@@ -1,0 +1,11 @@
+version: 1
+status: bootstrap
+active_work: null
+foundation_version: "1.0"
+next:
+  - define PH-01 Project Hub work contract
+  - identify SS1 donor code and invariant tests for Project/Workspace lifecycle
+  - create buildable SS2 repository skeleton
+notes:
+  - No CAD-domain implementation is authorized by bootstrap alone.
+  - SS1 is donor/reference only; SS2 Foundation is authoritative.

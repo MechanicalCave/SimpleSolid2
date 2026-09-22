@@ -1,0 +1,41 @@
+# Build output
+/build/
+/out/
+/cmake-build-*/
+
+# Temporary bootstrap / patch downloads kept inside workspace
+/Temp/
+/temp/
+
+# Local SS2 machine configuration
+/.ss2-local/
+/CMakeUserPresets.json
+
+# Local dependency environment
+/.simplesolid-env/
+
+# IDE / editor
+/.vs/
+/.vscode/
+*.user
+*.suo
+*.VC.db
+*.VC.opendb
+
+# CMake generated
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+
+# OS
+Thumbs.db
+Desktop.ini
+
+# Logs / scratch
+*.log
+*.tmp
+*.bak
+*.orig
+*.swp
