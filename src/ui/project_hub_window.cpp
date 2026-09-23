@@ -161,7 +161,7 @@ void ProjectHubWindow::buildHubPage() {
         recent_list_,
         &QListWidget::itemDoubleClicked,
         this,
-        [this](QListWidgetItem*) { openSelectedRecent(); });
+        [this](QListWidgetItem*, int) { openSelectedRecent(); });
     QObject::connect(
         recent_list_,
         &QListWidget::itemSelectionChanged,
@@ -246,7 +246,7 @@ void ProjectHubWindow::refreshRecent() {
     } else {
         hub_status_->setText(
             QStringLiteral("%1 recent Project(s).")
-                .arg(static_cast<qsizetype>(listed.entries.size())));
+                .arg(static_cast<qulonglong>(listed.entries.size())));
     }
 }
 
