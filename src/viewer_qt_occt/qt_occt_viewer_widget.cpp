@@ -40,6 +40,16 @@
 namespace simplesolid2::viewer_qt_occt {
 namespace {
 
+void traceProviderPhase(
+    const char* phase,
+    viewer::PresentationToken token = {}) noexcept {
+    qWarning().noquote()
+        << "WB-01A provider phase"
+        << phase
+        << "token"
+        << static_cast<qulonglong>(token.value);
+}
+
 void logProviderFailure(
     const char* operation,
     const char* message) noexcept {
@@ -235,8 +245,23 @@ public:
             for (const auto& reference : scene.references) {
                 if (!reference.visible) continue;
 
+                if (reference.kind ==
+                    viewer::ReferencePresentationKind::plane) {
+                    traceProviderPhase(
+                        "plane-before-make",
+                        reference.token);
+                }
+
                 const auto object =
                     makeReferenceObject(reference);
+
+                if (reference.kind ==
+                    viewer::ReferencePresentationKind::plane) {
+                    traceProviderPhase(
+                        "plane-after-make",
+                        reference.token);
+                }
+
                 if (object.IsNull()) {
                     clearReferenceScene();
                     return false;
@@ -247,12 +272,30 @@ public:
                         reference.token,
                         reference.kind,
                         object});
+                if (reference.kind ==
+                    viewer::ReferencePresentationKind::plane) {
+                    traceProviderPhase(
+                        "plane-before-display",
+                        reference.token);
+                }
+
                 context_->Display(object, false);
+
+                if (reference.kind ==
+                    viewer::ReferencePresentationKind::plane) {
+                    traceProviderPhase(
+                        "plane-after-display",
+                        reference.token);
+                }
             }
 
+            traceProviderPhase("scene-before-selection-styles");
             applySelectionStyles();
+            traceProviderPhase("scene-after-selection-styles");
             context_->UpdateCurrentViewer();
+            traceProviderPhase("scene-after-update-viewer");
             view_->Redraw();
+            traceProviderPhase("scene-after-redraw");
             reference_scene_ = scene;
             return true;
         } catch (...) {
@@ -440,14 +483,31 @@ public:
             viewer::cross(*u, *v));
         if (!normal) return {};
 
+        traceProviderPhase(
+            "plane-before-geom",
+            reference.token);
         Handle(Geom_Plane) plane = new Geom_Plane(
             gp_Pln{
                 toPoint(reference.origin),
                 toDirection(*normal)});
+        traceProviderPhase(
+            "plane-after-geom",
+            reference.token);
+
         Handle(AIS_Plane) object = new AIS_Plane(plane);
+        traceProviderPhase(
+            "plane-after-ais-constructor",
+            reference.token);
+
+        traceProviderPhase(
+            "plane-before-set-size",
+            reference.token);
         object->SetSize(
             reference.extent * 2.0,
             reference.extent * 2.0);
+        traceProviderPhase(
+            "plane-after-set-size",
+            reference.token);
         return object;
     }
 
@@ -594,10 +654,28 @@ public:
                               1.0, 0.63, 0.18, Quantity_TOC_RGB}
                         : baseColor(entry.kind);
 
+            if (entry.kind ==
+                viewer::ReferencePresentationKind::plane) {
+                traceProviderPhase(
+                    "plane-before-set-color",
+                    entry.token);
+            }
+
             context_->SetColor(
                 entry.object,
                 color,
                 false);
+
+            if (entry.kind ==
+                viewer::ReferencePresentationKind::plane) {
+                traceProviderPhase(
+                    "plane-after-set-color",
+                    entry.token);
+                traceProviderPhase(
+                    "plane-before-set-width",
+                    entry.token);
+            }
+
             context_->SetWidth(
                 entry.object,
                 primary ? 4.0 : (selected ? 3.0 : 1.8),
@@ -605,10 +683,19 @@ public:
 
             if (entry.kind ==
                 viewer::ReferencePresentationKind::plane) {
+                traceProviderPhase(
+                    "plane-after-set-width",
+                    entry.token);
+                traceProviderPhase(
+                    "plane-before-transparency",
+                    entry.token);
                 context_->SetTransparency(
                     entry.object,
                     primary ? 0.55 : (selected ? 0.68 : 0.82),
                     false);
+                traceProviderPhase(
+                    "plane-after-transparency",
+                    entry.token);
             }
         }
     }
