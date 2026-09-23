@@ -1,12 +1,17 @@
 #pragma once
 
+#include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/application/document_workspace.hpp>
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
 #include <filesystem>
+#include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace simplesolid2::application {
 
@@ -23,6 +28,33 @@ struct ProjectSessionDiagnostic final {
     ProjectMetadataErrorCode metadata_code{ProjectMetadataErrorCode::none};
     std::string message;
     std::filesystem::path path;
+};
+
+enum class ProjectDocumentErrorCode {
+    none,
+    invalid_path,
+    persistence_failure,
+    discovery_failure,
+    document_missing,
+    identity_conflict,
+    identity_changed,
+    dirty_document,
+};
+
+struct ProjectDocumentDiagnostic final {
+    ProjectDocumentErrorCode code{ProjectDocumentErrorCode::none};
+    part::PartStoreErrorCode store_code{part::PartStoreErrorCode::none};
+    std::string message;
+    std::filesystem::path path;
+    std::vector<std::filesystem::path> candidates;
+};
+
+struct ProjectDocumentResult final {
+    DocumentSession* session{};
+    bool reused_session{false};
+    ProjectDocumentDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept { return session != nullptr; }
 };
 
 class ProjectSession final {
@@ -52,6 +84,29 @@ public:
         return metadata_.display_name;
     }
 
+    [[nodiscard]] const DocumentWorkspaceIndex& documentIndex() const noexcept {
+        return document_index_;
+    }
+
+    [[nodiscard]] DocumentDiscoveryResult refreshDocuments();
+
+    [[nodiscard]] ProjectDocumentResult createPart(
+        const std::filesystem::path& workspace_relative_path);
+
+    [[nodiscard]] ProjectDocumentResult openDocument(
+        const core::DocumentId& document_id);
+
+    [[nodiscard]] DocumentSession* documentSession(
+        const core::DocumentId& document_id) noexcept;
+    [[nodiscard]] const DocumentSession* documentSession(
+        const core::DocumentId& document_id) const noexcept;
+
+    [[nodiscard]] bool closeDocument(
+        const core::DocumentId& document_id,
+        bool discard_unsaved = false) noexcept;
+
+    [[nodiscard]] bool hasDirtyDocuments() const noexcept;
+
 private:
     ProjectSession(std::filesystem::path workspace_root, ProjectWorkspaceMetadata metadata)
         : workspace_root_{std::move(workspace_root)},
@@ -59,6 +114,8 @@ private:
 
     std::filesystem::path workspace_root_;
     ProjectWorkspaceMetadata metadata_;
+    DocumentWorkspaceIndex document_index_;
+    std::map<std::string, std::unique_ptr<DocumentSession>> open_documents_;
 };
 
 struct ProjectSessionOpenResult final {

@@ -196,3 +196,88 @@ add_test(
 set_tests_properties(ph02c.project_creation_dialog PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+
+add_executable(part01_document_primitives_test
+    document_primitives_test.cpp
+)
+
+target_link_libraries(part01_document_primitives_test
+    PRIVATE
+        simplesolid2_core
+)
+
+add_test(
+    NAME part01.document_primitives
+    COMMAND part01_document_primitives_test
+)
+
+add_executable(part01_part_document_transaction_test
+    part_document_transaction_test.cpp
+)
+
+target_link_libraries(part01_part_document_transaction_test
+    PRIVATE
+        simplesolid2_part
+)
+
+add_test(
+    NAME part01.part_document_transaction
+    COMMAND part01_part_document_transaction_test
+)
+
+add_executable(part01_part_document_store_test
+    part_document_store_test.cpp
+)
+
+target_link_libraries(part01_part_document_store_test
+    PRIVATE
+        simplesolid2_part
+)
+
+add_test(
+    NAME part01.part_document_store
+    COMMAND part01_part_document_store_test
+)
+
+add_executable(part01_document_session_test
+    document_session_test.cpp
+)
+
+target_link_libraries(part01_document_session_test
+    PRIVATE
+        simplesolid2_application
+)
+
+add_test(
+    NAME part01.document_session
+    COMMAND part01_document_session_test
+)
+
+add_executable(part01_document_workspace_test
+    document_workspace_test.cpp
+)
+
+target_link_libraries(part01_document_workspace_test
+    PRIVATE
+        simplesolid2_application
+)
+
+add_test(
+    NAME part01.document_workspace
+    COMMAND part01_document_workspace_test
+)
+
+add_executable(part01_project_document_lifecycle_test
+    project_document_lifecycle_test.cpp
+)
+
+target_link_libraries(part01_project_document_lifecycle_test
+    PRIVATE
+        simplesolid2_application
+)
+
+add_test(
+    NAME part01.project_document_lifecycle
+    COMMAND part01_project_document_lifecycle_test
+)
