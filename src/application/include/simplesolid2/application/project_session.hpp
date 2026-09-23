@@ -106,6 +106,7 @@ public:
         bool discard_unsaved = false) noexcept;
 
     [[nodiscard]] bool hasDirtyDocuments() const noexcept;
+    [[nodiscard]] DocumentSessionResult saveAllDirtyDocuments();
 
 private:
     ProjectSession(std::filesystem::path workspace_root, ProjectWorkspaceMetadata metadata)

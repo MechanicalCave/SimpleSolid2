@@ -1,9 +1,11 @@
 #include "project_hub_window.hpp"
 #include "project_creation_dialog.hpp"
 #include "project_hub_selection.hpp"
+#include "part_workspace_panel.hpp"
 
 #include <QAbstractItemView>
 #include <QByteArray>
+#include <QCloseEvent>
 #include <QFileDialog>
 #include <QHBoxLayout>
 #include <QLabel>
@@ -202,13 +204,6 @@ void ProjectHubWindow::buildWorkspacePage() {
     title->setFont(font);
     root->addWidget(title);
 
-    auto* note = new QLabel(
-        QStringLiteral(
-            "PH-01 Workspace Shell. CAD documents and modeling are intentionally not implemented yet."),
-        workspace_page_);
-    note->setWordWrap(true);
-    root->addWidget(note);
-
     workspace_name_ = new QLabel(workspace_page_);
     workspace_id_ = new QLabel(workspace_page_);
     workspace_path_ = new QLabel(workspace_page_);
@@ -217,7 +212,10 @@ void ProjectHubWindow::buildWorkspacePage() {
     root->addWidget(workspace_name_);
     root->addWidget(workspace_id_);
     root->addWidget(workspace_path_);
-    root->addStretch(1);
+
+    part_workspace_panel_ = new PartWorkspacePanel(workspace_page_);
+    part_workspace_panel_->setObjectName(QStringLiteral("partWorkspacePanel"));
+    root->addWidget(part_workspace_panel_, 1);
 
     auto* close_button =
         new QPushButton(QStringLiteral("Close Project"), workspace_page_);
@@ -393,13 +391,14 @@ void ProjectHubWindow::removeSelectedRecent() {
 }
 
 void ProjectHubWindow::closeProject() {
-    controller_.closeProject();
+    if (!requestCloseProject()) return;
+
     pages_->setCurrentWidget(hub_page_);
     refreshRecent();
 }
 
 void ProjectHubWindow::enterWorkspace() {
-    const auto* session = controller_.activeSession();
+    auto* session = controller_.activeSession();
     if (session == nullptr) {
         QMessageBox::critical(
             this,
@@ -416,7 +415,39 @@ void ProjectHubWindow::enterWorkspace() {
         QStringLiteral("Workspace: ") +
         fromFilesystemPath(session->workspaceRoot()));
 
+    part_workspace_panel_->setProjectSession(session);
     pages_->setCurrentWidget(workspace_page_);
+}
+
+bool ProjectHubWindow::requestCloseProject() {
+    if (!controller_.hasActiveProject()) return true;
+
+    const auto disposition = part_workspace_panel_->prepareProjectClose();
+    if (disposition == ProjectCloseDisposition::cancel) {
+        return false;
+    }
+
+    const bool discard =
+        disposition == ProjectCloseDisposition::discard;
+    if (!controller_.closeProject(discard)) {
+        QMessageBox::warning(
+            this,
+            QStringLiteral("Close Project"),
+            QStringLiteral(
+                "The Project still contains unsaved Part changes and remains open."));
+        return false;
+    }
+
+    part_workspace_panel_->clearProjectSession();
+    return true;
+}
+
+void ProjectHubWindow::closeEvent(QCloseEvent* event) {
+    if (requestCloseProject()) {
+        event->accept();
+    } else {
+        event->ignore();
+    }
 }
 
 std::string ProjectHubWindow::selectedProjectId() const {

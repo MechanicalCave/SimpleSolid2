@@ -72,6 +72,7 @@ find_package(Qt6 6 REQUIRED COMPONENTS Widgets Test)
 
 add_executable(ph02a_project_hub_selection_ux_test
     project_hub_selection_ux_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_workspace_panel.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
 )
@@ -122,6 +123,7 @@ add_test(
 
 add_executable(ph02b_project_hub_availability_ux_test
     project_hub_availability_ux_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_workspace_panel.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
 )
@@ -280,4 +282,53 @@ target_link_libraries(part01_project_document_lifecycle_test
 add_test(
     NAME part01.project_document_lifecycle
     COMMAND part01_project_document_lifecycle_test
+)
+
+
+add_executable(part01_project_dirty_close_test
+    project_dirty_close_test.cpp
+)
+
+target_include_directories(part01_project_dirty_close_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/application
+)
+
+target_link_libraries(part01_project_dirty_close_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(part01_project_dirty_close_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME part01.project_dirty_close
+    COMMAND part01_project_dirty_close_test
+)
+
+add_executable(part01_part_workspace_panel_test
+    part_workspace_panel_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_workspace_panel.cpp
+)
+
+target_include_directories(part01_part_workspace_panel_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(part01_part_workspace_panel_test
+    PRIVATE
+        simplesolid2_application
+        Qt6::Widgets
+)
+
+target_compile_features(part01_part_workspace_panel_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME part01.part_workspace_panel
+    COMMAND part01_part_workspace_panel_test
+)
+
+set_tests_properties(part01.part_workspace_panel PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )

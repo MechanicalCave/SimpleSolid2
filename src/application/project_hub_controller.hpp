@@ -80,6 +80,10 @@ public:
         return active_session_.has_value();
     }
 
+    ProjectSession* activeSession() noexcept {
+        return active_session_ ? &*active_session_ : nullptr;
+    }
+
     [[nodiscard]] const ProjectSession* activeSession() const noexcept {
         return active_session_ ? &*active_session_ : nullptr;
     }
@@ -112,8 +116,14 @@ public:
     [[nodiscard]] ProjectHubResult removeRecent(
         std::string_view project_id);
 
-    void closeProject() noexcept {
+    bool closeProject(bool discard_unsaved = false) noexcept {
+        if (active_session_ &&
+            active_session_->hasDirtyDocuments() &&
+            !discard_unsaved) {
+            return false;
+        }
         active_session_.reset();
+        return true;
     }
 
 private:

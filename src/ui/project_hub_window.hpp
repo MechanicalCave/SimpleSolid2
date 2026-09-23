@@ -7,6 +7,7 @@
 #include <filesystem>
 #include <string>
 
+class QCloseEvent;
 class QLabel;
 class QListWidget;
 class QPushButton;
@@ -15,11 +16,16 @@ class QWidget;
 
 namespace simplesolid2::ui {
 
+class PartWorkspacePanel;
+
 class ProjectHubWindow final : public QMainWindow {
 public:
     explicit ProjectHubWindow(
         std::filesystem::path recent_catalog_path,
         QWidget* parent = nullptr);
+
+protected:
+    void closeEvent(QCloseEvent* event) override;
 
 private:
     void buildHubPage();
@@ -34,6 +40,7 @@ private:
     void closeProject();
     void enterWorkspace();
 
+    [[nodiscard]] bool requestCloseProject();
     [[nodiscard]] std::string selectedProjectId() const;
     void showFailure(
         const application::internal::ProjectHubDiagnostic& diagnostic);
@@ -53,6 +60,7 @@ private:
     QLabel* workspace_name_{};
     QLabel* workspace_id_{};
     QLabel* workspace_path_{};
+    PartWorkspacePanel* part_workspace_panel_{};
 };
 
 } // namespace simplesolid2::ui
