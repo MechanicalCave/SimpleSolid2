@@ -93,7 +93,7 @@ void verifySelectionDrivesRecentActions(
     CHECK(list->count() == 1);
     CHECK(list->selectedItems().empty());
     CHECK(list->currentItem() == nullptr);
-    CHECK(internal::selectedRecentProjectId(*list).empty());
+    CHECK(simplesolid2::ui::internal::selectedRecentProjectId(*list).empty());
     CHECK(!open->isEnabled());
     CHECK(!locate->isEnabled());
     CHECK(!remove->isEnabled());
@@ -106,7 +106,7 @@ void verifySelectionDrivesRecentActions(
 
     CHECK(list->currentItem() == item);
     CHECK(list->selectedItems().empty());
-    CHECK(internal::selectedRecentProjectId(*list).empty());
+    CHECK(simplesolid2::ui::internal::selectedRecentProjectId(*list).empty());
     CHECK(!open->isEnabled());
     CHECK(!locate->isEnabled());
     CHECK(!remove->isEnabled());
@@ -116,7 +116,7 @@ void verifySelectionDrivesRecentActions(
 
     CHECK(list->selectedItems().size() == 1);
     CHECK(list->selectedItems().front() == item);
-    CHECK(!internal::selectedRecentProjectId(*list).empty());
+    CHECK(!simplesolid2::ui::internal::selectedRecentProjectId(*list).empty());
     CHECK(open->isEnabled());
     CHECK(locate->isEnabled());
     CHECK(remove->isEnabled());
@@ -126,7 +126,7 @@ void verifySelectionDrivesRecentActions(
 
     CHECK(list->selectedItems().empty());
     CHECK(list->currentItem() == item);
-    CHECK(internal::selectedRecentProjectId(*list).empty());
+    CHECK(simplesolid2::ui::internal::selectedRecentProjectId(*list).empty());
     CHECK(!open->isEnabled());
     CHECK(!locate->isEnabled());
     CHECK(!remove->isEnabled());
