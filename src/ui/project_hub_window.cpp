@@ -1,4 +1,5 @@
 #include "project_hub_window.hpp"
+#include "project_hub_selection.hpp"
 
 #include <QAbstractItemView>
 #include <QByteArray>
@@ -256,7 +257,7 @@ void ProjectHubWindow::refreshRecent() {
 }
 
 void ProjectHubWindow::syncRecentActionState() {
-    const bool selected = recent_list_->selectedItems().size() == 1;
+    const bool selected = internal::hasSingleRecentSelection(*recent_list_);
     open_recent_button_->setEnabled(selected);
     locate_recent_button_->setEnabled(selected);
     remove_recent_button_->setEnabled(selected);
@@ -399,9 +400,7 @@ void ProjectHubWindow::enterWorkspace() {
 }
 
 std::string ProjectHubWindow::selectedProjectId() const {
-    const auto selected = recent_list_->selectedItems();
-    if (selected.size() != 1) return {};
-    return toUtf8(selected.front()->data(Qt::UserRole).toString());
+    return internal::selectedRecentProjectId(*recent_list_);
 }
 
 void ProjectHubWindow::showFailure(
