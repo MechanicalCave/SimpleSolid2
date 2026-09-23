@@ -3,12 +3,12 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QFont>
+#include <QItemSelectionModel>
 #include <QMenu>
 #include <QPoint>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
-#include <algorithm>
 #include <array>
 #include <optional>
 #include <string_view>
@@ -17,10 +17,15 @@
 namespace simplesolid2::ui {
 namespace {
 
-constexpr int builtinReferenceRoleData = Qt::UserRole + 40;
-constexpr int builtinReferenceVisibleData = Qt::UserRole + 41;
+constexpr int selectionTargetKindData =
+    Qt::UserRole + 39;
+constexpr int builtinReferenceRoleData =
+    Qt::UserRole + 40;
+constexpr int builtinReferenceVisibleData =
+    Qt::UserRole + 41;
 
-constexpr std::array<core::BuiltinReferenceRole, 7> tree_reference_order{
+constexpr std::array<core::BuiltinReferenceRole, 7>
+tree_reference_order{
     core::BuiltinReferenceRole::xy_plane,
     core::BuiltinReferenceRole::xz_plane,
     core::BuiltinReferenceRole::yz_plane,
@@ -46,18 +51,30 @@ QString displayName(
 
 #if defined(_WIN32)
     auto fallback =
-        QString::fromStdWString(session.path().stem().wstring());
+        QString::fromStdWString(
+            session.path().stem().wstring());
 #else
-    const auto utf8 = session.path().stem().generic_u8string();
+    const auto utf8 =
+        session.path().stem().generic_u8string();
     auto fallback = QString::fromUtf8(
         reinterpret_cast<const char*>(utf8.data()),
         static_cast<qsizetype>(utf8.size()));
 #endif
 
     if (fallback.isEmpty()) {
-        fallback = QStringLiteral("<untitled Part>");
+        fallback =
+            QStringLiteral("<untitled Part>");
     }
     return fallback;
+}
+
+void setTargetKind(
+    QTreeWidgetItem& item,
+    DocumentSelectionTargetKind kind) {
+    item.setData(
+        0,
+        selectionTargetKindData,
+        static_cast<int>(kind));
 }
 
 } // namespace
@@ -75,30 +92,49 @@ PartDocumentTreeController::PartDocumentTreeController(
     show_action_ =
         new QAction(QStringLiteral("Show"), tree_);
     show_action_->setObjectName(
-        QStringLiteral("showBuiltinReferencesAction"));
+        QStringLiteral(
+            "showBuiltinReferencesAction"));
 
     hide_action_ =
         new QAction(QStringLiteral("Hide"), tree_);
     hide_action_->setObjectName(
-        QStringLiteral("hideBuiltinReferencesAction"));
+        QStringLiteral(
+            "hideBuiltinReferencesAction"));
 
     QObject::connect(
         show_action_,
         &QAction::triggered,
         this,
-        [this] { applySelectedVisibility(true); });
+        [this] {
+            applySelectedVisibility(true);
+        });
 
     QObject::connect(
         hide_action_,
         &QAction::triggered,
         this,
-        [this] { applySelectedVisibility(false); });
+        [this] {
+            applySelectedVisibility(false);
+        });
 
     QObject::connect(
         tree_,
         &QTreeWidget::itemSelectionChanged,
         this,
-        [this] { updateVisibilityActions(); });
+        [this] {
+            updateVisibilityActions();
+            notifySelectionChanged();
+        });
+
+    QObject::connect(
+        tree_,
+        &QTreeWidget::currentItemChanged,
+        this,
+        [this](
+            QTreeWidgetItem*,
+            QTreeWidgetItem*) {
+            notifySelectionChanged();
+        });
 
     QObject::connect(
         tree_,
@@ -113,27 +149,105 @@ PartDocumentTreeController::PartDocumentTreeController(
 
 void PartDocumentTreeController::setDocumentSession(
     application::DocumentSession* session) {
-    const bool same_session = session_ == session;
+    const bool same_session =
+        session_ == session;
     session_ = session;
     rebuild(same_session);
 }
 
 void PartDocumentTreeController::clear() {
     session_ = nullptr;
+    applying_selection_ = true;
     tree_->clear();
+    applying_selection_ = false;
+    updateVisibilityActions();
+}
+
+DocumentSelectionState
+PartDocumentTreeController::selectionState() const {
+    DocumentSelectionState state;
+
+    for (const auto* item :
+         tree_->selectedItems()) {
+        if (item == nullptr) continue;
+        const auto target =
+            targetForItem(*item);
+        if (target) {
+            state.selected.push_back(*target);
+        }
+    }
+
+    if (const auto* current =
+            tree_->currentItem()) {
+        const auto target =
+            targetForItem(*current);
+        if (target &&
+            state.contains(*target)) {
+            state.primary = *target;
+        }
+    }
+
+    if (!state.primary &&
+        !state.selected.empty()) {
+        state.primary =
+            state.selected.front();
+    }
+
+    return state;
+}
+
+void PartDocumentTreeController::setSelectionState(
+    const DocumentSelectionState& state) {
+    if (!state.valid()) return;
+
+    applying_selection_ = true;
+    tree_->clearSelection();
+
+    for (const auto& target :
+         state.selected) {
+        if (auto* item =
+                itemForTarget(target)) {
+            item->setSelected(true);
+        }
+    }
+
+    if (state.primary) {
+        if (auto* item =
+                itemForTarget(*state.primary)) {
+            tree_->setCurrentItem(
+                item,
+                0,
+                QItemSelectionModel::NoUpdate);
+        }
+    } else {
+        tree_->setCurrentItem(
+            nullptr,
+            0,
+            QItemSelectionModel::NoUpdate);
+    }
+
+    applying_selection_ = false;
     updateVisibilityActions();
 }
 
 std::vector<core::BuiltinReferenceRole>
-PartDocumentTreeController::selectedBuiltinReferences() const {
-    std::vector<core::BuiltinReferenceRole> roles;
+PartDocumentTreeController::
+selectedBuiltinReferences() const {
+    std::vector<core::BuiltinReferenceRole>
+        roles;
 
-    for (const auto* item : tree_->selectedItems()) {
+    for (const auto* item :
+         tree_->selectedItems()) {
         if (item == nullptr) continue;
 
-        const auto role = roleForItem(*item);
-        if (role) {
-            roles.push_back(*role);
+        const auto target =
+            targetForItem(*item);
+        if (target &&
+            target->kind ==
+                DocumentSelectionTargetKind::
+                    builtin_reference) {
+            roles.push_back(
+                target->builtin_reference);
         }
     }
 
@@ -142,46 +256,66 @@ PartDocumentTreeController::selectedBuiltinReferences() const {
 
 bool PartDocumentTreeController::
 selectionContainsOnlyBuiltinReferences() const {
-    const auto selected = tree_->selectedItems();
+    const auto selected =
+        tree_->selectedItems();
     if (selected.empty()) return false;
 
     for (const auto* item : selected) {
-        if (item == nullptr || !roleForItem(*item)) {
+        if (item == nullptr) return false;
+
+        const auto target =
+            targetForItem(*item);
+        if (!target ||
+            target->kind !=
+                DocumentSelectionTargetKind::
+                    builtin_reference) {
             return false;
         }
     }
+
     return true;
 }
 
 void PartDocumentTreeController::rebuild(
-    bool preserve_reference_selection) {
-    std::vector<core::BuiltinReferenceRole>
-        previously_selected;
+    bool preserve_selection) {
+    const auto previous =
+        preserve_selection
+            ? selectionState()
+            : DocumentSelectionState{};
 
-    if (preserve_reference_selection) {
-        previously_selected =
-            selectedBuiltinReferences();
-    }
-
+    applying_selection_ = true;
     tree_->clear();
 
     if (session_ == nullptr) {
+        applying_selection_ = false;
         updateVisibilityActions();
         return;
     }
 
     auto* root = new QTreeWidgetItem(
         tree_,
-        QStringList{displayName(*session_)});
+        QStringList{
+            displayName(*session_)});
+    setTargetKind(
+        *root,
+        DocumentSelectionTargetKind::
+            document_root);
 
     auto* origin = new QTreeWidgetItem(
         root,
-        QStringList{QStringLiteral("Origin")});
+        QStringList{
+            QStringLiteral("Origin")});
 
-    for (const auto role : tree_reference_order) {
+    for (const auto role :
+         tree_reference_order) {
         auto* item = new QTreeWidgetItem(
             origin,
             QStringList{labelFor(role)});
+
+        setTargetKind(
+            *item,
+            DocumentSelectionTargetKind::
+                builtin_reference);
 
         item->setData(
             0,
@@ -206,29 +340,27 @@ void PartDocumentTreeController::rebuild(
             visible
                 ? QStringLiteral("Shown")
                 : QStringLiteral("Hidden"));
-
-        if (preserve_reference_selection) {
-            const bool was_selected =
-                std::find(
-                    previously_selected.begin(),
-                    previously_selected.end(),
-                    role) != previously_selected.end();
-            item->setSelected(was_selected);
-        }
     }
 
     root->setExpanded(true);
     origin->setExpanded(true);
+    applying_selection_ = false;
 
-    if (!preserve_reference_selection ||
-        tree_->selectedItems().empty()) {
-        tree_->setCurrentItem(root);
+    if (preserve_selection &&
+        previous.valid() &&
+        !previous.selected.empty()) {
+        setSelectionState(previous);
+    } else {
+        setSelectionState(
+            DocumentSelectionState::
+                documentRootOnly());
     }
 
     updateVisibilityActions();
 }
 
-void PartDocumentTreeController::updateVisibilityActions() {
+void PartDocumentTreeController::
+updateVisibilityActions() {
     if (session_ == nullptr ||
         !selectionContainsOnlyBuiltinReferences()) {
         show_action_->setEnabled(false);
@@ -239,8 +371,10 @@ void PartDocumentTreeController::updateVisibilityActions() {
     bool any_visible = false;
     bool any_hidden = false;
 
-    for (const auto role : selectedBuiltinReferences()) {
-        if (session_->document().builtinReferenceVisible(role)) {
+    for (const auto role :
+         selectedBuiltinReferences()) {
+        if (session_->document()
+                .builtinReferenceVisible(role)) {
             any_visible = true;
         } else {
             any_hidden = true;
@@ -249,6 +383,18 @@ void PartDocumentTreeController::updateVisibilityActions() {
 
     show_action_->setEnabled(any_hidden);
     hide_action_->setEnabled(any_visible);
+}
+
+void PartDocumentTreeController::
+notifySelectionChanged() {
+    if (applying_selection_ ||
+        !selection_handler_) {
+        return;
+    }
+
+    const auto state = selectionState();
+    if (!state.valid()) return;
+    selection_handler_(state);
 }
 
 void PartDocumentTreeController::showContextMenu(
@@ -263,11 +409,13 @@ void PartDocumentTreeController::showContextMenu(
     QMenu menu{tree_};
     menu.addAction(show_action_);
     menu.addAction(hide_action_);
-    menu.exec(tree_->viewport()->mapToGlobal(position));
+    menu.exec(
+        tree_->viewport()->mapToGlobal(
+            position));
 }
 
-void PartDocumentTreeController::applySelectedVisibility(
-    bool visible) {
+void PartDocumentTreeController::
+applySelectedVisibility(bool visible) {
     if (session_ == nullptr ||
         !selectionContainsOnlyBuiltinReferences()) {
         return;
@@ -277,10 +425,12 @@ void PartDocumentTreeController::applySelectedVisibility(
         selectedBuiltinReferences();
     if (roles.empty()) return;
 
-    const auto result = session_->execute(
-        application::SetBuiltinReferenceVisibilityCommand{
-            roles,
-            visible});
+    const auto result =
+        session_->execute(
+            application::
+                SetBuiltinReferenceVisibilityCommand{
+                    roles,
+                    visible});
 
     if (result.ok() && result.changed) {
         rebuild(true);
@@ -294,8 +444,10 @@ void PartDocumentTreeController::applySelectedVisibility(
 QString PartDocumentTreeController::labelFor(
     core::BuiltinReferenceRole role) {
     switch (role) {
-    case core::BuiltinReferenceRole::origin_point:
-        return QStringLiteral("Origin Point");
+    case core::BuiltinReferenceRole::
+        origin_point:
+        return QStringLiteral(
+            "Origin Point");
     case core::BuiltinReferenceRole::x_axis:
         return QStringLiteral("X Axis");
     case core::BuiltinReferenceRole::y_axis:
@@ -310,28 +462,102 @@ QString PartDocumentTreeController::labelFor(
         return QStringLiteral("YZ Plane");
     }
 
-    return QStringLiteral("<invalid reference>");
+    return QStringLiteral(
+        "<invalid reference>");
 }
 
-std::optional<core::BuiltinReferenceRole>
-PartDocumentTreeController::roleForItem(
+std::optional<DocumentSelectionTarget>
+PartDocumentTreeController::targetForItem(
     const QTreeWidgetItem& item) {
-    const auto value =
-        item.data(0, builtinReferenceRoleData);
+    const auto kind_value =
+        item.data(
+            0,
+            selectionTargetKindData);
+    if (!kind_value.isValid()) {
+        return std::nullopt;
+    }
 
-    if (!value.isValid()) {
+    const auto kind =
+        static_cast<
+            DocumentSelectionTargetKind>(
+                kind_value.toInt());
+
+    if (kind ==
+        DocumentSelectionTargetKind::
+            document_root) {
+        return DocumentSelectionTarget::
+            documentRoot();
+    }
+
+    if (kind !=
+        DocumentSelectionTargetKind::
+            builtin_reference) {
+        return std::nullopt;
+    }
+
+    const auto role_value =
+        item.data(
+            0,
+            builtinReferenceRoleData);
+    if (!role_value.isValid()) {
         return std::nullopt;
     }
 
     const auto role =
-        static_cast<core::BuiltinReferenceRole>(
-            value.toInt());
+        static_cast<
+            core::BuiltinReferenceRole>(
+                role_value.toInt());
 
-    if (!core::isBuiltinReferenceRole(role)) {
+    if (!core::isBuiltinReferenceRole(
+            role)) {
         return std::nullopt;
     }
 
-    return role;
+    return DocumentSelectionTarget::
+        builtinReference(role);
+}
+
+QTreeWidgetItem*
+PartDocumentTreeController::itemForTarget(
+    const DocumentSelectionTarget& target) const {
+    if (!target.valid() ||
+        tree_->topLevelItemCount() == 0) {
+        return nullptr;
+    }
+
+    auto* root =
+        tree_->topLevelItem(0);
+    if (root == nullptr) return nullptr;
+
+    if (target.kind ==
+        DocumentSelectionTargetKind::
+            document_root) {
+        return root;
+    }
+
+    if (root->childCount() == 0) {
+        return nullptr;
+    }
+
+    auto* origin = root->child(0);
+    if (origin == nullptr) return nullptr;
+
+    for (int index = 0;
+         index < origin->childCount();
+         ++index) {
+        auto* child =
+            origin->child(index);
+        if (child == nullptr) continue;
+
+        const auto child_target =
+            targetForItem(*child);
+        if (child_target &&
+            *child_target == target) {
+            return child;
+        }
+    }
+
+    return nullptr;
 }
 
 } // namespace simplesolid2::ui
