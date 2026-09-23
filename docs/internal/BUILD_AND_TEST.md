@@ -6,30 +6,20 @@
 <!-- section-id: internal.build-test.baseline -->
 ## Toolchain baseline
 
-The repository baseline is:
+The repository baseline is C++20, CMake 3.24+, Qt 6 Widgets, OpenCASCADE for the native CAD Viewer, Windows-first development and the self-hosted Windows/MSVC PR gate.
 
-- C++20;
-- CMake 3.24+;
-- Qt 6 Widgets;
-- Windows-first;
-- self-hosted Windows/MSVC PR gate.
+WB-01 makes OCCT a required machine-local product-build dependency. Public Viewer contracts remain provider-neutral.
 
-OCCT is present in the machine-local environment, but the implemented PART-01 lifecycle does not use OCCT modeling or Viewer functionality.
+The canonical local environment adds Qt and OCCT runtime DLL directories to PATH so the product and native Viewer tests can execute after build.
 
 <!-- section-id: internal.build-test.session -->
 ## Normal local session
 
-The normal Owner workflow starts with:
-
-```text
-START_SS2.cmd
-```
+The normal Owner workflow starts with `START_SS2.cmd`.
 
 The SS2 PowerShell session provides canonical convenience commands including `ss2-status`, `ss2-run`, `ss2-docs` and `ss2-resume`.
 
-`ss2-run` performs an incremental build and starts the current `SimpleSolid2.exe`.
-
-`ss2-docs` regenerates the Product Browser from canonical Markdown.
+`ss2-run` performs an incremental build and starts `SimpleSolid2.exe`. `ss2-docs` regenerates the Product Browser.
 
 <!-- section-id: internal.build-test.root-script -->
 ## Canonical repository commands
@@ -54,20 +44,13 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains eighteen tests.
+The compiled CTest suite contains 27 tests.
 
-The original ten cover Project metadata, ProjectSession, Recent Projects, Project Hub lifecycle, application smoke startup and Project Hub/Create UX.
+Project/Hub and PART-01 coverage remains active.
 
-Eight PART-01 tests cover:
+WB-01 adds deterministic coverage for built-in Origin roles/visibility, CameraState and standard/corner views, navigation input mapping, reference scene/grid validation, neutral Viewer selection transport, Workbench tabs/active-document switching, per-document camera state, Tree multi-selection/primary selection, Tree↔Viewport synchronization, persistent batch Show/Hide and Undo/Redo, contextual Properties, ViewCube navigation and architecture boundaries.
 
-- DocumentId / DocumentRevision / common properties;
-- PartDocument staged transaction semantics;
-- native Part persistence and schema rejection;
-- DocumentSession command, Undo/Redo, save checkpoint and failed-save behavior;
-- Workspace discovery and identity conflicts;
-- Project + Part restart lifecycle;
-- Project dirty-close guard and Save All;
-- real offscreen Qt Part Workspace panel lifecycle.
+`wb01.viewer_native_smoke` runs without the offscreen Qt platform. It creates the real Windows Qt/OCCT viewport, initializes OCCT/OpenGL, presents reference content, switches view/projection, performs Fit and exits cleanly.
 
 Repository documentation validation runs outside CTest through `ss2 verify`.
 
@@ -76,15 +59,9 @@ Tests must not be weakened to obtain a pass.
 <!-- section-id: internal.build-test.ci -->
 ## Windows PR gate
 
-The GitHub workflow is:
+The GitHub workflow is `.github/workflows/windows-pr-gate.yml` on the self-hosted Windows runner labeled `simplesolid2-native`.
 
-```text
-.github/workflows/windows-pr-gate.yml
-```
-
-It runs on the self-hosted Windows runner labeled `simplesolid2-native`.
-
-The gate checks out the exact PR head SHA and then performs:
+The gate checks out the exact PR head SHA and performs:
 
 ```text
 exact checkout
