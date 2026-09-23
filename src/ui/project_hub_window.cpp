@@ -1,7 +1,7 @@
 #include "project_hub_window.hpp"
 #include "project_creation_dialog.hpp"
 #include "project_hub_selection.hpp"
-#include "part_workspace_panel.hpp"
+#include "cad_workbench.hpp"
 
 #include <QAbstractItemView>
 #include <QByteArray>
@@ -213,9 +213,9 @@ void ProjectHubWindow::buildWorkspacePage() {
     root->addWidget(workspace_id_);
     root->addWidget(workspace_path_);
 
-    part_workspace_panel_ = new PartWorkspacePanel(workspace_page_);
-    part_workspace_panel_->setObjectName(QStringLiteral("partWorkspacePanel"));
-    root->addWidget(part_workspace_panel_, 1);
+    cad_workbench_ = new CadWorkbench(workspace_page_);
+    cad_workbench_->setObjectName(QStringLiteral("cadWorkbench"));
+    root->addWidget(cad_workbench_, 1);
 
     auto* close_button =
         new QPushButton(QStringLiteral("Close Project"), workspace_page_);
@@ -415,14 +415,14 @@ void ProjectHubWindow::enterWorkspace() {
         QStringLiteral("Workspace: ") +
         fromFilesystemPath(session->workspaceRoot()));
 
-    part_workspace_panel_->setProjectSession(session);
+    cad_workbench_->setProjectSession(session);
     pages_->setCurrentWidget(workspace_page_);
 }
 
 bool ProjectHubWindow::requestCloseProject() {
     if (!controller_.hasActiveProject()) return true;
 
-    const auto disposition = part_workspace_panel_->prepareProjectClose();
+    const auto disposition = cad_workbench_->prepareProjectClose();
     if (disposition == ProjectCloseDisposition::cancel) {
         return false;
     }
@@ -438,7 +438,7 @@ bool ProjectHubWindow::requestCloseProject() {
         return false;
     }
 
-    part_workspace_panel_->clearProjectSession();
+    cad_workbench_->clearProjectSession();
     return true;
 }
 
