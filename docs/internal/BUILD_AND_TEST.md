@@ -93,11 +93,15 @@ The gate checks out the exact PR head SHA and then performs:
 
 ```text
 exact checkout
+→ .\ss2.ps1 docs
+→ verify generated Browser is Git-clean
 → machine-local setup
 → ss2 verify
 → build
 → CTest
 ```
+
+The explicit root `ss2.ps1 docs` step is a dispatcher regression check: CI exercises the same public repository command used by maintainers, not only the underlying generator script.
 
 Documentation sources and documentation tooling are included in the workflow path filters so documentation-only changes are verified.
 
