@@ -157,6 +157,13 @@ function Find-OCCTConfig([string]$OcctRoot) {
     Add-OCCTSearchRoot $env:VCPKG_ROOT
     Add-OCCTSearchRoot $OcctRoot
 
+    # Reuse the machine-local roots that the accepted SS1 native gates used on
+    # the shared Windows CAD development host.
+    $workspaceParent = Split-Path (Get-SS2Root) -Parent
+    Add-OCCTSearchRoot $workspaceParent
+    Add-OCCTSearchRoot "C:\SimpleSolid"
+    Add-OCCTSearchRoot "C:\SimpleSolid\.simplesolid-env"
+
     if ($OcctRoot) {
         $driveRoot = [System.IO.Path]::GetPathRoot($OcctRoot)
         if ($driveRoot) {
