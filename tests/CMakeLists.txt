@@ -396,3 +396,10 @@ add_test(
         -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_workbench_shell_boundaries.cmake
 )
+
+
+add_executable(wb01_viewer_selection_test
+    viewer_selection_test.cpp
+)
+target_link_libraries(wb01_viewer_selection_test PRIVATE simplesolid2_viewer)
+add_test(NAME wb01.viewer_selection COMMAND wb01_viewer_selection_test)
