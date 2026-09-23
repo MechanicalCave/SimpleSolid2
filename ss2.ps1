@@ -1,6 +1,6 @@
 param(
     [Parameter(Position=0)]
-    [ValidateSet("setup","verify","configure","build","test","clean","status","git-init")]
+    [ValidateSet("setup","verify","configure","build","run","test","clean","status","git-init")]
     [string]$Command = "status",
 
     [string]$RemoteUrl = "",
@@ -15,6 +15,7 @@ $map = @{
     "verify"    = "scripts\ss2-verify.ps1"
     "configure" = "scripts\ss2-configure.ps1"
     "build"     = "scripts\ss2-build.ps1"
+    "run"       = "scripts\ss2-run.ps1"
     "test"      = "scripts\ss2-test.ps1"
     "clean"     = "scripts\ss2-clean.ps1"
     "status"    = "scripts\ss2-status.ps1"
