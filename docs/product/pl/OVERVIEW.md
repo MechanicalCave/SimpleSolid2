@@ -13,19 +13,22 @@ Jest przeznaczona do zrozumienia i używania programu. Nie opisuje historii impl
 <!-- section-id: product.overview.current -->
 ## Co jest obecnie dostępne
 
-Obecny produkt udostępnia platformę Projektu:
+Obecny produkt udostępnia:
 
-- tworzenie nowego Projektu;
-- otwieranie istniejącego Projektu;
-- stabilną tożsamość Projektu niezależną od ścieżki;
-- listę Recent Projects;
+- tworzenie i otwieranie Projektów;
+- stabilną tożsamość Projektu oraz Recent Projects;
 - przenoszenie Projektu i odzyskiwanie lokalizacji przez `Locate…`;
-- wykrywanie brakującego, niepoprawnego lub niezgodnego Workspace;
-- bezpieczne usuwanie wpisu wyłącznie z Recent Projects.
+- tworzenie i otwieranie natywnych dokumentów Part `.ss2part`;
+- stabilny `DocumentId` niezależny od nazwy i ścieżki pliku;
+- edycję właściwości Number, Title, Description i Engineering Revision;
+- Undo / Redo dla tych zmian;
+- Save i bezpieczne zamykanie z ostrzeżeniem o niezapisanych zmianach;
+- ponowne odnajdywanie Partów po restarcie;
+- wykrywanie konfliktu, gdy dwa pliki w jednym Workspace mają ten sam DocumentId.
 
-Po otwarciu Projektu program pokazuje obecnie pusty Workspace Shell.
+Obecny Part jest dokumentem trwałym, ale nie zawiera jeszcze modelowania geometrycznego.
 
-Modelowanie CAD, Part, Assembly, Drawing i Viewer nie są jeszcze częścią dostępnej powierzchni produktu.
+Sketch, Bodies/Features, Assembly, Drawing i Viewer nie są jeszcze częścią dostępnej powierzchni produktu.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser

@@ -53,7 +53,7 @@ code{background:#f0f2f5;padding:1px 5px;border-radius:5px}pre{background:#0e141b
 
 The application opens into `ProjectHubWindow`.
 
-The Hub is a navigation surface. It is not the durable owner of Project identity or Project files.
+The Hub is a navigation surface. It is not the durable owner of Project or Document identity.
 
 <!-- section-id: internal.application-lifecycle.create -->
 ## Create Project lifecycle
@@ -69,10 +69,10 @@ Create Project…
 → publish final Workspace
 → open ProjectSession
 → record Recent Project
-→ show empty Workspace Shell
+→ show Workspace Shell with Part document panel
 ```
 
-A successful Create therefore leaves one active ProjectSession and one logical Recent entry for the created ProjectId.
+A successful Create leaves one active ProjectSession and one logical Recent entry for the created ProjectId.
 
 <!-- section-id: internal.application-lifecycle.open -->
 ## Open existing Project
@@ -81,21 +81,41 @@ A successful Create therefore leaves one active ProjectSession and one logical R
 
 The application does not initialize an ordinary folder during Open. `ProjectSession::open` requires valid existing SimpleSolid Project metadata.
 
-After validation, the opened Project is recorded in Recent before the runtime session is adopted.
+Opening a Project also rebuilds the runtime native-document index by scanning the Workspace for `.ss2part` files. Invalid Part files and duplicate DocumentIds become explicit index states instead of being silently ignored.
 
-If recording Recent detects the same ProjectId at a different remembered location, opening fails and no active session is adopted.
+<!-- section-id: internal.application-lifecycle.part -->
+## Part Document lifecycle
+
+The current Part lifecycle is:
+
+```text
+New Part…
+→ choose Workspace-relative .ss2part path
+→ generate fresh DocumentId
+→ atomically publish valid empty PartDocument
+→ create canonical DocumentSession
+
+Open
+→ resolve one DocumentId to exactly one Workspace path
+→ load authored Part state
+→ create or reuse canonical DocumentSession
+```
+
+The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description or Engineering Revision goes through a semantic properties command and a PartDocument transaction.
+
+Closing and reopening a Part destroys runtime Undo/Redo history while preserving authored properties and DocumentId on disk.
 
 <!-- section-id: internal.application-lifecycle.close -->
-## Close and reopen
+## Close, dirty state and restart
 
-`Close Project` resets the active ProjectSession and returns to Project Hub.
+Closing a dirty Part prompts for `Save`, `Discard` or `Cancel`.
 
-Project metadata remains in the Workspace and the Recent entry remains in application/user state.
+Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure keeps the Project open.
 
-After application restart, the Hub reloads Recent Projects. Reopening the same Project creates a new runtime ProjectSession with the same durable ProjectId.
+After application restart, Recent Projects restores the Project location. Opening the Project creates a fresh ProjectSession, rebuilds document discovery and can reopen the same durable DocumentId with the same saved authored properties.
 
 <!-- section-id: internal.application-lifecycle.relocate -->
-## Move and relocation
+## Project move and relocation
 
 Moving a Project in the filesystem makes the remembered Recent path stale.
 
@@ -141,7 +161,7 @@ The repository baseline is:
 - Windows-first;
 - self-hosted Windows/MSVC PR gate.
 
-OCCT is present in the machine-local environment but current Project Hub implementation does not use CAD modeling or Viewer functionality.
+OCCT is present in the machine-local environment, but the implemented PART-01 lifecycle does not use OCCT modeling or Viewer functionality.
 
 <!-- section-id: internal.build-test.session -->
 ## Normal local session
@@ -152,14 +172,7 @@ The normal Owner workflow starts with:
 START_SS2.cmd
 ```
 
-The SS2 PowerShell session provides canonical convenience commands including:
-
-```powershell
-ss2-status
-ss2-run
-ss2-docs
-ss2-resume
-```
+The SS2 PowerShell session provides canonical convenience commands including `ss2-status`, `ss2-run`, `ss2-docs` and `ss2-resume`.
 
 `ss2-run` performs an incremental build and starts the current `SimpleSolid2.exe`.
 
@@ -188,20 +201,22 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-Before DOC-01, the compiled CTest suite contains ten tests covering:
+The compiled CTest suite contains eighteen tests.
 
-- Project workspace metadata;
-- ProjectSession;
-- RecentProjectStore;
-- complete Project Hub lifecycle;
-- real application smoke startup;
-- Recent selection UX;
-- Recent availability classification;
-- Recent availability UI;
-- staged Project creation workflow;
-- Project Creation dialog behavior.
+The original ten cover Project metadata, ProjectSession, Recent Projects, Project Hub lifecycle, application smoke startup and Project Hub/Create UX.
 
-DOC-01 adds repository documentation validation outside CTest through `ss2 verify`.
+Eight PART-01 tests cover:
+
+- DocumentId / DocumentRevision / common properties;
+- PartDocument staged transaction semantics;
+- native Part persistence and schema rejection;
+- DocumentSession command, Undo/Redo, save checkpoint and failed-save behavior;
+- Workspace discovery and identity conflicts;
+- Project + Part restart lifecycle;
+- Project dirty-close guard and Save All;
+- real offscreen Qt Part Workspace panel lifecycle.
+
+Repository documentation validation runs outside CTest through `ss2 verify`.
 
 Tests must not be weakened to obtain a pass.
 
@@ -228,22 +243,14 @@ exact checkout
 → CTest
 ```
 
-The explicit root `ss2.ps1 docs` step is a dispatcher regression check: CI exercises the same public repository command used by maintainers, not only the underlying generator script.
-
-Documentation sources and documentation tooling are included in the workflow path filters so documentation-only changes are verified.
+The explicit root `ss2.ps1 docs` step is a dispatcher regression check.
 
 <!-- section-id: internal.build-test.docs-validation -->
 ## Documentation validation
 
 `ss2 verify` invokes `scripts/ss2-docs.ps1 -Check -SelfTest`.
 
-The documentation gate validates current repository documentation and also executes negative fixtures proving that the validator rejects:
-
-- missing PL/EN product pairs;
-- mismatched bilingual section identifiers;
-- broken deterministic local Markdown links;
-- a current Work Contract without Documentation Impact;
-- a stale generated Product Browser.
+The documentation gate validates canonical pairs/section identifiers, deterministic links, Work Contract Documentation Impact and generated Product Browser freshness.
 
 The Product Browser must be regenerated with `.\ss2.ps1 docs` whenever canonical documentation or its generator changes.
 </script>
@@ -260,47 +267,57 @@ It is explanatory, not normative. If an as-built document conflicts with the Eng
 <!-- section-id: internal.overview.current-scope -->
 ## Current implemented scope
 
-The current executable implements the Project platform and a minimal Qt application shell:
+The current executable implements the Project platform plus the first persistent CAD Document lifecycle for an empty Part:
 
 ```text
 App start
 → Project Hub
-→ Create new Project / Open existing Project
+→ Create / Open Project
 → stable ProjectId + Workspace metadata
 → ProjectSession
-→ empty Workspace Shell
-→ Close
-→ Recent Projects
-→ reopen / relocate
+→ discover native .ss2part Documents
+→ Create / Open Part
+→ DocumentSession
+→ edit common Document Properties
+→ Undo / Redo
+→ Save / Close
+→ restart
+→ rediscover and reopen the same DocumentId
 ```
 
-The current product does **not** yet implement Part, Assembly, Drawing, DocumentSession, CAD geometry, OCCT modeling, Viewer or topology/reference semantics.
+The current product does **not** yet implement Part feature modeling, Sketch, Bodies, geometry evaluation, OCCT modeling, Viewer, Assembly, Drawing, BOM, topology selection or persistent naming.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
 
-The implemented Project surface follows the frozen dependency direction:
+The implemented dependency direction is:
 
 ```text
-Qt Project Hub / Workspace Shell
+Qt Project Hub / PartWorkspacePanel
         ↓
-internal ProjectHubController
+ProjectHubController / ProjectSession / DocumentSession
         ↓
-ProjectSession / RecentProjectStore / ProjectWorkspaceMetadataService
+PartDocument + PartDocumentTransaction
         ↓
-filesystem + Qt application-state location adapter
+PartDocumentStore / shared atomic-file persistence
+        ↓
+filesystem
 ```
 
-Qt selects presentation and user-state locations. Durable Project identity and Project metadata are owned below the UI.
+Project and Document authored semantics remain below Qt. No OCCT type participates in the current Part lifecycle.
 
 <!-- section-id: internal.overview.identity -->
 ## Identity and location
 
 A Project is identified by stable `ProjectId`.
 
-A Workspace path is a location, not identity. Moving or renaming the Workspace preserves Project identity. An ordinary filesystem copy also preserves the embedded ProjectId and therefore does not automatically create a new logical Project.
+A Part Document is independently identified by stable `DocumentId`.
 
-The current metadata implementation generates and validates textual UUIDv4 ProjectIds. That textual format is an implementation fact, not an additional Foundation-level identity rule.
+Neither identity is a path or filename. Moving or renaming a Workspace preserves ProjectId. Moving or renaming a native `.ss2part` file inside its Workspace preserves DocumentId.
+
+The current implementations serialize ProjectId and DocumentId as textual UUIDv4 values. That encoding is an implementation fact, not an additional Foundation-level identity rule.
+
+A copied `.ss2part` file preserves its embedded DocumentId. If more than one file in one Workspace declares the same DocumentId, discovery reports `IdentityConflict` and resolution by that ID fails closed.
 
 <!-- section-id: internal.overview.documentation -->
 ## Documentation system
@@ -315,6 +332,85 @@ Canonical current-state sources are:
 
 Operational documentation rules are defined in `governance/DOCUMENTATION.md`.
 </script>
+<script type="text/plain" class="doc-source" data-doc-id="internal.part-documents" data-kind="internal" data-lang="en" data-path="docs/internal/PART_DOCUMENTS.md">
+# Part Documents — As-built
+
+<!-- doc-id: internal.part-documents -->
+<!-- document-kind: internal -->
+
+<!-- section-id: internal.part-documents.model -->
+## Current model
+
+PART-01 implements a minimal persistent `PartDocument` without CAD features or geometry.
+
+Its authored state currently consists of stable `DocumentId` and common Document Properties:
+
+- Number;
+- Title;
+- Description;
+- Engineering Revision.
+
+`DocumentRevision` is a technical monotonic counter for successful semantic mutations within the loaded lifecycle.
+
+<!-- section-id: internal.part-documents.mutation -->
+## Command and transaction boundary
+
+Persistent property changes follow:
+
+```text
+Qt / caller
+→ SetDocumentPropertiesCommand
+→ DocumentSession validation/history preparation
+→ PartDocumentTransaction staged state
+→ atomic domain commit
+```
+
+A no-op creates neither a revision increment nor an Undo entry.
+
+A rejected/failed transaction leaves authored state and existing history unchanged.
+
+Undo and Redo reapply authored states through PartDocumentTransaction and therefore count as new semantic mutations with increasing technical DocumentRevision.
+
+<!-- section-id: internal.part-documents.session -->
+## DocumentSession
+
+`DocumentSession` is runtime-only and contains:
+
+- current physical path;
+- loaded PartDocument;
+- expected technical revision;
+- Undo/Redo history;
+- save checkpoint represented by the last successfully saved authored state.
+
+`needsSave()` compares authored state with the saved authored checkpoint. It is not defined by numeric DocumentRevision equality, which allows Undo back to the saved semantic state to become clean even though DocumentRevision increased.
+
+Closing and reopening creates fresh runtime history.
+
+<!-- section-id: internal.part-documents.persistence -->
+## Native Part persistence
+
+The native extension is `.ss2part`.
+
+Schema version 1 stores only authored state and required identity/version metadata. It does not serialize ProjectId, DocumentSession, Undo/Redo, Qt, Viewer or OCCT data.
+
+Save uses shared staged atomic-file persistence. The save checkpoint changes only after a successful write/replace.
+
+<!-- section-id: internal.part-documents.discovery -->
+## Discovery and canonical sessions
+
+ProjectSession owns a rebuildable Workspace index.
+
+A DocumentId resolves only when exactly one valid native file in the Workspace declares it. Duplicate physical files with the same DocumentId form `IdentityConflict` and include all discovered relative paths.
+
+When a resolved Part is already open, a second Open request returns the existing canonical DocumentSession rather than creating a second mutable session for the same DocumentId.
+
+<!-- section-id: internal.part-documents.current-limits -->
+## Current limits
+
+The current Part domain has no Sketch, Body, Feature, geometry evaluation, recompute graph, Viewer, topology selection, persistent naming, Material model, Assembly or Drawing.
+
+There is no OCCT dependency in the implemented PART-01 authored-state lifecycle.
+</script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.persistence" data-kind="internal" data-lang="en" data-path="docs/internal/PERSISTENCE.md">
 # Persistence — As-built
 
@@ -326,7 +422,7 @@ Operational documentation rules are defined in `governance/DOCUMENTATION.md`.
 
 The Project Workspace filesystem is authoritative for physical Project content.
 
-Current Project-level durable data is intentionally small. There is no hidden durable database that owns Project identity separately from the Workspace.
+There is no hidden durable database owning Project or Part Document identity separately from the Workspace.
 
 <!-- section-id: internal.persistence.project-metadata -->
 ## Project metadata
@@ -339,9 +435,40 @@ Project metadata is stored at:
 
 The current schema contains ProjectId, DisplayName, SchemaVersion and CreatedAt.
 
-Metadata writes use a private atomic-write path. Initialization fails closed if the Workspace is invalid or already initialized.
+Metadata initialization is fail-closed and uses staged publication. Metadata loading has a size limit and validates schema and field meaning before a ProjectSession can be opened.
 
-Metadata loading has a size limit and validates schema and field meaning before a ProjectSession can be opened.
+<!-- section-id: internal.persistence.part-document -->
+## Native Part Documents
+
+A native top-level Part is stored as:
+
+```text
+*.ss2part
+```
+
+The current private schema starts with the `SS2PART` signature and a schema version. It persists:
+
+- native document kind;
+- DocumentId;
+- Number;
+- Title;
+- Description;
+- Engineering Revision.
+
+The current schema does not persist ProjectId. Workspace membership is therefore physical/runtime context, not an owner ProjectId embedded in each Part.
+
+`DocumentRevision` is a technical in-memory synchronization counter in the current implementation and is not part of schema version 1.
+
+Unsupported schema versions, malformed fields, invalid DocumentIds and wrong declared document kind fail closed with structured diagnostics.
+
+<!-- section-id: internal.persistence.atomic-save -->
+## Atomic Part publication and Save
+
+New Part creation writes staged bytes and publishes only if the target path does not already exist.
+
+Save writes a temporary sibling file and replaces the target only after the complete serialized state has been written. On the Windows implementation, replacement uses an OS replace operation rather than delete-then-rename.
+
+The DocumentSession advances its save checkpoint only after successful persistence. If replacement fails, the in-memory authored state remains dirty and the previous durable Part remains the authoritative file.
 
 <!-- section-id: internal.persistence.recent -->
 ## Recent Projects catalog
@@ -354,46 +481,46 @@ The normal application selects its state root through Qt `QStandardPaths::AppLoc
 recent-projects-v1.txt
 ```
 
-The catalog has a private versioned text format with a magic header and schema version. Each entry stores:
-
-- ProjectId;
-- DisplayName;
-- absolute remembered Workspace path.
-
-The catalog has a 256 KiB size guard and a logical maximum of 20 entries.
-
-Catalog publication uses a temporary file and replacement backup so a failed replacement can restore the previous catalog.
+The catalog has a private versioned text format with a magic header and schema version. Each entry stores ProjectId, DisplayName and the remembered absolute Workspace path.
 
 <!-- section-id: internal.persistence.derived-state -->
-## Derived state
+## Runtime-only and derived state
 
-Recent availability status is not persisted.
+The following state is not serialized as Part authored state:
 
-`Available`, `WorkspaceMissing`, `ProjectInvalid` and `IdentityMismatch` are recomputed from the current filesystem and Project metadata whenever the Hub refreshes.
+- ProjectSession;
+- DocumentSession;
+- Undo/Redo history;
+- save-history cursor;
+- Workspace discovery index;
+- document conflict state;
+- Qt objects;
+- Viewer state;
+- OCCT/native geometry handles;
+- evaluated B-Rep or tessellation.
 
-ProjectSession is also runtime-only and is never serialized as Project design intent.
+Recent availability is also derived at runtime.
 
 <!-- section-id: internal.persistence.identity-safety -->
 ## Identity safety
 
-The store uses ProjectId as the logical Recent key.
+Project Recent state uses ProjectId as its logical key.
 
-Path normalization is used to compare locations, but path is never promoted to durable Project identity.
+Part discovery uses embedded DocumentId as logical identity and path only as location. A rename or move inside the Workspace does not change identity.
 
-Relocation validates the expected ProjectId at the replacement Workspace before changing the remembered location.
-
-A second presented location with the same ProjectId is an identity conflict unless the user explicitly performs relocation.
+If multiple native Part files declare one DocumentId, discovery records an identity conflict containing all relative paths and resolution/open by that DocumentId fails closed. No automatic ID rewrite is performed.
 
 <!-- section-id: internal.persistence.non-goals -->
 ## Current non-goals
 
 The current persistence layer does not provide:
 
-- global filesystem scanning for Project copies;
-- Project synchronization or merge;
+- Project synchronization or semantic merge;
 - cloud locking;
 - Duplicate / Save as New Project;
-- CAD Document persistence;
+- Part Save As / Save Copy As UI;
+- identity-conflict repair;
+- Assembly or Drawing persistence;
 - geometry or Viewer persistence.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.project-platform" data-kind="internal" data-lang="en" data-path="docs/internal/PROJECT_PLATFORM.md">
@@ -413,90 +540,72 @@ Current durable Project metadata is stored under the Workspace root at:
 .simplesolid/project.json
 ```
 
-The metadata contains:
+The metadata contains `project_id`, `display_name`, `schema_version` and `created_at`.
 
-- `project_id`;
-- `display_name`;
-- `schema_version`;
-- `created_at`.
-
-The current metadata schema version is 1.
-
-The metadata service validates existing initialized Workspaces fail-closed. Missing metadata, malformed metadata, unsupported schema, invalid ProjectId and invalid timestamps are explicit failures.
+The metadata service validates existing initialized Workspaces fail-closed.
 
 <!-- section-id: internal.project-platform.workspace -->
 ## Workspace
 
 A Project Workspace is exactly the filesystem root in which that Project lives.
 
-The Workspace path is not Project identity.
+The Workspace path is not Project identity. Moving or renaming the Workspace preserves `ProjectId`.
 
-Moving or renaming the Workspace preserves `ProjectId`. Project relocation therefore updates a known location only after identity has been revalidated.
+Native Part Documents are ordinary `.ss2part` files inside this Workspace. Their physical location is discovered from the filesystem rather than from a hidden persistent catalog.
 
 <!-- section-id: internal.project-platform.creation -->
 ## Project creation
 
-The Project Hub creation flow accepts:
-
-- Project name / DisplayName;
-- an existing parent Location;
-- one Project folder name.
-
-Project name and Project folder are independent. Neither is durable identity.
+The Project Hub creation flow accepts Project name / DisplayName, an existing parent Location and one Project folder name.
 
 Create requires the target child folder to be absent. Existing targets are never silently adopted, initialized or overwritten.
 
-Creation is staged:
-
-```text
-existing parent Location
-→ SS2-owned temporary staging directory
-→ metadata initialization
-→ publish staging directory as requested Workspace
-→ ProjectSession::open
-→ record Recent
-→ enter Workspace Shell
-```
-
-If creation fails, SS2 cleans only artifacts it owns. Rollback of a published Workspace verifies that its metadata still carries the ProjectId created by that operation before removing it.
-
-Folder input is restricted to one child folder name. Absolute paths, `.`, `..` and nested paths are rejected.
+Creation is staged before publication and cleans only SS2-owned artifacts on failure.
 
 <!-- section-id: internal.project-platform.session -->
 ## ProjectSession
 
 `ProjectSession` is runtime-only.
 
-Opening a Workspace validates Project metadata and resolves a canonical Workspace root. The session exposes the current ProjectId, DisplayName and Workspace root.
+Opening a Workspace validates Project metadata, resolves a canonical Workspace root and builds a runtime document discovery index.
 
-Closing a Project destroys/resets the active ProjectSession. Reopening creates a new runtime session for the same durable Project identity.
+The ProjectSession coordinates canonical active DocumentSessions for that Project. Within one ProjectSession, one resolved DocumentId has at most one active DocumentSession.
 
-ProjectSession is not persisted and is not Project identity.
+ProjectSession also owns no durable authored Part semantics. Those belong to the PartDocument loaded by its DocumentSession.
+
+Closing a Project destroys the runtime ProjectSession and all contained DocumentSessions.
+
+<!-- section-id: internal.project-platform.documents -->
+## Workspace Document discovery
+
+Discovery recursively scans the Workspace for native `.ss2part` files and skips the private `.simplesolid` metadata directory.
+
+A valid file contributes its embedded DocumentId and current path to the runtime index.
+
+One DocumentId at one path is resolved. One DocumentId at multiple paths becomes `IdentityConflict`. Invalid native files remain visible as invalid entries.
+
+Discovery is rebuildable. The current implementation does not require a continuous filesystem watcher.
 
 <!-- section-id: internal.project-platform.recent -->
 ## Recent Projects
 
 Recent Projects is application/user state, not Project persistence.
 
-The private catalog is versioned and keyed logically by `ProjectId`. It stores the ProjectId, DisplayName and remembered absolute Workspace path.
+The private catalog is versioned and keyed logically by `ProjectId`. Recording an already-known ProjectId at a different location is an identity conflict rather than a silent path update.
 
-The store keeps at most 20 entries.
-
-Recording an already-known ProjectId at a different location is an identity conflict rather than a silent path update. Explicit relocation is the supported operation for changing the remembered location of the same Project.
-
-Removing a Recent entry never modifies Project files.
+Removing a Recent entry never modifies Project or Part files.
 
 <!-- section-id: internal.project-platform.copy-semantics -->
 ## Filesystem copies
 
-An ordinary filesystem copy preserves the embedded ProjectId.
+An ordinary filesystem copy of a Project preserves ProjectId.
 
-If Hub already knows ProjectId A at one Workspace and another presented Workspace also declares ProjectId A, the second location is not registered as a separate logical Project.
+An ordinary filesystem copy of a `.ss2part` file preserves DocumentId.
 
-The current product has no Duplicate / Save as New Project operation yet. Creating a new independent identity from a copy is therefore not currently available.
+Inside one Workspace, two files carrying the same DocumentId are not treated as two independent Parts. They are an explicit identity conflict until the user resolves the filesystem situation outside the current PART-01 feature set.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.ui-project-hub" data-kind="internal" data-lang="en" data-path="docs/internal/UI_PROJECT_HUB.md">
-# Project Hub UI — As-built
+# Project Hub and Part Workspace UI — As-built
 
 <!-- doc-id: internal.ui-project-hub -->
 <!-- document-kind: internal -->
@@ -504,91 +613,83 @@ The current product has no Duplicate / Save as New Project operation yet. Creati
 <!-- section-id: internal.ui-project-hub.pages -->
 ## Hub and Workspace Shell
 
-The current Qt application uses a `QStackedWidget` with two pages:
+The Qt application uses a `QStackedWidget` with two pages:
 
 - Project Hub;
-- empty Workspace Shell.
+- Workspace Shell.
 
-The Workspace Shell currently presents the active Project name, ProjectId and Workspace path. It intentionally contains no CAD document/modeling UI yet.
+The Workspace Shell presents the active Project name, ProjectId and Workspace path plus a `PartWorkspacePanel`.
+
+The panel is intentionally separate from Project Hub responsibilities. It owns presentation for the current Part-document lifecycle but not authored semantics.
 
 <!-- section-id: internal.ui-project-hub.primary-actions -->
 ## Primary Project actions
 
-The Hub exposes:
+The Hub exposes `Create Project…` and `Open Project…`.
 
-- `Create Project…`;
-- `Open Project…`.
-
-Create opens one modal Project Creation dialog with:
-
-- Project name;
-- Location;
-- Project folder;
-- Final path preview.
-
-Location is the existing parent directory. Project folder is initially proposed from Project name and becomes independent once the user edits it.
-
-Open selects an already initialized SimpleSolid Project Workspace.
+Create opens the Project Creation dialog. Open selects an already initialized SimpleSolid Project Workspace.
 
 <!-- section-id: internal.ui-project-hub.recent-list -->
 ## Recent Projects list
 
 Recent entries show DisplayName and remembered Workspace path.
 
-Problematic entries also show a visible warning/status:
-
-- `Workspace not found`;
-- `Invalid Project`;
-- `Project mismatch`.
+Problematic entries also show `Workspace not found`, `Invalid Project` or `Project mismatch`.
 
 The warning state is derived at refresh time and is not persisted.
 
 <!-- section-id: internal.ui-project-hub.selection -->
-## Selection-dependent actions
+## Recent selection-dependent actions
 
-Recent actions are:
+Recent actions are `Open`, `Locate…` and `Remove from Recent`.
 
+No Recent entry is selected after Hub refresh. Open is enabled only for an actually selected, openable entry. Locate and Remove remain available for selected unavailable entries.
+
+<!-- section-id: internal.ui-project-hub.part-panel -->
+## Part Workspace panel
+
+The Part panel exposes:
+
+- `New Part…`;
+- `Refresh`;
 - `Open`;
-- `Locate…`;
-- `Remove from Recent`.
+- Number, Title, Description and Engineering Revision editors;
+- `Apply Properties`;
+- `Undo`;
+- `Redo`;
+- `Save`;
+- `Close Part`.
 
-No Recent entry is selected after Hub refresh.
+New Part asks for a Workspace-relative `.ss2part` path and proposes `Part001.ss2part`, `Part002.ss2part`, and so on when those names are free.
 
-The actions depend on a real Qt selection, not merely `currentItem()`.
+Resolved entries show title and relative path. Invalid files and identity conflicts are shown with warning state. Conflict entries display every conflicting relative path and cannot be opened.
 
-For a selected available entry:
+The UI obtains authored state through DocumentSession and sends property edits through the semantic command boundary. It does not mutate PartDocument directly.
 
-```text
-Open                enabled
-Locate…             enabled
-Remove from Recent  enabled
-```
+<!-- section-id: internal.ui-project-hub.dirty-close -->
+## Dirty-close UX
 
-For a selected unavailable/invalid/mismatched entry:
+Closing a dirty Part requires `Save`, `Discard` or `Cancel`.
 
-```text
-Open                disabled
-Locate…             enabled
-Remove from Recent  enabled
-```
+Closing the Project or application when any Part is dirty requires `Save All`, `Discard` or `Cancel`.
 
-Double-click opening is also blocked for a non-openable entry.
+A failed Save leaves the Part/Project open so authored in-memory changes are not silently lost.
 
 <!-- section-id: internal.ui-project-hub.recovery -->
-## Recovery UX
+## Project recovery UX
 
-`Locate…` is the recovery path for a moved Project.
+`Locate…` remains the recovery path for a moved Project.
 
-The UI only collects the replacement directory. Identity validation is performed below the UI by the Recent/Hub application layer.
+`Remove from Recent` removes only application history. Project and Part files are not modified.
 
-`Remove from Recent` removes only application history. The confirmation explicitly states that Project files are not modified.
+PART-01 does not provide automatic repair for duplicate Part DocumentIds.
 
 <!-- section-id: internal.ui-project-hub.boundary -->
 ## UI boundary
 
-The Qt layer converts strings/paths, displays diagnostics and maps derived application state to widgets.
+The Qt layer converts strings/paths, displays diagnostics and maps application state to widgets.
 
-It does not own ProjectId, Project metadata, Recent persistence semantics or relocation identity validation.
+It does not own ProjectId, DocumentId, authored Part state, persistence schemas, Undo/Redo semantics or identity-conflict resolution rules.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.overview" data-kind="product" data-lang="en" data-path="docs/product/en/OVERVIEW.md">
 # SimpleSolid 2.0 Product Documentation
@@ -606,19 +707,22 @@ It is written for understanding and using the application. It does not describe 
 <!-- section-id: product.overview.current -->
 ## What is currently available
 
-The current product provides the Project platform:
+The current product provides:
 
-- create a new Project;
-- open an existing Project;
-- stable Project identity independent of path;
-- Recent Projects;
+- creating and opening Projects;
+- stable Project identity and Recent Projects;
 - moving a Project and recovering its location with `Locate…`;
-- detection of missing, invalid or identity-mismatched Workspaces;
-- safe removal of an entry from Recent Projects only.
+- creating and opening native `.ss2part` Part Documents;
+- stable `DocumentId` independent of filename and path;
+- editing Number, Title, Description and Engineering Revision;
+- Undo / Redo for those changes;
+- Save and safe closing with unsaved-change protection;
+- rediscovering Parts after restart;
+- identity-conflict detection when two files in one Workspace carry the same DocumentId.
 
-After a Project is opened, the application currently shows an empty Workspace Shell.
+The current Part is a durable Document but does not yet contain geometric modeling.
 
-CAD modeling, Part, Assembly, Drawing and Viewer are not yet part of the available product surface.
+Sketch, Bodies/Features, Assembly, Drawing and Viewer are not yet part of the available product surface.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
@@ -626,6 +730,88 @@ CAD modeling, Part, Assembly, Drawing and Viewer are not yet part of the availab
 The Product Browser is generated from canonical Markdown documents stored in the repository.
 
 Polish and English are maintained as peer sources. The Browser opens product documentation in Polish by default and allows switching to English.
+</script>
+<script type="text/plain" class="doc-source" data-doc-id="product.parts" data-kind="product" data-lang="en" data-path="docs/product/en/PARTS.md">
+# Part Documents
+
+<!-- doc-id: product.parts -->
+<!-- document-kind: product -->
+
+<!-- section-id: product.parts.create -->
+## Creating a new Part
+
+After opening a Project, use `New Part…` in the Workspace.
+
+Enter a path relative to the current Workspace. A native Part file uses the extension:
+
+```text
+.ss2part
+```
+
+The application proposes `Part001.ss2part`, `Part002.ss2part`, and so on when those names are available.
+
+You may use an existing subfolder, for example `Parts/Shaft.ss2part`. The application does not silently overwrite an existing file.
+
+<!-- section-id: product.parts.identity -->
+## DocumentId, filename and properties
+
+Every new Part receives a stable `DocumentId`.
+
+Filename and path are not Document identity. You may rename or move the `.ss2part` file inside the Workspace; after `Refresh`, the same DocumentId is discovered at the new path.
+
+`Number`, `Title`, `Description` and `Engineering revision` are durable Document properties and are independent of the filename.
+
+<!-- section-id: product.parts.edit -->
+## Editing properties
+
+Select a valid Part in the list and choose `Open`.
+
+The properties panel lets you edit:
+
+- Number;
+- Title;
+- Description;
+- Engineering revision.
+
+`Apply Properties` changes the open Document session. The change is not durable on disk until you use `Save`.
+
+`Undo` and `Redo` operate on property changes in the current open session.
+
+<!-- section-id: product.parts.save-close -->
+## Save and closing
+
+`Save` writes the current authored Part state to its `.ss2part` file.
+
+When closing a Part with unsaved changes, the application requires `Save`, `Discard` or `Cancel`.
+
+When closing the complete Project or application while any Part is dirty, the choices are `Save All`, `Discard` and `Cancel`.
+
+If saving fails, the Document/Project remains open.
+
+<!-- section-id: product.parts.restart -->
+## Restart and reopen
+
+After restarting the application, open the same Project.
+
+SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId and saved properties.
+
+Undo/Redo history is not stored in the file and starts empty after reopening.
+
+<!-- section-id: product.parts.conflicts -->
+## DocumentId conflicts and invalid files
+
+If two `.ss2part` files in one Workspace contain the same DocumentId, the list shows `Identity conflict` and every discovered path.
+
+That entry cannot be opened by DocumentId until the conflict is removed. SimpleSolid does not arbitrarily choose one copy and does not automatically assign a new ID.
+
+A damaged or unsupported native Part is shown as `Invalid Part` instead of being treated as a valid Document.
+
+<!-- section-id: product.parts.current-limits -->
+## Current Part limits
+
+The current Part stores Document identity and common Document Properties.
+
+It does not yet contain Sketch, Bodies, Features, 3D geometry, Viewer, Material or Assembly/Drawing tools.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -743,9 +929,9 @@ The Project can later be opened again using `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Current limits
 
-The current Workspace Shell does not yet contain CAD Documents or modeling tools.
+The Workspace Shell now contains the first persistent CAD Document type: a native `.ss2part` Part with Document Properties, Undo/Redo and Save.
 
-Project Hub and the Project operations described here are the currently implemented product surface.
+Part geometric modeling, Assembly, Drawing and Viewer are not yet available. The current Part lifecycle is described in `Part Documents`.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.overview" data-kind="product" data-lang="pl" data-path="docs/product/pl/OVERVIEW.md">
 # Dokumentacja produktu SimpleSolid 2.0
@@ -763,19 +949,22 @@ Jest przeznaczona do zrozumienia i używania programu. Nie opisuje historii impl
 <!-- section-id: product.overview.current -->
 ## Co jest obecnie dostępne
 
-Obecny produkt udostępnia platformę Projektu:
+Obecny produkt udostępnia:
 
-- tworzenie nowego Projektu;
-- otwieranie istniejącego Projektu;
-- stabilną tożsamość Projektu niezależną od ścieżki;
-- listę Recent Projects;
+- tworzenie i otwieranie Projektów;
+- stabilną tożsamość Projektu oraz Recent Projects;
 - przenoszenie Projektu i odzyskiwanie lokalizacji przez `Locate…`;
-- wykrywanie brakującego, niepoprawnego lub niezgodnego Workspace;
-- bezpieczne usuwanie wpisu wyłącznie z Recent Projects.
+- tworzenie i otwieranie natywnych dokumentów Part `.ss2part`;
+- stabilny `DocumentId` niezależny od nazwy i ścieżki pliku;
+- edycję właściwości Number, Title, Description i Engineering Revision;
+- Undo / Redo dla tych zmian;
+- Save i bezpieczne zamykanie z ostrzeżeniem o niezapisanych zmianach;
+- ponowne odnajdywanie Partów po restarcie;
+- wykrywanie konfliktu, gdy dwa pliki w jednym Workspace mają ten sam DocumentId.
 
-Po otwarciu Projektu program pokazuje obecnie pusty Workspace Shell.
+Obecny Part jest dokumentem trwałym, ale nie zawiera jeszcze modelowania geometrycznego.
 
-Modelowanie CAD, Part, Assembly, Drawing i Viewer nie są jeszcze częścią dostępnej powierzchni produktu.
+Sketch, Bodies/Features, Assembly, Drawing i Viewer nie są jeszcze częścią dostępnej powierzchni produktu.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
@@ -783,6 +972,88 @@ Modelowanie CAD, Part, Assembly, Drawing i Viewer nie są jeszcze częścią dos
 Product Browser jest generowany z dokumentów Markdown znajdujących się w repozytorium.
 
 Wersje polska i angielska są utrzymywane jako równorzędne źródła. Browser domyślnie otwiera dokumentację po polsku i pozwala przełączyć ją na English.
+</script>
+<script type="text/plain" class="doc-source" data-doc-id="product.parts" data-kind="product" data-lang="pl" data-path="docs/product/pl/PARTS.md">
+# Dokumenty Part
+
+<!-- doc-id: product.parts -->
+<!-- document-kind: product -->
+
+<!-- section-id: product.parts.create -->
+## Tworzenie nowego Parta
+
+Po otwarciu Projektu w Workspace użyj `New Part…`.
+
+Podaj ścieżkę względną wewnątrz bieżącego Workspace. Natywny plik Part używa rozszerzenia:
+
+```text
+.ss2part
+```
+
+Program proponuje kolejne nazwy `Part001.ss2part`, `Part002.ss2part` itd., jeżeli są wolne.
+
+Możesz wskazać istniejący podfolder, np. `Parts/Shaft.ss2part`. Program nie nadpisze po cichu istniejącego pliku.
+
+<!-- section-id: product.parts.identity -->
+## DocumentId, nazwa pliku i właściwości
+
+Każdy nowy Part otrzymuje stabilny `DocumentId`.
+
+Nazwa pliku i ścieżka nie są tożsamością Dokumentu. Możesz zmienić nazwę lub przenieść `.ss2part` wewnątrz Workspace; po `Refresh` ten sam DocumentId zostanie odnaleziony pod nową ścieżką.
+
+Pola `Number`, `Title`, `Description` i `Engineering revision` są trwałymi właściwościami Dokumentu i są niezależne od filename.
+
+<!-- section-id: product.parts.edit -->
+## Edycja właściwości
+
+Zaznacz poprawny Part na liście i wybierz `Open`.
+
+Panel właściwości pozwala zmienić:
+
+- Number;
+- Title;
+- Description;
+- Engineering revision.
+
+`Apply Properties` wprowadza zmianę do otwartej sesji Dokumentu. Zmiana nie jest jeszcze trwała na dysku, dopóki nie wykonasz `Save`.
+
+`Undo` i `Redo` działają dla zmian właściwości w bieżącej otwartej sesji.
+
+<!-- section-id: product.parts.save-close -->
+## Save i zamykanie
+
+`Save` zapisuje bieżący authored state Parta do jego pliku `.ss2part`.
+
+Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Discard` albo `Cancel`.
+
+Przy zamykaniu całego Projektu lub aplikacji, gdy jakikolwiek Part jest dirty, dostępne są `Save All`, `Discard` i `Cancel`.
+
+Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty.
+
+<!-- section-id: product.parts.restart -->
+## Restart i ponowne otwarcie
+
+Po restarcie aplikacji otwórz ten sam Projekt.
+
+SimpleSolid ponownie skanuje Workspace. Zapisany Part zostaje odnaleziony z tym samym DocumentId i zapisanymi właściwościami.
+
+Historia Undo/Redo nie jest zapisywana do pliku i po ponownym otwarciu zaczyna się od nowa.
+
+<!-- section-id: product.parts.conflicts -->
+## Konflikt DocumentId i niepoprawne pliki
+
+Jeżeli dwa pliki `.ss2part` w jednym Workspace zawierają ten sam DocumentId, lista pokazuje `Identity conflict` i wszystkie wykryte ścieżki.
+
+Taki wpis nie może zostać otwarty przez DocumentId, dopóki konflikt nie zostanie usunięty. SimpleSolid nie wybiera arbitralnie jednej kopii i nie nadaje automatycznie nowego ID.
+
+Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako `Invalid Part` zamiast być traktowany jako poprawny Dokument.
+
+<!-- section-id: product.parts.current-limits -->
+## Aktualne ograniczenia Parta
+
+Obecny Part przechowuje tożsamość i wspólne właściwości Dokumentu.
+
+Nie zawiera jeszcze Sketch, Bodies, Features, geometrii 3D, Viewer, Material ani narzędzi Assembly/Drawing.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty
@@ -900,9 +1171,9 @@ Projekt można później ponownie otworzyć przez `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Aktualne ograniczenia
 
-Obecny Workspace Shell nie zawiera jeszcze dokumentów CAD ani narzędzi modelowania.
+Workspace Shell zawiera obecnie pierwszy trwały typ dokumentu CAD: Part `.ss2part` z właściwościami Dokumentu, Undo/Redo i Save.
 
-Project Hub i opisane tutaj operacje Projektu są aktualnie zaimplementowaną powierzchnią produktu.
+Modelowanie geometryczne Parta, Assembly, Drawing i Viewer nie są jeszcze dostępne. Szczegóły bieżącego lifecycle Parta opisuje dokument `Dokumenty Part`.
 </script>
 
 <script>

@@ -1,17 +1,22 @@
 version: 1
-status: active
+status: completed
 active_work: "work/PART-01_PART_DOCUMENT_LIFECYCLE.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
 next:
-  - implement PART-01 only within its accepted scope
+  - no implementation work is active after PART-01
+  - Owner must accept the next explicit work contract before further CAD-domain implementation
   - no Sketch, geometry modeling, Assembly, Drawing, BOM, export model, or OCCT modeling without a later accepted contract
 notes:
   - DOC-01 and DOC-01A remain complete.
   - ADR-0002 accepted by Owner on 2026-09-23.
-  - PART-01 accepted by Owner on 2026-09-23.
-  - PART-01 introduces the first persistent PartDocument lifecycle and uses .ss2part as the native Part extension.
-  - PART-01 requires internal and PL/EN product documentation updates before completion.
+  - PART-01 accepted by Owner on 2026-09-23 and completed.
+  - Native Part extension is .ss2part.
+  - ProjectSession now rebuilds Workspace Part discovery and coordinates canonical DocumentSessions.
+  - Part authored persistence contains DocumentId and common properties, not ProjectId, runtime history, Viewer, or OCCT identity.
+  - IdentityConflict fails closed when multiple Workspace files declare one DocumentId.
+  - Dirty Part/Project/application close requires explicit Save/Discard/Cancel behavior.
+  - Internal and PL/EN product documentation describe the as-built PART-01 lifecycle.
   - Root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.

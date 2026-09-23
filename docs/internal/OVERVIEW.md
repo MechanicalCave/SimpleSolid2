@@ -10,47 +10,57 @@ It is explanatory, not normative. If an as-built document conflicts with the Eng
 <!-- section-id: internal.overview.current-scope -->
 ## Current implemented scope
 
-The current executable implements the Project platform and a minimal Qt application shell:
+The current executable implements the Project platform plus the first persistent CAD Document lifecycle for an empty Part:
 
 ```text
 App start
 → Project Hub
-→ Create new Project / Open existing Project
+→ Create / Open Project
 → stable ProjectId + Workspace metadata
 → ProjectSession
-→ empty Workspace Shell
-→ Close
-→ Recent Projects
-→ reopen / relocate
+→ discover native .ss2part Documents
+→ Create / Open Part
+→ DocumentSession
+→ edit common Document Properties
+→ Undo / Redo
+→ Save / Close
+→ restart
+→ rediscover and reopen the same DocumentId
 ```
 
-The current product does **not** yet implement Part, Assembly, Drawing, DocumentSession, CAD geometry, OCCT modeling, Viewer or topology/reference semantics.
+The current product does **not** yet implement Part feature modeling, Sketch, Bodies, geometry evaluation, OCCT modeling, Viewer, Assembly, Drawing, BOM, topology selection or persistent naming.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
 
-The implemented Project surface follows the frozen dependency direction:
+The implemented dependency direction is:
 
 ```text
-Qt Project Hub / Workspace Shell
+Qt Project Hub / PartWorkspacePanel
         ↓
-internal ProjectHubController
+ProjectHubController / ProjectSession / DocumentSession
         ↓
-ProjectSession / RecentProjectStore / ProjectWorkspaceMetadataService
+PartDocument + PartDocumentTransaction
         ↓
-filesystem + Qt application-state location adapter
+PartDocumentStore / shared atomic-file persistence
+        ↓
+filesystem
 ```
 
-Qt selects presentation and user-state locations. Durable Project identity and Project metadata are owned below the UI.
+Project and Document authored semantics remain below Qt. No OCCT type participates in the current Part lifecycle.
 
 <!-- section-id: internal.overview.identity -->
 ## Identity and location
 
 A Project is identified by stable `ProjectId`.
 
-A Workspace path is a location, not identity. Moving or renaming the Workspace preserves Project identity. An ordinary filesystem copy also preserves the embedded ProjectId and therefore does not automatically create a new logical Project.
+A Part Document is independently identified by stable `DocumentId`.
 
-The current metadata implementation generates and validates textual UUIDv4 ProjectIds. That textual format is an implementation fact, not an additional Foundation-level identity rule.
+Neither identity is a path or filename. Moving or renaming a Workspace preserves ProjectId. Moving or renaming a native `.ss2part` file inside its Workspace preserves DocumentId.
+
+The current implementations serialize ProjectId and DocumentId as textual UUIDv4 values. That encoding is an implementation fact, not an additional Foundation-level identity rule.
+
+A copied `.ss2part` file preserves its embedded DocumentId. If more than one file in one Workspace declares the same DocumentId, discovery reports `IdentityConflict` and resolution by that ID fails closed.
 
 <!-- section-id: internal.overview.documentation -->
 ## Documentation system

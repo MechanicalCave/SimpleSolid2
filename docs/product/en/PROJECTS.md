@@ -113,6 +113,6 @@ The Project can later be opened again using `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Current limits
 
-The current Workspace Shell does not yet contain CAD Documents or modeling tools.
+The Workspace Shell now contains the first persistent CAD Document type: a native `.ss2part` Part with Document Properties, Undo/Redo and Save.
 
-Project Hub and the Project operations described here are the currently implemented product surface.
+Part geometric modeling, Assembly, Drawing and Viewer are not yet available. The current Part lifecycle is described in `Part Documents`.

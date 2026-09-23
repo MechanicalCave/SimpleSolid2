@@ -3,7 +3,17 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
+#include <string>
+
+#if defined(_WIN32)
+#define NOMINMAX
+#include <windows.h>
+#ifdef DocumentProperties
+#undef DocumentProperties
+#endif
+#endif
 
 using namespace simplesolid2;
 
@@ -16,6 +26,14 @@ void check(bool value, const char* expression, int line) {
     }
 }
 #define CHECK(expr) check(static_cast<bool>(expr), #expr, __LINE__)
+
+std::string readText(const std::filesystem::path& path) {
+    std::ifstream in{path, std::ios::binary};
+    CHECK(static_cast<bool>(in));
+    return std::string{
+        std::istreambuf_iterator<char>{in},
+        std::istreambuf_iterator<char>{}};
+}
 
 struct TempDirectory final {
     std::filesystem::path path;
@@ -88,6 +106,42 @@ int main() {
 
     CHECK(session.undo().changed);
     CHECK(!session.needsSave());
+
+#if defined(_WIN32)
+    const auto durable_before_failed_save = readText(path);
+
+    properties = session.document().properties();
+    properties.description = "This change must remain in memory after save failure";
+    CHECK(session.execute(
+              application::SetDocumentPropertiesCommand{properties})
+              .changed);
+    CHECK(session.needsSave());
+
+    HANDLE locked = ::CreateFileW(
+        path.c_str(),
+        GENERIC_READ,
+        FILE_SHARE_READ,
+        nullptr,
+        OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL,
+        nullptr);
+    CHECK(locked != INVALID_HANDLE_VALUE);
+
+    const auto failed_save = session.save();
+    CHECK(!failed_save.ok());
+    CHECK(failed_save.diagnostic.code ==
+          application::DocumentSessionErrorCode::persistence_failure);
+    CHECK(session.needsSave());
+
+    CHECK(::CloseHandle(locked) != 0);
+    CHECK(readText(path) == durable_before_failed_save);
+
+    auto persisted_after_failure = store.load(path);
+    CHECK(persisted_after_failure.ok());
+    CHECK(persisted_after_failure.document->properties().description.empty());
+    CHECK(session.document().properties().description ==
+          "This change must remain in memory after save failure");
+#endif
 
     return EXIT_SUCCESS;
 }
