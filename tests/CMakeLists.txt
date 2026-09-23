@@ -67,3 +67,31 @@ add_test(
 set_tests_properties(ph01.app_smoke PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+add_executable(ph02a_project_hub_selection_ux_test
+    project_hub_selection_ux_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
+)
+
+target_include_directories(ph02a_project_hub_selection_ux_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/application
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(ph02a_project_hub_selection_ux_test
+    PRIVATE
+        simplesolid2_application
+        Qt6::Widgets
+)
+
+target_compile_features(ph02a_project_hub_selection_ux_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME ph02a.project_hub_selection_ux
+    COMMAND ph02a_project_hub_selection_ux_test
+)
+
+set_tests_properties(ph02a.project_hub_selection_ux PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
