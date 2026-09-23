@@ -5,6 +5,7 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -371,7 +372,10 @@ int main(int argc, char* argv[]) {
     tree->clearSelection();
     xy_plane->setSelected(true);
     origin_point->setSelected(true);
-    tree->setCurrentItem(origin_point);
+    tree->setCurrentItem(
+        origin_point,
+        0,
+        QItemSelectionModel::NoUpdate);
     QApplication::processEvents();
 
     CHECK(hide_references->isEnabled());
