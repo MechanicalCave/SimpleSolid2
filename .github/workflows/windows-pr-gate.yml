@@ -48,44 +48,40 @@ jobs:
           persist-credentials: false
 
       - name: Verify exact checkout
-        shell: powershell
+        shell: cmd
         run: |
-          $ErrorActionPreference = "Stop"
-          $expected = "${{ github.event.pull_request.head.sha || github.sha }}"
-          $actual = (git rev-parse HEAD).Trim()
-          Write-Host "[runner] machine: $env:COMPUTERNAME"
-          Write-Host "[runner] user: $(whoami)"
-          Write-Host "[runner] workspace: $env:GITHUB_WORKSPACE"
-          Write-Host "[runner] expected SHA: $expected"
-          Write-Host "[runner] checkout SHA: $actual"
-          if ($actual -ne $expected) {
-              throw "Runner checkout SHA mismatch: expected $expected, got $actual"
-          }
+          @echo off
+          set EXPECTED=${{ github.event.pull_request.head.sha || github.sha }}
+          for /f %%i in ('git rev-parse HEAD') do set ACTUAL=%%i
+          echo [runner] machine: %COMPUTERNAME%
+          echo [runner] workspace: %GITHUB_WORKSPACE%
+          echo [runner] expected SHA: %EXPECTED%
+          echo [runner] checkout SHA: %ACTUAL%
+          if /I not "%ACTUAL%"=="%EXPECTED%" (
+            echo Runner checkout SHA mismatch.
+            exit /b 1
+          )
 
       - name: Configure SS2 machine-local environment
-        shell: powershell
+        shell: cmd
         run: |
-          $ErrorActionPreference = "Stop"
-          .\ss2.ps1 setup -QtRoot "D:\Qt" -OcctRoot "D:\SimpleSolid2\.simplesolid-env"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ".\ss2.ps1" setup -QtRoot "D:\Qt" -OcctRoot "D:\SimpleSolid2\.simplesolid-env"
+          if errorlevel 1 exit /b 1
 
       - name: Bootstrap verification
-        shell: powershell
+        shell: cmd
         run: |
-          $ErrorActionPreference = "Stop"
-          .\ss2.ps1 verify
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ".\ss2.ps1" verify
+          if errorlevel 1 exit /b 1
 
       - name: Build
-        shell: powershell
+        shell: cmd
         run: |
-          $ErrorActionPreference = "Stop"
-          .\ss2.ps1 build
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ".\ss2.ps1" build
+          if errorlevel 1 exit /b 1
 
       - name: Test
-        shell: powershell
+        shell: cmd
         run: |
-          $ErrorActionPreference = "Stop"
-          .\ss2.ps1 test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ".\ss2.ps1" test
+          if errorlevel 1 exit /b 1
