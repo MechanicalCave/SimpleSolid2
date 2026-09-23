@@ -15,6 +15,7 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QString>
+#include <QStyle>
 #include <QVBoxLayout>
 #include <QWidget>
 
@@ -58,6 +59,22 @@ QString fromFilesystemPath(const std::filesystem::path& value) {
         reinterpret_cast<const char*>(utf8.data()),
         static_cast<qsizetype>(utf8.size()));
 #endif
+}
+
+QString availabilityLabel(
+    application::internal::RecentProjectAvailability availability) {
+    using application::internal::RecentProjectAvailability;
+    switch (availability) {
+    case RecentProjectAvailability::available:
+        return {};
+    case RecentProjectAvailability::workspace_missing:
+        return QStringLiteral("Workspace not found");
+    case RecentProjectAvailability::project_invalid:
+        return QStringLiteral("Invalid Project");
+    case RecentProjectAvailability::identity_mismatch:
+        return QStringLiteral("Project mismatch");
+    }
+    return QStringLiteral("Project unavailable");
 }
 
 } // namespace
@@ -222,7 +239,7 @@ void ProjectHubWindow::refreshRecent() {
     recent_list_->setCurrentRow(-1);
     syncRecentActionState();
 
-    const auto listed = controller_.recentProjects();
+    const auto listed = controller_.recentProjectHubEntries();
     if (!listed.ok()) {
         hub_status_->setText(
             QStringLiteral("Recent Projects unavailable: ") +
@@ -230,17 +247,38 @@ void ProjectHubWindow::refreshRecent() {
         return;
     }
 
-    for (const auto& entry : listed.entries) {
-        const auto text =
-            fromUtf8(entry.display_name) +
+    for (const auto& view : listed.entries) {
+        auto text =
+            fromUtf8(view.recent.display_name) +
             QStringLiteral("\n") +
-            fromFilesystemPath(entry.workspace_root);
+            fromFilesystemPath(view.recent.workspace_root);
+
+        const auto status = availabilityLabel(view.availability);
+        if (!status.isEmpty()) {
+            text += QStringLiteral("\n⚠ ") + status;
+        }
+
         auto* item = new QListWidgetItem(text, recent_list_);
         item->setData(
             Qt::UserRole,
-            fromUtf8(entry.project_id));
-        item->setToolTip(
-            QStringLiteral("ProjectId: ") + fromUtf8(entry.project_id));
+            fromUtf8(view.recent.project_id));
+        item->setData(
+            internal::recentOpenableRole,
+            view.openable());
+        item->setData(
+            internal::recentAvailabilityRole,
+            static_cast<int>(view.availability));
+
+        auto tooltip =
+            QStringLiteral("ProjectId: ") + fromUtf8(view.recent.project_id);
+        if (!view.diagnostic.empty()) {
+            tooltip += QStringLiteral("\n") + fromUtf8(view.diagnostic);
+        }
+        item->setToolTip(tooltip);
+
+        if (!view.openable()) {
+            item->setIcon(style()->standardIcon(QStyle::SP_MessageBoxWarning));
+        }
     }
 
     recent_list_->clearSelection();
@@ -258,7 +296,8 @@ void ProjectHubWindow::refreshRecent() {
 
 void ProjectHubWindow::syncRecentActionState() {
     const bool selected = internal::hasSingleRecentSelection(*recent_list_);
-    open_recent_button_->setEnabled(selected);
+    open_recent_button_->setEnabled(
+        selected && internal::selectedRecentCanOpen(*recent_list_));
     locate_recent_button_->setEnabled(selected);
     remove_recent_button_->setEnabled(selected);
 }
@@ -317,6 +356,8 @@ void ProjectHubWindow::openProject() {
 }
 
 void ProjectHubWindow::openSelectedRecent() {
+    if (!internal::selectedRecentCanOpen(*recent_list_)) return;
+
     const auto project_id = selectedProjectId();
     if (project_id.empty()) return;
 
