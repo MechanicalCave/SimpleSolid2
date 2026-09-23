@@ -13,6 +13,7 @@ namespace simplesolid2::viewer {
 enum class SelectionIntentMode : std::uint8_t {
     replace,
     toggle,
+    clear,
 };
 
 struct SelectionIntent final {
@@ -20,6 +21,9 @@ struct SelectionIntent final {
     SelectionIntentMode mode{SelectionIntentMode::replace};
 
     [[nodiscard]] bool valid() const noexcept {
+        if (mode == SelectionIntentMode::clear) {
+            return !token.valid();
+        }
         return token.valid();
     }
 };
