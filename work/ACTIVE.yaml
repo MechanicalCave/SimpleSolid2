@@ -1,19 +1,17 @@
 version: 1
-status: completed
-active_work: "work/PH-01_PROJECT_HUB.md"
+status: active
+active_work: "work/PH-02A_PROJECT_HUB_SELECTION_UX.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
 next:
-  - no implementation work is active after PH-01
-  - Owner must accept the next explicit work contract before further product implementation
+  - make Recent Project actions depend on real visible selection
+  - add Qt regression coverage for selection state
 notes:
-  - PH-01 accepted by Owner on 2026-09-23.
-  - ADR-0001 accepted by Owner on 2026-09-23.
-  - Project metadata persistence is complete.
-  - ProjectSession lifecycle is complete and remains runtime-only.
-  - Recent Projects persistence uses ProjectId as logical identity with explicit relocation.
-  - Minimal Qt Project Hub and empty Workspace Shell are implemented.
-  - Full PH-01 lifecycle and application smoke tests pass on the self-hosted Windows/MSVC gate.
-  - No Part, Assembly, Drawing, DocumentSession, Viewer, OCCT modeling or other CAD-domain implementation is authorized without the next accepted work contract.
+  - PH-01 / MAIN v0.1 is complete.
+  - PH-02A accepted by Owner on 2026-09-23.
+  - PH-02A is limited to Project Hub Recent selection UX.
+  - Create Project workflow is explicitly out of scope for PH-02A.
+  - ProjectId, metadata, Recent persistence semantics and architecture remain unchanged.
+  - No CAD-domain implementation is authorized by PH-02A.
   - SS1 remains donor/reference only; SS2 Foundation remains authoritative.
