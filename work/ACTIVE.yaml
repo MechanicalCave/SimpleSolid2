@@ -1,19 +1,20 @@
 version: 1
-status: completed
-active_work: "work/PH-02A_PROJECT_HUB_SELECTION_UX.md"
+status: active
+active_work: "work/PH-02B_RECENT_PROJECT_AVAILABILITY_UX.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
 next:
-  - no implementation work is active after PH-02A
-  - Create Project parent-folder/workspace-creation UX is an unresolved candidate topic, not an accepted work contract
-  - Owner must accept the next explicit work contract before further product implementation
+  - derive Recent Project availability in the internal Project Hub layer
+  - present missing/invalid/mismatched Recent entries in Qt Hub
+  - add application and Qt regression coverage
 notes:
   - PH-01 / MAIN v0.1 is complete.
-  - PH-02A accepted by Owner on 2026-09-23 and completed.
-  - Recent Project actions now require a real visible selection; a current-only item does not enable actions.
-  - PH-02A regression coverage passes together with all PH-01 tests.
-  - Create Project workflow was explicitly out of scope for PH-02A and remains unchanged.
+  - PH-02A is complete.
+  - PH-02B accepted by Owner on 2026-09-23.
+  - Availability is derived runtime/presentation state and must not be persisted.
+  - Missing Recent entries remain registered for explicit Locate recovery.
+  - Create Project workflow is out of scope for PH-02B.
   - ProjectId, metadata, Recent persistence semantics and architecture remain unchanged.
-  - No CAD-domain implementation is authorized without the next accepted work contract.
+  - No CAD-domain implementation is authorized by PH-02B.
   - SS1 remains donor/reference only; SS2 Foundation remains authoritative.
