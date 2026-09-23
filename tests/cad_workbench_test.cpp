@@ -474,6 +474,29 @@ int main(int argc, char* argv[]) {
     CHECK(viewport->selection().selected.size() == 2U);
     CHECK(viewport->selection().primary.has_value());
     CHECK(*viewport->selection().primary == origin_point_token);
+
+    if (viewport->selection_handler_) {
+        viewport->selection_handler_(
+            viewer::SelectionIntent{
+                {},
+                viewer::SelectionIntentMode::clear});
+    }
+    QApplication::processEvents();
+    CHECK(tree->selectedItems().empty());
+    CHECK(viewport->selection().selected.empty());
+    CHECK(!viewport->selection().primary.has_value());
+
+    viewport->emitSelectionIntent(
+        xy_plane_token,
+        viewer::SelectionIntentMode::replace);
+    viewport->emitSelectionIntent(
+        origin_point_token,
+        viewer::SelectionIntentMode::toggle);
+    QApplication::processEvents();
+    CHECK(tree->selectedItems().size() == 2);
+    CHECK(viewport->selection().selected.size() == 2U);
+    CHECK(viewport->selection().primary.has_value());
+    CHECK(*viewport->selection().primary == origin_point_token);
     CHECK(properties_stack->currentWidget()->objectName() ==
           QStringLiteral("referencePropertiesPage"));
     CHECK(reference_name->text() ==
