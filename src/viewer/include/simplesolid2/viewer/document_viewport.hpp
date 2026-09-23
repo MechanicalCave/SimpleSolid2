@@ -2,6 +2,8 @@
 
 #include <simplesolid2/viewer/camera_state.hpp>
 #include <simplesolid2/viewer/navigation.hpp>
+#include <simplesolid2/viewer/reference_presentation.hpp>
+#include <simplesolid2/viewer/selection.hpp>
 
 #include <optional>
 
@@ -24,6 +26,15 @@ public:
         CameraProjection projection) = 0;
 
     virtual void fitAll() = 0;
+
+    virtual bool setReferenceScene(
+        const ReferenceScene& scene) = 0;
+
+    virtual bool setPresentationSelection(
+        const PresentationSelection& selection) = 0;
+
+    virtual void setSelectionIntentHandler(
+        SelectionIntentHandler handler) = 0;
 };
 
 } // namespace simplesolid2::viewer
