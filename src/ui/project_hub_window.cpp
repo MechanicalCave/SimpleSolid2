@@ -218,6 +218,8 @@ void ProjectHubWindow::buildWorkspacePage() {
 
 void ProjectHubWindow::refreshRecent() {
     recent_list_->clear();
+    recent_list_->setCurrentRow(-1);
+    syncRecentActionState();
 
     const auto listed = controller_.recentProjects();
     if (!listed.ok()) {
