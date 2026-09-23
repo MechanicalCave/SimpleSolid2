@@ -29,6 +29,7 @@ public:
         application::DocumentSession* session);
 
     void clear();
+    void resetRuntimeState();
     void refreshPresentation();
 
     void setSelectionChangedHandler(
