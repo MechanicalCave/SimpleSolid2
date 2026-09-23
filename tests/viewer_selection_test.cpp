@@ -45,5 +45,13 @@ int main() {
     intent.token = {};
     CHECK(!intent.valid());
 
+    SelectionIntent clear_intent{
+        {},
+        SelectionIntentMode::clear};
+    CHECK(clear_intent.valid());
+
+    clear_intent.token = first;
+    CHECK(!clear_intent.valid());
+
     return EXIT_SUCCESS;
 }
