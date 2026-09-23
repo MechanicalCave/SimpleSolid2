@@ -15,8 +15,14 @@ struct SetDocumentPropertiesCommand final {
     core::DocumentProperties properties;
 };
 
+struct SetBuiltinReferenceVisibilityCommand final {
+    std::vector<core::BuiltinReferenceRole> targets;
+    bool visible{true};
+};
+
 enum class DocumentSessionErrorCode {
     none,
+    invalid_command,
     revision_diverged,
     history_diverged,
     transaction_failure,
@@ -68,6 +74,8 @@ public:
 
     [[nodiscard]] DocumentSessionResult execute(
         const SetDocumentPropertiesCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const SetBuiltinReferenceVisibilityCommand& command);
     [[nodiscard]] DocumentSessionResult undo();
     [[nodiscard]] DocumentSessionResult redo();
     [[nodiscard]] DocumentSessionResult save();
@@ -79,6 +87,9 @@ private:
     };
 
     [[nodiscard]] DocumentSessionResult verifyRevision() const;
+    [[nodiscard]] DocumentSessionResult commitCommandState(
+        part::PartAuthoredState after,
+        const char* failure_message);
     [[nodiscard]] DocumentSessionResult applyHistoricalState(
         const part::PartAuthoredState& expected_current,
         const part::PartAuthoredState& target);
