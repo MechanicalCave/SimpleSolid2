@@ -10,44 +10,58 @@ It is explanatory, not normative. If an as-built document conflicts with the Eng
 <!-- section-id: internal.overview.current-scope -->
 ## Current implemented scope
 
-The current executable implements the Project platform plus the first persistent CAD Document lifecycle for an empty Part:
+The current executable implements the Project platform, persistent empty Part Documents and the shared CAD Workbench / Viewer foundation:
 
 ```text
 App start
 → Project Hub
 → Create / Open Project
-→ stable ProjectId + Workspace metadata
 → ProjectSession
 → discover native .ss2part Documents
-→ Create / Open Part
-→ DocumentSession
-→ edit common Document Properties
+→ Create / Open several Parts
+→ canonical DocumentSessions
+→ shared CAD Workbench
+→ bottom Document Tabs + one ActiveDocumentSession
+→ Document Tree + built-in Origin
+→ shared Properties / Operations surfaces
+→ OCCT-backed 3D Viewport + reference grid + ViewCube
+→ Tree / Viewport selection synchronization
+→ persistent Show / Hide of Origin references
 → Undo / Redo
 → Save / Close
 → restart
-→ rediscover and reopen the same DocumentId
+→ rediscover the same DocumentId and saved Origin visibility
 ```
 
-The current product does **not** yet implement Part feature modeling, Sketch, Bodies, geometry evaluation, OCCT modeling, Viewer, Assembly, Drawing, BOM, topology selection or persistent naming.
+The product still does **not** implement Sketch, Body/Feature modeling, solid geometry evaluation, Assembly, Drawing, BOM, modeled-topology selection or persistent topology naming.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
 
-The implemented dependency direction is:
+The implemented dependency direction has two coordinated branches:
 
 ```text
-Qt Project Hub / PartWorkspacePanel
+Qt ProjectHubWindow
         ↓
-ProjectHubController / ProjectSession / DocumentSession
-        ↓
-PartDocument + PartDocumentTransaction
-        ↓
-PartDocumentStore / shared atomic-file persistence
-        ↓
-filesystem
+CadWorkbenchShell + CadWorkbench
+        ├── ProjectSession / DocumentSession
+        │       ↓
+        │   PartDocument + PartDocumentTransaction
+        │       ↓
+        │   PartDocumentStore / atomic persistence
+        │
+        └── PartViewportController / Tree adapter
+                ↓
+            provider-neutral Viewer API
+                ↓
+            Qt/OCCT Viewer provider
+                ↓
+                OCCT
 ```
 
-Project and Document authored semantics remain below Qt. No OCCT type participates in the current Part lifecycle.
+`CadWorkbenchShell` owns only the fixed UI regions. Part-specific lifecycle, Tree and Viewer adapters sit outside that neutral shell.
+
+OCCT types stay inside the concrete Viewer provider. They do not participate in Part authored semantics, persistence, Document identity or command/transaction ownership.
 
 <!-- section-id: internal.overview.identity -->
 ## Identity and location
@@ -61,6 +75,13 @@ Neither identity is a path or filename. Moving or renaming a Workspace preserves
 The current implementations serialize ProjectId and DocumentId as textual UUIDv4 values. That encoding is an implementation fact, not an additional Foundation-level identity rule.
 
 A copied `.ss2part` file preserves its embedded DocumentId. If more than one file in one Workspace declares the same DocumentId, discovery reports `IdentityConflict` and resolution by that ID fails closed.
+
+<!-- section-id: internal.overview.runtime-presentation -->
+## Runtime and persistent presentation state
+
+Camera, projection, pan/orbit/zoom, active selection and primary selection are runtime-only. They do not increment DocumentRevision, dirty the Part or create CAD Undo entries.
+
+User-authored visibility of built-in Origin references is different: it is persistent presentation semantics stored by PartDocument, changed through DocumentSession commands, Undo/Redo-able and saved in the native Part file.
 
 <!-- section-id: internal.overview.documentation -->
 ## Documentation system
