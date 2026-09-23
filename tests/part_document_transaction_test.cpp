@@ -21,6 +21,9 @@ int main() {
     auto document = part::PartDocument::create(core::DocumentId::generate());
     CHECK(document.revision().value() == 0U);
     CHECK(document.properties().title.empty());
+    CHECK(document.builtinReferenceVisible(core::BuiltinReferenceRole::origin_point));
+    CHECK(document.builtinReferenceVisible(core::BuiltinReferenceRole::x_axis));
+    CHECK(!document.builtinReferenceVisible(core::BuiltinReferenceRole::xy_plane));
 
     {
         part::PartDocumentTransaction transaction{document};
@@ -57,6 +60,35 @@ int main() {
     }
     CHECK(document.properties().number.empty());
     CHECK(document.revision().value() == 1U);
+
+    {
+        part::PartDocumentTransaction transaction{document};
+        CHECK(transaction.setBuiltinReferenceVisible(
+            core::BuiltinReferenceRole::xy_plane,
+            true));
+        CHECK(!document.builtinReferenceVisible(
+            core::BuiltinReferenceRole::xy_plane));
+        CHECK(transaction.stagedState().presentation.builtin_references.visible(
+            core::BuiltinReferenceRole::xy_plane));
+
+        const auto committed = transaction.commit();
+        CHECK(committed.ok());
+        CHECK(committed.changed);
+    }
+
+    CHECK(document.builtinReferenceVisible(core::BuiltinReferenceRole::xy_plane));
+    CHECK(document.revision().value() == 2U);
+
+    {
+        part::PartDocumentTransaction transaction{document};
+        CHECK(!transaction.setBuiltinReferenceVisible(
+            core::BuiltinReferenceRole::xy_plane,
+            true));
+        const auto committed = transaction.commit();
+        CHECK(committed.ok());
+        CHECK(!committed.changed);
+    }
+    CHECK(document.revision().value() == 2U);
 
     auto exhausted = part::PartDocument::restore(
         core::DocumentId::generate(),

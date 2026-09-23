@@ -41,6 +41,21 @@ std::string readText(const std::filesystem::path& path) {
         std::istreambuf_iterator<char>{in},
         std::istreambuf_iterator<char>{}};
 }
+
+void writeLegacyV1(
+    const std::filesystem::path& path,
+    const core::DocumentId& id) {
+    std::ofstream out{path, std::ios::binary};
+    CHECK(static_cast<bool>(out));
+    out << "SS2PART\n"
+        << "schema_version=1\n"
+        << "document_kind=part\n"
+        << "document_id=" << id.value() << "\n"
+        << "number_hex=\n"
+        << "title_hex=\n"
+        << "description_hex=\n"
+        << "engineering_revision_hex=\n";
+}
 }
 
 int main() {
@@ -57,6 +72,12 @@ int main() {
         properties.description = "Main\nshaft";
         properties.engineering_revision = "B";
         tx.setProperties(properties);
+        CHECK(tx.setBuiltinReferenceVisible(
+            core::BuiltinReferenceRole::xy_plane,
+            true));
+        CHECK(tx.setBuiltinReferenceVisible(
+            core::BuiltinReferenceRole::x_axis,
+            false));
         CHECK(tx.commit().changed);
     }
 
@@ -66,6 +87,8 @@ int main() {
 
     const auto bytes = readText(path);
     CHECK(bytes.find("SS2PART") != std::string::npos);
+    CHECK(bytes.find("schema_version=2") != std::string::npos);
+    CHECK(bytes.find("builtin_reference_visibility_mask=") != std::string::npos);
     CHECK(bytes.find("project_id") == std::string::npos);
     CHECK(bytes.find("ProjectId") == std::string::npos);
     CHECK(bytes.find("TopoDS") == std::string::npos);
@@ -76,6 +99,10 @@ int main() {
     CHECK(loaded.document->documentId() == id);
     CHECK(loaded.document->properties() == document.properties());
     CHECK(loaded.document->revision().value() == 0U);
+    CHECK(loaded.document->builtinReferenceVisible(
+        core::BuiltinReferenceRole::xy_plane));
+    CHECK(!loaded.document->builtinReferenceVisible(
+        core::BuiltinReferenceRole::x_axis));
 
     {
         part::PartDocumentTransaction tx{document};
@@ -89,6 +116,39 @@ int main() {
     CHECK(reloaded.ok());
     CHECK(reloaded.document->documentId() == id);
     CHECK(reloaded.document->properties().title == "Drive Shaft");
+    CHECK(reloaded.document->builtinReferenceVisible(
+        core::BuiltinReferenceRole::xy_plane));
+
+    const auto legacy_path = temp.path / "Legacy.ss2part";
+    const auto legacy_id = core::DocumentId::generate();
+    writeLegacyV1(legacy_path, legacy_id);
+    const auto legacy_bytes_before = readText(legacy_path);
+
+    auto legacy = store.load(legacy_path);
+    CHECK(legacy.ok());
+    CHECK(legacy.document->documentId() == legacy_id);
+    CHECK(legacy.document->builtinReferenceVisible(
+        core::BuiltinReferenceRole::origin_point));
+    CHECK(legacy.document->builtinReferenceVisible(
+        core::BuiltinReferenceRole::x_axis));
+    CHECK(!legacy.document->builtinReferenceVisible(
+        core::BuiltinReferenceRole::xy_plane));
+    CHECK(readText(legacy_path) == legacy_bytes_before);
+
+    CHECK(store.save(legacy_path, *legacy.document).ok());
+    const auto legacy_bytes_after = readText(legacy_path);
+    CHECK(legacy_bytes_after != legacy_bytes_before);
+    CHECK(legacy_bytes_after.find("schema_version=2") != std::string::npos);
+    CHECK(legacy_bytes_after.find(
+              "builtin_reference_visibility_mask=15") != std::string::npos);
+
+    auto migrated = store.load(legacy_path);
+    CHECK(migrated.ok());
+    CHECK(migrated.document->documentId() == legacy_id);
+    CHECK(migrated.document->builtinReferenceVisible(
+        core::BuiltinReferenceRole::origin_point));
+    CHECK(!migrated.document->builtinReferenceVisible(
+        core::BuiltinReferenceRole::xy_plane));
 
     const auto invalid = temp.path / "Broken.ss2part";
     {
@@ -98,6 +158,25 @@ int main() {
     const auto broken = store.load(invalid);
     CHECK(!broken.ok());
     CHECK(broken.diagnostic.code == part::PartStoreErrorCode::malformed_document);
+
+    const auto invalid_visibility = temp.path / "InvalidVisibility.ss2part";
+    {
+        std::ofstream out{invalid_visibility, std::ios::binary};
+        CHECK(static_cast<bool>(out));
+        out << "SS2PART\n"
+            << "schema_version=2\n"
+            << "document_kind=part\n"
+            << "document_id=" << core::DocumentId::generate().value() << "\n"
+            << "number_hex=\n"
+            << "title_hex=\n"
+            << "description_hex=\n"
+            << "engineering_revision_hex=\n"
+            << "builtin_reference_visibility_mask=128\n";
+    }
+    const auto bad_visibility = store.load(invalid_visibility);
+    CHECK(!bad_visibility.ok());
+    CHECK(bad_visibility.diagnostic.code ==
+          part::PartStoreErrorCode::malformed_document);
 
     const auto unsupported = temp.path / "Future.ss2part";
     {

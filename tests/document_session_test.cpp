@@ -64,6 +64,66 @@ int main() {
     CHECK(!session.canUndo());
     CHECK(!session.canRedo());
 
+    CHECK(session.document().builtinReferenceVisible(
+        core::BuiltinReferenceRole::origin_point));
+    CHECK(!session.document().builtinReferenceVisible(
+        core::BuiltinReferenceRole::xy_plane));
+
+    const auto visibility_no_op_revision =
+        session.document().revision().value();
+    const auto visibility_no_op = session.execute(
+        application::SetBuiltinReferenceVisibilityCommand{
+            {core::BuiltinReferenceRole::xy_plane},
+            false});
+    CHECK(visibility_no_op.ok());
+    CHECK(!visibility_no_op.changed);
+    CHECK(session.document().revision().value() ==
+          visibility_no_op_revision);
+    CHECK(session.undoDepth() == 0U);
+
+    const auto invalid_revision = session.document().revision().value();
+    const auto invalid_visibility = session.execute(
+        application::SetBuiltinReferenceVisibilityCommand{
+            {static_cast<core::BuiltinReferenceRole>(255U)},
+            false});
+    CHECK(!invalid_visibility.ok());
+    CHECK(invalid_visibility.diagnostic.code ==
+          application::DocumentSessionErrorCode::invalid_command);
+    CHECK(session.document().revision().value() == invalid_revision);
+    CHECK(session.undoDepth() == 0U);
+
+    const auto before_visibility =
+        session.document().revision().value();
+    const auto hide_mixed = session.execute(
+        application::SetBuiltinReferenceVisibilityCommand{
+            {
+                core::BuiltinReferenceRole::origin_point,
+                core::BuiltinReferenceRole::xy_plane,
+            },
+            false});
+    CHECK(hide_mixed.ok());
+    CHECK(hide_mixed.changed);
+    CHECK(session.document().revision().value() ==
+          before_visibility + 1U);
+    CHECK(session.undoDepth() == 1U);
+    CHECK(session.needsSave());
+    CHECK(!session.document().builtinReferenceVisible(
+        core::BuiltinReferenceRole::origin_point));
+    CHECK(!session.document().builtinReferenceVisible(
+        core::BuiltinReferenceRole::xy_plane));
+
+    const auto before_visibility_undo =
+        session.document().revision().value();
+    CHECK(session.undo().changed);
+    CHECK(session.document().revision().value() ==
+          before_visibility_undo + 1U);
+    CHECK(!session.needsSave());
+    CHECK(session.document().builtinReferenceVisible(
+        core::BuiltinReferenceRole::origin_point));
+    CHECK(!session.document().builtinReferenceVisible(
+        core::BuiltinReferenceRole::xy_plane));
+    CHECK(session.canRedo());
+
     core::DocumentProperties properties;
     properties.title = "Drive Shaft";
     const auto first_revision = session.document().revision().value();

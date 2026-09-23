@@ -47,14 +47,13 @@ DocumentSessionResult DocumentSession::verifyRevision() const {
     return success();
 }
 
-DocumentSessionResult DocumentSession::execute(
-    const SetDocumentPropertiesCommand& command) {
+DocumentSessionResult DocumentSession::commitCommandState(
+    part::PartAuthoredState after,
+    const char* failure_message) {
     if (const auto verified = verifyRevision(); !verified.ok()) {
         return verified;
     }
 
-    auto after = document_.state();
-    after.properties = command.properties;
     if (after == document_.state()) {
         return success(false);
     }
@@ -64,12 +63,12 @@ DocumentSessionResult DocumentSession::execute(
     prepared.push_back(HistoryEntry{document_.state(), after});
 
     part::PartDocumentTransaction transaction{document_};
-    transaction.replaceState(after);
+    transaction.replaceState(std::move(after));
     const auto committed = transaction.commit();
     if (!committed.ok()) {
         return failure(
             DocumentSessionErrorCode::transaction_failure,
-            "Part transaction failed while executing document properties command",
+            failure_message,
             path_,
             committed.code);
     }
@@ -81,6 +80,39 @@ DocumentSessionResult DocumentSession::execute(
     cursor_ = history_.size();
     expected_revision_ = document_.revision();
     return success(true);
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const SetDocumentPropertiesCommand& command) {
+    auto after = document_.state();
+    after.properties = command.properties;
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while executing document properties command");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const SetBuiltinReferenceVisibilityCommand& command) {
+    for (const auto role : command.targets) {
+        if (!core::isBuiltinReferenceRole(role)) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Visibility command contains an invalid built-in reference role",
+                path_);
+        }
+    }
+
+    auto after = document_.state();
+    for (const auto role : command.targets) {
+        static_cast<void>(
+            after.presentation.builtin_references.setVisible(
+                role,
+                command.visible));
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while executing built-in reference visibility command");
 }
 
 DocumentSessionResult DocumentSession::applyHistoricalState(
