@@ -1,11 +1,11 @@
 #include "cad_workbench.hpp"
+#include "cad_workbench_shell.hpp"
 
 #include <QAbstractItemView>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QFrame>
-#include <QGroupBox>
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QLabel>
@@ -16,7 +16,6 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSignalBlocker>
-#include <QSplitter>
 #include <QStyle>
 #include <QTabBar>
 #include <QTreeWidget>
@@ -111,85 +110,86 @@ CadWorkbench::CadWorkbench(QWidget* parent)
 
 void CadWorkbench::buildUi() {
     auto* root = new QVBoxLayout(this);
-    root->setContentsMargins(6, 6, 6, 6);
-    root->setSpacing(5);
+    root->setContentsMargins(0, 0, 0, 0);
 
-    auto* lifecycle_actions = new QHBoxLayout;
+    shell_ = new CadWorkbenchShell(this);
+    shell_->setObjectName(QStringLiteral("cadWorkbenchShell"));
+    root->addWidget(shell_, 1);
 
-    new_part_button_ = new QPushButton(QStringLiteral("New Part…"), this);
+    auto& lifecycle_actions = shell_->documentActionsLayout();
+
+    new_part_button_ =
+        new QPushButton(QStringLiteral("New Part…"), shell_);
     new_part_button_->setObjectName(QStringLiteral("newPartButton"));
 
-    open_part_button_ = new QPushButton(QStringLiteral("Open Part…"), this);
+    open_part_button_ =
+        new QPushButton(QStringLiteral("Open Part…"), shell_);
     open_part_button_->setObjectName(QStringLiteral("openPartButton"));
 
-    refresh_button_ = new QPushButton(QStringLiteral("Refresh"), this);
-    refresh_button_->setObjectName(QStringLiteral("refreshDocumentsButton"));
+    refresh_button_ =
+        new QPushButton(QStringLiteral("Refresh"), shell_);
+    refresh_button_->setObjectName(
+        QStringLiteral("refreshDocumentsButton"));
 
-    undo_button_ = new QPushButton(QStringLiteral("Undo"), this);
+    undo_button_ =
+        new QPushButton(QStringLiteral("Undo"), shell_);
     undo_button_->setObjectName(QStringLiteral("undoDocumentButton"));
 
-    redo_button_ = new QPushButton(QStringLiteral("Redo"), this);
+    redo_button_ =
+        new QPushButton(QStringLiteral("Redo"), shell_);
     redo_button_->setObjectName(QStringLiteral("redoDocumentButton"));
 
-    save_button_ = new QPushButton(QStringLiteral("Save"), this);
+    save_button_ =
+        new QPushButton(QStringLiteral("Save"), shell_);
     save_button_->setObjectName(QStringLiteral("saveDocumentButton"));
 
     close_document_button_ =
-        new QPushButton(QStringLiteral("Close"), this);
-    close_document_button_->setObjectName(QStringLiteral("closeDocumentButton"));
+        new QPushButton(QStringLiteral("Close"), shell_);
+    close_document_button_->setObjectName(
+        QStringLiteral("closeDocumentButton"));
 
-    lifecycle_actions->addWidget(new_part_button_);
-    lifecycle_actions->addWidget(open_part_button_);
-    lifecycle_actions->addWidget(refresh_button_);
-    lifecycle_actions->addStretch(1);
-    lifecycle_actions->addWidget(undo_button_);
-    lifecycle_actions->addWidget(redo_button_);
-    lifecycle_actions->addWidget(save_button_);
-    lifecycle_actions->addWidget(close_document_button_);
-    root->addLayout(lifecycle_actions);
+    lifecycle_actions.addWidget(new_part_button_);
+    lifecycle_actions.addWidget(open_part_button_);
+    lifecycle_actions.addWidget(refresh_button_);
+    lifecycle_actions.addStretch(1);
+    lifecycle_actions.addWidget(undo_button_);
+    lifecycle_actions.addWidget(redo_button_);
+    lifecycle_actions.addWidget(save_button_);
+    lifecycle_actions.addWidget(close_document_button_);
 
-    auto* splitter = new QSplitter(Qt::Horizontal, this);
-    splitter->setObjectName(QStringLiteral("workbenchSplitter"));
-    splitter->setChildrenCollapsible(false);
+    document_tree_ = &shell_->documentTree();
+    document_tabs_ = &shell_->documentTabs();
+    status_ = &shell_->statusLabel();
 
-    auto* tree_group =
-        new QGroupBox(QStringLiteral("Document Tree"), splitter);
-    auto* tree_layout = new QVBoxLayout(tree_group);
-    document_tree_ = new QTreeWidget(tree_group);
-    document_tree_->setObjectName(QStringLiteral("documentTree"));
-    document_tree_->setHeaderHidden(true);
-    document_tree_->setSelectionMode(QAbstractItemView::SingleSelection);
-    tree_layout->addWidget(document_tree_);
-    splitter->addWidget(tree_group);
-
-    auto* editor_frame = new QFrame(splitter);
+    auto* editor_frame = new QFrame(shell_);
     editor_frame->setObjectName(QStringLiteral("editorSurface"));
     editor_frame->setFrameShape(QFrame::StyledPanel);
     auto* editor_layout = new QVBoxLayout(editor_frame);
+
     auto* editor_label = new QLabel(
         QStringLiteral(
             "3D Document View\n"
             "Viewer presentation is connected in a later WB-01 slice."),
         editor_frame);
-    editor_label->setObjectName(QStringLiteral("editorSurfacePlaceholder"));
+    editor_label->setObjectName(
+        QStringLiteral("editorSurfacePlaceholder"));
     editor_label->setAlignment(Qt::AlignCenter);
     editor_layout->addWidget(editor_label, 1);
+
     editor_surface_ = editor_frame;
-    splitter->addWidget(editor_surface_);
+    shell_->setEditorSurface(editor_surface_);
 
-    auto* right_panel = new QWidget(splitter);
-    auto* right_layout = new QVBoxLayout(right_panel);
-    right_layout->setContentsMargins(0, 0, 0, 0);
+    auto* properties_content = new QWidget(shell_);
+    properties_content->setObjectName(
+        QStringLiteral("partPropertiesContent"));
+    auto* properties_root = new QVBoxLayout(properties_content);
+    properties_root->setContentsMargins(0, 0, 0, 0);
 
-    auto* properties_group =
-        new QGroupBox(QStringLiteral("Properties"), right_panel);
-    auto* properties_root = new QVBoxLayout(properties_group);
-
-    active_path_ = new QLabel(properties_group);
+    active_path_ = new QLabel(properties_content);
     active_path_->setObjectName(QStringLiteral("activeDocumentPath"));
     active_path_->setWordWrap(true);
 
-    active_id_ = new QLabel(properties_group);
+    active_id_ = new QLabel(properties_content);
     active_id_->setObjectName(QStringLiteral("activeDocumentId"));
     active_id_->setWordWrap(true);
 
@@ -198,17 +198,18 @@ void CadWorkbench::buildUi() {
 
     auto* form = new QFormLayout;
 
-    number_ = new QLineEdit(properties_group);
+    number_ = new QLineEdit(properties_content);
     number_->setObjectName(QStringLiteral("documentNumberEdit"));
 
-    title_ = new QLineEdit(properties_group);
+    title_ = new QLineEdit(properties_content);
     title_->setObjectName(QStringLiteral("documentTitleEdit"));
 
-    description_ = new QPlainTextEdit(properties_group);
-    description_->setObjectName(QStringLiteral("documentDescriptionEdit"));
+    description_ = new QPlainTextEdit(properties_content);
+    description_->setObjectName(
+        QStringLiteral("documentDescriptionEdit"));
     description_->setMaximumHeight(90);
 
-    engineering_revision_ = new QLineEdit(properties_group);
+    engineering_revision_ = new QLineEdit(properties_content);
     engineering_revision_->setObjectName(
         QStringLiteral("documentEngineeringRevisionEdit"));
 
@@ -220,50 +221,33 @@ void CadWorkbench::buildUi() {
         engineering_revision_);
     properties_root->addLayout(form);
 
-    apply_button_ =
-        new QPushButton(QStringLiteral("Apply Properties"), properties_group);
+    apply_button_ = new QPushButton(
+        QStringLiteral("Apply Properties"),
+        properties_content);
     apply_button_->setObjectName(
         QStringLiteral("applyDocumentPropertiesButton"));
     properties_root->addWidget(apply_button_);
+    properties_root->addStretch(1);
 
-    right_layout->addWidget(properties_group, 0);
+    shell_->setPropertiesContent(properties_content);
 
-    auto* operations_group =
-        new QGroupBox(QStringLiteral("Operations"), right_panel);
-    auto* operations_layout = new QVBoxLayout(operations_group);
+    auto* operations_content = new QWidget(shell_);
+    operations_content->setObjectName(
+        QStringLiteral("partOperationsContent"));
+    auto* operations_layout = new QVBoxLayout(operations_content);
+    operations_layout->setContentsMargins(0, 0, 0, 0);
+
     operations_placeholder_ = new QLabel(
         QStringLiteral(
             "No modeling operations are available in this scope."),
-        operations_group);
+        operations_content);
     operations_placeholder_->setObjectName(
         QStringLiteral("operationsPlaceholder"));
     operations_placeholder_->setWordWrap(true);
     operations_layout->addWidget(operations_placeholder_);
     operations_layout->addStretch(1);
 
-    right_layout->addWidget(operations_group, 1);
-    splitter->addWidget(right_panel);
-
-    splitter->setStretchFactor(0, 1);
-    splitter->setStretchFactor(1, 4);
-    splitter->setStretchFactor(2, 2);
-    splitter->setSizes({220, 620, 300});
-
-    root->addWidget(splitter, 1);
-
-    document_tabs_ = new QTabBar(this);
-    document_tabs_->setObjectName(QStringLiteral("documentTabs"));
-    document_tabs_->setDocumentMode(true);
-    document_tabs_->setExpanding(false);
-    document_tabs_->setMovable(true);
-    document_tabs_->setTabsClosable(true);
-    document_tabs_->setUsesScrollButtons(true);
-    root->addWidget(document_tabs_);
-
-    status_ = new QLabel(this);
-    status_->setObjectName(QStringLiteral("workbenchStatus"));
-    status_->setWordWrap(true);
-    root->addWidget(status_);
+    shell_->setOperationsContent(operations_content);
 
     QObject::connect(
         new_part_button_,
