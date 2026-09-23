@@ -256,4 +256,14 @@ bool ProjectSession::hasDirtyDocuments() const noexcept {
         [](const auto& entry) { return entry.second->needsSave(); });
 }
 
+DocumentSessionResult ProjectSession::saveAllDirtyDocuments() {
+    for (auto& [id, session] : open_documents_) {
+        static_cast<void>(id);
+        if (!session->needsSave()) continue;
+        const auto saved = session->save();
+        if (!saved.ok()) return saved;
+    }
+    return DocumentSessionResult{};
+}
+
 } // namespace simplesolid2::application
