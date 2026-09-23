@@ -475,12 +475,9 @@ int main(int argc, char* argv[]) {
     CHECK(viewport->selection().primary.has_value());
     CHECK(*viewport->selection().primary == origin_point_token);
 
-    if (viewport->selection_handler_) {
-        viewport->selection_handler_(
-            viewer::SelectionIntent{
-                {},
-                viewer::SelectionIntentMode::clear});
-    }
+    viewport->emitSelectionIntent(
+        {},
+        viewer::SelectionIntentMode::clear);
     QApplication::processEvents();
     CHECK(tree->selectedItems().empty());
     CHECK(viewport->selection().selected.empty());
