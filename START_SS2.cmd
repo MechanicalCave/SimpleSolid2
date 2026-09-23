@@ -4,7 +4,6 @@ setlocal
 set "SS2_ROOT=%~dp0"
 set "SS2_PROMPT=%SS2_ROOT%work\RESUME_PROMPT.md"
 set "POWERSHELL=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
-set "CLIP=%SystemRoot%\System32\clip.exe"
 if not defined SS2_RUNNER_ROOT set "SS2_RUNNER_ROOT=D:\runner-ss2"
 
 cd /d "%SS2_ROOT%"
@@ -34,15 +33,15 @@ if not exist "%SS2_PROMPT%" (
     exit /b 1
 )
 
-if exist "%CLIP%" (
-    type "%SS2_PROMPT%" | "%CLIP%"
+if exist "%POWERSHELL%" (
+    "%POWERSHELL%" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$text=[IO.File]::ReadAllText($env:SS2_PROMPT,[Text.Encoding]::UTF8); Set-Clipboard -Value $text"
     if errorlevel 1 (
         echo [WARN] Could not copy resume prompt to clipboard.
     ) else (
         echo [OK] New-context prompt copied to clipboard.
     )
 ) else (
-    echo [WARN] clip.exe not found. Open manually:
+    echo [WARN] Windows PowerShell not found. Open manually:
     echo        %SS2_PROMPT%
 )
 
