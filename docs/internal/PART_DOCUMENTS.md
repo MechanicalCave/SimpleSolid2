@@ -6,46 +6,48 @@
 <!-- section-id: internal.part-documents.model -->
 ## Current model
 
-PART-01 implements a minimal persistent `PartDocument` without CAD features or geometry.
+The current `PartDocument` is persistent but still contains no Sketch, Body, Feature or modeled solid geometry.
 
-Its authored state currently consists of stable `DocumentId` and common Document Properties:
-
-- Number;
-- Title;
-- Description;
-- Engineering Revision.
+Its authored state consists of stable `DocumentId`, common Document Properties and persistent presentation state for the seven built-in Origin references.
 
 `DocumentRevision` is a technical monotonic counter for successful semantic mutations within the loaded lifecycle.
+
+<!-- section-id: internal.part-documents.origin -->
+## Built-in Document Origin
+
+Every Part has seven deterministic semantic references that always exist: Origin Point, X/Y/Z Axis and XY/XZ/YZ Plane.
+
+Their identity comes from their built-in role, not from random DocumentObjectId allocation.
+
+Hiding an Origin reference changes only persistent presentation visibility. It does not delete the reference or change its identity.
+
+The current default is Origin Point plus X/Y/Z axes visible and the three principal planes hidden.
 
 <!-- section-id: internal.part-documents.mutation -->
 ## Command and transaction boundary
 
-Persistent property changes follow:
+Persistent authored changes follow:
 
 ```text
 Qt / caller
-→ SetDocumentPropertiesCommand
-→ DocumentSession validation/history preparation
+→ semantic DocumentSession command
+→ history / revision validation
 → PartDocumentTransaction staged state
 → atomic domain commit
 ```
 
-A no-op creates neither a revision increment nor an Undo entry.
+Current commands include common Document Properties and batch built-in reference visibility.
 
-A rejected/failed transaction leaves authored state and existing history unchanged.
+A multi-selection Show/Hide is one semantic command, one successful revision increment and one Undo entry.
+
+A no-op creates neither a revision increment nor an Undo entry. A rejected/failed transaction leaves authored state and existing history unchanged.
 
 Undo and Redo reapply authored states through PartDocumentTransaction and therefore count as new semantic mutations with increasing technical DocumentRevision.
 
 <!-- section-id: internal.part-documents.session -->
 ## DocumentSession
 
-`DocumentSession` is runtime-only and contains:
-
-- current physical path;
-- loaded PartDocument;
-- expected technical revision;
-- Undo/Redo history;
-- save checkpoint represented by the last successfully saved authored state.
+`DocumentSession` is runtime-only and contains current physical path, loaded PartDocument, expected technical revision, Undo/Redo history and the save checkpoint.
 
 `needsSave()` compares authored state with the saved authored checkpoint. It is not defined by numeric DocumentRevision equality, which allows Undo back to the saved semantic state to become clean even though DocumentRevision increased.
 
@@ -56,7 +58,9 @@ Closing and reopening creates fresh runtime history.
 
 The native extension is `.ss2part`.
 
-Schema version 1 stores only authored state and required identity/version metadata. It does not serialize ProjectId, DocumentSession, Undo/Redo, Qt, Viewer or OCCT data.
+Current schema version 2 stores authored identity/properties plus a compact built-in Origin visibility mask. It does not serialize ProjectId, DocumentSession, Undo/Redo, camera, active selection, Qt objects, Viewer objects or OCCT handles.
+
+Schema version 1 remains readable. Opening v1 does not rewrite the file. A later successful Save publishes the current v2 schema with deterministic default Origin visibility for the migrated state.
 
 Save uses shared staged atomic-file persistence. The save checkpoint changes only after a successful write/replace.
 
@@ -72,6 +76,6 @@ When a resolved Part is already open, a second Open request returns the existing
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The current Part domain has no Sketch, Body, Feature, geometry evaluation, recompute graph, Viewer, topology selection, persistent naming, Material model, Assembly or Drawing.
+The shared CAD Workbench and Viewer can present the Part Origin and reference grid, but PartDocument still has no Sketch, Body, Feature, geometry evaluation, recompute graph, modeled topology, persistent topology naming or Material model.
 
-There is no OCCT dependency in the implemented PART-01 authored-state lifecycle.
+The Viewer is not a second model: no OCCT object is durable Part identity or authored state.

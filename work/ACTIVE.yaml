@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/WB-01_SHARED_CAD_WORKBENCH_VIEWPORT_FOUNDATION.md"
 foundation_version: "1.0"
 accepted_adrs:
@@ -7,16 +7,19 @@ accepted_adrs:
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
   - "adr/ADR-0003-cad-workbench-viewport-and-sketch-integration.md"
 next:
-  - implement WB-01 only within its accepted scope
-  - recommended sequence is Viewer API/OCCT provider, Origin/visibility/schema, Workbench tabs, Tree/selection/context actions, then ViewCube/final UX/docs
-  - no Sketch Core, Bodies, Features, Assembly, Drawing, BOM, export model, persistent topology naming, or Part feature modeling without a later accepted contract
+  - no implementation work is active after WB-01
+  - Owner must accept the next explicit work contract before further CAD-domain implementation
+  - no Sketch Core, Bodies, Features, modeled Part geometry, Assembly, Drawing, BOM, export model, or persistent topology naming without a later accepted contract
 notes:
   - DOC-01 and DOC-01A remain complete.
-  - ADR-0002 accepted by Owner on 2026-09-23.
+  - PART-01 remains complete.
   - ADR-0003 accepted by Owner on 2026-09-23.
-  - PART-01 accepted by Owner on 2026-09-23 and completed.
-  - WB-01 accepted by Owner on 2026-09-23.
-  - WB-01 activates the shared CAD Workbench and OCCT-backed Viewer foundation only.
-  - WB-01 preserves the PART-01 Document lifecycle and does not activate modeling semantics.
-  - Native Part schema migration in WB-01 must remain read-compatible with v1 and must not rewrite on Open.
+  - WB-01 accepted by Owner on 2026-09-23 and completed.
+  - The shared CAD Workbench now provides bottom Document Tabs, one active Document context, Tree, contextual Properties, Operations surface and Status/Diagnostics.
+  - The native Windows Qt/OCCT Viewer provides Origin/reference presentation, grid, Pan/Orbit/Zoom, ViewCube, standard/corner views, Fit and Orthographic/Perspective.
+  - Tree and Viewport share one document-scoped selected set plus primary selection.
+  - Built-in Origin visibility is persistent authored presentation state in native Part schema v2; schema v1 remains read-compatible and migrates only on successful Save.
+  - Camera, projection and selection remain runtime-only and do not dirty the Document.
+  - No Sketch, Body, Feature, modeled solid, Assembly, Drawing or persistent topology naming is implemented by WB-01.
+  - Internal and PL/EN product documentation describe the as-built WB-01 product.
   - Root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.

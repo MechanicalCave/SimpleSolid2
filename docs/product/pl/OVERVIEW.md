@@ -20,15 +20,21 @@ Obecny produkt udostępnia:
 - przenoszenie Projektu i odzyskiwanie lokalizacji przez `Locate…`;
 - tworzenie i otwieranie natywnych dokumentów Part `.ss2part`;
 - stabilny `DocumentId` niezależny od nazwy i ścieżki pliku;
-- edycję właściwości Number, Title, Description i Engineering Revision;
-- Undo / Redo dla tych zmian;
-- Save i bezpieczne zamykanie z ostrzeżeniem o niezapisanych zmianach;
+- otwieranie kilku Partów i przełączanie ich dolnymi Document Tabs;
+- wspólny CAD Workbench z Document Tree, Properties, Operations i Status;
+- viewport 3D oparty o OCCT z siatką odniesienia i ViewCube;
+- Pan, Orbit, Zoom, Fit, widoki standardowe/narożne oraz Orthographic/Perspective;
+- wbudowany Origin Parta: punkt, osie i płaszczyzny;
+- zsynchronizowane zaznaczenie Tree/Viewport z primary selection;
+- trwałe Show/Hide referencji Origin z Undo/Redo;
+- edycję Number, Title, Description i Engineering Revision;
+- Save i bezpieczne zamykanie z ochroną niezapisanych zmian;
 - ponowne odnajdywanie Partów po restarcie;
 - wykrywanie konfliktu, gdy dwa pliki w jednym Workspace mają ten sam DocumentId.
 
-Obecny Part jest dokumentem trwałym, ale nie zawiera jeszcze modelowania geometrycznego.
+Obecny Part jest trwałym dokumentem CAD ze wspólnym środowiskiem pracy 3D, ale nie zawiera jeszcze modelowanej geometrii bryłowej.
 
-Sketch, Bodies/Features, Assembly, Drawing i Viewer nie są jeszcze częścią dostępnej powierzchni produktu.
+Sketch, Bodies/Features, Assembly i Drawing nie są jeszcze dostępne.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser

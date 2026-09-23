@@ -20,15 +20,21 @@ The current product provides:
 - moving a Project and recovering its location with `Locate…`;
 - creating and opening native `.ss2part` Part Documents;
 - stable `DocumentId` independent of filename and path;
+- opening several Parts and switching them with bottom Document Tabs;
+- a shared CAD Workbench with Document Tree, Properties, Operations and Status areas;
+- an OCCT-backed 3D Viewport with reference grid and ViewCube;
+- Pan, Orbit, Zoom, Fit, standard/corner views and Orthographic/Perspective;
+- built-in Part Origin point, axes and planes;
+- synchronized Tree/Viewport selection with a primary selection context;
+- persistent Show/Hide for Origin references with Undo/Redo;
 - editing Number, Title, Description and Engineering Revision;
-- Undo / Redo for those changes;
 - Save and safe closing with unsaved-change protection;
 - rediscovering Parts after restart;
 - identity-conflict detection when two files in one Workspace carry the same DocumentId.
 
-The current Part is a durable Document but does not yet contain geometric modeling.
+The current Part is a durable CAD Document with a shared 3D working environment, but it does not yet contain modeled solid geometry.
 
-Sketch, Bodies/Features, Assembly, Drawing and Viewer are not yet part of the available product surface.
+Sketch, Bodies/Features, Assembly and Drawing are not yet available.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
