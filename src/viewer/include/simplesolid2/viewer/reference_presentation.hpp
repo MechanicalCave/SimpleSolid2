@@ -18,5 +18,27 @@ struct ReferencePresentation final {
   return cross(u_axis,v_axis).squaredLength()>1.0e-24;
  }
 };
-struct ReferenceScene final { std::vector<ReferencePresentation> references; };
-}
+struct ReferenceScene final {
+ std::vector<ReferencePresentation> references;
+};
+
+struct ReferenceGridPresentation final {
+ Point3 origin{};
+ Vec3 u_axis{1.0,0.0,0.0};
+ Vec3 v_axis{0.0,1.0,0.0};
+ double spacing{10.0};
+ unsigned int major_step{5U};
+ double extent{500.0};
+ bool visible{true};
+
+ [[nodiscard]] bool valid() const noexcept {
+  if(!finite(origin)||!finite(u_axis)||!finite(v_axis)||
+     !std::isfinite(spacing)||!std::isfinite(extent)||
+     spacing<=0.0||extent<=0.0||major_step==0U) return false;
+  if(u_axis.squaredLength()<=1.0e-24||v_axis.squaredLength()<=1.0e-24) return false;
+  return cross(u_axis,v_axis).squaredLength()>1.0e-24;
+ }
+};
+
+} // namespace simplesolid2::viewer
+
