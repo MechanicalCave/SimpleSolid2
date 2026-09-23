@@ -38,10 +38,24 @@ The opened SS2 PowerShell provides:
 ```text
 ss2-status
 ss2-run
+ss2-docs
 ss2-resume
 ```
 
 `ss2-run` performs an incremental build and starts the current `SimpleSolid2` application.
+
+`ss2-docs` regenerates the self-contained Product Browser at `docs/browser/index.html` from canonical Markdown.
+
+## Documentation
+
+Current-state documentation is maintained alongside the code:
+
+- `docs/product/pl/` — Polish user/product documentation;
+- `docs/product/en/` — English user/product documentation;
+- `docs/internal/` — internal as-built documentation;
+- `docs/browser/index.html` — generated Product Browser, Polish by default with PL/EN switching.
+
+Markdown is canonical. Documentation completion and update rules are defined in `governance/DOCUMENTATION.md`. Future work contracts declare their Documentation Impact and required documentation is updated before completion.
 
 ## Architecture entry points
 
