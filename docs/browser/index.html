@@ -69,7 +69,7 @@ Create Project…
 → publish final Workspace
 → open ProjectSession
 → record Recent Project
-→ show Workspace Shell with Part document panel
+→ show shared CAD Workbench
 ```
 
 A successful Create leaves one active ProjectSession and one logical Recent entry for the created ProjectId.
@@ -95,15 +95,25 @@ New Part…
 → atomically publish valid empty PartDocument
 → create canonical DocumentSession
 
-Open
+Open Part…
 → resolve one DocumentId to exactly one Workspace path
 → load authored Part state
 → create or reuse canonical DocumentSession
+→ add/focus bottom Document Tab
 ```
 
-The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description or Engineering Revision goes through a semantic properties command and a PartDocument transaction.
+The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description, Engineering Revision or persistent Origin visibility goes through semantic commands and PartDocument transactions.
 
-Closing and reopening a Part destroys runtime Undo/Redo history while preserving authored properties and DocumentId on disk.
+Closing and reopening a Part destroys runtime Undo/Redo history while preserving saved authored state and DocumentId on disk.
+
+<!-- section-id: internal.application-lifecycle.workbench -->
+## Active document and Workbench lifecycle
+
+One ProjectSession may keep several DocumentSessions open. `CadWorkbench` owns one active DocumentId for the current editor context.
+
+Changing the bottom tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. The other DocumentSessions remain open.
+
+Camera and selection are kept independently per open DocumentId for the lifetime of the Workbench. They are not persisted across application restart.
 
 <!-- section-id: internal.application-lifecycle.close -->
 ## Close, dirty state and restart
@@ -112,7 +122,9 @@ Closing a dirty Part prompts for `Save`, `Discard` or `Cancel`.
 
 Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure keeps the Project open.
 
-After application restart, Recent Projects restores the Project location. Opening the Project creates a fresh ProjectSession, rebuilds document discovery and can reopen the same durable DocumentId with the same saved authored properties.
+After application restart, Recent Projects restores the Project location. Opening the Project creates a fresh ProjectSession, rebuilds document discovery and can reopen the same durable DocumentId with the same saved authored properties and Origin visibility.
+
+Runtime camera, selection and tab state start fresh.
 
 <!-- section-id: internal.application-lifecycle.relocate -->
 ## Project move and relocation
@@ -138,11 +150,13 @@ At Hub refresh, the internal controller derives one presentation state for every
 Availability is runtime/presentation state only. It is not written back to the Recent catalog.
 
 <!-- section-id: internal.application-lifecycle.smoke -->
-## Application smoke path
+## Application smoke paths
 
 The executable supports `--smoke-test`.
 
-Smoke mode uses a temporary Recent catalog, shows the application window offscreen in CI, exits through a zero-delay Qt timer and removes its temporary state. It verifies that the real executable can start with the current UI wiring.
+Smoke mode uses a temporary Recent catalog, shows the Hub offscreen in CI, exits through a zero-delay Qt timer and removes its temporary state. The Viewer remains lazy because no Document is opened.
+
+WB-01 also has a native Windows Viewer smoke test that creates the real Qt/OCCT viewport, initializes OCCT/OpenGL, presents reference content, changes view/projection, performs Fit and closes cleanly.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.build-test" data-kind="internal" data-lang="en" data-path="docs/internal/BUILD_AND_TEST.md">
 # Build, Test and Run — As-built
@@ -153,30 +167,20 @@ Smoke mode uses a temporary Recent catalog, shows the application window offscre
 <!-- section-id: internal.build-test.baseline -->
 ## Toolchain baseline
 
-The repository baseline is:
+The repository baseline is C++20, CMake 3.24+, Qt 6 Widgets, OpenCASCADE for the native CAD Viewer, Windows-first development and the self-hosted Windows/MSVC PR gate.
 
-- C++20;
-- CMake 3.24+;
-- Qt 6 Widgets;
-- Windows-first;
-- self-hosted Windows/MSVC PR gate.
+WB-01 makes OCCT a required machine-local product-build dependency. Public Viewer contracts remain provider-neutral.
 
-OCCT is present in the machine-local environment, but the implemented PART-01 lifecycle does not use OCCT modeling or Viewer functionality.
+The canonical local environment adds Qt and OCCT runtime DLL directories to PATH so the product and native Viewer tests can execute after build.
 
 <!-- section-id: internal.build-test.session -->
 ## Normal local session
 
-The normal Owner workflow starts with:
-
-```text
-START_SS2.cmd
-```
+The normal Owner workflow starts with `START_SS2.cmd`.
 
 The SS2 PowerShell session provides canonical convenience commands including `ss2-status`, `ss2-run`, `ss2-docs` and `ss2-resume`.
 
-`ss2-run` performs an incremental build and starts the current `SimpleSolid2.exe`.
-
-`ss2-docs` regenerates the Product Browser from canonical Markdown.
+`ss2-run` performs an incremental build and starts `SimpleSolid2.exe`. `ss2-docs` regenerates the Product Browser.
 
 <!-- section-id: internal.build-test.root-script -->
 ## Canonical repository commands
@@ -201,20 +205,13 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains eighteen tests.
+The compiled CTest suite contains 27 tests.
 
-The original ten cover Project metadata, ProjectSession, Recent Projects, Project Hub lifecycle, application smoke startup and Project Hub/Create UX.
+Project/Hub and PART-01 coverage remains active.
 
-Eight PART-01 tests cover:
+WB-01 adds deterministic coverage for built-in Origin roles/visibility, CameraState and standard/corner views, navigation input mapping, reference scene/grid validation, neutral Viewer selection transport, Workbench tabs/active-document switching, per-document camera state, Tree multi-selection/primary selection, Tree↔Viewport synchronization, persistent batch Show/Hide and Undo/Redo, contextual Properties, ViewCube navigation and architecture boundaries.
 
-- DocumentId / DocumentRevision / common properties;
-- PartDocument staged transaction semantics;
-- native Part persistence and schema rejection;
-- DocumentSession command, Undo/Redo, save checkpoint and failed-save behavior;
-- Workspace discovery and identity conflicts;
-- Project + Part restart lifecycle;
-- Project dirty-close guard and Save All;
-- real offscreen Qt Part Workspace panel lifecycle.
+`wb01.viewer_native_smoke` runs without the offscreen Qt platform. It creates the real Windows Qt/OCCT viewport, initializes OCCT/OpenGL, presents reference content, switches view/projection, performs Fit and exits cleanly.
 
 Repository documentation validation runs outside CTest through `ss2 verify`.
 
@@ -223,15 +220,9 @@ Tests must not be weakened to obtain a pass.
 <!-- section-id: internal.build-test.ci -->
 ## Windows PR gate
 
-The GitHub workflow is:
+The GitHub workflow is `.github/workflows/windows-pr-gate.yml` on the self-hosted Windows runner labeled `simplesolid2-native`.
 
-```text
-.github/workflows/windows-pr-gate.yml
-```
-
-It runs on the self-hosted Windows runner labeled `simplesolid2-native`.
-
-The gate checks out the exact PR head SHA and then performs:
+The gate checks out the exact PR head SHA and performs:
 
 ```text
 exact checkout
@@ -254,6 +245,82 @@ The documentation gate validates canonical pairs/section identifiers, determinis
 
 The Product Browser must be regenerated with `.\ss2.ps1 docs` whenever canonical documentation or its generator changes.
 </script>
+<script type="text/plain" class="doc-source" data-doc-id="internal.cad-workbench-viewer" data-kind="internal" data-lang="en" data-path="docs/internal/CAD_WORKBENCH_VIEWER.md">
+# CAD Workbench and Viewer — As-built
+
+<!-- doc-id: internal.cad-workbench-viewer -->
+<!-- document-kind: internal -->
+
+<!-- section-id: internal.cad-workbench-viewer.shell -->
+## Shared Workbench shell
+
+WB-01 implements one reusable `CadWorkbenchShell` containing Document Tree, Editor Surface, Properties, Operations, bottom Document Tabs and Status/Diagnostics.
+
+The shell owns layout only. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
+
+<!-- section-id: internal.cad-workbench-viewer.active-document -->
+## Active document context
+
+ProjectSession may keep several canonical DocumentSessions open.
+
+`CadWorkbench` owns one active DocumentId. Bottom tab changes switch the Tree, Properties, Viewer scene, selection and camera context while leaving other DocumentSessions open.
+
+Camera state is stored in a Workbench runtime map keyed by DocumentId. Closing a tab drops that runtime view state.
+
+<!-- section-id: internal.cad-workbench-viewer.origin -->
+## Origin and reference scene
+
+PartViewportController maps the Part's seven deterministic built-in Origin roles to provider-neutral `ReferencePresentation` objects and runtime presentation tokens.
+
+The reference grid is a Viewer presentation primitive. It is not a Part semantic object and is not selectable.
+
+Persistent Origin visibility comes from PartDocument authored presentation state. Hidden references still exist semantically and remain present in the Tree.
+
+<!-- section-id: internal.cad-workbench-viewer.selection -->
+## Selection authority
+
+The current Part viewport controller owns document-scoped runtime selected set plus primary selection.
+
+Tree selection updates that authority. Qt/OCCT picking emits only neutral `SelectionIntent` values carrying `PresentationToken`; the controller maps tokens back to semantic built-in roles.
+
+The controller pushes one coherent selection to Tree and Viewer. Primary selection drives Properties.
+
+<!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
+## Viewer provider boundary
+
+`IDocumentViewport` is provider-neutral. It exposes camera/navigation, reference scene, presentation selection and selection-intent transport.
+
+`QtOcctViewerWidget` implements that contract behind the `viewer_qt_occt` module.
+
+The production executable creates the concrete provider only in the application composition root and injects it as a neutral `ViewportSurface`.
+
+Boundary tests reject OCCT/provider tokens from domain/application APIs and Workbench UI.
+
+<!-- section-id: internal.cad-workbench-viewer.navigation -->
+## Navigation
+
+The shared viewport supports middle-button Pan, Shift + middle-button Orbit, wheel Zoom, Fit All, six orthogonal standard views, Isometric and eight corner orientations, plus Orthographic/Perspective.
+
+`ViewCubeWidget` is an overlay in the shared Editor Surface and invokes only `IDocumentViewport`.
+
+Navigation changes are runtime-only and do not increment DocumentRevision, set needsSave or create CAD Undo entries.
+
+<!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
+## Current OCCT presentation
+
+The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid and selected/primary visual emphasis.
+
+There is no modeled Part B-Rep in WB-01. The OCCT provider is presentation/navigation infrastructure, not Part evaluation.
+
+<!-- section-id: internal.cad-workbench-viewer.runtime -->
+## Runtime lifetime
+
+Selection, primary selection, camera, projection and grid presentation are runtime-only.
+
+Persistent Origin visibility is authored state and is intentionally separate.
+
+Closing/reopening the application recreates runtime view and selection state while preserving saved visibility in the Part file.
+</script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.overview" data-kind="internal" data-lang="en" data-path="docs/internal/OVERVIEW.md">
 # SimpleSolid 2.0 — Internal As-built Overview
 
@@ -267,44 +334,58 @@ It is explanatory, not normative. If an as-built document conflicts with the Eng
 <!-- section-id: internal.overview.current-scope -->
 ## Current implemented scope
 
-The current executable implements the Project platform plus the first persistent CAD Document lifecycle for an empty Part:
+The current executable implements the Project platform, persistent empty Part Documents and the shared CAD Workbench / Viewer foundation:
 
 ```text
 App start
 → Project Hub
 → Create / Open Project
-→ stable ProjectId + Workspace metadata
 → ProjectSession
 → discover native .ss2part Documents
-→ Create / Open Part
-→ DocumentSession
-→ edit common Document Properties
+→ Create / Open several Parts
+→ canonical DocumentSessions
+→ shared CAD Workbench
+→ bottom Document Tabs + one ActiveDocumentSession
+→ Document Tree + built-in Origin
+→ shared Properties / Operations surfaces
+→ OCCT-backed 3D Viewport + reference grid + ViewCube
+→ Tree / Viewport selection synchronization
+→ persistent Show / Hide of Origin references
 → Undo / Redo
 → Save / Close
 → restart
-→ rediscover and reopen the same DocumentId
+→ rediscover the same DocumentId and saved Origin visibility
 ```
 
-The current product does **not** yet implement Part feature modeling, Sketch, Bodies, geometry evaluation, OCCT modeling, Viewer, Assembly, Drawing, BOM, topology selection or persistent naming.
+The product still does **not** implement Sketch, Body/Feature modeling, solid geometry evaluation, Assembly, Drawing, BOM, modeled-topology selection or persistent topology naming.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
 
-The implemented dependency direction is:
+The implemented dependency direction has two coordinated branches:
 
 ```text
-Qt Project Hub / PartWorkspacePanel
+Qt ProjectHubWindow
         ↓
-ProjectHubController / ProjectSession / DocumentSession
-        ↓
-PartDocument + PartDocumentTransaction
-        ↓
-PartDocumentStore / shared atomic-file persistence
-        ↓
-filesystem
+CadWorkbenchShell + CadWorkbench
+        ├── ProjectSession / DocumentSession
+        │       ↓
+        │   PartDocument + PartDocumentTransaction
+        │       ↓
+        │   PartDocumentStore / atomic persistence
+        │
+        └── PartViewportController / Tree adapter
+                ↓
+            provider-neutral Viewer API
+                ↓
+            Qt/OCCT Viewer provider
+                ↓
+                OCCT
 ```
 
-Project and Document authored semantics remain below Qt. No OCCT type participates in the current Part lifecycle.
+`CadWorkbenchShell` owns only the fixed UI regions. Part-specific lifecycle, Tree and Viewer adapters sit outside that neutral shell.
+
+OCCT types stay inside the concrete Viewer provider. They do not participate in Part authored semantics, persistence, Document identity or command/transaction ownership.
 
 <!-- section-id: internal.overview.identity -->
 ## Identity and location
@@ -318,6 +399,13 @@ Neither identity is a path or filename. Moving or renaming a Workspace preserves
 The current implementations serialize ProjectId and DocumentId as textual UUIDv4 values. That encoding is an implementation fact, not an additional Foundation-level identity rule.
 
 A copied `.ss2part` file preserves its embedded DocumentId. If more than one file in one Workspace declares the same DocumentId, discovery reports `IdentityConflict` and resolution by that ID fails closed.
+
+<!-- section-id: internal.overview.runtime-presentation -->
+## Runtime and persistent presentation state
+
+Camera, projection, pan/orbit/zoom, active selection and primary selection are runtime-only. They do not increment DocumentRevision, dirty the Part or create CAD Undo entries.
+
+User-authored visibility of built-in Origin references is different: it is persistent presentation semantics stored by PartDocument, changed through DocumentSession commands, Undo/Redo-able and saved in the native Part file.
 
 <!-- section-id: internal.overview.documentation -->
 ## Documentation system
@@ -341,46 +429,48 @@ Operational documentation rules are defined in `governance/DOCUMENTATION.md`.
 <!-- section-id: internal.part-documents.model -->
 ## Current model
 
-PART-01 implements a minimal persistent `PartDocument` without CAD features or geometry.
+The current `PartDocument` is persistent but still contains no Sketch, Body, Feature or modeled solid geometry.
 
-Its authored state currently consists of stable `DocumentId` and common Document Properties:
-
-- Number;
-- Title;
-- Description;
-- Engineering Revision.
+Its authored state consists of stable `DocumentId`, common Document Properties and persistent presentation state for the seven built-in Origin references.
 
 `DocumentRevision` is a technical monotonic counter for successful semantic mutations within the loaded lifecycle.
+
+<!-- section-id: internal.part-documents.origin -->
+## Built-in Document Origin
+
+Every Part has seven deterministic semantic references that always exist: Origin Point, X/Y/Z Axis and XY/XZ/YZ Plane.
+
+Their identity comes from their built-in role, not from random DocumentObjectId allocation.
+
+Hiding an Origin reference changes only persistent presentation visibility. It does not delete the reference or change its identity.
+
+The current default is Origin Point plus X/Y/Z axes visible and the three principal planes hidden.
 
 <!-- section-id: internal.part-documents.mutation -->
 ## Command and transaction boundary
 
-Persistent property changes follow:
+Persistent authored changes follow:
 
 ```text
 Qt / caller
-→ SetDocumentPropertiesCommand
-→ DocumentSession validation/history preparation
+→ semantic DocumentSession command
+→ history / revision validation
 → PartDocumentTransaction staged state
 → atomic domain commit
 ```
 
-A no-op creates neither a revision increment nor an Undo entry.
+Current commands include common Document Properties and batch built-in reference visibility.
 
-A rejected/failed transaction leaves authored state and existing history unchanged.
+A multi-selection Show/Hide is one semantic command, one successful revision increment and one Undo entry.
+
+A no-op creates neither a revision increment nor an Undo entry. A rejected/failed transaction leaves authored state and existing history unchanged.
 
 Undo and Redo reapply authored states through PartDocumentTransaction and therefore count as new semantic mutations with increasing technical DocumentRevision.
 
 <!-- section-id: internal.part-documents.session -->
 ## DocumentSession
 
-`DocumentSession` is runtime-only and contains:
-
-- current physical path;
-- loaded PartDocument;
-- expected technical revision;
-- Undo/Redo history;
-- save checkpoint represented by the last successfully saved authored state.
+`DocumentSession` is runtime-only and contains current physical path, loaded PartDocument, expected technical revision, Undo/Redo history and the save checkpoint.
 
 `needsSave()` compares authored state with the saved authored checkpoint. It is not defined by numeric DocumentRevision equality, which allows Undo back to the saved semantic state to become clean even though DocumentRevision increased.
 
@@ -391,7 +481,9 @@ Closing and reopening creates fresh runtime history.
 
 The native extension is `.ss2part`.
 
-Schema version 1 stores only authored state and required identity/version metadata. It does not serialize ProjectId, DocumentSession, Undo/Redo, Qt, Viewer or OCCT data.
+Current schema version 2 stores authored identity/properties plus a compact built-in Origin visibility mask. It does not serialize ProjectId, DocumentSession, Undo/Redo, camera, active selection, Qt objects, Viewer objects or OCCT handles.
+
+Schema version 1 remains readable. Opening v1 does not rewrite the file. A later successful Save publishes the current v2 schema with deterministic default Origin visibility for the migrated state.
 
 Save uses shared staged atomic-file persistence. The save checkpoint changes only after a successful write/replace.
 
@@ -407,9 +499,9 @@ When a resolved Part is already open, a second Open request returns the existing
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The current Part domain has no Sketch, Body, Feature, geometry evaluation, recompute graph, Viewer, topology selection, persistent naming, Material model, Assembly or Drawing.
+The shared CAD Workbench and Viewer can present the Part Origin and reference grid, but PartDocument still has no Sketch, Body, Feature, geometry evaluation, recompute graph, modeled topology, persistent topology naming or Material model.
 
-There is no OCCT dependency in the implemented PART-01 authored-state lifecycle.
+The Viewer is not a second model: no OCCT object is durable Part identity or authored state.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.persistence" data-kind="internal" data-lang="en" data-path="docs/internal/PERSISTENCE.md">
 # Persistence — As-built
@@ -440,64 +532,53 @@ Metadata initialization is fail-closed and uses staged publication. Metadata loa
 <!-- section-id: internal.persistence.part-document -->
 ## Native Part Documents
 
-A native top-level Part is stored as:
+A native top-level Part is stored as `*.ss2part`.
 
-```text
-*.ss2part
-```
+The current private schema starts with the `SS2PART` signature. Schema version 2 persists native document kind, DocumentId, Number, Title, Description, Engineering Revision and the built-in Origin visibility mask.
 
-The current private schema starts with the `SS2PART` signature and a schema version. It persists:
+The schema does not persist ProjectId. Workspace membership is physical/runtime context, not an owner ProjectId embedded in each Part.
 
-- native document kind;
-- DocumentId;
-- Number;
-- Title;
-- Description;
-- Engineering Revision.
+`DocumentRevision` is an in-memory synchronization counter and is not serialized.
 
-The current schema does not persist ProjectId. Workspace membership is therefore physical/runtime context, not an owner ProjectId embedded in each Part.
+Schema version 1 remains readable. Loading v1 assigns deterministic built-in Origin visibility defaults in memory and does not rewrite the source file. A successful later Save writes current schema v2.
 
-`DocumentRevision` is a technical in-memory synchronization counter in the current implementation and is not part of schema version 1.
-
-Unsupported schema versions, malformed fields, invalid DocumentIds and wrong declared document kind fail closed with structured diagnostics.
+Unsupported future schemas, malformed fields, unsupported visibility bits, invalid DocumentIds and wrong declared document kind fail closed with structured diagnostics.
 
 <!-- section-id: internal.persistence.atomic-save -->
 ## Atomic Part publication and Save
 
 New Part creation writes staged bytes and publishes only if the target path does not already exist.
 
-Save writes a temporary sibling file and replaces the target only after the complete serialized state has been written. On the Windows implementation, replacement uses an OS replace operation rather than delete-then-rename.
+Save writes a temporary sibling file and replaces the target only after the complete serialized state has been written. On Windows, replacement uses an OS replace operation rather than delete-then-rename.
 
-The DocumentSession advances its save checkpoint only after successful persistence. If replacement fails, the in-memory authored state remains dirty and the previous durable Part remains the authoritative file.
+The DocumentSession advances its save checkpoint only after successful persistence. If replacement fails, the in-memory authored state remains dirty and the previous durable Part remains authoritative.
 
 <!-- section-id: internal.persistence.recent -->
 ## Recent Projects catalog
 
 Recent Projects is persisted outside the Project as application/user state.
 
-The normal application selects its state root through Qt `QStandardPaths::AppLocalDataLocation` and stores:
+The normal application selects its state root through Qt `QStandardPaths::AppLocalDataLocation` and stores `recent-projects-v1.txt`.
 
-```text
-recent-projects-v1.txt
-```
-
-The catalog has a private versioned text format with a magic header and schema version. Each entry stores ProjectId, DisplayName and the remembered absolute Workspace path.
+Each entry stores ProjectId, DisplayName and the remembered absolute Workspace path.
 
 <!-- section-id: internal.persistence.derived-state -->
 ## Runtime-only and derived state
 
 The following state is not serialized as Part authored state:
 
-- ProjectSession;
-- DocumentSession;
-- Undo/Redo history;
-- save-history cursor;
-- Workspace discovery index;
-- document conflict state;
+- ProjectSession and DocumentSession;
+- Undo/Redo history and save-history cursor;
+- Workspace discovery/conflict state;
+- active Document tab;
+- camera / projection / pan / orbit / zoom;
+- selected set and primary selection;
+- reference grid runtime presentation;
 - Qt objects;
-- Viewer state;
-- OCCT/native geometry handles;
+- Viewer provider objects and OCCT handles;
 - evaluated B-Rep or tessellation.
+
+Persistent user visibility of built-in Origin references is intentionally **not** in this runtime-only list; it is authored presentation state in schema v2.
 
 Recent availability is also derived at runtime.
 
@@ -513,15 +594,7 @@ If multiple native Part files declare one DocumentId, discovery records an ident
 <!-- section-id: internal.persistence.non-goals -->
 ## Current non-goals
 
-The current persistence layer does not provide:
-
-- Project synchronization or semantic merge;
-- cloud locking;
-- Duplicate / Save as New Project;
-- Part Save As / Save Copy As UI;
-- identity-conflict repair;
-- Assembly or Drawing persistence;
-- geometry or Viewer persistence.
+The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing persistence, modeled geometry persistence, or camera/selection persistence between application runs.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.project-platform" data-kind="internal" data-lang="en" data-path="docs/internal/PROJECT_PLATFORM.md">
 # Project Platform — As-built
@@ -605,22 +678,29 @@ An ordinary filesystem copy of a `.ss2part` file preserves DocumentId.
 Inside one Workspace, two files carrying the same DocumentId are not treated as two independent Parts. They are an explicit identity conflict until the user resolves the filesystem situation outside the current PART-01 feature set.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.ui-project-hub" data-kind="internal" data-lang="en" data-path="docs/internal/UI_PROJECT_HUB.md">
-# Project Hub and Part Workspace UI — As-built
+# Project Hub and CAD Workbench UI — As-built
 
 <!-- doc-id: internal.ui-project-hub -->
 <!-- document-kind: internal -->
 
 <!-- section-id: internal.ui-project-hub.pages -->
-## Hub and Workspace Shell
+## Hub and Workspace
 
-The Qt application uses a `QStackedWidget` with two pages:
+The Qt application uses a `QStackedWidget` with Project Hub and Workspace pages.
 
-- Project Hub;
-- Workspace Shell.
+The Workspace shows the active Project name, ProjectId and Workspace path plus one shared `CadWorkbench`.
 
-The Workspace Shell presents the active Project name, ProjectId and Workspace path plus a `PartWorkspacePanel`.
+`CadWorkbenchShell` owns only fixed presentation regions:
 
-The panel is intentionally separate from Project Hub responsibilities. It owns presentation for the current Part-document lifecycle but not authored semantics.
+```text
+LEFT      Document Tree
+CENTER    Editor Surface / 3D Viewport
+RIGHT     Properties + Operations
+BOTTOM    Document Tabs
+BELOW     Status / Diagnostics
+```
+
+Domain/session adapters provide active content. The neutral Shell does not know PartDocument, AssemblyDocument or DrawingDocument.
 
 <!-- section-id: internal.ui-project-hub.primary-actions -->
 ## Primary Project actions
@@ -634,37 +714,36 @@ Create opens the Project Creation dialog. Open selects an already initialized Si
 
 Recent entries show DisplayName and remembered Workspace path.
 
-Problematic entries also show `Workspace not found`, `Invalid Project` or `Project mismatch`.
-
-The warning state is derived at refresh time and is not persisted.
+Problematic entries also show `Workspace not found`, `Invalid Project` or `Project mismatch`. The warning state is derived at refresh time and is not persisted.
 
 <!-- section-id: internal.ui-project-hub.selection -->
 ## Recent selection-dependent actions
 
 Recent actions are `Open`, `Locate…` and `Remove from Recent`.
 
-No Recent entry is selected after Hub refresh. Open is enabled only for an actually selected, openable entry. Locate and Remove remain available for selected unavailable entries.
+No Recent entry is selected after Hub refresh. Open is enabled only for a selected, openable entry. Locate and Remove remain available for selected unavailable entries.
 
 <!-- section-id: internal.ui-project-hub.part-panel -->
-## Part Workspace panel
+## Part controls inside the Workbench
 
-The Part panel exposes:
+The current Part composition exposes `New Part…`, `Open Part…`, `Refresh`, `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, Operations placeholder and bottom Document Tabs.
 
-- `New Part…`;
-- `Refresh`;
-- `Open`;
-- Number, Title, Description and Engineering Revision editors;
-- `Apply Properties`;
-- `Undo`;
-- `Redo`;
-- `Save`;
-- `Close Part`.
+`Open Part…` lists discovered native Parts. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
 
-New Part asks for a Workspace-relative `.ss2part` path and proposes `Part001.ss2part`, `Part002.ss2part`, and so on when those names are free.
+Opening an already open Document focuses its canonical existing DocumentSession instead of creating a second mutable session.
 
-Resolved entries show title and relative path. Invalid files and identity conflicts are shown with warning state. Conflict entries display every conflicting relative path and cannot be opened.
+<!-- section-id: internal.ui-project-hub.workbench -->
+## Tree, Properties and Viewport
 
-The UI obtains authored state through DocumentSession and sends property edits through the semantic command boundary. It does not mutate PartDocument directly.
+The active Part Tree contains the Part root and built-in Origin group with seven semantic references.
+
+Tree uses extended multi-selection. Show/Hide context actions are available only when the complete selection supports the operation. Mixed semantic/non-reference selections fail closed.
+
+Tree and Viewport are adapters of one document-scoped selected set plus primary selection.
+
+Properties shows common Document fields when no semantic object is primary. When a built-in Origin reference is primary, Properties switches to a read-only reference context showing role/type/identity/visibility.
+
+The central Editor Surface hosts the provider-neutral Document Viewport. Production composition injects the Windows Qt/OCCT provider. A ViewCube overlay provides faces, corner/isometric orientations, Fit and Orthographic/Perspective switching.
 
 <!-- section-id: internal.ui-project-hub.dirty-close -->
 ## Dirty-close UX
@@ -682,14 +761,16 @@ A failed Save leaves the Part/Project open so authored in-memory changes are not
 
 `Remove from Recent` removes only application history. Project and Part files are not modified.
 
-PART-01 does not provide automatic repair for duplicate Part DocumentIds.
+Automatic repair for duplicate Part DocumentIds is not implemented.
 
 <!-- section-id: internal.ui-project-hub.boundary -->
 ## UI boundary
 
-The Qt layer converts strings/paths, displays diagnostics and maps application state to widgets.
+The Qt layer converts strings/paths, displays diagnostics and maps application/domain state to widgets.
 
 It does not own ProjectId, DocumentId, authored Part state, persistence schemas, Undo/Redo semantics or identity-conflict resolution rules.
+
+The Viewer UI depends only on provider-neutral Viewer contracts. OCCT types and provider-native selection objects do not cross into `src/ui`.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.overview" data-kind="product" data-lang="en" data-path="docs/product/en/OVERVIEW.md">
 # SimpleSolid 2.0 Product Documentation
@@ -714,15 +795,21 @@ The current product provides:
 - moving a Project and recovering its location with `Locate…`;
 - creating and opening native `.ss2part` Part Documents;
 - stable `DocumentId` independent of filename and path;
+- opening several Parts and switching them with bottom Document Tabs;
+- a shared CAD Workbench with Document Tree, Properties, Operations and Status areas;
+- an OCCT-backed 3D Viewport with reference grid and ViewCube;
+- Pan, Orbit, Zoom, Fit, standard/corner views and Orthographic/Perspective;
+- built-in Part Origin point, axes and planes;
+- synchronized Tree/Viewport selection with a primary selection context;
+- persistent Show/Hide for Origin references with Undo/Redo;
 - editing Number, Title, Description and Engineering Revision;
-- Undo / Redo for those changes;
 - Save and safe closing with unsaved-change protection;
 - rediscovering Parts after restart;
 - identity-conflict detection when two files in one Workspace carry the same DocumentId.
 
-The current Part is a durable Document but does not yet contain geometric modeling.
+The current Part is a durable CAD Document with a shared 3D working environment, but it does not yet contain modeled solid geometry.
 
-Sketch, Bodies/Features, Assembly, Drawing and Viewer are not yet part of the available product surface.
+Sketch, Bodies/Features, Assembly and Drawing are not yet available.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
@@ -740,7 +827,7 @@ Polish and English are maintained as peer sources. The Browser opens product doc
 <!-- section-id: product.parts.create -->
 ## Creating a new Part
 
-After opening a Project, use `New Part…` in the Workspace.
+After opening a Project, use `New Part…` in the Workbench.
 
 Enter a path relative to the current Workspace. A native Part file uses the extension:
 
@@ -761,12 +848,19 @@ Filename and path are not Document identity. You may rename or move the `.ss2par
 
 `Number`, `Title`, `Description` and `Engineering revision` are durable Document properties and are independent of the filename.
 
+<!-- section-id: product.parts.workbench -->
+## Opening Parts and using the Workbench
+
+Use `Open Part…` to choose a resolved native Part.
+
+Several Parts can remain open at once. Use the bottom Document Tabs to switch the active Part. The same Workbench changes its Tree, Properties and 3D Viewport context to the selected tab.
+
+The left side contains Document Tree. The center contains the 3D Viewport. The right side contains Properties and Operations. Status/diagnostic information is below the tabs.
+
 <!-- section-id: product.parts.edit -->
-## Editing properties
+## Editing Document properties
 
-Select a valid Part in the list and choose `Open`.
-
-The properties panel lets you edit:
+When no model/reference object is the primary selection, Properties shows the Document fields:
 
 - Number;
 - Title;
@@ -775,12 +869,48 @@ The properties panel lets you edit:
 
 `Apply Properties` changes the open Document session. The change is not durable on disk until you use `Save`.
 
-`Undo` and `Redo` operate on property changes in the current open session.
+`Undo` and `Redo` operate on authored changes in the current open session.
+
+<!-- section-id: product.parts.origin -->
+## Origin, selection and visibility
+
+Every Part has an `Origin` group in Document Tree containing:
+
+- Origin Point;
+- X Axis, Y Axis, Z Axis;
+- XY Plane, XZ Plane, YZ Plane.
+
+These references always exist. Hiding one does not delete it.
+
+You can select one or several Origin references in the Tree. Use the context menu `Show` or `Hide` to set visibility for the complete supported selection.
+
+A group visibility change is one Undo/Redo operation.
+
+The Tree and 3D Viewport share one selection. The primary selected Origin reference is shown in Properties with its role, type, semantic identity and current visibility.
+
+After `Save`, Origin visibility survives closing and restarting the application.
+
+<!-- section-id: product.parts.navigation -->
+## 3D navigation and ViewCube
+
+The Part Workbench provides:
+
+- middle-button Pan;
+- Shift + middle-button Orbit;
+- mouse-wheel Zoom;
+- Fit;
+- Front, Back, Left, Right, Top and Bottom views;
+- Isometric and corner orientations;
+- Orthographic / Perspective switching.
+
+Use the ViewCube overlay in the upper-right of the 3D Viewport for standard orientations, Fit and projection switching.
+
+Navigation and camera changes are temporary view state. They do not dirty the Part, do not require Save and do not create CAD Undo entries.
 
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state to its `.ss2part` file.
+`Save` writes the current authored Part state, including Origin visibility, to its `.ss2part` file.
 
 When closing a Part with unsaved changes, the application requires `Save`, `Discard` or `Cancel`.
 
@@ -793,14 +923,14 @@ If saving fails, the Document/Project remains open.
 
 After restarting the application, open the same Project.
 
-SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId and saved properties.
+SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties and saved Origin visibility.
 
-Undo/Redo history is not stored in the file and starts empty after reopening.
+Undo/Redo history, active selection and camera state are not stored in the file and start fresh after reopening.
 
 <!-- section-id: product.parts.conflicts -->
 ## DocumentId conflicts and invalid files
 
-If two `.ss2part` files in one Workspace contain the same DocumentId, the list shows `Identity conflict` and every discovered path.
+If two `.ss2part` files in one Workspace contain the same DocumentId, `Open Part…` shows an identity-conflict entry and every discovered path.
 
 That entry cannot be opened by DocumentId until the conflict is removed. SimpleSolid does not arbitrarily choose one copy and does not automatically assign a new ID.
 
@@ -809,9 +939,9 @@ A damaged or unsupported native Part is shown as `Invalid Part` instead of being
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part stores Document identity and common Document Properties.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility and the shared 3D Workbench/Viewer foundation.
 
-It does not yet contain Sketch, Bodies, Features, 3D geometry, Viewer, Material or Assembly/Drawing tools.
+It does not yet contain Sketch, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -931,7 +1061,7 @@ The Project can later be opened again using `Open Project…`.
 
 The Workspace Shell now contains the first persistent CAD Document type: a native `.ss2part` Part with Document Properties, Undo/Redo and Save.
 
-Part geometric modeling, Assembly, Drawing and Viewer are not yet available. The current Part lifecycle is described in `Part Documents`.
+The shared CAD Workbench and 3D Viewer are available for Part Origin/reference work and navigation. Part geometric modeling, Sketch, Bodies/Features, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.overview" data-kind="product" data-lang="pl" data-path="docs/product/pl/OVERVIEW.md">
 # Dokumentacja produktu SimpleSolid 2.0
@@ -956,15 +1086,21 @@ Obecny produkt udostępnia:
 - przenoszenie Projektu i odzyskiwanie lokalizacji przez `Locate…`;
 - tworzenie i otwieranie natywnych dokumentów Part `.ss2part`;
 - stabilny `DocumentId` niezależny od nazwy i ścieżki pliku;
-- edycję właściwości Number, Title, Description i Engineering Revision;
-- Undo / Redo dla tych zmian;
-- Save i bezpieczne zamykanie z ostrzeżeniem o niezapisanych zmianach;
+- otwieranie kilku Partów i przełączanie ich dolnymi Document Tabs;
+- wspólny CAD Workbench z Document Tree, Properties, Operations i Status;
+- viewport 3D oparty o OCCT z siatką odniesienia i ViewCube;
+- Pan, Orbit, Zoom, Fit, widoki standardowe/narożne oraz Orthographic/Perspective;
+- wbudowany Origin Parta: punkt, osie i płaszczyzny;
+- zsynchronizowane zaznaczenie Tree/Viewport z primary selection;
+- trwałe Show/Hide referencji Origin z Undo/Redo;
+- edycję Number, Title, Description i Engineering Revision;
+- Save i bezpieczne zamykanie z ochroną niezapisanych zmian;
 - ponowne odnajdywanie Partów po restarcie;
 - wykrywanie konfliktu, gdy dwa pliki w jednym Workspace mają ten sam DocumentId.
 
-Obecny Part jest dokumentem trwałym, ale nie zawiera jeszcze modelowania geometrycznego.
+Obecny Part jest trwałym dokumentem CAD ze wspólnym środowiskiem pracy 3D, ale nie zawiera jeszcze modelowanej geometrii bryłowej.
 
-Sketch, Bodies/Features, Assembly, Drawing i Viewer nie są jeszcze częścią dostępnej powierzchni produktu.
+Sketch, Bodies/Features, Assembly i Drawing nie są jeszcze dostępne.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
@@ -982,7 +1118,7 @@ Wersje polska i angielska są utrzymywane jako równorzędne źródła. Browser 
 <!-- section-id: product.parts.create -->
 ## Tworzenie nowego Parta
 
-Po otwarciu Projektu w Workspace użyj `New Part…`.
+Po otwarciu Projektu użyj `New Part…` w Workbench.
 
 Podaj ścieżkę względną wewnątrz bieżącego Workspace. Natywny plik Part używa rozszerzenia:
 
@@ -1001,28 +1137,71 @@ Każdy nowy Part otrzymuje stabilny `DocumentId`.
 
 Nazwa pliku i ścieżka nie są tożsamością Dokumentu. Możesz zmienić nazwę lub przenieść `.ss2part` wewnątrz Workspace; po `Refresh` ten sam DocumentId zostanie odnaleziony pod nową ścieżką.
 
-Pola `Number`, `Title`, `Description` i `Engineering revision` są trwałymi właściwościami Dokumentu i są niezależne od filename.
+Pola `Number`, `Title`, `Description` i `Engineering revision` są trwałymi właściwościami Dokumentu i są niezależne od nazwy pliku.
+
+<!-- section-id: product.parts.workbench -->
+## Otwieranie Partów i Workbench
+
+Użyj `Open Part…`, aby wybrać poprawny natywny Part.
+
+Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs przełączają aktywny Part. Ten sam Workbench zmienia Tree, Properties i kontekst viewportu 3D zgodnie z aktywną zakładką.
+
+Po lewej znajduje się Document Tree, pośrodku viewport 3D, a po prawej Properties i Operations. Status/diagnostyka znajduje się pod zakładkami.
 
 <!-- section-id: product.parts.edit -->
-## Edycja właściwości
+## Edycja właściwości Dokumentu
 
-Zaznacz poprawny Part na liście i wybierz `Open`.
-
-Panel właściwości pozwala zmienić:
+Gdy żaden obiekt/referencja nie jest primary selection, Properties pokazuje pola Dokumentu:
 
 - Number;
 - Title;
 - Description;
 - Engineering revision.
 
-`Apply Properties` wprowadza zmianę do otwartej sesji Dokumentu. Zmiana nie jest jeszcze trwała na dysku, dopóki nie wykonasz `Save`.
+`Apply Properties` wprowadza zmianę do otwartej sesji Dokumentu. Zmiana nie jest trwała na dysku, dopóki nie wykonasz `Save`.
 
-`Undo` i `Redo` działają dla zmian właściwości w bieżącej otwartej sesji.
+`Undo` i `Redo` działają dla authored changes bieżącej otwartej sesji.
+
+<!-- section-id: product.parts.origin -->
+## Origin, zaznaczenie i widoczność
+
+Każdy Part ma w Document Tree grupę `Origin` zawierającą:
+
+- Origin Point;
+- X Axis, Y Axis, Z Axis;
+- XY Plane, XZ Plane, YZ Plane.
+
+Te referencje zawsze istnieją. Ukrycie referencji jej nie usuwa.
+
+Możesz zaznaczyć jedną albo kilka referencji Origin w Tree. W menu kontekstowym użyj `Show` lub `Hide`, aby ustawić widoczność całego obsługiwanego zaznaczenia.
+
+Grupowa zmiana widoczności jest jedną operacją Undo/Redo.
+
+Tree i viewport 3D używają wspólnego zaznaczenia. Primary selected Origin reference jest pokazywana w Properties wraz z rolą, typem, semantyczną tożsamością i bieżącą widocznością.
+
+Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
+
+<!-- section-id: product.parts.navigation -->
+## Nawigacja 3D i ViewCube
+
+Workbench Parta udostępnia:
+
+- Pan środkowym przyciskiem myszy;
+- Orbit przez Shift + środkowy przycisk myszy;
+- Zoom kółkiem myszy;
+- Fit;
+- widoki Front, Back, Left, Right, Top i Bottom;
+- Isometric oraz orientacje narożne;
+- przełączanie Orthographic / Perspective.
+
+ViewCube w prawym górnym rogu viewportu 3D służy do standardowych orientacji, Fit i przełączania projekcji.
+
+Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, nie wymagają Save i nie tworzą wpisów CAD Undo.
 
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta do jego pliku `.ss2part`.
+`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin, do pliku `.ss2part`.
 
 Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Discard` albo `Cancel`.
 
@@ -1035,14 +1214,14 @@ Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty.
 
 Po restarcie aplikacji otwórz ten sam Projekt.
 
-SimpleSolid ponownie skanuje Workspace. Zapisany Part zostaje odnaleziony z tym samym DocumentId i zapisanymi właściwościami.
+SimpleSolid ponownie skanuje Workspace. Zapisany Part zostaje odnaleziony z tym samym DocumentId, zapisanymi właściwościami i zapisaną widocznością Origin.
 
-Historia Undo/Redo nie jest zapisywana do pliku i po ponownym otwarciu zaczyna się od nowa.
+Historia Undo/Redo, aktywne zaznaczenie i stan kamery nie są zapisywane do pliku i po ponownym otwarciu zaczynają się od nowa.
 
 <!-- section-id: product.parts.conflicts -->
 ## Konflikt DocumentId i niepoprawne pliki
 
-Jeżeli dwa pliki `.ss2part` w jednym Workspace zawierają ten sam DocumentId, lista pokazuje `Identity conflict` i wszystkie wykryte ścieżki.
+Jeżeli dwa pliki `.ss2part` w jednym Workspace zawierają ten sam DocumentId, `Open Part…` pokazuje konflikt tożsamości i wszystkie wykryte ścieżki.
 
 Taki wpis nie może zostać otwarty przez DocumentId, dopóki konflikt nie zostanie usunięty. SimpleSolid nie wybiera arbitralnie jednej kopii i nie nadaje automatycznie nowego ID.
 
@@ -1051,9 +1230,9 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako `Invalid Part`
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part przechowuje tożsamość i wspólne właściwości Dokumentu.
+Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji oraz wspólny fundament Workbench/Viewer 3D.
 
-Nie zawiera jeszcze Sketch, Bodies, Features, geometrii 3D, Viewer, Material ani narzędzi Assembly/Drawing.
+Nie zawiera jeszcze Sketch, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty
@@ -1173,7 +1352,7 @@ Projekt można później ponownie otworzyć przez `Open Project…`.
 
 Workspace Shell zawiera obecnie pierwszy trwały typ dokumentu CAD: Part `.ss2part` z właściwościami Dokumentu, Undo/Redo i Save.
 
-Modelowanie geometryczne Parta, Assembly, Drawing i Viewer nie są jeszcze dostępne. Szczegóły bieżącego lifecycle Parta opisuje dokument `Dokumenty Part`.
+Wspólny CAD Workbench i Viewer 3D są dostępne dla Origin/referencji Parta i nawigacji. Modelowanie geometryczne Parta, Sketch, Bodies/Features, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Dokumenty Part`.
 </script>
 
 <script>
