@@ -120,6 +120,7 @@ add_executable(simplesolid2
     app/main.cpp
     ui/cad_workbench.cpp
     ui/cad_workbench_shell.cpp
+    ui/document_viewport_pane.cpp
     ui/part_document_tree_controller.cpp
     ui/part_viewer_projection.cpp
     ui/project_creation_dialog.cpp
