@@ -278,6 +278,36 @@ int main(int argc, char* argv[]) {
                 selectReference(
                     *tree,
                     *origin_point);
+                EXPECT(tree->selectedItems().size() == 1);
+
+                QTest::mouseClick(
+                    viewport,
+                    Qt::RightButton,
+                    Qt::NoModifier,
+                    center,
+                    1);
+                QApplication::processEvents();
+                EXPECT(tree->selectedItems().size() == 1);
+                EXPECT(tree->selectedItems().front()->text(0) ==
+                       QStringLiteral("Origin Point"));
+
+                QTest::mouseClick(
+                    viewport,
+                    Qt::LeftButton,
+                    Qt::NoModifier,
+                    empty,
+                    1);
+                QApplication::processEvents();
+                EXPECT(tree->selectedItems().empty());
+
+                origin_point =
+                    findOriginReference(
+                        *tree,
+                        QStringLiteral("Origin Point"));
+                EXPECT(origin_point != nullptr);
+                selectReference(
+                    *tree,
+                    *origin_point);
                 EXPECT(hide_action->isEnabled());
                 hide_action->trigger();
                 QApplication::processEvents();
