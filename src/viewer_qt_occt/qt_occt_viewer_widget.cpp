@@ -21,6 +21,7 @@
 #include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
 
+#include <QContextMenuEvent>
 #include <QDebug>
 #include <QMouseEvent>
 #include <QPaintEvent>
@@ -225,30 +226,41 @@ public:
         if (context_.IsNull() || view_.IsNull()) return false;
 
         clearReferenceScene();
-        reference_scene_ = scene;
 
-        if (scene.grid && scene.grid->visible) {
-            buildGrid(*scene.grid);
-        }
-
-        for (const auto& reference : scene.references) {
-            if (!reference.visible) continue;
-
-            const auto object = makeReferenceObject(reference);
-            if (object.IsNull()) {
-                clearReferenceScene();
-                return false;
+        try {
+            if (scene.grid && scene.grid->visible) {
+                buildGrid(*scene.grid);
             }
 
-            reference_objects_.push_back(
-                ReferenceObject{reference.token, reference.kind, object});
-            context_->Display(object, false);
-        }
+            for (const auto& reference : scene.references) {
+                if (!reference.visible) continue;
 
-        applySelectionStyles();
-        context_->UpdateCurrentViewer();
-        view_->Redraw();
-        return true;
+                const auto object =
+                    makeReferenceObject(reference);
+                if (object.IsNull()) {
+                    clearReferenceScene();
+                    return false;
+                }
+
+                reference_objects_.push_back(
+                    ReferenceObject{
+                        reference.token,
+                        reference.kind,
+                        object});
+                context_->Display(object, false);
+            }
+
+            applySelectionStyles();
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            reference_scene_ = scene;
+            return true;
+        } catch (...) {
+            // Leave the provider in a coherent empty-scene state even
+            // if OCCT fails after only part of the replacement was built.
+            clearReferenceScene();
+            throw;
+        }
     }
 
     bool setPresentationSelection(
@@ -435,29 +447,49 @@ public:
         return object;
     }
 
-    void clearReferenceScene() {
+    void clearReferenceScene() noexcept {
         if (!context_.IsNull()) {
             // Scene objects may still be held by transient OCCT detection
             // or native selection state after user input. Release those
             // references before removing presentation objects.
-            context_->ClearDetected(false);
-            context_->ClearSelected(false);
+            guardedVoid(
+                "clearDetected",
+                [this] {
+                    context_->ClearDetected(false);
+                });
+            guardedVoid(
+                "clearSelected",
+                [this] {
+                    context_->ClearSelected(false);
+                });
 
             for (const auto& entry : reference_objects_) {
-                if (!entry.object.IsNull()) {
-                    context_->Remove(entry.object, false);
-                }
+                if (entry.object.IsNull()) continue;
+                const auto object = entry.object;
+                guardedVoid(
+                    "removeReferenceObject",
+                    [this, object] {
+                        context_->Remove(
+                            object,
+                            false);
+                    });
             }
 
             for (const auto& object : grid_objects_) {
-                if (!object.IsNull()) {
-                    context_->Remove(object, false);
-                }
+                if (object.IsNull()) continue;
+                guardedVoid(
+                    "removeGridObject",
+                    [this, object] {
+                        context_->Remove(
+                            object,
+                            false);
+                    });
             }
         }
 
         reference_objects_.clear();
         grid_objects_.clear();
+        reference_scene_ = {};
     }
 
     void buildGrid(
@@ -921,6 +953,13 @@ void QtOcctViewerWidget::wheelEvent(QWheelEvent* event) {
                 point.y(),
                 delta);
         });
+    event->accept();
+}
+
+void QtOcctViewerWidget::contextMenuEvent(
+    QContextMenuEvent* event) {
+    // WB-01A reserves right click for a future context menu.
+    // Until one exists, keep it an explicit no-op.
     event->accept();
 }
 
