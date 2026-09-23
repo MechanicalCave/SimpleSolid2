@@ -339,7 +339,9 @@ void PartViewportController::applySelectionToSurfaces() {
 void PartViewportController::notifySelectionChanged() {
     if (!selection_changed_handler_) return;
 
-    const auto* selection = activeSelection();
+    const auto* selection =
+        static_cast<const PartViewportController&>(*this)
+            .activeSelection();
     if (selection == nullptr) {
         selection_changed_handler_(
             {},
