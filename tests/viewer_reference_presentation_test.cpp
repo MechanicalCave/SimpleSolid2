@@ -57,6 +57,9 @@ int main() {
     grid.v_axis = {2.0, 0.0, 0.0};
     CHECK(!grid.valid());
 
+    plane.v_axis = {0.0, 1.0, 0.0};
+    CHECK(plane.valid());
+
     ReferenceScene scene;
     scene.grid = GridPresentation{};
     scene.references = {point, plane};
