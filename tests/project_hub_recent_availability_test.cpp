@@ -46,6 +46,8 @@ void verifyAvailabilityIsDerivedAndNonPersistent(
     const auto catalog = root / "state" / "recent-projects-v1.txt";
     const auto workspace = root / "Remembered Project";
     std::filesystem::create_directories(workspace);
+    const auto remembered_workspace =
+        std::filesystem::weakly_canonical(workspace);
 
     ProjectHubController hub{catalog};
     const auto created = hub.createProject(workspace, "Remembered Project");
@@ -59,8 +61,7 @@ void verifyAvailabilityIsDerivedAndNonPersistent(
         CHECK(recent.ok());
         CHECK(recent.entries.size() == 1U);
         CHECK(recent.entries[0].project_id == expected_id);
-        CHECK(recent.entries[0].workspace_root ==
-              std::filesystem::weakly_canonical(workspace));
+        CHECK(recent.entries[0].workspace_root == remembered_workspace);
     };
 
     {
