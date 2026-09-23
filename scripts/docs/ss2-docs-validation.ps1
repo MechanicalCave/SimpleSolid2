@@ -178,6 +178,37 @@ function Test-BrowserFreshness {
     }
 }
 
+function Test-BrowserContract {
+    param(
+        [Parameter(Mandatory=$true)][string]$RepoRoot,
+        [Parameter(Mandatory=$true)]$Errors
+    )
+    $templatePath = Join-Path $RepoRoot "docs\\browser\\template.html"
+    if (-not (Test-Path -LiteralPath $templatePath -PathType Leaf)) { return }
+
+    $template = Read-NormalizedText $templatePath
+    foreach ($requiredToken in @(
+        'id="lang-pl"',
+        'id="lang-en"',
+        'id="search"',
+        'id="nav"',
+        "const state = { lang: 'pl'",
+        "document.getElementById('lang-pl')",
+        "document.getElementById('lang-en')"
+    )) {
+        if (-not $template.Contains($requiredToken)) {
+            Add-DocError $Errors "BROWSER" "Browser template is missing required offline/UI contract token: $requiredToken"
+        }
+    }
+
+    if ($template -match '(?i)(src|href)\s*=\s*["'']https?://') {
+        Add-DocError $Errors "BROWSER" "Browser template contains an external HTTP(S) resource dependency."
+    }
+    if ($template -match '(?i)\b(fetch|XMLHttpRequest)\s*\(') {
+        Add-DocError $Errors "BROWSER" "Browser template contains runtime network-loading code."
+    }
+}
+
 function Get-DocumentationErrors {
     param([Parameter(Mandatory=$true)][string]$RepoRoot)
     $errors = New-Object System.Collections.Generic.List[string]
@@ -185,6 +216,7 @@ function Get-DocumentationErrors {
     Test-MetadataAndPairs $RepoRoot $errors
     Test-LocalMarkdownLinks $RepoRoot $errors
     Test-DocumentationImpact $RepoRoot $errors
+    Test-BrowserContract $RepoRoot $errors
     Test-BrowserFreshness $RepoRoot $errors
     return $errors
 }
