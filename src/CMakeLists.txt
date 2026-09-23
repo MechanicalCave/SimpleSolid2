@@ -64,7 +64,7 @@ target_compile_features(simplesolid2_application PUBLIC cxx_std_20)
 find_package(Qt6 6 REQUIRED COMPONENTS Widgets)
 find_package(OpenCASCADE CONFIG REQUIRED)
 
-foreach(_target IN ITEMS TKernel TKMath TKG3d TKGeomBase TKService TKV3d TKOpenGl)
+foreach(_target IN ITEMS TKernel TKMath TKG3d TKGeomBase TKBRep TKTopAlgo TKService TKV3d TKOpenGl)
     if(NOT TARGET ${_target})
         message(FATAL_ERROR "OpenCASCADE package is missing required Viewer target ${_target}")
     endif()
@@ -107,6 +107,8 @@ target_link_libraries(simplesolid2_viewer_qt_occt
         TKMath
         TKG3d
         TKGeomBase
+        TKBRep
+        TKTopAlgo
         TKService
         TKV3d
         TKOpenGl
@@ -119,6 +121,7 @@ add_executable(simplesolid2
     ui/cad_workbench.cpp
     ui/cad_workbench_shell.cpp
     ui/part_document_tree_controller.cpp
+    ui/part_viewer_projection.cpp
     ui/project_creation_dialog.cpp
     ui/project_hub_window.cpp
 )
