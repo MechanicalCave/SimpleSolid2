@@ -1,21 +1,23 @@
 version: 1
-status: active
+status: completed
 active_work: "work/DOC-01_AS_BUILT_DOCUMENTATION_SYSTEM.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
 next:
-  - create canonical internal as-built documentation
-  - create bilingual PL/EN product documentation
-  - add deterministic Product Browser generator and validation
-  - integrate documentation validation into ss2 verify and Windows PR gate
+  - no implementation work is active after DOC-01
+  - Owner must accept the next explicit work contract before further product implementation
 notes:
   - PH-01 / MAIN v0.1 is complete.
   - PH-02A, PH-02B and PH-02C are complete.
-  - DOC-01 accepted by Owner on 2026-09-23.
-  - Product/user documentation is bilingual PL/EN with Polish as the default Browser language.
-  - Internal as-built documentation is English and explanatory; governance remains normative.
-  - Markdown is canonical; docs/browser/index.html is generated.
-  - Future work contracts must declare Documentation Impact.
-  - No CAD-domain implementation is authorized by DOC-01.
+  - DOC-01 accepted by Owner on 2026-09-23 and completed.
+  - Canonical internal as-built documentation exists under docs/internal/.
+  - Canonical user/product documentation is bilingual under docs/product/pl/ and docs/product/en/.
+  - Product Browser is generated at docs/browser/index.html with Polish default, PL/EN product switching, search and navigation.
+  - Markdown is canonical; the generated Browser is freshness-checked by ss2 verify.
+  - Documentation validation checks structure, bilingual parity, stable section IDs, local links, Documentation Impact, Browser freshness and offline Browser contract.
+  - Validator negative self-tests prove fail-closed behavior for missing pair, section mismatch, broken local link, missing Documentation Impact, stale Browser and external Browser dependency.
+  - Future accepted work contracts must declare Documentation Impact and required documentation must be current before completion.
+  - ProjectId, persistence semantics, CAD architecture and Foundation remain unchanged.
+  - No CAD-domain implementation is authorized without the next accepted work contract.
   - SS1 remains donor/reference only; SS2 Foundation remains authoritative.
