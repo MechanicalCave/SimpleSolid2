@@ -56,17 +56,20 @@ Po rekonstrukcji raportuj krótko:
 
 ## Aktualny handoff hint — MUSISZ ZWERYFIKOWAĆ
 
-Stan po zakończeniu PH-02A:
+Stan po zakończeniu PH-02B:
 
 - `work/PH-01_PROJECT_HUB.md` / MAIN v0.1 jest zakończony
-- `work/PH-02A_PROJECT_HUB_SELECTION_UX.md` jest zaakceptowany i zakończony
-- `work/ACTIVE.yaml` powinien mieć status `completed` i wskazywać PH-02A jako ostatni work item
+- `work/PH-02A_PROJECT_HUB_SELECTION_UX.md` jest zakończony
+- `work/PH-02B_RECENT_PROJECT_AVAILABILITY_UX.md` jest zaakceptowany i zakończony
+- `work/ACTIVE.yaml` powinien mieć status `completed` i wskazywać PH-02B jako ostatni work item
 - zaakceptowany ADR: `adr/ADR-0001-project-identity-and-workspace-clones.md`
 - Project metadata, runtime-only `ProjectSession`, ProjectId-based Recent Projects, minimalny Qt Project Hub i pusty Workspace Shell są na `main`
-- akcje Recent `Open` / `Locate…` / `Remove from Recent` wymagają rzeczywistego zaznaczenia; sam Qt current item nie wystarcza
-- lifecycle PH-01 oraz regresja PH-02A są pokryte automatycznymi testami
-- temat Create Project: wybór katalogu nadrzędnego i tworzenie nowego folderu Workspace pozostaje **kandydatem do osobnego work contractu**, nie jest jeszcze aktywnym zakresem implementacji
-- po PH-02A nie ma aktywnego następnego kontraktu implementacyjnego, dopóki Owner jawnie go nie zaakceptuje
+- akcje Recent wymagają rzeczywistego zaznaczenia; sam Qt current item nie wystarcza
+- Hub wyprowadza bieżący stan Recent jako: `Available`, `WorkspaceMissing`, `ProjectInvalid`, `IdentityMismatch`
+- availability jest stanem runtime/presentation i **nie jest zapisywane** do katalogu Recent
+- problematyczny wpis pozostaje w Recent dla `Locate…`; po zaznaczeniu `Open` jest disabled, a `Locate…` i `Remove from Recent` pozostają enabled
+- temat Create Project: wybór katalogu nadrzędnego i automatyczne tworzenie folderu Workspace pozostaje **kandydatem do osobnego work contractu**, nie jest aktywnym zakresem implementacji
+- po PH-02B nie ma aktywnego następnego kontraktu implementacyjnego, dopóki Owner jawnie go nie zaakceptuje
 - nie traktuj żadnego SHA z tego pliku jako bieżącego `main` HEAD
 
 Windows CI:
@@ -75,7 +78,7 @@ Windows CI:
 - label: `simplesolid2-native`
 - workflow: `.github/workflows/windows-pr-gate.yml`
 - gate sprawdza exact SHA → setup → verify → build → test
-- ostatni PH-02A gate obejmuje 6 testów, w tym `ph01.project_hub_lifecycle`, `ph01.app_smoke` i `ph02a.project_hub_selection_ux`
+- ostatni PH-02B gate obejmuje 8 testów, w tym `ph02a.project_hub_selection_ux`, `ph02b.project_hub_recent_availability` i `ph02b.project_hub_availability_ux`
 - tryb uruchomienia runnera (interaktywny vs Windows Service) jest stanem lokalnym maszyny; nie zakładaj go bez sprawdzenia
 
 Lokalne hinty maszyny Ownera:
