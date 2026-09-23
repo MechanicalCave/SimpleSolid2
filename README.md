@@ -4,11 +4,42 @@ SimpleSolid 2.0 is a clean architectural restart of SimpleSolid focused on a coh
 
 ## Current phase
 
-**Genesis / Project Hub foundation**
+**MAIN v0.1 — Testable Project Hub: complete**
 
-The first implementation milestone is `MAIN v0.1 — Testable Project Hub`.
+Implemented and verified lifecycle:
 
-No Part, Assembly, Drawing or kernel modeling implementation is authorized by repository bootstrap alone.
+```text
+App start
+→ Project Hub
+→ Create/Open Project
+→ stable ProjectId + metadata
+→ ProjectSession
+→ empty Workspace Shell
+→ Close
+→ restart
+→ Recent Projects
+→ reopen the same ProjectId
+```
+
+No subsequent product implementation work is active until the Owner accepts the next explicit work contract. In particular, PH-01 does not authorize Part, Assembly, Drawing, DocumentSession, Viewer, OCCT modeling, or other CAD-domain implementation.
+
+## Run locally
+
+Start the normal SS2 work session:
+
+```text
+START_SS2.cmd
+```
+
+The opened SS2 PowerShell provides:
+
+```text
+ss2-status
+ss2-run
+ss2-resume
+```
+
+`ss2-run` performs an incremental build and starts the current `SimpleSolid2` application.
 
 ## Architecture entry points
 
