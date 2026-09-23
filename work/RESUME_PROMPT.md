@@ -56,20 +56,23 @@ Po rekonstrukcji raportuj krótko:
 
 ## Aktualny handoff hint — MUSISZ ZWERYFIKOWAĆ
 
-Stan po zakończeniu PH-02B:
+Stan po zakończeniu PH-02C:
 
 - `work/PH-01_PROJECT_HUB.md` / MAIN v0.1 jest zakończony
 - `work/PH-02A_PROJECT_HUB_SELECTION_UX.md` jest zakończony
-- `work/PH-02B_RECENT_PROJECT_AVAILABILITY_UX.md` jest zaakceptowany i zakończony
-- `work/ACTIVE.yaml` powinien mieć status `completed` i wskazywać PH-02B jako ostatni work item
+- `work/PH-02B_RECENT_PROJECT_AVAILABILITY_UX.md` jest zakończony
+- `work/PH-02C_PROJECT_CREATION_UX.md` jest zaakceptowany i zakończony
+- `work/ACTIVE.yaml` powinien mieć status `completed` i wskazywać PH-02C jako ostatni work item
 - zaakceptowany ADR: `adr/ADR-0001-project-identity-and-workspace-clones.md`
-- Project metadata, runtime-only `ProjectSession`, ProjectId-based Recent Projects, minimalny Qt Project Hub i pusty Workspace Shell są na `main`
-- akcje Recent wymagają rzeczywistego zaznaczenia; sam Qt current item nie wystarcza
-- Hub wyprowadza bieżący stan Recent jako: `Available`, `WorkspaceMissing`, `ProjectInvalid`, `IdentityMismatch`
-- availability jest stanem runtime/presentation i **nie jest zapisywane** do katalogu Recent
-- problematyczny wpis pozostaje w Recent dla `Locate…`; po zaznaczeniu `Open` jest disabled, a `Locate…` i `Remove from Recent` pozostają enabled
-- temat Create Project: wybór katalogu nadrzędnego i automatyczne tworzenie folderu Workspace pozostaje **kandydatem do osobnego work contractu**, nie jest aktywnym zakresem implementacji
-- po PH-02B nie ma aktywnego następnego kontraktu implementacyjnego, dopóki Owner jawnie go nie zaakceptuje
+- Create Project używa jednego dialogu: Project name / Location / Project folder
+- Location jest istniejącym katalogiem nadrzędnym; SS2 tworzy nowy child Workspace
+- Project folder jest proponowany z Project name, ale pozostaje niezależnie edytowalny
+- Project name i folder nie są tożsamością; trwałą tożsamością pozostaje `ProjectId`
+- istniejący target folder podczas Create = fail closed; bez adopcji, nadpisania ani inicjalizacji
+- tworzenie używa SS2-owned staging folderu, a rollback usuwa tylko zweryfikowane artefakty nowo utworzonego projektu
+- po udanym Create powstaje poprawny `.simplesolid/project.json`, aktywny `ProjectSession`, Workspace Shell i wpis Recent
+- Hub nadal wyprowadza availability Recent jako `Available`, `WorkspaceMissing`, `ProjectInvalid`, `IdentityMismatch`; availability nie jest trwałe
+- po PH-02C nie ma aktywnego następnego kontraktu implementacyjnego, dopóki Owner jawnie go nie zaakceptuje
 - nie traktuj żadnego SHA z tego pliku jako bieżącego `main` HEAD
 
 Windows CI:
@@ -78,7 +81,7 @@ Windows CI:
 - label: `simplesolid2-native`
 - workflow: `.github/workflows/windows-pr-gate.yml`
 - gate sprawdza exact SHA → setup → verify → build → test
-- ostatni PH-02B gate obejmuje 8 testów, w tym `ph02a.project_hub_selection_ux`, `ph02b.project_hub_recent_availability` i `ph02b.project_hub_availability_ux`
+- ostatni PH-02C gate obejmuje 10 testów, w tym `ph02c.project_creation_workflow` i `ph02c.project_creation_dialog`
 - tryb uruchomienia runnera (interaktywny vs Windows Service) jest stanem lokalnym maszyny; nie zakładaj go bez sprawdzenia
 
 Lokalne hinty maszyny Ownera:
