@@ -1,15 +1,18 @@
 version: 1
-status: active
+status: completed
 active_work: "work/DOC-01A_DOCUMENTATION_COMMAND_WIRING.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
 next:
-  - fix root docs command mapping and fail-closed dispatch
-  - add exact dispatcher smoke to Windows PR gate
-  - update internal build/test/run documentation and regenerate Browser
+  - no implementation work is active after DOC-01A
+  - Owner must accept the next explicit work contract before further product implementation
 notes:
-  - DOC-01A accepted by Owner on 2026-09-23.
-  - This is a tooling hotfix only; Product Browser behavior and user/product docs are unchanged.
-  - Internal docs are required because canonical repository/CI workflow changes.
-  - No CAD-domain implementation is authorized by DOC-01A.
+  - DOC-01 remains complete.
+  - DOC-01A accepted by Owner on 2026-09-23 and completed.
+  - Root .\ss2.ps1 docs now maps to scripts\ss2-docs.ps1.
+  - Root dispatch fails closed for missing command mappings or missing mapped scripts.
+  - Windows PR gate executes the exact .\ss2.ps1 docs command and verifies generated Browser remains Git-clean.
+  - Internal build/test/run documentation was updated; user/product documentation was not impacted.
+  - Documentation validation and the existing CTest suite pass.
+  - No CAD-domain implementation is authorized without the next accepted work contract.
