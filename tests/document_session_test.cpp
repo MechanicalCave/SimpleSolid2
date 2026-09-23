@@ -10,6 +10,9 @@
 #if defined(_WIN32)
 #define NOMINMAX
 #include <windows.h>
+#ifdef DocumentProperties
+#undef DocumentProperties
+#endif
 #endif
 
 using namespace simplesolid2;
