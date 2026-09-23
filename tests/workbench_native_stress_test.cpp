@@ -104,6 +104,17 @@ void selectReference(
     QApplication::processEvents();
 }
 
+void tracePhase(
+    int iteration,
+    const char* phase) {
+    std::cerr
+        << "WB-01A stress iteration "
+        << iteration
+        << " phase "
+        << phase
+        << std::endl;
+}
+
 void selectTwoReferences(
     QTreeWidget& tree,
     QTreeWidgetItem& first,
@@ -224,6 +235,7 @@ int main(int argc, char* argv[]) {
                     viewport->width() - 6,
                     viewport->height() - 6};
 
+                tracePhase(iteration, "left-center");
                 QTest::mouseClick(
                     viewport,
                     Qt::LeftButton,
@@ -232,6 +244,7 @@ int main(int argc, char* argv[]) {
                     1);
                 QApplication::processEvents();
 
+                tracePhase(iteration, "ctrl-left-center");
                 QTest::mouseClick(
                     viewport,
                     Qt::LeftButton,
@@ -240,6 +253,7 @@ int main(int argc, char* argv[]) {
                     1);
                 QApplication::processEvents();
 
+                tracePhase(iteration, "left-empty");
                 QTest::mouseClick(
                     viewport,
                     Qt::LeftButton,
@@ -248,6 +262,7 @@ int main(int argc, char* argv[]) {
                     1);
                 QApplication::processEvents();
 
+                tracePhase(iteration, "right-center");
                 QTest::mouseClick(
                     viewport,
                     Qt::RightButton,
@@ -256,6 +271,7 @@ int main(int argc, char* argv[]) {
                     1);
                 QApplication::processEvents();
 
+                tracePhase(iteration, "navigation");
                 viewport->panByPixels(
                     (iteration % 3) - 1,
                     ((iteration + 1) % 3) - 1);
@@ -305,10 +321,12 @@ int main(int argc, char* argv[]) {
                         *tree,
                         QStringLiteral("Origin Point"));
                 EXPECT(origin_point != nullptr);
+                tracePhase(iteration, "tree-origin-right-noop");
                 selectReference(
                     *tree,
                     *origin_point);
                 EXPECT(hide_action->isEnabled());
+                tracePhase(iteration, "hide-origin");
                 hide_action->trigger();
                 QApplication::processEvents();
 
@@ -319,6 +337,7 @@ int main(int argc, char* argv[]) {
 
                 if ((iteration % 10) == 0) {
                     EXPECT(undo->isEnabled());
+                    tracePhase(iteration, "undo-origin-hide");
                     undo->click();
                     QApplication::processEvents();
                     EXPECT(session->document()
@@ -327,6 +346,7 @@ int main(int argc, char* argv[]) {
                                 origin_point));
 
                     EXPECT(redo->isEnabled());
+                    tracePhase(iteration, "redo-origin-hide");
                     redo->click();
                     QApplication::processEvents();
                     EXPECT(!session->document()
@@ -344,6 +364,7 @@ int main(int argc, char* argv[]) {
                     *tree,
                     *origin_point);
                 EXPECT(show_action->isEnabled());
+                tracePhase(iteration, "show-origin");
                 show_action->trigger();
                 QApplication::processEvents();
 
@@ -369,6 +390,7 @@ int main(int argc, char* argv[]) {
                         *origin_point,
                         *xy_plane);
                     EXPECT(show_action->isEnabled());
+                    tracePhase(iteration, "batch-show");
                     show_action->trigger();
                     QApplication::processEvents();
 
@@ -396,6 +418,7 @@ int main(int argc, char* argv[]) {
                         *origin_point,
                         *xy_plane);
                     EXPECT(hide_action->isEnabled());
+                    tracePhase(iteration, "batch-hide");
                     hide_action->trigger();
                     QApplication::processEvents();
 
