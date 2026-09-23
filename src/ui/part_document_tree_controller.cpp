@@ -5,6 +5,7 @@
 #include <QFont>
 #include <QMenu>
 #include <QPoint>
+#include <QSignalBlocker>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
@@ -98,7 +99,10 @@ PartDocumentTreeController::PartDocumentTreeController(
         tree_,
         &QTreeWidget::itemSelectionChanged,
         this,
-        [this] { updateVisibilityActions(); });
+        [this] {
+            updateVisibilityActions();
+            notifySelectionChanged();
+        });
 
     QObject::connect(
         tree_,
@@ -140,6 +144,71 @@ PartDocumentTreeController::selectedBuiltinReferences() const {
     return roles;
 }
 
+std::optional<core::BuiltinReferenceRole>
+PartDocumentTreeController::primaryBuiltinReference() const {
+    const auto* current = tree_->currentItem();
+    if (current != nullptr && current->isSelected()) {
+        if (const auto role = roleForItem(*current)) {
+            return role;
+        }
+    }
+
+    const auto selected = selectedBuiltinReferences();
+    if (!selected.empty()) {
+        return selected.front();
+    }
+
+    return std::nullopt;
+}
+
+void PartDocumentTreeController::setBuiltinReferenceSelection(
+    const std::vector<core::BuiltinReferenceRole>& selected,
+    std::optional<core::BuiltinReferenceRole> primary) {
+    const QSignalBlocker blocked{tree_};
+
+    QTreeWidgetItem* first_selected = nullptr;
+    QTreeWidgetItem* primary_item = nullptr;
+
+    const auto roots = tree_->findItems(
+        QStringLiteral("Origin"),
+        Qt::MatchExactly | Qt::MatchRecursive,
+        0);
+
+    for (auto* origin : roots) {
+        if (origin == nullptr) continue;
+
+        for (int index = 0; index < origin->childCount(); ++index) {
+            auto* item = origin->child(index);
+            if (item == nullptr) continue;
+
+            const auto role = roleForItem(*item);
+            if (!role) continue;
+
+            const bool should_select =
+                std::find(
+                    selected.begin(),
+                    selected.end(),
+                    *role) != selected.end();
+            item->setSelected(should_select);
+
+            if (should_select && first_selected == nullptr) {
+                first_selected = item;
+            }
+            if (should_select && primary && *primary == *role) {
+                primary_item = item;
+            }
+        }
+    }
+
+    if (primary_item != nullptr) {
+        tree_->setCurrentItem(primary_item);
+    } else if (first_selected != nullptr) {
+        tree_->setCurrentItem(first_selected);
+    }
+
+    updateVisibilityActions();
+}
+
 bool PartDocumentTreeController::
 selectionContainsOnlyBuiltinReferences() const {
     const auto selected = tree_->selectedItems();
@@ -155,6 +224,8 @@ selectionContainsOnlyBuiltinReferences() const {
 
 void PartDocumentTreeController::rebuild(
     bool preserve_reference_selection) {
+    const QSignalBlocker blocked{tree_};
+
     std::vector<core::BuiltinReferenceRole>
         previously_selected;
 
@@ -289,6 +360,14 @@ void PartDocumentTreeController::applySelectedVisibility(
     if (result_handler_) {
         result_handler_(result, visible);
     }
+}
+
+void PartDocumentTreeController::notifySelectionChanged() {
+    if (!selection_handler_) return;
+
+    selection_handler_(
+        selectedBuiltinReferences(),
+        primaryBuiltinReference());
 }
 
 QString PartDocumentTreeController::labelFor(
