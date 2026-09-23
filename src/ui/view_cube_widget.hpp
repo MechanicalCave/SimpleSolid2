@@ -4,6 +4,7 @@
 
 #include <QFrame>
 
+class QGridLayout;
 class QPushButton;
 class QString;
 
@@ -33,7 +34,7 @@ private:
     void syncEnabledState();
 
     viewer::IDocumentViewport* viewport_{};
-    class QGridLayout* grid_{};
+    QGridLayout* grid_{};
     QPushButton* fit_button_{};
     QPushButton* projection_button_{};
 };
