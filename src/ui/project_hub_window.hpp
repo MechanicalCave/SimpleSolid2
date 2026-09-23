@@ -25,6 +25,7 @@ private:
     void buildHubPage();
     void buildWorkspacePage();
     void refreshRecent();
+    void syncRecentActionState();
     void createProject();
     void openProject();
     void openSelectedRecent();
