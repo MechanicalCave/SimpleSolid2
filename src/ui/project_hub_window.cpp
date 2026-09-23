@@ -85,7 +85,7 @@ ProjectHubWindow::ProjectHubWindow(
     : QMainWindow{parent},
       controller_{std::move(recent_catalog_path)} {
     setWindowTitle(QStringLiteral("SimpleSolid 2.0"));
-    resize(860, 560);
+    resize(1280, 800);
 
     pages_ = new QStackedWidget(this);
     setCentralWidget(pages_);
