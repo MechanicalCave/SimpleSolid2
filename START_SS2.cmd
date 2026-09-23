@@ -4,7 +4,6 @@ setlocal
 set "SS2_ROOT=%~dp0"
 set "SS2_PROMPT=%SS2_ROOT%work\RESUME_PROMPT.md"
 set "POWERSHELL=%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe"
-set "CLIP=%SystemRoot%\System32\clip.exe"
 if not defined SS2_RUNNER_ROOT set "SS2_RUNNER_ROOT=D:\runner-ss2"
 
 cd /d "%SS2_ROOT%"
