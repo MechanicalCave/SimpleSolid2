@@ -40,7 +40,7 @@ jobs:
 
     defaults:
       run:
-        shell: C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File {0}
+        shell: '"C:\Program Files\Git\bin\bash.exe" --noprofile --norc -eo pipefail {0}'
 
     steps:
       - name: Checkout exact tested revision
@@ -53,37 +53,36 @@ jobs:
 
       - name: Verify exact checkout
         run: |
-          $ErrorActionPreference = "Stop"
-          $expected = "${{ github.event.pull_request.head.sha || github.sha }}"
-          $actual = (git rev-parse HEAD).Trim()
-          Write-Host "[runner] machine: $env:COMPUTERNAME"
-          Write-Host "[runner] workspace: $env:GITHUB_WORKSPACE"
-          Write-Host "[runner] expected SHA: $expected"
-          Write-Host "[runner] checkout SHA: $actual"
-          if ($actual -ne $expected) {
-              throw "Runner checkout SHA mismatch: expected $expected, got $actual"
-          }
+          expected='${{ github.event.pull_request.head.sha || github.sha }}'
+          actual="$(git rev-parse HEAD)"
+          echo "[runner] machine: $COMPUTERNAME"
+          echo "[runner] workspace: $GITHUB_WORKSPACE"
+          echo "[runner] expected SHA: $expected"
+          echo "[runner] checkout SHA: $actual"
+          test "$actual" = "$expected"
 
       - name: Configure SS2 machine-local environment
         run: |
-          $ErrorActionPreference = "Stop"
-          .\ss2.ps1 setup -QtRoot "D:\Qt" -OcctRoot "D:\SimpleSolid2\.simplesolid-env"
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" \
+            -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+            -File "./ss2.ps1" setup \
+            -QtRoot "D:/Qt" \
+            -OcctRoot "D:/SimpleSolid2/.simplesolid-env"
 
       - name: Bootstrap verification
         run: |
-          $ErrorActionPreference = "Stop"
-          .\ss2.ps1 verify
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" \
+            -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+            -File "./ss2.ps1" verify
 
       - name: Build
         run: |
-          $ErrorActionPreference = "Stop"
-          .\ss2.ps1 build
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" \
+            -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+            -File "./ss2.ps1" build
 
       - name: Test
         run: |
-          $ErrorActionPreference = "Stop"
-          .\ss2.ps1 test
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          "/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe" \
+            -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass \
+            -File "./ss2.ps1" test
