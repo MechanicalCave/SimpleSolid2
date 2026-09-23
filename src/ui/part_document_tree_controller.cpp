@@ -8,6 +8,7 @@
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <string_view>
