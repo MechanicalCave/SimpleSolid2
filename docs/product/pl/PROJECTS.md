@@ -115,4 +115,4 @@ Projekt można później ponownie otworzyć przez `Open Project…`.
 
 Workspace Shell zawiera obecnie pierwszy trwały typ dokumentu CAD: Part `.ss2part` z właściwościami Dokumentu, Undo/Redo i Save.
 
-Modelowanie geometryczne Parta, Assembly, Drawing i Viewer nie są jeszcze dostępne. Szczegóły bieżącego lifecycle Parta opisuje dokument `Dokumenty Part`.
+Wspólny CAD Workbench i Viewer 3D są dostępne dla Origin/referencji Parta i nawigacji. Modelowanie geometryczne Parta, Sketch, Bodies/Features, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Dokumenty Part`.
