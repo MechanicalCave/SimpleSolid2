@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 using namespace simplesolid2::application;
 using namespace simplesolid2::application::internal;
