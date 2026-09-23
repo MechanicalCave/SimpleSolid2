@@ -108,6 +108,7 @@ void ProjectHubWindow::buildHubPage() {
     root->addWidget(recent_label);
 
     recent_list_ = new QListWidget(hub_page_);
+    recent_list_->setObjectName(QStringLiteral("recentProjectsList"));
     recent_list_->setSelectionMode(QAbstractItemView::SingleSelection);
     recent_list_->setAlternatingRowColors(true);
     root->addWidget(recent_list_, 1);
@@ -115,10 +116,13 @@ void ProjectHubWindow::buildHubPage() {
     auto* recent_actions = new QHBoxLayout;
     open_recent_button_ =
         new QPushButton(QStringLiteral("Open"), hub_page_);
+    open_recent_button_->setObjectName(QStringLiteral("openRecentButton"));
     locate_recent_button_ =
         new QPushButton(QStringLiteral("Locate…"), hub_page_);
+    locate_recent_button_->setObjectName(QStringLiteral("locateRecentButton"));
     remove_recent_button_ =
         new QPushButton(QStringLiteral("Remove from Recent"), hub_page_);
+    remove_recent_button_->setObjectName(QStringLiteral("removeRecentButton"));
     open_recent_button_->setEnabled(false);
     locate_recent_button_->setEnabled(false);
     remove_recent_button_->setEnabled(false);
@@ -166,12 +170,7 @@ void ProjectHubWindow::buildHubPage() {
         recent_list_,
         &QListWidget::itemSelectionChanged,
         this,
-        [this] {
-            const bool selected = recent_list_->currentItem() != nullptr;
-            open_recent_button_->setEnabled(selected);
-            locate_recent_button_->setEnabled(selected);
-            remove_recent_button_->setEnabled(selected);
-        });
+        [this] { syncRecentActionState(); });
 
     pages_->addWidget(hub_page_);
 }
@@ -241,6 +240,10 @@ void ProjectHubWindow::refreshRecent() {
             QStringLiteral("ProjectId: ") + fromUtf8(entry.project_id));
     }
 
+    recent_list_->clearSelection();
+    recent_list_->setCurrentRow(-1);
+    syncRecentActionState();
+
     if (listed.entries.empty()) {
         hub_status_->setText(QStringLiteral("No recent Projects."));
     } else {
@@ -248,6 +251,13 @@ void ProjectHubWindow::refreshRecent() {
             QStringLiteral("%1 recent Project(s).")
                 .arg(static_cast<qulonglong>(listed.entries.size())));
     }
+}
+
+void ProjectHubWindow::syncRecentActionState() {
+    const bool selected = recent_list_->selectedItems().size() == 1;
+    open_recent_button_->setEnabled(selected);
+    locate_recent_button_->setEnabled(selected);
+    remove_recent_button_->setEnabled(selected);
 }
 
 void ProjectHubWindow::createProject() {
@@ -387,9 +397,9 @@ void ProjectHubWindow::enterWorkspace() {
 }
 
 std::string ProjectHubWindow::selectedProjectId() const {
-    const auto* item = recent_list_->currentItem();
-    if (item == nullptr) return {};
-    return toUtf8(item->data(Qt::UserRole).toString());
+    const auto selected = recent_list_->selectedItems();
+    if (selected.size() != 1) return {};
+    return toUtf8(selected.front()->data(Qt::UserRole).toString());
 }
 
 void ProjectHubWindow::showFailure(
