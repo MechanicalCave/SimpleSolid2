@@ -17,6 +17,7 @@ class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
 class QTabBar;
+class QStackedWidget;
 class QTreeWidget;
 class QWidget;
 
@@ -25,6 +26,7 @@ namespace simplesolid2::ui {
 class CadWorkbenchShell;
 class PartDocumentTreeController;
 class PartViewportController;
+class ViewCubeWidget;
 
 enum class ProjectCloseDisposition {
     clean,
@@ -70,6 +72,8 @@ private:
     void clearActiveContext();
     void captureActiveViewState();
     void restoreActiveViewState();
+    void refreshPropertiesContext(
+        std::optional<core::BuiltinReferenceRole> primary);
     void syncActionState();
     void updateTabPresentation(const core::DocumentId& document_id);
 
@@ -92,6 +96,7 @@ private:
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
     PartViewportController* viewport_controller_{};
+    ViewCubeWidget* view_cube_{};
 
     QPushButton* new_part_button_{};
     QPushButton* open_part_button_{};
@@ -104,8 +109,15 @@ private:
     QTreeWidget* document_tree_{};
     QWidget* editor_surface_{};
 
+    QStackedWidget* properties_stack_{};
+    QWidget* document_properties_page_{};
+    QWidget* reference_properties_page_{};
     QLabel* active_path_{};
     QLabel* active_id_{};
+    QLabel* reference_name_{};
+    QLabel* reference_kind_{};
+    QLabel* reference_identity_{};
+    QLabel* reference_visibility_{};
     QLineEdit* number_{};
     QLineEdit* title_{};
     QPlainTextEdit* description_{};

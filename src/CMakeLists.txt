@@ -122,6 +122,7 @@ add_executable(simplesolid2
     ui/part_viewport_controller.cpp
     ui/project_creation_dialog.cpp
     ui/project_hub_window.cpp
+    ui/view_cube_widget.cpp
 )
 
 target_include_directories(simplesolid2

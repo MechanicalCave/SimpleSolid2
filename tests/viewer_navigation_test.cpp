@@ -47,7 +47,15 @@ int main() {
              StandardView::right,
              StandardView::top,
              StandardView::bottom,
-             StandardView::isometric}) {
+             StandardView::isometric,
+             StandardView::top_front_left,
+             StandardView::top_front_right,
+             StandardView::top_back_left,
+             StandardView::top_back_right,
+             StandardView::bottom_front_left,
+             StandardView::bottom_front_right,
+             StandardView::bottom_back_left,
+             StandardView::bottom_back_right}) {
         const auto changed = cameraForStandardView(state, standard);
         CHECK(changed.has_value());
         CHECK(validateCameraState(*changed).valid);
@@ -66,6 +74,24 @@ int main() {
     const auto front = cameraForStandardView(state, StandardView::front);
     CHECK(front.has_value());
     CHECK(front->eye.y < state.target.y);
+
+    const auto iso_front_right =
+        cameraForStandardView(
+            state,
+            StandardView::top_front_right);
+    CHECK(iso_front_right.has_value());
+    CHECK(iso_front_right->eye.x > state.target.x);
+    CHECK(iso_front_right->eye.y < state.target.y);
+    CHECK(iso_front_right->eye.z > state.target.z);
+
+    const auto iso_back_left =
+        cameraForStandardView(
+            state,
+            StandardView::bottom_back_left);
+    CHECK(iso_back_left.has_value());
+    CHECK(iso_back_left->eye.x < state.target.x);
+    CHECK(iso_back_left->eye.y > state.target.y);
+    CHECK(iso_back_left->eye.z < state.target.z);
 
     const auto orthographic =
         cameraWithProjection(state, CameraProjection::orthographic);

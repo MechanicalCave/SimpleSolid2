@@ -9,6 +9,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QStackedWidget>
 #include <QTabBar>
 #include <QTreeWidget>
 #include <QWidget>
@@ -240,6 +241,31 @@ int main(int argc, char* argv[]) {
     auto* hide_references =
         workbench.findChild<QAction*>(
             QStringLiteral("hideBuiltinReferencesAction"));
+    auto* projection_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("viewCubeProjectionButton"));
+    auto* fit_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("viewCubeFitButton"));
+    auto* properties_stack =
+        workbench.findChild<QStackedWidget*>(
+            QStringLiteral("propertiesContextStack"));
+    auto* reference_name =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("referencePropertyName"));
+    auto* reference_visibility =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("referencePropertyVisibility"));
+
+    QPushButton* top_view_button = nullptr;
+    for (auto* button :
+         workbench.findChildren<QPushButton*>(
+             QStringLiteral("viewCubeViewButton"))) {
+        if (button->text() == QStringLiteral("TOP")) {
+            top_view_button = button;
+            break;
+        }
+    }
 
     CHECK(tabs != nullptr);
     CHECK(tree != nullptr);
@@ -252,6 +278,12 @@ int main(int argc, char* argv[]) {
     CHECK(save != nullptr);
     CHECK(show_references != nullptr);
     CHECK(hide_references != nullptr);
+    CHECK(projection_button != nullptr);
+    CHECK(fit_button != nullptr);
+    CHECK(properties_stack != nullptr);
+    CHECK(reference_name != nullptr);
+    CHECK(reference_visibility != nullptr);
+    CHECK(top_view_button != nullptr);
 
     CHECK(tabs->count() == 2);
     CHECK(operations->text().contains(
@@ -306,6 +338,40 @@ int main(int argc, char* argv[]) {
     CHECK(second_session_for_view != nullptr);
     CHECK(!first_session_for_view->needsSave());
     CHECK(!second_session_for_view->needsSave());
+
+    const auto navigation_revision =
+        first_session_for_view->document().revision().value();
+
+    top_view_button->click();
+    CHECK(viewport->cameraState().has_value());
+    CHECK(viewport->cameraState()->eye.z >
+          viewport->cameraState()->target.z);
+    CHECK(viewport->cameraState()->projection ==
+          viewer::CameraProjection::perspective);
+    CHECK(first_session_for_view->document().revision().value() ==
+          navigation_revision);
+    CHECK(!first_session_for_view->needsSave());
+
+    projection_button->click();
+    CHECK(viewport->cameraState()->projection ==
+          viewer::CameraProjection::orthographic);
+    CHECK(first_session_for_view->document().revision().value() ==
+          navigation_revision);
+    CHECK(!first_session_for_view->needsSave());
+
+    const auto fit_before = viewport->fitAllCount();
+    fit_button->click();
+    CHECK(viewport->fitAllCount() == fit_before + 1);
+    CHECK(first_session_for_view->document().revision().value() ==
+          navigation_revision);
+    CHECK(!first_session_for_view->needsSave());
+
+    projection_button->click();
+    CHECK(viewport->cameraState()->projection ==
+          viewer::CameraProjection::perspective);
+
+    CHECK(properties_stack->currentWidget()->objectName() ==
+          QStringLiteral("documentPropertiesPage"));
 
     CHECK(viewport->scene().valid());
     CHECK(viewport->scene().grid.has_value());
@@ -393,6 +459,12 @@ int main(int argc, char* argv[]) {
     CHECK(viewport->selection().selected.size() == 1U);
     CHECK(viewport->selection().primary.has_value());
     CHECK(*viewport->selection().primary == xy_plane_token);
+    CHECK(properties_stack->currentWidget()->objectName() ==
+          QStringLiteral("referencePropertiesPage"));
+    CHECK(reference_name->text() ==
+          QStringLiteral("XY Plane"));
+    CHECK(reference_visibility->text() ==
+          QStringLiteral("Hidden"));
 
     viewport->emitSelectionIntent(
         origin_point_token,
@@ -402,6 +474,12 @@ int main(int argc, char* argv[]) {
     CHECK(viewport->selection().selected.size() == 2U);
     CHECK(viewport->selection().primary.has_value());
     CHECK(*viewport->selection().primary == origin_point_token);
+    CHECK(properties_stack->currentWidget()->objectName() ==
+          QStringLiteral("referencePropertiesPage"));
+    CHECK(reference_name->text() ==
+          QStringLiteral("Origin Point"));
+    CHECK(reference_visibility->text() ==
+          QStringLiteral("Shown"));
 
     const auto before_visibility_revision =
         first_session->document().revision().value();
@@ -417,6 +495,8 @@ int main(int argc, char* argv[]) {
         core::BuiltinReferenceRole::xy_plane));
     CHECK(!visibleReference(origin_point_token));
     CHECK(!visibleReference(xy_plane_token));
+    CHECK(reference_visibility->text() ==
+          QStringLiteral("Hidden"));
     CHECK(undo->isEnabled());
     CHECK(save->isEnabled());
 
@@ -427,7 +507,14 @@ int main(int argc, char* argv[]) {
         core::BuiltinReferenceRole::xy_plane));
     CHECK(visibleReference(origin_point_token));
     CHECK(!visibleReference(xy_plane_token));
+    CHECK(reference_visibility->text() ==
+          QStringLiteral("Shown"));
     CHECK(!first_session->needsSave());
+
+    tree->clearSelection();
+    QApplication::processEvents();
+    CHECK(properties_stack->currentWidget()->objectName() ==
+          QStringLiteral("documentPropertiesPage"));
 
     title->setText(QStringLiteral("Drive Shaft Rev"));
     apply->click();

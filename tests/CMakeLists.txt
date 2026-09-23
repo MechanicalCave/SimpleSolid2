@@ -78,6 +78,7 @@ add_executable(ph02a_project_hub_selection_ux_test
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
 
 target_include_directories(ph02a_project_hub_selection_ux_test
@@ -133,6 +134,7 @@ add_executable(ph02b_project_hub_availability_ux_test
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
 
 target_include_directories(ph02b_project_hub_availability_ux_test
@@ -320,6 +322,7 @@ add_executable(wb01_cad_workbench_test
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
 
 target_include_directories(wb01_cad_workbench_test
@@ -403,3 +406,21 @@ add_executable(wb01_viewer_selection_test
 )
 target_link_libraries(wb01_viewer_selection_test PRIVATE simplesolid2_viewer)
 add_test(NAME wb01.viewer_selection COMMAND wb01_viewer_selection_test)
+
+
+add_executable(wb01_viewer_native_smoke_test
+    viewer_native_smoke_test.cpp
+)
+target_link_libraries(wb01_viewer_native_smoke_test
+    PRIVATE
+        simplesolid2_viewer_qt_occt
+        Qt6::Widgets
+)
+target_compile_features(wb01_viewer_native_smoke_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb01.viewer_native_smoke
+    COMMAND wb01_viewer_native_smoke_test
+)
+set_tests_properties(wb01.viewer_native_smoke PROPERTIES
+    TIMEOUT 20
+)
