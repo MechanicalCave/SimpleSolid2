@@ -2,11 +2,13 @@
 #include "cad_workbench_shell.hpp"
 #include "part_document_tree_controller.hpp"
 #include "part_viewport_controller.hpp"
+#include "view_cube_widget.hpp"
 
 #include <QAbstractItemView>
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QGridLayout>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QInputDialog>
@@ -18,6 +20,7 @@
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSignalBlocker>
+#include <QStackedWidget>
 #include <QStyle>
 #include <QTabBar>
 #include <QTreeWidget>
@@ -198,79 +201,129 @@ void CadWorkbench::buildUi() {
         viewport_surface = viewport_factory_(shell_);
     }
 
+    auto* editor_container = new QFrame(shell_);
+    editor_container->setObjectName(
+        QStringLiteral("editorSurface"));
+    editor_container->setFrameShape(QFrame::StyledPanel);
+    auto* editor_layout =
+        new QGridLayout(editor_container);
+    editor_layout->setContentsMargins(0, 0, 0, 0);
+
     if (viewport_surface.valid()) {
-        editor_surface_ = viewport_surface.widget;
         viewport_ = viewport_surface.viewport;
-        editor_surface_->setObjectName(
-            QStringLiteral("editorSurface"));
-        if (editor_surface_->parentWidget() != shell_) {
-            editor_surface_->setParent(shell_);
+        auto* viewport_widget =
+            viewport_surface.widget;
+
+        viewport_widget->setObjectName(
+            QStringLiteral("documentViewport"));
+        if (viewport_widget->parentWidget() != editor_container) {
+            viewport_widget->setParent(editor_container);
         }
-        shell_->setEditorSurface(editor_surface_);
+
+        editor_layout->addWidget(
+            viewport_widget,
+            0,
+            0);
+
+        view_cube_ =
+            new ViewCubeWidget(
+                viewport_,
+                editor_container);
+        editor_layout->addWidget(
+            view_cube_,
+            0,
+            0,
+            Qt::AlignTop | Qt::AlignRight);
     } else {
         if (viewport_surface.widget != nullptr) {
             viewport_surface.widget->deleteLater();
         }
 
-        auto* editor_frame = new QFrame(shell_);
-        editor_frame->setObjectName(
-            QStringLiteral("editorSurface"));
-        editor_frame->setFrameShape(QFrame::StyledPanel);
-        auto* editor_layout =
-            new QVBoxLayout(editor_frame);
+        viewport_ = nullptr;
 
         auto* editor_label = new QLabel(
             QStringLiteral(
                 "3D Document View\n"
                 "Native Viewer surface is unavailable."),
-            editor_frame);
+            editor_container);
         editor_label->setObjectName(
             QStringLiteral("editorSurfacePlaceholder"));
         editor_label->setAlignment(Qt::AlignCenter);
-        editor_layout->addWidget(editor_label, 1);
-
-        editor_surface_ = editor_frame;
-        viewport_ = nullptr;
-        shell_->setEditorSurface(editor_surface_);
+        editor_layout->addWidget(
+            editor_label,
+            0,
+            0);
     }
+
+    editor_surface_ = editor_container;
+    shell_->setEditorSurface(editor_surface_);
 
     viewport_controller_ =
         new PartViewportController(
             *tree_controller_,
             viewport_,
             this);
+    viewport_controller_->setSelectionChangedHandler(
+        [this](
+            const std::vector<core::BuiltinReferenceRole>&,
+            std::optional<core::BuiltinReferenceRole> primary) {
+            refreshPropertiesContext(primary);
+        });
 
     auto* properties_content = new QWidget(shell_);
     properties_content->setObjectName(
         QStringLiteral("partPropertiesContent"));
-    auto* properties_root = new QVBoxLayout(properties_content);
+    auto* properties_root =
+        new QVBoxLayout(properties_content);
     properties_root->setContentsMargins(0, 0, 0, 0);
 
-    active_path_ = new QLabel(properties_content);
-    active_path_->setObjectName(QStringLiteral("activeDocumentPath"));
+    properties_stack_ =
+        new QStackedWidget(properties_content);
+    properties_stack_->setObjectName(
+        QStringLiteral("propertiesContextStack"));
+    properties_root->addWidget(properties_stack_, 1);
+
+    document_properties_page_ =
+        new QWidget(properties_stack_);
+    auto* document_properties_root =
+        new QVBoxLayout(document_properties_page_);
+    document_properties_root->setContentsMargins(0, 0, 0, 0);
+
+    active_path_ =
+        new QLabel(document_properties_page_);
+    active_path_->setObjectName(
+        QStringLiteral("activeDocumentPath"));
     active_path_->setWordWrap(true);
 
-    active_id_ = new QLabel(properties_content);
-    active_id_->setObjectName(QStringLiteral("activeDocumentId"));
+    active_id_ =
+        new QLabel(document_properties_page_);
+    active_id_->setObjectName(
+        QStringLiteral("activeDocumentId"));
     active_id_->setWordWrap(true);
 
-    properties_root->addWidget(active_path_);
-    properties_root->addWidget(active_id_);
+    document_properties_root->addWidget(active_path_);
+    document_properties_root->addWidget(active_id_);
 
     auto* form = new QFormLayout;
 
-    number_ = new QLineEdit(properties_content);
-    number_->setObjectName(QStringLiteral("documentNumberEdit"));
+    number_ =
+        new QLineEdit(document_properties_page_);
+    number_->setObjectName(
+        QStringLiteral("documentNumberEdit"));
 
-    title_ = new QLineEdit(properties_content);
-    title_->setObjectName(QStringLiteral("documentTitleEdit"));
+    title_ =
+        new QLineEdit(document_properties_page_);
+    title_->setObjectName(
+        QStringLiteral("documentTitleEdit"));
 
-    description_ = new QPlainTextEdit(properties_content);
+    description_ =
+        new QPlainTextEdit(document_properties_page_);
     description_->setObjectName(
         QStringLiteral("documentDescriptionEdit"));
     description_->setMaximumHeight(90);
 
-    engineering_revision_ = new QLineEdit(properties_content);
+    engineering_revision_ =
+        new QLineEdit(document_properties_page_);
     engineering_revision_->setObjectName(
         QStringLiteral("documentEngineeringRevisionEdit"));
 
@@ -280,15 +333,62 @@ void CadWorkbench::buildUi() {
     form->addRow(
         QStringLiteral("Engineering revision"),
         engineering_revision_);
-    properties_root->addLayout(form);
+    document_properties_root->addLayout(form);
 
     apply_button_ = new QPushButton(
         QStringLiteral("Apply Properties"),
-        properties_content);
+        document_properties_page_);
     apply_button_->setObjectName(
         QStringLiteral("applyDocumentPropertiesButton"));
-    properties_root->addWidget(apply_button_);
-    properties_root->addStretch(1);
+    document_properties_root->addWidget(apply_button_);
+    document_properties_root->addStretch(1);
+
+    properties_stack_->addWidget(
+        document_properties_page_);
+
+    reference_properties_page_ =
+        new QWidget(properties_stack_);
+    auto* reference_root =
+        new QFormLayout(reference_properties_page_);
+
+    reference_name_ =
+        new QLabel(reference_properties_page_);
+    reference_name_->setObjectName(
+        QStringLiteral("referencePropertyName"));
+
+    reference_kind_ =
+        new QLabel(reference_properties_page_);
+    reference_kind_->setObjectName(
+        QStringLiteral("referencePropertyKind"));
+
+    reference_identity_ =
+        new QLabel(reference_properties_page_);
+    reference_identity_->setObjectName(
+        QStringLiteral("referencePropertyIdentity"));
+    reference_identity_->setWordWrap(true);
+
+    reference_visibility_ =
+        new QLabel(reference_properties_page_);
+    reference_visibility_->setObjectName(
+        QStringLiteral("referencePropertyVisibility"));
+
+    reference_root->addRow(
+        QStringLiteral("Reference"),
+        reference_name_);
+    reference_root->addRow(
+        QStringLiteral("Type"),
+        reference_kind_);
+    reference_root->addRow(
+        QStringLiteral("Identity"),
+        reference_identity_);
+    reference_root->addRow(
+        QStringLiteral("Visibility"),
+        reference_visibility_);
+
+    properties_stack_->addWidget(
+        reference_properties_page_);
+    properties_stack_->setCurrentWidget(
+        document_properties_page_);
 
     shell_->setPropertiesContent(properties_content);
 
@@ -1016,6 +1116,85 @@ void CadWorkbench::restoreActiveViewState() {
     viewer::CameraState initial;
     static_cast<void>(
         viewport_->setCameraState(initial));
+}
+
+void CadWorkbench::refreshPropertiesContext(
+    std::optional<core::BuiltinReferenceRole> primary) {
+    if (properties_stack_ == nullptr) return;
+
+    if (!primary) {
+        properties_stack_->setCurrentWidget(
+            document_properties_page_);
+        return;
+    }
+
+    QString name;
+    QString kind;
+    QString identity;
+
+    switch (*primary) {
+    case core::BuiltinReferenceRole::origin_point:
+        name = QStringLiteral("Origin Point");
+        kind = QStringLiteral("Point");
+        identity = QStringLiteral(
+            "BuiltinReference::OriginPoint");
+        break;
+    case core::BuiltinReferenceRole::x_axis:
+        name = QStringLiteral("X Axis");
+        kind = QStringLiteral("Axis");
+        identity = QStringLiteral(
+            "BuiltinReference::XAxis");
+        break;
+    case core::BuiltinReferenceRole::y_axis:
+        name = QStringLiteral("Y Axis");
+        kind = QStringLiteral("Axis");
+        identity = QStringLiteral(
+            "BuiltinReference::YAxis");
+        break;
+    case core::BuiltinReferenceRole::z_axis:
+        name = QStringLiteral("Z Axis");
+        kind = QStringLiteral("Axis");
+        identity = QStringLiteral(
+            "BuiltinReference::ZAxis");
+        break;
+    case core::BuiltinReferenceRole::xy_plane:
+        name = QStringLiteral("XY Plane");
+        kind = QStringLiteral("Plane");
+        identity = QStringLiteral(
+            "BuiltinReference::XYPlane");
+        break;
+    case core::BuiltinReferenceRole::xz_plane:
+        name = QStringLiteral("XZ Plane");
+        kind = QStringLiteral("Plane");
+        identity = QStringLiteral(
+            "BuiltinReference::XZPlane");
+        break;
+    case core::BuiltinReferenceRole::yz_plane:
+        name = QStringLiteral("YZ Plane");
+        kind = QStringLiteral("Plane");
+        identity = QStringLiteral(
+            "BuiltinReference::YZPlane");
+        break;
+    }
+
+    reference_name_->setText(name);
+    reference_kind_->setText(kind);
+    reference_identity_->setText(identity);
+
+    const auto* document_session =
+        activeDocumentSession();
+    const bool visible =
+        document_session != nullptr &&
+        document_session->document()
+            .builtinReferenceVisible(*primary);
+
+    reference_visibility_->setText(
+        visible
+            ? QStringLiteral("Shown")
+            : QStringLiteral("Hidden"));
+
+    properties_stack_->setCurrentWidget(
+        reference_properties_page_);
 }
 
 void CadWorkbench::syncActionState() {
