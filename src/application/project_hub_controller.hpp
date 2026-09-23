@@ -9,6 +9,7 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace simplesolid2::application::internal {
 
@@ -39,6 +40,33 @@ struct ProjectHubResult final {
     }
 };
 
+enum class RecentProjectAvailability {
+    available,
+    workspace_missing,
+    project_invalid,
+    identity_mismatch,
+};
+
+struct RecentProjectHubEntry final {
+    RecentProjectEntry recent;
+    RecentProjectAvailability availability{RecentProjectAvailability::available};
+    ProjectMetadataErrorCode metadata_code{ProjectMetadataErrorCode::none};
+    std::string diagnostic;
+
+    [[nodiscard]] bool openable() const noexcept {
+        return availability == RecentProjectAvailability::available;
+    }
+};
+
+struct RecentProjectHubListResult final {
+    std::vector<RecentProjectHubEntry> entries;
+    RecentProjectDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == RecentProjectErrorCode::none;
+    }
+};
+
 class ProjectHubController final {
 public:
     explicit ProjectHubController(std::filesystem::path recent_catalog_path)
@@ -55,6 +83,8 @@ public:
     [[nodiscard]] RecentProjectListResult recentProjects() const {
         return recent_.list();
     }
+
+    [[nodiscard]] RecentProjectHubListResult recentProjectHubEntries() const;
 
     [[nodiscard]] ProjectHubResult createProject(
         const std::filesystem::path& workspace_root,
