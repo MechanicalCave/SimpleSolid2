@@ -369,3 +369,10 @@ add_test(
         -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_viewer_boundaries.cmake
 )
+
+
+add_executable(wb01_builtin_reference_test
+    builtin_reference_test.cpp
+)
+target_link_libraries(wb01_builtin_reference_test PRIVATE simplesolid2_core)
+add_test(NAME wb01.builtin_reference COMMAND wb01_builtin_reference_test)
