@@ -57,24 +57,20 @@ Po rekonstrukcji raportuj krótko:
 
 ## Aktualny handoff hint — MUSISZ ZWERYFIKOWAĆ
 
-Stan po zakończeniu DOC-01:
+Stan po zakończeniu DOC-01A:
 
-- PH-01 / MAIN v0.1 oraz PH-02A / PH-02B / PH-02C są zakończone
-- `work/DOC-01_AS_BUILT_DOCUMENTATION_SYSTEM.md` jest zaakceptowany i zakończony
-- `work/ACTIVE.yaml` powinien mieć status `completed` i wskazywać DOC-01 jako ostatni work item
-- zaakceptowany ADR: `adr/ADR-0001-project-identity-and-workspace-clones.md`
-- operacyjna reguła dokumentacji: `governance/DOCUMENTATION.md`
-- canonical internal as-built docs: `docs/internal/` (English)
-- canonical user/product docs: `docs/product/pl/` i `docs/product/en/`
-- polska i angielska dokumentacja produktu są równorzędnymi źródłami; PL jest domyślnym językiem Browsera
+- PH-01 / PH-02A / PH-02B / PH-02C są zakończone
+- DOC-01 — As-built Documentation System jest zakończony
+- `work/DOC-01A_DOCUMENTATION_COMMAND_WIRING.md` jest zaakceptowany i zakończony
+- `work/ACTIVE.yaml` powinien mieć status `completed` i wskazywać DOC-01A jako ostatni work item
+- canonical docs: `docs/internal/`, `docs/product/pl/`, `docs/product/en/`
 - generated Product Browser: `docs/browser/index.html`
-- Markdown jest source of truth; Browser jest deterministycznie generowany i freshness-checked
-- `ss2-docs` / `.\ss2.ps1 docs` regeneruje Browser
-- `ss2 verify` wykonuje dokumentacyjny validator + self-testy fail-closed
-- każdy przyszły zaakceptowany work contract musi zawierać sekcję `## Documentation impact` z Internal docs / User/Product docs / Reason
-- work item nie może zostać completed, jeśli zadeklarowana wymagana dokumentacja jest nieaktualna
-- bieżący Project Hub: Create przez Project name + parent Location + Project folder; ProjectId pozostaje trwałą tożsamością; Recent/Locate/availability działają jak opisano w canonical docs
-- po DOC-01 nie ma aktywnego kolejnego kontraktu implementacyjnego, dopóki Owner jawnie go nie zaakceptuje
+- `.\ss2.ps1 docs` poprawnie dispatchuje do `scripts\ss2-docs.ps1`
+- root dispatcher fail-closed odrzuca brak mapowania oraz brak mapped script
+- Windows PR gate wykonuje exact public command `.\ss2.ps1 docs` i sprawdza, że regeneracja Browsera nie tworzy diffu
+- `ss2 verify` nadal wykonuje documentation validator + fail-closed self-tests
+- każdy przyszły zaakceptowany work contract musi zawierać `## Documentation impact`
+- po DOC-01A nie ma aktywnego kolejnego kontraktu implementacyjnego bez jawnej akceptacji Ownera
 - nie traktuj żadnego SHA z tego pliku jako bieżącego `main` HEAD
 
 Windows CI:
@@ -82,10 +78,9 @@ Windows CI:
 - self-hosted runner: `SS2-Windows`
 - label: `simplesolid2-native`
 - workflow: `.github/workflows/windows-pr-gate.yml`
-- gate sprawdza exact SHA → setup → verify (w tym docs validation) → build → test
-- compiled CTest suite pozostaje na 10 testach; DOC-01 dodaje repo/documentation validation w `ss2 verify`
-- validator self-tests obejmują brak pary PL/EN, mismatch section-id, broken local link, brak Documentation Impact, stale Browser oraz external Browser dependency
-- tryb uruchomienia runnera (interaktywny vs Windows Service) jest stanem lokalnym maszyny; nie zakładaj go bez sprawdzenia
+- gate: exact SHA → documentation dispatcher → setup → verify → build → test
+- dispatcher step wykonuje `.\ss2.ps1 docs` i `git diff --exit-code -- docs/browser/index.html`
+- compiled CTest suite pozostaje na 10 testach
 
 Lokalne hinty maszyny Ownera:
 

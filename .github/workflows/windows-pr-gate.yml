@@ -72,6 +72,16 @@ jobs:
               throw "Runner checkout SHA mismatch: expected $expected, got $actual"
           }
 
+      - name: Verify documentation dispatcher
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\ss2.ps1 docs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --exit-code -- docs/browser/index.html
+          if ($LASTEXITCODE -ne 0) {
+              throw "Documentation Browser changed after '.\ss2.ps1 docs'. Commit the regenerated Browser."
+          }
+
       - name: Configure SS2 machine-local environment
         run: |
           $ErrorActionPreference = "Stop"

@@ -17,12 +17,23 @@ $map = @{
     "build"     = "scripts\ss2-build.ps1"
     "run"       = "scripts\ss2-run.ps1"
     "test"      = "scripts\ss2-test.ps1"
+    "docs"      = "scripts\ss2-docs.ps1"
     "clean"     = "scripts\ss2-clean.ps1"
     "status"    = "scripts\ss2-status.ps1"
     "git-init"  = "scripts\ss2-git-init.ps1"
 }
 
+if (-not $map.ContainsKey($Command)) {
+    Write-Error "SS2 command '$Command' has no dispatcher mapping."
+    exit 2
+}
+
 $script = Join-Path $PSScriptRoot $map[$Command]
+if (-not (Test-Path -LiteralPath $script -PathType Leaf)) {
+    Write-Error "SS2 command '$Command' maps to a missing script: $script"
+    exit 2
+}
+
 switch ($Command) {
     "setup"    { & $script -QtRoot $QtRoot -OcctRoot $OcctRoot }
     "git-init" { & $script -RemoteUrl $RemoteUrl -CommitGenesis:$CommitGenesis }
