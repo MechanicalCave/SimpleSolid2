@@ -1,4 +1,4 @@
-#include "../src/application/project_hub_controller.hpp"
+#include "project_hub_controller.hpp"
 
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
