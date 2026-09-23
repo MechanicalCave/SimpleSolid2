@@ -1,18 +1,19 @@
 version: 1
-status: active
+status: completed
 active_work: "work/PH-01_PROJECT_HUB.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
 next:
-  - add minimal Project Hub / Workspace Shell lifecycle
-  - integrate create/open/close/restart flow and complete PH-01 acceptance tests
+  - no implementation work is active after PH-01
+  - Owner must accept the next explicit work contract before further product implementation
 notes:
   - PH-01 accepted by Owner on 2026-09-23.
   - ADR-0001 accepted by Owner on 2026-09-23.
-  - Project metadata persistence was merged in 7cf150d6ae6dca11ed14cacdeb2e0028e6a63171.
-  - ProjectSession remains runtime-only and is created only after metadata validation.
-  - Recent Projects persistence uses ProjectId as logical identity and explicit relocation for path changes.
-  - No CAD-domain implementation is authorized by PH-01.
-  - SS1 is donor/reference only; SS2 Foundation remains authoritative.
-  - No silent scope expansion beyond work/PH-01_PROJECT_HUB.md.
+  - Project metadata persistence is complete.
+  - ProjectSession lifecycle is complete and remains runtime-only.
+  - Recent Projects persistence uses ProjectId as logical identity with explicit relocation.
+  - Minimal Qt Project Hub and empty Workspace Shell are implemented.
+  - Full PH-01 lifecycle and application smoke tests pass on the self-hosted Windows/MSVC gate.
+  - No Part, Assembly, Drawing, DocumentSession, Viewer, OCCT modeling or other CAD-domain implementation is authorized without the next accepted work contract.
+  - SS1 remains donor/reference only; SS2 Foundation remains authoritative.
