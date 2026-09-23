@@ -56,18 +56,17 @@ Po rekonstrukcji raportuj krótko:
 
 ## Aktualny handoff hint — MUSISZ ZWERYFIKOWAĆ
 
-Stan po zakończeniu MAIN v0.1 / PH-01:
+Stan po zakończeniu PH-02A:
 
-- `work/PH-01_PROJECT_HUB.md` jest zakończony
-- `work/ACTIVE.yaml` powinien mieć status `completed`
+- `work/PH-01_PROJECT_HUB.md` / MAIN v0.1 jest zakończony
+- `work/PH-02A_PROJECT_HUB_SELECTION_UX.md` jest zaakceptowany i zakończony
+- `work/ACTIVE.yaml` powinien mieć status `completed` i wskazywać PH-02A jako ostatni work item
 - zaakceptowany ADR: `adr/ADR-0001-project-identity-and-workspace-clones.md`
-- Project metadata persistence jest na `main`
-- runtime-only `ProjectSession` jest na `main`
-- Recent Projects persistence jest na `main`, z `ProjectId` jako logiczną tożsamością i jawną relokacją
-- minimalny Qt Project Hub i pusty Workspace Shell są na `main`
-- rzeczywista aplikacja `SimpleSolid2` startuje do Hub
-- lifecycle Create/Open → ProjectSession → Workspace Shell → Close → restart → Recent → Reopen jest pokryty testami
-- po PH-01 **nie ma aktywnego następnego kontraktu implementacyjnego**, dopóki Owner jawnie go nie zaakceptuje
+- Project metadata, runtime-only `ProjectSession`, ProjectId-based Recent Projects, minimalny Qt Project Hub i pusty Workspace Shell są na `main`
+- akcje Recent `Open` / `Locate…` / `Remove from Recent` wymagają rzeczywistego zaznaczenia; sam Qt current item nie wystarcza
+- lifecycle PH-01 oraz regresja PH-02A są pokryte automatycznymi testami
+- temat Create Project: wybór katalogu nadrzędnego i tworzenie nowego folderu Workspace pozostaje **kandydatem do osobnego work contractu**, nie jest jeszcze aktywnym zakresem implementacji
+- po PH-02A nie ma aktywnego następnego kontraktu implementacyjnego, dopóki Owner jawnie go nie zaakceptuje
 - nie traktuj żadnego SHA z tego pliku jako bieżącego `main` HEAD
 
 Windows CI:
@@ -76,7 +75,7 @@ Windows CI:
 - label: `simplesolid2-native`
 - workflow: `.github/workflows/windows-pr-gate.yml`
 - gate sprawdza exact SHA → setup → verify → build → test
-- końcowy PH-01 gate obejmuje 5 testów, w tym `ph01.project_hub_lifecycle` i `ph01.app_smoke`
+- ostatni PH-02A gate obejmuje 6 testów, w tym `ph01.project_hub_lifecycle`, `ph01.app_smoke` i `ph02a.project_hub_selection_ux`
 - tryb uruchomienia runnera (interaktywny vs Windows Service) jest stanem lokalnym maszyny; nie zakładaj go bez sprawdzenia
 
 Lokalne hinty maszyny Ownera:
