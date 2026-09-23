@@ -18,12 +18,20 @@ constexpr double axisExtent = 45.0;
 constexpr double planeExtent = 35.0;
 constexpr double pointExtent = 3.0;
 
+viewer::PresentationToken presentationTokenFor(
+    core::BuiltinReferenceRole role) noexcept {
+    return viewer::PresentationToken{
+        0x100U +
+        static_cast<std::uint64_t>(role) +
+        1U};
+}
+
 viewer::ReferencePresentation makeReference(
     core::BuiltinReferenceRole role,
     bool visible) {
     viewer::ReferencePresentation reference;
     reference.token =
-        PartViewportController::tokenFor(role);
+        presentationTokenFor(role);
     reference.visible = visible;
 
     switch (role) {
@@ -160,10 +168,7 @@ PartViewportController::primarySelection() const {
 
 viewer::PresentationToken PartViewportController::tokenFor(
     core::BuiltinReferenceRole role) noexcept {
-    return viewer::PresentationToken{
-        0x100U +
-        static_cast<std::uint64_t>(role) +
-        1U};
+    return presentationTokenFor(role);
 }
 
 std::optional<core::BuiltinReferenceRole>
