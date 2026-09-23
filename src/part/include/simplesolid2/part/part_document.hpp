@@ -1,13 +1,23 @@
 #pragma once
 
 #include <simplesolid2/core/document.hpp>
+#include <simplesolid2/core/document_reference.hpp>
 
 #include <utility>
 
 namespace simplesolid2::part {
 
+struct PartPresentationState final {
+    core::BuiltinReferenceVisibility builtin_references;
+
+    friend bool operator==(
+        const PartPresentationState&,
+        const PartPresentationState&) = default;
+};
+
 struct PartAuthoredState final {
     core::DocumentProperties properties;
+    PartPresentationState presentation;
 
     friend bool operator==(const PartAuthoredState&, const PartAuthoredState&) = default;
 };
@@ -49,6 +59,13 @@ public:
     [[nodiscard]] const core::DocumentProperties& properties() const noexcept {
         return state_.properties;
     }
+    [[nodiscard]] const PartPresentationState& presentation() const noexcept {
+        return state_.presentation;
+    }
+    [[nodiscard]] bool builtinReferenceVisible(
+        core::BuiltinReferenceRole role) const noexcept {
+        return state_.presentation.builtin_references.visible(role);
+    }
 
 private:
     friend class PartDocumentTransaction;
@@ -81,6 +98,12 @@ public:
 
     void setProperties(core::DocumentProperties properties) {
         staged_.properties = std::move(properties);
+    }
+
+    [[nodiscard]] bool setBuiltinReferenceVisible(
+        core::BuiltinReferenceRole role,
+        bool visible) noexcept {
+        return staged_.presentation.builtin_references.setVisible(role, visible);
     }
 
     void replaceState(PartAuthoredState state) {
