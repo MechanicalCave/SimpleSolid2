@@ -100,8 +100,8 @@ void verifyMissingWorkspacePresentation(
     CHECK(item != nullptr);
     CHECK(item->text().contains(QStringLiteral("Workspace not found")));
     CHECK(item->toolTip().contains(QStringLiteral("Locate")));
-    CHECK(item->data(internal::recentOpenableRole).toBool() == false);
-    CHECK(item->data(internal::recentAvailabilityRole).toInt() ==
+    CHECK(item->data(simplesolid2::ui::internal::recentOpenableRole).toBool() == false);
+    CHECK(item->data(simplesolid2::ui::internal::recentAvailabilityRole).toInt() ==
           static_cast<int>(
               simplesolid2::application::internal::
                   RecentProjectAvailability::workspace_missing));
@@ -116,7 +116,7 @@ void verifyMissingWorkspacePresentation(
     CHECK(!open->isEnabled());
     CHECK(locate->isEnabled());
     CHECK(remove->isEnabled());
-    CHECK(!internal::selectedRecentCanOpen(*list));
+    CHECK(!simplesolid2::ui::internal::selectedRecentCanOpen(*list));
 
     RecentProjectStore recent{catalog};
     const auto persisted = recent.list();
