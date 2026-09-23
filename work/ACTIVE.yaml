@@ -1,22 +1,22 @@
 version: 1
 status: completed
-active_work: "work/PH-02B_RECENT_PROJECT_AVAILABILITY_UX.md"
+active_work: "work/PH-02C_PROJECT_CREATION_UX.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
 next:
-  - no implementation work is active after PH-02B
-  - Create Project parent-folder/workspace-creation UX remains an unresolved candidate topic, not an accepted work contract
+  - no implementation work is active after PH-02C
   - Owner must accept the next explicit work contract before further product implementation
 notes:
   - PH-01 / MAIN v0.1 is complete.
-  - PH-02A is complete.
-  - PH-02B accepted by Owner on 2026-09-23 and completed.
-  - Recent availability is derived runtime/presentation state and is never persisted.
-  - Hub distinguishes Available, WorkspaceMissing, ProjectInvalid and IdentityMismatch.
-  - Problematic Recent entries remain registered for Locate recovery; Open is disabled while Locate and Remove remain available when selected.
-  - PH-02B regression coverage passes together with all PH-01 and PH-02A tests.
-  - Create Project workflow remains unchanged and out of scope.
-  - ProjectId, metadata, Recent persistence semantics and architecture remain unchanged.
+  - PH-02A and PH-02B are complete.
+  - PH-02C accepted by Owner on 2026-09-23 and completed.
+  - Create Project now selects an existing parent Location and creates a new child Workspace folder.
+  - Project name and Project folder are independent; neither replaces ProjectId identity.
+  - Existing target folders fail closed and are never adopted or overwritten by Create.
+  - Creation uses SS2-owned staging and verified rollback of newly created Project artifacts.
+  - Successful Create opens ProjectSession, Workspace Shell and records Recent.
+  - PH-02C regression coverage passes together with all PH-01 / PH-02A / PH-02B tests.
+  - ProjectId, metadata persistence semantics, Recent semantics and architecture remain unchanged.
   - No CAD-domain implementation is authorized without the next accepted work contract.
   - SS1 remains donor/reference only; SS2 Foundation remains authoritative.

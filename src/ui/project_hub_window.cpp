@@ -1,14 +1,12 @@
 #include "project_hub_window.hpp"
+#include "project_creation_dialog.hpp"
 #include "project_hub_selection.hpp"
 
 #include <QAbstractItemView>
 #include <QByteArray>
 #include <QFileDialog>
-#include <QFileInfo>
 #include <QHBoxLayout>
-#include <QInputDialog>
 #include <QLabel>
-#include <QLineEdit>
 #include <QListWidget>
 #include <QListWidgetItem>
 #include <QMessageBox>
@@ -303,32 +301,13 @@ void ProjectHubWindow::syncRecentActionState() {
 }
 
 void ProjectHubWindow::createProject() {
-    const auto folder = QFileDialog::getExistingDirectory(
-        this,
-        QStringLiteral("Create Project in Folder"));
-    if (folder.isEmpty()) return;
+    ProjectCreationDialog dialog{this};
+    if (dialog.exec() != QDialog::Accepted) return;
 
-    const auto default_name = QFileInfo{folder}.fileName();
-    bool accepted = false;
-    const auto display_name = QInputDialog::getText(
-        this,
-        QStringLiteral("Create Project"),
-        QStringLiteral("Project name:"),
-        QLineEdit::Normal,
-        default_name,
-        &accepted).trimmed();
-    if (!accepted) return;
-    if (display_name.isEmpty()) {
-        QMessageBox::warning(
-            this,
-            QStringLiteral("Create Project"),
-            QStringLiteral("Project name must not be empty."));
-        return;
-    }
-
-    const auto result = controller_.createProject(
-        toFilesystemPath(folder),
-        toUtf8(display_name));
+    const auto result = controller_.createProjectInLocation(
+        toFilesystemPath(dialog.location()),
+        toFilesystemPath(dialog.projectFolder()),
+        toUtf8(dialog.projectName()));
     if (!result.ok()) {
         showFailure(result.diagnostic);
         refreshRecent();
