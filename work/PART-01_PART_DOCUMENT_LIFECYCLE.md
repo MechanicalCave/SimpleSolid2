@@ -646,7 +646,7 @@ Automatyczne testy muszą udowodnić co najmniej:
 29. Dirty close nie traci zmian bez jawnego Save/Discard.
 30. Cały repository verify/build/test pozostaje PASS.
 
-## 24. Documentation impact
+## Documentation impact
 
 Internal docs: required  
 User/Product docs: required
