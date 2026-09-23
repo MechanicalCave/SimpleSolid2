@@ -18,6 +18,7 @@ class QWidget;
 namespace simplesolid2::ui {
 
 class CadWorkbenchShell;
+class PartDocumentTreeController;
 
 enum class ProjectCloseDisposition {
     clean,
@@ -58,7 +59,6 @@ private:
 
     void refreshActiveContext();
     void clearActiveContext();
-    void rebuildDocumentTree();
     void syncActionState();
     void updateTabPresentation(const core::DocumentId& document_id);
 
@@ -75,6 +75,7 @@ private:
     std::optional<core::DocumentId> active_document_id_;
 
     CadWorkbenchShell* shell_{};
+    PartDocumentTreeController* tree_controller_{};
 
     QPushButton* new_part_button_{};
     QPushButton* open_part_button_{};

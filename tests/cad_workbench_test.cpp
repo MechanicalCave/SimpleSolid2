@@ -2,6 +2,8 @@
 
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
+#include <QAbstractItemView>
+#include <QAction>
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
@@ -88,6 +90,15 @@ int main(int argc, char* argv[]) {
               .changed);
     CHECK(second.session->save().ok());
 
+    CHECK(opened.session->closeDocument(first_id));
+    CHECK(opened.session->closeDocument(second_id));
+
+    auto reopened_first =
+        opened.session->openDocument(first_id);
+    auto reopened_second =
+        opened.session->openDocument(second_id);
+    CHECK(reopened_first.ok());
+    CHECK(reopened_second.ok());
     CHECK(opened.session->openDocumentIds().size() == 2U);
 
     ui::CadWorkbench workbench;
@@ -120,6 +131,12 @@ int main(int argc, char* argv[]) {
     auto* save =
         workbench.findChild<QPushButton*>(
             QStringLiteral("saveDocumentButton"));
+    auto* show_references =
+        workbench.findChild<QAction*>(
+            QStringLiteral("showBuiltinReferencesAction"));
+    auto* hide_references =
+        workbench.findChild<QAction*>(
+            QStringLiteral("hideBuiltinReferencesAction"));
 
     CHECK(tabs != nullptr);
     CHECK(tree != nullptr);
@@ -130,6 +147,8 @@ int main(int argc, char* argv[]) {
     CHECK(undo != nullptr);
     CHECK(redo != nullptr);
     CHECK(save != nullptr);
+    CHECK(show_references != nullptr);
+    CHECK(hide_references != nullptr);
 
     CHECK(tabs->count() == 2);
     CHECK(operations->text().contains(
@@ -151,13 +170,69 @@ int main(int argc, char* argv[]) {
     CHECK(origin != nullptr);
     CHECK(origin->text(0) == QStringLiteral("Origin"));
     CHECK(origin->childCount() == 7);
+    CHECK(tree->selectionMode() ==
+          QAbstractItemView::ExtendedSelection);
 
-    title->setText(QStringLiteral("Drive Shaft Rev"));
-    apply->click();
+    QTreeWidgetItem* xy_plane = nullptr;
+    QTreeWidgetItem* origin_point = nullptr;
+    for (int index = 0; index < origin->childCount(); ++index) {
+        auto* item = origin->child(index);
+        if (item->text(0) == QStringLiteral("XY Plane")) {
+            xy_plane = item;
+        } else if (
+            item->text(0) == QStringLiteral("Origin Point")) {
+            origin_point = item;
+        }
+    }
+
+    CHECK(xy_plane != nullptr);
+    CHECK(origin_point != nullptr);
+    CHECK(xy_plane->font(0).italic());
+    CHECK(!origin_point->font(0).italic());
+
+    tree->clearSelection();
+    root->setSelected(true);
+    xy_plane->setSelected(true);
+    CHECK(!hide_references->isEnabled());
+    CHECK(!show_references->isEnabled());
 
     auto* first_session =
         opened.session->documentSession(first_id);
     CHECK(first_session != nullptr);
+    CHECK(!first_session->canUndo());
+    CHECK(!first_session->needsSave());
+
+    tree->clearSelection();
+    xy_plane->setSelected(true);
+    origin_point->setSelected(true);
+    CHECK(hide_references->isEnabled());
+    CHECK(show_references->isEnabled());
+
+    const auto before_visibility_revision =
+        first_session->document().revision().value();
+    hide_references->trigger();
+
+    CHECK(first_session->document().revision().value() ==
+          before_visibility_revision + 1U);
+    CHECK(first_session->undoDepth() == 1U);
+    CHECK(first_session->needsSave());
+    CHECK(!first_session->document().builtinReferenceVisible(
+        core::BuiltinReferenceRole::origin_point));
+    CHECK(!first_session->document().builtinReferenceVisible(
+        core::BuiltinReferenceRole::xy_plane));
+    CHECK(undo->isEnabled());
+    CHECK(save->isEnabled());
+
+    undo->click();
+    CHECK(first_session->document().builtinReferenceVisible(
+        core::BuiltinReferenceRole::origin_point));
+    CHECK(!first_session->document().builtinReferenceVisible(
+        core::BuiltinReferenceRole::xy_plane));
+    CHECK(!first_session->needsSave());
+
+    title->setText(QStringLiteral("Drive Shaft Rev"));
+    apply->click();
+
     CHECK(first_session->needsSave());
     CHECK(first_session->document().properties().title ==
           "Drive Shaft Rev");
