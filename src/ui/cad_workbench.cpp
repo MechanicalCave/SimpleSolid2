@@ -1,5 +1,6 @@
 #include "cad_workbench.hpp"
 #include "cad_workbench_shell.hpp"
+#include "part_document_tree_controller.hpp"
 
 #include <QAbstractItemView>
 #include <QDialog>
@@ -160,6 +161,30 @@ void CadWorkbench::buildUi() {
     document_tree_ = &shell_->documentTree();
     document_tabs_ = &shell_->documentTabs();
     status_ = &shell_->statusLabel();
+
+    tree_controller_ =
+        new PartDocumentTreeController(*document_tree_, this);
+    tree_controller_->setResultHandler(
+        [this](
+            const application::DocumentSessionResult& result,
+            bool visible) {
+            if (!result.ok()) {
+                showFailure(result.diagnostic);
+                refreshActiveContext();
+                return;
+            }
+
+            refreshActiveContext();
+            status_->setText(
+                result.changed
+                    ? (visible
+                           ? QStringLiteral(
+                                 "Selected Origin references shown.")
+                           : QStringLiteral(
+                                 "Selected Origin references hidden."))
+                    : QStringLiteral(
+                          "No Origin visibility change."));
+        });
 
     auto* editor_frame = new QFrame(shell_);
     editor_frame->setObjectName(QStringLiteral("editorSurface"));
@@ -888,7 +913,7 @@ void CadWorkbench::refreshActiveContext() {
     description_->setEnabled(true);
     engineering_revision_->setEnabled(true);
 
-    rebuildDocumentTree();
+    tree_controller_->setDocumentSession(document_session);
     updateTabPresentation(document_session->documentId());
     syncActionState();
 }
@@ -907,45 +932,8 @@ void CadWorkbench::clearActiveContext() {
     description_->setEnabled(false);
     engineering_revision_->setEnabled(false);
 
-    document_tree_->clear();
+    tree_controller_->clear();
     syncActionState();
-}
-
-void CadWorkbench::rebuildDocumentTree() {
-    document_tree_->clear();
-
-    const auto* document_session = activeDocumentSession();
-    if (document_session == nullptr) return;
-
-    auto* root = new QTreeWidgetItem(
-        document_tree_,
-        QStringList{partDisplayName(*document_session)});
-
-    root->setData(
-        0,
-        documentIdRole,
-        fromUtf8(document_session->documentId().value()));
-
-    auto* origin = new QTreeWidgetItem(
-        root,
-        QStringList{QStringLiteral("Origin")});
-
-    for (const auto* label : {
-             "XY Plane",
-             "XZ Plane",
-             "YZ Plane",
-             "X Axis",
-             "Y Axis",
-             "Z Axis",
-             "Origin Point"}) {
-        new QTreeWidgetItem(
-            origin,
-            QStringList{QString::fromLatin1(label)});
-    }
-
-    root->setExpanded(true);
-    origin->setExpanded(true);
-    document_tree_->setCurrentItem(root);
 }
 
 void CadWorkbench::syncActionState() {
