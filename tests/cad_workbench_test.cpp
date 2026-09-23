@@ -1,10 +1,12 @@
 #include "cad_workbench.hpp"
+#include "part_viewer_projection.hpp"
 
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
 #include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -35,16 +37,21 @@ class TestViewportWidget final
     : public QWidget,
       public viewer::IDocumentViewport {
 public:
-    explicit TestViewportWidget(QWidget* parent = nullptr)
+    explicit TestViewportWidget(
+        QWidget* parent = nullptr)
         : QWidget{parent} {}
 
-    [[nodiscard]] std::optional<viewer::CameraState>
+    [[nodiscard]] std::optional<
+        viewer::CameraState>
     cameraState() const override {
         return state_;
     }
 
     bool setCameraState(
         const viewer::CameraState& state) override {
+        if (!viewer::validateCameraState(state).valid) {
+            return false;
+        }
         state_ = state;
         return true;
     }
@@ -52,7 +59,9 @@ public:
     bool setStandardView(
         viewer::StandardView view) override {
         const auto next =
-            viewer::cameraForStandardView(state_, view);
+            viewer::cameraForStandardView(
+                state_,
+                view);
         if (!next) return false;
         state_ = *next;
         return true;
@@ -73,14 +82,88 @@ public:
         ++fit_all_count_;
     }
 
+    bool setReferenceScene(
+        const viewer::ReferenceScene& scene) override {
+        for (const auto& item : scene.references) {
+            if (!item.valid()) return false;
+        }
+        scene_ = scene;
+        ++scene_set_count_;
+        return true;
+    }
+
+    bool setReferenceGrid(
+        const viewer::ReferenceGridPresentation& grid)
+        override {
+        if (!grid.valid()) return false;
+        grid_ = grid;
+        ++grid_set_count_;
+        return true;
+    }
+
+    void setSelectionIntentHandler(
+        viewer::SelectionIntentHandler handler)
+        override {
+        selection_handler_ =
+            std::move(handler);
+    }
+
+    void emitSelectionIntent(
+        std::optional<viewer::PresentationToken> token,
+        viewer::SelectionIntentMode mode =
+            viewer::SelectionIntentMode::replace) {
+        if (selection_handler_) {
+            selection_handler_(
+                viewer::SelectionIntent{
+                    token,
+                    mode});
+        }
+    }
+
+    [[nodiscard]] const viewer::ReferenceScene&
+    referenceScene() const noexcept {
+        return scene_;
+    }
+
+    [[nodiscard]] const
+    viewer::ReferenceGridPresentation&
+    referenceGrid() const noexcept {
+        return grid_;
+    }
+
     [[nodiscard]] int fitAllCount() const noexcept {
         return fit_all_count_;
     }
 
+    [[nodiscard]] int sceneSetCount() const noexcept {
+        return scene_set_count_;
+    }
+
+    [[nodiscard]] int gridSetCount() const noexcept {
+        return grid_set_count_;
+    }
+
 private:
     viewer::CameraState state_;
+    viewer::ReferenceScene scene_;
+    viewer::ReferenceGridPresentation grid_;
+    viewer::SelectionIntentHandler selection_handler_;
     int fit_all_count_{};
+    int scene_set_count_{};
+    int grid_set_count_{};
 };
+
+const viewer::ReferencePresentation* findReference(
+    const viewer::ReferenceScene& scene,
+    viewer::PresentationToken token) {
+    for (const auto& item : scene.references) {
+        if (item.token == token) {
+            return &item;
+        }
+    }
+    return nullptr;
+}
+
 
 struct TempDirectory final {
     std::filesystem::path path;
@@ -198,6 +281,21 @@ int main(int argc, char* argv[]) {
     auto* hide_references =
         workbench.findChild<QAction*>(
             QStringLiteral("hideBuiltinReferencesAction"));
+    auto* view_top =
+        workbench.findChild<QAction*>(
+            QStringLiteral("viewTopAction"));
+    auto* view_isometric =
+        workbench.findChild<QAction*>(
+            QStringLiteral("viewIsometricAction"));
+    auto* fit_all =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("fitAllButton"));
+    auto* projection =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("projectionButton"));
+    auto* selection_context =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("selectionContext"));
 
     CHECK(tabs != nullptr);
     CHECK(tree != nullptr);
@@ -210,6 +308,11 @@ int main(int argc, char* argv[]) {
     CHECK(save != nullptr);
     CHECK(show_references != nullptr);
     CHECK(hide_references != nullptr);
+    CHECK(view_top != nullptr);
+    CHECK(view_isometric != nullptr);
+    CHECK(fit_all != nullptr);
+    CHECK(projection != nullptr);
+    CHECK(selection_context != nullptr);
 
     CHECK(tabs->count() == 2);
     CHECK(operations->text().contains(
@@ -220,6 +323,34 @@ int main(int argc, char* argv[]) {
     CHECK(*workbench.activeDocumentId() == first_id);
     CHECK(tabs->count() == 2);
     CHECK(title->text() == QStringLiteral("Drive Shaft"));
+    CHECK(selection_context->text().contains(
+        QStringLiteral("Document")));
+    CHECK(viewport->referenceScene().references.size() == 7U);
+    CHECK(viewport->referenceGrid().valid());
+    CHECK(viewport->referenceGrid().visible);
+
+    const auto x_axis_token =
+        ui::presentationTokenFor(
+            core::BuiltinReferenceRole::x_axis);
+    const auto xy_plane_token =
+        ui::presentationTokenFor(
+            core::BuiltinReferenceRole::xy_plane);
+    const auto origin_point_token =
+        ui::presentationTokenFor(
+            core::BuiltinReferenceRole::origin_point);
+
+    const auto* initial_x_axis =
+        findReference(
+            viewport->referenceScene(),
+            x_axis_token);
+    const auto* initial_xy_plane =
+        findReference(
+            viewport->referenceScene(),
+            xy_plane_token);
+    CHECK(initial_x_axis != nullptr);
+    CHECK(initial_xy_plane != nullptr);
+    CHECK(initial_x_axis->visible);
+    CHECK(!initial_xy_plane->visible);
 
     viewer::CameraState first_camera;
     first_camera.eye = {20.0, -10.0, 15.0};
@@ -256,6 +387,36 @@ int main(int argc, char* argv[]) {
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == first_camera);
 
+    const auto view_revision_before =
+        opened.session->documentSession(first_id)
+            ->document().revision().value();
+
+    view_top->trigger();
+    CHECK(viewport->cameraState().has_value());
+    CHECK(viewport->cameraState()->eye.z >
+          viewport->cameraState()->target.z);
+
+    view_isometric->trigger();
+    CHECK(viewport->cameraState().has_value());
+
+    const auto fit_before =
+        viewport->fitAllCount();
+    fit_all->click();
+    CHECK(viewport->fitAllCount() ==
+          fit_before + 1);
+
+    const auto projection_before =
+        viewport->cameraState()->projection;
+    projection->click();
+    CHECK(viewport->cameraState()->projection !=
+          projection_before);
+
+    CHECK(opened.session->documentSession(first_id)
+              ->document().revision().value() ==
+          view_revision_before);
+    CHECK(!opened.session->documentSession(first_id)
+               ->needsSave());
+
     auto* first_session_for_view =
         opened.session->documentSession(first_id);
     auto* second_session_for_view =
@@ -279,11 +440,15 @@ int main(int argc, char* argv[]) {
           QAbstractItemView::ExtendedSelection);
 
     QTreeWidgetItem* xy_plane = nullptr;
+    QTreeWidgetItem* x_axis = nullptr;
     QTreeWidgetItem* origin_point = nullptr;
     for (int index = 0; index < origin->childCount(); ++index) {
         auto* item = origin->child(index);
         if (item->text(0) == QStringLiteral("XY Plane")) {
             xy_plane = item;
+        } else if (
+            item->text(0) == QStringLiteral("X Axis")) {
+            x_axis = item;
         } else if (
             item->text(0) == QStringLiteral("Origin Point")) {
             origin_point = item;
@@ -291,6 +456,7 @@ int main(int argc, char* argv[]) {
     }
 
     CHECK(xy_plane != nullptr);
+    CHECK(x_axis != nullptr);
     CHECK(origin_point != nullptr);
     CHECK(xy_plane->font(0).italic());
     CHECK(!origin_point->font(0).italic());
@@ -305,6 +471,77 @@ int main(int argc, char* argv[]) {
         opened.session->documentSession(first_id);
     CHECK(first_session != nullptr);
     CHECK(!first_session->canUndo());
+    CHECK(!first_session->needsSave());
+
+    const auto selection_revision =
+        first_session->document().revision().value();
+
+    tree->clearSelection();
+    x_axis->setSelected(true);
+    tree->setCurrentItem(
+        x_axis,
+        0,
+        QItemSelectionModel::NoUpdate);
+    QApplication::processEvents();
+
+    CHECK(selection_context->text().contains(
+        QStringLiteral("X Axis")));
+    CHECK(!title->isEnabled());
+    CHECK(!apply->isEnabled());
+
+    const auto* tree_selected_x =
+        findReference(
+            viewport->referenceScene(),
+            x_axis_token);
+    CHECK(tree_selected_x != nullptr);
+    CHECK(tree_selected_x->role ==
+          viewer::PresentationRole::primary_selection);
+
+    viewport->emitSelectionIntent(
+        origin_point_token);
+    QApplication::processEvents();
+
+    CHECK(tree->selectedItems().size() == 1);
+    CHECK(tree->currentItem() != nullptr);
+    CHECK(tree->currentItem()->text(0) ==
+          QStringLiteral("Origin Point"));
+    CHECK(selection_context->text().contains(
+        QStringLiteral("Origin Point")));
+
+    viewport->emitSelectionIntent(
+        x_axis_token,
+        viewer::SelectionIntentMode::toggle);
+    QApplication::processEvents();
+
+    CHECK(tree->selectedItems().size() == 2);
+    CHECK(tree->currentItem() != nullptr);
+    CHECK(tree->currentItem()->text(0) ==
+          QStringLiteral("X Axis"));
+
+    const auto* viewport_primary_x =
+        findReference(
+            viewport->referenceScene(),
+            x_axis_token);
+    const auto* viewport_secondary_origin =
+        findReference(
+            viewport->referenceScene(),
+            origin_point_token);
+    CHECK(viewport_primary_x != nullptr);
+    CHECK(viewport_secondary_origin != nullptr);
+    CHECK(viewport_primary_x->role ==
+          viewer::PresentationRole::primary_selection);
+    CHECK(viewport_secondary_origin->role ==
+          viewer::PresentationRole::secondary_selection);
+
+    viewport->emitSelectionIntent(std::nullopt);
+    QApplication::processEvents();
+
+    CHECK(tree->selectedItems().size() == 1);
+    CHECK(tree->currentItem() == root);
+    CHECK(title->isEnabled());
+    CHECK(apply->isEnabled());
+    CHECK(first_session->document().revision().value() ==
+          selection_revision);
     CHECK(!first_session->needsSave());
 
     tree->clearSelection();
@@ -325,6 +562,14 @@ int main(int argc, char* argv[]) {
         core::BuiltinReferenceRole::origin_point));
     CHECK(!first_session->document().builtinReferenceVisible(
         core::BuiltinReferenceRole::xy_plane));
+
+    const auto* hidden_origin =
+        findReference(
+            viewport->referenceScene(),
+            origin_point_token);
+    CHECK(hidden_origin != nullptr);
+    CHECK(!hidden_origin->visible);
+
     CHECK(undo->isEnabled());
     CHECK(save->isEnabled());
 
@@ -334,6 +579,17 @@ int main(int argc, char* argv[]) {
     CHECK(!first_session->document().builtinReferenceVisible(
         core::BuiltinReferenceRole::xy_plane));
     CHECK(!first_session->needsSave());
+
+    const auto* restored_origin =
+        findReference(
+            viewport->referenceScene(),
+            origin_point_token);
+    CHECK(restored_origin != nullptr);
+    CHECK(restored_origin->visible);
+
+    viewport->emitSelectionIntent(std::nullopt);
+    QApplication::processEvents();
+    CHECK(title->isEnabled());
 
     title->setText(QStringLiteral("Drive Shaft Rev"));
     apply->click();
