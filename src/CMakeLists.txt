@@ -1,4 +1,5 @@
 add_library(simplesolid2_application STATIC
+    application/recent_project_store.cpp
     application/project_session.cpp
     application/project_workspace_metadata.cpp
 )
