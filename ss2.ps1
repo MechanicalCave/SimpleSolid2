@@ -1,6 +1,6 @@
 param(
     [Parameter(Position=0)]
-    [ValidateSet("setup","verify","configure","build","run","test","clean","status","git-init")]
+    [ValidateSet("setup","verify","configure","build","run","test","docs","clean","status","git-init")]
     [string]$Command = "status",
 
     [string]$RemoteUrl = "",
