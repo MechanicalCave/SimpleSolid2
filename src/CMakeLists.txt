@@ -18,6 +18,7 @@ find_package(Qt6 6 REQUIRED COMPONENTS Widgets)
 
 add_executable(simplesolid2
     app/main.cpp
+    ui/project_creation_dialog.cpp
     ui/project_hub_window.cpp
 )
 
