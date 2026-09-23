@@ -37,8 +37,12 @@ if (Test-Path $envFile) {
     }
     if ($env:SS2_QT_PREFIX) { Write-Host "[OK] Qt prefix detected: $env:SS2_QT_PREFIX" }
     else { Write-Warning "Qt prefix not detected" }
-    if ($env:SS2_OCCT_PREFIX) { Write-Host "[OK] OCCT prefix detected: $env:SS2_OCCT_PREFIX" }
-    else { Write-Host "[INFO] OCCT prefix not detected (not a Genesis blocker)" }
+    if ($env:SS2_OCCT_PREFIX) {
+        Write-Host "[OK] OCCT prefix detected: $env:SS2_OCCT_PREFIX"
+    } else {
+        Write-Error "OCCT prefix not detected. WB-01 native Viewer requires OCCT."
+        $fail = $true
+    }
 } else {
     Write-Error "Local environment not configured. Run .\ss2.ps1 setup"
     $fail = $true

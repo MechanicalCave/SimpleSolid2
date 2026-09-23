@@ -332,3 +332,40 @@ add_test(
 set_tests_properties(part01.part_workspace_panel PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+
+add_executable(wb01_viewer_camera_state_test
+    viewer_camera_state_test.cpp
+)
+target_link_libraries(wb01_viewer_camera_state_test PRIVATE simplesolid2_viewer)
+add_test(NAME wb01.viewer_camera_state COMMAND wb01_viewer_camera_state_test)
+
+add_executable(wb01_viewer_navigation_test
+    viewer_navigation_test.cpp
+)
+target_link_libraries(wb01_viewer_navigation_test PRIVATE simplesolid2_viewer)
+add_test(NAME wb01.viewer_navigation COMMAND wb01_viewer_navigation_test)
+
+add_executable(wb01_viewer_reference_presentation_test
+    viewer_reference_presentation_test.cpp
+)
+target_link_libraries(wb01_viewer_reference_presentation_test PRIVATE simplesolid2_viewer)
+add_test(NAME wb01.viewer_reference_presentation COMMAND wb01_viewer_reference_presentation_test)
+
+add_executable(wb01_viewer_navigation_mapping_test
+    viewer_navigation_mapping_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/viewer_qt_occt/navigation_mapping.cpp
+)
+target_include_directories(wb01_viewer_navigation_mapping_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/viewer_qt_occt
+)
+target_compile_features(wb01_viewer_navigation_mapping_test PRIVATE cxx_std_20)
+add_test(NAME wb01.viewer_navigation_mapping COMMAND wb01_viewer_navigation_mapping_test)
+
+add_test(
+    NAME wb01.viewer_boundaries
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_viewer_boundaries.cmake
+)

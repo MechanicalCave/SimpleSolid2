@@ -133,14 +133,82 @@ function Find-Qt6Config([string]$QtRoot) {
 }
 
 function Find-OCCTConfig([string]$OcctRoot) {
-    if (-not (Test-Path $OcctRoot)) { return $null }
+    $roots = New-Object System.Collections.Generic.List[string]
 
-    foreach ($name in @("OpenCASCADEConfig.cmake", "opencascade-config.cmake")) {
-        $found = Get-ChildItem -Path $OcctRoot -Filter $name -File -Recurse -ErrorAction SilentlyContinue |
-            Select-Object -First 1
-        if ($found) { return $found.FullName }
+    function Add-OCCTSearchRoot([string]$Path) {
+        if (-not $Path) { return }
+        if (Test-Path $Path -PathType Leaf) {
+            $name = Split-Path $Path -Leaf
+            if ($name -ieq "OpenCASCADEConfig.cmake" -or
+                $name -ieq "opencascade-config.cmake") {
+                $resolved = (Resolve-Path $Path).Path
+                if (-not $roots.Contains($resolved)) { $roots.Add($resolved) }
+            }
+            return
+        }
+        if (Test-Path $Path -PathType Container) {
+            $resolved = (Resolve-Path $Path).Path
+            if (-not $roots.Contains($resolved)) { $roots.Add($resolved) }
+        }
     }
+
+    Add-OCCTSearchRoot $env:OpenCASCADE_DIR
+    Add-OCCTSearchRoot $env:CASROOT
+    Add-OCCTSearchRoot $env:VCPKG_ROOT
+    Add-OCCTSearchRoot $OcctRoot
+
+    # Reuse the machine-local roots that the accepted SS1 native gates used on
+    # the shared Windows CAD development host.
+    $workspaceParent = Split-Path (Get-SS2Root) -Parent
+    Add-OCCTSearchRoot $workspaceParent
+    Add-OCCTSearchRoot "C:\SimpleSolid"
+    Add-OCCTSearchRoot "C:\SimpleSolid\.simplesolid-env"
+
+    if ($OcctRoot) {
+        $driveRoot = [System.IO.Path]::GetPathRoot($OcctRoot)
+        if ($driveRoot) {
+            Add-OCCTSearchRoot (Join-Path $driveRoot ".simplesolid-env")
+        }
+    }
+
+    foreach ($candidate in @("C:\vcpkg", "C:\OCCT", "C:\OpenCASCADE")) {
+        Add-OCCTSearchRoot $candidate
+    }
+    if ($env:ProgramFiles) {
+        Add-OCCTSearchRoot (Join-Path $env:ProgramFiles "OpenCASCADE")
+        Add-OCCTSearchRoot (Join-Path $env:ProgramFiles "OCCT")
+    }
+
+    foreach ($root in $roots) {
+        if (Test-Path $root -PathType Leaf) { return $root }
+
+        foreach ($name in @("OpenCASCADEConfig.cmake", "opencascade-config.cmake")) {
+            $found = Get-ChildItem -Path $root -Filter $name -File -Recurse -ErrorAction SilentlyContinue |
+                Where-Object {
+                    $_.FullName -notmatch "[\\/](buildtrees|packages|templates)[\\/]"
+                } |
+                Select-Object -First 1
+            if ($found) { return $found.FullName }
+        }
+    }
+
     return $null
+}
+
+function Get-OCCTPrefixFromConfig([string]$OcctConfig) {
+    if (-not $OcctConfig) { return "" }
+
+    $configDir = Split-Path $OcctConfig -Parent
+    $parent = Split-Path $configDir -Parent
+    $parentName = Split-Path $parent -Leaf
+
+    if ($parentName -ieq "share") {
+        return (Split-Path $parent -Parent)
+    }
+
+    $p = $configDir
+    for ($i = 0; $i -lt 3; $i++) { $p = Split-Path $p -Parent }
+    return $p
 }
 
 function Write-SS2LocalEnvironment(
@@ -159,11 +227,7 @@ function Write-SS2LocalEnvironment(
         (Resolve-Path (Join-Path (Split-Path $QtConfig -Parent) "..\..\..")).Path
     } else { "" }
 
-    $occtPrefix = if ($OcctConfig) {
-        $p = Split-Path $OcctConfig -Parent
-        for ($i = 0; $i -lt 3; $i++) { $p = Split-Path $p -Parent }
-        $p
-    } else { "" }
+    $occtPrefix = Get-OCCTPrefixFromConfig $OcctConfig
 
     $prefixes = @()
     if ($qtPrefix) { $prefixes += $qtPrefix }
