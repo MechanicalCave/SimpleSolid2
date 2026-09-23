@@ -5,7 +5,6 @@ foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
 next:
-  - add Recent Projects persistence with ProjectId-based logical identity
   - add minimal Project Hub / Workspace Shell lifecycle
   - integrate create/open/close/restart flow and complete PH-01 acceptance tests
 notes:
@@ -13,6 +12,7 @@ notes:
   - ADR-0001 accepted by Owner on 2026-09-23.
   - Project metadata persistence was merged in 7cf150d6ae6dca11ed14cacdeb2e0028e6a63171.
   - ProjectSession remains runtime-only and is created only after metadata validation.
+  - Recent Projects persistence uses ProjectId as logical identity and explicit relocation for path changes.
   - No CAD-domain implementation is authorized by PH-01.
   - SS1 is donor/reference only; SS2 Foundation remains authoritative.
   - No silent scope expansion beyond work/PH-01_PROJECT_HUB.md.
