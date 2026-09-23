@@ -47,5 +47,20 @@ int main() {
     axis.token = {};
     CHECK(!axis.valid());
 
+    ReferenceGridPresentation grid;
+    CHECK(grid.valid());
+
+    auto invalid_grid = grid;
+    invalid_grid.spacing = 0.0;
+    CHECK(!invalid_grid.valid());
+
+    invalid_grid = grid;
+    invalid_grid.v_axis = {2.0, 0.0, 0.0};
+    CHECK(!invalid_grid.valid());
+
+    invalid_grid = grid;
+    invalid_grid.major_step = 0U;
+    CHECK(!invalid_grid.valid());
+
     return EXIT_SUCCESS;
 }
