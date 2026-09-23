@@ -1,0 +1,87 @@
+name: Windows PR gate (self-hosted)
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches:
+      - main
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - edited
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "scripts/**"
+      - "CMakeLists.txt"
+      - "ss2.ps1"
+      - "ss2.cmd"
+      - ".github/workflows/windows-pr-gate.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-msvc:
+    if: >
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on:
+      - self-hosted
+      - windows
+      - x64
+      - simplesolid2-native
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout exact tested revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        shell: cmd
+        run: |
+          @echo off
+          set EXPECTED=${{ github.event.pull_request.head.sha || github.sha }}
+          for /f %%i in ('git rev-parse HEAD') do set ACTUAL=%%i
+          echo [runner] machine: %COMPUTERNAME%
+          echo [runner] workspace: %GITHUB_WORKSPACE%
+          echo [runner] expected SHA: %EXPECTED%
+          echo [runner] checkout SHA: %ACTUAL%
+          if /I not "%ACTUAL%"=="%EXPECTED%" (
+            echo Runner checkout SHA mismatch.
+            exit /b 1
+          )
+
+      - name: Configure SS2 machine-local environment
+        shell: cmd
+        run: |
+          "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ".\ss2.ps1" setup -QtRoot "D:\Qt" -OcctRoot "D:\SimpleSolid2\.simplesolid-env"
+          if errorlevel 1 exit /b 1
+
+      - name: Bootstrap verification
+        shell: cmd
+        run: |
+          "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ".\ss2.ps1" verify
+          if errorlevel 1 exit /b 1
+
+      - name: Build
+        shell: cmd
+        run: |
+          "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ".\ss2.ps1" build
+          if errorlevel 1 exit /b 1
+
+      - name: Test
+        shell: cmd
+        run: |
+          "%SystemRoot%\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File ".\ss2.ps1" test
+          if errorlevel 1 exit /b 1
