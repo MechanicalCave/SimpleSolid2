@@ -56,6 +56,74 @@ ProjectHubResult sessionFailure(const ProjectSessionDiagnostic& diagnostic) {
 
 } // namespace
 
+RecentProjectHubListResult ProjectHubController::recentProjectHubEntries() const {
+    auto listed = recent_.list();
+    if (!listed.ok()) {
+        return RecentProjectHubListResult{{}, std::move(listed.diagnostic)};
+    }
+
+    std::vector<RecentProjectHubEntry> result;
+    result.reserve(listed.entries.size());
+
+    for (const auto& entry : listed.entries) {
+        RecentProjectHubEntry view;
+        view.recent = entry;
+
+        std::error_code ec;
+        const bool exists = std::filesystem::exists(entry.workspace_root, ec);
+        if (ec) {
+            view.availability = RecentProjectAvailability::project_invalid;
+            view.diagnostic =
+                "Unable to inspect the remembered Project Workspace location";
+            result.push_back(std::move(view));
+            continue;
+        }
+
+        if (!exists) {
+            view.availability = RecentProjectAvailability::workspace_missing;
+            view.diagnostic =
+                "Workspace not found. Use Locate to find the moved Project.";
+            result.push_back(std::move(view));
+            continue;
+        }
+
+        const bool is_directory =
+            std::filesystem::is_directory(entry.workspace_root, ec);
+        if (ec || !is_directory) {
+            view.availability = RecentProjectAvailability::project_invalid;
+            view.diagnostic =
+                "Remembered Project Workspace location is not a directory";
+            result.push_back(std::move(view));
+            continue;
+        }
+
+        auto loaded = metadata_service_.load(entry.workspace_root);
+        if (!loaded.ok()) {
+            view.availability = RecentProjectAvailability::project_invalid;
+            view.metadata_code = loaded.diagnostic.code;
+            view.diagnostic = std::move(loaded.diagnostic.message);
+            result.push_back(std::move(view));
+            continue;
+        }
+
+        if (loaded.metadata->project_id != entry.project_id) {
+            view.availability = RecentProjectAvailability::identity_mismatch;
+            view.diagnostic =
+                "Remembered Workspace contains a different ProjectId";
+            result.push_back(std::move(view));
+            continue;
+        }
+
+        view.availability = RecentProjectAvailability::available;
+        result.push_back(std::move(view));
+    }
+
+    return RecentProjectHubListResult{
+        std::move(result),
+        RecentProjectDiagnostic{},
+    };
+}
+
 ProjectHubResult ProjectHubController::createProject(
     const std::filesystem::path& workspace_root,
     std::string display_name) {
