@@ -307,9 +307,15 @@ ProjectHubResult ProjectHubController::createProjectInLocation(
             target);
     }
 
+    const std::string created_project_id = initialized.metadata->project_id;
+
     auto adopted = adoptOpened(ProjectSession::open(target));
     if (!adopted.ok()) {
-        removeOwnedTree(target);
+        const auto rollback_metadata = metadata_service_.load(target);
+        if (rollback_metadata.ok() &&
+            rollback_metadata.metadata->project_id == created_project_id) {
+            removeOwnedTree(target);
+        }
         return adopted;
     }
 
