@@ -143,6 +143,11 @@ void PartViewportController::clear() {
     notifySelectionChanged();
 }
 
+void PartViewportController::resetRuntimeState() {
+    selections_.clear();
+    clear();
+}
+
 void PartViewportController::refreshPresentation() {
     if (viewport_ == nullptr) return;
 
