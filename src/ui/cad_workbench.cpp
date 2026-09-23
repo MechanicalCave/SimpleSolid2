@@ -285,6 +285,8 @@ void CadWorkbench::buildUi() {
 
     document_properties_page_ =
         new QWidget(properties_stack_);
+    document_properties_page_->setObjectName(
+        QStringLiteral("documentPropertiesPage"));
     auto* document_properties_root =
         new QVBoxLayout(document_properties_page_);
     document_properties_root->setContentsMargins(0, 0, 0, 0);
@@ -348,6 +350,8 @@ void CadWorkbench::buildUi() {
 
     reference_properties_page_ =
         new QWidget(properties_stack_);
+    reference_properties_page_->setObjectName(
+        QStringLiteral("referencePropertiesPage"));
     auto* reference_root =
         new QFormLayout(reference_properties_page_);
 
