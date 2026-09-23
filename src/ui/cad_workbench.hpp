@@ -3,6 +3,7 @@
 #include <simplesolid2/application/project_session.hpp>
 #include <simplesolid2/viewer/camera_state.hpp>
 
+#include "document_selection.hpp"
 #include "viewport_surface.hpp"
 
 #include <QWidget>
@@ -69,6 +70,16 @@ private:
     void clearActiveContext();
     void captureActiveViewState();
     void restoreActiveViewState();
+    void handleDocumentSelectionChanged(
+        const DocumentSelectionState& state);
+    void handleViewportSelectionIntent(
+        const viewer::SelectionIntent& intent);
+    void applyDocumentSelection(
+        DocumentSelectionState state);
+    void refreshSelectionProperties();
+    void refreshViewportPresentation();
+    [[nodiscard]] DocumentSelectionState
+    activeSelectionState() const;
     void syncActionState();
     void updateTabPresentation(const core::DocumentId& document_id);
 
@@ -87,6 +98,8 @@ private:
     viewer::IDocumentViewport* viewport_{};
     std::unordered_map<std::string, viewer::CameraState>
         document_view_states_;
+    std::unordered_map<std::string, DocumentSelectionState>
+        document_selection_states_;
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
@@ -104,6 +117,7 @@ private:
 
     QLabel* active_path_{};
     QLabel* active_id_{};
+    QLabel* selection_context_{};
     QLineEdit* number_{};
     QLineEdit* title_{};
     QPlainTextEdit* description_{};
