@@ -1,0 +1,153 @@
+#include <simplesolid2/application/document_session.hpp>
+
+#include <utility>
+
+namespace simplesolid2::application {
+namespace {
+
+DocumentSessionResult failure(
+    DocumentSessionErrorCode code,
+    std::string message,
+    std::filesystem::path path = {},
+    part::PartCommitErrorCode commit_code = part::PartCommitErrorCode::none,
+    part::PartStoreErrorCode store_code = part::PartStoreErrorCode::none) {
+    return DocumentSessionResult{
+        false,
+        DocumentSessionDiagnostic{
+            code,
+            commit_code,
+            store_code,
+            std::move(message),
+            std::move(path),
+        },
+    };
+}
+
+DocumentSessionResult success(bool changed = false) {
+    return DocumentSessionResult{changed, DocumentSessionDiagnostic{}};
+}
+
+} // namespace
+
+DocumentSession::DocumentSession(
+    std::filesystem::path path,
+    part::PartDocument document)
+    : path_{std::move(path)},
+      document_{std::move(document)},
+      saved_state_{document_.state()},
+      expected_revision_{document_.revision()} {}
+
+DocumentSessionResult DocumentSession::verifyRevision() const {
+    if (document_.revision() != expected_revision_) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Document revision diverged from the active command/history context",
+            path_);
+    }
+    return success();
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const SetDocumentPropertiesCommand& command) {
+    if (const auto verified = verifyRevision(); !verified.ok()) {
+        return verified;
+    }
+
+    auto after = document_.state();
+    after.properties = command.properties;
+    if (after == document_.state()) {
+        return success(false);
+    }
+
+    std::vector<HistoryEntry> prepared = history_;
+    prepared.resize(cursor_);
+    prepared.push_back(HistoryEntry{document_.state(), after});
+
+    part::PartDocumentTransaction transaction{document_};
+    transaction.replaceState(after);
+    const auto committed = transaction.commit();
+    if (!committed.ok()) {
+        return failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Part transaction failed while executing document properties command",
+            path_,
+            committed.code);
+    }
+    if (!committed.changed) {
+        return success(false);
+    }
+
+    history_.swap(prepared);
+    cursor_ = history_.size();
+    expected_revision_ = document_.revision();
+    return success(true);
+}
+
+DocumentSessionResult DocumentSession::applyHistoricalState(
+    const part::PartAuthoredState& expected_current,
+    const part::PartAuthoredState& target) {
+    if (const auto verified = verifyRevision(); !verified.ok()) {
+        return verified;
+    }
+    if (document_.state() != expected_current) {
+        return failure(
+            DocumentSessionErrorCode::history_diverged,
+            "Authored state no longer matches the Undo/Redo history cursor",
+            path_);
+    }
+
+    part::PartDocumentTransaction transaction{document_};
+    transaction.replaceState(target);
+    const auto committed = transaction.commit();
+    if (!committed.ok() || !committed.changed) {
+        return failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Part transaction failed while applying Undo/Redo",
+            path_,
+            committed.code);
+    }
+
+    expected_revision_ = document_.revision();
+    return success(true);
+}
+
+DocumentSessionResult DocumentSession::undo() {
+    if (!canUndo()) return success(false);
+
+    const auto& entry = history_[cursor_ - 1U];
+    auto applied = applyHistoricalState(entry.after, entry.before);
+    if (!applied.ok()) return applied;
+    --cursor_;
+    return applied;
+}
+
+DocumentSessionResult DocumentSession::redo() {
+    if (!canRedo()) return success(false);
+
+    const auto& entry = history_[cursor_];
+    auto applied = applyHistoricalState(entry.before, entry.after);
+    if (!applied.ok()) return applied;
+    ++cursor_;
+    return applied;
+}
+
+DocumentSessionResult DocumentSession::save() {
+    if (const auto verified = verifyRevision(); !verified.ok()) {
+        return verified;
+    }
+
+    const auto saved = store_.save(path_, document_);
+    if (!saved.ok()) {
+        return failure(
+            DocumentSessionErrorCode::persistence_failure,
+            saved.diagnostic.message,
+            saved.diagnostic.path,
+            part::PartCommitErrorCode::none,
+            saved.diagnostic.code);
+    }
+
+    saved_state_ = document_.state();
+    return success(false);
+}
+
+} // namespace simplesolid2::application
