@@ -1,5 +1,6 @@
 #include "cad_workbench.hpp"
 #include "cad_workbench_shell.hpp"
+#include "document_viewport_pane.hpp"
 #include "part_document_tree_controller.hpp"
 #include "part_viewer_projection.hpp"
 
@@ -220,26 +221,40 @@ void CadWorkbench::buildUi() {
         });
 
     ViewportSurface viewport_surface;
+    DocumentViewportPane* viewport_pane = nullptr;
+
     if (viewport_factory_) {
-        viewport_surface = viewport_factory_(shell_);
+        viewport_pane =
+            new DocumentViewportPane(shell_);
+
+        viewport_surface =
+            viewport_factory_(
+                &viewport_pane->viewportHost());
     }
 
-    if (viewport_surface.valid()) {
-        editor_surface_ = viewport_surface.widget;
+    if (viewport_pane != nullptr &&
+        viewport_surface.valid()) {
         viewport_ = viewport_surface.viewport;
+
         viewport_->setSelectionIntentHandler(
             [this](const viewer::SelectionIntent& intent) {
                 handleViewportSelectionIntent(intent);
             });
+
+        viewport_pane->setViewportSurface(
+            viewport_surface.widget,
+            viewport_surface.viewport);
+
+        editor_surface_ = viewport_pane;
         editor_surface_->setObjectName(
             QStringLiteral("editorSurface"));
-        if (editor_surface_->parentWidget() != shell_) {
-            editor_surface_->setParent(shell_);
-        }
         shell_->setEditorSurface(editor_surface_);
     } else {
         if (viewport_surface.widget != nullptr) {
             viewport_surface.widget->deleteLater();
+        }
+        if (viewport_pane != nullptr) {
+            viewport_pane->deleteLater();
         }
 
         auto* editor_frame = new QFrame(shell_);
