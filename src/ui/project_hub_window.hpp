@@ -1,6 +1,6 @@
 #pragma once
 
-#include "../application/project_hub_controller.hpp"
+#include "project_hub_controller.hpp"
 
 #include <QMainWindow>
 
