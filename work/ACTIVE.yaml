@@ -1,21 +1,17 @@
 version: 1
-status: completed
-active_work: "work/DOC-01A_DOCUMENTATION_COMMAND_WIRING.md"
+status: active
+active_work: "work/PART-01_PART_DOCUMENT_LIFECYCLE.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
 next:
-  - no implementation work is active after DOC-01A
-  - Owner must accept the next explicit work contract before further product implementation
+  - implement PART-01 only within its accepted scope
+  - no Sketch, geometry modeling, Assembly, Drawing, BOM, export model, or OCCT modeling without a later accepted contract
 notes:
-  - DOC-01 remains complete.
-  - DOC-01A accepted by Owner on 2026-09-23 and completed.
-  - ADR-0002 accepted by Owner on 2026-09-23; it defines portable Document identity, DocumentSession lifecycle, persistence/evaluation boundaries, Document Properties, identity-conflict handling, and export identity semantics.
-  - ADR-0002 does not activate CAD-domain implementation.
-  - Root .\ss2.ps1 docs now maps to scripts\ss2-docs.ps1.
-  - Root dispatch fails closed for missing command mappings or missing mapped scripts.
-  - Windows PR gate executes the exact .\ss2.ps1 docs command and verifies generated Browser remains Git-clean.
-  - Internal build/test/run documentation was updated; user/product documentation was not impacted.
-  - Documentation validation and the existing CTest suite pass.
-  - No CAD-domain implementation is authorized without the next accepted work contract.
+  - DOC-01 and DOC-01A remain complete.
+  - ADR-0002 accepted by Owner on 2026-09-23.
+  - PART-01 accepted by Owner on 2026-09-23.
+  - PART-01 introduces the first persistent PartDocument lifecycle and uses .ss2part as the native Part extension.
+  - PART-01 requires internal and PL/EN product documentation updates before completion.
+  - Root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
