@@ -10,7 +10,7 @@
 
 The application opens into `ProjectHubWindow`.
 
-The Hub is a navigation surface. It is not the durable owner of Project identity or Project files.
+The Hub is a navigation surface. It is not the durable owner of Project or Document identity.
 
 <!-- section-id: internal.application-lifecycle.create -->
 ## Create Project lifecycle
@@ -26,10 +26,10 @@ Create Project…
 → publish final Workspace
 → open ProjectSession
 → record Recent Project
-→ show empty Workspace Shell
+→ show Workspace Shell with Part document panel
 ```
 
-A successful Create therefore leaves one active ProjectSession and one logical Recent entry for the created ProjectId.
+A successful Create leaves one active ProjectSession and one logical Recent entry for the created ProjectId.
 
 <!-- section-id: internal.application-lifecycle.open -->
 ## Open existing Project
@@ -38,21 +38,41 @@ A successful Create therefore leaves one active ProjectSession and one logical R
 
 The application does not initialize an ordinary folder during Open. `ProjectSession::open` requires valid existing SimpleSolid Project metadata.
 
-After validation, the opened Project is recorded in Recent before the runtime session is adopted.
+Opening a Project also rebuilds the runtime native-document index by scanning the Workspace for `.ss2part` files. Invalid Part files and duplicate DocumentIds become explicit index states instead of being silently ignored.
 
-If recording Recent detects the same ProjectId at a different remembered location, opening fails and no active session is adopted.
+<!-- section-id: internal.application-lifecycle.part -->
+## Part Document lifecycle
+
+The current Part lifecycle is:
+
+```text
+New Part…
+→ choose Workspace-relative .ss2part path
+→ generate fresh DocumentId
+→ atomically publish valid empty PartDocument
+→ create canonical DocumentSession
+
+Open
+→ resolve one DocumentId to exactly one Workspace path
+→ load authored Part state
+→ create or reuse canonical DocumentSession
+```
+
+The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description or Engineering Revision goes through a semantic properties command and a PartDocument transaction.
+
+Closing and reopening a Part destroys runtime Undo/Redo history while preserving authored properties and DocumentId on disk.
 
 <!-- section-id: internal.application-lifecycle.close -->
-## Close and reopen
+## Close, dirty state and restart
 
-`Close Project` resets the active ProjectSession and returns to Project Hub.
+Closing a dirty Part prompts for `Save`, `Discard` or `Cancel`.
 
-Project metadata remains in the Workspace and the Recent entry remains in application/user state.
+Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure keeps the Project open.
 
-After application restart, the Hub reloads Recent Projects. Reopening the same Project creates a new runtime ProjectSession with the same durable ProjectId.
+After application restart, Recent Projects restores the Project location. Opening the Project creates a fresh ProjectSession, rebuilds document discovery and can reopen the same durable DocumentId with the same saved authored properties.
 
 <!-- section-id: internal.application-lifecycle.relocate -->
-## Move and relocation
+## Project move and relocation
 
 Moving a Project in the filesystem makes the remembered Recent path stale.
 

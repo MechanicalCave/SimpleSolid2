@@ -113,6 +113,6 @@ Projekt można później ponownie otworzyć przez `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Aktualne ograniczenia
 
-Obecny Workspace Shell nie zawiera jeszcze dokumentów CAD ani narzędzi modelowania.
+Workspace Shell zawiera obecnie pierwszy trwały typ dokumentu CAD: Part `.ss2part` z właściwościami Dokumentu, Undo/Redo i Save.
 
-Project Hub i opisane tutaj operacje Projektu są aktualnie zaimplementowaną powierzchnią produktu.
+Modelowanie geometryczne Parta, Assembly, Drawing i Viewer nie są jeszcze dostępne. Szczegóły bieżącego lifecycle Parta opisuje dokument `Dokumenty Part`.

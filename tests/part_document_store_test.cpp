@@ -99,5 +99,22 @@ int main() {
     CHECK(!broken.ok());
     CHECK(broken.diagnostic.code == part::PartStoreErrorCode::malformed_document);
 
+    const auto unsupported = temp.path / "Future.ss2part";
+    {
+        std::ofstream out{unsupported, std::ios::binary};
+        CHECK(static_cast<bool>(out));
+        out << "SS2PART\n"
+            << "schema_version=999\n"
+            << "document_kind=part\n"
+            << "document_id=" << id.value() << "\n"
+            << "number_hex=\n"
+            << "title_hex=\n"
+            << "description_hex=\n"
+            << "engineering_revision_hex=\n";
+    }
+    const auto future = store.load(unsupported);
+    CHECK(!future.ok());
+    CHECK(future.diagnostic.code == part::PartStoreErrorCode::unsupported_schema);
+
     return EXIT_SUCCESS;
 }

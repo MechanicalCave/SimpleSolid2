@@ -14,7 +14,7 @@ The repository baseline is:
 - Windows-first;
 - self-hosted Windows/MSVC PR gate.
 
-OCCT is present in the machine-local environment but current Project Hub implementation does not use CAD modeling or Viewer functionality.
+OCCT is present in the machine-local environment, but the implemented PART-01 lifecycle does not use OCCT modeling or Viewer functionality.
 
 <!-- section-id: internal.build-test.session -->
 ## Normal local session
@@ -25,14 +25,7 @@ The normal Owner workflow starts with:
 START_SS2.cmd
 ```
 
-The SS2 PowerShell session provides canonical convenience commands including:
-
-```powershell
-ss2-status
-ss2-run
-ss2-docs
-ss2-resume
-```
+The SS2 PowerShell session provides canonical convenience commands including `ss2-status`, `ss2-run`, `ss2-docs` and `ss2-resume`.
 
 `ss2-run` performs an incremental build and starts the current `SimpleSolid2.exe`.
 
@@ -61,20 +54,22 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-Before DOC-01, the compiled CTest suite contains ten tests covering:
+The compiled CTest suite contains eighteen tests.
 
-- Project workspace metadata;
-- ProjectSession;
-- RecentProjectStore;
-- complete Project Hub lifecycle;
-- real application smoke startup;
-- Recent selection UX;
-- Recent availability classification;
-- Recent availability UI;
-- staged Project creation workflow;
-- Project Creation dialog behavior.
+The original ten cover Project metadata, ProjectSession, Recent Projects, Project Hub lifecycle, application smoke startup and Project Hub/Create UX.
 
-DOC-01 adds repository documentation validation outside CTest through `ss2 verify`.
+Eight PART-01 tests cover:
+
+- DocumentId / DocumentRevision / common properties;
+- PartDocument staged transaction semantics;
+- native Part persistence and schema rejection;
+- DocumentSession command, Undo/Redo, save checkpoint and failed-save behavior;
+- Workspace discovery and identity conflicts;
+- Project + Part restart lifecycle;
+- Project dirty-close guard and Save All;
+- real offscreen Qt Part Workspace panel lifecycle.
+
+Repository documentation validation runs outside CTest through `ss2 verify`.
 
 Tests must not be weakened to obtain a pass.
 
@@ -101,21 +96,13 @@ exact checkout
 → CTest
 ```
 
-The explicit root `ss2.ps1 docs` step is a dispatcher regression check: CI exercises the same public repository command used by maintainers, not only the underlying generator script.
-
-Documentation sources and documentation tooling are included in the workflow path filters so documentation-only changes are verified.
+The explicit root `ss2.ps1 docs` step is a dispatcher regression check.
 
 <!-- section-id: internal.build-test.docs-validation -->
 ## Documentation validation
 
 `ss2 verify` invokes `scripts/ss2-docs.ps1 -Check -SelfTest`.
 
-The documentation gate validates current repository documentation and also executes negative fixtures proving that the validator rejects:
-
-- missing PL/EN product pairs;
-- mismatched bilingual section identifiers;
-- broken deterministic local Markdown links;
-- a current Work Contract without Documentation Impact;
-- a stale generated Product Browser.
+The documentation gate validates canonical pairs/section identifiers, deterministic links, Work Contract Documentation Impact and generated Product Browser freshness.
 
 The Product Browser must be regenerated with `.\ss2.ps1 docs` whenever canonical documentation or its generator changes.

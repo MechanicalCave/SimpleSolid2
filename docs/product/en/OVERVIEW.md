@@ -13,19 +13,22 @@ It is written for understanding and using the application. It does not describe 
 <!-- section-id: product.overview.current -->
 ## What is currently available
 
-The current product provides the Project platform:
+The current product provides:
 
-- create a new Project;
-- open an existing Project;
-- stable Project identity independent of path;
-- Recent Projects;
+- creating and opening Projects;
+- stable Project identity and Recent Projects;
 - moving a Project and recovering its location with `Locate…`;
-- detection of missing, invalid or identity-mismatched Workspaces;
-- safe removal of an entry from Recent Projects only.
+- creating and opening native `.ss2part` Part Documents;
+- stable `DocumentId` independent of filename and path;
+- editing Number, Title, Description and Engineering Revision;
+- Undo / Redo for those changes;
+- Save and safe closing with unsaved-change protection;
+- rediscovering Parts after restart;
+- identity-conflict detection when two files in one Workspace carry the same DocumentId.
 
-After a Project is opened, the application currently shows an empty Workspace Shell.
+The current Part is a durable Document but does not yet contain geometric modeling.
 
-CAD modeling, Part, Assembly, Drawing and Viewer are not yet part of the available product surface.
+Sketch, Bodies/Features, Assembly, Drawing and Viewer are not yet part of the available product surface.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
