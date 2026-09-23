@@ -18,6 +18,7 @@ public:
  [[nodiscard]] bool setStandardView(viewer::StandardView view) override;
  [[nodiscard]] bool setProjection(viewer::CameraProjection projection) override;
  void fitAll() override;
+ void setCameraStateChangedHandler(viewer::CameraStateChangedHandler handler) override;
  [[nodiscard]] bool setReferenceScene(const viewer::ReferenceScene& scene) override;
  [[nodiscard]] bool setPresentationSelection(const viewer::PresentationSelection& selection) override;
  void setSelectionIntentHandler(viewer::SelectionIntentHandler handler) override;
