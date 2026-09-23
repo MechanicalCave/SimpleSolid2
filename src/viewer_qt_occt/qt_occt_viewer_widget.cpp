@@ -110,6 +110,7 @@ public:
         camera->OrthogonalizeUp();
         camera->SetScale(state.scale);
         view_->Redraw();
+        notifyCameraStateChanged();
         return true;
     }
 
@@ -134,6 +135,12 @@ public:
         if (view_.IsNull()) return;
         view_->FitAll(0.05, false);
         view_->Redraw();
+        notifyCameraStateChanged();
+    }
+
+    void setCameraStateChangedHandler(
+        viewer::CameraStateChangedHandler handler) {
+        camera_state_changed_handler_ = std::move(handler);
     }
 
     bool setReferenceScene(
@@ -227,6 +234,7 @@ public:
         if (view_.IsNull() || !std::isfinite(factor) || factor <= 0.0) return;
         view_->SetZoom(factor, true);
         view_->Redraw();
+        notifyCameraStateChanged();
     }
 
     void panByPixels(int delta_x, int delta_y) {
@@ -240,6 +248,7 @@ public:
             static_cast<int>(std::lround(delta_y * dpr)));
         view_->Panning(-dx, dy, 1.0, true);
         view_->Redraw();
+        notifyCameraStateChanged();
     }
 
     void orbitByScreenAngles(const detail::OrbitScreenAngles& angles) {
@@ -253,6 +262,7 @@ public:
 
         view_->Rotate(angles.x, angles.y, angles.z, true);
         view_->Redraw();
+        notifyCameraStateChanged();
     }
 
     void orbitByRadians(double horizontal, double vertical) {
@@ -537,6 +547,15 @@ public:
         view_->StartZoomAtPoint(x, y);
         view_->ZoomAtPoint(x, y, x + dx, y + dy);
         view_->Redraw();
+        notifyCameraStateChanged();
+    }
+
+    void notifyCameraStateChanged() {
+        if (!camera_state_changed_handler_) return;
+        const auto state = cameraState();
+        if (state) {
+            camera_state_changed_handler_(*state);
+        }
     }
 
 private:
@@ -549,6 +568,7 @@ private:
     viewer::ReferenceScene reference_scene_;
     viewer::PresentationSelection selection_;
     viewer::SelectionIntentHandler selection_intent_handler_;
+    viewer::CameraStateChangedHandler camera_state_changed_handler_;
     std::vector<ReferenceObject> reference_objects_;
     std::vector<Handle(AIS_InteractiveObject)> grid_objects_;
 
@@ -590,6 +610,11 @@ bool QtOcctViewerWidget::setProjection(viewer::CameraProjection projection) {
 
 void QtOcctViewerWidget::fitAll() {
     impl_->fitAll();
+}
+
+void QtOcctViewerWidget::setCameraStateChangedHandler(
+    viewer::CameraStateChangedHandler handler) {
+    impl_->setCameraStateChangedHandler(std::move(handler));
 }
 
 bool QtOcctViewerWidget::setReferenceScene(
