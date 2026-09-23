@@ -23,6 +23,10 @@ public:
         const application::DocumentSessionResult&,
         bool visible)>;
 
+    using SelectionHandler = std::function<void(
+        const std::vector<core::BuiltinReferenceRole>&,
+        std::optional<core::BuiltinReferenceRole>)>;
+
     PartDocumentTreeController(
         QTreeWidget& tree,
         QObject* parent = nullptr);
@@ -35,14 +39,26 @@ public:
         result_handler_ = std::move(handler);
     }
 
+    void setSelectionHandler(SelectionHandler handler) {
+        selection_handler_ = std::move(handler);
+    }
+
+    void setBuiltinReferenceSelection(
+        const std::vector<core::BuiltinReferenceRole>& selected,
+        std::optional<core::BuiltinReferenceRole> primary);
+
     [[nodiscard]] std::vector<core::BuiltinReferenceRole>
     selectedBuiltinReferences() const;
+
+    [[nodiscard]] std::optional<core::BuiltinReferenceRole>
+    primaryBuiltinReference() const;
 
 private:
     void rebuild(bool preserve_reference_selection);
     void updateVisibilityActions();
     void showContextMenu(const QPoint& position);
     void applySelectedVisibility(bool visible);
+    void notifySelectionChanged();
 
     [[nodiscard]] bool selectionContainsOnlyBuiltinReferences() const;
     [[nodiscard]] static QString labelFor(
@@ -55,6 +71,7 @@ private:
     QAction* show_action_{};
     QAction* hide_action_{};
     ResultHandler result_handler_;
+    SelectionHandler selection_handler_;
 };
 
 } // namespace simplesolid2::ui
