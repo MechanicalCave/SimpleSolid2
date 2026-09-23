@@ -238,6 +238,14 @@ function Write-SS2LocalEnvironment(
     if ($CMakeExe) { $extraPathParts += (Split-Path $CMakeExe -Parent) }
     if ($NinjaExe) { $extraPathParts += (Split-Path $NinjaExe -Parent) }
     if ($qtPrefix) { $extraPathParts += (Join-Path $qtPrefix "bin") }
+    if ($occtPrefix) {
+        foreach ($relativeRuntime in @("bin", "debug\bin")) {
+            $runtimePath = Join-Path $occtPrefix $relativeRuntime
+            if (Test-Path $runtimePath -PathType Container) {
+                $extraPathParts += (Resolve-Path $runtimePath).Path
+            }
+        }
+    }
     $extraPath = ($extraPathParts | Select-Object -Unique) -join ";"
 
     $content = @"
