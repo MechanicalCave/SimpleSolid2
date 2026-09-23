@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <charconv>
 #include <cctype>
+#include <cstdint>
 #include <fstream>
 #include <map>
 #include <string_view>
@@ -71,7 +72,8 @@ std::string serialize(const PartDocument& document) {
     const auto& properties = document.properties();
     std::string out;
     out += "SS2PART\n";
-    out += "schema_version=1\n";
+    out += "schema_version=" +
+           std::to_string(PartDocumentStore::current_schema_version) + "\n";
     out += "document_kind=part\n";
     out += "document_id=" + std::string{document.documentId().value()} + "\n";
     out += "number_hex=" + hexEncode(properties.number) + "\n";
@@ -79,6 +81,11 @@ std::string serialize(const PartDocument& document) {
     out += "description_hex=" + hexEncode(properties.description) + "\n";
     out += "engineering_revision_hex=" +
            hexEncode(properties.engineering_revision) + "\n";
+    out += "builtin_reference_visibility_mask=" +
+           std::to_string(
+               static_cast<unsigned>(
+                   document.presentation().builtin_references.mask())) +
+           "\n";
     return out;
 }
 
@@ -244,31 +251,11 @@ PartLoadResult PartDocumentStore::load(
             path);
     }
 
-    constexpr std::size_t expected_fields = 7U;
-    if (fields.size() != expected_fields) {
-        return loadFailure(
-            PartStoreErrorCode::malformed_document,
-            "Native Part contains unknown or missing fields",
-            path);
-    }
-
     std::string schema;
-    std::string kind;
-    std::string id_text;
-    std::string number_hex;
-    std::string title_hex;
-    std::string description_hex;
-    std::string engineering_revision_hex;
-    if (!getRequired(fields, "schema_version", schema) ||
-        !getRequired(fields, "document_kind", kind) ||
-        !getRequired(fields, "document_id", id_text) ||
-        !getRequired(fields, "number_hex", number_hex) ||
-        !getRequired(fields, "title_hex", title_hex) ||
-        !getRequired(fields, "description_hex", description_hex) ||
-        !getRequired(fields, "engineering_revision_hex", engineering_revision_hex)) {
+    if (!getRequired(fields, "schema_version", schema)) {
         return loadFailure(
             PartStoreErrorCode::missing_field,
-            "Native Part is missing a required field",
+            "Native Part is missing schema_version",
             path);
     }
 
@@ -282,12 +269,41 @@ PartLoadResult PartDocumentStore::load(
             "Native Part schema_version is not an integer",
             path);
     }
-    if (schema_version != current_schema_version) {
+
+    if (schema_version != 1 &&
+        schema_version != PartDocumentStore::current_schema_version) {
         return loadFailure(
             PartStoreErrorCode::unsupported_schema,
             "Unsupported native Part schema version",
             path);
     }
+
+    const std::size_t expected_fields = schema_version == 1 ? 7U : 8U;
+    if (fields.size() != expected_fields) {
+        return loadFailure(
+            PartStoreErrorCode::malformed_document,
+            "Native Part contains unknown or missing fields",
+            path);
+    }
+
+    std::string kind;
+    std::string id_text;
+    std::string number_hex;
+    std::string title_hex;
+    std::string description_hex;
+    std::string engineering_revision_hex;
+    if (!getRequired(fields, "document_kind", kind) ||
+        !getRequired(fields, "document_id", id_text) ||
+        !getRequired(fields, "number_hex", number_hex) ||
+        !getRequired(fields, "title_hex", title_hex) ||
+        !getRequired(fields, "description_hex", description_hex) ||
+        !getRequired(fields, "engineering_revision_hex", engineering_revision_hex)) {
+        return loadFailure(
+            PartStoreErrorCode::missing_field,
+            "Native Part is missing a required field",
+            path);
+    }
+
     if (kind != "part") {
         return loadFailure(
             PartStoreErrorCode::wrong_document_kind,
@@ -314,7 +330,49 @@ PartLoadResult PartDocumentStore::load(
             path);
     }
 
-    PartAuthoredState state{std::move(properties)};
+    PartPresentationState presentation;
+    if (schema_version == PartDocumentStore::current_schema_version) {
+        std::string mask_text;
+        if (!getRequired(
+                fields,
+                "builtin_reference_visibility_mask",
+                mask_text)) {
+            return loadFailure(
+                PartStoreErrorCode::missing_field,
+                "Native Part is missing built-in reference visibility",
+                path);
+        }
+
+        unsigned int parsed_mask{};
+        const auto mask_result = std::from_chars(
+            mask_text.data(),
+            mask_text.data() + mask_text.size(),
+            parsed_mask);
+        if (mask_result.ec != std::errc{} ||
+            mask_result.ptr != mask_text.data() + mask_text.size() ||
+            parsed_mask > 0xFFU) {
+            return loadFailure(
+                PartStoreErrorCode::malformed_document,
+                "Native Part contains malformed built-in reference visibility",
+                path);
+        }
+
+        const auto visibility =
+            core::BuiltinReferenceVisibility::fromMask(
+                static_cast<std::uint8_t>(parsed_mask));
+        if (!visibility) {
+            return loadFailure(
+                PartStoreErrorCode::malformed_document,
+                "Native Part contains unsupported built-in reference visibility bits",
+                path);
+        }
+        presentation.builtin_references = *visibility;
+    }
+
+    PartAuthoredState state;
+    state.properties = std::move(properties);
+    state.presentation = presentation;
+
     return PartLoadResult{
         std::optional<PartDocument>{
             PartDocument::restore(std::move(*id), std::move(state))},
