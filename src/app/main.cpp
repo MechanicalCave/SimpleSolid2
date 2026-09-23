@@ -1,4 +1,4 @@
-#include "../ui/project_hub_window.hpp"
+#include "project_hub_window.hpp"
 
 #include <QApplication>
 #include <QCoreApplication>
