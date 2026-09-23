@@ -25,7 +25,8 @@ Przeczytaj w tej kolejności:
 5. zaakceptowane ADR-y istotne dla bieżącego/ostatniego work itemu
 6. `work/ACTIVE.yaml`
 7. aktywny work contract, a jeśli `ACTIVE.yaml` ma status `completed` — ostatni zakończony work contract
-8. aktualny branch / HEAD / otwarte PR-y / ostatnie relewantne commity / status relewantnego CI
+8. `governance/DOCUMENTATION.md`
+9. aktualny branch / HEAD / otwarte PR-y / ostatnie relewantne commity / status relewantnego CI
 
 Nie zgaduj, jeśli któregoś elementu brakuje. Repo i governance mają pierwszeństwo przed tym promptem.
 
@@ -56,23 +57,24 @@ Po rekonstrukcji raportuj krótko:
 
 ## Aktualny handoff hint — MUSISZ ZWERYFIKOWAĆ
 
-Stan po zakończeniu PH-02C:
+Stan po zakończeniu DOC-01:
 
-- `work/PH-01_PROJECT_HUB.md` / MAIN v0.1 jest zakończony
-- `work/PH-02A_PROJECT_HUB_SELECTION_UX.md` jest zakończony
-- `work/PH-02B_RECENT_PROJECT_AVAILABILITY_UX.md` jest zakończony
-- `work/PH-02C_PROJECT_CREATION_UX.md` jest zaakceptowany i zakończony
-- `work/ACTIVE.yaml` powinien mieć status `completed` i wskazywać PH-02C jako ostatni work item
+- PH-01 / MAIN v0.1 oraz PH-02A / PH-02B / PH-02C są zakończone
+- `work/DOC-01_AS_BUILT_DOCUMENTATION_SYSTEM.md` jest zaakceptowany i zakończony
+- `work/ACTIVE.yaml` powinien mieć status `completed` i wskazywać DOC-01 jako ostatni work item
 - zaakceptowany ADR: `adr/ADR-0001-project-identity-and-workspace-clones.md`
-- Create Project używa jednego dialogu: Project name / Location / Project folder
-- Location jest istniejącym katalogiem nadrzędnym; SS2 tworzy nowy child Workspace
-- Project folder jest proponowany z Project name, ale pozostaje niezależnie edytowalny
-- Project name i folder nie są tożsamością; trwałą tożsamością pozostaje `ProjectId`
-- istniejący target folder podczas Create = fail closed; bez adopcji, nadpisania ani inicjalizacji
-- tworzenie używa SS2-owned staging folderu, a rollback usuwa tylko zweryfikowane artefakty nowo utworzonego projektu
-- po udanym Create powstaje poprawny `.simplesolid/project.json`, aktywny `ProjectSession`, Workspace Shell i wpis Recent
-- Hub nadal wyprowadza availability Recent jako `Available`, `WorkspaceMissing`, `ProjectInvalid`, `IdentityMismatch`; availability nie jest trwałe
-- po PH-02C nie ma aktywnego następnego kontraktu implementacyjnego, dopóki Owner jawnie go nie zaakceptuje
+- operacyjna reguła dokumentacji: `governance/DOCUMENTATION.md`
+- canonical internal as-built docs: `docs/internal/` (English)
+- canonical user/product docs: `docs/product/pl/` i `docs/product/en/`
+- polska i angielska dokumentacja produktu są równorzędnymi źródłami; PL jest domyślnym językiem Browsera
+- generated Product Browser: `docs/browser/index.html`
+- Markdown jest source of truth; Browser jest deterministycznie generowany i freshness-checked
+- `ss2-docs` / `.\ss2.ps1 docs` regeneruje Browser
+- `ss2 verify` wykonuje dokumentacyjny validator + self-testy fail-closed
+- każdy przyszły zaakceptowany work contract musi zawierać sekcję `## Documentation impact` z Internal docs / User/Product docs / Reason
+- work item nie może zostać completed, jeśli zadeklarowana wymagana dokumentacja jest nieaktualna
+- bieżący Project Hub: Create przez Project name + parent Location + Project folder; ProjectId pozostaje trwałą tożsamością; Recent/Locate/availability działają jak opisano w canonical docs
+- po DOC-01 nie ma aktywnego kolejnego kontraktu implementacyjnego, dopóki Owner jawnie go nie zaakceptuje
 - nie traktuj żadnego SHA z tego pliku jako bieżącego `main` HEAD
 
 Windows CI:
@@ -80,8 +82,9 @@ Windows CI:
 - self-hosted runner: `SS2-Windows`
 - label: `simplesolid2-native`
 - workflow: `.github/workflows/windows-pr-gate.yml`
-- gate sprawdza exact SHA → setup → verify → build → test
-- ostatni PH-02C gate obejmuje 10 testów, w tym `ph02c.project_creation_workflow` i `ph02c.project_creation_dialog`
+- gate sprawdza exact SHA → setup → verify (w tym docs validation) → build → test
+- compiled CTest suite pozostaje na 10 testach; DOC-01 dodaje repo/documentation validation w `ss2 verify`
+- validator self-tests obejmują brak pary PL/EN, mismatch section-id, broken local link, brak Documentation Impact, stale Browser oraz external Browser dependency
 - tryb uruchomienia runnera (interaktywny vs Windows Service) jest stanem lokalnym maszyny; nie zakładaj go bez sprawdzenia
 
 Lokalne hinty maszyny Ownera:
@@ -91,7 +94,7 @@ Lokalne hinty maszyny Ownera:
 - OCCT env: `D:\SimpleSolid2\.simplesolid-env`
 - self-hosted runner: `D:\runner-ss2`
 - `START_SS2.cmd` uruchamia runner, kopiuje ten prompt do schowka i otwiera SS2 PowerShell
-- komendy sesji: `ss2-status`, `ss2-run`, `ss2-resume`
+- komendy sesji: `ss2-status`, `ss2-run`, `ss2-docs`, `ss2-resume`
 
 ## Punkt kontroli architektonicznej
 
