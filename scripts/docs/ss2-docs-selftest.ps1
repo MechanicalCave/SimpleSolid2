@@ -7,7 +7,19 @@ function New-SelfTestFixture {
     }
 
     Write-Utf8NoBom (Join-Path $fixture "governance\\DOCUMENTATION.md") "# rule`n"
-    Write-Utf8NoBom (Join-Path $fixture "docs\\browser\\template.html") "<html><body>@@DOC_SOURCES@@</body></html>`n"
+    $fixtureTemplate = @'
+<html><body>
+<button id="lang-pl">PL</button><button id="lang-en">EN</button>
+<input id="search"><nav id="nav"></nav>
+@@DOC_SOURCES@@
+<script>
+const state = { lang: 'pl', query: '' };
+document.getElementById('lang-pl');
+document.getElementById('lang-en');
+</script>
+</body></html>
+'@
+    Write-Utf8NoBom (Join-Path $fixture "docs\\browser\\template.html") ($fixtureTemplate + "`n")
 
     $internalFiles = @(
         "OVERVIEW.md","PROJECT_PLATFORM.md","APPLICATION_LIFECYCLE.md","PERSISTENCE.md","UI_PROJECT_HUB.md","BUILD_AND_TEST.md"
@@ -93,5 +105,12 @@ function Invoke-DocumentationSelfTest {
         $p = Join-Path $r "docs\\product\\pl\\OVERVIEW.md"
         $t = Read-NormalizedText $p
         Write-Utf8NoBom $p ($t + "`nChanged after Browser generation.`n")
+    }
+
+    Assert-SelfTestFailure "external Browser dependency" "BROWSER" {
+        param($r)
+        $p = Join-Path $r "docs\\browser\\template.html"
+        $t = Read-NormalizedText $p
+        Write-Utf8NoBom $p ($t.Replace("</body>", "<script src=`"https://example.invalid/x.js`"></script></body>"))
     }
 }
