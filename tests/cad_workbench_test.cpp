@@ -2,6 +2,7 @@
 
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
+#include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
 #include <QLabel>
@@ -188,6 +189,12 @@ int main(int argc, char* argv[]) {
     CHECK(origin_point != nullptr);
     CHECK(xy_plane->font(0).italic());
     CHECK(!origin_point->font(0).italic());
+
+    tree->clearSelection();
+    root->setSelected(true);
+    xy_plane->setSelected(true);
+    CHECK(!hide_references->isEnabled());
+    CHECK(!show_references->isEnabled());
 
     auto* first_session =
         opened.session->documentSession(first_id);
