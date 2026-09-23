@@ -3,6 +3,7 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QFont>
+#include <QItemSelectionModel>
 #include <QMenu>
 #include <QPoint>
 #include <QSignalBlocker>
@@ -201,9 +202,15 @@ void PartDocumentTreeController::setBuiltinReferenceSelection(
     }
 
     if (primary_item != nullptr) {
-        tree_->setCurrentItem(primary_item);
+        tree_->setCurrentItem(
+            primary_item,
+            0,
+            QItemSelectionModel::NoUpdate);
     } else if (first_selected != nullptr) {
-        tree_->setCurrentItem(first_selected);
+        tree_->setCurrentItem(
+            first_selected,
+            0,
+            QItemSelectionModel::NoUpdate);
     }
 
     updateVisibilityActions();
