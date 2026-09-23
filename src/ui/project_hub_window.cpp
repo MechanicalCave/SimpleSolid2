@@ -1,0 +1,409 @@
+#include "project_hub_window.hpp"
+
+#include <QAbstractItemView>
+#include <QByteArray>
+#include <QFileDialog>
+#include <QFileInfo>
+#include <QHBoxLayout>
+#include <QInputDialog>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
+#include <QListWidgetItem>
+#include <QMessageBox>
+#include <QPushButton>
+#include <QStackedWidget>
+#include <QString>
+#include <QVBoxLayout>
+#include <QWidget>
+
+#include <string_view>
+#include <utility>
+
+namespace simplesolid2::ui {
+namespace {
+
+std::string toUtf8(const QString& value) {
+    const auto bytes = value.toUtf8();
+    return std::string{bytes.constData(), static_cast<std::size_t>(bytes.size())};
+}
+
+QString fromUtf8(std::string_view value) {
+    return QString::fromUtf8(
+        value.data(),
+        static_cast<qsizetype>(value.size()));
+}
+
+std::filesystem::path toFilesystemPath(const QString& value) {
+#if defined(_WIN32)
+    return std::filesystem::path{value.toStdWString()};
+#else
+    const auto bytes = value.toUtf8();
+    std::u8string utf8;
+    utf8.reserve(static_cast<std::size_t>(bytes.size()));
+    for (const unsigned char ch : bytes) {
+        utf8.push_back(static_cast<char8_t>(ch));
+    }
+    return std::filesystem::path{utf8};
+#endif
+}
+
+QString fromFilesystemPath(const std::filesystem::path& value) {
+#if defined(_WIN32)
+    return QString::fromStdWString(value.wstring());
+#else
+    const auto utf8 = value.generic_u8string();
+    return QString::fromUtf8(
+        reinterpret_cast<const char*>(utf8.data()),
+        static_cast<qsizetype>(utf8.size()));
+#endif
+}
+
+} // namespace
+
+ProjectHubWindow::ProjectHubWindow(
+    std::filesystem::path recent_catalog_path,
+    QWidget* parent)
+    : QMainWindow{parent},
+      controller_{std::move(recent_catalog_path)} {
+    setWindowTitle(QStringLiteral("SimpleSolid 2.0"));
+    resize(860, 560);
+
+    pages_ = new QStackedWidget(this);
+    setCentralWidget(pages_);
+
+    buildHubPage();
+    buildWorkspacePage();
+    pages_->setCurrentWidget(hub_page_);
+    refreshRecent();
+}
+
+void ProjectHubWindow::buildHubPage() {
+    hub_page_ = new QWidget(pages_);
+    auto* root = new QVBoxLayout(hub_page_);
+
+    auto* title = new QLabel(QStringLiteral("SimpleSolid 2.0"), hub_page_);
+    auto font = title->font();
+    font.setPointSize(font.pointSize() + 6);
+    font.setBold(true);
+    title->setFont(font);
+    root->addWidget(title);
+
+    auto* subtitle = new QLabel(
+        QStringLiteral("Project Hub — create, open or reopen a Project."),
+        hub_page_);
+    root->addWidget(subtitle);
+
+    auto* primary_actions = new QHBoxLayout;
+    auto* create_button =
+        new QPushButton(QStringLiteral("Create Project…"), hub_page_);
+    auto* open_button =
+        new QPushButton(QStringLiteral("Open Project…"), hub_page_);
+    primary_actions->addWidget(create_button);
+    primary_actions->addWidget(open_button);
+    primary_actions->addStretch(1);
+    root->addLayout(primary_actions);
+
+    auto* recent_label = new QLabel(QStringLiteral("Recent Projects"), hub_page_);
+    root->addWidget(recent_label);
+
+    recent_list_ = new QListWidget(hub_page_);
+    recent_list_->setSelectionMode(QAbstractItemView::SingleSelection);
+    recent_list_->setAlternatingRowColors(true);
+    root->addWidget(recent_list_, 1);
+
+    auto* recent_actions = new QHBoxLayout;
+    open_recent_button_ =
+        new QPushButton(QStringLiteral("Open"), hub_page_);
+    locate_recent_button_ =
+        new QPushButton(QStringLiteral("Locate…"), hub_page_);
+    remove_recent_button_ =
+        new QPushButton(QStringLiteral("Remove from Recent"), hub_page_);
+    open_recent_button_->setEnabled(false);
+    locate_recent_button_->setEnabled(false);
+    remove_recent_button_->setEnabled(false);
+    recent_actions->addWidget(open_recent_button_);
+    recent_actions->addWidget(locate_recent_button_);
+    recent_actions->addWidget(remove_recent_button_);
+    recent_actions->addStretch(1);
+    root->addLayout(recent_actions);
+
+    hub_status_ = new QLabel(hub_page_);
+    hub_status_->setWordWrap(true);
+    root->addWidget(hub_status_);
+
+    QObject::connect(
+        create_button,
+        &QPushButton::clicked,
+        this,
+        [this] { createProject(); });
+    QObject::connect(
+        open_button,
+        &QPushButton::clicked,
+        this,
+        [this] { openProject(); });
+    QObject::connect(
+        open_recent_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { openSelectedRecent(); });
+    QObject::connect(
+        locate_recent_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { locateSelectedRecent(); });
+    QObject::connect(
+        remove_recent_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { removeSelectedRecent(); });
+    QObject::connect(
+        recent_list_,
+        &QListWidget::itemDoubleClicked,
+        this,
+        [this](QListWidgetItem*) { openSelectedRecent(); });
+    QObject::connect(
+        recent_list_,
+        &QListWidget::itemSelectionChanged,
+        this,
+        [this] {
+            const bool selected = recent_list_->currentItem() != nullptr;
+            open_recent_button_->setEnabled(selected);
+            locate_recent_button_->setEnabled(selected);
+            remove_recent_button_->setEnabled(selected);
+        });
+
+    pages_->addWidget(hub_page_);
+}
+
+void ProjectHubWindow::buildWorkspacePage() {
+    workspace_page_ = new QWidget(pages_);
+    auto* root = new QVBoxLayout(workspace_page_);
+
+    auto* title = new QLabel(QStringLiteral("Workspace"), workspace_page_);
+    auto font = title->font();
+    font.setPointSize(font.pointSize() + 6);
+    font.setBold(true);
+    title->setFont(font);
+    root->addWidget(title);
+
+    auto* note = new QLabel(
+        QStringLiteral(
+            "PH-01 Workspace Shell. CAD documents and modeling are intentionally not implemented yet."),
+        workspace_page_);
+    note->setWordWrap(true);
+    root->addWidget(note);
+
+    workspace_name_ = new QLabel(workspace_page_);
+    workspace_id_ = new QLabel(workspace_page_);
+    workspace_path_ = new QLabel(workspace_page_);
+    workspace_path_->setWordWrap(true);
+
+    root->addWidget(workspace_name_);
+    root->addWidget(workspace_id_);
+    root->addWidget(workspace_path_);
+    root->addStretch(1);
+
+    auto* close_button =
+        new QPushButton(QStringLiteral("Close Project"), workspace_page_);
+    root->addWidget(close_button);
+
+    QObject::connect(
+        close_button,
+        &QPushButton::clicked,
+        this,
+        [this] { closeProject(); });
+
+    pages_->addWidget(workspace_page_);
+}
+
+void ProjectHubWindow::refreshRecent() {
+    recent_list_->clear();
+
+    const auto listed = controller_.recentProjects();
+    if (!listed.ok()) {
+        hub_status_->setText(
+            QStringLiteral("Recent Projects unavailable: ") +
+            fromUtf8(listed.diagnostic.message));
+        return;
+    }
+
+    for (const auto& entry : listed.entries) {
+        const auto text =
+            fromUtf8(entry.display_name) +
+            QStringLiteral("\n") +
+            fromFilesystemPath(entry.workspace_root);
+        auto* item = new QListWidgetItem(text, recent_list_);
+        item->setData(
+            Qt::UserRole,
+            fromUtf8(entry.project_id));
+        item->setToolTip(
+            QStringLiteral("ProjectId: ") + fromUtf8(entry.project_id));
+    }
+
+    if (listed.entries.empty()) {
+        hub_status_->setText(QStringLiteral("No recent Projects."));
+    } else {
+        hub_status_->setText(
+            QStringLiteral("%1 recent Project(s).")
+                .arg(static_cast<qulonglong>(listed.entries.size())));
+    }
+}
+
+void ProjectHubWindow::createProject() {
+    const auto folder = QFileDialog::getExistingDirectory(
+        this,
+        QStringLiteral("Create Project in Folder"));
+    if (folder.isEmpty()) return;
+
+    const auto default_name = QFileInfo{folder}.fileName();
+    bool accepted = false;
+    const auto display_name = QInputDialog::getText(
+        this,
+        QStringLiteral("Create Project"),
+        QStringLiteral("Project name:"),
+        QLineEdit::Normal,
+        default_name,
+        &accepted).trimmed();
+    if (!accepted) return;
+    if (display_name.isEmpty()) {
+        QMessageBox::warning(
+            this,
+            QStringLiteral("Create Project"),
+            QStringLiteral("Project name must not be empty."));
+        return;
+    }
+
+    const auto result = controller_.createProject(
+        toFilesystemPath(folder),
+        toUtf8(display_name));
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        refreshRecent();
+        return;
+    }
+
+    enterWorkspace();
+}
+
+void ProjectHubWindow::openProject() {
+    const auto folder = QFileDialog::getExistingDirectory(
+        this,
+        QStringLiteral("Open SimpleSolid Project"));
+    if (folder.isEmpty()) return;
+
+    const auto result =
+        controller_.openProject(toFilesystemPath(folder));
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        refreshRecent();
+        return;
+    }
+
+    enterWorkspace();
+}
+
+void ProjectHubWindow::openSelectedRecent() {
+    const auto project_id = selectedProjectId();
+    if (project_id.empty()) return;
+
+    const auto result = controller_.openRecent(project_id);
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        refreshRecent();
+        return;
+    }
+
+    enterWorkspace();
+}
+
+void ProjectHubWindow::locateSelectedRecent() {
+    const auto project_id = selectedProjectId();
+    if (project_id.empty()) return;
+
+    const auto folder = QFileDialog::getExistingDirectory(
+        this,
+        QStringLiteral("Locate Project Workspace"));
+    if (folder.isEmpty()) return;
+
+    const auto result = controller_.relocateAndOpenRecent(
+        project_id,
+        toFilesystemPath(folder));
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        refreshRecent();
+        return;
+    }
+
+    enterWorkspace();
+}
+
+void ProjectHubWindow::removeSelectedRecent() {
+    const auto project_id = selectedProjectId();
+    if (project_id.empty()) return;
+
+    if (QMessageBox::question(
+            this,
+            QStringLiteral("Remove from Recent"),
+            QStringLiteral(
+                "Remove this Project from Recent Projects?\n\n"
+                "The Project files will not be modified.")) !=
+        QMessageBox::Yes) {
+        return;
+    }
+
+    const auto result = controller_.removeRecent(project_id);
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+    }
+    refreshRecent();
+}
+
+void ProjectHubWindow::closeProject() {
+    controller_.closeProject();
+    pages_->setCurrentWidget(hub_page_);
+    refreshRecent();
+}
+
+void ProjectHubWindow::enterWorkspace() {
+    const auto* session = controller_.activeSession();
+    if (session == nullptr) {
+        QMessageBox::critical(
+            this,
+            QStringLiteral("Project"),
+            QStringLiteral("No active ProjectSession is available."));
+        return;
+    }
+
+    workspace_name_->setText(
+        QStringLiteral("Project: ") + fromUtf8(session->displayName()));
+    workspace_id_->setText(
+        QStringLiteral("ProjectId: ") + fromUtf8(session->projectId()));
+    workspace_path_->setText(
+        QStringLiteral("Workspace: ") +
+        fromFilesystemPath(session->workspaceRoot()));
+
+    pages_->setCurrentWidget(workspace_page_);
+}
+
+std::string ProjectHubWindow::selectedProjectId() const {
+    const auto* item = recent_list_->currentItem();
+    if (item == nullptr) return {};
+    return toUtf8(item->data(Qt::UserRole).toString());
+}
+
+void ProjectHubWindow::showFailure(
+    const application::internal::ProjectHubDiagnostic& diagnostic) {
+    auto message = fromUtf8(diagnostic.message);
+    if (!diagnostic.path.empty()) {
+        message += QStringLiteral("\n\nPath: ");
+        message += fromFilesystemPath(diagnostic.path);
+    }
+
+    QMessageBox::warning(
+        this,
+        QStringLiteral("SimpleSolid Project"),
+        message);
+}
+
+} // namespace simplesolid2::ui

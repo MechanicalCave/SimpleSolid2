@@ -14,6 +14,10 @@ function global:ss2-status {
     & (Join-Path $global:SS2Root 'ss2.ps1') status
 }
 
+function global:ss2-run {
+    & (Join-Path $global:SS2Root 'ss2.ps1') run
+}
+
 function global:ss2-resume {
     $promptPath = Join-Path $global:SS2Root 'work\RESUME_PROMPT.md'
     if (-not (Test-Path -LiteralPath $promptPath)) {
@@ -35,6 +39,6 @@ function global:ss2-resume {
 Write-Host ""
 Write-Host "=== SS2 PowerShell ==="
 Write-Host "Workspace : $global:SS2Root"
-Write-Host "Commands  : ss2-status, ss2-resume"
+Write-Host "Commands  : ss2-status, ss2-run, ss2-resume"
 Write-Host "Prompt    : already copied to clipboard by START_SS2.cmd"
 Write-Host ""
