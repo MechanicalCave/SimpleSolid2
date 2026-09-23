@@ -489,7 +489,8 @@ public:
 
         reference_objects_.clear();
         grid_objects_.clear();
-        reference_scene_ = {};
+        reference_scene_.references.clear();
+        reference_scene_.grid.reset();
     }
 
     void buildGrid(
