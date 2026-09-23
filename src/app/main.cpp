@@ -7,7 +7,8 @@
 #include <QString>
 #include <QTimer>
 
-#include <cstdlib>\n#include <filesystem>
+#include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <string>
 
