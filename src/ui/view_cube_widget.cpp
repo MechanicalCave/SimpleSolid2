@@ -2,6 +2,7 @@
 
 #include <QGridLayout>
 #include <QPushButton>
+#include <QSizePolicy>
 #include <QString>
 #include <QVBoxLayout>
 
