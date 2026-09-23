@@ -94,7 +94,12 @@ std::string locationKey(const std::filesystem::path& path) {
     auto key = pathToUtf8(normalized.lexically_normal());
 #if defined(_WIN32)
     std::transform(key.begin(), key.end(), key.begin(), [](unsigned char ch) {
-        return static_cast<char>(std::tolower(ch));
+        if (ch >= static_cast<unsigned char>('A') &&
+            ch <= static_cast<unsigned char>('Z')) {
+            return static_cast<char>(ch - static_cast<unsigned char>('A') +
+                                     static_cast<unsigned char>('a'));
+        }
+        return static_cast<char>(ch);
     });
 #endif
     return key;
