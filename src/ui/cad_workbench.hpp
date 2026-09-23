@@ -24,6 +24,7 @@ namespace simplesolid2::ui {
 
 class CadWorkbenchShell;
 class PartDocumentTreeController;
+class PartViewportController;
 
 enum class ProjectCloseDisposition {
     clean,
@@ -90,6 +91,7 @@ private:
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
+    PartViewportController* viewport_controller_{};
 
     QPushButton* new_part_button_{};
     QPushButton* open_part_button_{};
