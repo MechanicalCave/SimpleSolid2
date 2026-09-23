@@ -12,6 +12,11 @@ on:
       - edited
     paths:
       - "src/**"
+      - "docs/**"
+      - "work/**"
+      - "governance/DOCUMENTATION.md"
+      - "AGENTS.md"
+      - "README.md"
       - "tests/**"
       - "scripts/**"
       - "CMakeLists.txt"
