@@ -128,10 +128,13 @@ void PartViewportController::setDocumentSession(
 }
 
 void PartViewportController::clear() {
+    const bool had_document_session =
+        session_ != nullptr;
+
     session_ = nullptr;
     tree_->clear();
 
-    if (viewport_ != nullptr) {
+    if (viewport_ != nullptr && had_document_session) {
         static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));
