@@ -68,6 +68,8 @@ set_tests_properties(ph01.app_smoke PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+find_package(Qt6 6 REQUIRED COMPONENTS Widgets)
+
 add_executable(ph02a_project_hub_selection_ux_test
     project_hub_selection_ux_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
