@@ -399,3 +399,27 @@ add_test(
         -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_workbench_shell_boundaries.cmake
 )
+
+
+add_executable(wb01_part_viewer_projection_test
+    part_viewer_projection_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewer_projection.cpp
+)
+
+target_include_directories(wb01_part_viewer_projection_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(wb01_part_viewer_projection_test
+    PRIVATE
+        simplesolid2_part
+        simplesolid2_viewer
+)
+
+target_compile_features(wb01_part_viewer_projection_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME wb01.part_viewer_projection
+    COMMAND wb01_part_viewer_projection_test
+)
