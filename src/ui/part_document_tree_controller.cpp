@@ -107,6 +107,14 @@ PartDocumentTreeController::PartDocumentTreeController(
 
     QObject::connect(
         tree_,
+        &QTreeWidget::currentItemChanged,
+        this,
+        [this](QTreeWidgetItem*, QTreeWidgetItem*) {
+            notifySelectionChanged();
+        });
+
+    QObject::connect(
+        tree_,
         &QTreeWidget::customContextMenuRequested,
         this,
         [this](const QPoint& position) {
