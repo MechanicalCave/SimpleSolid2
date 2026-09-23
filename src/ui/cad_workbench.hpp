@@ -17,6 +17,8 @@ class QWidget;
 
 namespace simplesolid2::ui {
 
+class CadWorkbenchShell;
+
 enum class ProjectCloseDisposition {
     clean,
     discard,
@@ -71,6 +73,8 @@ private:
 
     application::ProjectSession* session_{};
     std::optional<core::DocumentId> active_document_id_;
+
+    CadWorkbenchShell* shell_{};
 
     QPushButton* new_part_button_{};
     QPushButton* open_part_button_{};
