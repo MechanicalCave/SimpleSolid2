@@ -239,6 +239,16 @@ const DocumentSession* ProjectSession::documentSession(
     return found == open_documents_.end() ? nullptr : found->second.get();
 }
 
+std::vector<core::DocumentId> ProjectSession::openDocumentIds() const {
+    std::vector<core::DocumentId> ids;
+    ids.reserve(open_documents_.size());
+    for (const auto& [key, session] : open_documents_) {
+        static_cast<void>(key);
+        ids.push_back(session->documentId());
+    }
+    return ids;
+}
+
 bool ProjectSession::closeDocument(
     const core::DocumentId& document_id,
     bool discard_unsaved) noexcept {
