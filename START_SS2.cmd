@@ -53,7 +53,7 @@ echo   %SS2_ROOT%
 echo.
 
 if exist "%POWERSHELL%" (
-    start "SS2 Shell" "%POWERSHELL%" -NoLogo -NoExit -NoProfile -ExecutionPolicy Bypass -Command "Set-Location -LiteralPath '%SS2_ROOT%'"
+    start "SS2 Shell" "%POWERSHELL%" -NoLogo -NoExit -NoProfile -ExecutionPolicy Bypass -Command ". '%SS2_ROOT%scripts\ss2-session.ps1' -Root '%SS2_ROOT%'"
 )
 
 endlocal
