@@ -47,5 +47,23 @@ int main() {
     axis.token = {};
     CHECK(!axis.valid());
 
+    GridPresentation grid;
+    CHECK(grid.valid());
+
+    grid.spacing = 0.0;
+    CHECK(!grid.valid());
+
+    grid = {};
+    grid.v_axis = {2.0, 0.0, 0.0};
+    CHECK(!grid.valid());
+
+    ReferenceScene scene;
+    scene.grid = GridPresentation{};
+    scene.references = {point, plane};
+    CHECK(scene.valid());
+
+    scene.references.push_back(point);
+    CHECK(!scene.valid());
+
     return EXIT_SUCCESS;
 }
