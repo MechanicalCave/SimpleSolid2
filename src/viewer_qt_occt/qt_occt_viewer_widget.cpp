@@ -299,14 +299,18 @@ public:
             std::lround(static_cast<double>(logical_y) * dpr));
 
         context_->MoveTo(x, y, view_, true);
-        const auto detected = context_->DetectedInteractive();
 
         std::optional<viewer::PresentationToken> detected_token;
-        if (!detected.IsNull()) {
-            for (const auto& entry : reference_objects_) {
-                if (entry.object == detected) {
-                    detected_token = entry.token;
-                    break;
+        if (context_->HasDetected()) {
+            const auto detected =
+                context_->DetectedInteractive();
+
+            if (!detected.IsNull()) {
+                for (const auto& entry : reference_objects_) {
+                    if (entry.object == detected) {
+                        detected_token = entry.token;
+                        break;
+                    }
                 }
             }
         }
