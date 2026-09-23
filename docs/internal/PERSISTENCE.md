@@ -26,64 +26,53 @@ Metadata initialization is fail-closed and uses staged publication. Metadata loa
 <!-- section-id: internal.persistence.part-document -->
 ## Native Part Documents
 
-A native top-level Part is stored as:
+A native top-level Part is stored as `*.ss2part`.
 
-```text
-*.ss2part
-```
+The current private schema starts with the `SS2PART` signature. Schema version 2 persists native document kind, DocumentId, Number, Title, Description, Engineering Revision and the built-in Origin visibility mask.
 
-The current private schema starts with the `SS2PART` signature and a schema version. It persists:
+The schema does not persist ProjectId. Workspace membership is physical/runtime context, not an owner ProjectId embedded in each Part.
 
-- native document kind;
-- DocumentId;
-- Number;
-- Title;
-- Description;
-- Engineering Revision.
+`DocumentRevision` is an in-memory synchronization counter and is not serialized.
 
-The current schema does not persist ProjectId. Workspace membership is therefore physical/runtime context, not an owner ProjectId embedded in each Part.
+Schema version 1 remains readable. Loading v1 assigns deterministic built-in Origin visibility defaults in memory and does not rewrite the source file. A successful later Save writes current schema v2.
 
-`DocumentRevision` is a technical in-memory synchronization counter in the current implementation and is not part of schema version 1.
-
-Unsupported schema versions, malformed fields, invalid DocumentIds and wrong declared document kind fail closed with structured diagnostics.
+Unsupported future schemas, malformed fields, unsupported visibility bits, invalid DocumentIds and wrong declared document kind fail closed with structured diagnostics.
 
 <!-- section-id: internal.persistence.atomic-save -->
 ## Atomic Part publication and Save
 
 New Part creation writes staged bytes and publishes only if the target path does not already exist.
 
-Save writes a temporary sibling file and replaces the target only after the complete serialized state has been written. On the Windows implementation, replacement uses an OS replace operation rather than delete-then-rename.
+Save writes a temporary sibling file and replaces the target only after the complete serialized state has been written. On Windows, replacement uses an OS replace operation rather than delete-then-rename.
 
-The DocumentSession advances its save checkpoint only after successful persistence. If replacement fails, the in-memory authored state remains dirty and the previous durable Part remains the authoritative file.
+The DocumentSession advances its save checkpoint only after successful persistence. If replacement fails, the in-memory authored state remains dirty and the previous durable Part remains authoritative.
 
 <!-- section-id: internal.persistence.recent -->
 ## Recent Projects catalog
 
 Recent Projects is persisted outside the Project as application/user state.
 
-The normal application selects its state root through Qt `QStandardPaths::AppLocalDataLocation` and stores:
+The normal application selects its state root through Qt `QStandardPaths::AppLocalDataLocation` and stores `recent-projects-v1.txt`.
 
-```text
-recent-projects-v1.txt
-```
-
-The catalog has a private versioned text format with a magic header and schema version. Each entry stores ProjectId, DisplayName and the remembered absolute Workspace path.
+Each entry stores ProjectId, DisplayName and the remembered absolute Workspace path.
 
 <!-- section-id: internal.persistence.derived-state -->
 ## Runtime-only and derived state
 
 The following state is not serialized as Part authored state:
 
-- ProjectSession;
-- DocumentSession;
-- Undo/Redo history;
-- save-history cursor;
-- Workspace discovery index;
-- document conflict state;
+- ProjectSession and DocumentSession;
+- Undo/Redo history and save-history cursor;
+- Workspace discovery/conflict state;
+- active Document tab;
+- camera / projection / pan / orbit / zoom;
+- selected set and primary selection;
+- reference grid runtime presentation;
 - Qt objects;
-- Viewer state;
-- OCCT/native geometry handles;
+- Viewer provider objects and OCCT handles;
 - evaluated B-Rep or tessellation.
+
+Persistent user visibility of built-in Origin references is intentionally **not** in this runtime-only list; it is authored presentation state in schema v2.
 
 Recent availability is also derived at runtime.
 
@@ -99,12 +88,4 @@ If multiple native Part files declare one DocumentId, discovery records an ident
 <!-- section-id: internal.persistence.non-goals -->
 ## Current non-goals
 
-The current persistence layer does not provide:
-
-- Project synchronization or semantic merge;
-- cloud locking;
-- Duplicate / Save as New Project;
-- Part Save As / Save Copy As UI;
-- identity-conflict repair;
-- Assembly or Drawing persistence;
-- geometry or Viewer persistence.
+The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing persistence, modeled geometry persistence, or camera/selection persistence between application runs.
