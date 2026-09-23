@@ -17,6 +17,7 @@ $map = @{
     "build"     = "scripts\ss2-build.ps1"
     "run"       = "scripts\ss2-run.ps1"
     "test"      = "scripts\ss2-test.ps1"
+    "docs"      = "scripts\ss2-docs.ps1"
     "clean"     = "scripts\ss2-clean.ps1"
     "status"    = "scripts\ss2-status.ps1"
     "git-init"  = "scripts\ss2-git-init.ps1"
