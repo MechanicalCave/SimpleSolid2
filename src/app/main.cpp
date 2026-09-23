@@ -1,5 +1,7 @@
 #include "project_hub_window.hpp"
 
+#include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
+
 #include <QApplication>
 #include <QCoreApplication>
 #include <QDir>
@@ -11,6 +13,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <utility>
 
 namespace {
 
@@ -67,7 +70,19 @@ int main(int argc, char* argv[]) {
             "recent-projects-v1.txt";
     }
 
-    simplesolid2::ui::ProjectHubWindow window{recent_catalog};
+    simplesolid2::ui::ViewportFactory viewport_factory =
+        [](QWidget* parent) {
+            auto* widget =
+                new simplesolid2::viewer_qt_occt::QtOcctViewerWidget{
+                    parent};
+            return simplesolid2::ui::ViewportSurface{
+                widget,
+                widget};
+        };
+
+    simplesolid2::ui::ProjectHubWindow window{
+        recent_catalog,
+        std::move(viewport_factory)};
     window.show();
 
     if (smoke_test) {
