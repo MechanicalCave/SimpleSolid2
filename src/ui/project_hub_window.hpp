@@ -16,7 +16,7 @@ class QWidget;
 
 namespace simplesolid2::ui {
 
-class PartWorkspacePanel;
+class CadWorkbench;
 
 class ProjectHubWindow final : public QMainWindow {
 public:
@@ -60,7 +60,7 @@ private:
     QLabel* workspace_name_{};
     QLabel* workspace_id_{};
     QLabel* workspace_path_{};
-    PartWorkspacePanel* part_workspace_panel_{};
+    CadWorkbench* cad_workbench_{};
 };
 
 } // namespace simplesolid2::ui

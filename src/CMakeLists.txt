@@ -116,7 +116,8 @@ target_compile_features(simplesolid2_viewer_qt_occt PUBLIC cxx_std_20)
 
 add_executable(simplesolid2
     app/main.cpp
-    ui/part_workspace_panel.cpp
+    ui/cad_workbench.cpp
+    ui/cad_workbench_shell.cpp
     ui/project_creation_dialog.cpp
     ui/project_hub_window.cpp
 )
