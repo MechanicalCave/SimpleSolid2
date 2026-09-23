@@ -101,6 +101,8 @@ public:
     [[nodiscard]] const DocumentSession* documentSession(
         const core::DocumentId& document_id) const noexcept;
 
+    [[nodiscard]] std::vector<core::DocumentId> openDocumentIds() const;
+
     [[nodiscard]] bool closeDocument(
         const core::DocumentId& document_id,
         bool discard_unsaved = false) noexcept;
