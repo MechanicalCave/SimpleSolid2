@@ -161,7 +161,7 @@ void ProjectHubWindow::buildHubPage() {
         recent_list_,
         &QListWidget::itemDoubleClicked,
         this,
-        [this](QListWidgetItem*, int) { openSelectedRecent(); });
+        [this](QListWidgetItem*) { openSelectedRecent(); });
     QObject::connect(
         recent_list_,
         &QListWidget::itemSelectionChanged,
