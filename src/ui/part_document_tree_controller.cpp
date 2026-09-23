@@ -229,12 +229,26 @@ void PartDocumentTreeController::rebuild(
 }
 
 void PartDocumentTreeController::updateVisibilityActions() {
-    const bool applicable =
-        session_ != nullptr &&
-        selectionContainsOnlyBuiltinReferences();
+    if (session_ == nullptr ||
+        !selectionContainsOnlyBuiltinReferences()) {
+        show_action_->setEnabled(false);
+        hide_action_->setEnabled(false);
+        return;
+    }
 
-    show_action_->setEnabled(applicable);
-    hide_action_->setEnabled(applicable);
+    bool any_visible = false;
+    bool any_hidden = false;
+
+    for (const auto role : selectedBuiltinReferences()) {
+        if (session_->document().builtinReferenceVisible(role)) {
+            any_visible = true;
+        } else {
+            any_hidden = true;
+        }
+    }
+
+    show_action_->setEnabled(any_hidden);
+    hide_action_->setEnabled(any_visible);
 }
 
 void PartDocumentTreeController::showContextMenu(
