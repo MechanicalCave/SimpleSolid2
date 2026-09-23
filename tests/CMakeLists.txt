@@ -379,3 +379,11 @@ add_executable(wb01_builtin_reference_test
 )
 target_link_libraries(wb01_builtin_reference_test PRIVATE simplesolid2_core)
 add_test(NAME wb01.builtin_reference COMMAND wb01_builtin_reference_test)
+
+
+add_test(
+    NAME wb01.workbench_shell_boundaries
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_workbench_shell_boundaries.cmake
+)
