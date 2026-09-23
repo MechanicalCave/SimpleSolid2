@@ -1,6 +1,7 @@
 #include "project_hub_controller.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <utility>
 
 namespace simplesolid2::application::internal {
@@ -52,6 +53,49 @@ ProjectHubResult sessionFailure(const ProjectSessionDiagnostic& diagnostic) {
         diagnostic.path,
         diagnostic.metadata_code,
         diagnostic.code);
+}
+
+bool resolveExistingParentLocation(
+    const std::filesystem::path& input,
+    std::filesystem::path& output) {
+    if (input.empty()) return false;
+
+    std::error_code ec;
+    auto absolute = std::filesystem::absolute(input, ec);
+    if (ec) return false;
+
+    auto canonical = std::filesystem::weakly_canonical(absolute, ec);
+    if (ec) return false;
+
+    if (!std::filesystem::exists(canonical, ec) || ec) return false;
+    if (!std::filesystem::is_directory(canonical, ec) || ec) return false;
+
+    output = canonical.lexically_normal();
+    return true;
+}
+
+bool isSingleProjectFolderName(const std::filesystem::path& folder) {
+    if (folder.empty() || folder.is_absolute() || folder.has_root_path()) {
+        return false;
+    }
+
+    if (!folder.parent_path().empty() || folder.filename() != folder) {
+        return false;
+    }
+
+    const auto generic = folder.generic_u8string();
+    if (generic == u8"." || generic == u8"..") return false;
+    if (generic.find(u8'/') != std::u8string::npos ||
+        generic.find(u8'\\') != std::u8string::npos) {
+        return false;
+    }
+
+    return true;
+}
+
+void removeOwnedTree(const std::filesystem::path& path) noexcept {
+    std::error_code ec;
+    std::filesystem::remove_all(path, ec);
 }
 
 } // namespace
@@ -141,6 +185,135 @@ ProjectHubResult ProjectHubController::createProject(
     }
 
     return adoptOpened(ProjectSession::open(workspace_root));
+}
+
+ProjectHubResult ProjectHubController::createProjectInLocation(
+    const std::filesystem::path& parent_location,
+    const std::filesystem::path& project_folder,
+    std::string display_name) {
+    if (hasActiveProject()) return activeProjectFailure();
+
+    if (display_name.empty()) {
+        return failure(
+            ProjectHubErrorCode::metadata_failure,
+            "Project name must not be empty",
+            parent_location,
+            ProjectMetadataErrorCode::invalid_display_name);
+    }
+
+    std::filesystem::path parent;
+    if (!resolveExistingParentLocation(parent_location, parent)) {
+        return failure(
+            ProjectHubErrorCode::invalid_project_location,
+            "Project Location must be an existing directory",
+            parent_location);
+    }
+
+    if (!isSingleProjectFolderName(project_folder)) {
+        return failure(
+            ProjectHubErrorCode::invalid_project_folder,
+            "Project folder must be one child folder name",
+            project_folder);
+    }
+
+    const auto target = parent / project_folder;
+    std::error_code ec;
+    const bool target_exists = std::filesystem::exists(target, ec);
+    if (ec) {
+        return failure(
+            ProjectHubErrorCode::project_creation_failure,
+            "Unable to inspect requested Project folder",
+            target);
+    }
+    if (target_exists) {
+        return failure(
+            ProjectHubErrorCode::project_folder_exists,
+            "Requested Project folder already exists",
+            target);
+    }
+
+    std::filesystem::path staging;
+    const auto seed = std::chrono::high_resolution_clock::now()
+                          .time_since_epoch()
+                          .count();
+
+    bool staging_created = false;
+    for (unsigned attempt = 0; attempt < 64U; ++attempt) {
+        staging = parent /
+                  (".simplesolid-create-" +
+                   std::to_string(seed) + "-" +
+                   std::to_string(attempt));
+
+        ec.clear();
+        if (std::filesystem::create_directory(staging, ec)) {
+            staging_created = true;
+            break;
+        }
+        if (ec) {
+            return failure(
+                ProjectHubErrorCode::project_creation_failure,
+                "Unable to create temporary Project Workspace",
+                staging);
+        }
+    }
+
+    if (!staging_created) {
+        return failure(
+            ProjectHubErrorCode::project_creation_failure,
+            "Unable to reserve a temporary Project Workspace",
+            parent);
+    }
+
+    auto initialized =
+        metadata_service_.initialize(staging, std::move(display_name));
+    if (!initialized.ok()) {
+        removeOwnedTree(staging);
+        return failure(
+            ProjectHubErrorCode::metadata_failure,
+            std::move(initialized.diagnostic.message),
+            target,
+            initialized.diagnostic.code);
+    }
+
+    ec.clear();
+    if (std::filesystem::exists(target, ec)) {
+        removeOwnedTree(staging);
+        if (ec) {
+            return failure(
+                ProjectHubErrorCode::project_creation_failure,
+                "Unable to recheck requested Project folder",
+                target);
+        }
+        return failure(
+            ProjectHubErrorCode::project_folder_exists,
+            "Requested Project folder appeared during Project creation",
+            target);
+    }
+    if (ec) {
+        removeOwnedTree(staging);
+        return failure(
+            ProjectHubErrorCode::project_creation_failure,
+            "Unable to recheck requested Project folder",
+            target);
+    }
+
+    ec.clear();
+    std::filesystem::rename(staging, target, ec);
+    if (ec) {
+        removeOwnedTree(staging);
+        return failure(
+            ProjectHubErrorCode::project_creation_failure,
+            "Unable to publish the new Project Workspace",
+            target);
+    }
+
+    auto adopted = adoptOpened(ProjectSession::open(target));
+    if (!adopted.ok()) {
+        removeOwnedTree(target);
+        return adopted;
+    }
+
+    return success();
 }
 
 ProjectHubResult ProjectHubController::openProject(
