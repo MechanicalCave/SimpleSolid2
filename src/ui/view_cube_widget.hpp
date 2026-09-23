@@ -5,6 +5,7 @@
 #include <QFrame>
 
 class QPushButton;
+class QString;
 
 namespace simplesolid2::ui {
 
