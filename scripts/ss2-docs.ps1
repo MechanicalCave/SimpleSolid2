@@ -37,6 +37,7 @@ Test-RequiredStructure $repoRoot $preErrors $false
 Test-MetadataAndPairs $repoRoot $preErrors
 Test-LocalMarkdownLinks $repoRoot $preErrors
 Test-DocumentationImpact $repoRoot $preErrors
+Test-BrowserContract $repoRoot $preErrors
 if ($preErrors.Count -gt 0) {
     foreach ($error in $preErrors) { Write-Error $error }
     Write-Error "Cannot generate Browser while canonical documentation is invalid."
