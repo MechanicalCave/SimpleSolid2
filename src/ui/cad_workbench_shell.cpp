@@ -105,7 +105,7 @@ void CadWorkbenchShell::replaceContent(
 
     if (current != nullptr) {
         layout.removeWidget(current);
-        current->setParent(nullptr);
+        current->deleteLater();
     }
 
     current = replacement;
