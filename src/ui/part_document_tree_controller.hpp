@@ -5,10 +5,13 @@
 #include <QObject>
 
 #include <functional>
+#include <optional>
+#include <utility>
 #include <vector>
 
 class QAction;
 class QPoint;
+class QString;
 class QTreeWidget;
 class QTreeWidgetItem;
 
