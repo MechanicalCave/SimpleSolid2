@@ -674,8 +674,9 @@ Weryfikacja musi udowodnić co najmniej:
 
 ## Documentation impact
 
-Internal docs: required  
-User/Product docs PL/EN: required
+Internal docs: required
+User/Product docs: required
+Reason: WB-01 materialnie zmienia Workspace, wprowadza pierwszy realny CAD Viewport oraz nowy Workbench/Origin/visibility UX wymagający aktualizacji internal i PL/EN product documentation.
 
 WB-01 materialnie zmienia Workspace i wprowadza pierwszy realny CAD Viewport.
 
