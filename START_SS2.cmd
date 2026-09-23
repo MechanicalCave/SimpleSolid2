@@ -34,15 +34,15 @@ if not exist "%SS2_PROMPT%" (
     exit /b 1
 )
 
-if exist "%CLIP%" (
-    type "%SS2_PROMPT%" | "%CLIP%"
+if exist "%POWERSHELL%" (
+    "%POWERSHELL%" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "$text=[IO.File]::ReadAllText($env:SS2_PROMPT,[Text.Encoding]::UTF8); Set-Clipboard -Value $text"
     if errorlevel 1 (
         echo [WARN] Could not copy resume prompt to clipboard.
     ) else (
         echo [OK] New-context prompt copied to clipboard.
     )
 ) else (
-    echo [WARN] clip.exe not found. Open manually:
+    echo [WARN] Windows PowerShell not found. Open manually:
     echo        %SS2_PROMPT%
 )
 
