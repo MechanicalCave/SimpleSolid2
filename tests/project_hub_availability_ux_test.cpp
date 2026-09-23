@@ -73,6 +73,8 @@ void verifyMissingWorkspacePresentation(
     const auto catalog = root / "state" / "recent-projects-v1.txt";
 
     seedRecentProject(workspace, catalog);
+    const auto remembered_workspace =
+        std::filesystem::weakly_canonical(workspace);
     std::filesystem::rename(workspace, moved);
 
     ProjectHubWindow window{catalog};
@@ -120,8 +122,7 @@ void verifyMissingWorkspacePresentation(
     const auto persisted = recent.list();
     CHECK(persisted.ok());
     CHECK(persisted.entries.size() == 1U);
-    CHECK(persisted.entries[0].workspace_root ==
-          std::filesystem::weakly_canonical(workspace));
+    CHECK(persisted.entries[0].workspace_root == remembered_workspace);
 }
 
 } // namespace
