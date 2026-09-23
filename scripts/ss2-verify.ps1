@@ -46,6 +46,17 @@ if (Test-Path $envFile) {
 
 if (-not $fail) {
     Write-Host ""
+    & (Join-Path $PSScriptRoot "ss2-docs.ps1") -Check -SelfTest
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "Documentation verification failed."
+        $fail = $true
+    } else {
+        Write-Host "[OK] Documentation verification passed"
+    }
+}
+
+if (-not $fail) {
+    Write-Host ""
     Write-Host "Running minimal CMake configure..."
     & (Join-Path $PSScriptRoot "ss2-configure.ps1")
     if ($LASTEXITCODE -ne 0) {
