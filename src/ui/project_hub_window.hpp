@@ -1,6 +1,7 @@
 #pragma once
 
 #include "project_hub_controller.hpp"
+#include "viewport_surface.hpp"
 
 #include <QMainWindow>
 
@@ -22,6 +23,11 @@ class ProjectHubWindow final : public QMainWindow {
 public:
     explicit ProjectHubWindow(
         std::filesystem::path recent_catalog_path,
+        QWidget* parent = nullptr);
+
+    ProjectHubWindow(
+        std::filesystem::path recent_catalog_path,
+        ViewportFactory viewport_factory,
         QWidget* parent = nullptr);
 
 protected:
@@ -46,6 +52,7 @@ private:
         const application::internal::ProjectHubDiagnostic& diagnostic);
 
     application::internal::ProjectHubController controller_;
+    ViewportFactory viewport_factory_;
 
     QStackedWidget* pages_{};
     QWidget* hub_page_{};

@@ -104,7 +104,13 @@ QString partDisplayName(const application::DocumentSession& session) {
 } // namespace
 
 CadWorkbench::CadWorkbench(QWidget* parent)
-    : QWidget{parent} {
+    : CadWorkbench{ViewportFactory{}, parent} {}
+
+CadWorkbench::CadWorkbench(
+    ViewportFactory viewport_factory,
+    QWidget* parent)
+    : QWidget{parent},
+      viewport_factory_{std::move(viewport_factory)} {
     buildUi();
     clearProjectSession();
 }
@@ -186,23 +192,46 @@ void CadWorkbench::buildUi() {
                           "No Origin visibility change."));
         });
 
-    auto* editor_frame = new QFrame(shell_);
-    editor_frame->setObjectName(QStringLiteral("editorSurface"));
-    editor_frame->setFrameShape(QFrame::StyledPanel);
-    auto* editor_layout = new QVBoxLayout(editor_frame);
+    ViewportSurface viewport_surface;
+    if (viewport_factory_) {
+        viewport_surface = viewport_factory_(shell_);
+    }
 
-    auto* editor_label = new QLabel(
-        QStringLiteral(
-            "3D Document View\n"
-            "Viewer presentation is connected in a later WB-01 slice."),
-        editor_frame);
-    editor_label->setObjectName(
-        QStringLiteral("editorSurfacePlaceholder"));
-    editor_label->setAlignment(Qt::AlignCenter);
-    editor_layout->addWidget(editor_label, 1);
+    if (viewport_surface.valid()) {
+        editor_surface_ = viewport_surface.widget;
+        viewport_ = viewport_surface.viewport;
+        editor_surface_->setObjectName(
+            QStringLiteral("editorSurface"));
+        if (editor_surface_->parentWidget() != shell_) {
+            editor_surface_->setParent(shell_);
+        }
+        shell_->setEditorSurface(editor_surface_);
+    } else {
+        if (viewport_surface.widget != nullptr) {
+            viewport_surface.widget->deleteLater();
+        }
 
-    editor_surface_ = editor_frame;
-    shell_->setEditorSurface(editor_surface_);
+        auto* editor_frame = new QFrame(shell_);
+        editor_frame->setObjectName(
+            QStringLiteral("editorSurface"));
+        editor_frame->setFrameShape(QFrame::StyledPanel);
+        auto* editor_layout =
+            new QVBoxLayout(editor_frame);
+
+        auto* editor_label = new QLabel(
+            QStringLiteral(
+                "3D Document View\n"
+                "Native Viewer surface is unavailable."),
+            editor_frame);
+        editor_label->setObjectName(
+            QStringLiteral("editorSurfacePlaceholder"));
+        editor_label->setAlignment(Qt::AlignCenter);
+        editor_layout->addWidget(editor_label, 1);
+
+        editor_surface_ = editor_frame;
+        viewport_ = nullptr;
+        shell_->setEditorSurface(editor_surface_);
+    }
 
     auto* properties_content = new QWidget(shell_);
     properties_content->setObjectName(
@@ -330,6 +359,7 @@ void CadWorkbench::setProjectSession(
     application::ProjectSession* session) {
     session_ = session;
     active_document_id_.reset();
+    document_view_states_.clear();
     syncOpenTabs();
     refreshWorkspaceIndex();
 
@@ -346,6 +376,7 @@ void CadWorkbench::setProjectSession(
 void CadWorkbench::clearProjectSession() {
     session_ = nullptr;
     active_document_id_.reset();
+    document_view_states_.clear();
 
     {
         const QSignalBlocker blocked{document_tabs_};
@@ -458,6 +489,8 @@ bool CadWorkbench::activateDocument(
 }
 
 void CadWorkbench::activateTab(int index) {
+    captureActiveViewState();
+
     const auto id = tabDocumentId(index);
     if (!id || session_ == nullptr ||
         session_->documentSession(*id) == nullptr) {
@@ -467,6 +500,7 @@ void CadWorkbench::activateTab(int index) {
     }
 
     active_document_id_ = *id;
+    restoreActiveViewState();
     refreshActiveContext();
 }
 
@@ -846,6 +880,9 @@ void CadWorkbench::closeTab(int index) {
         return;
     }
 
+    document_view_states_.erase(
+        std::string{id->value()});
+
     const bool closing_active =
         active_document_id_.has_value() &&
         *active_document_id_ == *id;
@@ -934,6 +971,42 @@ void CadWorkbench::clearActiveContext() {
 
     tree_controller_->clear();
     syncActionState();
+}
+
+void CadWorkbench::captureActiveViewState() {
+    if (viewport_ == nullptr ||
+        !active_document_id_.has_value()) {
+        return;
+    }
+
+    const auto state = viewport_->cameraState();
+    if (!state) return;
+
+    document_view_states_.insert_or_assign(
+        std::string{active_document_id_->value()},
+        *state);
+}
+
+void CadWorkbench::restoreActiveViewState() {
+    if (viewport_ == nullptr ||
+        !active_document_id_.has_value()) {
+        return;
+    }
+
+    const auto key =
+        std::string{active_document_id_->value()};
+    const auto found =
+        document_view_states_.find(key);
+
+    if (found != document_view_states_.end()) {
+        static_cast<void>(
+            viewport_->setCameraState(found->second));
+        return;
+    }
+
+    viewer::CameraState initial;
+    static_cast<void>(
+        viewport_->setCameraState(initial));
 }
 
 void CadWorkbench::syncActionState() {

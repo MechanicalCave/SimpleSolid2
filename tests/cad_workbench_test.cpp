@@ -10,6 +10,7 @@
 #include <QPushButton>
 #include <QTabBar>
 #include <QTreeWidget>
+#include <QWidget>
 
 #include <cstdlib>
 #include <filesystem>
@@ -29,6 +30,57 @@ void check(bool value, const char* expression, int line) {
 }
 
 #define CHECK(expr) check(static_cast<bool>(expr), #expr, __LINE__)
+
+class TestViewportWidget final
+    : public QWidget,
+      public viewer::IDocumentViewport {
+public:
+    explicit TestViewportWidget(QWidget* parent = nullptr)
+        : QWidget{parent} {}
+
+    [[nodiscard]] std::optional<viewer::CameraState>
+    cameraState() const override {
+        return state_;
+    }
+
+    bool setCameraState(
+        const viewer::CameraState& state) override {
+        state_ = state;
+        return true;
+    }
+
+    bool setStandardView(
+        viewer::StandardView view) override {
+        const auto next =
+            viewer::cameraForStandardView(state_, view);
+        if (!next) return false;
+        state_ = *next;
+        return true;
+    }
+
+    bool setProjection(
+        viewer::CameraProjection projection) override {
+        const auto next =
+            viewer::cameraWithProjection(
+                state_,
+                projection);
+        if (!next) return false;
+        state_ = *next;
+        return true;
+    }
+
+    void fitAll() override {
+        ++fit_all_count_;
+    }
+
+    [[nodiscard]] int fitAllCount() const noexcept {
+        return fit_all_count_;
+    }
+
+private:
+    viewer::CameraState state_;
+    int fit_all_count_{};
+};
 
 struct TempDirectory final {
     std::filesystem::path path;
@@ -101,8 +153,17 @@ int main(int argc, char* argv[]) {
     CHECK(reopened_second.ok());
     CHECK(opened.session->openDocumentIds().size() == 2U);
 
-    ui::CadWorkbench workbench;
+    TestViewportWidget* viewport = nullptr;
+    ui::CadWorkbench workbench{
+        [&viewport](QWidget* parent) {
+            viewport =
+                new TestViewportWidget{parent};
+            return ui::ViewportSurface{
+                viewport,
+                viewport};
+        }};
     workbench.setProjectSession(&*opened.session);
+    CHECK(viewport != nullptr);
 
     auto* tabs =
         workbench.findChild<QTabBar*>(
@@ -159,6 +220,50 @@ int main(int argc, char* argv[]) {
     CHECK(*workbench.activeDocumentId() == first_id);
     CHECK(tabs->count() == 2);
     CHECK(title->text() == QStringLiteral("Drive Shaft"));
+
+    viewer::CameraState first_camera;
+    first_camera.eye = {20.0, -10.0, 15.0};
+    first_camera.target = {1.0, 2.0, 3.0};
+    first_camera.up = {0.0, 0.0, 1.0};
+    first_camera.projection =
+        viewer::CameraProjection::perspective;
+    first_camera.scale = 42.0;
+    CHECK(viewport->setCameraState(first_camera));
+
+    CHECK(workbench.activateDocument(second_id));
+    CHECK(*workbench.activeDocumentId() == second_id);
+    CHECK(viewport->cameraState().has_value());
+    CHECK(*viewport->cameraState() == viewer::CameraState{});
+
+    viewer::CameraState second_camera;
+    second_camera.eye = {-12.0, -18.0, 9.0};
+    second_camera.target = {0.0, 0.0, 0.0};
+    second_camera.up = {0.0, 0.0, 1.0};
+    second_camera.projection =
+        viewer::CameraProjection::orthographic;
+    second_camera.scale = 88.0;
+    CHECK(viewport->setCameraState(second_camera));
+
+    CHECK(workbench.activateDocument(first_id));
+    CHECK(viewport->cameraState().has_value());
+    CHECK(*viewport->cameraState() == first_camera);
+
+    CHECK(workbench.activateDocument(second_id));
+    CHECK(viewport->cameraState().has_value());
+    CHECK(*viewport->cameraState() == second_camera);
+
+    CHECK(workbench.activateDocument(first_id));
+    CHECK(viewport->cameraState().has_value());
+    CHECK(*viewport->cameraState() == first_camera);
+
+    auto* first_session_for_view =
+        opened.session->documentSession(first_id);
+    auto* second_session_for_view =
+        opened.session->documentSession(second_id);
+    CHECK(first_session_for_view != nullptr);
+    CHECK(second_session_for_view != nullptr);
+    CHECK(!first_session_for_view->needsSave());
+    CHECK(!second_session_for_view->needsSave());
 
     CHECK(tree->topLevelItemCount() == 1);
     auto* root = tree->topLevelItem(0);

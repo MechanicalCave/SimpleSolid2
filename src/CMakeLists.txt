@@ -132,6 +132,8 @@ target_include_directories(simplesolid2
 target_link_libraries(simplesolid2
     PRIVATE
         simplesolid2_application
+        simplesolid2_viewer
+        simplesolid2_viewer_qt_occt
         Qt6::Widgets
 )
 

@@ -88,6 +88,7 @@ target_include_directories(ph02a_project_hub_selection_ux_test
 target_link_libraries(ph02a_project_hub_selection_ux_test
     PRIVATE
         simplesolid2_application
+        simplesolid2_viewer
         Qt6::Widgets
 )
 
@@ -141,6 +142,7 @@ target_include_directories(ph02b_project_hub_availability_ux_test
 target_link_libraries(ph02b_project_hub_availability_ux_test
     PRIVATE
         simplesolid2_application
+        simplesolid2_viewer
         Qt6::Widgets
 )
 
@@ -325,6 +327,7 @@ target_include_directories(wb01_cad_workbench_test
 target_link_libraries(wb01_cad_workbench_test
     PRIVATE
         simplesolid2_application
+        simplesolid2_viewer
         Qt6::Widgets
 )
 

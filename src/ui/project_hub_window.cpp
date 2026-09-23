@@ -82,8 +82,18 @@ QString availabilityLabel(
 ProjectHubWindow::ProjectHubWindow(
     std::filesystem::path recent_catalog_path,
     QWidget* parent)
+    : ProjectHubWindow{
+          std::move(recent_catalog_path),
+          ViewportFactory{},
+          parent} {}
+
+ProjectHubWindow::ProjectHubWindow(
+    std::filesystem::path recent_catalog_path,
+    ViewportFactory viewport_factory,
+    QWidget* parent)
     : QMainWindow{parent},
-      controller_{std::move(recent_catalog_path)} {
+      controller_{std::move(recent_catalog_path)},
+      viewport_factory_{std::move(viewport_factory)} {
     setWindowTitle(QStringLiteral("SimpleSolid 2.0"));
     resize(1280, 800);
 
@@ -213,7 +223,8 @@ void ProjectHubWindow::buildWorkspacePage() {
     root->addWidget(workspace_id_);
     root->addWidget(workspace_path_);
 
-    cad_workbench_ = new CadWorkbench(workspace_page_);
+    cad_workbench_ =
+        new CadWorkbench(viewport_factory_, workspace_page_);
     cad_workbench_->setObjectName(QStringLiteral("cadWorkbench"));
     root->addWidget(cad_workbench_, 1);
 

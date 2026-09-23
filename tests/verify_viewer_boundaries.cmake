@@ -28,3 +28,27 @@ foreach(FILE_PATH IN LISTS DOMAIN_SOURCES)
     endif()
   endforeach()
 endforeach()
+
+
+file(GLOB_RECURSE WORKBENCH_UI_SOURCES
+    "${SOURCE_ROOT}/src/ui/*")
+
+foreach(FILE_PATH IN LISTS WORKBENCH_UI_SOURCES)
+    if(IS_DIRECTORY "${FILE_PATH}")
+        continue()
+    endif()
+    file(READ "${FILE_PATH}" CONTENT)
+    foreach(TOKEN IN ITEMS
+            "viewer_qt_occt"
+            "QtOcctViewerWidget"
+            "TopoDS_"
+            "AIS_"
+            "V3d_"
+            "Graphic3d_")
+        string(FIND "${CONTENT}" "${TOKEN}" POSITION)
+        if(NOT POSITION EQUAL -1)
+            message(FATAL_ERROR
+                "Workbench UI leaks concrete Viewer provider token '${TOKEN}': ${FILE_PATH}")
+        endif()
+    endforeach()
+endforeach()
