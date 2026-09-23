@@ -1,11 +1,16 @@
 #pragma once
 
 #include <simplesolid2/application/project_session.hpp>
+#include <simplesolid2/viewer/camera_state.hpp>
+
+#include "viewport_surface.hpp"
 
 #include <QWidget>
 
 #include <filesystem>
 #include <optional>
+#include <string>
+#include <unordered_map>
 
 class QLabel;
 class QLineEdit;
@@ -29,6 +34,9 @@ enum class ProjectCloseDisposition {
 class CadWorkbench final : public QWidget {
 public:
     explicit CadWorkbench(QWidget* parent = nullptr);
+    CadWorkbench(
+        ViewportFactory viewport_factory,
+        QWidget* parent = nullptr);
 
     void setProjectSession(application::ProjectSession* session);
     void clearProjectSession();
@@ -59,6 +67,8 @@ private:
 
     void refreshActiveContext();
     void clearActiveContext();
+    void captureActiveViewState();
+    void restoreActiveViewState();
     void syncActionState();
     void updateTabPresentation(const core::DocumentId& document_id);
 
@@ -73,6 +83,10 @@ private:
 
     application::ProjectSession* session_{};
     std::optional<core::DocumentId> active_document_id_;
+    ViewportFactory viewport_factory_;
+    viewer::IDocumentViewport* viewport_{};
+    std::unordered_map<std::string, viewer::CameraState>
+        document_view_states_;
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
