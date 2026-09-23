@@ -21,6 +21,10 @@ enum class ProjectHubErrorCode {
     recent_failure,
     recent_entry_not_found,
     recent_identity_mismatch,
+    invalid_project_location,
+    invalid_project_folder,
+    project_folder_exists,
+    project_creation_failure,
 };
 
 struct ProjectHubDiagnostic final {
@@ -88,6 +92,11 @@ public:
 
     [[nodiscard]] ProjectHubResult createProject(
         const std::filesystem::path& workspace_root,
+        std::string display_name);
+
+    [[nodiscard]] ProjectHubResult createProjectInLocation(
+        const std::filesystem::path& parent_location,
+        const std::filesystem::path& project_folder,
         std::string display_name);
 
     [[nodiscard]] ProjectHubResult openProject(
