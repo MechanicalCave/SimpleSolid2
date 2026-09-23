@@ -1,6 +1,7 @@
 #include "cad_workbench.hpp"
 #include "cad_workbench_shell.hpp"
 #include "part_document_tree_controller.hpp"
+#include "part_viewer_projection.hpp"
 
 #include <QAbstractItemView>
 #include <QDialog>
@@ -101,6 +102,27 @@ QString partDisplayName(const application::DocumentSession& session) {
     return fallback;
 }
 
+QString builtinReferenceLabel(
+    core::BuiltinReferenceRole role) {
+    switch (role) {
+    case core::BuiltinReferenceRole::origin_point:
+        return QStringLiteral("Origin Point");
+    case core::BuiltinReferenceRole::x_axis:
+        return QStringLiteral("X Axis");
+    case core::BuiltinReferenceRole::y_axis:
+        return QStringLiteral("Y Axis");
+    case core::BuiltinReferenceRole::z_axis:
+        return QStringLiteral("Z Axis");
+    case core::BuiltinReferenceRole::xy_plane:
+        return QStringLiteral("XY Plane");
+    case core::BuiltinReferenceRole::xz_plane:
+        return QStringLiteral("XZ Plane");
+    case core::BuiltinReferenceRole::yz_plane:
+        return QStringLiteral("YZ Plane");
+    }
+    return QStringLiteral("<invalid reference>");
+}
+
 } // namespace
 
 CadWorkbench::CadWorkbench(QWidget* parent)
@@ -192,6 +214,11 @@ void CadWorkbench::buildUi() {
                           "No Origin visibility change."));
         });
 
+    tree_controller_->setSelectionHandler(
+        [this](const DocumentSelectionState& state) {
+            handleDocumentSelectionChanged(state);
+        });
+
     ViewportSurface viewport_surface;
     if (viewport_factory_) {
         viewport_surface = viewport_factory_(shell_);
@@ -200,6 +227,10 @@ void CadWorkbench::buildUi() {
     if (viewport_surface.valid()) {
         editor_surface_ = viewport_surface.widget;
         viewport_ = viewport_surface.viewport;
+        viewport_->setSelectionIntentHandler(
+            [this](const viewer::SelectionIntent& intent) {
+                handleViewportSelectionIntent(intent);
+            });
         editor_surface_->setObjectName(
             QStringLiteral("editorSurface"));
         if (editor_surface_->parentWidget() != shell_) {
@@ -247,8 +278,14 @@ void CadWorkbench::buildUi() {
     active_id_->setObjectName(QStringLiteral("activeDocumentId"));
     active_id_->setWordWrap(true);
 
+    selection_context_ = new QLabel(properties_content);
+    selection_context_->setObjectName(
+        QStringLiteral("selectionContext"));
+    selection_context_->setWordWrap(true);
+
     properties_root->addWidget(active_path_);
     properties_root->addWidget(active_id_);
+    properties_root->addWidget(selection_context_);
 
     auto* form = new QFormLayout;
 
@@ -360,6 +397,7 @@ void CadWorkbench::setProjectSession(
     session_ = session;
     active_document_id_.reset();
     document_view_states_.clear();
+    document_selection_states_.clear();
     syncOpenTabs();
     refreshWorkspaceIndex();
 
@@ -377,6 +415,7 @@ void CadWorkbench::clearProjectSession() {
     session_ = nullptr;
     active_document_id_.reset();
     document_view_states_.clear();
+    document_selection_states_.clear();
 
     {
         const QSignalBlocker blocked{document_tabs_};
@@ -882,6 +921,8 @@ void CadWorkbench::closeTab(int index) {
 
     document_view_states_.erase(
         std::string{id->value()});
+    document_selection_states_.erase(
+        std::string{id->value()});
 
     const bool closing_active =
         active_document_id_.has_value() &&
@@ -945,12 +986,17 @@ void CadWorkbench::refreshActiveContext() {
         QStringLiteral("DocumentId: ") +
         fromUtf8(document_session->documentId().value()));
 
-    number_->setEnabled(true);
-    title_->setEnabled(true);
-    description_->setEnabled(true);
-    engineering_revision_->setEnabled(true);
-
     tree_controller_->setDocumentSession(document_session);
+
+    const auto selection =
+        activeSelectionState();
+    document_selection_states_.insert_or_assign(
+        std::string{document_session->documentId().value()},
+        selection);
+    tree_controller_->setSelectionState(selection);
+
+    refreshSelectionProperties();
+    refreshViewportPresentation();
     updateTabPresentation(document_session->documentId());
     syncActionState();
 }
@@ -958,6 +1004,7 @@ void CadWorkbench::refreshActiveContext() {
 void CadWorkbench::clearActiveContext() {
     active_path_->setText(QStringLiteral("No Part is open."));
     active_id_->clear();
+    selection_context_->clear();
 
     number_->clear();
     title_->clear();
@@ -970,6 +1017,17 @@ void CadWorkbench::clearActiveContext() {
     engineering_revision_->setEnabled(false);
 
     tree_controller_->clear();
+
+    if (viewport_ != nullptr) {
+        static_cast<void>(
+            viewport_->setReferenceScene(
+                viewer::ReferenceScene{}));
+        auto grid = defaultPartReferenceGrid();
+        grid.visible = false;
+        static_cast<void>(
+            viewport_->setReferenceGrid(grid));
+    }
+
     syncActionState();
 }
 
@@ -1009,11 +1067,231 @@ void CadWorkbench::restoreActiveViewState() {
         viewport_->setCameraState(initial));
 }
 
+DocumentSelectionState
+CadWorkbench::activeSelectionState() const {
+    if (!active_document_id_) {
+        return {};
+    }
+
+    const auto key =
+        std::string{active_document_id_->value()};
+    const auto found =
+        document_selection_states_.find(key);
+
+    if (found != document_selection_states_.end() &&
+        found->second.valid() &&
+        !found->second.selected.empty()) {
+        return found->second;
+    }
+
+    return DocumentSelectionState::documentRootOnly();
+}
+
+void CadWorkbench::handleDocumentSelectionChanged(
+    const DocumentSelectionState& state) {
+    if (!active_document_id_ ||
+        !state.valid()) {
+        return;
+    }
+
+    document_selection_states_.insert_or_assign(
+        std::string{active_document_id_->value()},
+        state);
+
+    refreshSelectionProperties();
+    refreshViewportPresentation();
+    syncActionState();
+}
+
+void CadWorkbench::handleViewportSelectionIntent(
+    const viewer::SelectionIntent& intent) {
+    if (!active_document_id_) return;
+
+    if (!intent.token) {
+        applyDocumentSelection(
+            DocumentSelectionState::documentRootOnly());
+        return;
+    }
+
+    const auto role =
+        builtinReferenceFor(*intent.token);
+    if (!role) return;
+
+    const auto target =
+        DocumentSelectionTarget::builtinReference(
+            *role);
+
+    if (intent.mode ==
+        viewer::SelectionIntentMode::replace) {
+        DocumentSelectionState state;
+        state.selected = {target};
+        state.primary = target;
+        applyDocumentSelection(std::move(state));
+        return;
+    }
+
+    auto state = activeSelectionState();
+
+    state.selected.erase(
+        std::remove_if(
+            state.selected.begin(),
+            state.selected.end(),
+            [](const DocumentSelectionTarget& item) {
+                return item.kind ==
+                    DocumentSelectionTargetKind::document_root;
+            }),
+        state.selected.end());
+
+    const auto found =
+        std::find(
+            state.selected.begin(),
+            state.selected.end(),
+            target);
+
+    if (found == state.selected.end()) {
+        state.selected.push_back(target);
+        state.primary = target;
+    } else {
+        state.selected.erase(found);
+        if (state.selected.empty()) {
+            state =
+                DocumentSelectionState::documentRootOnly();
+        } else if (state.primary &&
+                   *state.primary == target) {
+            state.primary =
+                state.selected.back();
+        }
+    }
+
+    applyDocumentSelection(std::move(state));
+}
+
+void CadWorkbench::applyDocumentSelection(
+    DocumentSelectionState state) {
+    if (!active_document_id_ ||
+        !state.valid()) {
+        return;
+    }
+
+    document_selection_states_.insert_or_assign(
+        std::string{active_document_id_->value()},
+        state);
+
+    tree_controller_->setSelectionState(state);
+    refreshSelectionProperties();
+    refreshViewportPresentation();
+    syncActionState();
+}
+
+void CadWorkbench::refreshSelectionProperties() {
+    const auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        return;
+    }
+
+    const auto selection =
+        activeSelectionState();
+
+    const bool document_primary =
+        selection.primary &&
+        selection.primary->kind ==
+            DocumentSelectionTargetKind::document_root;
+
+    if (document_primary) {
+        const auto& properties =
+            document_session->document().properties();
+
+        selection_context_->setText(
+            QStringLiteral("Selection: Document"));
+
+        number_->setText(
+            fromUtf8(properties.number));
+        title_->setText(
+            fromUtf8(properties.title));
+        description_->setPlainText(
+            fromUtf8(properties.description));
+        engineering_revision_->setText(
+            fromUtf8(
+                properties.engineering_revision));
+
+        number_->setEnabled(true);
+        title_->setEnabled(true);
+        description_->setEnabled(true);
+        engineering_revision_->setEnabled(true);
+        return;
+    }
+
+    number_->clear();
+    title_->clear();
+    description_->clear();
+    engineering_revision_->clear();
+
+    number_->setEnabled(false);
+    title_->setEnabled(false);
+    description_->setEnabled(false);
+    engineering_revision_->setEnabled(false);
+
+    if (selection.primary &&
+        selection.primary->kind ==
+            DocumentSelectionTargetKind::builtin_reference) {
+        selection_context_->setText(
+            QStringLiteral("Selection: Built-in reference — ") +
+            builtinReferenceLabel(
+                selection.primary->builtin_reference));
+    } else if (!selection.selected.empty()) {
+        selection_context_->setText(
+            QStringLiteral("Selection: %1 semantic items")
+                .arg(
+                    static_cast<qulonglong>(
+                        selection.selected.size())));
+    } else {
+        selection_context_->setText(
+            QStringLiteral("Selection: none"));
+    }
+}
+
+void CadWorkbench::refreshViewportPresentation() {
+    if (viewport_ == nullptr) return;
+
+    const auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        static_cast<void>(
+            viewport_->setReferenceScene(
+                viewer::ReferenceScene{}));
+        return;
+    }
+
+    const auto selection =
+        activeSelectionState();
+
+    static_cast<void>(
+        viewport_->setReferenceScene(
+            partReferenceScene(
+                document_session->document(),
+                selection)));
+
+    static_cast<void>(
+        viewport_->setReferenceGrid(
+            defaultPartReferenceGrid()));
+}
+
 void CadWorkbench::syncActionState() {
     const auto* document_session = activeDocumentSession();
     const bool active = document_session != nullptr;
 
-    apply_button_->setEnabled(active);
+    const auto selection =
+        active ? activeSelectionState()
+               : DocumentSelectionState{};
+
+    const bool document_primary =
+        active &&
+        selection.primary &&
+        selection.primary->kind ==
+            DocumentSelectionTargetKind::document_root;
+
+    apply_button_->setEnabled(document_primary);
     undo_button_->setEnabled(
         active && document_session->canUndo());
     redo_button_->setEnabled(
