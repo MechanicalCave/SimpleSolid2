@@ -1,6 +1,7 @@
 #include "cad_workbench.hpp"
 #include "cad_workbench_shell.hpp"
 #include "part_document_tree_controller.hpp"
+#include "part_viewport_controller.hpp"
 
 #include <QAbstractItemView>
 #include <QDialog>
@@ -233,6 +234,12 @@ void CadWorkbench::buildUi() {
         shell_->setEditorSurface(editor_surface_);
     }
 
+    viewport_controller_ =
+        new PartViewportController(
+            *tree_controller_,
+            viewport_,
+            this);
+
     auto* properties_content = new QWidget(shell_);
     properties_content->setObjectName(
         QStringLiteral("partPropertiesContent"));
@@ -360,6 +367,7 @@ void CadWorkbench::setProjectSession(
     session_ = session;
     active_document_id_.reset();
     document_view_states_.clear();
+    viewport_controller_->resetRuntimeState();
     syncOpenTabs();
     refreshWorkspaceIndex();
 
@@ -377,6 +385,7 @@ void CadWorkbench::clearProjectSession() {
     session_ = nullptr;
     active_document_id_.reset();
     document_view_states_.clear();
+    viewport_controller_->resetRuntimeState();
 
     {
         const QSignalBlocker blocked{document_tabs_};
@@ -950,7 +959,7 @@ void CadWorkbench::refreshActiveContext() {
     description_->setEnabled(true);
     engineering_revision_->setEnabled(true);
 
-    tree_controller_->setDocumentSession(document_session);
+    viewport_controller_->setDocumentSession(document_session);
     updateTabPresentation(document_session->documentId());
     syncActionState();
 }
@@ -969,7 +978,7 @@ void CadWorkbench::clearActiveContext() {
     description_->setEnabled(false);
     engineering_revision_->setEnabled(false);
 
-    tree_controller_->clear();
+    viewport_controller_->clear();
     syncActionState();
 }
 

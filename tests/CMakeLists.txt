@@ -75,6 +75,7 @@ add_executable(ph02a_project_hub_selection_ux_test
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
 )
@@ -129,6 +130,7 @@ add_executable(ph02b_project_hub_availability_ux_test
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
 )
@@ -317,6 +319,7 @@ add_executable(wb01_cad_workbench_test
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
 )
 
 target_include_directories(wb01_cad_workbench_test
@@ -393,3 +396,10 @@ add_test(
         -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_workbench_shell_boundaries.cmake
 )
+
+
+add_executable(wb01_viewer_selection_test
+    viewer_selection_test.cpp
+)
+target_link_libraries(wb01_viewer_selection_test PRIVATE simplesolid2_viewer)
+add_test(NAME wb01.viewer_selection COMMAND wb01_viewer_selection_test)

@@ -17,7 +17,11 @@ public:
  [[nodiscard]] bool setCameraState(const viewer::CameraState& state) override;
  [[nodiscard]] bool setStandardView(viewer::StandardView view) override;
  [[nodiscard]] bool setProjection(viewer::CameraProjection projection) override;
- void fitAll() override; void zoomByFactor(double factor); void panByPixels(int delta_x,int delta_y); void orbitByRadians(double horizontal_radians,double vertical_radians);
+ void fitAll() override;
+ [[nodiscard]] bool setReferenceScene(const viewer::ReferenceScene& scene) override;
+ [[nodiscard]] bool setPresentationSelection(const viewer::PresentationSelection& selection) override;
+ void setSelectionIntentHandler(viewer::SelectionIntentHandler handler) override;
+ void zoomByFactor(double factor); void panByPixels(int delta_x,int delta_y); void orbitByRadians(double horizontal_radians,double vertical_radians);
 protected:
  QPaintEngine* paintEngine() const override;
  void paintEvent(QPaintEvent* event) override; void resizeEvent(QResizeEvent* event) override; void showEvent(QShowEvent* event) override;

@@ -5,6 +5,7 @@
 #include <QAbstractItemView>
 #include <QAction>
 #include <QApplication>
+#include <QItemSelectionModel>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -16,6 +17,7 @@
 #include <filesystem>
 #include <iostream>
 #include <string>
+#include <utility>
 
 using namespace simplesolid2;
 
@@ -73,12 +75,52 @@ public:
         ++fit_all_count_;
     }
 
+    bool setReferenceScene(
+        const viewer::ReferenceScene& scene) override {
+        if (!scene.valid()) return false;
+        scene_ = scene;
+        return true;
+    }
+
+    bool setPresentationSelection(
+        const viewer::PresentationSelection& selection) override {
+        if (!selection.valid()) return false;
+        selection_ = selection;
+        return true;
+    }
+
+    void setSelectionIntentHandler(
+        viewer::SelectionIntentHandler handler) override {
+        selection_handler_ = std::move(handler);
+    }
+
+    void emitSelectionIntent(
+        viewer::PresentationToken token,
+        viewer::SelectionIntentMode mode) {
+        if (selection_handler_) {
+            selection_handler_(
+                viewer::SelectionIntent{token, mode});
+        }
+    }
+
     [[nodiscard]] int fitAllCount() const noexcept {
         return fit_all_count_;
     }
 
+    [[nodiscard]] const viewer::ReferenceScene& scene() const noexcept {
+        return scene_;
+    }
+
+    [[nodiscard]] const viewer::PresentationSelection&
+    selection() const noexcept {
+        return selection_;
+    }
+
 private:
     viewer::CameraState state_;
+    viewer::ReferenceScene scene_;
+    viewer::PresentationSelection selection_;
+    viewer::SelectionIntentHandler selection_handler_;
     int fit_all_count_{};
 };
 
@@ -265,6 +307,26 @@ int main(int argc, char* argv[]) {
     CHECK(!first_session_for_view->needsSave());
     CHECK(!second_session_for_view->needsSave());
 
+    CHECK(viewport->scene().valid());
+    CHECK(viewport->scene().grid.has_value());
+    CHECK(viewport->scene().grid->visible);
+    CHECK(viewport->scene().references.size() == 7U);
+
+    auto visibleReference = [&](
+        viewer::PresentationToken token) {
+        for (const auto& reference : viewport->scene().references) {
+            if (reference.token == token) {
+                return reference.visible;
+            }
+        }
+        return false;
+    };
+
+    const viewer::PresentationToken origin_point_token{0x101U};
+    const viewer::PresentationToken xy_plane_token{0x105U};
+    CHECK(visibleReference(origin_point_token));
+    CHECK(!visibleReference(xy_plane_token));
+
     CHECK(tree->topLevelItemCount() == 1);
     auto* root = tree->topLevelItem(0);
     CHECK(root != nullptr);
@@ -310,8 +372,36 @@ int main(int argc, char* argv[]) {
     tree->clearSelection();
     xy_plane->setSelected(true);
     origin_point->setSelected(true);
+    tree->setCurrentItem(
+        origin_point,
+        0,
+        QItemSelectionModel::NoUpdate);
+    QApplication::processEvents();
+
     CHECK(hide_references->isEnabled());
     CHECK(show_references->isEnabled());
+    CHECK(viewport->selection().selected.size() == 2U);
+    CHECK(viewport->selection().primary.has_value());
+    CHECK(*viewport->selection().primary == origin_point_token);
+
+    viewport->emitSelectionIntent(
+        xy_plane_token,
+        viewer::SelectionIntentMode::replace);
+    QApplication::processEvents();
+    CHECK(tree->selectedItems().size() == 1);
+    CHECK(tree->selectedItems().front() == xy_plane);
+    CHECK(viewport->selection().selected.size() == 1U);
+    CHECK(viewport->selection().primary.has_value());
+    CHECK(*viewport->selection().primary == xy_plane_token);
+
+    viewport->emitSelectionIntent(
+        origin_point_token,
+        viewer::SelectionIntentMode::toggle);
+    QApplication::processEvents();
+    CHECK(tree->selectedItems().size() == 2);
+    CHECK(viewport->selection().selected.size() == 2U);
+    CHECK(viewport->selection().primary.has_value());
+    CHECK(*viewport->selection().primary == origin_point_token);
 
     const auto before_visibility_revision =
         first_session->document().revision().value();
@@ -325,6 +415,8 @@ int main(int argc, char* argv[]) {
         core::BuiltinReferenceRole::origin_point));
     CHECK(!first_session->document().builtinReferenceVisible(
         core::BuiltinReferenceRole::xy_plane));
+    CHECK(!visibleReference(origin_point_token));
+    CHECK(!visibleReference(xy_plane_token));
     CHECK(undo->isEnabled());
     CHECK(save->isEnabled());
 
@@ -333,6 +425,8 @@ int main(int argc, char* argv[]) {
         core::BuiltinReferenceRole::origin_point));
     CHECK(!first_session->document().builtinReferenceVisible(
         core::BuiltinReferenceRole::xy_plane));
+    CHECK(visibleReference(origin_point_token));
+    CHECK(!visibleReference(xy_plane_token));
     CHECK(!first_session->needsSave());
 
     title->setText(QStringLiteral("Drive Shaft Rev"));
