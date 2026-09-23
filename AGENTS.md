@@ -10,6 +10,7 @@ Read in this order before changing production code:
 4. relevant accepted ADRs
 5. `work/ACTIVE.yaml`
 6. active work contract
+7. `governance/DOCUMENTATION.md` for documentation completion rules
 
 The repository is authoritative for implementation state. Foundation is authoritative for product/domain boundaries.
 
@@ -44,6 +45,9 @@ Ambiguity about authority or scope fails closed.
 - SS1 may be used as a donor of proven concepts, tests and selected code only after checking compatibility with SS2 Foundation.
 - Keep changes bounded to the active work contract.
 - Update durable architecture documentation only when the underlying accepted architecture changes.
+- Apply `governance/DOCUMENTATION.md`: every active Work Contract accepted after DOC-01 declares Documentation Impact, and required as-built/product documentation is updated before completion.
+- Treat `docs/internal/` and `docs/product/` as current-state documentation, not implementation history.
+- Treat `docs/browser/index.html` as generated; canonical documentation lives in Markdown.
 
 ## Handoff
 
@@ -52,4 +56,6 @@ A work item is complete only when:
 - relevant tests pass;
 - lifecycle/persistence behavior is covered where applicable;
 - no known architecture contradiction remains;
-- active work state points to the next concrete action.
+- active work state points to the next concrete action;
+- Documentation Impact declared by the active contract is satisfied;
+- documentation validation passes and the generated Product Browser is current.
