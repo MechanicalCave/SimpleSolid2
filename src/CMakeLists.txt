@@ -62,6 +62,57 @@ target_link_libraries(simplesolid2_application
 target_compile_features(simplesolid2_application PUBLIC cxx_std_20)
 
 find_package(Qt6 6 REQUIRED COMPONENTS Widgets)
+find_package(OpenCASCADE CONFIG REQUIRED)
+
+foreach(_target IN ITEMS TKernel TKMath TKG3d TKGeomBase TKService TKV3d TKOpenGl)
+    if(NOT TARGET ${_target})
+        message(FATAL_ERROR "OpenCASCADE package is missing required Viewer target ${_target}")
+    endif()
+endforeach()
+
+add_library(simplesolid2_viewer STATIC
+    viewer/camera_state.cpp
+    viewer/navigation.cpp
+)
+
+target_include_directories(simplesolid2_viewer
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/viewer/include
+)
+
+target_compile_features(simplesolid2_viewer PUBLIC cxx_std_20)
+
+if(NOT WIN32)
+    message(FATAL_ERROR "WB-01 native Qt/OCCT Viewer provider is currently supported on Windows")
+endif()
+
+add_library(simplesolid2_viewer_qt_occt STATIC
+    viewer_qt_occt/navigation_mapping.cpp
+    viewer_qt_occt/qt_occt_viewer_widget.cpp
+)
+
+target_include_directories(simplesolid2_viewer_qt_occt
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/viewer_qt_occt/include
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/viewer_qt_occt
+)
+
+target_link_libraries(simplesolid2_viewer_qt_occt
+    PUBLIC
+        simplesolid2_viewer
+        Qt6::Widgets
+    PRIVATE
+        TKernel
+        TKMath
+        TKG3d
+        TKGeomBase
+        TKService
+        TKV3d
+        TKOpenGl
+)
+
+target_compile_features(simplesolid2_viewer_qt_occt PUBLIC cxx_std_20)
 
 add_executable(simplesolid2
     app/main.cpp

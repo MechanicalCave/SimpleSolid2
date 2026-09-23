@@ -32,7 +32,7 @@ if ($qt) { Write-Host "[OK] Qt6Config.cmake: $qt" }
 else { Write-Warning "Qt6Config.cmake not found under $QtRoot. Project Hub GUI will require Qt." }
 
 if ($occt) { Write-Host "[OK] OpenCASCADE config: $occt" }
-else { Write-Host "[INFO] OCCT config not found under $OcctRoot. This does not block Project Hub Genesis." }
+else { throw "OpenCASCADE config was not found under $OcctRoot. WB-01 requires OCCT for the native CAD Viewer." }
 
 if (-not $cmake) {
     throw "CMake could not be located automatically in PATH, Qt Tools, Visual Studio 2022, or Program Files. Install CMake via Qt Maintenance Tool (Developer and Designer Tools -> CMake) or Visual Studio Installer (C++ CMake tools for Windows), then rerun setup."
