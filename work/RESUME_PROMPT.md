@@ -58,7 +58,7 @@ Po rekonstrukcji raportuj krótko:
 
 Stan na 2026-09-23 po ostatnim zakończonym kroku:
 
-- `main` HEAD hint: `5f568689e4fd42422c876c7b9efbf69fe133a3a1`
+- ostatni zakończony produktowy slice hint: `5f568689e4fd42422c876c7b9efbf69fe133a3a1` (`ProjectSession`); nie traktuj żadnego SHA z tego pliku jako bieżącego `main` HEAD
 - aktywne: `work/PH-01_PROJECT_HUB.md`
 - zaakceptowany ADR: `adr/ADR-0001-project-identity-and-workspace-clones.md`
 - Project metadata persistence jest na `main`
