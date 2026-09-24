@@ -7,6 +7,7 @@
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QWidget>
+#include <QTest>
 
 #include <cstdlib>
 #include <filesystem>
@@ -207,11 +208,16 @@ int main(int argc, char* argv[]) {
     CHECK(
         workbench.activateDocument(
             document_id));
+    workbench.show();
+    QApplication::processEvents();
     CHECK(viewport != nullptr);
 
     auto* sketch_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("sketchToolButton"));
+    auto* cancel_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("cancelSketchButton"));
     auto* finish_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("finishSketchButton"));
@@ -227,15 +233,38 @@ int main(int argc, char* argv[]) {
     auto* top_action =
         workbench.findChild<QAction*>(
             QStringLiteral("viewCubeTopAction"));
+    auto* edit_sketch_action =
+        workbench.findChild<QAction*>(
+            QStringLiteral("editSketchAction"));
+    auto* operations_content =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("partOperationsContent"));
+    auto* editor_host =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("editorSurfaceHost"));
+    auto* operations_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("operationsPlaceholder"));
 
     CHECK(sketch_button != nullptr);
+    CHECK(cancel_button != nullptr);
     CHECK(finish_button != nullptr);
     CHECK(undo_button != nullptr);
     CHECK(redo_button != nullptr);
     CHECK(tree != nullptr);
     CHECK(top_action != nullptr);
+    CHECK(edit_sketch_action != nullptr);
+    CHECK(operations_content != nullptr);
+    CHECK(editor_host != nullptr);
+    CHECK(operations_label != nullptr);
+    CHECK(editor_host->isAncestorOf(sketch_button));
+    CHECK(!operations_content->isAncestorOf(sketch_button));
     CHECK(sketch_button->isEnabled());
-    CHECK(!finish_button->isEnabled());
+    CHECK(cancel_button->isHidden());
+    CHECK(finish_button->isHidden());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("No active tool."));
 
     auto* session =
         opened.session->documentSession(
@@ -245,6 +274,9 @@ int main(int argc, char* argv[]) {
     CHECK(!session->needsSave());
 
     sketch_button->click();
+    CHECK(!cancel_button->isHidden());
+    CHECK(finish_button->isHidden());
+    CHECK(!sketch_button->isEnabled());
 
     const viewer::PresentationToken
         x_axis_token{0x102U};
@@ -253,7 +285,8 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
 
     CHECK(session->document().sketches().empty());
-    CHECK(!finish_button->isEnabled());
+    CHECK(finish_button->isHidden());
+    CHECK(!cancel_button->isHidden());
 
     const viewer::PresentationToken
         xz_plane_token{0x106U};
@@ -263,7 +296,9 @@ int main(int argc, char* argv[]) {
 
     CHECK(session->document().sketches().size() == 1U);
     CHECK(session->needsSave());
+    CHECK(!finish_button->isHidden());
     CHECK(finish_button->isEnabled());
+    CHECK(cancel_button->isHidden());
     CHECK(!sketch_button->isEnabled());
 
     const auto sketch_id =
@@ -321,8 +356,12 @@ int main(int argc, char* argv[]) {
     finish_button->click();
     QApplication::processEvents();
 
-    CHECK(!finish_button->isEnabled());
+    CHECK(finish_button->isHidden());
+    CHECK(cancel_button->isHidden());
     CHECK(sketch_button->isEnabled());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("No active tool."));
     CHECK(session->document().sketches().size() == 1U);
     CHECK(viewport->scene().grid.has_value());
     CHECK(
@@ -333,6 +372,56 @@ int main(int argc, char* argv[]) {
         vectorEquals(
             viewport->scene().grid->v_axis,
             0.0, 1.0, 0.0));
+
+    auto* sketches_node = root->child(1);
+    CHECK(sketches_node != nullptr);
+    auto* sketch_item = sketches_node->child(0);
+    CHECK(sketch_item != nullptr);
+
+    const auto before_reedit_state =
+        session->document().state();
+    const auto before_reedit_revision =
+        session->document().revision();
+
+    tree->setCurrentItem(sketch_item);
+    edit_sketch_action->trigger();
+    QApplication::processEvents();
+
+    CHECK(!finish_button->isHidden());
+    CHECK(
+        session->document().state() ==
+        before_reedit_state);
+    CHECK(
+        session->document().revision() ==
+        before_reedit_revision);
+
+    finish_button->click();
+    QApplication::processEvents();
+    CHECK(finish_button->isHidden());
+
+    tree->scrollToItem(sketch_item);
+    QApplication::processEvents();
+    const auto sketch_rect =
+        tree->visualItemRect(sketch_item);
+    CHECK(sketch_rect.isValid());
+    QTest::mouseDClick(
+        tree->viewport(),
+        Qt::LeftButton,
+        Qt::NoModifier,
+        sketch_rect.center());
+    QApplication::processEvents();
+
+    CHECK(!finish_button->isHidden());
+    CHECK(
+        session->document().state() ==
+        before_reedit_state);
+    CHECK(
+        session->document().revision() ==
+        before_reedit_revision);
+
+    finish_button->click();
+    QApplication::processEvents();
+    CHECK(finish_button->isHidden());
 
     undo_button->click();
     QApplication::processEvents();
@@ -345,7 +434,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         session->document().sketches().front().id ==
         sketch_id);
-    CHECK(!finish_button->isEnabled());
+    CHECK(finish_button->isHidden());
 
     sketch_button->click();
     const viewer::PresentationToken
@@ -364,7 +453,7 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
 
     CHECK(session->document().sketches().size() == 1U);
-    CHECK(!finish_button->isEnabled());
+    CHECK(finish_button->isHidden());
     CHECK(sketch_button->isEnabled());
     CHECK(
         session->document().sketches().front().id ==
@@ -395,7 +484,7 @@ int main(int argc, char* argv[]) {
     undo_button->click();
     QApplication::processEvents();
     CHECK(session->document().sketches().size() == 1U);
-    CHECK(!finish_button->isEnabled());
+    CHECK(finish_button->isHidden());
 
     CHECK(session->save().ok());
     CHECK(!session->needsSave());
