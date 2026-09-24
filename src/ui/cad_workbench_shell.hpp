@@ -16,6 +16,7 @@ public:
     explicit CadWorkbenchShell(QWidget* parent = nullptr);
 
     [[nodiscard]] QHBoxLayout& documentActionsLayout() noexcept;
+    [[nodiscard]] QHBoxLayout& editorToolsLayout() noexcept;
     [[nodiscard]] QTreeWidget& documentTree() noexcept;
     [[nodiscard]] QTabBar& documentTabs() noexcept;
     [[nodiscard]] QLabel& statusLabel() noexcept;
@@ -33,6 +34,7 @@ private:
     QHBoxLayout* document_actions_{};
     QTreeWidget* document_tree_{};
     QVBoxLayout* editor_host_layout_{};
+    QHBoxLayout* editor_tools_layout_{};
     QVBoxLayout* properties_host_layout_{};
     QVBoxLayout* operations_host_layout_{};
     QTabBar* document_tabs_{};
