@@ -8,6 +8,8 @@ class QAction;
 class QEvent;
 class QHBoxLayout;
 class QMenu;
+class QShowEvent;
+class QString;
 class QToolButton;
 
 namespace simplesolid2::ui {
