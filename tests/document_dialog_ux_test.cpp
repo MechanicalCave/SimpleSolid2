@@ -5,6 +5,7 @@
 
 #include <QApplication>
 #include <QDialogButtonBox>
+#include <QHeaderView>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTest>
@@ -253,6 +254,19 @@ int main(int argc, char* argv[]) {
     EXPECT(document_list->columnCount() == 4);
     EXPECT(document_list->topLevelItemCount() == 3);
     EXPECT(!open_button->isEnabled());
+
+    auto* document_header = document_list->header();
+    EXPECT(document_header != nullptr);
+    for (int section = 0; section < 4; ++section) {
+        EXPECT(
+            document_header->sectionResizeMode(section) ==
+            QHeaderView::Interactive);
+    }
+    EXPECT(
+        document_header->sectionSize(2) >
+        document_header->sectionSize(1) * 2);
+    document_header->resizeSection(1, 210);
+    EXPECT(document_header->sectionSize(1) == 210);
 
     auto* resolved =
         findTopLevelRow(
