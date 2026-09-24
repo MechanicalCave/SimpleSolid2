@@ -87,10 +87,10 @@ Opening a Project also rebuilds the runtime native-document index by scanning th
 <!-- section-id: internal.application-lifecycle.part -->
 ## Part Document lifecycle
 
-The Project Workspace initially owns document launch. The current Part lifecycle is:
+The Project Workspace Shell owns document launch. Its Project toolbar remains visible in both Workspace Dashboard and active Document contexts. The current Part lifecycle is:
 
 ```text
-neutral Project Workspace
+Project Workspace
 → New Part…
 → WorkspaceLocationDialog
 → browse folders inside current Workspace
@@ -100,17 +100,20 @@ neutral Project Workspace
 → generate fresh DocumentId
 → atomically publish valid empty PartDocument
 → create canonical DocumentSession
+→ add/focus Project-level Document Tab
+→ navigate to Document(DocumentId)
 → activate Part Workbench
 
-neutral Project Workspace
+Project Workspace
 → Open…
 → OpenDocumentDialog
 → list discovered Document candidates with Kind / Name / Location / Status
 → choose one resolved DocumentId
 → load authored Part state
 → create or reuse canonical DocumentSession
+→ add/focus Project-level Document Tab
+→ navigate to Document(DocumentId)
 → activate the Workbench for the resolved DocumentKind
-→ add/focus bottom Document Tab
 ```
 
 The current discovery backend provides Part candidates only. The dialog is document-oriented so later document kinds do not require a Part-specific top-level Open action.
@@ -126,20 +129,30 @@ Closing and reopening a Part destroys runtime Undo/Redo and Sketch edit context 
 <!-- section-id: internal.application-lifecycle.workbench -->
 ## Active document and Workbench lifecycle
 
-One ProjectSession may keep several DocumentSessions open. With zero open Documents the Project remains in a neutral Workspace context; no inactive Part editor is implied.
+One ProjectSession may keep several DocumentSessions open. Project Workspace Shell owns the runtime navigation state:
 
-Creating/opening a Part activates the Part Workbench. The architecture routes future editor activation by DocumentKind rather than treating Project Workspace as a Part Workbench. `CadWorkbench` owns one active DocumentId for the current Part editor context.
+```text
+Workspace
+or
+Document(DocumentId)
+```
 
-Changing the bottom tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. The other DocumentSessions remain open. Closing the last open Document returns to the neutral Workspace without closing the Project.
+This navigation state is independent from the set of open DocumentSessions. The user may return to Workspace Dashboard while several Documents remain open; doing so does not save, close or mutate them.
 
-Camera and selection are kept independently per open DocumentId for the lifetime of the Workbench. They are not persisted across application restart.
+Project Workspace Shell owns Project-level Document Tabs. Selecting a tab navigates to that DocumentId and routes to the appropriate Workbench for its DocumentKind. Current routing supports Part only.
+
+`CadWorkbench` is now a one-active-Part editor boundary. It receives the active `DocumentSession` directly and does not own ProjectSession, Project discovery, Project tabs or cross-document navigation.
+
+Changing the Project-level tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. Closing the last open Document navigates to Workspace without closing the Project.
+
+Camera and selection are runtime-only. Camera state is retained per DocumentId while navigating between open Documents/Workspace and is cleared at the Project runtime boundary; it is never persisted.
 
 <!-- section-id: internal.application-lifecycle.close -->
 ## Close, dirty state and restart
 
 Closing a dirty Part prompts for `Save`, `Discard` or `Cancel`.
 
-Workbench Tree/Viewer controllers hold non-owning runtime pointers to the active DocumentSession. SK-01A makes lifecycle ordering explicit: those bindings are detached before ProjectSession erases a DocumentSession. The same detach-before-destroy rule applies before the ProjectSession itself is destroyed.
+Workbench Tree/Viewer controllers hold non-owning runtime pointers to the active DocumentSession. Project Workspace Shell coordinates lifecycle ordering: the Part Workbench is detached before ProjectSession erases an active DocumentSession, and is detached/reset before the ProjectSession itself is destroyed.
 
 Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure keeps the Project open.
 
@@ -294,7 +307,9 @@ The Product Browser must be regenerated with `.\ss2.ps1 docs` whenever canonical
 <!-- section-id: internal.cad-workbench-viewer.shell -->
 ## Shared Workbench shell
 
-WB-01 implements one reusable `CadWorkbenchShell` containing Document Tree, an editor tool-launch strip above the Editor Surface, Properties, contextual Operations, bottom Document Tabs and Status/Diagnostics.
+WB-01 implements one reusable `CadWorkbenchShell` containing Document Tree, an editor tool-launch strip above the Editor Surface, Properties, contextual Operations and Status/Diagnostics.
+
+WS-01 moves Project-level Document Tabs out of `CadWorkbenchShell` and into Project Workspace Shell. The Workbench shell therefore represents only one active CAD Document editor.
 
 The shell owns layout only. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
 
@@ -303,13 +318,15 @@ WB-01A stabilized the existing shell/Viewer interaction without adding a new CAD
 <!-- section-id: internal.cad-workbench-viewer.active-document -->
 ## Active document context
 
-ProjectSession may keep several canonical DocumentSessions open.
+ProjectSession may keep several canonical DocumentSessions open, while Project Workspace Shell owns `Workspace | Document(DocumentId)` navigation and Project-level Document Tabs.
 
-`CadWorkbench` owns one active DocumentId. Bottom tab changes switch the Tree, Properties, Viewer scene, selection and camera context while leaving other DocumentSessions open.
+`CadWorkbench` receives only the currently active Part `DocumentSession` plus Workspace path context needed for presentation. It does not own ProjectSession, discovery or tabs.
 
-Camera state is stored in a Workbench runtime map keyed by DocumentId. Closing a tab drops that runtime view state.
+Project-level tab changes ask the host to bind a different open DocumentSession. Navigating to Workspace detaches the Workbench without closing the DocumentSession. Returning to that Document rebinds it.
 
-SK-01A requires detach-before-destroy ordering: Tree/Viewport controllers are disconnected from the active DocumentSession before ProjectSession erases it. This prevents runtime cleanup from dereferencing a destroyed session during Document or Project close.
+Camera state is stored in Workbench runtime state keyed by DocumentId so Document → Workspace → Document and inter-Document switching can restore the view while the Project remains open. Project close resets that runtime state.
+
+SK-01A/WS-01 require detach-before-destroy ordering: Tree/Viewport controllers are disconnected from the active DocumentSession before ProjectSession erases it. This prevents runtime cleanup from dereferencing a destroyed session during Document or Project close.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
 ## Origin and reference scene
@@ -851,21 +868,28 @@ Inside one Workspace, two files carrying the same DocumentId are not treated as 
 
 The Qt application uses a `QStackedWidget` with Project Hub and Workspace pages.
 
-The Workspace shows the active Project name, ProjectId and Workspace path plus a Document host.
+The Workspace page contains a persistent Project Workspace Shell. It shows Project name, ProjectId and Workspace path and owns the Project-level navigation surfaces:
 
-With zero open CAD Documents the host shows a neutral Workspace launch surface. It does not show an inactive Part editor. Creating/opening a Part activates the Part Workbench; future document kinds are routed to their appropriate editor by DocumentKind.
+```text
+TOP       Project toolbar
+CONTENT   Workspace Dashboard or active Document Workbench
+BOTTOM    Project-level Document Tabs
+```
 
-`CadWorkbenchShell` owns only fixed presentation regions for an active CAD Document:
+The Project toolbar remains visible in both Workspace and Document contexts. Workspace Dashboard is a first-class Project surface, not only an empty-state placeholder; it remains reachable while Documents are open.
+
+Project Workspace navigation is runtime-only: `Workspace` or `Document(DocumentId)`. Open DocumentSessions may remain alive while Workspace Dashboard is visible.
+
+`CadWorkbenchShell` owns only fixed presentation regions for the active Part Document:
 
 ```text
 LEFT      Document Tree
 CENTER    tool-launch strip + Editor Surface / 3D Viewport
 RIGHT     Properties + contextual Operations
-BOTTOM    Document Tabs
 BELOW     Status / Diagnostics
 ```
 
-Domain/session adapters provide active content. The neutral Shell does not know PartDocument, AssemblyDocument or DrawingDocument.
+Document Tabs are deliberately outside `CadWorkbenchShell`. Future Assembly/Drawing editors can therefore use the same Project-level navigation without making Part Workbench their owner.
 
 <!-- section-id: internal.ui-project-hub.primary-actions -->
 ## Primary Project actions
@@ -891,9 +915,11 @@ No Recent entry is selected after Hub refresh. Open is enabled only for a select
 <!-- section-id: internal.ui-project-hub.part-panel -->
 ## Workspace launch and Part document controls
 
-The neutral Project Workspace exposes the current document-launch actions `New Part…`, neutral `Open…` and `Refresh`. These actions are not Part editor tools.
+The persistent Project toolbar exposes `Workspace`, `New Part…`, neutral `Open…`, `Refresh` and `Close Project`. These actions remain available while a Part is active and are not Part editor tools.
 
-Once a Part is active, its Workbench exposes `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, the editor tool-launch strip, contextual Operations and bottom Document Tabs.
+`Workspace` switches only the runtime navigation context to Project Dashboard. It does not close, save or mutate open Documents.
+
+Once a Part is active, its Workbench exposes `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, the editor tool-launch strip and contextual Operations. Project-level Document Tabs remain owned by Project Workspace Shell.
 
 `New Part…` opens `WorkspaceLocationDialog`. It shows the current Workspace folder hierarchy, allows the user to choose a folder, enter the filename and explicitly `Create Folder`.
 
@@ -901,7 +927,7 @@ The location picker is constrained to the current Workspace. Private `.simplesol
 
 `Open…` opens `OpenDocumentDialog`. Candidates show Document kind, display/name information, location and status. The four columns are interactively resizable; the default layout keeps Name compact and gives Location the largest share of the dialog. Current discovery supplies Part entries only. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
 
-Opening an already open Document focuses its canonical existing DocumentSession instead of creating a second mutable session. Closing the last open Document switches the host back to the neutral Workspace while the Project remains open.
+Opening an already open Document focuses its canonical existing DocumentSession/tab instead of creating a second mutable session. Several Documents can remain open simultaneously. Selecting a Project-level tab navigates by DocumentId, not by tab index. Closing the last open Document returns to Workspace Dashboard while the Project remains open.
 
 <!-- section-id: internal.ui-project-hub.workbench -->
 ## Tree, Properties and Viewport
@@ -931,7 +957,7 @@ Closing the Project or application when any Part is dirty requires `Save All`, `
 
 A failed Save leaves the Part/Project open so authored in-memory changes are not silently lost.
 
-Before a DocumentSession or the owning ProjectSession is destroyed, Workbench runtime bindings are detached. This ordering is required because Tree/Viewer controllers use non-owning session pointers.
+Before a DocumentSession or the owning ProjectSession is destroyed, Project Workspace Shell detaches Workbench runtime bindings. This ordering is required because Tree/Viewer controllers use non-owning session pointers.
 
 <!-- section-id: internal.ui-project-hub.recovery -->
 ## Project recovery UX
@@ -1012,7 +1038,7 @@ Polish and English are maintained as peer sources. The Browser opens product doc
 <!-- section-id: product.parts.create -->
 ## Creating a new Part
 
-After opening a Project, you first see a neutral Workspace with no active Part editor. Use `New Part…` there to create a Document and open its Part Workbench.
+After opening a Project, you see the Project Workspace Dashboard with no active Part editor. Use `New Part…` on the persistent Project Workspace toolbar to create a Document and open its Part Workbench. That toolbar remains visible while a Part is being edited.
 
 The dialog shows the folder hierarchy of the current Workspace. Choose the target folder, enter the Part filename and confirm creation.
 
@@ -1044,15 +1070,17 @@ Filename and path are not Document identity. You may rename or move the `.ss2par
 <!-- section-id: product.parts.workbench -->
 ## Opening Parts and using the Workbench
 
-Use `Open…` in the neutral Workspace to choose a discovered Document. Opening a Project by itself does not activate the Part Workbench; an editor appears only after a specific Document is created or opened.
+Use `Open…` on the persistent Project Workspace toolbar to choose a discovered Document. `Open…`, `New Part…` and `Refresh` remain available while another Part is already being edited. Opening a Project by itself does not activate the Part Workbench; an editor appears only after a specific Document is created or opened.
 
 The dialog shows Document kind, name, location and status. You can resize the columns by dragging the header separators; by default, Location receives more space than Name. The current product supplies Part Documents only, but the Open UI is not Part-specific.
 
 Invalid native files and DocumentId conflicts remain visible but cannot be opened as resolved Documents.
 
-Several Parts can remain open at once. Use the bottom Document Tabs to switch the active Part. Opening a Part that is already open activates the existing tab/session instead of creating a second mutable session. Closing the last Document returns to the neutral Workspace without closing the Project.
+Several Parts can remain open at once. The bottom Document Tabs belong to Project Workspace and switch the active Document. Opening a Part that is already open activates the existing tab/session instead of creating a second mutable session.
 
-The left side contains Document Tree. The center contains the 3D Viewport with a tool-launch strip above it. The right side contains Properties and contextual Operations. Status/diagnostic information is below the tabs.
+Use `Workspace` on the top toolbar to return to the Project Workspace Dashboard without closing any open Documents. Their tabs remain available, and clicking a tab returns to that Part. Navigating to Workspace does not Save or change authored state. Closing the last Document also returns to Workspace without closing the Project.
+
+In the active Part Workbench, the left side contains Document Tree. The center contains the 3D Viewport with a tool-launch strip above it. The right side contains Properties and contextual Operations. Status/diagnostic information belongs to the active Workbench.
 
 <!-- section-id: product.parts.edit -->
 ## Editing Document properties
@@ -1139,7 +1167,7 @@ When closing a Part with unsaved changes, the application requires `Save`, `Disc
 
 When closing the complete Project or application while any Part is dirty, the choices are `Save All`, `Discard` and `Cancel`.
 
-If saving fails, the Document/Project remains open. Closing the last open Part keeps the Project open and returns to the neutral Workspace.
+If saving fails, the Document/Project remains open. Closing the last open Part keeps the Project open and returns to the Project Workspace Dashboard. Using `Workspace` by itself never closes the Part.
 
 <!-- section-id: product.parts.restart -->
 ## Restart and reopen
@@ -1347,7 +1375,7 @@ Wersje polska i angielska są utrzymywane jako równorzędne źródła. Browser 
 <!-- section-id: product.parts.create -->
 ## Tworzenie nowego Parta
 
-Po otwarciu Projektu najpierw widzisz neutralny Workspace bez aktywnego edytora Part. Użyj tam `New Part…`, aby utworzyć Dokument i otworzyć jego Part Workbench.
+Po otwarciu Projektu widzisz Project Workspace Dashboard bez aktywnego edytora Part. Na stałym pasku Project Workspace użyj `New Part…`, aby utworzyć Dokument i otworzyć jego Part Workbench. Ten pasek pozostaje widoczny także podczas edycji Parta.
 
 Dialog pokazuje strukturę katalogów bieżącego Workspace. Wybierz folder docelowy, wpisz nazwę pliku Parta i potwierdź utworzenie.
 
@@ -1379,15 +1407,17 @@ Pola `Number`, `Title`, `Description` i `Engineering revision` są trwałymi wł
 <!-- section-id: product.parts.workbench -->
 ## Otwieranie Partów i Workbench
 
-Użyj `Open…` w neutralnym Workspace, aby wybrać wykryty Dokument. Samo otwarcie Projektu nie uruchamia Part Workbench; edytor pojawia się dopiero po utworzeniu lub otwarciu konkretnego Dokumentu.
+Użyj `Open…` na stałym pasku Project Workspace, aby wybrać wykryty Dokument. `Open…`, `New Part…` i `Refresh` pozostają dostępne również wtedy, gdy edytujesz już inny Part. Samo otwarcie Projektu nie uruchamia Part Workbench; edytor pojawia się dopiero po utworzeniu lub otwarciu konkretnego Dokumentu.
 
 Dialog pokazuje typ Dokumentu, nazwę, lokalizację i status. Szerokości kolumn możesz zmieniać ręcznie przeciągając separatory nagłówka; domyślnie więcej miejsca otrzymuje lokalizacja niż nazwa. Obecny produkt dostarcza tylko Dokumenty Part, ale sam interfejs Open nie jest Part-specific.
 
 Niepoprawne pliki natywne i konflikty DocumentId pozostają widoczne, ale nie można ich otworzyć jako resolved Documents.
 
-Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs przełączają aktywny Part. Ponowne otwarcie Parta, który jest już otwarty, aktywuje istniejącą zakładkę/sesję zamiast tworzyć drugą mutowalną sesję. Zamknięcie ostatniego Dokumentu wraca do neutralnego Workspace bez zamykania Projektu.
+Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs należą do Project Workspace i przełączają aktywny Dokument. Ponowne otwarcie Parta, który jest już otwarty, aktywuje istniejącą zakładkę/sesję zamiast tworzyć drugą mutowalną sesję.
 
-Po lewej znajduje się Document Tree, pośrodku viewport 3D z paskiem narzędzi nad nim, a po prawej Properties i kontekstowy panel Operations. Status/diagnostyka znajduje się pod zakładkami.
+Przycisk `Workspace` na górnym pasku wraca do Project Workspace Dashboard bez zamykania otwartych Dokumentów. Ich taby pozostają dostępne i możesz wrócić do dowolnego Parta klikając jego zakładkę. Sam powrót do Workspace nie wykonuje Save i nie zmienia authored state. Zamknięcie ostatniego Dokumentu również wraca do Workspace bez zamykania Projektu.
+
+W aktywnym Part Workbench po lewej znajduje się Document Tree, pośrodku viewport 3D z paskiem narzędzi nad nim, a po prawej Properties i kontekstowy panel Operations. Status/diagnostyka należy do aktywnego Workbench.
 
 <!-- section-id: product.parts.edit -->
 ## Edycja właściwości Dokumentu
@@ -1474,7 +1504,7 @@ Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Di
 
 Przy zamykaniu całego Projektu lub aplikacji, gdy jakikolwiek Part jest dirty, dostępne są `Save All`, `Discard` i `Cancel`.
 
-Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty. Zamknięcie ostatniego otwartego Parta pozostawia Projekt otwarty i pokazuje z powrotem neutralny Workspace.
+Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty. Zamknięcie ostatniego otwartego Parta pozostawia Projekt otwarty i pokazuje Project Workspace Dashboard. Samo użycie `Workspace` nigdy nie zamyka Parta.
 
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
