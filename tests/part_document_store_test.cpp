@@ -144,6 +144,10 @@ int main() {
         std::string::npos);
     CHECK(
         package.package->authored_json.find(
+            "\"sketches\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
             "ProjectId") ==
         std::string::npos);
     CHECK(
@@ -236,7 +240,8 @@ int main() {
             "},"
             "\"presentation\":{"
                 "\"builtin_reference_visibility_mask\":128"
-            "}"
+            "},"
+            "\"sketches\":[]"
             "}"));
     const auto bad_visibility =
         store.load(
@@ -244,6 +249,128 @@ int main() {
     CHECK(!bad_visibility.ok());
     CHECK(
         bad_visibility.diagnostic.code ==
+        part::PartStoreErrorCode::
+            malformed_document);
+
+    const auto legacy_v1_path =
+        temp.path / "LegacyV1.ss2part";
+    const auto legacy_v1_id =
+        core::DocumentId::generate();
+    const auto legacy_v1_bytes =
+        buildPartPackage(
+            std::string{
+                legacy_v1_id.value()},
+            1,
+            "{"
+            "\"properties\":{"
+                "\"number\":\"L-1\","
+                "\"title\":\"Legacy native v1\","
+                "\"description\":\"\","
+                "\"engineering_revision\":\"A\""
+            "},"
+            "\"presentation\":{"
+                "\"builtin_reference_visibility_mask\":15"
+            "}"
+            "}");
+    writeBytes(
+        legacy_v1_path,
+        legacy_v1_bytes);
+
+    const auto legacy_v1 =
+        store.load(legacy_v1_path);
+    CHECK(legacy_v1.ok());
+    CHECK(
+        legacy_v1.document->documentId() ==
+        legacy_v1_id);
+    CHECK(
+        legacy_v1.document->properties().title ==
+        "Legacy native v1");
+    CHECK(legacy_v1.document->sketches().empty());
+
+    std::ifstream legacy_before_stream{
+        legacy_v1_path,
+        std::ios::binary};
+    const std::string legacy_before{
+        std::istreambuf_iterator<char>{
+            legacy_before_stream},
+        std::istreambuf_iterator<char>{}};
+
+    CHECK(
+        legacy_before ==
+        legacy_v1_bytes);
+
+    CHECK(
+        store.save(
+            legacy_v1_path,
+            *legacy_v1.document)
+            .ok());
+
+    const auto legacy_after =
+        persistence::readNativeDocumentContainer(
+            legacy_v1_path);
+    CHECK(legacy_after.ok());
+    CHECK(
+        legacy_after.package->descriptor
+            .domain_schema_version ==
+        part::PartDocumentStore::
+            current_schema_version);
+    CHECK(
+        legacy_after.package->authored_json.find(
+            "\"sketches\"") !=
+        std::string::npos);
+
+    const auto duplicate_sketch_path =
+        temp.path / "DuplicateSketch.ss2part";
+    const auto duplicate_sketch_id =
+        sketch::SketchId::generate();
+    const auto duplicate_record =
+        std::string{
+            "{"
+            "\"id\":\""} +
+        std::string{duplicate_sketch_id.value()} +
+        "\","
+        "\"support\":{"
+            "\"kind\":\"builtin_origin_plane\","
+            "\"builtin_plane\":\"xy_plane\""
+        "},"
+        "\"placement\":{"
+            "\"origin\":[0,0,0],"
+            "\"u_axis\":[1,0,0],"
+            "\"v_axis\":[0,1,0]"
+        "},"
+        "\"visible\":true"
+        "}";
+
+    writeBytes(
+        duplicate_sketch_path,
+        buildPartPackage(
+            std::string{
+                core::DocumentId::generate()
+                    .value()},
+            part::PartDocumentStore::
+                current_schema_version,
+            std::string{
+                "{"
+                "\"properties\":{"
+                    "\"number\":\"\","
+                    "\"title\":\"\","
+                    "\"description\":\"\","
+                    "\"engineering_revision\":\"\""
+                "},"
+                "\"presentation\":{"
+                    "\"builtin_reference_visibility_mask\":15"
+                "},"
+                "\"sketches\":["} +
+                duplicate_record + "," +
+                duplicate_record +
+                "]}"));
+
+    const auto duplicate_sketch =
+        store.load(
+            duplicate_sketch_path);
+    CHECK(!duplicate_sketch.ok());
+    CHECK(
+        duplicate_sketch.diagnostic.code ==
         part::PartStoreErrorCode::
             malformed_document);
 
