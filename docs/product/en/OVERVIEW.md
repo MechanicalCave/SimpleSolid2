@@ -18,19 +18,23 @@ The current product provides:
 - creating and opening Projects;
 - stable Project identity and Recent Projects;
 - moving a Project and recovering its location with `Locate…`;
-- creating and opening native `.ss2part` Part Documents;
+- creating native `.ss2part` Parts through a Workspace folder picker;
+- creating a new folder inside the Workspace directly from the New Part dialog;
+- opening discovered Documents through the neutral `Open…` dialog;
 - stable `DocumentId` independent of filename and path;
 - opening several Parts and switching them with bottom Document Tabs;
 - a shared CAD Workbench with Document Tree, Properties, Operations and Status areas;
-- an OCCT-backed 3D Viewport with reference grid and ViewCube;
+- an OCCT-backed 3D Viewport with reference grid and responsive ViewCube;
 - Pan, Orbit, Zoom, Fit, standard/corner views and Orthographic/Perspective;
 - built-in Part Origin point, axes and planes;
-- synchronized Tree/Viewport selection with a primary selection context;
+- synchronized Tree/Viewport selection with empty-space clear and primary selection;
 - persistent Show/Hide for Origin references with Undo/Redo;
 - editing Number, Title, Description and Engineering Revision;
 - Save and safe closing with unsaved-change protection;
 - rediscovering Parts after restart;
 - identity-conflict detection when two files in one Workspace carry the same DocumentId.
+
+The current `Open…` dialog is document-oriented, but the only implemented top-level CAD Document kind is still Part.
 
 The current Part is a durable CAD Document with a shared 3D working environment, but it does not yet contain modeled solid geometry.
 
