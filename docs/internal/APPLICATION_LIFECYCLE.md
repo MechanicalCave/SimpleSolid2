@@ -44,10 +44,10 @@ Opening a Project also rebuilds the runtime native-document index by scanning th
 <!-- section-id: internal.application-lifecycle.part -->
 ## Part Document lifecycle
 
-The Project Workspace initially owns document launch. The current Part lifecycle is:
+The Project Workspace Shell owns document launch. Its Project toolbar remains visible in both Workspace Dashboard and active Document contexts. The current Part lifecycle is:
 
 ```text
-neutral Project Workspace
+Project Workspace
 → New Part…
 → WorkspaceLocationDialog
 → browse folders inside current Workspace
@@ -57,17 +57,20 @@ neutral Project Workspace
 → generate fresh DocumentId
 → atomically publish valid empty PartDocument
 → create canonical DocumentSession
+→ add/focus Project-level Document Tab
+→ navigate to Document(DocumentId)
 → activate Part Workbench
 
-neutral Project Workspace
+Project Workspace
 → Open…
 → OpenDocumentDialog
 → list discovered Document candidates with Kind / Name / Location / Status
 → choose one resolved DocumentId
 → load authored Part state
 → create or reuse canonical DocumentSession
+→ add/focus Project-level Document Tab
+→ navigate to Document(DocumentId)
 → activate the Workbench for the resolved DocumentKind
-→ add/focus bottom Document Tab
 ```
 
 The current discovery backend provides Part candidates only. The dialog is document-oriented so later document kinds do not require a Part-specific top-level Open action.
@@ -83,20 +86,30 @@ Closing and reopening a Part destroys runtime Undo/Redo and Sketch edit context 
 <!-- section-id: internal.application-lifecycle.workbench -->
 ## Active document and Workbench lifecycle
 
-One ProjectSession may keep several DocumentSessions open. With zero open Documents the Project remains in a neutral Workspace context; no inactive Part editor is implied.
+One ProjectSession may keep several DocumentSessions open. Project Workspace Shell owns the runtime navigation state:
 
-Creating/opening a Part activates the Part Workbench. The architecture routes future editor activation by DocumentKind rather than treating Project Workspace as a Part Workbench. `CadWorkbench` owns one active DocumentId for the current Part editor context.
+```text
+Workspace
+or
+Document(DocumentId)
+```
 
-Changing the bottom tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. The other DocumentSessions remain open. Closing the last open Document returns to the neutral Workspace without closing the Project.
+This navigation state is independent from the set of open DocumentSessions. The user may return to Workspace Dashboard while several Documents remain open; doing so does not save, close or mutate them.
 
-Camera and selection are kept independently per open DocumentId for the lifetime of the Workbench. They are not persisted across application restart.
+Project Workspace Shell owns Project-level Document Tabs. Selecting a tab navigates to that DocumentId and routes to the appropriate Workbench for its DocumentKind. Current routing supports Part only.
+
+`CadWorkbench` is now a one-active-Part editor boundary. It receives the active `DocumentSession` directly and does not own ProjectSession, Project discovery, Project tabs or cross-document navigation.
+
+Changing the Project-level tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. Closing the last open Document navigates to Workspace without closing the Project.
+
+Camera and selection are runtime-only. Camera state is retained per DocumentId while navigating between open Documents/Workspace and is cleared at the Project runtime boundary; it is never persisted.
 
 <!-- section-id: internal.application-lifecycle.close -->
 ## Close, dirty state and restart
 
 Closing a dirty Part prompts for `Save`, `Discard` or `Cancel`.
 
-Workbench Tree/Viewer controllers hold non-owning runtime pointers to the active DocumentSession. SK-01A makes lifecycle ordering explicit: those bindings are detached before ProjectSession erases a DocumentSession. The same detach-before-destroy rule applies before the ProjectSession itself is destroyed.
+Workbench Tree/Viewer controllers hold non-owning runtime pointers to the active DocumentSession. Project Workspace Shell coordinates lifecycle ordering: the Part Workbench is detached before ProjectSession erases an active DocumentSession, and is detached/reset before the ProjectSession itself is destroyed.
 
 Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure keeps the Project open.
 
