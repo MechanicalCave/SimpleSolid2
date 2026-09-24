@@ -58,6 +58,7 @@ ProjectWorkspaceShell::ProjectWorkspaceShell(
             toolbar_frame);
     workspace_button_->setObjectName(
         QStringLiteral("workspaceHomeButton"));
+    workspace_button_->setCheckable(true);
     toolbar->addWidget(workspace_button_);
 
     new_part_button_ =
@@ -230,7 +231,8 @@ void ProjectWorkspaceShell::setDocumentWorkbench(
 void ProjectWorkspaceShell::showWorkspace() {
     content_->setCurrentWidget(
         dashboard_);
-    workspace_button_->setEnabled(false);
+    workspace_button_->setEnabled(true);
+    workspace_button_->setChecked(true);
 }
 
 void ProjectWorkspaceShell::showDocumentWorkbench() {
@@ -242,6 +244,7 @@ void ProjectWorkspaceShell::showDocumentWorkbench() {
     content_->setCurrentWidget(
         document_workbench_);
     workspace_button_->setEnabled(true);
+    workspace_button_->setChecked(false);
 }
 
 bool ProjectWorkspaceShell::showingWorkspace() const noexcept {
