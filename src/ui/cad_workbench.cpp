@@ -256,6 +256,11 @@ void CadWorkbench::buildUi() {
                           "No Origin visibility change."));
         });
 
+    tree_controller_->setSketchEditHandler(
+        [this](const sketch::SketchId& sketch_id) {
+            requestEditSketch(sketch_id);
+        });
+
     ViewportSurface viewport_surface;
     if (viewport_factory_) {
         viewport_surface = viewport_factory_(shell_);
@@ -313,6 +318,16 @@ void CadWorkbench::buildUi() {
 
     editor_surface_ = editor_container;
     shell_->setEditorSurface(editor_surface_);
+
+    sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Sketch"),
+            shell_);
+    sketch_button_->setObjectName(
+        QStringLiteral("sketchToolButton"));
+    shell_->editorToolsLayout().insertWidget(
+        0,
+        sketch_button_);
 
     viewport_controller_ =
         new PartViewportController(
@@ -459,13 +474,14 @@ void CadWorkbench::buildUi() {
     auto* operations_layout = new QVBoxLayout(operations_content);
     operations_layout->setContentsMargins(0, 0, 0, 0);
 
-    sketch_button_ =
+    cancel_sketch_button_ =
         new QPushButton(
-            QStringLiteral("Sketch"),
+            QStringLiteral("Cancel"),
             operations_content);
-    sketch_button_->setObjectName(
-        QStringLiteral("sketchToolButton"));
-    operations_layout->addWidget(sketch_button_);
+    cancel_sketch_button_->setObjectName(
+        QStringLiteral("cancelSketchButton"));
+    operations_layout->addWidget(
+        cancel_sketch_button_);
 
     finish_sketch_button_ =
         new QPushButton(
@@ -477,8 +493,7 @@ void CadWorkbench::buildUi() {
         finish_sketch_button_);
 
     operations_placeholder_ = new QLabel(
-        QStringLiteral(
-            "Sketch creates an empty Part-hosted Sketch on an Origin plane."),
+        QStringLiteral("No active tool."),
         operations_content);
     operations_placeholder_->setObjectName(
         QStringLiteral("operationsPlaceholder"));
@@ -533,6 +548,11 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { startSketchTool(); });
+    QObject::connect(
+        cancel_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { cancelSketchTool(); });
     QObject::connect(
         finish_sketch_button_,
         &QPushButton::clicked,
