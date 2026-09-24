@@ -228,16 +228,26 @@ std::optional<std::string> extractEntry(
 
 std::optional<int> positiveInt(
     const nlohmann::json& value) {
-    if (!value.is_number_integer() &&
-        !value.is_number_unsigned()) {
+    std::uint64_t parsed{};
+
+    if (value.is_number_unsigned()) {
+        parsed = value.get<std::uint64_t>();
+    } else if (value.is_number_integer()) {
+        const auto signed_value =
+            value.get<std::int64_t>();
+        if (signed_value <= 0) {
+            return std::nullopt;
+        }
+        parsed =
+            static_cast<std::uint64_t>(
+                signed_value);
+    } else {
         return std::nullopt;
     }
 
-    const auto parsed =
-        value.get<std::int64_t>();
-    if (parsed <= 0 ||
+    if (parsed == 0U ||
         parsed >
-            static_cast<std::int64_t>(
+            static_cast<std::uint64_t>(
                 std::numeric_limits<int>::max())) {
         return std::nullopt;
     }
@@ -600,7 +610,7 @@ NativeContainerBuildResult buildNativeDocumentContainer(
     }
 
     nlohmann::json manifest{
-        {"format", native_document_format},
+        {"format", std::string{native_document_format}},
         {"container_version",
          native_document_container_version},
         {"document_kind",
