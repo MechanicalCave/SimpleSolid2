@@ -4,6 +4,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QLabel>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QWidget>
