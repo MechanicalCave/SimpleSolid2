@@ -555,8 +555,10 @@ void CadWorkbench::setProjectSession(
         clearActiveContext();
         status_->setText(
             QStringLiteral(
-                "Project open. Create or open a Part Document."));
+                "Project open. No CAD Document is active."));
     }
+
+    notifyDocumentPresence();
 }
 
 void CadWorkbench::clearProjectSession() {
@@ -576,6 +578,7 @@ void CadWorkbench::clearProjectSession() {
 
     clearActiveContext();
     status_->setText(QStringLiteral("No Project is open."));
+    notifyDocumentPresence();
 }
 
 void CadWorkbench::refreshWorkspaceIndex() {
@@ -666,6 +669,7 @@ bool CadWorkbench::activateDocument(
             ? QStringLiteral(
                   "Part was already open; activated existing DocumentSession.")
             : QStringLiteral("Part opened."));
+    notifyDocumentPresence();
     return true;
 }
 
@@ -737,8 +741,28 @@ std::filesystem::path CadWorkbench::defaultPartPath() const {
     return "Part.ss2part";
 }
 
-void CadWorkbench::newPart() {
-    if (session_ == nullptr) return;
+bool CadWorkbench::createPartInteractive(
+    QWidget* dialog_parent) {
+    return newPart(dialog_parent);
+}
+
+bool CadWorkbench::openDocumentInteractive(
+    QWidget* dialog_parent) {
+    return openDocument(dialog_parent);
+}
+
+void CadWorkbench::refreshWorkspaceDocuments() {
+    refreshWorkspaceIndex();
+}
+
+bool CadWorkbench::hasOpenDocuments() const noexcept {
+    return document_tabs_ != nullptr &&
+           document_tabs_->count() > 0;
+}
+
+bool CadWorkbench::newPart(
+    QWidget* dialog_parent) {
+    if (session_ == nullptr) return false;
 
     WorkspaceLocationDialog dialog{
         session_->workspaceRoot(),
@@ -746,22 +770,24 @@ void CadWorkbench::newPart() {
         QStringLiteral(".ss2part"),
         fromFilesystemPath(
             defaultPartPath().filename()),
-        this};
+        dialog_parent != nullptr
+            ? dialog_parent
+            : this};
 
     if (dialog.exec() != QDialog::Accepted) {
-        return;
+        return false;
     }
 
     const auto relative =
         dialog.selectedRelativeFilePath();
-    if (!relative) return;
+    if (!relative) return false;
 
     auto created =
         session_->createPart(*relative);
     if (!created.ok()) {
         showFailure(created.diagnostic);
         refreshWorkspaceIndex();
-        return;
+        return false;
     }
 
     ensureDocumentTab(
@@ -775,10 +801,13 @@ void CadWorkbench::newPart() {
     status_->setText(
         QStringLiteral(
             "New Part created and saved."));
+    notifyDocumentPresence();
+    return true;
 }
 
-void CadWorkbench::openDocument() {
-    if (session_ == nullptr) return;
+bool CadWorkbench::openDocument(
+    QWidget* dialog_parent) {
+    if (session_ == nullptr) return false;
 
     const auto refreshed =
         session_->refreshDocuments();
@@ -793,18 +822,19 @@ void CadWorkbench::openDocument() {
     OpenDocumentDialog dialog{
         openDocumentCandidates(
             session_->documentIndex()),
-        this};
+        dialog_parent != nullptr
+            ? dialog_parent
+            : this};
 
     if (dialog.exec() != QDialog::Accepted) {
-        return;
+        return false;
     }
 
     const auto document_id =
         dialog.selectedDocumentId();
-    if (!document_id) return;
+    if (!document_id) return false;
 
-    static_cast<void>(
-        activateDocument(*document_id));
+    return activateDocument(*document_id);
 }
 
 application::DocumentSession*
@@ -1253,6 +1283,7 @@ void CadWorkbench::closeTab(int index) {
     }
 
     status_->setText(QStringLiteral("Part closed."));
+    notifyDocumentPresence();
 }
 
 void CadWorkbench::refreshActiveContext() {
@@ -1470,6 +1501,13 @@ void CadWorkbench::syncActionState() {
     finish_sketch_button_->setEnabled(
         editing_sketch);
 
+}
+
+void CadWorkbench::notifyDocumentPresence() {
+    if (document_presence_handler_) {
+        document_presence_handler_(
+            hasOpenDocuments());
+    }
 }
 
 void CadWorkbench::updateTabPresentation(
