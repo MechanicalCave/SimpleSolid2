@@ -65,6 +65,9 @@ private:
     void openDocument();
     void applyProperties();
     void startSketchTool();
+    void cancelSketchTool();
+    void requestEditSketch(
+        const sketch::SketchId& sketch_id);
     void tryCreateSketchFromSupport(
         std::optional<core::BuiltinReferenceRole> support);
     void enterSketchEdit(
@@ -140,6 +143,7 @@ private:
 
     QLabel* operations_placeholder_{};
     QPushButton* sketch_button_{};
+    QPushButton* cancel_sketch_button_{};
     QPushButton* finish_sketch_button_{};
 
     QTabBar* document_tabs_{};
