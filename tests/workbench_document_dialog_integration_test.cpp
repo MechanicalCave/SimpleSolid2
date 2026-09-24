@@ -243,7 +243,7 @@ int main(int argc, char* argv[]) {
                     QStringLiteral("Existing"));
         });
 
-    open_document->click();
+    EXPECT(workbench.openDocumentInteractive(&workbench));
 
     EXPECT(reuse_dialog_ok);
     EXPECT(
