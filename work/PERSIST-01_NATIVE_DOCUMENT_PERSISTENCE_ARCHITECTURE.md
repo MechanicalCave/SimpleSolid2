@@ -75,7 +75,9 @@ The accepted reasons are:
 - reusable persistence mechanics across Part/Assembly/Drawing without a universal domain schema;
 - good fit for future embedded Sketch data while leaving Sketch semantics to the host domain.
 
-The cost is an explicit maintained ZIP dependency plus JSON support. PERSIST-01 must select those implementation dependencies without exposing them through CAD-domain semantic APIs.
+The accepted implementation dependencies are vendored/pinned `miniz` 3.1.2 and `nlohmann/json` 3.12.0. Normal builds must not download them. Their types must not cross CAD-domain public semantic APIs.
+
+Container v1 fixes `authored/document.json`; the manifest therefore contains only `format`, `container_version`, `document_kind`, `document_id` and `domain_schema_version`. `document_id` uses Core's canonical serialization and is parsed by Core; persistence does not define a second UUID contract.
 
 
 ## 5. Scope IN
