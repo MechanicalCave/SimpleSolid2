@@ -1,6 +1,6 @@
 # SK-01A — Workbench Host Corrections & Close Safety
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — IMPLEMENTED  
 **Owner acceptance:** 2026-09-24  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -125,3 +125,28 @@ Reason: changes Workspace/Workbench ownership, tool-launch placement, Operations
 SK-01A completes only after the manual P0 scenario is covered by automated regression and the exact-head Windows gate passes.
 
 Completion does not activate SK-02.
+
+
+## 9. Completion record
+
+SK-01A implementation is complete and ready for the final exact-head Windows gate.
+
+Implemented state:
+
+- active Document close detaches Workbench/Tree/Viewer runtime bindings before ProjectSession erases the owning DocumentSession;
+- Project close detaches CadWorkbench before ProjectHubController destroys the owning ProjectSession;
+- the P0 close regression reported during manual SK-01 validation is covered by automated Workbench and Project Hub lifecycle tests;
+- a Project with zero open CAD Documents shows a neutral Workspace instead of an inactive Part editor;
+- current Workspace launch actions are New Part, neutral Open and Refresh;
+- creating/opening a Part activates the Part Workbench; closing the last open Part returns to neutral Workspace while keeping the Project open;
+- the Part Sketch launcher lives in the editor tool strip above the 3D Viewport;
+- Operations is contextual: idle has no permanent Sketch launcher, support-pick exposes contextual Cancel/guidance, and active Sketch edit exposes Finish Sketch;
+- existing Sketches re-enter the same runtime edit context by Tree double-click or Edit Sketch context menu;
+- Tree routing uses transient stable SketchId data and revalidates the ID against the active Part before edit entry;
+- re-entering Sketch edit is runtime-only and does not mutate authored state, revision or dirty state;
+- no SK-02 geometry, constraints/solver, Datum/face support, Body/Feature, Assembly or Drawing implementation was introduced;
+- internal and PL/EN product documentation describe the corrected Workspace/Workbench/Sketch UX and lifecycle ordering;
+- the compiled CTest suite remains 35 tests;
+- exact-head implementation gate #183 passed docs/verify/build and 35/35 tests, including native Workbench stress and the corrected Sketch double-click regression.
+
+The final completion condition is one final exact-head Windows docs/verify/build/CTest gate on this completed governance state.
