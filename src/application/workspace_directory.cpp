@@ -79,20 +79,15 @@ bool validRelativeDirectoryPath(
 }
 
 bool validFolderName(
-    std::string_view name) {
+    const std::filesystem::path& name) {
     if (name.empty() ||
         name == "." ||
-        name == "..") {
-        return false;
-    }
-
-    const std::filesystem::path path{
-        std::string{name}};
-    if (path.is_absolute() ||
-        path.has_root_path() ||
-        path.has_parent_path() ||
-        path.filename() != path ||
-        isReservedComponent(path)) {
+        name == ".." ||
+        name.is_absolute() ||
+        name.has_root_path() ||
+        name.has_parent_path() ||
+        name.filename() != name ||
+        isReservedComponent(name)) {
         return false;
     }
 
@@ -301,7 +296,7 @@ WorkspaceDirectoryResult
 WorkspaceDirectoryService::createDirectory(
     const std::filesystem::path& workspace_root,
     const std::filesystem::path& parent_relative_path,
-    std::string_view folder_name) const {
+    const std::filesystem::path& folder_name) const {
     if (!validFolderName(folder_name)) {
         return {
             {},
@@ -309,8 +304,7 @@ WorkspaceDirectoryService::createDirectory(
                 WorkspaceDirectoryErrorCode::
                     invalid_name,
                 "Folder name must be one ordinary Workspace directory name and may not be .simplesolid",
-                std::filesystem::path{
-                    std::string{folder_name}})};
+                folder_name)};
     }
 
     const auto parent =
@@ -325,8 +319,7 @@ WorkspaceDirectoryService::createDirectory(
 
     const auto target =
         parent.absolute /
-        std::filesystem::path{
-            std::string{folder_name}};
+        folder_name;
 
     std::error_code ec;
     if (std::filesystem::exists(target, ec)) {
