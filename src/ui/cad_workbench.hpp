@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/application/project_session.hpp>
+#include <simplesolid2/sketch/sketch_id.hpp>
 #include <simplesolid2/viewer/camera_state.hpp>
 
 #include "viewport_surface.hpp"
