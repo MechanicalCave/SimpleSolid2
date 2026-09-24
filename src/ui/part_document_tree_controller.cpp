@@ -303,6 +303,55 @@ void PartDocumentTreeController::rebuild(
         }
     }
 
+    if (!session_->document().sketches().empty()) {
+        auto* sketches = new QTreeWidgetItem(
+            root,
+            QStringList{QStringLiteral("Sketches")});
+
+        std::size_t sketch_index = 0U;
+        for (const auto& sketch :
+             session_->document().sketches()) {
+            ++sketch_index;
+
+            auto* item = new QTreeWidgetItem(
+                sketches,
+                QStringList{
+                    QStringLiteral("Sketch %1")
+                        .arg(
+                            static_cast<qulonglong>(
+                                sketch_index))});
+
+            QString support;
+            switch (sketch.support.builtin_plane) {
+            case core::BuiltinReferenceRole::xy_plane:
+                support = QStringLiteral("XY Plane");
+                break;
+            case core::BuiltinReferenceRole::xz_plane:
+                support = QStringLiteral("XZ Plane");
+                break;
+            case core::BuiltinReferenceRole::yz_plane:
+                support = QStringLiteral("YZ Plane");
+                break;
+            default:
+                support = QStringLiteral("<invalid>");
+                break;
+            }
+
+            item->setToolTip(
+                0,
+                QStringLiteral("SketchId: ") +
+                    fromUtf8(sketch.id.value()) +
+                    QStringLiteral("\nSupport: ") +
+                    support);
+
+            auto font = item->font(0);
+            font.setItalic(!sketch.visible);
+            item->setFont(0, font);
+        }
+
+        sketches->setExpanded(true);
+    }
+
     root->setExpanded(true);
     origin->setExpanded(true);
 
