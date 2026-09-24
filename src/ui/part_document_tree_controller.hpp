@@ -60,6 +60,11 @@ public:
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primaryBuiltinReference() const;
 
+protected:
+    bool eventFilter(
+        QObject* watched,
+        QEvent* event) override;
+
 private:
     void rebuild(bool preserve_reference_selection);
     void updateVisibilityActions();
