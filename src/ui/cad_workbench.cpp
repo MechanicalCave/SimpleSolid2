@@ -273,7 +273,8 @@ void CadWorkbench::buildUi() {
         view_cube_ =
             new ViewCubeWidget(
                 viewport_,
-                editor_container);
+                editor_container,
+                viewport_widget);
     } else {
         if (viewport_surface.widget != nullptr) {
             viewport_surface.widget->deleteLater();
