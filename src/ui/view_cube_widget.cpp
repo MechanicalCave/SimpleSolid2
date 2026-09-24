@@ -3,15 +3,15 @@
 #include <QAction>
 #include <QEvent>
 #include <QHBoxLayout>
+#include <QLineF>
 #include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPalette>
 #include <QPolygonF>
-#include <QShowEvent>
+#include <QPushButton>
 #include <QSizePolicy>
 #include <QString>
-#include <QTimer>
 #include <QToolButton>
 #include <QVBoxLayout>
 
@@ -19,416 +19,513 @@
 #include <array>
 #include <cmath>
 #include <functional>
-#include <utility>
+#include <optional>
 
 namespace simplesolid2::ui {
 namespace {
 
+constexpr QSize regularOverlaySize{132, 118};
+constexpr QSize compactOverlaySize{54, 34};
 constexpr int overlayMargin = 8;
-constexpr int compactThreshold = 250;
-constexpr int fullWidth = 148;
-constexpr int compactWidth = 88;
+constexpr int compactWidthThreshold = 180;
+constexpr int compactHeightThreshold = 145;
 
-double squaredDistance(
-    const QPointF& left,
-    const QPointF& right) noexcept {
-    const auto dx = left.x() - right.x();
-    const auto dy = left.y() - right.y();
-    return dx * dx + dy * dy;
-}
-
-} // namespace
-
-class NavigationCubeCanvas final : public QWidget {
+class ViewCubeCanvas final : public QWidget {
 public:
     using ViewHandler =
         std::function<void(viewer::StandardView)>;
 
-    NavigationCubeCanvas(
+    explicit ViewCubeCanvas(
         ViewHandler handler,
-        QWidget* parent)
+        QWidget* parent = nullptr)
         : QWidget{parent},
           handler_{std::move(handler)} {
-        setObjectName(
-            QStringLiteral("viewCubeCanvas"));
+        setObjectName(QStringLiteral("viewCubeCanvas"));
+        setFixedSize(96, 76);
+        setMouseTracking(true);
         setCursor(Qt::PointingHandCursor);
-        setToolTip(
-            QStringLiteral(
-                "Click a visible face or corner. "
-                "Use Views for every standard orientation."));
-        setSizePolicy(
-            QSizePolicy::Fixed,
-            QSizePolicy::Fixed);
-    }
-
-    void setCompact(bool compact) {
-        if (compact_ == compact) return;
-        compact_ = compact;
-        updateGeometry();
-        update();
-    }
-
-    [[nodiscard]] QSize sizeHint() const override {
-        return compact_
-            ? QSize{72, 64}
-            : QSize{116, 98};
-    }
-
-    [[nodiscard]] QSize minimumSizeHint() const override {
-        return QSize{0, 0};
+        setToolTip(QStringLiteral(
+            "Click a face or corner to orient the view."));
     }
 
 protected:
     void paintEvent(QPaintEvent*) override {
         QPainter painter{this};
-        painter.setRenderHint(
-            QPainter::Antialiasing,
-            true);
+        painter.setRenderHint(QPainter::Antialiasing, true);
 
-        const auto geometry =
-            cubeGeometry(rect());
+        const auto palette_window =
+            palette().color(QPalette::Window);
+        const auto palette_mid =
+            palette().color(QPalette::Mid);
+        const auto palette_light =
+            palette().color(QPalette::Light);
+        const auto palette_button =
+            palette().color(QPalette::Button);
+        const auto palette_text =
+            palette().color(QPalette::ButtonText);
+        const auto palette_highlight =
+            palette().color(QPalette::Highlight);
 
-        const auto base = palette().button().color();
-        const auto text = palette().buttonText().color();
-        const auto edge = palette().mid().color();
+        painter.fillRect(rect(), palette_window);
 
-        painter.setPen(QPen{edge, 1.2});
+        auto drawFace = [&](
+            const QPolygonF& polygon,
+            viewer::StandardView view,
+            const QColor& fill) {
+            painter.setPen(
+                QPen{
+                    hovered_ && *hovered_ == view
+                        ? palette_highlight
+                        : palette_mid,
+                    hovered_ && *hovered_ == view
+                        ? 2.0
+                        : 1.0});
+            painter.setBrush(fill);
+            painter.drawPolygon(polygon);
+        };
 
-        painter.setBrush(base.lighter(118));
-        painter.drawPolygon(geometry.top);
+        drawFace(
+            topPolygon(),
+            viewer::StandardView::top,
+            palette_light);
+        drawFace(
+            frontPolygon(),
+            viewer::StandardView::front,
+            palette_button);
+        drawFace(
+            rightPolygon(),
+            viewer::StandardView::right,
+            palette_mid.lighter(125));
 
-        painter.setBrush(base);
-        painter.drawPolygon(geometry.front);
+        painter.setPen(
+            QPen{palette_mid, 1.0, Qt::DashLine});
+        painter.drawLine(vertex(H), vertex(D));
+        painter.drawLine(vertex(H), vertex(G));
+        painter.drawLine(vertex(H), vertex(E));
 
-        painter.setBrush(base.darker(108));
-        painter.drawPolygon(geometry.right);
-
-        painter.setPen(QPen{text, 1.0});
-        painter.setBrush(text);
-
-        const auto corner_radius =
-            compact_ ? 2.7 : 3.5;
-        for (const auto& corner : geometry.corners) {
+        for (const auto& hotspot : cornerHotspots()) {
+            const bool hovered =
+                hovered_ && *hovered_ == hotspot.view;
+            painter.setPen(
+                QPen{
+                    hovered
+                        ? palette_highlight
+                        : palette_mid,
+                    hovered ? 2.0 : 1.0});
+            painter.setBrush(
+                hovered
+                    ? palette_highlight
+                    : palette_window);
             painter.drawEllipse(
-                corner.point,
-                corner_radius,
-                corner_radius);
+                hotspot.point,
+                hovered ? 4.5 : 3.2,
+                hovered ? 4.5 : 3.2);
         }
 
-        if (!compact_) {
-            painter.drawText(
-                geometry.top.boundingRect(),
-                Qt::AlignCenter,
-                QStringLiteral("TOP"));
-            painter.drawText(
-                geometry.front.boundingRect(),
-                Qt::AlignCenter,
-                QStringLiteral("FRONT"));
-            painter.drawText(
-                geometry.right.boundingRect(),
-                Qt::AlignCenter,
-                QStringLiteral("RIGHT"));
-        }
+        const QRectF isoRect{2.0, 3.0, 20.0, 18.0};
+        const bool isoHovered =
+            hovered_ &&
+            *hovered_ == viewer::StandardView::isometric;
+        painter.setPen(
+            QPen{
+                isoHovered
+                    ? palette_highlight
+                    : palette_mid,
+                isoHovered ? 2.0 : 1.0});
+        painter.setBrush(
+            isoHovered
+                ? palette_highlight
+                : palette_window);
+        painter.drawRoundedRect(isoRect, 3.0, 3.0);
+        painter.setPen(
+            isoHovered
+                ? palette().color(
+                      QPalette::HighlightedText)
+                : palette_text);
+        painter.drawText(
+            isoRect,
+            Qt::AlignCenter,
+            QStringLiteral("ISO"));
     }
 
-    void mousePressEvent(
-        QMouseEvent* event) override {
-        if (event->button() != Qt::LeftButton ||
-            !handler_) {
+    void mouseMoveEvent(QMouseEvent* event) override {
+        const auto next = viewAt(event->position());
+        if (next != hovered_) {
+            hovered_ = next;
+            update();
+        }
+        QWidget::mouseMoveEvent(event);
+    }
+
+    void leaveEvent(QEvent* event) override {
+        hovered_.reset();
+        update();
+        QWidget::leaveEvent(event);
+    }
+
+    void mousePressEvent(QMouseEvent* event) override {
+        if (event->button() != Qt::LeftButton) {
             QWidget::mousePressEvent(event);
             return;
         }
 
-        const auto geometry =
-            cubeGeometry(rect());
-        const auto point = event->position();
-
-        const auto corner_radius =
-            compact_ ? 8.0 : 10.0;
-        const auto corner_radius_sq =
-            corner_radius * corner_radius;
-
-        for (const auto& corner : geometry.corners) {
-            if (squaredDistance(
-                    point,
-                    corner.point) <=
-                corner_radius_sq) {
-                handler_(corner.view);
-                event->accept();
-                return;
-            }
-        }
-
-        if (geometry.top.containsPoint(
-                point,
-                Qt::OddEvenFill)) {
-            handler_(viewer::StandardView::top);
+        const auto view = viewAt(event->position());
+        if (view && handler_) {
+            handler_(*view);
             event->accept();
             return;
         }
 
-        if (geometry.front.containsPoint(
-                point,
-                Qt::OddEvenFill)) {
-            handler_(viewer::StandardView::front);
-            event->accept();
-            return;
-        }
-
-        if (geometry.right.containsPoint(
-                point,
-                Qt::OddEvenFill)) {
-            handler_(viewer::StandardView::right);
-            event->accept();
-            return;
-        }
-
-        handler_(viewer::StandardView::isometric);
-        event->accept();
+        QWidget::mousePressEvent(event);
     }
 
 private:
-    struct Corner final {
+    enum VertexIndex : std::size_t {
+        A,
+        B,
+        C,
+        D,
+        E,
+        F,
+        G,
+        H,
+    };
+
+    struct CornerHotspot final {
         QPointF point;
         viewer::StandardView view;
     };
 
-    struct Geometry final {
-        QPolygonF top;
-        QPolygonF front;
-        QPolygonF right;
-        std::array<Corner, 7> corners;
-    };
+    [[nodiscard]] static QPointF vertex(
+        VertexIndex index) {
+        constexpr std::array<QPointF, 8> vertices{
+            QPointF{20.0, 28.0},
+            QPointF{55.0, 28.0},
+            QPointF{78.0, 12.0},
+            QPointF{43.0, 12.0},
+            QPointF{20.0, 60.0},
+            QPointF{55.0, 60.0},
+            QPointF{78.0, 44.0},
+            QPointF{43.0, 44.0},
+        };
+        return vertices[index];
+    }
 
-    [[nodiscard]] static Geometry cubeGeometry(
-        const QRect& rect) {
-        const double width =
-            std::max(1, rect.width());
-        const double height =
-            std::max(1, rect.height());
+    [[nodiscard]] static QPolygonF topPolygon() {
+        return QPolygonF{
+            vertex(D),
+            vertex(C),
+            vertex(B),
+            vertex(A)};
+    }
 
-        const QPointF a{
-            width * 0.12,
-            height * 0.30};
-        const QPointF b{
-            width * 0.50,
-            height * 0.08};
-        const QPointF c{
-            width * 0.88,
-            height * 0.30};
-        const QPointF d{
-            width * 0.50,
-            height * 0.48};
-        const QPointF e{
-            width * 0.12,
-            height * 0.68};
-        const QPointF f{
-            width * 0.50,
-            height * 0.90};
-        const QPointF g{
-            width * 0.88,
-            height * 0.68};
+    [[nodiscard]] static QPolygonF frontPolygon() {
+        return QPolygonF{
+            vertex(A),
+            vertex(B),
+            vertex(F),
+            vertex(E)};
+    }
 
-        Geometry geometry;
-        geometry.top = QPolygonF{a, b, c, d};
-        geometry.front = QPolygonF{a, d, f, e};
-        geometry.right = QPolygonF{d, c, g, f};
-        geometry.corners = {{
-            {a, viewer::StandardView::top_front_left},
-            {b, viewer::StandardView::top_back_left},
-            {c, viewer::StandardView::top_back_right},
-            {d, viewer::StandardView::top_front_right},
-            {e, viewer::StandardView::bottom_front_left},
-            {f, viewer::StandardView::bottom_front_right},
-            {g, viewer::StandardView::bottom_back_right},
+    [[nodiscard]] static QPolygonF rightPolygon() {
+        return QPolygonF{
+            vertex(B),
+            vertex(C),
+            vertex(G),
+            vertex(F)};
+    }
+
+    [[nodiscard]] static std::array<
+        CornerHotspot,
+        8> cornerHotspots() {
+        return {{
+            {vertex(A),
+             viewer::StandardView::top_front_left},
+            {vertex(B),
+             viewer::StandardView::top_front_right},
+            {vertex(C),
+             viewer::StandardView::top_back_right},
+            {vertex(D),
+             viewer::StandardView::top_back_left},
+            {vertex(E),
+             viewer::StandardView::bottom_front_left},
+            {vertex(F),
+             viewer::StandardView::bottom_front_right},
+            {vertex(G),
+             viewer::StandardView::bottom_back_right},
+            {vertex(H),
+             viewer::StandardView::bottom_back_left},
         }};
-        return geometry;
+    }
+
+    [[nodiscard]] static bool near(
+        const QPointF& a,
+        const QPointF& b,
+        double radius) {
+        return QLineF{a, b}.length() <= radius;
+    }
+
+    [[nodiscard]] std::optional<viewer::StandardView>
+    viewAt(const QPointF& point) const {
+        if (QRectF{2.0, 3.0, 20.0, 18.0}
+                .contains(point)) {
+            return viewer::StandardView::isometric;
+        }
+
+        for (const auto& hotspot : cornerHotspots()) {
+            if (near(point, hotspot.point, 6.5)) {
+                return hotspot.view;
+            }
+        }
+
+        if (topPolygon().containsPoint(
+                point,
+                Qt::OddEvenFill)) {
+            return viewer::StandardView::top;
+        }
+        if (rightPolygon().containsPoint(
+                point,
+                Qt::OddEvenFill)) {
+            return viewer::StandardView::right;
+        }
+        if (frontPolygon().containsPoint(
+                point,
+                Qt::OddEvenFill)) {
+            return viewer::StandardView::front;
+        }
+
+        return std::nullopt;
     }
 
     ViewHandler handler_;
-    bool compact_{};
+    std::optional<viewer::StandardView> hovered_;
 };
+
+} // namespace
 
 ViewCubeWidget::ViewCubeWidget(
     viewer::IDocumentViewport* viewport,
     QWidget* parent)
     : QFrame{parent},
-      viewport_{viewport} {
-    setObjectName(
-        QStringLiteral("viewCubeWidget"));
+      viewport_{viewport},
+      host_{parent} {
+    setObjectName(QStringLiteral("viewCubeWidget"));
     setFrameShape(QFrame::StyledPanel);
     setSizePolicy(
         QSizePolicy::Fixed,
         QSizePolicy::Fixed);
-    setMinimumSize(0, 0);
 
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(4, 4, 4, 4);
     root->setSpacing(2);
 
+    navigation_menu_ = new QMenu(this);
+    navigation_menu_->setObjectName(
+        QStringLiteral("viewCubeNavigationMenu"));
+
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Front"),
+        QStringLiteral("viewCubeFrontAction"),
+        viewer::StandardView::front);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Back"),
+        QStringLiteral("viewCubeBackAction"),
+        viewer::StandardView::back);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Left"),
+        QStringLiteral("viewCubeLeftAction"),
+        viewer::StandardView::left);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Right"),
+        QStringLiteral("viewCubeRightAction"),
+        viewer::StandardView::right);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Top"),
+        QStringLiteral("viewCubeTopAction"),
+        viewer::StandardView::top);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Bottom"),
+        QStringLiteral("viewCubeBottomAction"),
+        viewer::StandardView::bottom);
+
+    navigation_menu_->addSeparator();
+
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Isometric"),
+        QStringLiteral("viewCubeIsometricAction"),
+        viewer::StandardView::isometric);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Top Front Left"),
+        QStringLiteral("viewCubeTopFrontLeftAction"),
+        viewer::StandardView::top_front_left);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Top Front Right"),
+        QStringLiteral("viewCubeTopFrontRightAction"),
+        viewer::StandardView::top_front_right);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Top Back Left"),
+        QStringLiteral("viewCubeTopBackLeftAction"),
+        viewer::StandardView::top_back_left);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Top Back Right"),
+        QStringLiteral("viewCubeTopBackRightAction"),
+        viewer::StandardView::top_back_right);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Bottom Front Left"),
+        QStringLiteral("viewCubeBottomFrontLeftAction"),
+        viewer::StandardView::bottom_front_left);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Bottom Front Right"),
+        QStringLiteral("viewCubeBottomFrontRightAction"),
+        viewer::StandardView::bottom_front_right);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Bottom Back Left"),
+        QStringLiteral("viewCubeBottomBackLeftAction"),
+        viewer::StandardView::bottom_back_left);
+    addViewAction(
+        *navigation_menu_,
+        QStringLiteral("Bottom Back Right"),
+        QStringLiteral("viewCubeBottomBackRightAction"),
+        viewer::StandardView::bottom_back_right);
+
+    navigation_menu_->addSeparator();
+
+    fit_action_ =
+        navigation_menu_->addAction(
+            QStringLiteral("Fit"));
+    fit_action_->setObjectName(
+        QStringLiteral("viewCubeFitAction"));
+    QObject::connect(
+        fit_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (viewport_ != nullptr) {
+                viewport_->fitAll();
+            }
+        });
+
+    projection_action_ =
+        navigation_menu_->addAction(QString{});
+    projection_action_->setObjectName(
+        QStringLiteral("viewCubeProjectionAction"));
+    QObject::connect(
+        projection_action_,
+        &QAction::triggered,
+        this,
+        [this] { toggleProjection(); });
+
+    regular_panel_ = new QWidget(this);
+    regular_panel_->setObjectName(
+        QStringLiteral("viewCubeRegularPanel"));
+    auto* regular_layout =
+        new QVBoxLayout(regular_panel_);
+    regular_layout->setContentsMargins(0, 0, 0, 0);
+    regular_layout->setSpacing(1);
+
     cube_canvas_ =
-        new NavigationCubeCanvas(
+        new ViewCubeCanvas(
             [this](viewer::StandardView view) {
                 applyStandardView(view);
             },
-            this);
-    root->addWidget(
+            regular_panel_);
+    regular_layout->addWidget(
         cube_canvas_,
         0,
         Qt::AlignHCenter);
 
-    controls_layout_ = new QHBoxLayout;
-    controls_layout_->setContentsMargins(
-        0, 0, 0, 0);
-    controls_layout_->setSpacing(2);
+    auto* controls = new QHBoxLayout;
+    controls->setContentsMargins(0, 0, 0, 0);
+    controls->setSpacing(2);
 
-    views_button_ = new QToolButton(this);
+    views_button_ =
+        new QToolButton(regular_panel_);
     views_button_->setObjectName(
         QStringLiteral("viewCubeViewsButton"));
+    views_button_->setText(QStringLiteral("Views"));
+    views_button_->setMenu(navigation_menu_);
     views_button_->setPopupMode(
         QToolButton::InstantPopup);
+    views_button_->setToolTip(
+        QStringLiteral("All standard views"));
 
-    auto* views_menu =
-        new QMenu(views_button_);
-
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Front"),
-        QStringLiteral("viewCubeViewActionFront"),
-        viewer::StandardView::front);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Back"),
-        QStringLiteral("viewCubeViewActionBack"),
-        viewer::StandardView::back);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Left"),
-        QStringLiteral("viewCubeViewActionLeft"),
-        viewer::StandardView::left);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Right"),
-        QStringLiteral("viewCubeViewActionRight"),
-        viewer::StandardView::right);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Top"),
-        QStringLiteral("viewCubeViewActionTop"),
-        viewer::StandardView::top);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Bottom"),
-        QStringLiteral("viewCubeViewActionBottom"),
-        viewer::StandardView::bottom);
-
-    views_menu->addSeparator();
-
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Isometric"),
-        QStringLiteral("viewCubeViewActionIsometric"),
-        viewer::StandardView::isometric);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Top Front Left"),
-        QStringLiteral("viewCubeViewActionTopFrontLeft"),
-        viewer::StandardView::top_front_left);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Top Front Right"),
-        QStringLiteral("viewCubeViewActionTopFrontRight"),
-        viewer::StandardView::top_front_right);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Top Back Left"),
-        QStringLiteral("viewCubeViewActionTopBackLeft"),
-        viewer::StandardView::top_back_left);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Top Back Right"),
-        QStringLiteral("viewCubeViewActionTopBackRight"),
-        viewer::StandardView::top_back_right);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Bottom Front Left"),
-        QStringLiteral("viewCubeViewActionBottomFrontLeft"),
-        viewer::StandardView::bottom_front_left);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Bottom Front Right"),
-        QStringLiteral("viewCubeViewActionBottomFrontRight"),
-        viewer::StandardView::bottom_front_right);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Bottom Back Left"),
-        QStringLiteral("viewCubeViewActionBottomBackLeft"),
-        viewer::StandardView::bottom_back_left);
-    addViewAction(
-        *views_menu,
-        QStringLiteral("Bottom Back Right"),
-        QStringLiteral("viewCubeViewActionBottomBackRight"),
-        viewer::StandardView::bottom_back_right);
-
-    views_button_->setMenu(views_menu);
-
-    fit_button_ = new QToolButton(this);
+    fit_button_ =
+        new QPushButton(
+            QStringLiteral("Fit"),
+            regular_panel_);
     fit_button_->setObjectName(
         QStringLiteral("viewCubeFitButton"));
     fit_button_->setToolTip(
         QStringLiteral("Fit All"));
 
     projection_button_ =
-        new QToolButton(this);
+        new QPushButton(regular_panel_);
     projection_button_->setObjectName(
-        QStringLiteral(
-            "viewCubeProjectionButton"));
+        QStringLiteral("viewCubeProjectionButton"));
 
-    controls_layout_->addWidget(
-        views_button_);
-    controls_layout_->addWidget(
-        fit_button_);
-    controls_layout_->addWidget(
-        projection_button_);
-    root->addLayout(controls_layout_);
+    controls->addWidget(views_button_);
+    controls->addWidget(fit_button_);
+    controls->addWidget(projection_button_);
+    regular_layout->addLayout(controls);
+    root->addWidget(regular_panel_);
+
+    compact_button_ =
+        new QToolButton(this);
+    compact_button_->setObjectName(
+        QStringLiteral("viewCubeCompactButton"));
+    compact_button_->setText(QStringLiteral("View"));
+    compact_button_->setToolTip(
+        QStringLiteral("View navigation"));
+    compact_button_->setMenu(navigation_menu_);
+    compact_button_->setPopupMode(
+        QToolButton::InstantPopup);
+    compact_button_->setVisible(false);
+    root->addWidget(compact_button_);
 
     QObject::connect(
         fit_button_,
-        &QToolButton::clicked,
+        &QPushButton::clicked,
         this,
         [this] {
-            if (viewport_ == nullptr) return;
-            viewport_->fitAll();
+            if (viewport_ != nullptr) {
+                viewport_->fitAll();
+            }
         });
 
     QObject::connect(
         projection_button_,
-        &QToolButton::clicked,
+        &QPushButton::clicked,
         this,
         [this] { toggleProjection(); });
 
-    if (parentWidget() != nullptr) {
-        parentWidget()->installEventFilter(this);
+    if (host_ != nullptr) {
+        host_->installEventFilter(this);
     }
 
-    refreshProjectionLabel();
+    refreshProjectionPresentation();
     syncEnabledState();
-    updateResponsiveLayout();
-
-    QTimer::singleShot(
-        0,
-        this,
-        [this] {
-            updateResponsiveLayout();
-            repositionInsideParent();
-            raise();
-        });
+    syncOverlayGeometry();
 }
 
-ViewCubeWidget::~ViewCubeWidget() {
-    if (parentWidget() != nullptr) {
-        parentWidget()->removeEventFilter(this);
-    }
+void ViewCubeWidget::setViewport(
+    viewer::IDocumentViewport* viewport) {
+    viewport_ = viewport;
+    refreshProjectionPresentation();
+    syncEnabledState();
 }
 
 QAction* ViewCubeWidget::addViewAction(
@@ -438,7 +535,6 @@ QAction* ViewCubeWidget::addViewAction(
     viewer::StandardView view) {
     auto* action = menu.addAction(text);
     action->setObjectName(object_name);
-
     QObject::connect(
         action,
         &QAction::triggered,
@@ -446,39 +542,7 @@ QAction* ViewCubeWidget::addViewAction(
         [this, view] {
             applyStandardView(view);
         });
-
     return action;
-}
-
-void ViewCubeWidget::setViewport(
-    viewer::IDocumentViewport* viewport) {
-    viewport_ = viewport;
-    refreshProjectionLabel();
-    syncEnabledState();
-}
-
-bool ViewCubeWidget::eventFilter(
-    QObject* watched,
-    QEvent* event) {
-    if (watched == parentWidget() &&
-        (event->type() == QEvent::Resize ||
-         event->type() == QEvent::Show ||
-         event->type() == QEvent::LayoutRequest)) {
-        updateResponsiveLayout();
-        repositionInsideParent();
-    }
-
-    return QFrame::eventFilter(
-        watched,
-        event);
-}
-
-void ViewCubeWidget::showEvent(
-    QShowEvent* event) {
-    QFrame::showEvent(event);
-    updateResponsiveLayout();
-    repositionInsideParent();
-    raise();
 }
 
 void ViewCubeWidget::applyStandardView(
@@ -487,7 +551,7 @@ void ViewCubeWidget::applyStandardView(
 
     static_cast<void>(
         viewport_->setStandardView(view));
-    refreshProjectionLabel();
+    refreshProjectionPresentation();
 }
 
 void ViewCubeWidget::toggleProjection() {
@@ -505,139 +569,147 @@ void ViewCubeWidget::toggleProjection() {
 
     static_cast<void>(
         viewport_->setProjection(next));
-    refreshProjectionLabel();
+    refreshProjectionPresentation();
 }
 
-void ViewCubeWidget::refreshProjectionLabel() {
-    if (projection_button_ == nullptr) return;
-
+void ViewCubeWidget::refreshProjectionPresentation() {
     const auto camera =
         viewport_ == nullptr
             ? std::optional<viewer::CameraState>{}
             : viewport_->cameraState();
 
-    if (!camera) {
-        projection_button_->setText(
-            compact_mode_
-                ? QStringLiteral("P")
-                : QStringLiteral("Projection"));
-        projection_button_->setToolTip(
-            QStringLiteral(
-                "Orthographic / Perspective"));
-        return;
+    QString button_text =
+        QStringLiteral("Proj");
+    QString action_text =
+        QStringLiteral("Projection");
+    QString tooltip =
+        QStringLiteral(
+            "Orthographic / Perspective");
+
+    if (camera) {
+        const bool orthographic =
+            camera->projection ==
+            viewer::CameraProjection::orthographic;
+
+        button_text =
+            orthographic
+                ? QStringLiteral("Ortho")
+                : QStringLiteral("Persp");
+        action_text =
+            orthographic
+                ? QStringLiteral(
+                      "Switch to Perspective")
+                : QStringLiteral(
+                      "Switch to Orthographic");
+        tooltip = action_text;
     }
 
-    const bool orthographic =
-        camera->projection ==
-        viewer::CameraProjection::orthographic;
-
-    projection_button_->setText(
-        compact_mode_
-            ? (orthographic
-                   ? QStringLiteral("O")
-                   : QStringLiteral("P"))
-            : (orthographic
-                   ? QStringLiteral("Ortho")
-                   : QStringLiteral("Persp")));
-    projection_button_->setToolTip(
-        orthographic
-            ? QStringLiteral(
-                  "Switch to Perspective")
-            : QStringLiteral(
-                  "Switch to Orthographic"));
+    if (projection_button_ != nullptr) {
+        projection_button_->setText(button_text);
+        projection_button_->setToolTip(tooltip);
+    }
+    if (projection_action_ != nullptr) {
+        projection_action_->setText(action_text);
+    }
 }
 
 void ViewCubeWidget::syncEnabledState() {
-    setEnabled(viewport_ != nullptr);
+    const bool enabled = viewport_ != nullptr;
+    setEnabled(enabled);
+    if (navigation_menu_ != nullptr) {
+        navigation_menu_->setEnabled(enabled);
+    }
 }
 
-void ViewCubeWidget::updateResponsiveLayout() {
-    const auto* parent = parentWidget();
-    const auto available_width =
-        parent != nullptr
-            ? parent->contentsRect().width()
-            : fullWidth;
-
-    const bool compact =
-        available_width < compactThreshold;
-
-    if (compact_mode_ != compact) {
-        compact_mode_ = compact;
-        setProperty(
-            "compactMode",
-            compact_mode_);
-        cube_canvas_->setCompact(
-            compact_mode_);
+void ViewCubeWidget::setCompactMode(bool compact) {
+    if (compact_mode_ == compact &&
+        regular_panel_ != nullptr &&
+        compact_button_ != nullptr) {
+        return;
     }
 
-    views_button_->setText(
-        compact_mode_
-            ? QStringLiteral("V")
-            : QStringLiteral("Views"));
-    views_button_->setToolTip(
-        QStringLiteral("Standard views"));
+    compact_mode_ = compact;
 
-    fit_button_->setText(
-        compact_mode_
-            ? QStringLiteral("F")
-            : QStringLiteral("Fit"));
-
-    refreshProjectionLabel();
-
-    const auto target_width =
-        compact_mode_
-            ? compactWidth
-            : fullWidth;
-
-    setFixedWidth(
-        std::max(
-            0,
-            std::min(
-                target_width,
-                available_width -
-                    2 * overlayMargin)));
-
-    adjustSize();
+    if (regular_panel_ != nullptr) {
+        regular_panel_->setVisible(!compact_mode_);
+    }
+    if (compact_button_ != nullptr) {
+        compact_button_->setVisible(compact_mode_);
+    }
 }
 
-void ViewCubeWidget::repositionInsideParent() {
-    auto* parent = parentWidget();
-    if (parent == nullptr) return;
+void ViewCubeWidget::syncOverlayGeometry() {
+    if (host_ == nullptr) return;
 
-    const auto bounds =
-        parent->contentsRect();
-    if (bounds.isEmpty()) return;
+    const bool compact =
+        host_->width() < compactWidthThreshold ||
+        host_->height() < compactHeightThreshold;
+    setCompactMode(compact);
 
-    auto desired = sizeHint();
-    desired.setWidth(
+    const auto desired =
+        compact_mode_
+            ? compactOverlaySize
+            : regularOverlaySize;
+
+    const int available_width =
+        std::max(
+            0,
+            host_->width() - 2 * overlayMargin);
+    const int available_height =
+        std::max(
+            0,
+            host_->height() - 2 * overlayMargin);
+
+    if (available_width < 28 ||
+        available_height < 28) {
+        hide();
+        return;
+    }
+
+    const int width =
         std::min(
             desired.width(),
-            std::max(
-                0,
-                bounds.width() -
-                    2 * overlayMargin)));
-    desired.setHeight(
+            available_width);
+    const int height =
         std::min(
             desired.height(),
+            available_height);
+
+    resize(width, height);
+    move(
+        std::max(
+            0,
+            host_->width() - width - overlayMargin),
+        std::min(
+            overlayMargin,
             std::max(
                 0,
-                bounds.height() -
-                    2 * overlayMargin)));
+                host_->height() - height)));
 
-    resize(desired);
-
-    const int x =
-        std::max(
-            bounds.left(),
-            bounds.right() -
-                overlayMargin -
-                width() +
-                1);
-    const int y =
-        bounds.top() + overlayMargin;
-
-    move(x, y);
+    if (host_->isVisible() && !isVisible()) {
+        show();
+    }
     raise();
+}
+
+bool ViewCubeWidget::eventFilter(
+    QObject* watched,
+    QEvent* event) {
+    if (watched == host_ && event != nullptr) {
+        switch (event->type()) {
+        case QEvent::Resize:
+        case QEvent::Show:
+        case QEvent::LayoutRequest:
+            syncOverlayGeometry();
+            break;
+        default:
+            break;
+        }
+    }
+
+    return QFrame::eventFilter(
+        watched,
+        event);
 }
 
 } // namespace simplesolid2::ui
