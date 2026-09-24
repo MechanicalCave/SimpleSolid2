@@ -63,6 +63,14 @@ private:
     void newPart();
     void openDocument();
     void applyProperties();
+    void startSketchTool();
+    void tryCreateSketchFromSupport(
+        std::optional<core::BuiltinReferenceRole> support);
+    void enterSketchEdit(
+        const sketch::SketchId& sketch_id);
+    void finishSketch();
+    void clearSketchRuntimeContext();
+    void reconcileSketchRuntimeContext();
     void undo();
     void redo();
     void save();
@@ -92,6 +100,11 @@ private:
     viewer::IDocumentViewport* viewport_{};
     std::unordered_map<std::string, viewer::CameraState>
         document_view_states_;
+    bool sketch_support_pick_active_{};
+    std::optional<core::DocumentId>
+        sketch_edit_document_id_;
+    std::optional<sketch::SketchId>
+        active_sketch_id_;
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
@@ -125,6 +138,8 @@ private:
     QPushButton* apply_button_{};
 
     QLabel* operations_placeholder_{};
+    QPushButton* sketch_button_{};
+    QPushButton* finish_sketch_button_{};
 
     QTabBar* document_tabs_{};
     QLabel* status_{};
