@@ -888,16 +888,8 @@ void CadWorkbench::applyProperties() {
 }
 
 void CadWorkbench::startSketchTool() {
-    if (activeDocumentSession() == nullptr) {
-        return;
-    }
-
-    if (sketch_support_pick_active_) {
-        clearSketchRuntimeContext();
-        status_->setText(
-            QStringLiteral(
-                "Sketch creation cancelled."));
-        syncActionState();
+    if (activeDocumentSession() == nullptr ||
+        sketch_support_pick_active_) {
         return;
     }
 
@@ -916,6 +908,58 @@ void CadWorkbench::startSketchTool() {
         QStringLiteral(
             "Sketch tool active — select an Origin plane."));
     syncActionState();
+}
+
+void CadWorkbench::cancelSketchTool() {
+    if (!sketch_support_pick_active_) {
+        return;
+    }
+
+    clearSketchRuntimeContext();
+    status_->setText(
+        QStringLiteral(
+            "Sketch creation cancelled."));
+    syncActionState();
+}
+
+void CadWorkbench::requestEditSketch(
+    const sketch::SketchId& sketch_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        return;
+    }
+
+    if (active_sketch_id_) {
+        if (*active_sketch_id_ == sketch_id) {
+            status_->setText(
+                QStringLiteral(
+                    "This Sketch is already being edited."));
+        } else {
+            status_->setText(
+                QStringLiteral(
+                    "Finish the active Sketch before editing another one."));
+        }
+        return;
+    }
+
+    if (sketch_support_pick_active_) {
+        clearSketchRuntimeContext();
+    }
+
+    if (document_session->document()
+            .findSketch(sketch_id) == nullptr) {
+        status_->setText(
+            QStringLiteral(
+                "Sketch is no longer available in the active Part."));
+        syncActionState();
+        return;
+    }
+
+    enterSketchEdit(sketch_id);
+    status_->setText(
+        QStringLiteral(
+            "Sketch edit context opened in the 3D Viewport."));
 }
 
 void CadWorkbench::tryCreateSketchFromSupport(
@@ -1041,8 +1085,13 @@ void CadWorkbench::clearSketchRuntimeContext() {
 
     if (operations_placeholder_ != nullptr) {
         operations_placeholder_->setText(
-            QStringLiteral(
-                "Sketch creates an empty Part-hosted Sketch on an Origin plane."));
+            QStringLiteral("No active tool."));
+    }
+    if (cancel_sketch_button_ != nullptr) {
+        cancel_sketch_button_->setVisible(false);
+    }
+    if (finish_sketch_button_ != nullptr) {
+        finish_sketch_button_->setVisible(false);
     }
 }
 
@@ -1444,11 +1493,19 @@ void CadWorkbench::syncActionState() {
             *active_document_id_;
 
     sketch_button_->setText(
-        sketch_support_pick_active_
-            ? QStringLiteral("Cancel Sketch")
-            : QStringLiteral("Sketch"));
+        QStringLiteral("Sketch"));
     sketch_button_->setEnabled(
-        active && !editing_sketch);
+        active &&
+        !editing_sketch &&
+        !sketch_support_pick_active_);
+
+    cancel_sketch_button_->setVisible(
+        active && sketch_support_pick_active_);
+    cancel_sketch_button_->setEnabled(
+        active && sketch_support_pick_active_);
+
+    finish_sketch_button_->setVisible(
+        editing_sketch);
     finish_sketch_button_->setEnabled(
         editing_sketch);
 
