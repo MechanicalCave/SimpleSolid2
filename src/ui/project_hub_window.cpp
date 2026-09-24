@@ -819,8 +819,7 @@ void ProjectHubWindow::enterWorkspace() {
         fromFilesystemPath(
             session->workspaceRoot()));
 
-    cad_workbench_->
-        setProjectSession(session);
+    cad_workbench_->deactivateDocument();
     syncOpenDocumentTabs();
     navigateToWorkspace();
 
@@ -865,9 +864,13 @@ navigateToDocument(
 
     ensureDocumentTab(document_id);
 
-    if (!cad_workbench_->
-            activateOpenDocument(
-                document_id)) {
+    auto* document_session =
+        session->documentSession(
+            document_id);
+    if (document_session == nullptr ||
+        !cad_workbench_->activateDocument(
+            document_session,
+            session->workspaceRoot())) {
         return false;
     }
 
@@ -1463,13 +1466,10 @@ requestCloseProject() {
     // Detach the active Workbench before ProjectHubController
     // destroys the owning ProjectSession.
     cad_workbench_->
-        clearProjectSession();
+        deactivateDocument();
 
     if (!controller_.closeProject(
             discard)) {
-        cad_workbench_->
-            setProjectSession(
-                session);
         syncOpenDocumentTabs();
 
         if (previous_navigation.kind ==
