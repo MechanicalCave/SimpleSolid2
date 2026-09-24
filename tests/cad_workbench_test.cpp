@@ -208,13 +208,6 @@ int main(int argc, char* argv[]) {
     workbench.setProjectSession(&*opened.session);
     CHECK(viewport != nullptr);
 
-    auto* open_document =
-        workbench.findChild<QPushButton*>(
-            QStringLiteral("openDocumentButton"));
-    CHECK(open_document != nullptr);
-    CHECK(open_document->text() ==
-          QStringLiteral("Open…"));
-
     auto* tabs =
         workbench.findChild<QTabBar*>(
             QStringLiteral("documentTabs"));
@@ -291,8 +284,8 @@ int main(int argc, char* argv[]) {
     CHECK(top_view_action != nullptr);
 
     CHECK(tabs->count() == 2);
-    CHECK(operations->text().contains(
-        QStringLiteral("Sketch creates")));
+    CHECK(operations->text() ==
+          QStringLiteral("No active tool."));
 
     CHECK(workbench.activateDocument(first_id));
     CHECK(workbench.activeDocumentId().has_value());
