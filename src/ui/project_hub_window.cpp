@@ -839,15 +839,10 @@ navigateToWorkspace() {
         ProjectNavigationKind::workspace;
     navigation_.document_id.reset();
 
-    {
-        const QSignalBlocker blocked{
-            workspace_shell_->
-                documentTabs()};
-        workspace_shell_->
-            documentTabs()
-            .setCurrentIndex(-1);
-    }
-
+    // Document Tabs are not the navigation authority.
+    // QTabBar keeps one current tab while tabs exist; Workspace
+    // navigation is represented explicitly by navigation_, not by
+    // trying to synthesize a "no current tab" state.
     workspace_shell_->showWorkspace();
 }
 
