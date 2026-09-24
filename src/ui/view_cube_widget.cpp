@@ -16,6 +16,7 @@
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <functional>
 #include <utility>
