@@ -10,7 +10,7 @@ It is explanatory, not normative. If an as-built document conflicts with the Eng
 <!-- section-id: internal.overview.current-scope -->
 ## Current implemented scope
 
-The current executable implements the Project platform, persistent empty Part Documents and the shared CAD Workbench / Viewer foundation:
+The current executable implements the Project platform, persistent empty Part Documents and the stabilized shared CAD Workbench / Viewer foundation:
 
 ```text
 App start
@@ -18,13 +18,15 @@ App start
 → Create / Open Project
 → ProjectSession
 → discover native .ss2part Documents
-→ Create / Open several Parts
+→ New Part… through Workspace Location Picker
+→ optional Create Folder inside Workspace
+→ Open… through document-oriented dialog
 → canonical DocumentSessions
 → shared CAD Workbench
 → bottom Document Tabs + one ActiveDocumentSession
 → Document Tree + built-in Origin
 → shared Properties / Operations surfaces
-→ OCCT-backed 3D Viewport + reference grid + ViewCube
+→ OCCT-backed 3D Viewport + reference grid + responsive ViewCube
 → Tree / Viewport selection synchronization
 → persistent Show / Hide of Origin references
 → Undo / Redo
@@ -49,6 +51,10 @@ CadWorkbenchShell + CadWorkbench
         │   PartDocument + PartDocumentTransaction
         │       ↓
         │   PartDocumentStore / atomic persistence
+        │
+        ├── WorkspaceLocationDialog / OpenDocumentDialog
+        │       ↓
+        │   Workspace-safe application services
         │
         └── PartViewportController / Tree adapter
                 ↓
@@ -82,6 +88,8 @@ A copied `.ss2part` file preserves its embedded DocumentId. If more than one fil
 Camera, projection, pan/orbit/zoom, active selection and primary selection are runtime-only. They do not increment DocumentRevision, dirty the Part or create CAD Undo entries.
 
 User-authored visibility of built-in Origin references is different: it is persistent presentation semantics stored by PartDocument, changed through DocumentSession commands, Undo/Redo-able and saved in the native Part file.
+
+WB-01A hardened the native Viewer so scene replacement clears provider-native detection/selection state before presentation objects are removed and recoverable provider exceptions are contained at the concrete Viewer boundary.
 
 <!-- section-id: internal.overview.documentation -->
 ## Documentation system

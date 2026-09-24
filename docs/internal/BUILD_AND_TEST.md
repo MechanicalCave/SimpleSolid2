@@ -6,9 +6,9 @@
 <!-- section-id: internal.build-test.baseline -->
 ## Toolchain baseline
 
-The repository baseline is C++20, CMake 3.24+, Qt 6 Widgets, OpenCASCADE for the native CAD Viewer, Windows-first development and the self-hosted Windows/MSVC PR gate.
+The repository baseline is C++20, CMake 3.24+, Qt 6 Widgets/Test, OpenCASCADE for the native CAD Viewer, Windows-first development and the self-hosted Windows/MSVC PR gate.
 
-WB-01 makes OCCT a required machine-local product-build dependency. Public Viewer contracts remain provider-neutral.
+OCCT is a required machine-local product-build dependency. Public Viewer contracts remain provider-neutral.
 
 The canonical local environment adds Qt and OCCT runtime DLL directories to PATH so the product and native Viewer tests can execute after build.
 
@@ -44,13 +44,26 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 27 tests.
+The compiled CTest suite contains 32 tests.
 
-Project/Hub and PART-01 coverage remains active.
+Project/Hub, PART-01 and WB-01 coverage remains active.
 
-WB-01 adds deterministic coverage for built-in Origin roles/visibility, CameraState and standard/corner views, navigation input mapping, reference scene/grid validation, neutral Viewer selection transport, Workbench tabs/active-document switching, per-document camera state, Tree multi-selection/primary selection, Tree↔Viewport synchronization, persistent batch Show/Hide and Undo/Redo, contextual Properties, ViewCube navigation and architecture boundaries.
+WB-01A adds or extends deterministic coverage for:
 
-`wb01.viewer_native_smoke` runs without the offscreen Qt platform. It creates the real Windows Qt/OCCT viewport, initializes OCCT/OpenGL, presents reference content, switches view/projection, performs Fit and exits cleanly.
+- empty-space selection clear and right-click no-op semantics;
+- native provider detection/selection cleanup during scene replacement;
+- recoverable provider exception containment;
+- 100-iteration real Windows Workbench/Qt/OCCT stress behavior;
+- repeated Origin Show/Hide and Undo/Redo;
+- repeated Pan/Orbit/Zoom mixed with presentation refresh;
+- responsive ViewCube geometry in wide and narrow Editor Surface layouts;
+- Workspace folder browsing and explicit Create Folder;
+- fail-closed Workspace path validation;
+- neutral Open Document candidates and canonical DocumentSession reuse.
+
+`wb01.viewer_native_smoke` runs without the offscreen Qt platform and validates basic real Qt/OCCT initialization/navigation.
+
+`wb01a.workbench_native_stress` also runs natively. It exercises a real `CadWorkbench` with the real Qt/OCCT provider for 100 representative stress iterations.
 
 Repository documentation validation runs outside CTest through `ss2 verify`.
 

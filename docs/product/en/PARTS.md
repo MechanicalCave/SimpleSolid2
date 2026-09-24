@@ -8,7 +8,9 @@
 
 After opening a Project, use `New Part…` in the Workbench.
 
-Enter a path relative to the current Workspace. A native Part file uses the extension:
+The dialog shows the folder hierarchy of the current Workspace. Choose the target folder, enter the Part filename and confirm creation.
+
+A native Part file uses the extension:
 
 ```text
 .ss2part
@@ -16,7 +18,11 @@ Enter a path relative to the current Workspace. A native Part file uses the exte
 
 The application proposes `Part001.ss2part`, `Part002.ss2part`, and so on when those names are available.
 
-You may use an existing subfolder, for example `Parts/Shaft.ss2part`. The application does not silently overwrite an existing file.
+Use `Create Folder` if you want to add a new folder inside the Workspace before creating the Part.
+
+The location picker is constrained to the current Workspace. It does not expose private `.simplesolid` metadata as a normal target and does not allow creating the Document outside the Workspace.
+
+An existing target file is never silently overwritten.
 
 <!-- section-id: product.parts.identity -->
 ## DocumentId, filename and properties
@@ -30,9 +36,13 @@ Filename and path are not Document identity. You may rename or move the `.ss2par
 <!-- section-id: product.parts.workbench -->
 ## Opening Parts and using the Workbench
 
-Use `Open Part…` to choose a resolved native Part.
+Use `Open…` to choose a discovered Document.
 
-Several Parts can remain open at once. Use the bottom Document Tabs to switch the active Part. The same Workbench changes its Tree, Properties and 3D Viewport context to the selected tab.
+The dialog shows Document kind, name, location and status. The current product supplies Part Documents only, but the Open UI is not Part-specific.
+
+Invalid native files and DocumentId conflicts remain visible but cannot be opened as resolved Documents.
+
+Several Parts can remain open at once. Use the bottom Document Tabs to switch the active Part. Opening a Part that is already open activates the existing tab/session instead of creating a second mutable session.
 
 The left side contains Document Tree. The center contains the 3D Viewport. The right side contains Properties and Operations. Status/diagnostic information is below the tabs.
 
@@ -67,6 +77,13 @@ A group visibility change is one Undo/Redo operation.
 
 The Tree and 3D Viewport share one selection. The primary selected Origin reference is shown in Properties with its role, type, semantic identity and current visibility.
 
+Viewport selection behavior is:
+
+- Left click — replace selection;
+- Ctrl + Left click — toggle an item in the selection;
+- Left click on empty space — clear selection;
+- Right click — reserved for context menus; where no menu exists it currently does nothing.
+
 After `Save`, Origin visibility survives closing and restarting the application.
 
 <!-- section-id: product.parts.navigation -->
@@ -82,7 +99,9 @@ The Part Workbench provides:
 - Isometric and corner orientations;
 - Orthographic / Perspective switching.
 
-Use the ViewCube overlay in the upper-right of the 3D Viewport for standard orientations, Fit and projection switching.
+The ViewCube is an overlay in the upper-right of the 3D Viewport. It adapts when the Editor Surface becomes narrow instead of overlapping the Properties panel or forcing the Viewport to remain wide.
+
+Use the regular or compact ViewCube controls for standard orientations, Fit and projection switching.
 
 Navigation and camera changes are temporary view state. They do not dirty the Part, do not require Save and do not create CAD Undo entries.
 
@@ -109,15 +128,15 @@ Undo/Redo history, active selection and camera state are not stored in the file 
 <!-- section-id: product.parts.conflicts -->
 ## DocumentId conflicts and invalid files
 
-If two `.ss2part` files in one Workspace contain the same DocumentId, `Open Part…` shows an identity-conflict entry and every discovered path.
+If two `.ss2part` files in one Workspace contain the same DocumentId, `Open…` shows an identity-conflict entry and the discovered location information.
 
 That entry cannot be opened by DocumentId until the conflict is removed. SimpleSolid does not arbitrarily choose one copy and does not automatically assign a new ID.
 
-A damaged or unsupported native Part is shown as `Invalid Part` instead of being treated as a valid Document.
+A damaged or unsupported native Part is shown as an invalid entry instead of being treated as a valid Document.
 
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility and the shared 3D Workbench/Viewer foundation.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility and the shared stabilized 3D Workbench/Viewer foundation.
 
 It does not yet contain Sketch, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.

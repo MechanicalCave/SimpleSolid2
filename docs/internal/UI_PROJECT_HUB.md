@@ -44,11 +44,15 @@ Recent actions are `Open`, `Locate…` and `Remove from Recent`.
 No Recent entry is selected after Hub refresh. Open is enabled only for a selected, openable entry. Locate and Remove remain available for selected unavailable entries.
 
 <!-- section-id: internal.ui-project-hub.part-panel -->
-## Part controls inside the Workbench
+## Document controls inside the Workbench
 
-The current Part composition exposes `New Part…`, `Open Part…`, `Refresh`, `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, Operations placeholder and bottom Document Tabs.
+The current Part composition exposes `New Part…`, `Open…`, `Refresh`, `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, Operations placeholder and bottom Document Tabs.
 
-`Open Part…` lists discovered native Parts. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
+`New Part…` opens `WorkspaceLocationDialog`. It shows the current Workspace folder hierarchy, allows the user to choose a folder, enter the filename and explicitly `Create Folder`.
+
+The location picker is constrained to the current Workspace. Private `.simplesolid` metadata is not exposed as a normal target. Existing targets and attempts to escape the Workspace fail closed.
+
+`Open…` opens `OpenDocumentDialog`. Candidates show Document kind, display/name information, location and status. Current discovery supplies Part entries only. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
 
 Opening an already open Document focuses its canonical existing DocumentSession instead of creating a second mutable session.
 
@@ -63,7 +67,9 @@ Tree and Viewport are adapters of one document-scoped selected set plus primary 
 
 Properties shows common Document fields when no semantic object is primary. When a built-in Origin reference is primary, Properties switches to a read-only reference context showing role/type/identity/visibility.
 
-The central Editor Surface hosts the provider-neutral Document Viewport. Production composition injects the Windows Qt/OCCT provider. A ViewCube overlay provides faces, corner/isometric orientations, Fit and Orthographic/Perspective switching.
+The central Editor Surface hosts the provider-neutral Document Viewport. Production composition injects the Windows Qt/OCCT provider.
+
+The ViewCube is a responsive overlay. At normal width it presents the regular CAD navigation surface; at narrow Editor widths it switches to a compact control instead of forcing the Editor Surface wider or overlapping the Properties panel.
 
 <!-- section-id: internal.ui-project-hub.dirty-close -->
 ## Dirty-close UX
@@ -91,3 +97,5 @@ The Qt layer converts strings/paths, displays diagnostics and maps application/d
 It does not own ProjectId, DocumentId, authored Part state, persistence schemas, Undo/Redo semantics or identity-conflict resolution rules.
 
 The Viewer UI depends only on provider-neutral Viewer contracts. OCCT types and provider-native selection objects do not cross into `src/ui`.
+
+Workspace document dialogs may validate filesystem locations through application services, but they do not own Document identity or Part authored semantics.
