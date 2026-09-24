@@ -188,20 +188,6 @@ void CadWorkbench::buildUi() {
 
     auto& lifecycle_actions = shell_->documentActionsLayout();
 
-    new_part_button_ =
-        new QPushButton(QStringLiteral("New Part…"), shell_);
-    new_part_button_->setObjectName(QStringLiteral("newPartButton"));
-
-    open_document_button_ =
-        new QPushButton(QStringLiteral("Open…"), shell_);
-    open_document_button_->setObjectName(
-        QStringLiteral("openDocumentButton"));
-
-    refresh_button_ =
-        new QPushButton(QStringLiteral("Refresh"), shell_);
-    refresh_button_->setObjectName(
-        QStringLiteral("refreshDocumentsButton"));
-
     undo_button_ =
         new QPushButton(QStringLiteral("Undo"), shell_);
     undo_button_->setObjectName(QStringLiteral("undoDocumentButton"));
@@ -219,9 +205,6 @@ void CadWorkbench::buildUi() {
     close_document_button_->setObjectName(
         QStringLiteral("closeDocumentButton"));
 
-    lifecycle_actions.addWidget(new_part_button_);
-    lifecycle_actions.addWidget(open_document_button_);
-    lifecycle_actions.addWidget(refresh_button_);
     lifecycle_actions.addStretch(1);
     lifecycle_actions.addWidget(undo_button_);
     lifecycle_actions.addWidget(redo_button_);
@@ -504,21 +487,6 @@ void CadWorkbench::buildUi() {
     shell_->setOperationsContent(operations_content);
 
     QObject::connect(
-        new_part_button_,
-        &QPushButton::clicked,
-        this,
-        [this] { newPart(); });
-    QObject::connect(
-        open_document_button_,
-        &QPushButton::clicked,
-        this,
-        [this] { openDocument(); });
-    QObject::connect(
-        refresh_button_,
-        &QPushButton::clicked,
-        this,
-        [this] { refreshWorkspaceIndex(); });
-    QObject::connect(
         undo_button_,
         &QPushButton::clicked,
         this,
@@ -606,9 +574,6 @@ void CadWorkbench::clearProjectSession() {
         document_tabs_->setCurrentIndex(-1);
     }
 
-    new_part_button_->setEnabled(false);
-    open_document_button_->setEnabled(false);
-    refresh_button_->setEnabled(false);
     clearActiveContext();
     status_->setText(QStringLiteral("No Project is open."));
 }
@@ -618,10 +583,6 @@ void CadWorkbench::refreshWorkspaceIndex() {
         status_->setText(QStringLiteral("No Project is open."));
         return;
     }
-
-    new_part_button_->setEnabled(true);
-    open_document_button_->setEnabled(true);
-    refresh_button_->setEnabled(true);
 
     const auto refreshed = session_->refreshDocuments();
     if (!refreshed.ok()) {
@@ -1509,9 +1470,6 @@ void CadWorkbench::syncActionState() {
     finish_sketch_button_->setEnabled(
         editing_sketch);
 
-    new_part_button_->setEnabled(session_ != nullptr);
-    open_document_button_->setEnabled(session_ != nullptr);
-    refresh_button_->setEnabled(session_ != nullptr);
 }
 
 void CadWorkbench::updateTabPresentation(
