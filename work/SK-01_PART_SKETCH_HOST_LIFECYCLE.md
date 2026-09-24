@@ -1,6 +1,6 @@
 # SK-01 — Part Sketch Host Lifecycle & 3D Edit Context
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — IMPLEMENTED  
 **Owner acceptance:** 2026-09-24  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -173,3 +173,30 @@ Generated Product Browser must be regenerated and Git-clean.
 SK-01 is complete only when the acceptance tests and documentation pass on exact head.
 
 Completion does not activate SK-02 automatically. A later explicit contract is required for the first 2D entity model.
+
+
+## 8. Completion record
+
+SK-01 implementation is complete and ready for the final exact-head Windows gate.
+
+Implemented state:
+
+- Part hosts durable empty Sketch records with stable SketchId;
+- SK-01 support is restricted to semantic XY/XZ/YZ built-in Origin planes;
+- SketchPlacement is explicit authored Part state and is validated against its support;
+- Sketch creation executes through DocumentSession and a Part transaction as one Undo/Redo entry;
+- Undo removes the created Sketch and Redo restores the same SketchId/state;
+- Part domain schema is v2 and persists SketchId, support, placement and visibility;
+- Part schema v1 remains readable as an empty Sketch collection and upgrades only on a later successful Save;
+- duplicate SketchId, invalid support and support/placement mismatch fail closed;
+- the normal Part Tree presents hosted Sketches;
+- the Operations surface provides Sketch / Cancel Sketch and Finish Sketch;
+- successful creation enters a runtime Sketch edit context in the existing 3D Document Viewport;
+- the runtime grid aligns to the Sketch U/V frame and the camera aligns normal to XY/XZ/YZ support with Fit;
+- ViewCube and normal navigation remain available and do not mutate SketchPlacement or Part authored state;
+- Finish Sketch, Document switching and close clear runtime edit context without deleting authored Sketch state;
+- no 2D entities, constraints, solver, Datum, planar-face support, topology naming, Body/Feature, Assembly or Drawing scope was introduced;
+- internal and PL/EN product documentation describe the as-built capability;
+- the compiled CTest suite contains 35 tests, including the SK-01 host and Workbench lifecycle regressions.
+
+The final completion condition is the exact-head Windows docs/verify/build/CTest gate on this completed contract state.
