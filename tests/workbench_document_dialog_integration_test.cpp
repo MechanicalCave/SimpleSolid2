@@ -462,6 +462,7 @@ int main(int argc, char* argv[]) {
     EXPECT(content->currentWidget() == dashboard);
     EXPECT(tabs->count() == 2);
     EXPECT(tabs->currentIndex() == remembered_tab);
+    EXPECT(workspace_button->isChecked());
     EXPECT(new_part->isVisible());
     EXPECT(open_document->isVisible());
 
@@ -474,6 +475,7 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
 
     EXPECT(content->currentWidget() == workbench);
+    EXPECT(!workspace_button->isChecked());
     EXPECT(tabs->count() == 2);
 
     return EXIT_SUCCESS;
