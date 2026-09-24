@@ -527,6 +527,31 @@ void ProjectHubWindow::buildWorkspacePage() {
     QObject::connect(
         &workspace_shell_->
             documentTabs(),
+        &QTabBar::tabBarClicked,
+        this,
+        [this](int index) {
+            if (index < 0) {
+                return;
+            }
+
+            if (const auto id =
+                    tabDocumentId(index)) {
+                const bool already_active =
+                    navigation_.kind ==
+                        ProjectNavigationKind::document &&
+                    navigation_.document_id &&
+                    *navigation_.document_id == *id;
+
+                if (!already_active) {
+                    static_cast<void>(
+                        navigateToDocument(*id));
+                }
+            }
+        });
+
+    QObject::connect(
+        &workspace_shell_->
+            documentTabs(),
         &QTabBar::tabCloseRequested,
         this,
         [this](int index) {
