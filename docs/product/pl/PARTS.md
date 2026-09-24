@@ -8,7 +8,9 @@
 
 Po otwarciu Projektu użyj `New Part…` w Workbench.
 
-Podaj ścieżkę względną wewnątrz bieżącego Workspace. Natywny plik Part używa rozszerzenia:
+Dialog pokazuje strukturę katalogów bieżącego Workspace. Wybierz folder docelowy, wpisz nazwę pliku Parta i potwierdź utworzenie.
+
+Natywny plik Part używa rozszerzenia:
 
 ```text
 .ss2part
@@ -16,7 +18,11 @@ Podaj ścieżkę względną wewnątrz bieżącego Workspace. Natywny plik Part u
 
 Program proponuje kolejne nazwy `Part001.ss2part`, `Part002.ss2part` itd., jeżeli są wolne.
 
-Możesz wskazać istniejący podfolder, np. `Parts/Shaft.ss2part`. Program nie nadpisze po cichu istniejącego pliku.
+Użyj `Create Folder`, jeżeli chcesz utworzyć nowy katalog wewnątrz Workspace przed utworzeniem Parta.
+
+Picker lokalizacji jest ograniczony do bieżącego Workspace. Nie pokazuje prywatnego `.simplesolid` jako normalnego miejsca zapisu i nie pozwala utworzyć Dokumentu poza Workspace.
+
+Istniejący plik docelowy nigdy nie jest po cichu nadpisywany.
 
 <!-- section-id: product.parts.identity -->
 ## DocumentId, nazwa pliku i właściwości
@@ -30,9 +36,13 @@ Pola `Number`, `Title`, `Description` i `Engineering revision` są trwałymi wł
 <!-- section-id: product.parts.workbench -->
 ## Otwieranie Partów i Workbench
 
-Użyj `Open Part…`, aby wybrać poprawny natywny Part.
+Użyj `Open…`, aby wybrać wykryty Dokument.
 
-Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs przełączają aktywny Part. Ten sam Workbench zmienia Tree, Properties i kontekst viewportu 3D zgodnie z aktywną zakładką.
+Dialog pokazuje typ Dokumentu, nazwę, lokalizację i status. Obecny produkt dostarcza tylko Dokumenty Part, ale sam interfejs Open nie jest Part-specific.
+
+Niepoprawne pliki natywne i konflikty DocumentId pozostają widoczne, ale nie można ich otworzyć jako resolved Documents.
+
+Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs przełączają aktywny Part. Ponowne otwarcie Parta, który jest już otwarty, aktywuje istniejącą zakładkę/sesję zamiast tworzyć drugą mutowalną sesję.
 
 Po lewej znajduje się Document Tree, pośrodku viewport 3D, a po prawej Properties i Operations. Status/diagnostyka znajduje się pod zakładkami.
 
@@ -67,6 +77,13 @@ Grupowa zmiana widoczności jest jedną operacją Undo/Redo.
 
 Tree i viewport 3D używają wspólnego zaznaczenia. Primary selected Origin reference jest pokazywana w Properties wraz z rolą, typem, semantyczną tożsamością i bieżącą widocznością.
 
+Zachowanie zaznaczenia w Viewporcie:
+
+- lewy klik — zastępuje zaznaczenie;
+- Ctrl + lewy klik — dodaje/usuwa element z zaznaczenia;
+- lewy klik w puste tło — czyści zaznaczenie;
+- prawy klik — jest zarezerwowany dla menu kontekstowego; tam, gdzie menu nie istnieje, obecnie nic nie robi.
+
 Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 
 <!-- section-id: product.parts.navigation -->
@@ -82,7 +99,9 @@ Workbench Parta udostępnia:
 - Isometric oraz orientacje narożne;
 - przełączanie Orthographic / Perspective.
 
-ViewCube w prawym górnym rogu viewportu 3D służy do standardowych orientacji, Fit i przełączania projekcji.
+ViewCube jest overlayem w prawym górnym rogu viewportu 3D. Gdy Editor Surface staje się wąski, ViewCube przechodzi w układ kompaktowy zamiast nachodzić na Properties albo wymuszać szeroki Viewport.
+
+Do standardowych orientacji, Fit i przełączania projekcji możesz używać normalnego albo kompaktowego wariantu ViewCube.
 
 Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, nie wymagają Save i nie tworzą wpisów CAD Undo.
 
@@ -109,15 +128,15 @@ Historia Undo/Redo, aktywne zaznaczenie i stan kamery nie są zapisywane do plik
 <!-- section-id: product.parts.conflicts -->
 ## Konflikt DocumentId i niepoprawne pliki
 
-Jeżeli dwa pliki `.ss2part` w jednym Workspace zawierają ten sam DocumentId, `Open Part…` pokazuje konflikt tożsamości i wszystkie wykryte ścieżki.
+Jeżeli dwa pliki `.ss2part` w jednym Workspace zawierają ten sam DocumentId, `Open…` pokazuje wpis konfliktu tożsamości oraz informacje o wykrytych lokalizacjach.
 
-Taki wpis nie może zostać otwarty przez DocumentId, dopóki konflikt nie zostanie usunięty. SimpleSolid nie wybiera arbitralnie jednej kopii i nie nadaje automatycznie nowego ID.
+Takiego wpisu nie można otworzyć przez DocumentId, dopóki konflikt nie zostanie usunięty. SimpleSolid nie wybiera arbitralnie jednej kopii i nie nadaje automatycznie nowego ID.
 
-Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako `Invalid Part` zamiast być traktowany jako poprawny Dokument.
+Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wpis zamiast być traktowany jako poprawny Dokument.
 
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji oraz wspólny fundament Workbench/Viewer 3D.
+Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji oraz wspólny ustabilizowany fundament Workbench/Viewer 3D.
 
 Nie zawiera jeszcze Sketch, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
