@@ -186,7 +186,7 @@ Completion does not activate Assembly/Drawing implementation or SK-02.
 
 ## 9. Completion record
 
-WS-01 implementation is complete and ready for the final exact-head Windows gate.
+WS-01 implementation is complete.
 
 Implemented state:
 
@@ -209,6 +209,8 @@ Implemented state:
 - a dedicated architecture boundary regression prevents ProjectSession/QTabBar/discovery ownership from leaking back into Part Workbench and prevents CAD-domain ownership from leaking into the Project Workspace Shell;
 - internal and PL/EN product documentation describe the as-built Workspace/Document navigation model;
 - the compiled CTest suite contains 36 tests;
-- implementation gate #226 passed docs/verify/build and 36/36 CTest, including native Workbench stress, SK-01/SK-01A regressions and WS-01 navigation/boundary coverage.
+- final exact-head Windows gate #230 passed documentation dispatch/verification, bootstrap verification, build and the complete CTest suite on head `817d0fd25b4a234bd9a8aa99e0c6ae46f6df513a`;
+- the tested head tree was `b095045ddb32eb7290be3cbecd2226dbad23a97a`;
+- WS-01 was squash-merged to `main` as `de78c3993b7e3d5aab561a4f4bc35423f44ea743`, whose tree is the same tested tree `b095045ddb32eb7290be3cbecd2226dbad23a97a`.
 
-The final completion condition is one exact-head Windows docs/verify/build/CTest gate on this completed governance state.
+All WS-01 completion conditions are satisfied. No further WS-01 implementation work is active.
