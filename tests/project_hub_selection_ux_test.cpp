@@ -1,14 +1,20 @@
 #include "project_hub_window.hpp"
 #include "project_hub_selection.hpp"
+#include "workspace_location_dialog.hpp"
 
 #include <simplesolid2/application/project_session.hpp>
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 #include <simplesolid2/application/recent_project_store.hpp>
 
 #include <QApplication>
+#include <QDialog>
 #include <QItemSelectionModel>
+#include <QLineEdit>
 #include <QListWidget>
 #include <QPushButton>
+#include <QStackedWidget>
+#include <QTabBar>
+#include <QTimer>
 
 #include <cstdlib>
 #include <filesystem>
@@ -65,6 +71,44 @@ void seedRecentProject(
     RecentProjectStore recent{catalog};
     const auto recorded = recent.recordOpened(*opened.session);
     CHECK(recorded.ok());
+}
+
+bool completeNewPartDialog(
+    const QString& file_name) {
+    auto* modal =
+        QApplication::activeModalWidget();
+    auto* dialog =
+        dynamic_cast<WorkspaceLocationDialog*>(
+            modal);
+    if (dialog == nullptr) {
+        if (auto* unexpected =
+                dynamic_cast<QDialog*>(modal)) {
+            unexpected->reject();
+        }
+        return false;
+    }
+
+    auto* file_edit =
+        dialog->findChild<QLineEdit*>(
+            QStringLiteral("documentFileNameEdit"));
+    auto* create =
+        dialog->findChild<QPushButton*>(
+            QStringLiteral("createDocumentButton"));
+    if (file_edit == nullptr ||
+        create == nullptr) {
+        dialog->reject();
+        return false;
+    }
+
+    file_edit->setText(file_name);
+    QApplication::processEvents();
+    if (!create->isEnabled()) {
+        dialog->reject();
+        return false;
+    }
+
+    create->click();
+    return true;
 }
 
 void verifySelectionDrivesRecentActions(
@@ -132,11 +176,148 @@ void verifySelectionDrivesRecentActions(
     CHECK(!remove->isEnabled());
 }
 
+void verifyNeutralWorkspaceAndCloseLifecycle(
+    const std::filesystem::path& root) {
+    std::filesystem::create_directories(root);
+
+    const auto workspace =
+        root / "Project";
+    const auto catalog =
+        root / "state" / "recent-projects-v1.txt";
+    seedRecentProject(workspace, catalog);
+
+    ProjectHubWindow window{catalog};
+    window.show();
+    QApplication::processEvents();
+
+    auto* pages =
+        window.findChild<QStackedWidget*>(
+            "applicationPages");
+    auto* recent =
+        window.findChild<QListWidget*>(
+            "recentProjectsList");
+    auto* open_recent =
+        window.findChild<QPushButton*>(
+            "openRecentButton");
+
+    CHECK(pages != nullptr);
+    CHECK(recent != nullptr);
+    CHECK(open_recent != nullptr);
+    CHECK(recent->count() == 1);
+
+    auto* recent_item = recent->item(0);
+    CHECK(recent_item != nullptr);
+    recent_item->setSelected(true);
+    QApplication::processEvents();
+    CHECK(open_recent->isEnabled());
+
+    open_recent->click();
+    QApplication::processEvents();
+
+    auto* workspace_host =
+        window.findChild<QStackedWidget*>(
+            "workspaceDocumentHost");
+    auto* empty_page =
+        window.findChild<QWidget*>(
+            "workspaceEmptyPage");
+    auto* cad_workbench =
+        window.findChild<QWidget*>(
+            "cadWorkbench");
+    auto* new_part =
+        window.findChild<QPushButton*>(
+            "workspaceNewPartButton");
+    auto* close_document =
+        window.findChild<QPushButton*>(
+            "closeDocumentButton");
+    auto* close_project =
+        window.findChild<QPushButton*>(
+            "closeProjectButton");
+    auto* tabs =
+        window.findChild<QTabBar*>(
+            "documentTabs");
+
+    CHECK(
+        pages->currentWidget()->objectName() ==
+        QStringLiteral("workspacePage"));
+    CHECK(workspace_host != nullptr);
+    CHECK(empty_page != nullptr);
+    CHECK(cad_workbench != nullptr);
+    CHECK(new_part != nullptr);
+    CHECK(close_document != nullptr);
+    CHECK(close_project != nullptr);
+    CHECK(tabs != nullptr);
+    CHECK(
+        workspace_host->currentWidget() ==
+        empty_page);
+    CHECK(tabs->count() == 0);
+
+    bool first_dialog_ok = false;
+    QTimer::singleShot(
+        0,
+        &window,
+        [&] {
+            first_dialog_ok =
+                completeNewPartDialog(
+                    QStringLiteral(
+                        "WorkspacePart001.ss2part"));
+        });
+    new_part->click();
+    CHECK(first_dialog_ok);
+    QApplication::processEvents();
+
+    CHECK(tabs->count() == 1);
+    CHECK(
+        workspace_host->currentWidget() ==
+        cad_workbench);
+
+    // Closing the last active Document must detach the Workbench
+    // before ProjectSession destroys the DocumentSession, then
+    // return to neutral Workspace.
+    close_document->click();
+    QApplication::processEvents();
+
+    CHECK(tabs->count() == 0);
+    CHECK(
+        workspace_host->currentWidget() ==
+        empty_page);
+
+    bool second_dialog_ok = false;
+    QTimer::singleShot(
+        0,
+        &window,
+        [&] {
+            second_dialog_ok =
+                completeNewPartDialog(
+                    QStringLiteral(
+                        "WorkspacePart002.ss2part"));
+        });
+    new_part->click();
+    CHECK(second_dialog_ok);
+    QApplication::processEvents();
+    CHECK(tabs->count() == 1);
+    CHECK(
+        workspace_host->currentWidget() ==
+        cad_workbench);
+
+    // Project close has the same lifetime rule at the larger
+    // ownership boundary: detach Workbench before ProjectSession
+    // destruction.
+    close_project->click();
+    QApplication::processEvents();
+
+    CHECK(
+        pages->currentWidget()->objectName() ==
+        QStringLiteral("projectHubPage"));
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
     TempDirectory temp;
-    verifySelectionDrivesRecentActions(temp.path);
+    verifySelectionDrivesRecentActions(
+        temp.path / "selection");
+    verifyNeutralWorkspaceAndCloseLifecycle(
+        temp.path / "workspace");
     return EXIT_SUCCESS;
 }
