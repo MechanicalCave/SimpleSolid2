@@ -256,6 +256,28 @@ add_test(
     COMMAND part01_part_document_store_test
 )
 
+add_executable(persist01_native_document_container_test
+    native_document_container_test.cpp
+)
+
+target_include_directories(persist01_native_document_container_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2
+)
+
+target_link_libraries(persist01_native_document_container_test
+    PRIVATE
+        simplesolid2_persistence
+        simplesolid2_miniz
+)
+
+target_compile_features(persist01_native_document_container_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME persist01.native_document_container
+    COMMAND persist01_native_document_container_test
+)
+
 add_executable(part01_document_session_test
     document_session_test.cpp
 )

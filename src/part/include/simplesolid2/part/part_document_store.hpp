@@ -2,6 +2,7 @@
 
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/persistence/atomic_file.hpp>
+#include <simplesolid2/persistence/native_document_container.hpp>
 
 #include <filesystem>
 #include <optional>
@@ -21,12 +22,15 @@ enum class PartStoreErrorCode {
     unsupported_schema,
     wrong_document_kind,
     invalid_document_id,
+    container_failure,
 };
 
 struct PartStoreDiagnostic final {
     PartStoreErrorCode code{PartStoreErrorCode::none};
     persistence::AtomicWriteErrorCode atomic_code{
         persistence::AtomicWriteErrorCode::none};
+    persistence::NativeContainerErrorCode container_code{
+        persistence::NativeContainerErrorCode::none};
     std::string message;
     std::filesystem::path path;
 };
@@ -48,7 +52,7 @@ struct PartSaveResult final {
 
 class PartDocumentStore final {
 public:
-    static constexpr int current_schema_version = 2;
+    static constexpr int current_schema_version = 1;
 
     [[nodiscard]] static bool hasNativeExtension(
         const std::filesystem::path& path) noexcept;

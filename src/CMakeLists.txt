@@ -9,13 +9,45 @@ target_include_directories(simplesolid2_core
 
 target_compile_features(simplesolid2_core PUBLIC cxx_std_20)
 
+add_library(simplesolid2_miniz STATIC
+    ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2/miniz.c
+    ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2/miniz_zip.c
+    ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2/miniz_tinfl.c
+    ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2/miniz_tdef.c
+)
+
+target_include_directories(simplesolid2_miniz
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2
+)
+
+target_compile_definitions(simplesolid2_miniz
+    PUBLIC
+        MINIZ_NO_TIME
+        MINIZ_NO_ZLIB_COMPATIBLE_NAMES
+)
+
+set_target_properties(simplesolid2_miniz PROPERTIES
+    C_STANDARD 90
+    C_STANDARD_REQUIRED ON
+)
+
 add_library(simplesolid2_persistence STATIC
     persistence/atomic_file.cpp
+    persistence/native_document_container.cpp
 )
 
 target_include_directories(simplesolid2_persistence
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/persistence/include
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2
+        ${PROJECT_SOURCE_DIR}/third_party/nlohmann-json-3.12.0/include
+)
+
+target_link_libraries(simplesolid2_persistence
+    PRIVATE
+        simplesolid2_miniz
 )
 
 target_compile_features(simplesolid2_persistence PUBLIC cxx_std_20)
@@ -34,6 +66,11 @@ target_link_libraries(simplesolid2_part
     PUBLIC
         simplesolid2_core
         simplesolid2_persistence
+)
+
+target_include_directories(simplesolid2_part
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/nlohmann-json-3.12.0/include
 )
 
 target_compile_features(simplesolid2_part PUBLIC cxx_std_20)

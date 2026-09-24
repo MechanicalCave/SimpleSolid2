@@ -10,11 +10,13 @@ Po otwarciu Projektu użyj `New Part…` w Workbench.
 
 Dialog pokazuje strukturę katalogów bieżącego Workspace. Wybierz folder docelowy, wpisz nazwę pliku Parta i potwierdź utworzenie.
 
-Natywny plik Part używa rozszerzenia:
+Natywny Part jest jednym przenośnym plikiem i używa rozszerzenia:
 
 ```text
 .ss2part
 ```
+
+Cała trwała zawartość Dokumentu należy do tego jednego pliku. Przeniesienie lub zmiana nazwy pliku zmienia lokalizację, nie DocumentId.
 
 Program proponuje kolejne nazwy `Part001.ss2part`, `Part002.ss2part` itd., jeżeli są wolne.
 
@@ -139,4 +141,6 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wp
 
 Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji oraz wspólny ustabilizowany fundament Workbench/Viewer 3D.
 
-Nie zawiera jeszcze Sketch, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
+Bardzo wczesne testowe pliki `.ss2part` utworzone przed wprowadzeniem obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
+
+Part nie zawiera jeszcze Sketch, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
