@@ -1,27 +1,22 @@
 #include "cad_workbench.hpp"
 #include "cad_workbench_shell.hpp"
+#include "open_document_dialog.hpp"
 #include "part_document_tree_controller.hpp"
 #include "part_viewport_controller.hpp"
 #include "view_cube_widget.hpp"
+#include "workspace_location_dialog.hpp"
 
-#include <QAbstractItemView>
-#include <QDialog>
-#include <QDialogButtonBox>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QFrame>
 #include <QHBoxLayout>
-#include <QInputDialog>
 #include <QLabel>
 #include <QLineEdit>
-#include <QListWidget>
-#include <QListWidgetItem>
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QStackedWidget>
-#include <QStyle>
 #include <QTabBar>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
@@ -38,9 +33,6 @@
 namespace simplesolid2::ui {
 namespace {
 
-constexpr int documentIdRole = Qt::UserRole + 20;
-constexpr int documentOpenableRole = Qt::UserRole + 21;
-
 std::string toUtf8(const QString& value) {
     const auto bytes = value.toUtf8();
     return std::string{
@@ -52,20 +44,6 @@ QString fromUtf8(std::string_view value) {
     return QString::fromUtf8(
         value.data(),
         static_cast<qsizetype>(value.size()));
-}
-
-std::filesystem::path toFilesystemPath(const QString& value) {
-#if defined(_WIN32)
-    return std::filesystem::path{value.toStdWString()};
-#else
-    const auto bytes = value.toUtf8();
-    std::u8string utf8;
-    utf8.reserve(static_cast<std::size_t>(bytes.size()));
-    for (const unsigned char ch : bytes) {
-        utf8.push_back(static_cast<char8_t>(ch));
-    }
-    return std::filesystem::path{utf8};
-#endif
 }
 
 QString fromFilesystemPath(const std::filesystem::path& value) {
@@ -89,6 +67,71 @@ QString documentIndexStateLabel(application::DocumentIndexState state) {
         return QStringLiteral("Invalid Part");
     }
     return QStringLiteral("Unavailable");
+}
+
+QString documentCandidateName(
+    const application::DocumentIndexEntry& entry) {
+    if (!entry.title.empty()) {
+        return fromUtf8(entry.title);
+    }
+
+    if (!entry.relative_paths.empty()) {
+        auto name = fromFilesystemPath(
+            entry.relative_paths.front().stem());
+        if (!name.isEmpty()) return name;
+    }
+
+    return QStringLiteral("<untitled>");
+}
+
+QString documentCandidateLocations(
+    const application::DocumentIndexEntry& entry) {
+    QString result;
+    for (const auto& path : entry.relative_paths) {
+        if (!result.isEmpty()) {
+            result += QStringLiteral("\n");
+        }
+        result += fromFilesystemPath(path);
+    }
+    return result;
+}
+
+std::vector<OpenDocumentCandidate> openDocumentCandidates(
+    const application::DocumentWorkspaceIndex& index) {
+    std::vector<OpenDocumentCandidate> result;
+    result.reserve(index.entries().size());
+
+    for (const auto& entry : index.entries()) {
+        const bool openable =
+            entry.state ==
+                application::DocumentIndexState::resolved &&
+            entry.document_id.has_value();
+
+        QString tooltip;
+        if (entry.document_id) {
+            tooltip =
+                QStringLiteral("DocumentId: ") +
+                fromUtf8(entry.document_id->value());
+        }
+        if (!entry.diagnostic.empty()) {
+            if (!tooltip.isEmpty()) {
+                tooltip += QStringLiteral("\n");
+            }
+            tooltip += fromUtf8(entry.diagnostic);
+        }
+
+        result.push_back(
+            OpenDocumentCandidate{
+                QStringLiteral("Part"),
+                documentCandidateName(entry),
+                documentCandidateLocations(entry),
+                documentIndexStateLabel(entry.state),
+                std::move(tooltip),
+                entry.document_id,
+                openable});
+    }
+
+    return result;
 }
 
 QString partDisplayName(const application::DocumentSession& session) {
@@ -133,9 +176,10 @@ void CadWorkbench::buildUi() {
         new QPushButton(QStringLiteral("New Part…"), shell_);
     new_part_button_->setObjectName(QStringLiteral("newPartButton"));
 
-    open_part_button_ =
-        new QPushButton(QStringLiteral("Open Part…"), shell_);
-    open_part_button_->setObjectName(QStringLiteral("openPartButton"));
+    open_document_button_ =
+        new QPushButton(QStringLiteral("Open…"), shell_);
+    open_document_button_->setObjectName(
+        QStringLiteral("openDocumentButton"));
 
     refresh_button_ =
         new QPushButton(QStringLiteral("Refresh"), shell_);
@@ -160,7 +204,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("closeDocumentButton"));
 
     lifecycle_actions.addWidget(new_part_button_);
-    lifecycle_actions.addWidget(open_part_button_);
+    lifecycle_actions.addWidget(open_document_button_);
     lifecycle_actions.addWidget(refresh_button_);
     lifecycle_actions.addStretch(1);
     lifecycle_actions.addWidget(undo_button_);
@@ -415,10 +459,10 @@ void CadWorkbench::buildUi() {
         this,
         [this] { newPart(); });
     QObject::connect(
-        open_part_button_,
+        open_document_button_,
         &QPushButton::clicked,
         this,
-        [this] { openPart(); });
+        [this] { openDocument(); });
     QObject::connect(
         refresh_button_,
         &QPushButton::clicked,
@@ -495,7 +539,7 @@ void CadWorkbench::clearProjectSession() {
     }
 
     new_part_button_->setEnabled(false);
-    open_part_button_->setEnabled(false);
+    open_document_button_->setEnabled(false);
     refresh_button_->setEnabled(false);
     clearActiveContext();
     status_->setText(QStringLiteral("No Project is open."));
@@ -508,7 +552,7 @@ void CadWorkbench::refreshWorkspaceIndex() {
     }
 
     new_part_button_->setEnabled(true);
-    open_part_button_->setEnabled(true);
+    open_document_button_->setEnabled(true);
     refresh_button_->setEnabled(true);
 
     const auto refreshed = session_->refreshDocuments();
@@ -658,175 +702,71 @@ std::filesystem::path CadWorkbench::defaultPartPath() const {
 void CadWorkbench::newPart() {
     if (session_ == nullptr) return;
 
-    bool accepted = false;
-    const auto entered = QInputDialog::getText(
-        this,
-        QStringLiteral("New Part"),
-        QStringLiteral(
-            "Workspace-relative file path (.ss2part).\n"
-            "Existing parent folders may be used, for example "
-            "Parts/Shaft.ss2part:"),
-        QLineEdit::Normal,
-        fromFilesystemPath(defaultPartPath()),
-        &accepted);
+    WorkspaceLocationDialog dialog{
+        session_->workspaceRoot(),
+        QStringLiteral("Part"),
+        QStringLiteral(".ss2part"),
+        fromFilesystemPath(
+            defaultPartPath().filename()),
+        this};
 
-    if (!accepted || entered.trimmed().isEmpty()) return;
-
-    auto relative = toFilesystemPath(entered.trimmed());
-    if (!relative.has_extension()) {
-        relative += ".ss2part";
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
     }
 
-    auto created = session_->createPart(relative);
+    const auto relative =
+        dialog.selectedRelativeFilePath();
+    if (!relative) return;
+
+    auto created =
+        session_->createPart(*relative);
     if (!created.ok()) {
         showFailure(created.diagnostic);
         refreshWorkspaceIndex();
         return;
     }
 
-    ensureDocumentTab(created.session->documentId());
+    ensureDocumentTab(
+        created.session->documentId());
     const int index =
-        tabIndexFor(created.session->documentId());
+        tabIndexFor(
+            created.session->documentId());
     document_tabs_->setCurrentIndex(index);
     activateTab(index);
     refreshWorkspaceIndex();
-    status_->setText(QStringLiteral("New Part created and saved."));
+    status_->setText(
+        QStringLiteral(
+            "New Part created and saved."));
 }
 
-void CadWorkbench::openPart() {
+void CadWorkbench::openDocument() {
     if (session_ == nullptr) return;
 
-    const auto refreshed = session_->refreshDocuments();
+    const auto refreshed =
+        session_->refreshDocuments();
     if (!refreshed.ok()) {
         status_->setText(
-            QStringLiteral("Document discovery warning: ") +
-            fromUtf8(refreshed.diagnostic.message));
+            QStringLiteral(
+                "Document discovery warning: ") +
+            fromUtf8(
+                refreshed.diagnostic.message));
     }
 
-    QDialog dialog{this};
-    dialog.setWindowTitle(QStringLiteral("Open Part"));
-    dialog.resize(620, 420);
+    OpenDocumentDialog dialog{
+        openDocumentCandidates(
+            session_->documentIndex()),
+        this};
 
-    auto* layout = new QVBoxLayout(&dialog);
-    auto* explanation = new QLabel(
-        QStringLiteral(
-            "Select a resolved native Part Document. "
-            "Identity conflicts and invalid files remain visible "
-            "but cannot be opened."),
-        &dialog);
-    explanation->setWordWrap(true);
-    layout->addWidget(explanation);
-
-    auto* list = new QListWidget(&dialog);
-    list->setObjectName(QStringLiteral("openPartDocumentList"));
-    list->setSelectionMode(QAbstractItemView::SingleSelection);
-    layout->addWidget(list, 1);
-
-    for (const auto& entry : session_->documentIndex().entries()) {
-        QString text;
-        if (entry.state == application::DocumentIndexState::resolved) {
-            text = entry.title.empty()
-                ? QStringLiteral("<untitled>")
-                : fromUtf8(entry.title);
-        } else {
-            text =
-                QStringLiteral("⚠ ") +
-                documentIndexStateLabel(entry.state);
-        }
-
-        for (const auto& path : entry.relative_paths) {
-            text += QStringLiteral("\n") +
-                    fromFilesystemPath(path);
-        }
-
-        auto* item = new QListWidgetItem(text, list);
-        const bool openable =
-            entry.state == application::DocumentIndexState::resolved &&
-            entry.document_id.has_value();
-
-        item->setData(documentOpenableRole, openable);
-        if (entry.document_id) {
-            item->setData(
-                documentIdRole,
-                fromUtf8(entry.document_id->value()));
-        }
-
-        QString tooltip;
-        if (entry.document_id) {
-            tooltip =
-                QStringLiteral("DocumentId: ") +
-                fromUtf8(entry.document_id->value());
-        }
-        if (!entry.diagnostic.empty()) {
-            if (!tooltip.isEmpty()) {
-                tooltip += QStringLiteral("\n");
-            }
-            tooltip += fromUtf8(entry.diagnostic);
-        }
-        item->setToolTip(tooltip);
-
-        if (!openable) {
-            item->setIcon(
-                style()->standardIcon(QStyle::SP_MessageBoxWarning));
-        }
+    if (dialog.exec() != QDialog::Accepted) {
+        return;
     }
 
-    auto* buttons = new QDialogButtonBox(
-        QDialogButtonBox::Open | QDialogButtonBox::Cancel,
-        &dialog);
-    auto* open_button = buttons->button(QDialogButtonBox::Open);
-    open_button->setEnabled(false);
-    layout->addWidget(buttons);
+    const auto document_id =
+        dialog.selectedDocumentId();
+    if (!document_id) return;
 
-    const auto sync_open_enabled = [list, open_button] {
-        const auto* item = list->currentItem();
-        open_button->setEnabled(
-            item != nullptr &&
-            item->data(documentOpenableRole).toBool());
-    };
-
-    QObject::connect(
-        list,
-        &QListWidget::itemSelectionChanged,
-        &dialog,
-        sync_open_enabled);
-    QObject::connect(
-        buttons,
-        &QDialogButtonBox::accepted,
-        &dialog,
-        [&dialog, list] {
-            const auto* item = list->currentItem();
-            if (item != nullptr &&
-                item->data(documentOpenableRole).toBool()) {
-                dialog.accept();
-            }
-        });
-    QObject::connect(
-        buttons,
-        &QDialogButtonBox::rejected,
-        &dialog,
-        &QDialog::reject);
-    QObject::connect(
-        list,
-        &QListWidget::itemDoubleClicked,
-        &dialog,
-        [&dialog](QListWidgetItem* item) {
-            if (item != nullptr &&
-                item->data(documentOpenableRole).toBool()) {
-                dialog.accept();
-            }
-        });
-
-    if (dialog.exec() != QDialog::Accepted) return;
-
-    const auto* item = list->currentItem();
-    if (item == nullptr) return;
-
-    const auto parsed = core::DocumentId::parse(
-        toUtf8(item->data(documentIdRole).toString()));
-    if (!parsed) return;
-
-    static_cast<void>(activateDocument(*parsed));
+    static_cast<void>(
+        activateDocument(*document_id));
 }
 
 application::DocumentSession*
@@ -1210,7 +1150,7 @@ void CadWorkbench::syncActionState() {
     close_document_button_->setEnabled(active);
 
     new_part_button_->setEnabled(session_ != nullptr);
-    open_part_button_->setEnabled(session_ != nullptr);
+    open_document_button_->setEnabled(session_ != nullptr);
     refresh_button_->setEnabled(session_ != nullptr);
 }
 
