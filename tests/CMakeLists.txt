@@ -525,3 +525,35 @@ add_test(
 set_tests_properties(wb01a.document_dialog_ux PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+
+add_executable(wb01a_workbench_document_dialog_integration_test
+    workbench_document_dialog_integration_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
+)
+target_include_directories(wb01a_workbench_document_dialog_integration_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+target_link_libraries(wb01a_workbench_document_dialog_integration_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+        Qt6::Test
+)
+target_compile_features(wb01a_workbench_document_dialog_integration_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb01a.workbench_document_dialog_integration
+    COMMAND wb01a_workbench_document_dialog_integration_test
+)
+set_tests_properties(wb01a.workbench_document_dialog_integration PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 30
+)
