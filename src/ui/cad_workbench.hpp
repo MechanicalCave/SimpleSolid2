@@ -28,12 +28,6 @@ class PartDocumentTreeController;
 class PartViewportController;
 class ViewCubeWidget;
 
-enum class ProjectCloseDisposition {
-    clean,
-    discard,
-    cancel,
-};
-
 class CadWorkbench final : public QWidget {
 public:
     explicit CadWorkbench(QWidget* parent = nullptr);
@@ -44,9 +38,6 @@ public:
     void setProjectSession(
         application::ProjectSession* session);
     void clearProjectSession();
-
-    [[nodiscard]] ProjectCloseDisposition
-    prepareProjectClose();
 
     [[nodiscard]] std::optional<core::DocumentId>
     activeDocumentId() const {
