@@ -448,18 +448,29 @@ int main(int argc, char* argv[]) {
     EXPECT(content->currentWidget() == workbench);
     EXPECT(tabs->currentIndex() >= 0);
 
-    // Workspace is navigation, not a close operation.
+    // Workspace is explicit navigation, not a tab-selection
+    // sentinel and not a close operation. QTabBar may keep the last
+    // current tab while the authoritative navigation context is
+    // Workspace.
+    const int remembered_tab =
+        tabs->currentIndex();
+    EXPECT(remembered_tab >= 0);
+
     workspace_button->click();
     QApplication::processEvents();
 
     EXPECT(content->currentWidget() == dashboard);
     EXPECT(tabs->count() == 2);
-    EXPECT(tabs->currentIndex() == -1);
+    EXPECT(tabs->currentIndex() == remembered_tab);
     EXPECT(new_part->isVisible());
     EXPECT(open_document->isVisible());
 
     // A Project-level Document Tab returns to its Document Workbench.
-    tabs->setCurrentIndex(0);
+    const int target_tab =
+        remembered_tab == 0
+            ? 1
+            : 0;
+    tabs->setCurrentIndex(target_tab);
     QApplication::processEvents();
 
     EXPECT(content->currentWidget() == workbench);
