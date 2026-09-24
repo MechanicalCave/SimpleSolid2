@@ -5,6 +5,7 @@
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
 #include <QApplication>
+#include <QDialog>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTabBar>
@@ -51,10 +52,18 @@ struct TempDirectory final {
 };
 
 bool completeNewPartDialog() {
+    auto* modal =
+        QApplication::activeModalWidget();
     auto* dialog =
         dynamic_cast<ui::WorkspaceLocationDialog*>(
-            QApplication::activeModalWidget());
-    if (dialog == nullptr) return false;
+            modal);
+    if (dialog == nullptr) {
+        if (auto* unexpected =
+                dynamic_cast<QDialog*>(modal)) {
+            unexpected->reject();
+        }
+        return false;
+    }
 
     auto* file_name =
         dialog->findChild<QLineEdit*>(
@@ -82,10 +91,18 @@ bool completeNewPartDialog() {
 
 bool completeOpenDialog(
     const QString& document_name) {
+    auto* modal =
+        QApplication::activeModalWidget();
     auto* dialog =
         dynamic_cast<ui::OpenDocumentDialog*>(
-            QApplication::activeModalWidget());
-    if (dialog == nullptr) return false;
+            modal);
+    if (dialog == nullptr) {
+        if (auto* unexpected =
+                dynamic_cast<QDialog*>(modal)) {
+            unexpected->reject();
+        }
+        return false;
+    }
 
     auto* list =
         dialog->findChild<QTreeWidget*>(
