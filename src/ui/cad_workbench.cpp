@@ -135,6 +135,21 @@ std::vector<OpenDocumentCandidate> openDocumentCandidates(
     return result;
 }
 
+std::optional<viewer::StandardView>
+standardViewForSketchSupport(
+    core::BuiltinReferenceRole role) noexcept {
+    switch (role) {
+    case core::BuiltinReferenceRole::xy_plane:
+        return viewer::StandardView::top;
+    case core::BuiltinReferenceRole::xz_plane:
+        return viewer::StandardView::front;
+    case core::BuiltinReferenceRole::yz_plane:
+        return viewer::StandardView::right;
+    default:
+        return std::nullopt;
+    }
+}
+
 QString partDisplayName(const application::DocumentSession& session) {
     const auto& title = session.document().properties().title;
     if (!title.empty()) {
@@ -309,6 +324,7 @@ void CadWorkbench::buildUi() {
             const std::vector<core::BuiltinReferenceRole>&,
             std::optional<core::BuiltinReferenceRole> primary) {
             refreshPropertiesContext(primary);
+            tryCreateSketchFromSupport(primary);
         });
 
     auto* properties_content = new QWidget(shell_);
@@ -443,9 +459,26 @@ void CadWorkbench::buildUi() {
     auto* operations_layout = new QVBoxLayout(operations_content);
     operations_layout->setContentsMargins(0, 0, 0, 0);
 
+    sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Sketch"),
+            operations_content);
+    sketch_button_->setObjectName(
+        QStringLiteral("sketchToolButton"));
+    operations_layout->addWidget(sketch_button_);
+
+    finish_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Sketch"),
+            operations_content);
+    finish_sketch_button_->setObjectName(
+        QStringLiteral("finishSketchButton"));
+    operations_layout->addWidget(
+        finish_sketch_button_);
+
     operations_placeholder_ = new QLabel(
         QStringLiteral(
-            "No modeling operations are available in this scope."),
+            "Sketch creates an empty Part-hosted Sketch on an Origin plane."),
         operations_content);
     operations_placeholder_->setObjectName(
         QStringLiteral("operationsPlaceholder"));
@@ -495,6 +528,17 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { applyProperties(); });
+    QObject::connect(
+        sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { startSketchTool(); });
+    QObject::connect(
+        finish_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { finishSketch(); });
+
     QObject::connect(
         document_tabs_,
         &QTabBar::currentChanged,
