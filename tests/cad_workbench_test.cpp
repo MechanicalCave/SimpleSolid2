@@ -242,6 +242,9 @@ int main(int argc, char* argv[]) {
     auto* save =
         workbench.findChild<QPushButton*>(
             QStringLiteral("saveDocumentButton"));
+    auto* close_document =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("closeDocumentButton"));
     auto* show_references =
         workbench.findChild<QAction*>(
             QStringLiteral("showBuiltinReferencesAction"));
@@ -277,6 +280,7 @@ int main(int argc, char* argv[]) {
     CHECK(undo != nullptr);
     CHECK(redo != nullptr);
     CHECK(save != nullptr);
+    CHECK(close_document != nullptr);
     CHECK(show_references != nullptr);
     CHECK(hide_references != nullptr);
     CHECK(projection_button != nullptr);
@@ -570,6 +574,19 @@ int main(int argc, char* argv[]) {
     CHECK(*workbench.activeDocumentId() == first_id);
     CHECK(tabs->count() == 2);
     CHECK(title->text() == QStringLiteral("Drive Shaft Rev"));
+
+    // SK-01A P0 regression: closing the active Part must detach
+    // Workbench/Viewer non-owning pointers before ProjectSession
+    // erases the owning DocumentSession.
+    close_document->click();
+    QApplication::processEvents();
+    CHECK(
+        opened.session->documentSession(first_id) ==
+        nullptr);
+    CHECK(workbench.activeDocumentId().has_value());
+    CHECK(*workbench.activeDocumentId() == second_id);
+    CHECK(tabs->count() == 1);
+    CHECK(title->text() == QStringLiteral("Housing"));
 
     workbench.clearProjectSession();
     CHECK(!workbench.activeDocumentId().has_value());
