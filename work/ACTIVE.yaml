@@ -8,8 +8,8 @@ accepted_adrs:
   - "adr/ADR-0003-cad-workbench-viewport-and-sketch-integration.md"
   - "adr/ADR-0004-native-document-container-and-persistence.md"
 next:
-  - select maintained ZIP and JSON implementation dependencies within the accepted persistence boundary
-  - implement bounded common container/envelope primitives and safety tests
+  - implement bounded common ZIP+JSON container/envelope primitives and safety tests
+  - use vendored miniz 3.1.2 and nlohmann/json 3.12.0 without network fetches
   - replace experimental Part persistence with the accepted native ZIP+JSON representation
   - preserve existing Project/Document lifecycle and identity invariants
 notes:
