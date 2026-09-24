@@ -583,6 +583,7 @@ add_executable(wb01a_workbench_document_dialog_integration_test
 )
 target_include_directories(wb01a_workbench_document_dialog_integration_test
     PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/application
         ${PROJECT_SOURCE_DIR}/src/ui
 )
 target_link_libraries(wb01a_workbench_document_dialog_integration_test
