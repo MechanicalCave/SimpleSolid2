@@ -1090,66 +1090,6 @@ void CadWorkbench::notifyDocumentStateChanged() {
     }
 }
 
-ProjectCloseDisposition CadWorkbench::prepareProjectClose() {
-    if (session_ == nullptr ||
-        !session_->hasDirtyDocuments()) {
-        return ProjectCloseDisposition::clean;
-    }
-
-    QMessageBox box{
-        QMessageBox::Warning,
-        QStringLiteral("Unsaved Parts"),
-        QStringLiteral(
-            "One or more open Parts contain unsaved authored changes.\n"
-            "Save all changes before closing the Project?"),
-        QMessageBox::NoButton,
-        this};
-
-    auto* save_button =
-        box.addButton(
-            QStringLiteral("Save All"),
-            QMessageBox::AcceptRole);
-    auto* discard_button =
-        box.addButton(
-            QStringLiteral("Discard"),
-            QMessageBox::DestructiveRole);
-    auto* cancel_button =
-        box.addButton(
-            QStringLiteral("Cancel"),
-            QMessageBox::RejectRole);
-
-    box.exec();
-
-    if (box.clickedButton() == cancel_button ||
-        box.clickedButton() == nullptr) {
-        return ProjectCloseDisposition::cancel;
-    }
-
-    if (box.clickedButton() == discard_button) {
-        return ProjectCloseDisposition::discard;
-    }
-
-    if (box.clickedButton() == save_button) {
-        const auto saved =
-            session_->saveAllDirtyDocuments();
-        if (!saved.ok()) {
-            showFailure(saved.diagnostic);
-            return ProjectCloseDisposition::cancel;
-        }
-
-        if (document_state_changed_handler_) {
-            for (const auto& id :
-                 session_->openDocumentIds()) {
-                document_state_changed_handler_(id);
-            }
-        }
-        syncActionState();
-        return ProjectCloseDisposition::clean;
-    }
-
-    return ProjectCloseDisposition::cancel;
-}
-
 void CadWorkbench::showFailure(
     const application::DocumentSessionDiagnostic& diagnostic) {
     auto message = fromUtf8(diagnostic.message);
