@@ -867,6 +867,193 @@ void CadWorkbench::applyProperties() {
             : QStringLiteral("No authored property change."));
 }
 
+void CadWorkbench::startSketchTool() {
+    if (activeDocumentSession() == nullptr) {
+        return;
+    }
+
+    if (active_sketch_id_) {
+        status_->setText(
+            QStringLiteral(
+                "Finish the active Sketch before creating another one."));
+        return;
+    }
+
+    sketch_support_pick_active_ = true;
+    operations_placeholder_->setText(
+        QStringLiteral(
+            "Sketch: select XY, XZ or YZ Origin plane in the Tree or 3D Viewport."));
+    status_->setText(
+        QStringLiteral(
+            "Sketch tool active — select an Origin plane."));
+    syncActionState();
+}
+
+void CadWorkbench::tryCreateSketchFromSupport(
+    std::optional<core::BuiltinReferenceRole> support) {
+    if (!sketch_support_pick_active_) {
+        return;
+    }
+
+    if (!support) {
+        return;
+    }
+
+    if (!part::isSketchOriginPlane(*support)) {
+        status_->setText(
+            QStringLiteral(
+                "Sketch support must be XY, XZ or YZ Origin plane."));
+        return;
+    }
+
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    const auto created =
+        document_session->execute(
+            application::CreatePartSketchCommand{
+                *support});
+    if (!created.ok()) {
+        showFailure(created.diagnostic);
+        return;
+    }
+
+    if (!created.changed ||
+        !created.sketch_id) {
+        status_->setText(
+            QStringLiteral(
+                "Sketch was not created."));
+        return;
+    }
+
+    sketch_support_pick_active_ = false;
+
+    const auto created_id =
+        *created.sketch_id;
+
+    refreshActiveContext();
+    enterSketchEdit(created_id);
+
+    status_->setText(
+        QStringLiteral(
+            "Sketch created — editing in the 3D Viewport. "
+            "Pan/Zoom/Orbit remain available."));
+}
+
+void CadWorkbench::enterSketchEdit(
+    const sketch::SketchId& sketch_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        !active_document_id_) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    const auto* sketch =
+        document_session->document()
+            .findSketch(sketch_id);
+    if (sketch == nullptr) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    active_sketch_id_ = sketch_id;
+    sketch_edit_document_id_ =
+        *active_document_id_;
+
+    viewport_controller_->setSketchEditPlacement(
+        sketch->placement);
+
+    if (viewport_ != nullptr) {
+        const auto standard_view =
+            standardViewForSketchSupport(
+                sketch->support.builtin_plane);
+        if (standard_view) {
+            static_cast<void>(
+                viewport_->setStandardView(
+                    *standard_view));
+        }
+        viewport_->fitAll();
+    }
+
+    operations_placeholder_->setText(
+        QStringLiteral(
+            "Sketch edit context is active in the same 3D Viewport. "
+            "This SK-01 Sketch is intentionally empty; 2D entities come later."));
+    syncActionState();
+}
+
+void CadWorkbench::finishSketch() {
+    if (!active_sketch_id_) {
+        return;
+    }
+
+    clearSketchRuntimeContext();
+    status_->setText(
+        QStringLiteral(
+            "Sketch edit finished. The Sketch remains authored in the Part."));
+    syncActionState();
+}
+
+void CadWorkbench::clearSketchRuntimeContext() {
+    sketch_support_pick_active_ = false;
+    active_sketch_id_.reset();
+    sketch_edit_document_id_.reset();
+
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->setSketchEditPlacement(
+            std::nullopt);
+    }
+
+    if (operations_placeholder_ != nullptr) {
+        operations_placeholder_->setText(
+            QStringLiteral(
+                "Sketch creates an empty Part-hosted Sketch on an Origin plane."));
+    }
+}
+
+void CadWorkbench::reconcileSketchRuntimeContext() {
+    if (!active_sketch_id_) {
+        return;
+    }
+
+    if (!active_document_id_ ||
+        !sketch_edit_document_id_ ||
+        *active_document_id_ !=
+            *sketch_edit_document_id_) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    const auto* sketch =
+        document_session->document()
+            .findSketch(*active_sketch_id_);
+    if (sketch == nullptr) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    viewport_controller_->setSketchEditPlacement(
+        sketch->placement);
+
+    operations_placeholder_->setText(
+        QStringLiteral(
+            "Sketch edit context is active in the same 3D Viewport. "
+            "This SK-01 Sketch is intentionally empty; 2D entities come later."));
+}
+
 void CadWorkbench::undo() {
     auto* document_session = activeDocumentSession();
     if (document_session == nullptr) return;
