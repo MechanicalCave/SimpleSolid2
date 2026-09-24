@@ -370,6 +370,33 @@ int main(int argc, char* argv[]) {
         session->document().sketches().front().id ==
         sketch_id);
 
+    sketch_button->click();
+    const viewer::PresentationToken
+        xy_plane_token{0x105U};
+    viewport->emitSelectionIntent(
+        xy_plane_token);
+    QApplication::processEvents();
+
+    CHECK(session->document().sketches().size() == 2U);
+    CHECK(finish_button->isEnabled());
+    CHECK(
+        viewport->lastStandardView() ==
+        viewer::StandardView::top);
+    CHECK(viewport->scene().grid.has_value());
+    CHECK(
+        vectorEquals(
+            viewport->scene().grid->u_axis,
+            1.0, 0.0, 0.0));
+    CHECK(
+        vectorEquals(
+            viewport->scene().grid->v_axis,
+            0.0, 1.0, 0.0));
+
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().sketches().size() == 1U);
+    CHECK(!finish_button->isEnabled());
+
     CHECK(session->save().ok());
     CHECK(!session->needsSave());
 
