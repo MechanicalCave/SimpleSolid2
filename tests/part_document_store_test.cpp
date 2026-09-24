@@ -294,6 +294,7 @@ int main() {
         std::istreambuf_iterator<char>{
             legacy_before_stream},
         std::istreambuf_iterator<char>{}};
+    legacy_before_stream.close();
 
     CHECK(
         legacy_before ==
