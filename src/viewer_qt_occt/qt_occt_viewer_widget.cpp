@@ -5,11 +5,11 @@
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_InteractiveObject.hxx>
 #include <AIS_Line.hxx>
-#include <AIS_Plane.hxx>
 #include <AIS_Point.hxx>
+#include <AIS_Shape.hxx>
 #include <Aspect_DisplayConnection.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
 #include <Geom_CartesianPoint.hxx>
-#include <Geom_Plane.hxx>
 #include <Graphic3d_Camera.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Quantity_Color.hxx>
@@ -484,29 +484,31 @@ public:
         if (!normal) return {};
 
         traceProviderPhase(
-            "plane-before-geom",
+            "plane-before-face",
             reference.token);
-        Handle(Geom_Plane) plane = new Geom_Plane(
-            gp_Pln{
-                toPoint(reference.origin),
-                toDirection(*normal)});
+        const gp_Pln plane{
+            toPoint(reference.origin),
+            toDirection(*normal)};
+        BRepBuilderAPI_MakeFace face{
+            plane,
+            -reference.extent,
+            reference.extent,
+            -reference.extent,
+            reference.extent};
         traceProviderPhase(
-            "plane-after-geom",
+            "plane-after-face-builder",
             reference.token);
+        if (!face.IsDone()) {
+            return {};
+        }
 
-        Handle(AIS_Plane) object = new AIS_Plane(plane);
+        // A finite AIS_Shape avoids the unstable AIS_Plane lifecycle
+        // observed during repeated native scene replacement on Windows.
+        // The neutral PresentationToken remains the semantic transport.
+        Handle(AIS_Shape) object =
+            new AIS_Shape(face.Face());
         traceProviderPhase(
-            "plane-after-ais-constructor",
-            reference.token);
-
-        traceProviderPhase(
-            "plane-before-set-size",
-            reference.token);
-        object->SetSize(
-            reference.extent * 2.0,
-            reference.extent * 2.0);
-        traceProviderPhase(
-            "plane-after-set-size",
+            "plane-after-ais-shape",
             reference.token);
         return object;
     }
