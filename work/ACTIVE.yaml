@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/WB-01A_WORKBENCH_STABILIZATION_AND_DOCUMENT_DIALOG_UX.md"
 foundation_version: "1.0"
 accepted_adrs:
@@ -7,17 +7,19 @@ accepted_adrs:
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
   - "adr/ADR-0003-cad-workbench-viewport-and-sketch-integration.md"
 next:
-  - fix the native ViewCube repaint regression during Editor Surface/right-panel resize
-  - make Open Document columns interactively resizable with narrower default Name and wider Location
-  - update required documentation and close WB-01A again after exact-head PASS
-  - do not implement tile/icon view, thumbnails, preview cache, or native Document format changes in WB-01A
+  - no implementation work is active after the WB-01A follow-up
+  - Owner must accept the next explicit work contract before further product implementation
+  - planned next larger decision is a D2 native Document persistence architecture contract before Sketcher implementation
+  - no tile/icon Document browser, thumbnails, preview cache, Sketch Core, Bodies, Features, Assembly, Drawing, or native format changes without a later accepted contract
 notes:
   - DOC-01 and DOC-01A remain complete.
   - PART-01 remains complete.
   - WB-01 remains complete.
   - ADR-0003 remains the governing Workbench/Viewer architecture.
   - WB-01A was completed on 2026-09-24 and explicitly reopened by Owner on 2026-09-24 for two in-scope P1 follow-up defects only.
-  - Follow-up scope is limited to native ViewCube repaint/invalidation and Open Document interactive column sizing.
+  - ViewCube overlay geometry changes now schedule a coalesced repaint of the underlying native Viewer surface so stale overlay pixels are not left after splitter/right-panel resize.
+  - Open Document Kind/Name/Location/Status columns are interactively resizable; default sizing keeps Name compact and Location wider.
+  - Existing responsive containment and document-dialog behavior remain covered, with added regression checks for underlay repaint and interactive column sizing.
   - Tile/icon Document browsing and thumbnails are explicitly deferred.
-  - The next planned larger work after WB-01A is a separate Owner-approved D2 native Document persistence architecture contract before Sketcher implementation.
+  - Internal and PL/EN product documentation plus generated Product Browser describe the follow-up state.
   - Root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
