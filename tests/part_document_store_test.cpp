@@ -1,4 +1,5 @@
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/persistence/native_document_container.hpp>
 
 #include <cstdlib>
 #include <filesystem>
@@ -9,191 +10,296 @@
 using namespace simplesolid2;
 
 namespace {
+
 void check(bool value, const char* expression, int line) {
     if (!value) {
-        std::cerr << "PART-01 Part store CHECK failed at line "
-                  << line << ": " << expression << '\n';
+        std::cerr
+            << "PERSIST-01 Part store CHECK failed at line "
+            << line << ": " << expression << '\n';
         std::abort();
     }
 }
-#define CHECK(expr) check(static_cast<bool>(expr), #expr, __LINE__)
+
+#define CHECK(expr) \
+    check(static_cast<bool>(expr), #expr, __LINE__)
 
 struct TempDirectory final {
     std::filesystem::path path;
+
     TempDirectory() {
-        path = std::filesystem::temp_directory_path() /
-               ("simplesolid2_part_store_" +
-                std::to_string(
-                    std::filesystem::file_time_type::clock::now()
-                        .time_since_epoch().count()));
+        path =
+            std::filesystem::temp_directory_path() /
+            ("simplesolid2_part_store_" +
+             std::to_string(
+                 std::filesystem::file_time_type::clock::now()
+                     .time_since_epoch()
+                     .count()));
         std::filesystem::create_directories(path);
     }
+
     ~TempDirectory() {
         std::error_code ec;
         std::filesystem::remove_all(path, ec);
     }
 };
 
-std::string readText(const std::filesystem::path& path) {
-    std::ifstream in{path, std::ios::binary};
-    CHECK(static_cast<bool>(in));
-    return std::string{
-        std::istreambuf_iterator<char>{in},
-        std::istreambuf_iterator<char>{}};
+void writeBytes(
+    const std::filesystem::path& path,
+    const std::string& bytes) {
+    std::ofstream out{
+        path,
+        std::ios::binary | std::ios::trunc};
+    CHECK(static_cast<bool>(out));
+    out.write(
+        bytes.data(),
+        static_cast<std::streamsize>(
+            bytes.size()));
+    CHECK(static_cast<bool>(out));
 }
 
-void writeLegacyV1(
-    const std::filesystem::path& path,
-    const core::DocumentId& id) {
-    std::ofstream out{path, std::ios::binary};
-    CHECK(static_cast<bool>(out));
-    out << "SS2PART\n"
-        << "schema_version=1\n"
-        << "document_kind=part\n"
-        << "document_id=" << id.value() << "\n"
-        << "number_hex=\n"
-        << "title_hex=\n"
-        << "description_hex=\n"
-        << "engineering_revision_hex=\n";
+std::string buildPartPackage(
+    std::string document_id,
+    int schema_version,
+    std::string authored_json,
+    std::string kind = "part") {
+    const auto built =
+        persistence::buildNativeDocumentContainer(
+            persistence::NativeDocumentDescriptor{
+                std::move(kind),
+                std::move(document_id),
+                schema_version,
+            },
+            authored_json);
+    CHECK(built.ok());
+    return *built.bytes;
 }
-}
+
+} // namespace
 
 int main() {
     TempDirectory temp;
-    const auto path = temp.path / "Part001.ss2part";
+    const auto path =
+        temp.path / "Part001.ss2part";
 
-    const auto id = core::DocumentId::generate();
-    auto document = part::PartDocument::create(id);
+    const auto id =
+        core::DocumentId::generate();
+    auto document =
+        part::PartDocument::create(id);
+
     {
-        part::PartDocumentTransaction tx{document};
+        part::PartDocumentTransaction tx{
+            document};
         core::DocumentProperties properties;
         properties.number = "12-04-117";
         properties.title = "Wał napędowy";
         properties.description = "Main\nshaft";
         properties.engineering_revision = "B";
         tx.setProperties(properties);
-        CHECK(tx.setBuiltinReferenceVisible(
-            core::BuiltinReferenceRole::xy_plane,
-            true));
-        CHECK(tx.setBuiltinReferenceVisible(
-            core::BuiltinReferenceRole::x_axis,
-            false));
+        CHECK(
+            tx.setBuiltinReferenceVisible(
+                core::BuiltinReferenceRole::
+                    xy_plane,
+                true));
+        CHECK(
+            tx.setBuiltinReferenceVisible(
+                core::BuiltinReferenceRole::
+                    x_axis,
+                false));
         CHECK(tx.commit().changed);
     }
 
     part::PartDocumentStore store;
-    CHECK(store.createNew(path, document).ok());
-    CHECK(!store.createNew(path, document).ok());
+    CHECK(
+        store.createNew(
+            path,
+            document)
+            .ok());
+    CHECK(
+        !store.createNew(
+            path,
+            document)
+             .ok());
 
-    const auto bytes = readText(path);
-    CHECK(bytes.find("SS2PART") != std::string::npos);
-    CHECK(bytes.find("schema_version=2") != std::string::npos);
-    CHECK(bytes.find("builtin_reference_visibility_mask=") != std::string::npos);
-    CHECK(bytes.find("project_id") == std::string::npos);
-    CHECK(bytes.find("ProjectId") == std::string::npos);
-    CHECK(bytes.find("TopoDS") == std::string::npos);
-    CHECK(bytes.find("evaluation") == std::string::npos);
+    const auto package =
+        persistence::readNativeDocumentContainer(
+            path);
+    CHECK(package.ok());
+    CHECK(
+        package.package->descriptor.document_kind ==
+        "part");
+    CHECK(
+        package.package->descriptor.document_id ==
+        id.value());
+    CHECK(
+        package.package->descriptor.domain_schema_version ==
+        part::PartDocumentStore::
+            current_schema_version);
+    CHECK(
+        package.package->authored_json.find(
+            "\"properties\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
+            "\"presentation\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
+            "ProjectId") ==
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
+            "TopoDS") ==
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
+            "evaluation") ==
+        std::string::npos);
 
     auto loaded = store.load(path);
     CHECK(loaded.ok());
-    CHECK(loaded.document->documentId() == id);
-    CHECK(loaded.document->properties() == document.properties());
-    CHECK(loaded.document->revision().value() == 0U);
-    CHECK(loaded.document->builtinReferenceVisible(
-        core::BuiltinReferenceRole::xy_plane));
-    CHECK(!loaded.document->builtinReferenceVisible(
-        core::BuiltinReferenceRole::x_axis));
+    CHECK(
+        loaded.document->documentId() == id);
+    CHECK(
+        loaded.document->properties() ==
+        document.properties());
+    CHECK(
+        loaded.document->revision().value() ==
+        0U);
+    CHECK(
+        loaded.document->builtinReferenceVisible(
+            core::BuiltinReferenceRole::
+                xy_plane));
+    CHECK(
+        !loaded.document->builtinReferenceVisible(
+            core::BuiltinReferenceRole::
+                x_axis));
 
     {
-        part::PartDocumentTransaction tx{document};
-        auto properties = document.properties();
-        properties.title = "Drive Shaft";
-        tx.setProperties(properties);
+        part::PartDocumentTransaction tx{
+            document};
+        auto properties =
+            document.properties();
+        properties.title =
+            "Drive Shaft";
+        tx.setProperties(
+            std::move(properties));
         CHECK(tx.commit().changed);
     }
+
     CHECK(store.save(path, document).ok());
     auto reloaded = store.load(path);
     CHECK(reloaded.ok());
-    CHECK(reloaded.document->documentId() == id);
-    CHECK(reloaded.document->properties().title == "Drive Shaft");
-    CHECK(reloaded.document->builtinReferenceVisible(
-        core::BuiltinReferenceRole::xy_plane));
+    CHECK(
+        reloaded.document->documentId() ==
+        id);
+    CHECK(
+        reloaded.document
+            ->properties()
+            .title ==
+        "Drive Shaft");
+    CHECK(
+        reloaded.document
+            ->builtinReferenceVisible(
+                core::BuiltinReferenceRole::
+                    xy_plane));
 
-    const auto legacy_path = temp.path / "Legacy.ss2part";
-    const auto legacy_id = core::DocumentId::generate();
-    writeLegacyV1(legacy_path, legacy_id);
-    const auto legacy_bytes_before = readText(legacy_path);
+    const auto old_bootstrap =
+        temp.path / "OldBootstrap.ss2part";
+    writeBytes(
+        old_bootstrap,
+        "SS2PART\n"
+        "schema_version=2\n");
+    const auto old =
+        store.load(old_bootstrap);
+    CHECK(!old.ok());
+    CHECK(
+        old.diagnostic.code ==
+        part::PartStoreErrorCode::
+            malformed_document);
 
-    auto legacy = store.load(legacy_path);
-    CHECK(legacy.ok());
-    CHECK(legacy.document->documentId() == legacy_id);
-    CHECK(legacy.document->builtinReferenceVisible(
-        core::BuiltinReferenceRole::origin_point));
-    CHECK(legacy.document->builtinReferenceVisible(
-        core::BuiltinReferenceRole::x_axis));
-    CHECK(!legacy.document->builtinReferenceVisible(
-        core::BuiltinReferenceRole::xy_plane));
-    CHECK(readText(legacy_path) == legacy_bytes_before);
-
-    CHECK(store.save(legacy_path, *legacy.document).ok());
-    const auto legacy_bytes_after = readText(legacy_path);
-    CHECK(legacy_bytes_after != legacy_bytes_before);
-    CHECK(legacy_bytes_after.find("schema_version=2") != std::string::npos);
-    CHECK(legacy_bytes_after.find(
-              "builtin_reference_visibility_mask=15") != std::string::npos);
-
-    auto migrated = store.load(legacy_path);
-    CHECK(migrated.ok());
-    CHECK(migrated.document->documentId() == legacy_id);
-    CHECK(migrated.document->builtinReferenceVisible(
-        core::BuiltinReferenceRole::origin_point));
-    CHECK(!migrated.document->builtinReferenceVisible(
-        core::BuiltinReferenceRole::xy_plane));
-
-    const auto invalid = temp.path / "Broken.ss2part";
-    {
-        std::ofstream out{invalid, std::ios::binary};
-        out << "not a native Part\n";
-    }
-    const auto broken = store.load(invalid);
-    CHECK(!broken.ok());
-    CHECK(broken.diagnostic.code == part::PartStoreErrorCode::malformed_document);
-
-    const auto invalid_visibility = temp.path / "InvalidVisibility.ss2part";
-    {
-        std::ofstream out{invalid_visibility, std::ios::binary};
-        CHECK(static_cast<bool>(out));
-        out << "SS2PART\n"
-            << "schema_version=2\n"
-            << "document_kind=part\n"
-            << "document_id=" << core::DocumentId::generate().value() << "\n"
-            << "number_hex=\n"
-            << "title_hex=\n"
-            << "description_hex=\n"
-            << "engineering_revision_hex=\n"
-            << "builtin_reference_visibility_mask=128\n";
-    }
-    const auto bad_visibility = store.load(invalid_visibility);
+    const auto bad_visibility_path =
+        temp.path / "BadVisibility.ss2part";
+    writeBytes(
+        bad_visibility_path,
+        buildPartPackage(
+            std::string{
+                core::DocumentId::generate()
+                    .value()},
+            part::PartDocumentStore::
+                current_schema_version,
+            "{"
+            "\"properties\":{"
+                "\"number\":\"\","
+                "\"title\":\"\","
+                "\"description\":\"\","
+                "\"engineering_revision\":\"\""
+            "},"
+            "\"presentation\":{"
+                "\"builtin_reference_visibility_mask\":128"
+            "}"
+            "}"));
+    const auto bad_visibility =
+        store.load(
+            bad_visibility_path);
     CHECK(!bad_visibility.ok());
-    CHECK(bad_visibility.diagnostic.code ==
-          part::PartStoreErrorCode::malformed_document);
+    CHECK(
+        bad_visibility.diagnostic.code ==
+        part::PartStoreErrorCode::
+            malformed_document);
 
-    const auto unsupported = temp.path / "Future.ss2part";
-    {
-        std::ofstream out{unsupported, std::ios::binary};
-        CHECK(static_cast<bool>(out));
-        out << "SS2PART\n"
-            << "schema_version=999\n"
-            << "document_kind=part\n"
-            << "document_id=" << id.value() << "\n"
-            << "number_hex=\n"
-            << "title_hex=\n"
-            << "description_hex=\n"
-            << "engineering_revision_hex=\n";
-    }
-    const auto future = store.load(unsupported);
-    CHECK(!future.ok());
-    CHECK(future.diagnostic.code == part::PartStoreErrorCode::unsupported_schema);
+    const auto future_schema_path =
+        temp.path / "FutureSchema.ss2part";
+    writeBytes(
+        future_schema_path,
+        buildPartPackage(
+            std::string{id.value()},
+            999,
+            "{}"));
+    const auto future_schema =
+        store.load(
+            future_schema_path);
+    CHECK(!future_schema.ok());
+    CHECK(
+        future_schema.diagnostic.code ==
+        part::PartStoreErrorCode::
+            unsupported_schema);
+
+    const auto wrong_kind_path =
+        temp.path / "WrongKind.ss2part";
+    writeBytes(
+        wrong_kind_path,
+        buildPartPackage(
+            std::string{id.value()},
+            part::PartDocumentStore::
+                current_schema_version,
+            "{}",
+            "drawing"));
+    const auto wrong_kind =
+        store.load(
+            wrong_kind_path);
+    CHECK(!wrong_kind.ok());
+    CHECK(
+        wrong_kind.diagnostic.code ==
+        part::PartStoreErrorCode::
+            wrong_document_kind);
+
+    const auto invalid_id_path =
+        temp.path / "InvalidId.ss2part";
+    writeBytes(
+        invalid_id_path,
+        buildPartPackage(
+            "not-a-document-id",
+            part::PartDocumentStore::
+                current_schema_version,
+            "{}"));
+    const auto invalid_id =
+        store.load(
+            invalid_id_path);
+    CHECK(!invalid_id.ok());
+    CHECK(
+        invalid_id.diagnostic.code ==
+        part::PartStoreErrorCode::
+            invalid_document_id);
 
     return EXIT_SUCCESS;
 }
