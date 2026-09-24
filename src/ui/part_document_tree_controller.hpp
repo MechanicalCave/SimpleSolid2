@@ -81,7 +81,6 @@ private:
     QAction* show_action_{};
     QAction* hide_action_{};
     QAction* edit_sketch_action_{};
-    std::optional<sketch::SketchId> context_sketch_id_;
     ResultHandler result_handler_;
     SelectionHandler selection_handler_;
     SketchEditHandler sketch_edit_handler_;
