@@ -11,7 +11,6 @@
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTabBar>
-#include <QToolButton>
 #include <QTreeWidget>
 #include <QWidget>
 
@@ -243,10 +242,10 @@ int main(int argc, char* argv[]) {
         workbench.findChild<QAction*>(
             QStringLiteral("hideBuiltinReferencesAction"));
     auto* projection_button =
-        workbench.findChild<QToolButton*>(
+        workbench.findChild<QPushButton*>(
             QStringLiteral("viewCubeProjectionButton"));
     auto* fit_button =
-        workbench.findChild<QToolButton*>(
+        workbench.findChild<QPushButton*>(
             QStringLiteral("viewCubeFitButton"));
     auto* properties_stack =
         workbench.findChild<QStackedWidget*>(
@@ -260,7 +259,7 @@ int main(int argc, char* argv[]) {
 
     auto* top_view_action =
         workbench.findChild<QAction*>(
-            QStringLiteral("viewCubeViewActionTop"));
+            QStringLiteral("viewCubeTopAction"));
 
     CHECK(tabs != nullptr);
     CHECK(tree != nullptr);
