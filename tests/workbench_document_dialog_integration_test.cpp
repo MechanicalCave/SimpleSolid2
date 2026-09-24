@@ -466,16 +466,21 @@ int main(int argc, char* argv[]) {
     EXPECT(new_part->isVisible());
     EXPECT(open_document->isVisible());
 
-    // A Project-level Document Tab returns to its Document Workbench.
-    const int target_tab =
-        remembered_tab == 0
-            ? 1
-            : 0;
-    tabs->setCurrentIndex(target_tab);
+    // Clicking the remembered current tab must return from
+    // Workspace too. QTabBar does not emit currentChanged when the
+    // same index is clicked, so Project navigation also listens to
+    // tabBarClicked.
+    EXPECT(
+        QMetaObject::invokeMethod(
+            tabs,
+            "tabBarClicked",
+            Qt::DirectConnection,
+            Q_ARG(int, remembered_tab)));
     QApplication::processEvents();
 
     EXPECT(content->currentWidget() == workbench);
     EXPECT(!workspace_button->isChecked());
+    EXPECT(tabs->currentIndex() == remembered_tab);
     EXPECT(tabs->count() == 2);
 
     return EXIT_SUCCESS;
