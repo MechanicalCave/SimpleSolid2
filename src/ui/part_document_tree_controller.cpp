@@ -21,6 +21,7 @@ namespace {
 
 constexpr int builtinReferenceRoleData = Qt::UserRole + 40;
 constexpr int builtinReferenceVisibleData = Qt::UserRole + 41;
+constexpr int sketchIdData = Qt::UserRole + 42;
 
 constexpr std::array<core::BuiltinReferenceRole, 7> tree_reference_order{
     core::BuiltinReferenceRole::xy_plane,
@@ -84,6 +85,23 @@ PartDocumentTreeController::PartDocumentTreeController(
     hide_action_->setObjectName(
         QStringLiteral("hideBuiltinReferencesAction"));
 
+    edit_sketch_action_ =
+        new QAction(QStringLiteral("Edit Sketch"), tree_);
+    edit_sketch_action_->setObjectName(
+        QStringLiteral("editSketchAction"));
+
+    QObject::connect(
+        edit_sketch_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (context_sketch_id_ &&
+                sketch_edit_handler_) {
+                sketch_edit_handler_(
+                    *context_sketch_id_);
+            }
+        });
+
     QObject::connect(
         show_action_,
         &QAction::triggered,
@@ -111,6 +129,16 @@ PartDocumentTreeController::PartDocumentTreeController(
         this,
         [this](QTreeWidgetItem*, QTreeWidgetItem*) {
             notifySelectionChanged();
+        });
+
+    QObject::connect(
+        tree_,
+        &QTreeWidget::itemDoubleClicked,
+        this,
+        [this](QTreeWidgetItem* item, int) {
+            if (item != nullptr) {
+                requestSketchEdit(*item);
+            }
         });
 
     QObject::connect(
@@ -337,6 +365,11 @@ void PartDocumentTreeController::rebuild(
                 break;
             }
 
+            item->setData(
+                0,
+                sketchIdData,
+                fromUtf8(sketch.id.value()));
+
             item->setToolTip(
                 0,
                 QStringLiteral("SketchId: ") +
@@ -390,6 +423,21 @@ void PartDocumentTreeController::showContextMenu(
     const QPoint& position) {
     updateVisibilityActions();
 
+    if (auto* item = tree_->itemAt(position);
+        item != nullptr) {
+        if (const auto sketch_id =
+                sketchIdForItem(*item)) {
+            context_sketch_id_ = *sketch_id;
+            QMenu menu{tree_};
+            menu.addAction(edit_sketch_action_);
+            menu.exec(
+                tree_->viewport()->mapToGlobal(
+                    position));
+            context_sketch_id_.reset();
+            return;
+        }
+    }
+
     if (!show_action_->isEnabled() &&
         !hide_action_->isEnabled()) {
         return;
@@ -424,6 +472,18 @@ void PartDocumentTreeController::applySelectedVisibility(
     if (result_handler_) {
         result_handler_(result, visible);
     }
+}
+
+void PartDocumentTreeController::requestSketchEdit(
+    const QTreeWidgetItem& item) {
+    const auto sketch_id =
+        sketchIdForItem(item);
+    if (!sketch_id ||
+        !sketch_edit_handler_) {
+        return;
+    }
+
+    sketch_edit_handler_(*sketch_id);
 }
 
 void PartDocumentTreeController::notifySelectionChanged() {
@@ -475,6 +535,25 @@ PartDocumentTreeController::roleForItem(
     }
 
     return role;
+}
+
+
+std::optional<sketch::SketchId>
+PartDocumentTreeController::sketchIdForItem(
+    const QTreeWidgetItem& item) {
+    const auto value =
+        item.data(0, sketchIdData);
+    if (!value.isValid()) {
+        return std::nullopt;
+    }
+
+    const auto bytes =
+        value.toString().toUtf8();
+    return sketch::SketchId::parse(
+        std::string_view{
+            bytes.constData(),
+            static_cast<std::size_t>(
+                bytes.size())});
 }
 
 } // namespace simplesolid2::ui
