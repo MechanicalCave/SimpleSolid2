@@ -174,7 +174,7 @@ int main(int argc, char* argv[]) {
     workbench.resize(1200, 780);
     workbench.setProjectSession(&*opened.session);
 
-    if (!workbench.activateDocument(document_id) ||
+    if (!workbench.activateOpenDocument(document_id) ||
         viewport == nullptr) {
         return EXIT_FAILURE;
     }
