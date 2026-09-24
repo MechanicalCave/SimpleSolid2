@@ -3,6 +3,7 @@
 #include <QWidget>
 
 class QLabel;
+class QString;
 class QPushButton;
 class QStackedWidget;
 class QTabBar;
