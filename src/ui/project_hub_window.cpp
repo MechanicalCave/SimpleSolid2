@@ -440,7 +440,17 @@ bool ProjectHubWindow::requestCloseProject() {
 
     const bool discard =
         disposition == ProjectCloseDisposition::discard;
+
+    // CadWorkbench and its controllers hold non-owning pointers into
+    // the active ProjectSession. Detach before ProjectHubController
+    // destroys that owning session.
+    auto* session = controller_.activeSession();
+    cad_workbench_->clearProjectSession();
+
     if (!controller_.closeProject(discard)) {
+        if (session != nullptr) {
+            cad_workbench_->setProjectSession(session);
+        }
         QMessageBox::warning(
             this,
             QStringLiteral("Close Project"),
@@ -449,7 +459,6 @@ bool ProjectHubWindow::requestCloseProject() {
         return false;
     }
 
-    cad_workbench_->clearProjectSession();
     return true;
 }
 
