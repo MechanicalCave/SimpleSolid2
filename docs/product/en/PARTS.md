@@ -88,6 +88,19 @@ Viewport selection behavior is:
 
 After `Save`, Origin visibility survives closing and restarting the application.
 
+<!-- section-id: product.parts.sketch-host -->
+## Creating an empty Sketch
+
+In Operations, use `Sketch`, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when it is visible, in the 3D Viewport.
+
+After a valid selection, Part creates a durable empty Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane.
+
+Automatic alignment does not lock the camera. While the Sketch is active you can still use Pan, Zoom, Orbit and ViewCube. Navigation does not change Sketch placement and does not dirty the Document by itself.
+
+Use `Finish Sketch` to leave the current edit context. The Sketch remains an authored Part object, stays in Document Tree and after `Save` survives Close/Reopen with the same SketchId, support and placement.
+
+In SK-01 the Sketch is intentionally empty. Line/Arc/Circle, constraints, dimensions and a solver are not available yet. Support is currently limited to the three Origin planes; Construction/Datum planes and planar model faces are separate later stages.
+
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and ViewCube
 
@@ -110,7 +123,7 @@ Navigation and camera changes are temporary view state. They do not dirty the Pa
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state, including Origin visibility, to its `.ss2part` file.
+`Save` writes the current authored Part state, including Origin visibility and created Sketches with their durable identity/support/placement, to its `.ss2part` file.
 
 When closing a Part with unsaved changes, the application requires `Save`, `Discard` or `Cancel`.
 
@@ -123,9 +136,9 @@ If saving fails, the Document/Project remains open.
 
 After restarting the application, open the same Project.
 
-SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties and saved Origin visibility.
+SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties, saved Origin visibility and saved Sketch records.
 
-Undo/Redo history, active selection and camera state are not stored in the file and start fresh after reopening.
+Undo/Redo history, active selection, active Sketch edit context and camera state are not stored in the file and start fresh after reopening.
 
 <!-- section-id: product.parts.conflicts -->
 ## DocumentId conflicts and invalid files
@@ -139,8 +152,8 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility and the shared stabilized 3D Workbench/Viewer foundation.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the shared stabilized 3D Workbench/Viewer foundation and the first host lifecycle for empty Sketches on Origin planes.
 
 Very early test `.ss2part` files created before the current native format are not supported product data and are not migrated automatically.
 
-Part does not yet contain Sketch, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
+Part does not yet contain Sketch 2D geometry, constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
