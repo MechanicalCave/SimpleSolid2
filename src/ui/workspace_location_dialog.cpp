@@ -472,8 +472,7 @@ createFolder() {
             .createDirectory(
                 workspace_root_,
                 selectedDirectory(),
-                name.toUtf8()
-                    .toStdString());
+                toFilesystemPath(name));
 
     if (!result.ok()) {
         diagnostic_->setText(
