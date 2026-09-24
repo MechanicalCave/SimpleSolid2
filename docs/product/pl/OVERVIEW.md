@@ -18,19 +18,23 @@ Obecny produkt udostępnia:
 - tworzenie i otwieranie Projektów;
 - stabilną tożsamość Projektu oraz Recent Projects;
 - przenoszenie Projektu i odzyskiwanie lokalizacji przez `Locate…`;
-- tworzenie i otwieranie natywnych dokumentów Part `.ss2part`;
+- tworzenie natywnych Partów `.ss2part` przez wybór folderu wewnątrz Workspace;
+- tworzenie nowego folderu bezpośrednio z dialogu New Part;
+- otwieranie wykrytych Dokumentów przez neutralny dialog `Open…`;
 - stabilny `DocumentId` niezależny od nazwy i ścieżki pliku;
 - otwieranie kilku Partów i przełączanie ich dolnymi Document Tabs;
 - wspólny CAD Workbench z Document Tree, Properties, Operations i Status;
-- viewport 3D oparty o OCCT z siatką odniesienia i ViewCube;
+- viewport 3D oparty o OCCT z siatką odniesienia i responsywnym ViewCube;
 - Pan, Orbit, Zoom, Fit, widoki standardowe/narożne oraz Orthographic/Perspective;
 - wbudowany Origin Parta: punkt, osie i płaszczyzny;
-- zsynchronizowane zaznaczenie Tree/Viewport z primary selection;
+- zsynchronizowane zaznaczenie Tree/Viewport z czyszczeniem zaznaczenia na pustym tle i primary selection;
 - trwałe Show/Hide referencji Origin z Undo/Redo;
 - edycję Number, Title, Description i Engineering Revision;
 - Save i bezpieczne zamykanie z ochroną niezapisanych zmian;
 - ponowne odnajdywanie Partów po restarcie;
 - wykrywanie konfliktu, gdy dwa pliki w jednym Workspace mają ten sam DocumentId.
+
+Dialog `Open…` jest już dokumentowo-neutralny, ale jedynym zaimplementowanym typem głównego Dokumentu CAD pozostaje obecnie Part.
 
 Obecny Part jest trwałym dokumentem CAD ze wspólnym środowiskiem pracy 3D, ale nie zawiera jeszcze modelowanej geometrii bryłowej.
 
