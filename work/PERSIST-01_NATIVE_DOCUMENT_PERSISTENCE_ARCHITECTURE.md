@@ -1,6 +1,6 @@
 # PERSIST-01 — Native Document Persistence Architecture
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — IMPLEMENTED  
 **Owner acceptance:** 2026-09-24  
 **Decision class:** D2 Architecture  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -266,3 +266,23 @@ PERSIST-01 completes only when:
 - exact-head Windows gate passes.
 
 Completion does not automatically activate Sketcher. The Owner must accept the subsequent Sketch architecture/implementation contract.
+
+
+## 11. Completion record
+
+PERSIST-01 implementation is complete and ready for the final exact-head Windows gate.
+
+Implemented state:
+
+- native Part files are ZIP-compatible container v1 packages;
+- `manifest.json` is the strict common envelope;
+- `authored/document.json` is the Part-owned authored payload;
+- `derived/*` is optional, disposable and ignored when safe/unknown;
+- miniz 3.1.2 and nlohmann/json 3.12.0 are vendored/pinned with no normal-build network fetch;
+- container and domain schema versions are separate;
+- Part domain schema is reset to v1 for the new accepted representation;
+- the former line-based `SS2PART` bootstrap format is deliberately unsupported;
+- current Project/Document discovery, stable DocumentId behavior, atomic save and canonical DocumentSession lifecycle remain intact;
+- no Sketch, Body/Feature, Assembly/Drawing semantic schema, thumbnail or modeled B-Rep scope was introduced.
+
+The compiled suite contains 33 tests. The final repository completion condition remains the exact-head Windows docs/verify/build/CTest gate on this completed contract state.
