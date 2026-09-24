@@ -47,17 +47,27 @@ The current Part lifecycle is:
 
 ```text
 New Part…
-→ choose Workspace-relative .ss2part path
+→ WorkspaceLocationDialog
+→ browse folders inside current Workspace
+→ optionally Create Folder
+→ enter Part filename
+→ validate Workspace-contained target
 → generate fresh DocumentId
 → atomically publish valid empty PartDocument
 → create canonical DocumentSession
 
-Open Part…
-→ resolve one DocumentId to exactly one Workspace path
+Open…
+→ OpenDocumentDialog
+→ list discovered Document candidates with Kind / Name / Location / Status
+→ choose one resolved DocumentId
 → load authored Part state
 → create or reuse canonical DocumentSession
 → add/focus bottom Document Tab
 ```
+
+The current discovery backend provides Part candidates only. The dialog is document-oriented so later document kinds do not require a Part-specific top-level Open action.
+
+The Workspace location flow rejects targets outside the current Workspace, rejects existing target files, and keeps private `.simplesolid` metadata outside the normal Document location tree.
 
 The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description, Engineering Revision or persistent Origin visibility goes through semantic commands and PartDocument transactions.
 
@@ -107,10 +117,12 @@ At Hub refresh, the internal controller derives one presentation state for every
 Availability is runtime/presentation state only. It is not written back to the Recent catalog.
 
 <!-- section-id: internal.application-lifecycle.smoke -->
-## Application smoke paths
+## Application smoke and stress paths
 
 The executable supports `--smoke-test`.
 
 Smoke mode uses a temporary Recent catalog, shows the Hub offscreen in CI, exits through a zero-delay Qt timer and removes its temporary state. The Viewer remains lazy because no Document is opened.
 
-WB-01 also has a native Windows Viewer smoke test that creates the real Qt/OCCT viewport, initializes OCCT/OpenGL, presents reference content, changes view/projection, performs Fit and closes cleanly.
+`wb01.viewer_native_smoke` creates the real Qt/OCCT viewport, initializes OCCT/OpenGL, presents reference content, changes view/projection, performs Fit and closes cleanly.
+
+`wb01a.workbench_native_stress` runs a real Workbench with the real Qt/OCCT provider and repeatedly exercises Viewport input, Origin Show/Hide, Undo/Redo, navigation and narrow/wide Workbench resizing for 100 iterations.
