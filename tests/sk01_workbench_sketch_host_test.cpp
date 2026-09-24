@@ -207,7 +207,7 @@ int main(int argc, char* argv[]) {
     workbench.setProjectSession(
         &*opened.session);
     CHECK(
-        workbench.activateDocument(
+        workbench.activateOpenDocument(
             document_id));
     workbench.show();
     QApplication::processEvents();
