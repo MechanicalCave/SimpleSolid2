@@ -1,25 +1,25 @@
 version: 1
-status: completed
-active_work: "work/WB-01A_WORKBENCH_STABILIZATION_AND_DOCUMENT_DIALOG_UX.md"
+status: active
+active_work: "work/PERSIST-01_NATIVE_DOCUMENT_PERSISTENCE_ARCHITECTURE.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
   - "adr/ADR-0003-cad-workbench-viewport-and-sketch-integration.md"
+  - "adr/ADR-0004-native-document-container-and-persistence.md"
 next:
-  - no implementation work is active after the WB-01A follow-up
-  - Owner must accept the next explicit work contract before further product implementation
-  - planned next larger decision is a D2 native Document persistence architecture contract before Sketcher implementation
-  - no tile/icon Document browser, thumbnails, preview cache, Sketch Core, Bodies, Features, Assembly, Drawing, or native format changes without a later accepted contract
+  - select maintained ZIP and JSON implementation dependencies within the accepted persistence boundary
+  - implement bounded common container/envelope primitives and safety tests
+  - replace experimental Part persistence with the accepted native ZIP+JSON representation
+  - preserve existing Project/Document lifecycle and identity invariants
 notes:
-  - DOC-01 and DOC-01A remain complete.
-  - PART-01 remains complete.
-  - WB-01 remains complete.
-  - ADR-0003 remains the governing Workbench/Viewer architecture.
-  - WB-01A was completed on 2026-09-24 and explicitly reopened by Owner on 2026-09-24 for two in-scope P1 follow-up defects only.
-  - ViewCube overlay geometry changes now schedule a coalesced repaint of the underlying native Viewer surface so stale overlay pixels are not left after splitter/right-panel resize.
-  - Open Document Kind/Name/Location/Status columns are interactively resizable; default sizing keeps Name compact and Location wider.
-  - Existing responsive containment and document-dialog behavior remain covered, with added regression checks for underlay repaint and interactive column sizing.
-  - Tile/icon Document browsing and thumbnails are explicitly deferred.
-  - Internal and PL/EN product documentation plus generated Product Browser describe the follow-up state.
+  - PERSIST-01 accepted by Owner on 2026-09-24.
+  - Native top-level Documents are one portable ZIP-compatible package.
+  - Container v1 requires manifest.json and authored/document.json; derived/* is optional and disposable.
+  - Part owns Part-authored payload semantics; future Part-hosted Sketch data is persisted through Part ownership.
+  - The experimental SS2PART v1/v2 format has no compatibility/migration requirement.
+  - Assembly and Drawing semantic schemas remain out of scope.
+  - Tile/icon browser and thumbnail generation remain out of scope.
+  - No production Sketch Core, Body/Feature, modeled B-Rep, Assembly or Drawing implementation is authorized by PERSIST-01.
+  - Documentation impact is required before completion.
   - Root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
