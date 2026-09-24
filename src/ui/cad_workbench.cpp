@@ -1174,7 +1174,22 @@ void CadWorkbench::closeTab(int index) {
         }
     }
 
+    const bool closing_active =
+        active_document_id_.has_value() &&
+        *active_document_id_ == *id;
+
+    // Runtime controllers keep non-owning DocumentSession pointers.
+    // Detach them while the owning ProjectSession still owns the
+    // session; closeDocument() may erase it immediately.
+    if (closing_active) {
+        clearSketchRuntimeContext();
+        viewport_controller_->clear();
+    }
+
     if (!session_->closeDocument(*id, discard)) {
+        if (closing_active) {
+            refreshActiveContext();
+        }
         status_->setText(
             QStringLiteral(
                 "Part remains open because it still has unsaved changes."));
@@ -1183,14 +1198,6 @@ void CadWorkbench::closeTab(int index) {
 
     document_view_states_.erase(
         std::string{id->value()});
-
-    const bool closing_active =
-        active_document_id_.has_value() &&
-        *active_document_id_ == *id;
-
-    if (closing_active) {
-        clearSketchRuntimeContext();
-    }
 
     int next_index = -1;
     {
