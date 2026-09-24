@@ -9,6 +9,7 @@
 #include <QWidget>
 
 #include <filesystem>
+#include <functional>
 #include <optional>
 #include <string>
 #include <unordered_map>
@@ -53,6 +54,21 @@ public:
 
     [[nodiscard]] bool activateDocument(const core::DocumentId& document_id);
 
+    [[nodiscard]] bool createPartInteractive(
+        QWidget* dialog_parent = nullptr);
+    [[nodiscard]] bool openDocumentInteractive(
+        QWidget* dialog_parent = nullptr);
+    void refreshWorkspaceDocuments();
+    [[nodiscard]] bool hasOpenDocuments() const noexcept;
+
+    using DocumentPresenceHandler =
+        std::function<void(bool has_open_documents)>;
+    void setDocumentPresenceHandler(
+        DocumentPresenceHandler handler) {
+        document_presence_handler_ =
+            std::move(handler);
+    }
+
 private:
     void buildUi();
     void refreshWorkspaceIndex();
@@ -61,8 +77,10 @@ private:
     void activateTab(int index);
     void closeTab(int index);
 
-    void newPart();
-    void openDocument();
+    [[nodiscard]] bool newPart(
+        QWidget* dialog_parent = nullptr);
+    [[nodiscard]] bool openDocument(
+        QWidget* dialog_parent = nullptr);
     void applyProperties();
     void startSketchTool();
     void cancelSketchTool();
@@ -88,6 +106,7 @@ private:
         std::optional<core::BuiltinReferenceRole> primary);
     void syncActionState();
     void updateTabPresentation(const core::DocumentId& document_id);
+    void notifyDocumentPresence();
 
     [[nodiscard]] application::DocumentSession* activeDocumentSession() noexcept;
     [[nodiscard]] const application::DocumentSession* activeDocumentSession() const noexcept;
@@ -109,15 +128,14 @@ private:
         sketch_edit_document_id_;
     std::optional<sketch::SketchId>
         active_sketch_id_;
+    DocumentPresenceHandler
+        document_presence_handler_;
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
     PartViewportController* viewport_controller_{};
     ViewCubeWidget* view_cube_{};
 
-    QPushButton* new_part_button_{};
-    QPushButton* open_document_button_{};
-    QPushButton* refresh_button_{};
     QPushButton* undo_button_{};
     QPushButton* redo_button_{};
     QPushButton* save_button_{};
