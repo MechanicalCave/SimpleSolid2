@@ -506,7 +506,7 @@ public:
         // observed during repeated native scene replacement on Windows.
         // The neutral PresentationToken remains the semantic transport.
         Handle(AIS_Shape) object =
-            new AIS_Shape(face.Face());
+            new AIS_Shape(face.Shape());
         traceProviderPhase(
             "plane-after-ais-shape",
             reference.token);
