@@ -278,6 +278,23 @@ add_test(
     COMMAND persist01_native_document_container_test
 )
 
+add_executable(sk01_part_sketch_host_test
+    sk01_part_sketch_host_test.cpp
+)
+
+target_link_libraries(sk01_part_sketch_host_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(sk01_part_sketch_host_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk01.part_sketch_host
+    COMMAND sk01_part_sketch_host_test
+)
+
+
 add_executable(part01_document_session_test
     document_session_test.cpp
 )
