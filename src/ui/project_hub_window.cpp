@@ -1072,14 +1072,17 @@ ensureDocumentTab(
     auto& tabs =
         workspace_shell_->
             documentTabs();
-    const int index =
-        tabs.addTab(
+    int index = -1;
+    {
+        const QSignalBlocker blocked{tabs};
+        index = tabs.addTab(
             partDisplayName(
                 *document_session));
-    tabs.setTabData(
-        index,
-        fromUtf8(
-            document_id.value()));
+        tabs.setTabData(
+            index,
+            fromUtf8(
+                document_id.value()));
+    }
     tabs.setVisible(true);
 
     updateDocumentTab(
