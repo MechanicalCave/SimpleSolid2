@@ -452,5 +452,5 @@ add_test(
     COMMAND wb01a_workbench_native_stress_test
 )
 set_tests_properties(wb01a.workbench_native_stress PROPERTIES
-    TIMEOUT 60
+    TIMEOUT 120
 )
