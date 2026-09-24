@@ -6,31 +6,29 @@
 
 class QAction;
 class QEvent;
+class QHBoxLayout;
 class QMenu;
-class QPushButton;
-class QString;
 class QToolButton;
-class QWidget;
 
 namespace simplesolid2::ui {
+
+class NavigationCubeCanvas;
 
 class ViewCubeWidget final : public QFrame {
 public:
     explicit ViewCubeWidget(
         viewer::IDocumentViewport* viewport,
         QWidget* parent = nullptr);
+    ~ViewCubeWidget() override;
 
     void setViewport(
         viewer::IDocumentViewport* viewport);
-
-    [[nodiscard]] bool compactMode() const noexcept {
-        return compact_mode_;
-    }
 
 protected:
     bool eventFilter(
         QObject* watched,
         QEvent* event) override;
+    void showEvent(QShowEvent* event) override;
 
 private:
     QAction* addViewAction(
@@ -42,22 +40,17 @@ private:
     void applyStandardView(
         viewer::StandardView view);
     void toggleProjection();
-    void refreshProjectionPresentation();
+    void refreshProjectionLabel();
     void syncEnabledState();
-    void syncOverlayGeometry();
-    void setCompactMode(bool compact);
+    void updateResponsiveLayout();
+    void repositionInsideParent();
 
     viewer::IDocumentViewport* viewport_{};
-    QWidget* host_{};
-    QWidget* regular_panel_{};
-    QWidget* cube_canvas_{};
+    NavigationCubeCanvas* cube_canvas_{};
     QToolButton* views_button_{};
-    QToolButton* compact_button_{};
-    QPushButton* fit_button_{};
-    QPushButton* projection_button_{};
-    QMenu* navigation_menu_{};
-    QAction* fit_action_{};
-    QAction* projection_action_{};
+    QToolButton* fit_button_{};
+    QToolButton* projection_button_{};
+    QHBoxLayout* controls_layout_{};
     bool compact_mode_{};
 };
 
