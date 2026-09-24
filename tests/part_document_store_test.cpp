@@ -375,6 +375,57 @@ int main() {
         part::PartStoreErrorCode::
             malformed_document);
 
+    const auto mismatched_sketch_path =
+        temp.path / "MismatchedSketchPlacement.ss2part";
+    const auto mismatched_sketch_id =
+        sketch::SketchId::generate();
+
+    writeBytes(
+        mismatched_sketch_path,
+        buildPartPackage(
+            std::string{
+                core::DocumentId::generate()
+                    .value()},
+            part::PartDocumentStore::
+                current_schema_version,
+            std::string{
+                "{"
+                "\"properties\":{"
+                    "\"number\":\"\","
+                    "\"title\":\"\","
+                    "\"description\":\"\","
+                    "\"engineering_revision\":\"\""
+                "},"
+                "\"presentation\":{"
+                    "\"builtin_reference_visibility_mask\":15"
+                "},"
+                "\"sketches\":[{"
+                    "\"id\":\""} +
+                std::string{
+                    mismatched_sketch_id.value()} +
+                "\","
+                "\"support\":{"
+                    "\"kind\":\"builtin_origin_plane\","
+                    "\"builtin_plane\":\"xz_plane\""
+                "},"
+                "\"placement\":{"
+                    "\"origin\":[0,0,0],"
+                    "\"u_axis\":[1,0,0],"
+                    "\"v_axis\":[0,1,0]"
+                "},"
+                "\"visible\":true"
+                "}]"
+                "}"));
+
+    const auto mismatched_sketch =
+        store.load(
+            mismatched_sketch_path);
+    CHECK(!mismatched_sketch.ok());
+    CHECK(
+        mismatched_sketch.diagnostic.code ==
+        part::PartStoreErrorCode::
+            malformed_document);
+
     const auto future_schema_path =
         temp.path / "FutureSchema.ss2part";
     writeBytes(
