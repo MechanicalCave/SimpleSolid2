@@ -61,7 +61,7 @@ private:
     void closeTab(int index);
 
     void newPart();
-    void openPart();
+    void openDocument();
     void applyProperties();
     void undo();
     void redo();
@@ -99,7 +99,7 @@ private:
     ViewCubeWidget* view_cube_{};
 
     QPushButton* new_part_button_{};
-    QPushButton* open_part_button_{};
+    QPushButton* open_document_button_{};
     QPushButton* refresh_button_{};
     QPushButton* undo_button_{};
     QPushButton* redo_button_{};

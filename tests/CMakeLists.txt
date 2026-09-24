@@ -73,6 +73,8 @@ find_package(Qt6 6 REQUIRED COMPONENTS Widgets Test)
 add_executable(ph02a_project_hub_selection_ux_test
     project_hub_selection_ux_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
@@ -129,6 +131,8 @@ add_test(
 add_executable(ph02b_project_hub_availability_ux_test
     project_hub_availability_ux_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
@@ -319,6 +323,8 @@ add_test(
 add_executable(wb01_cad_workbench_test
     cad_workbench_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
@@ -429,6 +435,8 @@ set_tests_properties(wb01.viewer_native_smoke PROPERTIES
 add_executable(wb01a_workbench_native_stress_test
     workbench_native_stress_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
@@ -477,4 +485,75 @@ add_test(
 )
 set_tests_properties(wb01a.viewcube_responsive PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+
+add_executable(wb01a_workspace_directory_test
+    workspace_directory_test.cpp
+)
+target_link_libraries(wb01a_workspace_directory_test
+    PRIVATE
+        simplesolid2_application
+)
+target_compile_features(wb01a_workspace_directory_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb01a.workspace_directory
+    COMMAND wb01a_workspace_directory_test
+)
+
+
+add_executable(wb01a_document_dialog_ux_test
+    document_dialog_ux_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
+)
+target_include_directories(wb01a_document_dialog_ux_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+target_link_libraries(wb01a_document_dialog_ux_test
+    PRIVATE
+        simplesolid2_application
+        Qt6::Widgets
+        Qt6::Test
+)
+target_compile_features(wb01a_document_dialog_ux_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb01a.document_dialog_ux
+    COMMAND wb01a_document_dialog_ux_test
+)
+set_tests_properties(wb01a.document_dialog_ux PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+
+add_executable(wb01a_workbench_document_dialog_integration_test
+    workbench_document_dialog_integration_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
+)
+target_include_directories(wb01a_workbench_document_dialog_integration_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+target_link_libraries(wb01a_workbench_document_dialog_integration_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+        Qt6::Test
+)
+target_compile_features(wb01a_workbench_document_dialog_integration_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb01a.workbench_document_dialog_integration
+    COMMAND wb01a_workbench_document_dialog_integration_test
+)
+set_tests_properties(wb01a.workbench_document_dialog_integration PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 30
 )

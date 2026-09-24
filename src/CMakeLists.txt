@@ -45,6 +45,7 @@ add_library(simplesolid2_application STATIC
     application/recent_project_store.cpp
     application/project_session.cpp
     application/project_workspace_metadata.cpp
+    application/workspace_directory.cpp
 )
 
 target_include_directories(simplesolid2_application
@@ -118,11 +119,13 @@ add_executable(simplesolid2
     app/main.cpp
     ui/cad_workbench.cpp
     ui/cad_workbench_shell.cpp
+    ui/open_document_dialog.cpp
     ui/part_document_tree_controller.cpp
     ui/part_viewport_controller.cpp
     ui/project_creation_dialog.cpp
     ui/project_hub_window.cpp
     ui/view_cube_widget.cpp
+    ui/workspace_location_dialog.cpp
 )
 
 target_include_directories(simplesolid2

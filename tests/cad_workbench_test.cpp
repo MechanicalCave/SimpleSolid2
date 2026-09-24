@@ -208,6 +208,13 @@ int main(int argc, char* argv[]) {
     workbench.setProjectSession(&*opened.session);
     CHECK(viewport != nullptr);
 
+    auto* open_document =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("openDocumentButton"));
+    CHECK(open_document != nullptr);
+    CHECK(open_document->text() ==
+          QStringLiteral("Open…"));
+
     auto* tabs =
         workbench.findChild<QTabBar*>(
             QStringLiteral("documentTabs"));
