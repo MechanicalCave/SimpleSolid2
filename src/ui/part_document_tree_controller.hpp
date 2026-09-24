@@ -27,6 +27,9 @@ public:
         const std::vector<core::BuiltinReferenceRole>&,
         std::optional<core::BuiltinReferenceRole>)>;
 
+    using SketchEditHandler = std::function<void(
+        const sketch::SketchId&)>;
+
     PartDocumentTreeController(
         QTreeWidget& tree,
         QObject* parent = nullptr);
@@ -47,6 +50,10 @@ public:
         const std::vector<core::BuiltinReferenceRole>& selected,
         std::optional<core::BuiltinReferenceRole> primary);
 
+    void setSketchEditHandler(SketchEditHandler handler) {
+        sketch_edit_handler_ = std::move(handler);
+    }
+
     [[nodiscard]] std::vector<core::BuiltinReferenceRole>
     selectedBuiltinReferences() const;
 
@@ -58,6 +65,7 @@ private:
     void updateVisibilityActions();
     void showContextMenu(const QPoint& position);
     void applySelectedVisibility(bool visible);
+    void requestSketchEdit(const QTreeWidgetItem& item);
     void notifySelectionChanged();
 
     [[nodiscard]] bool selectionContainsOnlyBuiltinReferences() const;
@@ -65,13 +73,18 @@ private:
         core::BuiltinReferenceRole role);
     [[nodiscard]] static std::optional<core::BuiltinReferenceRole>
     roleForItem(const QTreeWidgetItem& item);
+    [[nodiscard]] static std::optional<sketch::SketchId>
+    sketchIdForItem(const QTreeWidgetItem& item);
 
     QTreeWidget* tree_{};
     application::DocumentSession* session_{};
     QAction* show_action_{};
     QAction* hide_action_{};
+    QAction* edit_sketch_action_{};
+    std::optional<sketch::SketchId> context_sketch_id_;
     ResultHandler result_handler_;
     SelectionHandler selection_handler_;
+    SketchEditHandler sketch_edit_handler_;
 };
 
 } // namespace simplesolid2::ui
