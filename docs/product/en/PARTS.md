@@ -38,7 +38,7 @@ Filename and path are not Document identity. You may rename or move the `.ss2par
 
 Use `Open…` to choose a discovered Document.
 
-The dialog shows Document kind, name, location and status. The current product supplies Part Documents only, but the Open UI is not Part-specific.
+The dialog shows Document kind, name, location and status. You can resize the columns by dragging the header separators; by default, Location receives more space than Name. The current product supplies Part Documents only, but the Open UI is not Part-specific.
 
 Invalid native files and DocumentId conflicts remain visible but cannot be opened as resolved Documents.
 
