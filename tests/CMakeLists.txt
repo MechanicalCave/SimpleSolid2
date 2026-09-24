@@ -73,6 +73,8 @@ find_package(Qt6 6 REQUIRED COMPONENTS Widgets Test)
 add_executable(ph02a_project_hub_selection_ux_test
     project_hub_selection_ux_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
@@ -129,6 +131,8 @@ add_test(
 add_executable(ph02b_project_hub_availability_ux_test
     project_hub_availability_ux_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
@@ -319,6 +323,8 @@ add_test(
 add_executable(wb01_cad_workbench_test
     cad_workbench_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
@@ -429,6 +435,8 @@ set_tests_properties(wb01.viewer_native_smoke PROPERTIES
 add_executable(wb01a_workbench_native_stress_test
     workbench_native_stress_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
