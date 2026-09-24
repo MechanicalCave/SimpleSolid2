@@ -872,6 +872,15 @@ void CadWorkbench::startSketchTool() {
         return;
     }
 
+    if (sketch_support_pick_active_) {
+        clearSketchRuntimeContext();
+        status_->setText(
+            QStringLiteral(
+                "Sketch creation cancelled."));
+        syncActionState();
+        return;
+    }
+
     if (active_sketch_id_) {
         status_->setText(
             QStringLiteral(
@@ -1407,6 +1416,10 @@ void CadWorkbench::syncActionState() {
         *sketch_edit_document_id_ ==
             *active_document_id_;
 
+    sketch_button_->setText(
+        sketch_support_pick_active_
+            ? QStringLiteral("Cancel Sketch")
+            : QStringLiteral("Sketch"));
     sketch_button_->setEnabled(
         active && !editing_sketch);
     finish_sketch_button_->setEnabled(
