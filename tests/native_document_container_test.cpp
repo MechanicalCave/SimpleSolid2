@@ -292,6 +292,28 @@ int main() {
         persistence::NativeContainerErrorCode::
             unsupported_zip_feature);
 
+    const auto oversized_path =
+        temp.path / "Oversized.ss2part";
+    {
+        std::ofstream out{
+            oversized_path,
+            std::ios::binary | std::ios::trunc};
+        CHECK(static_cast<bool>(out));
+        out.seekp(
+            static_cast<std::streamoff>(
+                64ULL * 1024ULL * 1024ULL));
+        out.put('\0');
+        CHECK(static_cast<bool>(out));
+    }
+    const auto oversized =
+        persistence::readNativeDocumentContainer(
+            oversized_path);
+    CHECK(!oversized.ok());
+    CHECK(
+        oversized.diagnostic.code ==
+        persistence::NativeContainerErrorCode::
+            too_large);
+
     const auto plain_path =
         temp.path / "Plain.ss2part";
     writeBytes(plain_path, "not a ZIP");
