@@ -25,7 +25,8 @@ notes:
   - Part CadWorkbench is now a one-active-Document editor boundary and does not know ProjectSession or own Project navigation/discovery/tabs.
   - detach-before-destroy remains mandatory when closing Documents or Project.
   - dedicated ws01.project_workspace_boundaries regression locks the ownership boundary.
-  - implementation gate #226 passed docs/verify/build and 36/36 CTest including native Workbench stress.
+  - final exact-head gate #230 passed documentation verification, bootstrap verification, build and the complete CTest suite on 817d0fd25b4a234bd9a8aa99e0c6ae46f6df513a.
+  - tested WS-01 tree b095045ddb32eb7290be3cbecd2226dbad23a97a is identical to merged main commit de78c3993b7e3d5aab561a4f4bc35423f44ea743 tree.
   - no Assembly/Drawing implementation or SK-02 geometry/constraints/solver work is active.
   - documentation impact is satisfied and Product Browser is current.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
