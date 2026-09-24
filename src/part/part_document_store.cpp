@@ -1,28 +1,33 @@
 #include <simplesolid2/part/part_document_store.hpp>
 
+#include <nlohmann/json.hpp>
+
 #include <algorithm>
-#include <charconv>
-#include <cctype>
 #include <cstdint>
-#include <fstream>
-#include <map>
+#include <string>
 #include <string_view>
-#include <system_error>
+#include <utility>
 
 namespace simplesolid2::part {
 namespace {
-
-constexpr std::uintmax_t maximum_part_bytes = 4U * 1024U * 1024U;
 
 PartLoadResult loadFailure(
     PartStoreErrorCode code,
     std::string message,
     std::filesystem::path path,
+    persistence::NativeContainerErrorCode container_code =
+        persistence::NativeContainerErrorCode::none,
     persistence::AtomicWriteErrorCode atomic_code =
         persistence::AtomicWriteErrorCode::none) {
     return PartLoadResult{
         std::nullopt,
-        PartStoreDiagnostic{code, atomic_code, std::move(message), std::move(path)},
+        PartStoreDiagnostic{
+            code,
+            atomic_code,
+            container_code,
+            std::move(message),
+            std::move(path),
+        },
     };
 }
 
@@ -30,112 +35,183 @@ PartSaveResult saveFailure(
     PartStoreErrorCode code,
     std::string message,
     std::filesystem::path path,
+    persistence::NativeContainerErrorCode container_code =
+        persistence::NativeContainerErrorCode::none,
     persistence::AtomicWriteErrorCode atomic_code =
         persistence::AtomicWriteErrorCode::none) {
     return PartSaveResult{
-        PartStoreDiagnostic{code, atomic_code, std::move(message), std::move(path)},
+        PartStoreDiagnostic{
+            code,
+            atomic_code,
+            container_code,
+            std::move(message),
+            std::move(path),
+        },
     };
 }
 
-std::string hexEncode(std::string_view input) {
-    constexpr char digits[] = "0123456789abcdef";
-    std::string out;
-    out.reserve(input.size() * 2U);
-    for (const unsigned char ch : input) {
-        out.push_back(digits[(ch >> 4U) & 0x0FU]);
-        out.push_back(digits[ch & 0x0FU]);
-    }
-    return out;
+std::string serializeAuthored(
+    const PartDocument& document) {
+    const auto& properties =
+        document.properties();
+
+    nlohmann::json authored{
+        {"properties",
+         {
+             {"number", properties.number},
+             {"title", properties.title},
+             {"description", properties.description},
+             {"engineering_revision",
+              properties.engineering_revision},
+         }},
+        {"presentation",
+         {
+             {"builtin_reference_visibility_mask",
+              static_cast<unsigned>(
+                  document.presentation()
+                      .builtin_references.mask())},
+         }},
+    };
+
+    std::string text = authored.dump(2);
+    text.push_back('\n');
+    return text;
 }
 
-int hexValue(char ch) noexcept {
-    if (ch >= '0' && ch <= '9') return ch - '0';
-    if (ch >= 'a' && ch <= 'f') return 10 + ch - 'a';
-    if (ch >= 'A' && ch <= 'F') return 10 + ch - 'A';
-    return -1;
-}
+std::optional<std::uint8_t> parseVisibilityMask(
+    const nlohmann::json& value) {
+    std::uint64_t parsed{};
 
-bool hexDecode(std::string_view input, std::string& output) {
-    if ((input.size() % 2U) != 0U) return false;
-    output.clear();
-    output.reserve(input.size() / 2U);
-    for (std::size_t i = 0; i < input.size(); i += 2U) {
-        const int hi = hexValue(input[i]);
-        const int lo = hexValue(input[i + 1U]);
-        if (hi < 0 || lo < 0) return false;
-        output.push_back(static_cast<char>((hi << 4) | lo));
-    }
-    return true;
-}
-
-std::string serialize(const PartDocument& document) {
-    const auto& properties = document.properties();
-    std::string out;
-    out += "SS2PART\n";
-    out += "schema_version=" +
-           std::to_string(PartDocumentStore::current_schema_version) + "\n";
-    out += "document_kind=part\n";
-    out += "document_id=" + std::string{document.documentId().value()} + "\n";
-    out += "number_hex=" + hexEncode(properties.number) + "\n";
-    out += "title_hex=" + hexEncode(properties.title) + "\n";
-    out += "description_hex=" + hexEncode(properties.description) + "\n";
-    out += "engineering_revision_hex=" +
-           hexEncode(properties.engineering_revision) + "\n";
-    out += "builtin_reference_visibility_mask=" +
-           std::to_string(
-               static_cast<unsigned>(
-                   document.presentation().builtin_references.mask())) +
-           "\n";
-    return out;
-}
-
-bool parseLines(
-    const std::string& text,
-    std::map<std::string, std::string>& fields,
-    std::string& error) {
-    std::size_t start = 0;
-    std::size_t line_number = 0;
-    while (start <= text.size()) {
-        const auto end = text.find('\n', start);
-        const auto length =
-            end == std::string::npos ? text.size() - start : end - start;
-        std::string line = text.substr(start, length);
-        if (!line.empty() && line.back() == '\r') line.pop_back();
-        ++line_number;
-
-        if (line_number == 1U) {
-            if (line != "SS2PART") {
-                error = "Missing SS2PART file signature";
-                return false;
-            }
-        } else if (!line.empty()) {
-            const auto equals = line.find('=');
-            if (equals == std::string::npos || equals == 0U) {
-                error = "Malformed native Part field";
-                return false;
-            }
-            auto key = line.substr(0U, equals);
-            auto value = line.substr(equals + 1U);
-            if (!fields.emplace(std::move(key), std::move(value)).second) {
-                error = "Duplicate native Part field";
-                return false;
-            }
+    if (value.is_number_unsigned()) {
+        parsed = value.get<std::uint64_t>();
+    } else if (value.is_number_integer()) {
+        const auto signed_value =
+            value.get<std::int64_t>();
+        if (signed_value < 0) {
+            return std::nullopt;
         }
-
-        if (end == std::string::npos) break;
-        start = end + 1U;
+        parsed =
+            static_cast<std::uint64_t>(
+                signed_value);
+    } else {
+        return std::nullopt;
     }
-    return true;
+
+    if (parsed > 0xFFU) {
+        return std::nullopt;
+    }
+
+    return static_cast<std::uint8_t>(parsed);
 }
 
-bool getRequired(
-    const std::map<std::string, std::string>& fields,
-    std::string_view key,
-    std::string& output) {
-    const auto it = fields.find(std::string{key});
-    if (it == fields.end()) return false;
-    output = it->second;
-    return true;
+std::optional<PartAuthoredState> parseAuthored(
+    const std::string& text,
+    std::string& error) {
+    const auto authored =
+        nlohmann::json::parse(
+            text,
+            nullptr,
+            false);
+
+    if (authored.is_discarded() ||
+        !authored.is_object() ||
+        authored.size() != 2U ||
+        !authored.contains("properties") ||
+        !authored.contains("presentation")) {
+        error =
+            "Native Part authored payload has an invalid top-level schema";
+        return std::nullopt;
+    }
+
+    const auto& properties_json =
+        authored["properties"];
+    if (!properties_json.is_object() ||
+        properties_json.size() != 4U ||
+        !properties_json.contains("number") ||
+        !properties_json.contains("title") ||
+        !properties_json.contains("description") ||
+        !properties_json.contains("engineering_revision") ||
+        !properties_json["number"].is_string() ||
+        !properties_json["title"].is_string() ||
+        !properties_json["description"].is_string() ||
+        !properties_json["engineering_revision"].is_string()) {
+        error =
+            "Native Part properties payload is invalid";
+        return std::nullopt;
+    }
+
+    const auto& presentation_json =
+        authored["presentation"];
+    if (!presentation_json.is_object() ||
+        presentation_json.size() != 1U ||
+        !presentation_json.contains(
+            "builtin_reference_visibility_mask")) {
+        error =
+            "Native Part presentation payload is invalid";
+        return std::nullopt;
+    }
+
+    const auto mask =
+        parseVisibilityMask(
+            presentation_json[
+                "builtin_reference_visibility_mask"]);
+    if (!mask) {
+        error =
+            "Native Part contains malformed built-in reference visibility";
+        return std::nullopt;
+    }
+
+    const auto visibility =
+        core::BuiltinReferenceVisibility::fromMask(
+            *mask);
+    if (!visibility) {
+        error =
+            "Native Part contains unsupported built-in reference visibility bits";
+        return std::nullopt;
+    }
+
+    PartAuthoredState state;
+    state.properties.number =
+        properties_json["number"].get<std::string>();
+    state.properties.title =
+        properties_json["title"].get<std::string>();
+    state.properties.description =
+        properties_json["description"].get<std::string>();
+    state.properties.engineering_revision =
+        properties_json[
+            "engineering_revision"].get<std::string>();
+    state.presentation.builtin_references =
+        *visibility;
+
+    return state;
+}
+
+PartStoreErrorCode containerReadErrorToStore(
+    persistence::NativeContainerErrorCode code) noexcept {
+    using persistence::NativeContainerErrorCode;
+
+    switch (code) {
+    case NativeContainerErrorCode::none:
+        return PartStoreErrorCode::none;
+    case NativeContainerErrorCode::not_found:
+        return PartStoreErrorCode::not_found;
+    case NativeContainerErrorCode::io_failure:
+        return PartStoreErrorCode::io_failure;
+    case NativeContainerErrorCode::unsupported_container_version:
+        return PartStoreErrorCode::unsupported_schema;
+    case NativeContainerErrorCode::too_large:
+    case NativeContainerErrorCode::malformed_container:
+    case NativeContainerErrorCode::unsupported_zip_feature:
+    case NativeContainerErrorCode::unsafe_entry:
+    case NativeContainerErrorCode::duplicate_entry:
+    case NativeContainerErrorCode::missing_manifest:
+    case NativeContainerErrorCode::invalid_manifest:
+    case NativeContainerErrorCode::missing_authored_payload:
+    case NativeContainerErrorCode::invalid_authored_json:
+        return PartStoreErrorCode::malformed_document;
+    }
+
+    return PartStoreErrorCode::container_failure;
 }
 
 PartStoreErrorCode atomicErrorToStore(
@@ -161,15 +237,42 @@ PartSaveResult write(
             path);
     }
 
+    const auto authored =
+        serializeAuthored(document);
+    const auto built =
+        persistence::buildNativeDocumentContainer(
+            persistence::NativeDocumentDescriptor{
+                "part",
+                std::string{
+                    document.documentId().value()},
+                PartDocumentStore::
+                    current_schema_version,
+            },
+            authored);
+
+    if (!built.ok()) {
+        return saveFailure(
+            PartStoreErrorCode::container_failure,
+            built.diagnostic.message,
+            path,
+            built.diagnostic.code);
+    }
+
     const auto written =
-        persistence::writeFileAtomically(path, serialize(document), mode);
+        persistence::writeFileAtomically(
+            path,
+            *built.bytes,
+            mode);
     if (!written.ok()) {
         return saveFailure(
-            atomicErrorToStore(written.diagnostic.code),
+            atomicErrorToStore(
+                written.diagnostic.code),
             written.diagnostic.message,
             written.diagnostic.path,
+            persistence::NativeContainerErrorCode::none,
             written.diagnostic.code);
     }
+
     return PartSaveResult{};
 }
 
@@ -182,7 +285,10 @@ bool PartDocumentStore::hasNativeExtension(
         extension.begin(),
         extension.end(),
         extension.begin(),
-        [](unsigned char ch) { return static_cast<char>(std::tolower(ch)); });
+        [](unsigned char ch) {
+            return static_cast<char>(
+                std::tolower(ch));
+        });
     return extension == ".ss2part";
 }
 
@@ -195,123 +301,39 @@ PartLoadResult PartDocumentStore::load(
             path);
     }
 
-    std::error_code ec;
-    if (!std::filesystem::exists(path, ec) || ec) {
-        return loadFailure(
-            ec ? PartStoreErrorCode::io_failure : PartStoreErrorCode::not_found,
-            ec ? "Unable to inspect native Part file" : "Native Part file does not exist",
+    auto container =
+        persistence::readNativeDocumentContainer(
             path);
-    }
-    if (!std::filesystem::is_regular_file(path, ec) || ec) {
+    if (!container.ok()) {
         return loadFailure(
-            PartStoreErrorCode::malformed_document,
-            "Native Part path is not a regular file",
-            path);
+            containerReadErrorToStore(
+                container.diagnostic.code),
+            container.diagnostic.message,
+            container.diagnostic.path,
+            container.diagnostic.code);
     }
 
-    const auto size = std::filesystem::file_size(path, ec);
-    if (ec) {
-        return loadFailure(
-            PartStoreErrorCode::io_failure,
-            "Unable to inspect native Part file size",
-            path);
-    }
-    if (size > maximum_part_bytes) {
-        return loadFailure(
-            PartStoreErrorCode::malformed_document,
-            "Native Part file exceeds the supported size",
-            path);
-    }
+    const auto& descriptor =
+        container.package->descriptor;
 
-    std::ifstream in{path, std::ios::binary};
-    if (!in) {
-        return loadFailure(
-            PartStoreErrorCode::io_failure,
-            "Unable to open native Part file",
-            path);
-    }
-
-    std::string text(static_cast<std::size_t>(size), '\0');
-    if (!text.empty()) {
-        in.read(text.data(), static_cast<std::streamsize>(text.size()));
-    }
-    if (!in && !in.eof()) {
-        return loadFailure(
-            PartStoreErrorCode::io_failure,
-            "Unable to read native Part file",
-            path);
-    }
-
-    std::map<std::string, std::string> fields;
-    std::string parse_error;
-    if (!parseLines(text, fields, parse_error)) {
-        return loadFailure(
-            PartStoreErrorCode::malformed_document,
-            std::move(parse_error),
-            path);
-    }
-
-    std::string schema;
-    if (!getRequired(fields, "schema_version", schema)) {
-        return loadFailure(
-            PartStoreErrorCode::missing_field,
-            "Native Part is missing schema_version",
-            path);
-    }
-
-    int schema_version{};
-    const auto parsed_schema =
-        std::from_chars(schema.data(), schema.data() + schema.size(), schema_version);
-    if (parsed_schema.ec != std::errc{} ||
-        parsed_schema.ptr != schema.data() + schema.size()) {
-        return loadFailure(
-            PartStoreErrorCode::malformed_document,
-            "Native Part schema_version is not an integer",
-            path);
-    }
-
-    if (schema_version != 1 &&
-        schema_version != PartDocumentStore::current_schema_version) {
-        return loadFailure(
-            PartStoreErrorCode::unsupported_schema,
-            "Unsupported native Part schema version",
-            path);
-    }
-
-    const std::size_t expected_fields = schema_version == 1 ? 7U : 8U;
-    if (fields.size() != expected_fields) {
-        return loadFailure(
-            PartStoreErrorCode::malformed_document,
-            "Native Part contains unknown or missing fields",
-            path);
-    }
-
-    std::string kind;
-    std::string id_text;
-    std::string number_hex;
-    std::string title_hex;
-    std::string description_hex;
-    std::string engineering_revision_hex;
-    if (!getRequired(fields, "document_kind", kind) ||
-        !getRequired(fields, "document_id", id_text) ||
-        !getRequired(fields, "number_hex", number_hex) ||
-        !getRequired(fields, "title_hex", title_hex) ||
-        !getRequired(fields, "description_hex", description_hex) ||
-        !getRequired(fields, "engineering_revision_hex", engineering_revision_hex)) {
-        return loadFailure(
-            PartStoreErrorCode::missing_field,
-            "Native Part is missing a required field",
-            path);
-    }
-
-    if (kind != "part") {
+    if (descriptor.document_kind != "part") {
         return loadFailure(
             PartStoreErrorCode::wrong_document_kind,
-            "Native file does not declare a Part document",
+            "Native .ss2part file does not declare DocumentKind part",
             path);
     }
 
-    auto id = core::DocumentId::parse(id_text);
+    if (descriptor.domain_schema_version !=
+        current_schema_version) {
+        return loadFailure(
+            PartStoreErrorCode::unsupported_schema,
+            "Unsupported native Part domain schema version",
+            path);
+    }
+
+    auto id =
+        core::DocumentId::parse(
+            descriptor.document_id);
     if (!id) {
         return loadFailure(
             PartStoreErrorCode::invalid_document_id,
@@ -319,63 +341,23 @@ PartLoadResult PartDocumentStore::load(
             path);
     }
 
-    core::DocumentProperties properties;
-    if (!hexDecode(number_hex, properties.number) ||
-        !hexDecode(title_hex, properties.title) ||
-        !hexDecode(description_hex, properties.description) ||
-        !hexDecode(engineering_revision_hex, properties.engineering_revision)) {
+    std::string parse_error;
+    auto state =
+        parseAuthored(
+            container.package->authored_json,
+            parse_error);
+    if (!state) {
         return loadFailure(
             PartStoreErrorCode::malformed_document,
-            "Native Part contains malformed property encoding",
+            std::move(parse_error),
             path);
     }
 
-    PartPresentationState presentation;
-    if (schema_version == PartDocumentStore::current_schema_version) {
-        std::string mask_text;
-        if (!getRequired(
-                fields,
-                "builtin_reference_visibility_mask",
-                mask_text)) {
-            return loadFailure(
-                PartStoreErrorCode::missing_field,
-                "Native Part is missing built-in reference visibility",
-                path);
-        }
-
-        unsigned int parsed_mask{};
-        const auto mask_result = std::from_chars(
-            mask_text.data(),
-            mask_text.data() + mask_text.size(),
-            parsed_mask);
-        if (mask_result.ec != std::errc{} ||
-            mask_result.ptr != mask_text.data() + mask_text.size() ||
-            parsed_mask > 0xFFU) {
-            return loadFailure(
-                PartStoreErrorCode::malformed_document,
-                "Native Part contains malformed built-in reference visibility",
-                path);
-        }
-
-        const auto visibility =
-            core::BuiltinReferenceVisibility::fromMask(
-                static_cast<std::uint8_t>(parsed_mask));
-        if (!visibility) {
-            return loadFailure(
-                PartStoreErrorCode::malformed_document,
-                "Native Part contains unsupported built-in reference visibility bits",
-                path);
-        }
-        presentation.builtin_references = *visibility;
-    }
-
-    PartAuthoredState state;
-    state.properties = std::move(properties);
-    state.presentation = presentation;
-
     return PartLoadResult{
         std::optional<PartDocument>{
-            PartDocument::restore(std::move(*id), std::move(state))},
+            PartDocument::restore(
+                std::move(*id),
+                std::move(*state))},
         PartStoreDiagnostic{},
     };
 }
@@ -383,13 +365,19 @@ PartLoadResult PartDocumentStore::load(
 PartSaveResult PartDocumentStore::createNew(
     const std::filesystem::path& path,
     const PartDocument& document) const {
-    return write(path, document, persistence::AtomicWriteMode::create_new);
+    return write(
+        path,
+        document,
+        persistence::AtomicWriteMode::create_new);
 }
 
 PartSaveResult PartDocumentStore::save(
     const std::filesystem::path& path,
     const PartDocument& document) const {
-    return write(path, document, persistence::AtomicWriteMode::replace);
+    return write(
+        path,
+        document,
+        persistence::AtomicWriteMode::replace);
 }
 
 } // namespace simplesolid2::part
