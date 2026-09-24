@@ -553,6 +553,7 @@ void CadWorkbench::buildUi() {
 
 void CadWorkbench::setProjectSession(
     application::ProjectSession* session) {
+    clearSketchRuntimeContext();
     session_ = session;
     active_document_id_.reset();
     document_view_states_.clear();
@@ -571,6 +572,7 @@ void CadWorkbench::setProjectSession(
 }
 
 void CadWorkbench::clearProjectSession() {
+    clearSketchRuntimeContext();
     session_ = nullptr;
     active_document_id_.reset();
     document_view_states_.clear();
@@ -687,9 +689,18 @@ bool CadWorkbench::activateDocument(
 }
 
 void CadWorkbench::activateTab(int index) {
+    const auto requested_id =
+        tabDocumentId(index);
+
+    if (active_document_id_ &&
+        (!requested_id ||
+         *requested_id != *active_document_id_)) {
+        clearSketchRuntimeContext();
+    }
+
     captureActiveViewState();
 
-    const auto id = tabDocumentId(index);
+    const auto id = requested_id;
     if (!id || session_ == nullptr ||
         session_->documentSession(*id) == nullptr) {
         active_document_id_.reset();
@@ -981,6 +992,10 @@ void CadWorkbench::closeTab(int index) {
         active_document_id_.has_value() &&
         *active_document_id_ == *id;
 
+    if (closing_active) {
+        clearSketchRuntimeContext();
+    }
+
     int next_index = -1;
     {
         const QSignalBlocker blocked{document_tabs_};
@@ -1045,11 +1060,13 @@ void CadWorkbench::refreshActiveContext() {
     engineering_revision_->setEnabled(true);
 
     viewport_controller_->setDocumentSession(document_session);
+    reconcileSketchRuntimeContext();
     updateTabPresentation(document_session->documentId());
     syncActionState();
 }
 
 void CadWorkbench::clearActiveContext() {
+    clearSketchRuntimeContext();
     active_path_->setText(QStringLiteral("No Part is open."));
     active_id_->clear();
 
@@ -1194,6 +1211,19 @@ void CadWorkbench::syncActionState() {
     save_button_->setEnabled(
         active && document_session->needsSave());
     close_document_button_->setEnabled(active);
+
+    const bool editing_sketch =
+        active &&
+        active_sketch_id_.has_value() &&
+        sketch_edit_document_id_.has_value() &&
+        active_document_id_.has_value() &&
+        *sketch_edit_document_id_ ==
+            *active_document_id_;
+
+    sketch_button_->setEnabled(
+        active && !editing_sketch);
+    finish_sketch_button_->setEnabled(
+        editing_sketch);
 
     new_part_button_->setEnabled(session_ != nullptr);
     open_document_button_->setEnabled(session_ != nullptr);
