@@ -2,6 +2,7 @@
 
 **Status:** ACCEPTED  
 **Owner acceptance:** 2026-09-23  
+**Owner follow-up acceptance:** 2026-09-24  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Powiązane ADR:** ADR-0002, ADR-0003  
 **Parent work:** WB-01
@@ -320,3 +321,35 @@ no change to Document identity semantics
 ```
 
 Ukończenie WB-01A nie uruchamia automatycznie następnego etapu CAD.
+
+
+## 15. Owner-approved follow-up — 2026-09-24
+
+Po finalnym ręcznym teście Owner ponownie otworzył WB-01A wyłącznie dla dwóch defektów mieszczących się w pierwotnym zakresie P1:
+
+1. **ViewCube native repaint regression**
+   - podczas zmiany szerokości prawego panelu / Editor Surface poprzedni obszar ViewCube może pozostawiać artefakty nad natywnym Qt/OCCT Viewportem;
+   - naprawa ma zapewnić poprawne odświeżenie starego i nowego obszaru overlayu również nad realnym native Viewerem;
+   - nie zmienia provider-neutral Viewer API ani camera semantics.
+
+2. **Open Document interactive columns**
+   - kolumny `Kind / Name / Location / Status` mają być ręcznie resizable przez użytkownika;
+   - domyślnie `Name` ma być wyraźnie węższe niż obecnie, a `Location` szersze;
+   - szerokości nie są w tym follow-upie persystowane między restartami.
+
+Jawnie **poza zakresem follow-upu** pozostają:
+- tile/icon view;
+- thumbnails / preview generation;
+- thumbnail cache;
+- zmiany native Document format/persistence.
+
+Te tematy nie są częścią WB-01A. Następnym planowanym większym krokiem po ponownym zamknięciu WB-01A jest osobny D2 contract dotyczący architektury natywnych formatów/persistence Part/Assembly/Drawing przed implementacją Sketchera.
+
+### Follow-up acceptance
+
+Follow-up został zaimplementowany w ramach WB-01A i jest gotowy do exact-head gate. Jest ukończony, gdy:
+- ręczne/native resize nie pozostawia artefaktów ViewCube;
+- automatyczne testy obejmują repaint/invalidation path możliwy do zweryfikowania mechanicznie oraz dotychczasową geometry containment regression;
+- nagłówki Open Document są interaktywne i mają zaakceptowane domyślne proporcje;
+- dokumentacja as-built/product pozostaje zgodna;
+- exact-head docs/verify/build/CTest gate jest PASS.

@@ -2,6 +2,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QPaintEvent>
 #include <QToolButton>
 #include <QTest>
 #include <QWidget>
@@ -26,6 +27,24 @@ namespace {
             return EXIT_FAILURE; \
         } \
     } while (false)
+
+class PaintProbe final : public QWidget {
+public:
+    using QWidget::QWidget;
+
+    [[nodiscard]] int paintCount() const noexcept {
+        return paint_count_;
+    }
+
+protected:
+    void paintEvent(QPaintEvent* event) override {
+        ++paint_count_;
+        QWidget::paintEvent(event);
+    }
+
+private:
+    int paint_count_{};
+};
 
 class TestViewport final
     : public viewer::IDocumentViewport {
@@ -111,9 +130,14 @@ int main(int argc, char* argv[]) {
     QWidget host;
     host.resize(420, 260);
 
+    PaintProbe repaint_target{&host};
+    repaint_target.setGeometry(host.rect());
+    repaint_target.show();
+
     ui::ViewCubeWidget cube{
         &viewport,
-        &host};
+        &host,
+        &repaint_target};
 
     host.show();
     QApplication::processEvents();
@@ -181,9 +205,15 @@ int main(int argc, char* argv[]) {
     CHECK(viewport.cameraState()->eye.y <
           viewport.cameraState()->target.y);
 
+    const int paints_before_compact =
+        repaint_target.paintCount();
+
     host.resize(150, 220);
     QApplication::processEvents();
 
+    CHECK(
+        repaint_target.paintCount() >
+        paints_before_compact);
     CHECK(cube.compactMode());
     CHECK(cube.isVisible());
     CHECK(compact_button->isVisible());
@@ -214,8 +244,14 @@ int main(int argc, char* argv[]) {
         CHECK(containedBy(host, cube));
     }
 
+    const int paints_before_regular =
+        repaint_target.paintCount();
+
     host.resize(420, 260);
     QApplication::processEvents();
+    CHECK(
+        repaint_target.paintCount() >
+        paints_before_regular);
     CHECK(!cube.compactMode());
     CHECK(containedBy(host, cube));
 

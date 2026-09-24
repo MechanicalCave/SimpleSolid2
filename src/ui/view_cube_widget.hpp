@@ -18,7 +18,8 @@ class ViewCubeWidget final : public QFrame {
 public:
     explicit ViewCubeWidget(
         viewer::IDocumentViewport* viewport,
-        QWidget* parent = nullptr);
+        QWidget* parent = nullptr,
+        QWidget* repaint_target = nullptr);
 
     void setViewport(
         viewer::IDocumentViewport* viewport);
@@ -45,10 +46,12 @@ private:
     void refreshProjectionPresentation();
     void syncEnabledState();
     void syncOverlayGeometry();
+    void scheduleUnderlayRefresh();
     void setCompactMode(bool compact);
 
     viewer::IDocumentViewport* viewport_{};
     QWidget* host_{};
+    QWidget* repaint_target_{};
     QWidget* regular_panel_{};
     QWidget* cube_canvas_{};
     QToolButton* views_button_{};
@@ -59,6 +62,7 @@ private:
     QAction* fit_action_{};
     QAction* projection_action_{};
     bool compact_mode_{};
+    bool underlay_refresh_scheduled_{};
 };
 
 } // namespace simplesolid2::ui

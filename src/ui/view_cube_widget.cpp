@@ -13,6 +13,7 @@
 #include <QSizePolicy>
 #include <QString>
 #include <QToolButton>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <algorithm>
@@ -305,10 +306,12 @@ private:
 
 ViewCubeWidget::ViewCubeWidget(
     viewer::IDocumentViewport* viewport,
-    QWidget* parent)
+    QWidget* parent,
+    QWidget* repaint_target)
     : QFrame{parent},
       viewport_{viewport},
-      host_{parent} {
+      host_{parent},
+      repaint_target_{repaint_target} {
     setObjectName(QStringLiteral("viewCubeWidget"));
     setFrameShape(QFrame::StyledPanel);
     setSizePolicy(
@@ -662,7 +665,10 @@ void ViewCubeWidget::syncOverlayGeometry() {
 
     if (available_width < 28 ||
         available_height < 28) {
-        hide();
+        if (isVisible()) {
+            hide();
+        }
+        scheduleUnderlayRefresh();
         return;
     }
 
@@ -675,21 +681,53 @@ void ViewCubeWidget::syncOverlayGeometry() {
             desired.height(),
             available_height);
 
-    resize(width, height);
-    move(
+    const int x =
         std::max(
             0,
-            host_->width() - width - overlayMargin),
+            host_->width() - width - overlayMargin);
+    const int y =
         std::min(
             overlayMargin,
             std::max(
                 0,
-                host_->height() - height)));
+                host_->height() - height));
+
+    setGeometry(x, y, width, height);
 
     if (host_->isVisible() && !isVisible()) {
         show();
     }
     raise();
+
+    // The OCCT viewport is a native child window (WA_PaintOnScreen).
+    // Moving or shrinking a Qt overlay does not reliably invalidate the
+    // pixels that were previously covered by the overlay on Windows.
+    // Defer and coalesce an explicit repaint request for the underlying
+    // native surface after the overlay geometry has settled.
+    scheduleUnderlayRefresh();
+}
+
+void ViewCubeWidget::scheduleUnderlayRefresh() {
+    if (underlay_refresh_scheduled_) {
+        return;
+    }
+
+    underlay_refresh_scheduled_ = true;
+    QTimer::singleShot(
+        0,
+        this,
+        [this] {
+            underlay_refresh_scheduled_ = false;
+
+            if (host_ != nullptr) {
+                host_->update();
+            }
+
+            if (repaint_target_ != nullptr &&
+                repaint_target_->isVisible()) {
+                repaint_target_->update();
+            }
+        });
 }
 
 bool ViewCubeWidget::eventFilter(

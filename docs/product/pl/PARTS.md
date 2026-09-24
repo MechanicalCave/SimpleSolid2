@@ -38,7 +38,7 @@ Pola `Number`, `Title`, `Description` i `Engineering revision` są trwałymi wł
 
 Użyj `Open…`, aby wybrać wykryty Dokument.
 
-Dialog pokazuje typ Dokumentu, nazwę, lokalizację i status. Obecny produkt dostarcza tylko Dokumenty Part, ale sam interfejs Open nie jest Part-specific.
+Dialog pokazuje typ Dokumentu, nazwę, lokalizację i status. Szerokości kolumn możesz zmieniać ręcznie przeciągając separatory nagłówka; domyślnie więcej miejsca otrzymuje lokalizacja niż nazwa. Obecny produkt dostarcza tylko Dokumenty Part, ale sam interfejs Open nie jest Part-specific.
 
 Niepoprawne pliki natywne i konflikty DocumentId pozostają widoczne, ale nie można ich otworzyć jako resolved Documents.
 

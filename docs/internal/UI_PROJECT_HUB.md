@@ -52,7 +52,7 @@ The current Part composition exposes `New Part…`, `Open…`, `Refresh`, `Undo`
 
 The location picker is constrained to the current Workspace. Private `.simplesolid` metadata is not exposed as a normal target. Existing targets and attempts to escape the Workspace fail closed.
 
-`Open…` opens `OpenDocumentDialog`. Candidates show Document kind, display/name information, location and status. Current discovery supplies Part entries only. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
+`Open…` opens `OpenDocumentDialog`. Candidates show Document kind, display/name information, location and status. The four columns are interactively resizable; the default layout keeps Name compact and gives Location the largest share of the dialog. Current discovery supplies Part entries only. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
 
 Opening an already open Document focuses its canonical existing DocumentSession instead of creating a second mutable session.
 

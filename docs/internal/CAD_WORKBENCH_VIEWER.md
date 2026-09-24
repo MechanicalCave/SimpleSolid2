@@ -77,6 +77,8 @@ The shared viewport supports middle-button Pan, Shift + middle-button Orbit, whe
 
 WB-01A replaced the fixed button-grid presentation with a compact responsive CAD navigation control. It tracks its host Editor Surface and switches to a compact mode when space is constrained, so narrow splitter layouts do not force a large Viewer minimum width or overlap the right-side panels.
 
+Because the production Qt/OCCT viewport is a native `WA_PaintOnScreen` child, overlay movement/resize explicitly schedules a coalesced repaint of the underlying Viewer surface. This prevents stale ViewCube pixels from remaining after splitter or right-panel resize without changing the provider-neutral Viewer API.
+
 Navigation changes are runtime-only and do not increment DocumentRevision, set needsSave or create CAD Undo entries.
 
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->

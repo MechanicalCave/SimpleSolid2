@@ -350,6 +350,8 @@ The shared viewport supports middle-button Pan, Shift + middle-button Orbit, whe
 
 WB-01A replaced the fixed button-grid presentation with a compact responsive CAD navigation control. It tracks its host Editor Surface and switches to a compact mode when space is constrained, so narrow splitter layouts do not force a large Viewer minimum width or overlap the right-side panels.
 
+Because the production Qt/OCCT viewport is a native `WA_PaintOnScreen` child, overlay movement/resize explicitly schedules a coalesced repaint of the underlying Viewer surface. This prevents stale ViewCube pixels from remaining after splitter or right-panel resize without changing the provider-neutral Viewer API.
+
 Navigation changes are runtime-only and do not increment DocumentRevision, set needsSave or create CAD Undo entries.
 
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
@@ -791,7 +793,7 @@ The current Part composition exposes `New Part…`, `Open…`, `Refresh`, `Undo`
 
 The location picker is constrained to the current Workspace. Private `.simplesolid` metadata is not exposed as a normal target. Existing targets and attempts to escape the Workspace fail closed.
 
-`Open…` opens `OpenDocumentDialog`. Candidates show Document kind, display/name information, location and status. Current discovery supplies Part entries only. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
+`Open…` opens `OpenDocumentDialog`. Candidates show Document kind, display/name information, location and status. The four columns are interactively resizable; the default layout keeps Name compact and gives Location the largest share of the dialog. Current discovery supplies Part entries only. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
 
 Opening an already open Document focuses its canonical existing DocumentSession instead of creating a second mutable session.
 
@@ -930,7 +932,7 @@ Filename and path are not Document identity. You may rename or move the `.ss2par
 
 Use `Open…` to choose a discovered Document.
 
-The dialog shows Document kind, name, location and status. The current product supplies Part Documents only, but the Open UI is not Part-specific.
+The dialog shows Document kind, name, location and status. You can resize the columns by dragging the header separators; by default, Location receives more space than Name. The current product supplies Part Documents only, but the Open UI is not Part-specific.
 
 Invalid native files and DocumentId conflicts remain visible but cannot be opened as resolved Documents.
 
@@ -1244,7 +1246,7 @@ Pola `Number`, `Title`, `Description` i `Engineering revision` są trwałymi wł
 
 Użyj `Open…`, aby wybrać wykryty Dokument.
 
-Dialog pokazuje typ Dokumentu, nazwę, lokalizację i status. Obecny produkt dostarcza tylko Dokumenty Part, ale sam interfejs Open nie jest Part-specific.
+Dialog pokazuje typ Dokumentu, nazwę, lokalizację i status. Szerokości kolumn możesz zmieniać ręcznie przeciągając separatory nagłówka; domyślnie więcej miejsca otrzymuje lokalizacja niż nazwa. Obecny produkt dostarcza tylko Dokumenty Part, ale sam interfejs Open nie jest Part-specific.
 
 Niepoprawne pliki natywne i konflikty DocumentId pozostają widoczne, ale nie można ich otworzyć jako resolved Documents.
 
