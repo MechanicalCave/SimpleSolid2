@@ -68,6 +68,21 @@ The concrete provider contains recoverable OCCT/standard exceptions at its publi
 
 Boundary tests reject OCCT/provider tokens from domain/application APIs and Workbench UI.
 
+<!-- section-id: internal.cad-workbench-viewer.sketch-edit -->
+## Part Sketch host and 3D edit context
+
+SK-01 adds the first durable Part-hosted Sketch lifecycle without adding 2D drawing entities.
+
+The Operations surface provides `Sketch`. While the tool is active, the user selects one semantic built-in Origin plane: XY, XZ or YZ. Origin axes/point are rejected. The selected Tree item or Viewer token is only command input; the durable Sketch support is the semantic built-in reference role.
+
+Creation executes through `CreatePartSketchCommand`, DocumentSession validation/history and a Part transaction. One successful creation adds one authored Sketch with stable SketchId, Origin-plane support, explicit SketchPlacement and persistent visibility. Undo removes that Sketch and Redo restores the same SketchId/state.
+
+The active Sketch editor remains the existing Document Viewport. On entry, the runtime grid changes to the Sketch U/V frame, the camera aligns normal to the support plane and Fit is requested. This is only an initial view: normal Pan, Zoom, Orbit and ViewCube navigation remain available immediately afterward and do not mutate SketchPlacement, DocumentRevision or dirty state.
+
+`Finish Sketch` exits only the runtime editor context. The authored Sketch remains in the Part and in the normal Document Tree. Switching/closing Documents clears the runtime edit context safely.
+
+SK-01 supports only empty Sketches on XY/XZ/YZ Origin planes. Datum/Construction Plane support, planar model-face support, topology naming, 2D entities, constraints and solver behavior remain outside this implementation.
+
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and responsive ViewCube
 
