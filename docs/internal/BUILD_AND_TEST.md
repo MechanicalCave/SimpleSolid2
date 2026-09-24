@@ -44,9 +44,11 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 32 tests.
+The compiled CTest suite contains 33 tests.
 
 Project/Hub, PART-01 and WB-01 coverage remains active.
+
+PERSIST-01 adds `persist01.native_document_container` coverage for the native ZIP+JSON package boundary, including round-trip read/write, mandatory entries, optional derived entries, unsupported container versions, malformed JSON, unsafe/duplicate ZIP entries, ZIP64 rejection and bounded physical file size.
 
 WB-01A adds or extends deterministic coverage for:
 
