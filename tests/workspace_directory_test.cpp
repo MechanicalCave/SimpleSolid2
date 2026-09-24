@@ -86,15 +86,15 @@ int main() {
         std::filesystem::path{"Other"}));
     CHECK(!contains(
         listed.directories,
-        std::filesystem::path{std::filesystem::path{".simplesolid"}}));
+        std::filesystem::path{".simplesolid"}));
     CHECK(!contains(
         listed.directories,
-        std::filesystem::path{std::filesystem::path{".simplesolid"}} / "internal"));
+        std::filesystem::path{".simplesolid"} / "internal"));
 
     const auto created =
         service.createDirectory(
             root,
-            "Parts",
+            std::filesystem::path{"Parts"},
             std::filesystem::path{"Generated"});
     CHECK(created.ok());
     CHECK(created.relative_path ==
@@ -155,7 +155,7 @@ int main() {
     const auto missing_parent =
         service.createDirectory(
             root,
-            "Missing",
+            std::filesystem::path{"Missing"},
             std::filesystem::path{"Child"});
     CHECK(!missing_parent.ok());
     CHECK(missing_parent.diagnostic.code ==
