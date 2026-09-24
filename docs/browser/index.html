@@ -69,7 +69,8 @@ Create Project…
 → publish final Workspace
 → open ProjectSession
 → record Recent Project
-→ show shared CAD Workbench
+→ show neutral Project Workspace
+→ activate a Document Workbench only after a CAD Document is created/opened
 ```
 
 A successful Create leaves one active ProjectSession and one logical Recent entry for the created ProjectId.
@@ -86,10 +87,11 @@ Opening a Project also rebuilds the runtime native-document index by scanning th
 <!-- section-id: internal.application-lifecycle.part -->
 ## Part Document lifecycle
 
-The current Part lifecycle is:
+The Project Workspace initially owns document launch. The current Part lifecycle is:
 
 ```text
-New Part…
+neutral Project Workspace
+→ New Part…
 → WorkspaceLocationDialog
 → browse folders inside current Workspace
 → optionally Create Folder
@@ -98,13 +100,16 @@ New Part…
 → generate fresh DocumentId
 → atomically publish valid empty PartDocument
 → create canonical DocumentSession
+→ activate Part Workbench
 
-Open…
+neutral Project Workspace
+→ Open…
 → OpenDocumentDialog
 → list discovered Document candidates with Kind / Name / Location / Status
 → choose one resolved DocumentId
 → load authored Part state
 → create or reuse canonical DocumentSession
+→ activate the Workbench for the resolved DocumentKind
 → add/focus bottom Document Tab
 ```
 
@@ -114,16 +119,18 @@ The Workspace location flow rejects targets outside the current Workspace, rejec
 
 The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description, Engineering Revision, persistent Origin visibility or creating a Part-hosted Sketch goes through semantic commands and PartDocument transactions.
 
-SK-01 Sketch creation starts from the Workbench `Sketch` tool, validates a selected XY/XZ/YZ built-in Origin plane, creates one durable empty Sketch and enters a runtime edit context in the same 3D Viewport. `Finish Sketch` ends that runtime context without deleting the authored Sketch.
+SK-01A places the Part `Sketch` launcher in the editor toolbar above the 3D Viewport. Creation validates a selected XY/XZ/YZ built-in Origin plane, creates one durable empty Sketch and enters a runtime edit context in the same 3D Viewport. Operations is contextual: support-pick may show Cancel guidance and active Sketch edit shows `Finish Sketch`. An existing Sketch can re-enter the same edit context by Tree double-click or `Edit Sketch` context action without authored mutation.
 
 Closing and reopening a Part destroys runtime Undo/Redo and Sketch edit context while preserving saved authored state, including SketchId/support/placement/visibility, and DocumentId on disk.
 
 <!-- section-id: internal.application-lifecycle.workbench -->
 ## Active document and Workbench lifecycle
 
-One ProjectSession may keep several DocumentSessions open. `CadWorkbench` owns one active DocumentId for the current editor context.
+One ProjectSession may keep several DocumentSessions open. With zero open Documents the Project remains in a neutral Workspace context; no inactive Part editor is implied.
 
-Changing the bottom tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. The other DocumentSessions remain open.
+Creating/opening a Part activates the Part Workbench. The architecture routes future editor activation by DocumentKind rather than treating Project Workspace as a Part Workbench. `CadWorkbench` owns one active DocumentId for the current Part editor context.
+
+Changing the bottom tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. The other DocumentSessions remain open. Closing the last open Document returns to the neutral Workspace without closing the Project.
 
 Camera and selection are kept independently per open DocumentId for the lifetime of the Workbench. They are not persisted across application restart.
 
@@ -131,6 +138,8 @@ Camera and selection are kept independently per open DocumentId for the lifetime
 ## Close, dirty state and restart
 
 Closing a dirty Part prompts for `Save`, `Discard` or `Cancel`.
+
+Workbench Tree/Viewer controllers hold non-owning runtime pointers to the active DocumentSession. SK-01A makes lifecycle ordering explicit: those bindings are detached before ProjectSession erases a DocumentSession. The same detach-before-destroy rule applies before the ProjectSession itself is destroyed.
 
 Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure keeps the Project open.
 
@@ -285,7 +294,7 @@ The Product Browser must be regenerated with `.\ss2.ps1 docs` whenever canonical
 <!-- section-id: internal.cad-workbench-viewer.shell -->
 ## Shared Workbench shell
 
-WB-01 implements one reusable `CadWorkbenchShell` containing Document Tree, Editor Surface, Properties, Operations, bottom Document Tabs and Status/Diagnostics.
+WB-01 implements one reusable `CadWorkbenchShell` containing Document Tree, an editor tool-launch strip above the Editor Surface, Properties, contextual Operations, bottom Document Tabs and Status/Diagnostics.
 
 The shell owns layout only. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
 
@@ -299,6 +308,8 @@ ProjectSession may keep several canonical DocumentSessions open.
 `CadWorkbench` owns one active DocumentId. Bottom tab changes switch the Tree, Properties, Viewer scene, selection and camera context while leaving other DocumentSessions open.
 
 Camera state is stored in a Workbench runtime map keyed by DocumentId. Closing a tab drops that runtime view state.
+
+SK-01A requires detach-before-destroy ordering: Tree/Viewport controllers are disconnected from the active DocumentSession before ProjectSession erases it. This prevents runtime cleanup from dereferencing a destroyed session during Document or Project close.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
 ## Origin and reference scene
@@ -352,13 +363,17 @@ Boundary tests reject OCCT/provider tokens from domain/application APIs and Work
 
 SK-01 adds the first durable Part-hosted Sketch lifecycle without adding 2D drawing entities.
 
-The Operations surface provides `Sketch`. While the tool is active, the user selects one semantic built-in Origin plane: XY, XZ or YZ. Origin axes/point are rejected. The selected Tree item or Viewer token is only command input; the durable Sketch support is the semantic built-in reference role.
+The editor toolbar above the 3D Viewport provides the Part `Sketch` launcher. Operations is reserved for the active tool/edit context rather than acting as a permanent tool catalog. During support pick it presents contextual guidance/Cancel; during Sketch edit it presents `Finish Sketch`.
+
+While the Sketch tool is active, the user selects one semantic built-in Origin plane: XY, XZ or YZ. Origin axes/point are rejected. The selected Tree item or Viewer token is only command input; the durable Sketch support is the semantic built-in reference role.
 
 Creation executes through `CreatePartSketchCommand`, DocumentSession validation/history and a Part transaction. One successful creation adds one authored Sketch with stable SketchId, Origin-plane support, explicit SketchPlacement and persistent visibility. Undo removes that Sketch and Redo restores the same SketchId/state.
 
 The active Sketch editor remains the existing Document Viewport. On entry, the runtime grid changes to the Sketch U/V frame, the camera aligns normal to the support plane and Fit is requested. This is only an initial view: normal Pan, Zoom, Orbit and ViewCube navigation remain available immediately afterward and do not mutate SketchPlacement, DocumentRevision or dirty state.
 
-`Finish Sketch` exits only the runtime editor context. The authored Sketch remains in the Part and in the normal Document Tree. Switching/closing Documents clears the runtime edit context safely.
+`Finish Sketch` exits only the runtime editor context. The authored Sketch remains in the Part and in the normal Document Tree. An existing Sketch re-enters edit by Tree double-click or `Edit Sketch` context action; the Tree carries only transient SketchId metadata and the Workbench revalidates that stable ID against the active Part before editing. Re-entering edit is runtime-only and does not dirty the Part.
+
+Switching/closing Documents clears the runtime edit context safely.
 
 SK-01 supports only empty Sketches on XY/XZ/YZ Origin planes. Datum/Construction Plane support, planar model-face support, topology naming, 2D entities, constraints and solver behavior remain outside this implementation.
 
@@ -836,14 +851,16 @@ Inside one Workspace, two files carrying the same DocumentId are not treated as 
 
 The Qt application uses a `QStackedWidget` with Project Hub and Workspace pages.
 
-The Workspace shows the active Project name, ProjectId and Workspace path plus one shared `CadWorkbench`.
+The Workspace shows the active Project name, ProjectId and Workspace path plus a Document host.
 
-`CadWorkbenchShell` owns only fixed presentation regions:
+With zero open CAD Documents the host shows a neutral Workspace launch surface. It does not show an inactive Part editor. Creating/opening a Part activates the Part Workbench; future document kinds are routed to their appropriate editor by DocumentKind.
+
+`CadWorkbenchShell` owns only fixed presentation regions for an active CAD Document:
 
 ```text
 LEFT      Document Tree
-CENTER    Editor Surface / 3D Viewport
-RIGHT     Properties + Operations
+CENTER    tool-launch strip + Editor Surface / 3D Viewport
+RIGHT     Properties + contextual Operations
 BOTTOM    Document Tabs
 BELOW     Status / Diagnostics
 ```
@@ -872,9 +889,11 @@ Recent actions are `Open`, `Locate…` and `Remove from Recent`.
 No Recent entry is selected after Hub refresh. Open is enabled only for a selected, openable entry. Locate and Remove remain available for selected unavailable entries.
 
 <!-- section-id: internal.ui-project-hub.part-panel -->
-## Document controls inside the Workbench
+## Workspace launch and Part document controls
 
-The current Part composition exposes `New Part…`, `Open…`, `Refresh`, `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, Operations placeholder and bottom Document Tabs.
+The neutral Project Workspace exposes the current document-launch actions `New Part…`, neutral `Open…` and `Refresh`. These actions are not Part editor tools.
+
+Once a Part is active, its Workbench exposes `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, the editor tool-launch strip, contextual Operations and bottom Document Tabs.
 
 `New Part…` opens `WorkspaceLocationDialog`. It shows the current Workspace folder hierarchy, allows the user to choose a folder, enter the filename and explicitly `Create Folder`.
 
@@ -882,12 +901,14 @@ The location picker is constrained to the current Workspace. Private `.simplesol
 
 `Open…` opens `OpenDocumentDialog`. Candidates show Document kind, display/name information, location and status. The four columns are interactively resizable; the default layout keeps Name compact and gives Location the largest share of the dialog. Current discovery supplies Part entries only. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
 
-Opening an already open Document focuses its canonical existing DocumentSession instead of creating a second mutable session.
+Opening an already open Document focuses its canonical existing DocumentSession instead of creating a second mutable session. Closing the last open Document switches the host back to the neutral Workspace while the Project remains open.
 
 <!-- section-id: internal.ui-project-hub.workbench -->
 ## Tree, Properties and Viewport
 
-The active Part Tree contains the Part root and built-in Origin group with seven semantic references.
+The active Part Tree contains the Part root, built-in Origin group with seven semantic references and any hosted Sketch records.
+
+Existing Sketches can enter their runtime edit context through Tree double-click or the `Edit Sketch` context action. The Tree stores transient SketchId data for routing only; Tree row identity is not durable model identity.
 
 Tree uses extended multi-selection. Show/Hide context actions are available only when the complete selection supports the operation. Mixed semantic/non-reference selections fail closed.
 
@@ -895,7 +916,9 @@ Tree and Viewport are adapters of one document-scoped selected set plus primary 
 
 Properties shows common Document fields when no semantic object is primary. When a built-in Origin reference is primary, Properties switches to a read-only reference context showing role/type/identity/visibility.
 
-The central Editor Surface hosts the provider-neutral Document Viewport. Production composition injects the Windows Qt/OCCT provider.
+The central Editor Surface hosts the provider-neutral Document Viewport. A tool-launch strip immediately above it contains the current Part `Sketch` launcher. Production composition injects the Windows Qt/OCCT provider.
+
+Operations is contextual to the active tool/edit mode: it is idle when no tool is active, shows Sketch support-pick controls while creating a Sketch, and shows `Finish Sketch` while a Sketch is being edited.
 
 The ViewCube is a responsive overlay. At normal width it presents the regular CAD navigation surface; at narrow Editor widths it switches to a compact control instead of forcing the Editor Surface wider or overlapping the Properties panel.
 
@@ -907,6 +930,8 @@ Closing a dirty Part requires `Save`, `Discard` or `Cancel`.
 Closing the Project or application when any Part is dirty requires `Save All`, `Discard` or `Cancel`.
 
 A failed Save leaves the Part/Project open so authored in-memory changes are not silently lost.
+
+Before a DocumentSession or the owning ProjectSession is destroyed, Workbench runtime bindings are detached. This ordering is required because Tree/Viewer controllers use non-owning session pointers.
 
 <!-- section-id: internal.ui-project-hub.recovery -->
 ## Project recovery UX
@@ -987,7 +1012,7 @@ Polish and English are maintained as peer sources. The Browser opens product doc
 <!-- section-id: product.parts.create -->
 ## Creating a new Part
 
-After opening a Project, use `New Part…` in the Workbench.
+After opening a Project, you first see a neutral Workspace with no active Part editor. Use `New Part…` there to create a Document and open its Part Workbench.
 
 The dialog shows the folder hierarchy of the current Workspace. Choose the target folder, enter the Part filename and confirm creation.
 
@@ -1019,15 +1044,15 @@ Filename and path are not Document identity. You may rename or move the `.ss2par
 <!-- section-id: product.parts.workbench -->
 ## Opening Parts and using the Workbench
 
-Use `Open…` to choose a discovered Document.
+Use `Open…` in the neutral Workspace to choose a discovered Document. Opening a Project by itself does not activate the Part Workbench; an editor appears only after a specific Document is created or opened.
 
 The dialog shows Document kind, name, location and status. You can resize the columns by dragging the header separators; by default, Location receives more space than Name. The current product supplies Part Documents only, but the Open UI is not Part-specific.
 
 Invalid native files and DocumentId conflicts remain visible but cannot be opened as resolved Documents.
 
-Several Parts can remain open at once. Use the bottom Document Tabs to switch the active Part. Opening a Part that is already open activates the existing tab/session instead of creating a second mutable session.
+Several Parts can remain open at once. Use the bottom Document Tabs to switch the active Part. Opening a Part that is already open activates the existing tab/session instead of creating a second mutable session. Closing the last Document returns to the neutral Workspace without closing the Project.
 
-The left side contains Document Tree. The center contains the 3D Viewport. The right side contains Properties and Operations. Status/diagnostic information is below the tabs.
+The left side contains Document Tree. The center contains the 3D Viewport with a tool-launch strip above it. The right side contains Properties and contextual Operations. Status/diagnostic information is below the tabs.
 
 <!-- section-id: product.parts.edit -->
 ## Editing Document properties
@@ -1072,13 +1097,17 @@ After `Save`, Origin visibility survives closing and restarting the application.
 <!-- section-id: product.parts.sketch-host -->
 ## Creating an empty Sketch
 
-In Operations, use `Sketch`, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when it is visible, in the 3D Viewport.
+Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when it is visible, in the 3D Viewport.
+
+Operations is not a permanent tool list. It shows controls for the current operation: Sketch support-pick context/Cancel while choosing the plane, then `Finish Sketch` after Sketch edit begins.
 
 After a valid selection, Part creates a durable empty Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane.
 
 Automatic alignment does not lock the camera. While the Sketch is active you can still use Pan, Zoom, Orbit and ViewCube. Navigation does not change Sketch placement and does not dirty the Document by itself.
 
 Use `Finish Sketch` to leave the current edit context. The Sketch remains an authored Part object, stays in Document Tree and after `Save` survives Close/Reopen with the same SketchId, support and placement.
+
+To edit an existing Sketch again, double-click it in Document Tree or use its `Edit Sketch` context-menu action. Entering edit by itself does not change authored state and does not require Save.
 
 In SK-01 the Sketch is intentionally empty. Line/Arc/Circle, constraints, dimensions and a solver are not available yet. Support is currently limited to the three Origin planes; Construction/Datum planes and planar model faces are separate later stages.
 
@@ -1110,7 +1139,7 @@ When closing a Part with unsaved changes, the application requires `Save`, `Disc
 
 When closing the complete Project or application while any Part is dirty, the choices are `Save All`, `Discard` and `Cancel`.
 
-If saving fails, the Document/Project remains open.
+If saving fails, the Document/Project remains open. Closing the last open Part keeps the Project open and returns to the neutral Workspace.
 
 <!-- section-id: product.parts.restart -->
 ## Restart and reopen
@@ -1318,7 +1347,7 @@ Wersje polska i angielska są utrzymywane jako równorzędne źródła. Browser 
 <!-- section-id: product.parts.create -->
 ## Tworzenie nowego Parta
 
-Po otwarciu Projektu użyj `New Part…` w Workbench.
+Po otwarciu Projektu najpierw widzisz neutralny Workspace bez aktywnego edytora Part. Użyj tam `New Part…`, aby utworzyć Dokument i otworzyć jego Part Workbench.
 
 Dialog pokazuje strukturę katalogów bieżącego Workspace. Wybierz folder docelowy, wpisz nazwę pliku Parta i potwierdź utworzenie.
 
@@ -1350,15 +1379,15 @@ Pola `Number`, `Title`, `Description` i `Engineering revision` są trwałymi wł
 <!-- section-id: product.parts.workbench -->
 ## Otwieranie Partów i Workbench
 
-Użyj `Open…`, aby wybrać wykryty Dokument.
+Użyj `Open…` w neutralnym Workspace, aby wybrać wykryty Dokument. Samo otwarcie Projektu nie uruchamia Part Workbench; edytor pojawia się dopiero po utworzeniu lub otwarciu konkretnego Dokumentu.
 
 Dialog pokazuje typ Dokumentu, nazwę, lokalizację i status. Szerokości kolumn możesz zmieniać ręcznie przeciągając separatory nagłówka; domyślnie więcej miejsca otrzymuje lokalizacja niż nazwa. Obecny produkt dostarcza tylko Dokumenty Part, ale sam interfejs Open nie jest Part-specific.
 
 Niepoprawne pliki natywne i konflikty DocumentId pozostają widoczne, ale nie można ich otworzyć jako resolved Documents.
 
-Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs przełączają aktywny Part. Ponowne otwarcie Parta, który jest już otwarty, aktywuje istniejącą zakładkę/sesję zamiast tworzyć drugą mutowalną sesję.
+Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs przełączają aktywny Part. Ponowne otwarcie Parta, który jest już otwarty, aktywuje istniejącą zakładkę/sesję zamiast tworzyć drugą mutowalną sesję. Zamknięcie ostatniego Dokumentu wraca do neutralnego Workspace bez zamykania Projektu.
 
-Po lewej znajduje się Document Tree, pośrodku viewport 3D, a po prawej Properties i Operations. Status/diagnostyka znajduje się pod zakładkami.
+Po lewej znajduje się Document Tree, pośrodku viewport 3D z paskiem narzędzi nad nim, a po prawej Properties i kontekstowy panel Operations. Status/diagnostyka znajduje się pod zakładkami.
 
 <!-- section-id: product.parts.edit -->
 ## Edycja właściwości Dokumentu
@@ -1403,13 +1432,17 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie pustego Sketchu
 
-W Operations użyj `Sketch`, a następnie wskaż jedną z płaszczyzn `XY Plane`, `XZ Plane` albo `YZ Plane` w Origin. Płaszczyznę możesz wskazać w Document Tree albo — gdy jest widoczna — w viewporcie 3D.
+Na pasku narzędzi bezpośrednio nad viewportem 3D użyj `Sketch`, a następnie wskaż jedną z płaszczyzn `XY Plane`, `XZ Plane` albo `YZ Plane` w Origin. Płaszczyznę możesz wskazać w Document Tree albo — gdy jest widoczna — w viewporcie 3D.
+
+Operations nie jest listą narzędzi. Pokazuje sterowanie bieżącą operacją: podczas wyboru płaszczyzny Sketchu zawiera kontekst wyboru/Cancel, a po wejściu do edycji pokazuje `Finish Sketch`.
 
 Po poprawnym wyborze Part tworzy trwały pusty Sketch i pozostaje w tym samym Workbench oraz tym samym viewporcie 3D. Kamera automatycznie ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnej płaszczyzny.
 
 Automatyczne ustawienie widoku nie blokuje kamery. Podczas aktywnego Sketchu nadal możesz używać Pan, Zoom, Orbit i ViewCube. Nawigacja nie zmienia położenia Sketchu i sama nie dirty'uje Dokumentu.
 
 Użyj `Finish Sketch`, aby zakończyć bieżący tryb edycji. Sketch pozostaje authored obiektem Parta, jest widoczny w Document Tree i po `Save` przeżywa Close/Reopen z tym samym SketchId, supportem i placementem.
+
+Aby ponownie edytować istniejący Sketch, kliknij go dwukrotnie w Document Tree albo użyj jego menu kontekstowego `Edit Sketch`. Samo wejście do edycji nie zmienia authored state i nie wymaga Save.
 
 W SK-01 Sketch jest celowo pusty. Nie ma jeszcze Line/Arc/Circle, constraintów, wymiarów ani solvera. Support może być obecnie tylko jedną z trzech płaszczyzn Origin; płaszczyzny konstrukcyjne/Datum oraz płaskie ściany modelu będą osobnymi późniejszymi etapami.
 
@@ -1441,7 +1474,7 @@ Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Di
 
 Przy zamykaniu całego Projektu lub aplikacji, gdy jakikolwiek Part jest dirty, dostępne są `Save All`, `Discard` i `Cancel`.
 
-Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty.
+Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty. Zamknięcie ostatniego otwartego Parta pozostawia Projekt otwarty i pokazuje z powrotem neutralny Workspace.
 
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
