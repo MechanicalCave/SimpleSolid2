@@ -26,7 +26,8 @@ Create Project…
 → publish final Workspace
 → open ProjectSession
 → record Recent Project
-→ show shared CAD Workbench
+→ show neutral Project Workspace
+→ activate a Document Workbench only after a CAD Document is created/opened
 ```
 
 A successful Create leaves one active ProjectSession and one logical Recent entry for the created ProjectId.
@@ -43,10 +44,11 @@ Opening a Project also rebuilds the runtime native-document index by scanning th
 <!-- section-id: internal.application-lifecycle.part -->
 ## Part Document lifecycle
 
-The current Part lifecycle is:
+The Project Workspace initially owns document launch. The current Part lifecycle is:
 
 ```text
-New Part…
+neutral Project Workspace
+→ New Part…
 → WorkspaceLocationDialog
 → browse folders inside current Workspace
 → optionally Create Folder
@@ -55,13 +57,16 @@ New Part…
 → generate fresh DocumentId
 → atomically publish valid empty PartDocument
 → create canonical DocumentSession
+→ activate Part Workbench
 
-Open…
+neutral Project Workspace
+→ Open…
 → OpenDocumentDialog
 → list discovered Document candidates with Kind / Name / Location / Status
 → choose one resolved DocumentId
 → load authored Part state
 → create or reuse canonical DocumentSession
+→ activate the Workbench for the resolved DocumentKind
 → add/focus bottom Document Tab
 ```
 
@@ -71,16 +76,18 @@ The Workspace location flow rejects targets outside the current Workspace, rejec
 
 The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description, Engineering Revision, persistent Origin visibility or creating a Part-hosted Sketch goes through semantic commands and PartDocument transactions.
 
-SK-01 Sketch creation starts from the Workbench `Sketch` tool, validates a selected XY/XZ/YZ built-in Origin plane, creates one durable empty Sketch and enters a runtime edit context in the same 3D Viewport. `Finish Sketch` ends that runtime context without deleting the authored Sketch.
+SK-01A places the Part `Sketch` launcher in the editor toolbar above the 3D Viewport. Creation validates a selected XY/XZ/YZ built-in Origin plane, creates one durable empty Sketch and enters a runtime edit context in the same 3D Viewport. Operations is contextual: support-pick may show Cancel guidance and active Sketch edit shows `Finish Sketch`. An existing Sketch can re-enter the same edit context by Tree double-click or `Edit Sketch` context action without authored mutation.
 
 Closing and reopening a Part destroys runtime Undo/Redo and Sketch edit context while preserving saved authored state, including SketchId/support/placement/visibility, and DocumentId on disk.
 
 <!-- section-id: internal.application-lifecycle.workbench -->
 ## Active document and Workbench lifecycle
 
-One ProjectSession may keep several DocumentSessions open. `CadWorkbench` owns one active DocumentId for the current editor context.
+One ProjectSession may keep several DocumentSessions open. With zero open Documents the Project remains in a neutral Workspace context; no inactive Part editor is implied.
 
-Changing the bottom tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. The other DocumentSessions remain open.
+Creating/opening a Part activates the Part Workbench. The architecture routes future editor activation by DocumentKind rather than treating Project Workspace as a Part Workbench. `CadWorkbench` owns one active DocumentId for the current Part editor context.
+
+Changing the bottom tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. The other DocumentSessions remain open. Closing the last open Document returns to the neutral Workspace without closing the Project.
 
 Camera and selection are kept independently per open DocumentId for the lifetime of the Workbench. They are not persisted across application restart.
 
@@ -88,6 +95,8 @@ Camera and selection are kept independently per open DocumentId for the lifetime
 ## Close, dirty state and restart
 
 Closing a dirty Part prompts for `Save`, `Discard` or `Cancel`.
+
+Workbench Tree/Viewer controllers hold non-owning runtime pointers to the active DocumentSession. SK-01A makes lifecycle ordering explicit: those bindings are detached before ProjectSession erases a DocumentSession. The same detach-before-destroy rule applies before the ProjectSession itself is destroyed.
 
 Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure keeps the Project open.
 
