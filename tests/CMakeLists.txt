@@ -448,6 +448,14 @@ add_test(
 )
 
 
+add_test(
+    NAME ws01.project_workspace_boundaries
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_project_workspace_boundaries.cmake
+)
+
+
 add_executable(wb01_viewer_selection_test
     viewer_selection_test.cpp
 )
