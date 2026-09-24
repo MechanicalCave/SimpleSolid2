@@ -177,7 +177,7 @@ int main(int argc, char* argv[]) {
         canvas,
         Qt::LeftButton,
         Qt::NoModifier,
-        QPoint{38, 45});
+        QPoint{30, 50});
     CHECK(viewport.cameraState()->eye.y <
           viewport.cameraState()->target.y);
 
