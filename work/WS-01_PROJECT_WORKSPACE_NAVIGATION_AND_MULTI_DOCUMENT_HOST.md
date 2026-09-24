@@ -1,6 +1,6 @@
 # WS-01 — Project Workspace Navigation & Multi-Document Host
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — IMPLEMENTED  
 **Owner acceptance:** 2026-09-24  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -182,3 +182,33 @@ Reason: WS-01 changes Project Workspace ownership, Document navigation, tab owne
 WS-01 completes only when Project-level navigation is independent from Part Workbench and exact-head Windows verification passes.
 
 Completion does not activate Assembly/Drawing implementation or SK-02.
+
+
+## 9. Completion record
+
+WS-01 implementation is complete and ready for the final exact-head Windows gate.
+
+Implemented state:
+
+- Project Workspace Shell owns the persistent Project toolbar, Workspace Dashboard, Project-level Document Tabs and runtime navigation;
+- navigation is explicit runtime state: Workspace or Document(DocumentId);
+- Workspace Dashboard remains reachable while multiple DocumentSessions stay open;
+- Project toolbar remains visible in Workspace and active Part contexts and exposes Workspace, New Part, Open, Refresh and Close Project;
+- Project-level tabs represent open DocumentSessions and route by stable DocumentId rather than tab index;
+- creating/opening another Part while a Part is active leaves existing sessions open and activates/focuses the requested tab;
+- opening an already open Part reuses its canonical DocumentSession/tab;
+- Workspace navigation detaches the Part Workbench without Save/Close/authored mutation and keeps all open tabs/sessions;
+- returning through a Document tab rebinds the corresponding open DocumentSession;
+- closing an inactive tab closes only that DocumentSession;
+- closing the active/last tab preserves detach-before-destroy ordering and returns to Workspace when no Documents remain;
+- tab labels reflect Part display name and dirty marker;
+- Part `CadWorkbench` no longer owns ProjectSession, Project discovery, Project tabs or cross-document navigation;
+- Part `CadWorkbench` receives only the active DocumentSession plus Workspace path context required for presentation;
+- Workbench camera runtime state remains keyed by DocumentId across Document/Workspace navigation and is reset at the Project boundary;
+- current DocumentKind routing supports Part only and does not guess Assembly/Drawing behavior;
+- a dedicated architecture boundary regression prevents ProjectSession/QTabBar/discovery ownership from leaking back into Part Workbench and prevents CAD-domain ownership from leaking into the Project Workspace Shell;
+- internal and PL/EN product documentation describe the as-built Workspace/Document navigation model;
+- the compiled CTest suite contains 36 tests;
+- implementation gate #226 passed docs/verify/build and 36/36 CTest, including native Workbench stress, SK-01/SK-01A regressions and WS-01 navigation/boundary coverage.
+
+The final completion condition is one exact-head Windows docs/verify/build/CTest gate on this completed governance state.
