@@ -40,6 +40,7 @@ public:
         application::DocumentSession* session,
         std::filesystem::path workspace_root);
     void deactivateDocument();
+    void resetRuntimeState();
     void forgetDocumentRuntimeState(
         const core::DocumentId& document_id);
 
