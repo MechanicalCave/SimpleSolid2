@@ -6,7 +6,7 @@
 <!-- section-id: product.parts.create -->
 ## Tworzenie nowego Parta
 
-Po otwarciu Projektu użyj `New Part…` w Workbench.
+Po otwarciu Projektu najpierw widzisz neutralny Workspace bez aktywnego edytora Part. Użyj tam `New Part…`, aby utworzyć Dokument i otworzyć jego Part Workbench.
 
 Dialog pokazuje strukturę katalogów bieżącego Workspace. Wybierz folder docelowy, wpisz nazwę pliku Parta i potwierdź utworzenie.
 
@@ -38,15 +38,15 @@ Pola `Number`, `Title`, `Description` i `Engineering revision` są trwałymi wł
 <!-- section-id: product.parts.workbench -->
 ## Otwieranie Partów i Workbench
 
-Użyj `Open…`, aby wybrać wykryty Dokument.
+Użyj `Open…` w neutralnym Workspace, aby wybrać wykryty Dokument. Samo otwarcie Projektu nie uruchamia Part Workbench; edytor pojawia się dopiero po utworzeniu lub otwarciu konkretnego Dokumentu.
 
 Dialog pokazuje typ Dokumentu, nazwę, lokalizację i status. Szerokości kolumn możesz zmieniać ręcznie przeciągając separatory nagłówka; domyślnie więcej miejsca otrzymuje lokalizacja niż nazwa. Obecny produkt dostarcza tylko Dokumenty Part, ale sam interfejs Open nie jest Part-specific.
 
 Niepoprawne pliki natywne i konflikty DocumentId pozostają widoczne, ale nie można ich otworzyć jako resolved Documents.
 
-Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs przełączają aktywny Part. Ponowne otwarcie Parta, który jest już otwarty, aktywuje istniejącą zakładkę/sesję zamiast tworzyć drugą mutowalną sesję.
+Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs przełączają aktywny Part. Ponowne otwarcie Parta, który jest już otwarty, aktywuje istniejącą zakładkę/sesję zamiast tworzyć drugą mutowalną sesję. Zamknięcie ostatniego Dokumentu wraca do neutralnego Workspace bez zamykania Projektu.
 
-Po lewej znajduje się Document Tree, pośrodku viewport 3D, a po prawej Properties i Operations. Status/diagnostyka znajduje się pod zakładkami.
+Po lewej znajduje się Document Tree, pośrodku viewport 3D z paskiem narzędzi nad nim, a po prawej Properties i kontekstowy panel Operations. Status/diagnostyka znajduje się pod zakładkami.
 
 <!-- section-id: product.parts.edit -->
 ## Edycja właściwości Dokumentu
@@ -91,13 +91,17 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie pustego Sketchu
 
-W Operations użyj `Sketch`, a następnie wskaż jedną z płaszczyzn `XY Plane`, `XZ Plane` albo `YZ Plane` w Origin. Płaszczyznę możesz wskazać w Document Tree albo — gdy jest widoczna — w viewporcie 3D.
+Na pasku narzędzi bezpośrednio nad viewportem 3D użyj `Sketch`, a następnie wskaż jedną z płaszczyzn `XY Plane`, `XZ Plane` albo `YZ Plane` w Origin. Płaszczyznę możesz wskazać w Document Tree albo — gdy jest widoczna — w viewporcie 3D.
+
+Operations nie jest listą narzędzi. Pokazuje sterowanie bieżącą operacją: podczas wyboru płaszczyzny Sketchu zawiera kontekst wyboru/Cancel, a po wejściu do edycji pokazuje `Finish Sketch`.
 
 Po poprawnym wyborze Part tworzy trwały pusty Sketch i pozostaje w tym samym Workbench oraz tym samym viewporcie 3D. Kamera automatycznie ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnej płaszczyzny.
 
 Automatyczne ustawienie widoku nie blokuje kamery. Podczas aktywnego Sketchu nadal możesz używać Pan, Zoom, Orbit i ViewCube. Nawigacja nie zmienia położenia Sketchu i sama nie dirty'uje Dokumentu.
 
 Użyj `Finish Sketch`, aby zakończyć bieżący tryb edycji. Sketch pozostaje authored obiektem Parta, jest widoczny w Document Tree i po `Save` przeżywa Close/Reopen z tym samym SketchId, supportem i placementem.
+
+Aby ponownie edytować istniejący Sketch, kliknij go dwukrotnie w Document Tree albo użyj jego menu kontekstowego `Edit Sketch`. Samo wejście do edycji nie zmienia authored state i nie wymaga Save.
 
 W SK-01 Sketch jest celowo pusty. Nie ma jeszcze Line/Arc/Circle, constraintów, wymiarów ani solvera. Support może być obecnie tylko jedną z trzech płaszczyzn Origin; płaszczyzny konstrukcyjne/Datum oraz płaskie ściany modelu będą osobnymi późniejszymi etapami.
 
@@ -129,7 +133,7 @@ Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Di
 
 Przy zamykaniu całego Projektu lub aplikacji, gdy jakikolwiek Part jest dirty, dostępne są `Save All`, `Discard` i `Cancel`.
 
-Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty.
+Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty. Zamknięcie ostatniego otwartego Parta pozostawia Projekt otwarty i pokazuje z powrotem neutralny Workspace.
 
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
