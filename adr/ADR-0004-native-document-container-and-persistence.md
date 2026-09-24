@@ -18,7 +18,7 @@ Foundation requires:
 - each CAD domain owns its durable semantic schema;
 - shared persistence owns format/version recognition, atomic file mechanics, common helpers and migration dispatch;
 - provider/runtime state does not leak into native files;
-- schemas are versioned and migratable;
+- schemas are explicitly versioned; future accepted formats must define their compatibility/migration policy deliberately;
 - one Document remains independently persistent with stable DocumentId independent of path.
 
 This ADR defines the native Document persistence boundary for Part now and for future Assembly/Drawing without prematurely defining those domains' semantic schemas.
@@ -123,20 +123,20 @@ No in-place mutation of the authoritative native file is required by this ADR.
 
 DocumentSession advances its save checkpoint only after successful durable publication.
 
-### 9. Migration policy
+### 9. Early-development compatibility reset
 
-Legacy Part schemas v1/v2 remain readable.
+Owner explicitly decided on 2026-09-24 that the current private `SS2PART` v1/v2 files do not require compatibility or migration.
 
-Opening a legacy Part does not rewrite it automatically.
+SS2 is still before meaningful user/project data exists. PERSIST-01 may therefore replace the current experimental format with the accepted native format as a clean break.
 
-A successful subsequent Save may migrate it to the accepted new native representation while preserving:
+After the new format is accepted:
 
-- DocumentId;
-- authored Document Properties;
-- built-in Origin visibility;
-- all other authored semantics supported by the source schema.
+- newly created Parts use only the new representation;
+- current private v1/v2 test files are not part of the supported product contract;
+- no production migration reader is required;
+- tests/fixtures are recreated for the new format rather than preserving obsolete compatibility.
 
-Migration failure leaves the previous durable file authoritative and the in-memory Document unsaved/dirty as appropriate.
+This reset applies only to the present pre-product format. Future accepted native schemas remain versioned, and compatibility/migration policy for later schema changes must be decided explicitly rather than assumed.
 
 ### 10. Fail-closed recognition and bounded parsing
 
@@ -166,7 +166,6 @@ Before implementation, PERSIST-01 must compare candidate physical representation
 - independent authored/derived entry integrity;
 - bounded safe parsing;
 - atomic whole-file publication;
-- migration from current v1/v2;
 - support for future nested Sketch/Assembly/Drawing semantic data;
 - implementation/dependency cost on the Windows-first toolchain.
 
@@ -180,7 +179,7 @@ Part remains the persistence owner for Part-hosted Sketches.
 
 Future Assembly/Drawing can reuse persistence mechanics without sharing one universal semantic schema.
 
-The current `SS2PART` text representation becomes a legacy format once a new physical representation is accepted and implemented.
+The current `SS2PART` text representation is an experimental bootstrap format and is replaced rather than supported as a legacy product format.
 
 ## Explicit non-goals
 
