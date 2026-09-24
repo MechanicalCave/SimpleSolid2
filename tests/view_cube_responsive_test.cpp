@@ -6,6 +6,7 @@
 #include <QTest>
 #include <QWidget>
 
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
@@ -152,11 +153,11 @@ int main(int argc, char* argv[]) {
     CHECK(viewport.cameraState().has_value());
     CHECK(viewport.cameraState()->eye.z >
           viewport.cameraState()->target.z);
-    CHECK(
+    CHECK(std::abs(
         (viewport.cameraState()->eye -
          viewport.cameraState()->target)
-                .squaredLength() ==
-        initial_distance);
+                .squaredLength() -
+        initial_distance) < 1.0e-9);
 
     const auto fit_before =
         viewport.fitCount();
