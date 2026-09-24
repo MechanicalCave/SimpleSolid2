@@ -115,6 +115,83 @@ DocumentSessionResult DocumentSession::execute(
         "Part transaction failed while executing built-in reference visibility command");
 }
 
+CreatePartSketchResult DocumentSession::execute(
+    const CreatePartSketchCommand& command) {
+    const auto support =
+        part::partSketchSupportForBuiltinPlane(
+            command.support);
+    if (!support) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Sketch creation requires XY, XZ or YZ built-in Origin plane support",
+            path_);
+        return CreatePartSketchResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto placement =
+        part::sketchPlacementForSupport(*support);
+    if (!placement) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Unable to derive a valid Sketch placement from the selected support",
+            path_);
+        return CreatePartSketchResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    std::optional<sketch::SketchId> id;
+    for (unsigned attempt = 0U;
+         attempt < 16U;
+         ++attempt) {
+        auto candidate =
+            sketch::SketchId::generate();
+        if (document_.findSketch(candidate) == nullptr) {
+            id = std::move(candidate);
+            break;
+        }
+    }
+
+    if (!id) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Unable to allocate a unique SketchId",
+            path_);
+        return CreatePartSketchResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    after.sketches.push_back(
+        part::PartSketch{
+            *id,
+            *support,
+            *placement,
+            true});
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while creating Sketch");
+    if (!committed.ok() || !committed.changed) {
+        return CreatePartSketchResult{
+            committed.changed,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return CreatePartSketchResult{
+        true,
+        *id,
+        DocumentSessionDiagnostic{}};
+}
+
 DocumentSessionResult DocumentSession::applyHistoricalState(
     const part::PartAuthoredState& expected_current,
     const part::PartAuthoredState& target) {
