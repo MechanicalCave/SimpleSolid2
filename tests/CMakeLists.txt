@@ -478,3 +478,17 @@ add_test(
 set_tests_properties(wb01a.viewcube_responsive PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+
+add_executable(wb01a_workspace_directory_test
+    workspace_directory_test.cpp
+)
+target_link_libraries(wb01a_workspace_directory_test
+    PRIVATE
+        simplesolid2_application
+)
+target_compile_features(wb01a_workspace_directory_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb01a.workspace_directory
+    COMMAND wb01a_workspace_directory_test
+)
