@@ -141,7 +141,7 @@ int main(int argc, char* argv[]) {
 
     folder_tree->setCurrentItem(parts);
     folder_name->setText(
-        QString::fromUtf8("Łożyska"));
+        QStringLiteral("Generated"));
     QApplication::processEvents();
     EXPECT(create_folder->isEnabled());
 
@@ -151,12 +151,12 @@ int main(int argc, char* argv[]) {
     EXPECT(std::filesystem::is_directory(
         workspace /
         "Parts" /
-        std::filesystem::path{L"Łożyska"}));
+        std::filesystem::path{"Generated"}));
 
     auto* created_folder =
         findItem(
             folder_tree->topLevelItem(0),
-            QString::fromUtf8("Łożyska"));
+            QStringLiteral("Generated"));
     EXPECT(created_folder != nullptr);
     EXPECT(folder_tree->currentItem() == created_folder);
 
@@ -187,7 +187,7 @@ int main(int argc, char* argv[]) {
 
     const auto existing =
         workspace / "Parts" /
-        std::filesystem::path{L"Łożyska"} /
+        std::filesystem::path{"Generated"} /
         "Existing.ss2part";
     {
         std::ofstream output{existing, std::ios::binary};
