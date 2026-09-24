@@ -343,6 +343,40 @@ int main(int argc, char* argv[]) {
     EXPECT(content->currentWidget() == workbench);
     EXPECT(toolbar->isVisible());
 
+    auto* title_edit =
+        window.findChild<QLineEdit*>(
+            QStringLiteral(
+                "documentTitleEdit"));
+    auto* apply_properties =
+        window.findChild<QPushButton*>(
+            QStringLiteral(
+                "applyDocumentPropertiesButton"));
+    auto* save_document =
+        window.findChild<QPushButton*>(
+            QStringLiteral(
+                "saveDocumentButton"));
+    EXPECT(title_edit != nullptr);
+    EXPECT(apply_properties != nullptr);
+    EXPECT(save_document != nullptr);
+
+    title_edit->setText(
+        QStringLiteral("Created Dirty"));
+    apply_properties->click();
+    QApplication::processEvents();
+    EXPECT(
+        tabs->tabText(
+            tabs->currentIndex())
+            .endsWith(
+                QStringLiteral(" *")));
+
+    save_document->click();
+    QApplication::processEvents();
+    EXPECT(
+        !tabs->tabText(
+            tabs->currentIndex())
+             .endsWith(
+                 QStringLiteral(" *")));
+
     // Project actions remain available while a Part Workbench is active.
     bool second_dialog_ok = false;
     QTimer::singleShot(
