@@ -95,10 +95,9 @@ PartDocumentTreeController::PartDocumentTreeController(
         &QAction::triggered,
         this,
         [this] {
-            if (context_sketch_id_ &&
-                sketch_edit_handler_) {
-                sketch_edit_handler_(
-                    *context_sketch_id_);
+            if (auto* item = tree_->currentItem();
+                item != nullptr) {
+                requestSketchEdit(*item);
             }
         });
 
@@ -425,15 +424,13 @@ void PartDocumentTreeController::showContextMenu(
 
     if (auto* item = tree_->itemAt(position);
         item != nullptr) {
-        if (const auto sketch_id =
-                sketchIdForItem(*item)) {
-            context_sketch_id_ = *sketch_id;
+        if (sketchIdForItem(*item)) {
+            tree_->setCurrentItem(item);
             QMenu menu{tree_};
             menu.addAction(edit_sketch_action_);
             menu.exec(
                 tree_->viewport()->mapToGlobal(
                     position));
-            context_sketch_id_.reset();
             return;
         }
     }
