@@ -2,9 +2,11 @@
 
 #include <QAbstractItemView>
 #include <QAction>
+#include <QEvent>
 #include <QFont>
 #include <QItemSelectionModel>
 #include <QMenu>
+#include <QMouseEvent>
 #include <QPoint>
 #include <QSignalBlocker>
 #include <QTreeWidget>
@@ -74,6 +76,7 @@ PartDocumentTreeController::PartDocumentTreeController(
         QAbstractItemView::ExtendedSelection);
     tree_->setContextMenuPolicy(
         Qt::CustomContextMenu);
+    tree_->viewport()->installEventFilter(this);
 
     show_action_ =
         new QAction(QStringLiteral("Show"), tree_);
@@ -132,16 +135,6 @@ PartDocumentTreeController::PartDocumentTreeController(
 
     QObject::connect(
         tree_,
-        &QTreeWidget::itemDoubleClicked,
-        this,
-        [this](QTreeWidgetItem* item, int) {
-            if (item != nullptr) {
-                requestSketchEdit(*item);
-            }
-        });
-
-    QObject::connect(
-        tree_,
         &QTreeWidget::customContextMenuRequested,
         this,
         [this](const QPoint& position) {
@@ -149,6 +142,36 @@ PartDocumentTreeController::PartDocumentTreeController(
         });
 
     updateVisibilityActions();
+}
+
+bool PartDocumentTreeController::eventFilter(
+    QObject* watched,
+    QEvent* event) {
+    if (watched == tree_->viewport() &&
+        event != nullptr &&
+        event->type() ==
+            QEvent::MouseButtonDblClick) {
+        auto* mouse_event =
+            static_cast<QMouseEvent*>(event);
+
+        if (mouse_event->button() ==
+            Qt::LeftButton) {
+            if (auto* item =
+                    tree_->itemAt(
+                        mouse_event->position()
+                            .toPoint());
+                item != nullptr &&
+                sketchIdForItem(*item)) {
+                tree_->setCurrentItem(item);
+                requestSketchEdit(*item);
+                return true;
+            }
+        }
+    }
+
+    return QObject::eventFilter(
+        watched,
+        event);
 }
 
 void PartDocumentTreeController::setDocumentSession(
