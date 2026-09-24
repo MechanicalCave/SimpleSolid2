@@ -98,6 +98,8 @@ ProjectHubWindow::ProjectHubWindow(
     resize(1280, 800);
 
     pages_ = new QStackedWidget(this);
+    pages_->setObjectName(
+        QStringLiteral("applicationPages"));
     setCentralWidget(pages_);
 
     buildHubPage();
@@ -108,6 +110,8 @@ ProjectHubWindow::ProjectHubWindow(
 
 void ProjectHubWindow::buildHubPage() {
     hub_page_ = new QWidget(pages_);
+    hub_page_->setObjectName(
+        QStringLiteral("projectHubPage"));
     auto* root = new QVBoxLayout(hub_page_);
 
     auto* title = new QLabel(QStringLiteral("SimpleSolid 2.0"), hub_page_);
@@ -205,6 +209,8 @@ void ProjectHubWindow::buildHubPage() {
 
 void ProjectHubWindow::buildWorkspacePage() {
     workspace_page_ = new QWidget(pages_);
+    workspace_page_->setObjectName(
+        QStringLiteral("workspacePage"));
     auto* root = new QVBoxLayout(workspace_page_);
 
     auto* title = new QLabel(QStringLiteral("Workspace"), workspace_page_);
