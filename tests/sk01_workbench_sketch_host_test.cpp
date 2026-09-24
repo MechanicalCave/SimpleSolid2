@@ -1,5 +1,6 @@
 #include "cad_workbench.hpp"
 
+#include <simplesolid2/application/project_session.hpp>
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
 #include <QAction>
