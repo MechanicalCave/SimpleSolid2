@@ -22,7 +22,7 @@ target_include_directories(simplesolid2_miniz
 )
 
 target_compile_definitions(simplesolid2_miniz
-    PRIVATE
+    PUBLIC
         MINIZ_NO_TIME
         MINIZ_NO_ZLIB_COMPATIBLE_NAMES
 )
