@@ -229,11 +229,6 @@ void CadWorkbench::buildUi() {
             new ViewCubeWidget(
                 viewport_,
                 editor_container);
-        editor_layout->addWidget(
-            view_cube_,
-            0,
-            0,
-            Qt::AlignTop | Qt::AlignRight);
     } else {
         if (viewport_surface.widget != nullptr) {
             viewport_surface.widget->deleteLater();
