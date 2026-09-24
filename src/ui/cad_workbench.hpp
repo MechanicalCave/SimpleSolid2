@@ -1,6 +1,6 @@
 #pragma once
 
-#include <simplesolid2/application/project_session.hpp>
+#include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/sketch/sketch_id.hpp>
 #include <simplesolid2/viewer/camera_state.hpp>
 
@@ -8,6 +8,7 @@
 
 #include <QWidget>
 
+#include <filesystem>
 #include <functional>
 #include <optional>
 #include <string>
@@ -35,20 +36,20 @@ public:
         ViewportFactory viewport_factory,
         QWidget* parent = nullptr);
 
-    void setProjectSession(
-        application::ProjectSession* session);
-    void clearProjectSession();
-
-    [[nodiscard]] std::optional<core::DocumentId>
-    activeDocumentId() const {
-        return active_document_id_;
-    }
-
-    [[nodiscard]] bool activateOpenDocument(
-        const core::DocumentId& document_id);
+    [[nodiscard]] bool activateDocument(
+        application::DocumentSession* session,
+        std::filesystem::path workspace_root);
     void deactivateDocument();
     void forgetDocumentRuntimeState(
         const core::DocumentId& document_id);
+
+    [[nodiscard]] std::optional<core::DocumentId>
+    activeDocumentId() const {
+        if (document_session_ == nullptr) {
+            return std::nullopt;
+        }
+        return document_session_->documentId();
+    }
 
     using CloseDocumentHandler =
         std::function<void(
@@ -98,16 +99,19 @@ private:
     void notifyDocumentStateChanged();
 
     [[nodiscard]] application::DocumentSession*
-    activeDocumentSession() noexcept;
+    activeDocumentSession() noexcept {
+        return document_session_;
+    }
     [[nodiscard]] const application::DocumentSession*
-    activeDocumentSession() const noexcept;
+    activeDocumentSession() const noexcept {
+        return document_session_;
+    }
 
     void showFailure(
         const application::DocumentSessionDiagnostic& diagnostic);
 
-    application::ProjectSession* session_{};
-    std::optional<core::DocumentId>
-        active_document_id_;
+    application::DocumentSession* document_session_{};
+    std::filesystem::path workspace_root_;
     ViewportFactory viewport_factory_;
     viewer::IDocumentViewport* viewport_{};
     std::unordered_map<
