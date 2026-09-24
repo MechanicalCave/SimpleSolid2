@@ -77,7 +77,9 @@ CadWorkbench::CadWorkbench(
     : QWidget{parent},
       viewport_factory_{std::move(viewport_factory)} {
     buildUi();
-    clearProjectSession();
+    deactivateDocument();
+    status_->setText(
+        QStringLiteral("No Part is active."));
 }
 
 void CadWorkbench::buildUi() {
@@ -430,104 +432,62 @@ void CadWorkbench::buildUi() {
 
 }
 
-void CadWorkbench::setProjectSession(
-    application::ProjectSession* session) {
-    if (session_ == session) {
+bool CadWorkbench::activateDocument(
+    application::DocumentSession* session,
+    std::filesystem::path workspace_root) {
+    if (session == nullptr) {
         deactivateDocument();
-        return;
-    }
-
-    deactivateDocument();
-    session_ = session;
-    document_view_states_.clear();
-
-    status_->setText(
-        session_ != nullptr
-            ? QStringLiteral(
-                  "Project context ready. Select an open Part Document.")
-            : QStringLiteral("No Project is open."));
-    syncActionState();
-}
-
-void CadWorkbench::clearProjectSession() {
-    deactivateDocument();
-    session_ = nullptr;
-    document_view_states_.clear();
-    status_->setText(
-        QStringLiteral("No Project is open."));
-    syncActionState();
-}
-
-bool CadWorkbench::activateOpenDocument(
-    const core::DocumentId& document_id) {
-    if (session_ == nullptr) {
         return false;
     }
 
-    auto* document_session =
-        session_->documentSession(document_id);
-    if (document_session == nullptr) {
-        status_->setText(
-            QStringLiteral(
-                "Part DocumentSession is not open in the active Project."));
-        return false;
-    }
-
-    if (active_document_id_ &&
-        *active_document_id_ == document_id) {
+    if (document_session_ == session) {
+        workspace_root_ = std::move(workspace_root);
         refreshActiveContext();
+        status_->setText(
+            QStringLiteral("Part Document activated."));
         return true;
     }
 
     captureActiveViewState();
     clearSketchRuntimeContext();
-    viewport_controller_->clear();
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->clear();
+    }
 
-    active_document_id_ = document_id;
+    document_session_ = session;
+    workspace_root_ = std::move(workspace_root);
+
     restoreActiveViewState();
     refreshActiveContext();
-
     status_->setText(
         QStringLiteral("Part Document activated."));
     return true;
 }
 
 void CadWorkbench::deactivateDocument() {
-    if (active_document_id_) {
+    if (document_session_ != nullptr) {
         captureActiveViewState();
     }
 
     clearSketchRuntimeContext();
-    active_document_id_.reset();
-
-    if (viewport_controller_ != nullptr) {
-        viewport_controller_->clear();
-    }
+    document_session_ = nullptr;
+    workspace_root_.clear();
 
     clearActiveContext();
+    status_->setText(
+        QStringLiteral("No Part Document is active."));
 }
 
 void CadWorkbench::forgetDocumentRuntimeState(
     const core::DocumentId& document_id) {
-    if (active_document_id_ &&
-        *active_document_id_ == document_id) {
+    if (document_session_ != nullptr &&
+        document_session_->documentId() ==
+            document_id) {
         deactivateDocument();
     }
 
     document_view_states_.erase(
         std::string{document_id.value()});
-}
-
-application::DocumentSession*
-CadWorkbench::activeDocumentSession() noexcept {
-    if (session_ == nullptr || !active_document_id_) return nullptr;
-    return session_->documentSession(*active_document_id_);
-}
-
-const application::DocumentSession*
-CadWorkbench::activeDocumentSession() const noexcept {
-    if (session_ == nullptr || !active_document_id_) return nullptr;
-    return session_->documentSession(*active_document_id_);
 }
 
 void CadWorkbench::applyProperties() {
@@ -693,8 +653,7 @@ void CadWorkbench::enterSketchEdit(
     const sketch::SketchId& sketch_id) {
     auto* document_session =
         activeDocumentSession();
-    if (document_session == nullptr ||
-        !active_document_id_) {
+    if (document_session == nullptr) {
         clearSketchRuntimeContext();
         return;
     }
@@ -709,7 +668,7 @@ void CadWorkbench::enterSketchEdit(
 
     active_sketch_id_ = sketch_id;
     sketch_edit_document_id_ =
-        *active_document_id_;
+        document_session->documentId();
 
     viewport_controller_->setSketchEditPlacement(
         sketch->placement);
@@ -772,9 +731,9 @@ void CadWorkbench::reconcileSketchRuntimeContext() {
         return;
     }
 
-    if (!active_document_id_ ||
+    if (document_session_ == nullptr ||
         !sketch_edit_document_id_ ||
-        *active_document_id_ !=
+        document_session_->documentId() !=
             *sketch_edit_document_id_) {
         clearSketchRuntimeContext();
         return;
@@ -856,13 +815,13 @@ void CadWorkbench::save() {
 }
 
 void CadWorkbench::closeActiveDocument() {
-    if (!active_document_id_ ||
+    if (document_session_ == nullptr ||
         !close_document_handler_) {
         return;
     }
 
     close_document_handler_(
-        *active_document_id_);
+        document_session_->documentId());
 }
 
 void CadWorkbench::refreshActiveContext() {
@@ -885,7 +844,7 @@ void CadWorkbench::refreshActiveContext() {
     std::error_code ec;
     const auto relative = std::filesystem::relative(
         document_session->path(),
-        session_->workspaceRoot(),
+        workspace_root_,
         ec);
 
     active_path_->setText(
@@ -929,7 +888,7 @@ void CadWorkbench::clearActiveContext() {
 
 void CadWorkbench::captureActiveViewState() {
     if (viewport_ == nullptr ||
-        !active_document_id_.has_value()) {
+        document_session_ == nullptr) {
         return;
     }
 
@@ -937,18 +896,20 @@ void CadWorkbench::captureActiveViewState() {
     if (!state) return;
 
     document_view_states_.insert_or_assign(
-        std::string{active_document_id_->value()},
+        std::string{
+            document_session_->documentId().value()},
         *state);
 }
 
 void CadWorkbench::restoreActiveViewState() {
     if (viewport_ == nullptr ||
-        !active_document_id_.has_value()) {
+        document_session_ == nullptr) {
         return;
     }
 
     const auto key =
-        std::string{active_document_id_->value()};
+        std::string{
+            document_session_->documentId().value()};
     const auto found =
         document_view_states_.find(key);
 
@@ -1059,9 +1020,9 @@ void CadWorkbench::syncActionState() {
         active &&
         active_sketch_id_.has_value() &&
         sketch_edit_document_id_.has_value() &&
-        active_document_id_.has_value() &&
+        document_session_ != nullptr &&
         *sketch_edit_document_id_ ==
-            *active_document_id_;
+            document_session_->documentId();
 
     sketch_button_->setText(
         QStringLiteral("Sketch"));
@@ -1083,10 +1044,10 @@ void CadWorkbench::syncActionState() {
 }
 
 void CadWorkbench::notifyDocumentStateChanged() {
-    if (active_document_id_ &&
+    if (document_session_ != nullptr &&
         document_state_changed_handler_) {
         document_state_changed_handler_(
-            *active_document_id_);
+            document_session_->documentId());
     }
 }
 
