@@ -67,24 +67,15 @@ OpenDocumentDialog::OpenDocumentDialog(
         QAbstractItemView::SingleSelection);
     documents_->setRootIsDecorated(false);
     documents_->setAlternatingRowColors(true);
-    documents_->header()
-        ->setStretchLastSection(false);
-    documents_->header()
-        ->setSectionResizeMode(
-            0,
-            QHeaderView::ResizeToContents);
-    documents_->header()
-        ->setSectionResizeMode(
-            1,
-            QHeaderView::Stretch);
-    documents_->header()
-        ->setSectionResizeMode(
-            2,
-            QHeaderView::Stretch);
-    documents_->header()
-        ->setSectionResizeMode(
-            3,
-            QHeaderView::ResizeToContents);
+    auto* header = documents_->header();
+    header->setStretchLastSection(false);
+    header->setSectionsMovable(false);
+    header->setSectionResizeMode(
+        QHeaderView::Interactive);
+    header->resizeSection(0, 70);
+    header->resizeSection(1, 150);
+    header->resizeSection(2, 360);
+    header->resizeSection(3, 140);
     root->addWidget(
         documents_,
         1);
