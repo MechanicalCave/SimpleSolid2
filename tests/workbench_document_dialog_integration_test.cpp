@@ -10,6 +10,7 @@
 #include <QDialog>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QMetaObject>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTabBar>
@@ -426,12 +427,33 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     EXPECT(tabs->count() == 3);
 
+    // Closing an inactive Project-level tab closes only that
+    // DocumentSession and leaves the active Workbench context intact.
+    const int active_before_close =
+        tabs->currentIndex();
+    EXPECT(active_before_close >= 0);
+    const int inactive_index =
+        active_before_close == 0
+            ? 1
+            : 0;
+    EXPECT(
+        QMetaObject::invokeMethod(
+            tabs,
+            "tabCloseRequested",
+            Qt::DirectConnection,
+            Q_ARG(int, inactive_index)));
+    QApplication::processEvents();
+
+    EXPECT(tabs->count() == 2);
+    EXPECT(content->currentWidget() == workbench);
+    EXPECT(tabs->currentIndex() >= 0);
+
     // Workspace is navigation, not a close operation.
     workspace_button->click();
     QApplication::processEvents();
 
     EXPECT(content->currentWidget() == dashboard);
-    EXPECT(tabs->count() == 3);
+    EXPECT(tabs->count() == 2);
     EXPECT(tabs->currentIndex() == -1);
     EXPECT(new_part->isVisible());
     EXPECT(open_document->isVisible());
@@ -441,7 +463,7 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
 
     EXPECT(content->currentWidget() == workbench);
-    EXPECT(tabs->count() == 3);
+    EXPECT(tabs->count() == 2);
 
     return EXIT_SUCCESS;
 }
