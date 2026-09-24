@@ -67,6 +67,11 @@ private:
     QLabel* workspace_name_{};
     QLabel* workspace_id_{};
     QLabel* workspace_path_{};
+    QStackedWidget* workspace_content_{};
+    QWidget* workspace_empty_page_{};
+    QPushButton* workspace_new_part_button_{};
+    QPushButton* workspace_open_document_button_{};
+    QPushButton* workspace_refresh_button_{};
     CadWorkbench* cad_workbench_{};
 };
 
