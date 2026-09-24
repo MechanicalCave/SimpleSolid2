@@ -2,7 +2,6 @@
 
 #include <filesystem>
 #include <string>
-#include <string_view>
 #include <vector>
 
 namespace simplesolid2::application {
@@ -53,7 +52,7 @@ public:
     [[nodiscard]] WorkspaceDirectoryResult createDirectory(
         const std::filesystem::path& workspace_root,
         const std::filesystem::path& parent_relative_path,
-        std::string_view folder_name) const;
+        const std::filesystem::path& folder_name) const;
 };
 
 } // namespace simplesolid2::application
