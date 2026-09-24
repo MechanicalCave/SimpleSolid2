@@ -201,7 +201,7 @@ The initial container contract requires:
 - unknown mandatory structure fails closed;
 - unknown optional `derived/*` entries may be ignored.
 
-The common manifest v1 carries:
+The common manifest v1 carries exactly:
 
 ```text
 format
@@ -209,12 +209,11 @@ container_version
 document_kind
 document_id
 domain_schema_version
-authored_entry
 ```
 
-with `authored_entry` equal to `authored/document.json` in container v1.
+`authored/document.json` is fixed by container v1 and is therefore not repeated as an indirection field in the manifest.
 
-The exact lexical serialization contract of `DocumentId` is not expanded by this ADR beyond the accepted Core identity contract. PERSIST-01 must not create a second identity format in persistence.
+The exact lexical serialization contract of `DocumentId` is not expanded by this ADR beyond the accepted Core identity contract. `document_id` stores the canonical serialization supplied by Core and is parsed through Core on load. Persistence must not create a second identity format or freeze the current UUIDv4 spelling as an independent persistence rule.
 
 ### 13. Extension/kind coherence
 
@@ -228,7 +227,12 @@ ZIP and JSON libraries, if used, are persistence-format implementation dependenc
 
 They must not become CAD-domain semantic APIs, leak into Part/Assembly/Drawing public model contracts, or introduce Qt/OCCT/provider types into durable semantics.
 
-The concrete maintained ZIP/JSON implementation dependency is selected within PERSIST-01 before production container code is committed and documented in the build/toolchain.
+The concrete implementation dependencies accepted by Owner on 2026-09-24 are:
+
+- `miniz` 3.1.2 for ZIP read/write;
+- `nlohmann/json` 3.12.0 for JSON parsing/serialization.
+
+Both are vendored and pinned in the repository so normal configure/build/test does not fetch code from the network. Their types remain private implementation details and do not cross CAD-domain public semantic APIs.
 
 ## Consequences
 
