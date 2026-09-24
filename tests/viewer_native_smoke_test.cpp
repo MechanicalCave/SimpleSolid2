@@ -54,6 +54,15 @@ int main(int argc, char* argv[]) {
             z_axis.extent = 45.0;
             scene.references.push_back(z_axis);
 
+            viewer::ReferencePresentation xy_plane;
+            xy_plane.token = {5U};
+            xy_plane.kind =
+                viewer::ReferencePresentationKind::plane;
+            xy_plane.u_axis = {1.0, 0.0, 0.0};
+            xy_plane.v_axis = {0.0, 1.0, 0.0};
+            xy_plane.extent = 35.0;
+            scene.references.push_back(xy_plane);
+
             bool ok = scene.valid();
             ok = ok && widget.setReferenceScene(scene);
             ok = ok && widget.setStandardView(
