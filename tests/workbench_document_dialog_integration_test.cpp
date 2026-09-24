@@ -179,7 +179,7 @@ bool completeOpenDialog(
     return true;
 }
 
-void seedProject(
+bool seedProject(
     const std::filesystem::path& workspace,
     const std::filesystem::path& catalog) {
     std::filesystem::create_directories(
@@ -187,39 +187,46 @@ void seedProject(
 
     application::
         ProjectWorkspaceMetadataService metadata;
-    EXPECT(
-        metadata.initialize(
+    if (!metadata.initialize(
             workspace,
             "Workspace Navigation")
-            .ok());
+            .ok()) {
+        return false;
+    }
 
     auto opened =
         application::ProjectSession::open(
             workspace);
-    EXPECT(opened.ok());
+    if (!opened.ok()) {
+        return false;
+    }
 
     auto existing =
         opened.session->createPart(
             "Existing.ss2part");
-    EXPECT(existing.ok());
+    if (!existing.ok()) {
+        return false;
+    }
 
     core::DocumentProperties properties;
     properties.title = "Existing";
-    EXPECT(
-        existing.session
-            ->execute(
-                application::
-                    SetDocumentPropertiesCommand{
-                        properties})
-            .changed);
-    EXPECT(existing.session->save().ok());
+    if (!existing.session
+             ->execute(
+                 application::
+                     SetDocumentPropertiesCommand{
+                         properties})
+             .changed) {
+        return false;
+    }
+    if (!existing.session->save().ok()) {
+        return false;
+    }
 
     application::RecentProjectStore recent{
         catalog};
-    EXPECT(
-        recent.recordOpened(
-            *opened.session)
-            .ok());
+    return recent.recordOpened(
+        *opened.session)
+        .ok();
 }
 
 } // namespace
@@ -235,7 +242,7 @@ int main(int argc, char* argv[]) {
         "state" /
         "recent-projects-v1.txt";
 
-    seedProject(workspace, catalog);
+    EXPECT(seedProject(workspace, catalog));
 
     ui::ProjectHubWindow window{catalog};
     window.show();
