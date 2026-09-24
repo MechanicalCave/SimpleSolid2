@@ -478,6 +478,14 @@ void CadWorkbench::deactivateDocument() {
         QStringLiteral("No Part Document is active."));
 }
 
+void CadWorkbench::resetRuntimeState() {
+    deactivateDocument();
+    document_view_states_.clear();
+    status_->setText(
+        QStringLiteral(
+            "No Part Document is active."));
+}
+
 void CadWorkbench::forgetDocumentRuntimeState(
     const core::DocumentId& document_id) {
     if (document_session_ != nullptr &&
