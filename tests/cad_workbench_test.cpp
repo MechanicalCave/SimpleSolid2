@@ -208,13 +208,6 @@ int main(int argc, char* argv[]) {
     workbench.setProjectSession(&*opened.session);
     CHECK(viewport != nullptr);
 
-    auto* open_document =
-        workbench.findChild<QPushButton*>(
-            QStringLiteral("openDocumentButton"));
-    CHECK(open_document != nullptr);
-    CHECK(open_document->text() ==
-          QStringLiteral("Open…"));
-
     auto* tabs =
         workbench.findChild<QTabBar*>(
             QStringLiteral("documentTabs"));
@@ -242,6 +235,9 @@ int main(int argc, char* argv[]) {
     auto* save =
         workbench.findChild<QPushButton*>(
             QStringLiteral("saveDocumentButton"));
+    auto* close_document =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("closeDocumentButton"));
     auto* show_references =
         workbench.findChild<QAction*>(
             QStringLiteral("showBuiltinReferencesAction"));
@@ -277,6 +273,7 @@ int main(int argc, char* argv[]) {
     CHECK(undo != nullptr);
     CHECK(redo != nullptr);
     CHECK(save != nullptr);
+    CHECK(close_document != nullptr);
     CHECK(show_references != nullptr);
     CHECK(hide_references != nullptr);
     CHECK(projection_button != nullptr);
@@ -287,8 +284,8 @@ int main(int argc, char* argv[]) {
     CHECK(top_view_action != nullptr);
 
     CHECK(tabs->count() == 2);
-    CHECK(operations->text().contains(
-        QStringLiteral("Sketch creates")));
+    CHECK(operations->text() ==
+          QStringLiteral("No active tool."));
 
     CHECK(workbench.activateDocument(first_id));
     CHECK(workbench.activeDocumentId().has_value());
@@ -570,6 +567,19 @@ int main(int argc, char* argv[]) {
     CHECK(*workbench.activeDocumentId() == first_id);
     CHECK(tabs->count() == 2);
     CHECK(title->text() == QStringLiteral("Drive Shaft Rev"));
+
+    // SK-01A P0 regression: closing the active Part must detach
+    // Workbench/Viewer non-owning pointers before ProjectSession
+    // erases the owning DocumentSession.
+    close_document->click();
+    QApplication::processEvents();
+    CHECK(
+        opened.session->documentSession(first_id) ==
+        nullptr);
+    CHECK(workbench.activeDocumentId().has_value());
+    CHECK(*workbench.activeDocumentId() == second_id);
+    CHECK(tabs->count() == 1);
+    CHECK(title->text() == QStringLiteral("Housing"));
 
     workbench.clearProjectSession();
     CHECK(!workbench.activeDocumentId().has_value());

@@ -1,6 +1,6 @@
 version: 1
 status: completed
-active_work: "work/SK-01_PART_SKETCH_HOST_LIFECYCLE.md"
+active_work: "work/SK-01A_WORKBENCH_HOST_CORRECTIONS_AND_CLOSE_SAFETY.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
@@ -8,20 +8,22 @@ accepted_adrs:
   - "adr/ADR-0003-cad-workbench-viewport-and-sketch-integration.md"
   - "adr/ADR-0004-native-document-container-and-persistence.md"
   - "adr/ADR-0005-part-sketch-host-identity-and-edit-context.md"
+  - "adr/ADR-0006-workspace-document-workbench-and-tool-surfaces.md"
 next:
-  - no implementation work is active after SK-01
-  - Owner must accept the next explicit Sketch work contract before further product implementation
-  - suggested next slice is SK-02 for the minimal shared 2D authored model and first Line entity with stable entity identity
+  - no implementation work is active after SK-01A
+  - Owner must accept the next explicit work contract before further product implementation
+  - suggested next Sketch slice remains SK-02 for the minimal shared 2D authored model and first Line entity with stable entity identity
   - Datum/Construction Plane and planar model-face Sketch support remain later explicit contracts
 notes:
-  - SK-01 accepted and implemented on 2026-09-24.
-  - Part now owns durable empty Sketch records with SketchId, Origin-plane support, SketchPlacement and visibility.
-  - supported SK-01 creation supports are XY/XZ/YZ built-in Origin planes only.
-  - Sketch creation uses semantic Command -> Transaction -> PartDocument and is one Undo/Redo entry.
-  - Part domain schema v2 persists hosted Sketch state; schema v1 remains readable and upgrades on later successful Save.
-  - Sketch editing stays in the same 3D Document Viewport; entry aligns camera/grid but normal navigation remains free.
-  - active Sketch edit context, camera and grid runtime state are not persisted.
-  - the compiled CTest suite contains 35 tests including SK-01 host and Workbench lifecycle regressions.
-  - no 2D entities, constraints, solver, Datum/Construction Plane, planar-face support, topology naming, Body/Feature/Extrude, Assembly or Drawing implementation is active.
+  - SK-01A accepted and implemented on 2026-09-24 from manual SK-01 validation findings.
+  - active Document and Project close now obey detach-before-destroy ordering for non-owning Workbench/Tree/Viewer session bindings.
+  - the manual active-Part close abort is covered by automated regressions.
+  - zero-document Project Workspace is neutral and no longer presents an inactive Part editor.
+  - document launch belongs to Workspace; Part editing tools belong to the active Part Workbench.
+  - Sketch launcher is above the 3D editor; Operations is contextual to active tool/edit state.
+  - existing Sketch edit entry works from Tree double-click and Edit Sketch context menu using stable SketchId routing.
+  - re-entering Sketch edit is runtime-only and does not dirty authored state.
+  - implementation gate #183 passed docs/verify/build and 35/35 CTest including native Workbench stress.
+  - no SK-02 2D geometry/constraints/solver, Datum/face support, Body/Feature, Assembly or Drawing implementation is active.
   - documentation impact is satisfied and Product Browser is current.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.

@@ -6,7 +6,7 @@
 <!-- section-id: internal.cad-workbench-viewer.shell -->
 ## Shared Workbench shell
 
-WB-01 implements one reusable `CadWorkbenchShell` containing Document Tree, Editor Surface, Properties, Operations, bottom Document Tabs and Status/Diagnostics.
+WB-01 implements one reusable `CadWorkbenchShell` containing Document Tree, an editor tool-launch strip above the Editor Surface, Properties, contextual Operations, bottom Document Tabs and Status/Diagnostics.
 
 The shell owns layout only. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
 
@@ -20,6 +20,8 @@ ProjectSession may keep several canonical DocumentSessions open.
 `CadWorkbench` owns one active DocumentId. Bottom tab changes switch the Tree, Properties, Viewer scene, selection and camera context while leaving other DocumentSessions open.
 
 Camera state is stored in a Workbench runtime map keyed by DocumentId. Closing a tab drops that runtime view state.
+
+SK-01A requires detach-before-destroy ordering: Tree/Viewport controllers are disconnected from the active DocumentSession before ProjectSession erases it. This prevents runtime cleanup from dereferencing a destroyed session during Document or Project close.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
 ## Origin and reference scene
@@ -73,13 +75,17 @@ Boundary tests reject OCCT/provider tokens from domain/application APIs and Work
 
 SK-01 adds the first durable Part-hosted Sketch lifecycle without adding 2D drawing entities.
 
-The Operations surface provides `Sketch`. While the tool is active, the user selects one semantic built-in Origin plane: XY, XZ or YZ. Origin axes/point are rejected. The selected Tree item or Viewer token is only command input; the durable Sketch support is the semantic built-in reference role.
+The editor toolbar above the 3D Viewport provides the Part `Sketch` launcher. Operations is reserved for the active tool/edit context rather than acting as a permanent tool catalog. During support pick it presents contextual guidance/Cancel; during Sketch edit it presents `Finish Sketch`.
+
+While the Sketch tool is active, the user selects one semantic built-in Origin plane: XY, XZ or YZ. Origin axes/point are rejected. The selected Tree item or Viewer token is only command input; the durable Sketch support is the semantic built-in reference role.
 
 Creation executes through `CreatePartSketchCommand`, DocumentSession validation/history and a Part transaction. One successful creation adds one authored Sketch with stable SketchId, Origin-plane support, explicit SketchPlacement and persistent visibility. Undo removes that Sketch and Redo restores the same SketchId/state.
 
 The active Sketch editor remains the existing Document Viewport. On entry, the runtime grid changes to the Sketch U/V frame, the camera aligns normal to the support plane and Fit is requested. This is only an initial view: normal Pan, Zoom, Orbit and ViewCube navigation remain available immediately afterward and do not mutate SketchPlacement, DocumentRevision or dirty state.
 
-`Finish Sketch` exits only the runtime editor context. The authored Sketch remains in the Part and in the normal Document Tree. Switching/closing Documents clears the runtime edit context safely.
+`Finish Sketch` exits only the runtime editor context. The authored Sketch remains in the Part and in the normal Document Tree. An existing Sketch re-enters edit by Tree double-click or `Edit Sketch` context action; the Tree carries only transient SketchId metadata and the Workbench revalidates that stable ID against the active Part before editing. Re-entering edit is runtime-only and does not dirty the Part.
+
+Switching/closing Documents clears the runtime edit context safely.
 
 SK-01 supports only empty Sketches on XY/XZ/YZ Origin planes. Datum/Construction Plane support, planar model-face support, topology naming, 2D entities, constraints and solver behavior remain outside this implementation.
 

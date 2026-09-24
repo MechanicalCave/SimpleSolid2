@@ -183,21 +183,11 @@ int main(int argc, char* argv[]) {
     workbench.setProjectSession(
         &*opened.session);
 
-    auto* new_part =
-        workbench.findChild<QPushButton*>(
-            QStringLiteral("newPartButton"));
-    auto* open_document =
-        workbench.findChild<QPushButton*>(
-            QStringLiteral("openDocumentButton"));
     auto* tabs =
         workbench.findChild<QTabBar*>(
             QStringLiteral("documentTabs"));
 
-    EXPECT(new_part != nullptr);
-    EXPECT(open_document != nullptr);
     EXPECT(tabs != nullptr);
-    EXPECT(open_document->text() ==
-           QStringLiteral("Open…"));
 
     bool new_dialog_ok = false;
     QTimer::singleShot(
@@ -208,7 +198,7 @@ int main(int argc, char* argv[]) {
                 completeNewPartDialog();
         });
 
-    new_part->click();
+    EXPECT(workbench.createPartInteractive(&workbench));
 
     EXPECT(new_dialog_ok);
     EXPECT(
@@ -231,7 +221,7 @@ int main(int argc, char* argv[]) {
                     QStringLiteral("Existing"));
         });
 
-    open_document->click();
+    EXPECT(workbench.openDocumentInteractive(&workbench));
 
     EXPECT(open_dialog_ok);
     EXPECT(
@@ -253,7 +243,7 @@ int main(int argc, char* argv[]) {
                     QStringLiteral("Existing"));
         });
 
-    open_document->click();
+    EXPECT(workbench.openDocumentInteractive(&workbench));
 
     EXPECT(reuse_dialog_ok);
     EXPECT(

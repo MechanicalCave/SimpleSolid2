@@ -41,6 +41,13 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     editor_host->setObjectName(QStringLiteral("editorSurfaceHost"));
     editor_host_layout_ = new QVBoxLayout(editor_host);
     editor_host_layout_->setContentsMargins(0, 0, 0, 0);
+    editor_host_layout_->setSpacing(4);
+
+    editor_tools_layout_ = new QHBoxLayout;
+    editor_tools_layout_->setContentsMargins(0, 0, 0, 0);
+    editor_tools_layout_->addStretch(1);
+    editor_host_layout_->addLayout(editor_tools_layout_);
+
     splitter->addWidget(editor_host);
 
     auto* right_panel = new QWidget(splitter);
@@ -83,6 +90,10 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
 
 QHBoxLayout& CadWorkbenchShell::documentActionsLayout() noexcept {
     return *document_actions_;
+}
+
+QHBoxLayout& CadWorkbenchShell::editorToolsLayout() noexcept {
+    return *editor_tools_layout_;
 }
 
 QTreeWidget& CadWorkbenchShell::documentTree() noexcept {

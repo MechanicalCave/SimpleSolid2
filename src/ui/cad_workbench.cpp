@@ -188,20 +188,6 @@ void CadWorkbench::buildUi() {
 
     auto& lifecycle_actions = shell_->documentActionsLayout();
 
-    new_part_button_ =
-        new QPushButton(QStringLiteral("New Part…"), shell_);
-    new_part_button_->setObjectName(QStringLiteral("newPartButton"));
-
-    open_document_button_ =
-        new QPushButton(QStringLiteral("Open…"), shell_);
-    open_document_button_->setObjectName(
-        QStringLiteral("openDocumentButton"));
-
-    refresh_button_ =
-        new QPushButton(QStringLiteral("Refresh"), shell_);
-    refresh_button_->setObjectName(
-        QStringLiteral("refreshDocumentsButton"));
-
     undo_button_ =
         new QPushButton(QStringLiteral("Undo"), shell_);
     undo_button_->setObjectName(QStringLiteral("undoDocumentButton"));
@@ -219,9 +205,6 @@ void CadWorkbench::buildUi() {
     close_document_button_->setObjectName(
         QStringLiteral("closeDocumentButton"));
 
-    lifecycle_actions.addWidget(new_part_button_);
-    lifecycle_actions.addWidget(open_document_button_);
-    lifecycle_actions.addWidget(refresh_button_);
     lifecycle_actions.addStretch(1);
     lifecycle_actions.addWidget(undo_button_);
     lifecycle_actions.addWidget(redo_button_);
@@ -254,6 +237,11 @@ void CadWorkbench::buildUi() {
                                  "Selected Origin references hidden."))
                     : QStringLiteral(
                           "No Origin visibility change."));
+        });
+
+    tree_controller_->setSketchEditHandler(
+        [this](const sketch::SketchId& sketch_id) {
+            requestEditSketch(sketch_id);
         });
 
     ViewportSurface viewport_surface;
@@ -313,6 +301,16 @@ void CadWorkbench::buildUi() {
 
     editor_surface_ = editor_container;
     shell_->setEditorSurface(editor_surface_);
+
+    sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Sketch"),
+            shell_);
+    sketch_button_->setObjectName(
+        QStringLiteral("sketchToolButton"));
+    shell_->editorToolsLayout().insertWidget(
+        0,
+        sketch_button_);
 
     viewport_controller_ =
         new PartViewportController(
@@ -459,13 +457,14 @@ void CadWorkbench::buildUi() {
     auto* operations_layout = new QVBoxLayout(operations_content);
     operations_layout->setContentsMargins(0, 0, 0, 0);
 
-    sketch_button_ =
+    cancel_sketch_button_ =
         new QPushButton(
-            QStringLiteral("Sketch"),
+            QStringLiteral("Cancel"),
             operations_content);
-    sketch_button_->setObjectName(
-        QStringLiteral("sketchToolButton"));
-    operations_layout->addWidget(sketch_button_);
+    cancel_sketch_button_->setObjectName(
+        QStringLiteral("cancelSketchButton"));
+    operations_layout->addWidget(
+        cancel_sketch_button_);
 
     finish_sketch_button_ =
         new QPushButton(
@@ -477,8 +476,7 @@ void CadWorkbench::buildUi() {
         finish_sketch_button_);
 
     operations_placeholder_ = new QLabel(
-        QStringLiteral(
-            "Sketch creates an empty Part-hosted Sketch on an Origin plane."),
+        QStringLiteral("No active tool."),
         operations_content);
     operations_placeholder_->setObjectName(
         QStringLiteral("operationsPlaceholder"));
@@ -488,21 +486,6 @@ void CadWorkbench::buildUi() {
 
     shell_->setOperationsContent(operations_content);
 
-    QObject::connect(
-        new_part_button_,
-        &QPushButton::clicked,
-        this,
-        [this] { newPart(); });
-    QObject::connect(
-        open_document_button_,
-        &QPushButton::clicked,
-        this,
-        [this] { openDocument(); });
-    QObject::connect(
-        refresh_button_,
-        &QPushButton::clicked,
-        this,
-        [this] { refreshWorkspaceIndex(); });
     QObject::connect(
         undo_button_,
         &QPushButton::clicked,
@@ -533,6 +516,11 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { startSketchTool(); });
+    QObject::connect(
+        cancel_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { cancelSketchTool(); });
     QObject::connect(
         finish_sketch_button_,
         &QPushButton::clicked,
@@ -567,8 +555,10 @@ void CadWorkbench::setProjectSession(
         clearActiveContext();
         status_->setText(
             QStringLiteral(
-                "Project open. Create or open a Part Document."));
+                "Project open. No CAD Document is active."));
     }
+
+    notifyDocumentPresence();
 }
 
 void CadWorkbench::clearProjectSession() {
@@ -586,11 +576,9 @@ void CadWorkbench::clearProjectSession() {
         document_tabs_->setCurrentIndex(-1);
     }
 
-    new_part_button_->setEnabled(false);
-    open_document_button_->setEnabled(false);
-    refresh_button_->setEnabled(false);
     clearActiveContext();
     status_->setText(QStringLiteral("No Project is open."));
+    notifyDocumentPresence();
 }
 
 void CadWorkbench::refreshWorkspaceIndex() {
@@ -598,10 +586,6 @@ void CadWorkbench::refreshWorkspaceIndex() {
         status_->setText(QStringLiteral("No Project is open."));
         return;
     }
-
-    new_part_button_->setEnabled(true);
-    open_document_button_->setEnabled(true);
-    refresh_button_->setEnabled(true);
 
     const auto refreshed = session_->refreshDocuments();
     if (!refreshed.ok()) {
@@ -685,6 +669,7 @@ bool CadWorkbench::activateDocument(
             ? QStringLiteral(
                   "Part was already open; activated existing DocumentSession.")
             : QStringLiteral("Part opened."));
+    notifyDocumentPresence();
     return true;
 }
 
@@ -756,8 +741,28 @@ std::filesystem::path CadWorkbench::defaultPartPath() const {
     return "Part.ss2part";
 }
 
-void CadWorkbench::newPart() {
-    if (session_ == nullptr) return;
+bool CadWorkbench::createPartInteractive(
+    QWidget* dialog_parent) {
+    return newPart(dialog_parent);
+}
+
+bool CadWorkbench::openDocumentInteractive(
+    QWidget* dialog_parent) {
+    return openDocument(dialog_parent);
+}
+
+void CadWorkbench::refreshWorkspaceDocuments() {
+    refreshWorkspaceIndex();
+}
+
+bool CadWorkbench::hasOpenDocuments() const noexcept {
+    return document_tabs_ != nullptr &&
+           document_tabs_->count() > 0;
+}
+
+bool CadWorkbench::newPart(
+    QWidget* dialog_parent) {
+    if (session_ == nullptr) return false;
 
     WorkspaceLocationDialog dialog{
         session_->workspaceRoot(),
@@ -765,22 +770,24 @@ void CadWorkbench::newPart() {
         QStringLiteral(".ss2part"),
         fromFilesystemPath(
             defaultPartPath().filename()),
-        this};
+        dialog_parent != nullptr
+            ? dialog_parent
+            : this};
 
     if (dialog.exec() != QDialog::Accepted) {
-        return;
+        return false;
     }
 
     const auto relative =
         dialog.selectedRelativeFilePath();
-    if (!relative) return;
+    if (!relative) return false;
 
     auto created =
         session_->createPart(*relative);
     if (!created.ok()) {
         showFailure(created.diagnostic);
         refreshWorkspaceIndex();
-        return;
+        return false;
     }
 
     ensureDocumentTab(
@@ -794,10 +801,13 @@ void CadWorkbench::newPart() {
     status_->setText(
         QStringLiteral(
             "New Part created and saved."));
+    notifyDocumentPresence();
+    return true;
 }
 
-void CadWorkbench::openDocument() {
-    if (session_ == nullptr) return;
+bool CadWorkbench::openDocument(
+    QWidget* dialog_parent) {
+    if (session_ == nullptr) return false;
 
     const auto refreshed =
         session_->refreshDocuments();
@@ -812,18 +822,19 @@ void CadWorkbench::openDocument() {
     OpenDocumentDialog dialog{
         openDocumentCandidates(
             session_->documentIndex()),
-        this};
+        dialog_parent != nullptr
+            ? dialog_parent
+            : this};
 
     if (dialog.exec() != QDialog::Accepted) {
-        return;
+        return false;
     }
 
     const auto document_id =
         dialog.selectedDocumentId();
-    if (!document_id) return;
+    if (!document_id) return false;
 
-    static_cast<void>(
-        activateDocument(*document_id));
+    return activateDocument(*document_id);
 }
 
 application::DocumentSession*
@@ -868,16 +879,8 @@ void CadWorkbench::applyProperties() {
 }
 
 void CadWorkbench::startSketchTool() {
-    if (activeDocumentSession() == nullptr) {
-        return;
-    }
-
-    if (sketch_support_pick_active_) {
-        clearSketchRuntimeContext();
-        status_->setText(
-            QStringLiteral(
-                "Sketch creation cancelled."));
-        syncActionState();
+    if (activeDocumentSession() == nullptr ||
+        sketch_support_pick_active_) {
         return;
     }
 
@@ -896,6 +899,58 @@ void CadWorkbench::startSketchTool() {
         QStringLiteral(
             "Sketch tool active — select an Origin plane."));
     syncActionState();
+}
+
+void CadWorkbench::cancelSketchTool() {
+    if (!sketch_support_pick_active_) {
+        return;
+    }
+
+    clearSketchRuntimeContext();
+    status_->setText(
+        QStringLiteral(
+            "Sketch creation cancelled."));
+    syncActionState();
+}
+
+void CadWorkbench::requestEditSketch(
+    const sketch::SketchId& sketch_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        return;
+    }
+
+    if (active_sketch_id_) {
+        if (*active_sketch_id_ == sketch_id) {
+            status_->setText(
+                QStringLiteral(
+                    "This Sketch is already being edited."));
+        } else {
+            status_->setText(
+                QStringLiteral(
+                    "Finish the active Sketch before editing another one."));
+        }
+        return;
+    }
+
+    if (sketch_support_pick_active_) {
+        clearSketchRuntimeContext();
+    }
+
+    if (document_session->document()
+            .findSketch(sketch_id) == nullptr) {
+        status_->setText(
+            QStringLiteral(
+                "Sketch is no longer available in the active Part."));
+        syncActionState();
+        return;
+    }
+
+    enterSketchEdit(sketch_id);
+    status_->setText(
+        QStringLiteral(
+            "Sketch edit context opened in the 3D Viewport."));
 }
 
 void CadWorkbench::tryCreateSketchFromSupport(
@@ -1021,8 +1076,13 @@ void CadWorkbench::clearSketchRuntimeContext() {
 
     if (operations_placeholder_ != nullptr) {
         operations_placeholder_->setText(
-            QStringLiteral(
-                "Sketch creates an empty Part-hosted Sketch on an Origin plane."));
+            QStringLiteral("No active tool."));
+    }
+    if (cancel_sketch_button_ != nullptr) {
+        cancel_sketch_button_->setVisible(false);
+    }
+    if (finish_sketch_button_ != nullptr) {
+        finish_sketch_button_->setVisible(false);
     }
 }
 
@@ -1174,7 +1234,22 @@ void CadWorkbench::closeTab(int index) {
         }
     }
 
+    const bool closing_active =
+        active_document_id_.has_value() &&
+        *active_document_id_ == *id;
+
+    // Runtime controllers keep non-owning DocumentSession pointers.
+    // Detach them while the owning ProjectSession still owns the
+    // session; closeDocument() may erase it immediately.
+    if (closing_active) {
+        clearSketchRuntimeContext();
+        viewport_controller_->clear();
+    }
+
     if (!session_->closeDocument(*id, discard)) {
+        if (closing_active) {
+            refreshActiveContext();
+        }
         status_->setText(
             QStringLiteral(
                 "Part remains open because it still has unsaved changes."));
@@ -1183,14 +1258,6 @@ void CadWorkbench::closeTab(int index) {
 
     document_view_states_.erase(
         std::string{id->value()});
-
-    const bool closing_active =
-        active_document_id_.has_value() &&
-        *active_document_id_ == *id;
-
-    if (closing_active) {
-        clearSketchRuntimeContext();
-    }
 
     int next_index = -1;
     {
@@ -1216,6 +1283,7 @@ void CadWorkbench::closeTab(int index) {
     }
 
     status_->setText(QStringLiteral("Part closed."));
+    notifyDocumentPresence();
 }
 
 void CadWorkbench::refreshActiveContext() {
@@ -1417,17 +1485,29 @@ void CadWorkbench::syncActionState() {
             *active_document_id_;
 
     sketch_button_->setText(
-        sketch_support_pick_active_
-            ? QStringLiteral("Cancel Sketch")
-            : QStringLiteral("Sketch"));
+        QStringLiteral("Sketch"));
     sketch_button_->setEnabled(
-        active && !editing_sketch);
+        active &&
+        !editing_sketch &&
+        !sketch_support_pick_active_);
+
+    cancel_sketch_button_->setVisible(
+        active && sketch_support_pick_active_);
+    cancel_sketch_button_->setEnabled(
+        active && sketch_support_pick_active_);
+
+    finish_sketch_button_->setVisible(
+        editing_sketch);
     finish_sketch_button_->setEnabled(
         editing_sketch);
 
-    new_part_button_->setEnabled(session_ != nullptr);
-    open_document_button_->setEnabled(session_ != nullptr);
-    refresh_button_->setEnabled(session_ != nullptr);
+}
+
+void CadWorkbench::notifyDocumentPresence() {
+    if (document_presence_handler_) {
+        document_presence_handler_(
+            hasOpenDocuments());
+    }
 }
 
 void CadWorkbench::updateTabPresentation(
