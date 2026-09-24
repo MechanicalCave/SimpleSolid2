@@ -14,6 +14,7 @@
 class QCloseEvent;
 class QLabel;
 class QListWidget;
+class QPushButton;
 class QStackedWidget;
 class QWidget;
 
