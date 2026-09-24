@@ -819,7 +819,7 @@ void ProjectHubWindow::enterWorkspace() {
         fromFilesystemPath(
             session->workspaceRoot()));
 
-    cad_workbench_->deactivateDocument();
+    cad_workbench_->resetRuntimeState();
     syncOpenDocumentTabs();
     navigateToWorkspace();
 
@@ -1492,6 +1492,8 @@ requestCloseProject() {
                 "The Project still contains unsaved Part changes and remains open."));
         return false;
     }
+
+    cad_workbench_->resetRuntimeState();
 
     navigation_.kind =
         ProjectNavigationKind::
