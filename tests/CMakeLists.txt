@@ -454,3 +454,27 @@ add_test(
 set_tests_properties(wb01a.workbench_native_stress PROPERTIES
     TIMEOUT 120
 )
+
+
+add_executable(wb01a_viewcube_responsive_test
+    view_cube_responsive_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
+)
+target_include_directories(wb01a_viewcube_responsive_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+target_link_libraries(wb01a_viewcube_responsive_test
+    PRIVATE
+        simplesolid2_viewer
+        Qt6::Widgets
+        Qt6::Test
+)
+target_compile_features(wb01a_viewcube_responsive_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb01a.viewcube_responsive
+    COMMAND wb01a_viewcube_responsive_test
+)
+set_tests_properties(wb01a.viewcube_responsive PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
