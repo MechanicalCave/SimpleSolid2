@@ -424,3 +424,33 @@ add_test(
 set_tests_properties(wb01.viewer_native_smoke PROPERTIES
     TIMEOUT 20
 )
+
+
+add_executable(wb01a_workbench_native_stress_test
+    workbench_native_stress_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
+)
+target_include_directories(wb01a_workbench_native_stress_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+target_link_libraries(wb01a_workbench_native_stress_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        simplesolid2_viewer_qt_occt
+        Qt6::Widgets
+        Qt6::Test
+)
+target_compile_features(wb01a_workbench_native_stress_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb01a.workbench_native_stress
+    COMMAND wb01a_workbench_native_stress_test
+)
+set_tests_properties(wb01a.workbench_native_stress PROPERTIES
+    TIMEOUT 120
+)

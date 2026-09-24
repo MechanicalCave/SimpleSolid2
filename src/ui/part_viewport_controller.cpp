@@ -266,10 +266,19 @@ void PartViewportController::onViewportIntent(
     const viewer::SelectionIntent& intent) {
     if (session_ == nullptr || !intent.valid()) return;
 
+    auto& selection = activeSelection();
+
+    if (intent.mode ==
+        viewer::SelectionIntentMode::clear) {
+        selection.selected.clear();
+        selection.primary.reset();
+        applySelectionToSurfaces();
+        notifySelectionChanged();
+        return;
+    }
+
     const auto role = roleFor(intent.token);
     if (!role) return;
-
-    auto& selection = activeSelection();
 
     if (intent.mode ==
         viewer::SelectionIntentMode::replace) {

@@ -5,14 +5,15 @@
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_InteractiveObject.hxx>
 #include <AIS_Line.hxx>
-#include <AIS_Plane.hxx>
 #include <AIS_Point.hxx>
+#include <AIS_Shape.hxx>
 #include <Aspect_DisplayConnection.hxx>
+#include <BRepBuilderAPI_MakeFace.hxx>
 #include <Geom_CartesianPoint.hxx>
-#include <Geom_Plane.hxx>
 #include <Graphic3d_Camera.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Quantity_Color.hxx>
+#include <Standard_Failure.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
 #include <WNT_Window.hxx>
@@ -20,6 +21,8 @@
 #include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
 
+#include <QContextMenuEvent>
+#include <QDebug>
 #include <QMouseEvent>
 #include <QPaintEvent>
 #include <QResizeEvent>
@@ -30,10 +33,89 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <exception>
 #include <utility>
 #include <vector>
 
 namespace simplesolid2::viewer_qt_occt {
+namespace {
+
+void logProviderFailure(
+    const char* operation,
+    const char* message) noexcept {
+    qWarning().noquote()
+        << "SS2 Viewer provider failure in"
+        << operation
+        << ":"
+        << (message != nullptr ? message : "<no message>");
+}
+
+template <typename Function>
+bool guardedBool(
+    const char* operation,
+    Function&& function) noexcept {
+    try {
+        return function();
+    } catch (const Standard_Failure& failure) {
+        logProviderFailure(
+            operation,
+            failure.GetMessageString());
+    } catch (const std::exception& failure) {
+        logProviderFailure(
+            operation,
+            failure.what());
+    } catch (...) {
+        logProviderFailure(
+            operation,
+            "<unknown exception>");
+    }
+    return false;
+}
+
+template <typename Function>
+void guardedVoid(
+    const char* operation,
+    Function&& function) noexcept {
+    try {
+        function();
+    } catch (const Standard_Failure& failure) {
+        logProviderFailure(
+            operation,
+            failure.GetMessageString());
+    } catch (const std::exception& failure) {
+        logProviderFailure(
+            operation,
+            failure.what());
+    } catch (...) {
+        logProviderFailure(
+            operation,
+            "<unknown exception>");
+    }
+}
+
+template <typename Function>
+std::optional<viewer::CameraState> guardedCameraState(
+    const char* operation,
+    Function&& function) noexcept {
+    try {
+        return function();
+    } catch (const Standard_Failure& failure) {
+        logProviderFailure(
+            operation,
+            failure.GetMessageString());
+    } catch (const std::exception& failure) {
+        logProviderFailure(
+            operation,
+            failure.what());
+    } catch (...) {
+        logProviderFailure(
+            operation,
+            "<unknown exception>");
+    }
+    return std::nullopt;
+}
+
+} // namespace
 
 class QtOcctViewerWidget::Impl final {
 public:
@@ -144,30 +226,43 @@ public:
         if (context_.IsNull() || view_.IsNull()) return false;
 
         clearReferenceScene();
-        reference_scene_ = scene;
 
-        if (scene.grid && scene.grid->visible) {
-            buildGrid(*scene.grid);
-        }
-
-        for (const auto& reference : scene.references) {
-            if (!reference.visible) continue;
-
-            const auto object = makeReferenceObject(reference);
-            if (object.IsNull()) {
-                clearReferenceScene();
-                return false;
+        try {
+            if (scene.grid && scene.grid->visible) {
+                buildGrid(*scene.grid);
             }
 
-            reference_objects_.push_back(
-                ReferenceObject{reference.token, reference.kind, object});
-            context_->Display(object, false);
-        }
+            for (const auto& reference : scene.references) {
+                if (!reference.visible) continue;
 
-        applySelectionStyles();
-        context_->UpdateCurrentViewer();
-        view_->Redraw();
-        return true;
+                const auto object =
+                    makeReferenceObject(reference);
+
+                if (object.IsNull()) {
+                    clearReferenceScene();
+                    return false;
+                }
+
+                reference_objects_.push_back(
+                    ReferenceObject{
+                        reference.token,
+                        reference.kind,
+                        object});
+                context_->Display(object, false);
+
+            }
+
+            applySelectionStyles();
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            reference_scene_ = scene;
+            return true;
+        } catch (...) {
+            // Leave the provider in a coherent empty-scene state even
+            // if OCCT fails after only part of the replacement was built.
+            clearReferenceScene();
+            throw;
+        }
     }
 
     bool setPresentationSelection(
@@ -206,20 +301,41 @@ public:
             std::lround(static_cast<double>(logical_y) * dpr));
 
         context_->MoveTo(x, y, view_, true);
-        const auto detected = context_->DetectedInteractive();
-        if (detected.IsNull()) return;
 
-        for (const auto& entry : reference_objects_) {
-            if (entry.object == detected) {
-                selection_intent_handler_(
-                    viewer::SelectionIntent{
-                        entry.token,
-                        toggle
-                            ? viewer::SelectionIntentMode::toggle
-                            : viewer::SelectionIntentMode::replace});
-                return;
+        std::optional<viewer::PresentationToken> detected_token;
+        if (context_->HasDetected()) {
+            const auto detected =
+                context_->DetectedInteractive();
+
+            if (!detected.IsNull()) {
+                for (const auto& entry : reference_objects_) {
+                    if (entry.object == detected) {
+                        detected_token = entry.token;
+                        break;
+                    }
+                }
             }
         }
+
+        // MoveTo owns transient detected/highlight state inside OCCT.
+        // Clear it before invoking application callbacks because a callback
+        // may synchronously refresh or replace the presentation scene.
+        context_->ClearDetected(false);
+
+        if (detected_token) {
+            selection_intent_handler_(
+                viewer::SelectionIntent{
+                    *detected_token,
+                    toggle
+                        ? viewer::SelectionIntentMode::toggle
+                        : viewer::SelectionIntentMode::replace});
+            return;
+        }
+
+        selection_intent_handler_(
+            viewer::SelectionIntent{
+                {},
+                viewer::SelectionIntentMode::clear});
     }
 
     void zoomByFactor(double factor) {
@@ -326,34 +442,71 @@ public:
             viewer::cross(*u, *v));
         if (!normal) return {};
 
-        Handle(Geom_Plane) plane = new Geom_Plane(
-            gp_Pln{
-                toPoint(reference.origin),
-                toDirection(*normal)});
-        Handle(AIS_Plane) object = new AIS_Plane(plane);
-        object->SetSize(
-            reference.extent * 2.0,
-            reference.extent * 2.0);
+        const gp_Pln plane{
+            toPoint(reference.origin),
+            toDirection(*normal)};
+        BRepBuilderAPI_MakeFace face{
+            plane,
+            -reference.extent,
+            reference.extent,
+            -reference.extent,
+            reference.extent};
+        if (!face.IsDone()) {
+            return {};
+        }
+
+        // A finite AIS_Shape avoids the unstable AIS_Plane lifecycle
+        // observed during repeated native scene replacement on Windows.
+        // The neutral PresentationToken remains the semantic transport.
+        Handle(AIS_Shape) object =
+            new AIS_Shape(face.Shape());
         return object;
     }
 
-    void clearReferenceScene() {
+    void clearReferenceScene() noexcept {
         if (!context_.IsNull()) {
+            // Scene objects may still be held by transient OCCT detection
+            // or native selection state after user input. Release those
+            // references before removing presentation objects.
+            guardedVoid(
+                "clearDetected",
+                [this] {
+                    context_->ClearDetected(false);
+                });
+            guardedVoid(
+                "clearSelected",
+                [this] {
+                    context_->ClearSelected(false);
+                });
+
             for (const auto& entry : reference_objects_) {
-                if (!entry.object.IsNull()) {
-                    context_->Remove(entry.object, false);
-                }
+                if (entry.object.IsNull()) continue;
+                const auto object = entry.object;
+                guardedVoid(
+                    "removeReferenceObject",
+                    [this, object] {
+                        context_->Remove(
+                            object,
+                            false);
+                    });
             }
 
             for (const auto& object : grid_objects_) {
-                if (!object.IsNull()) {
-                    context_->Remove(object, false);
-                }
+                if (object.IsNull()) continue;
+                guardedVoid(
+                    "removeGridObject",
+                    [this, object] {
+                        context_->Remove(
+                            object,
+                            false);
+                    });
             }
         }
 
         reference_objects_.clear();
         grid_objects_.clear();
+        reference_scene_.references.clear();
+        reference_scene_.grid.reset();
     }
 
     void buildGrid(
@@ -457,6 +610,7 @@ public:
                 entry.object,
                 color,
                 false);
+
             context_->SetWidth(
                 entry.object,
                 primary ? 4.0 : (selected ? 3.0 : 1.8),
@@ -573,50 +727,98 @@ QtOcctViewerWidget::QtOcctViewerWidget(QWidget* parent)
 QtOcctViewerWidget::~QtOcctViewerWidget() = default;
 
 std::optional<viewer::CameraState> QtOcctViewerWidget::cameraState() const {
-    return impl_->cameraState();
+    return guardedCameraState(
+        "cameraState",
+        [this] { return impl_->cameraState(); });
 }
 
-bool QtOcctViewerWidget::setCameraState(const viewer::CameraState& state) {
-    return impl_->setCameraState(state);
+bool QtOcctViewerWidget::setCameraState(
+    const viewer::CameraState& state) {
+    return guardedBool(
+        "setCameraState",
+        [this, &state] {
+            return impl_->setCameraState(state);
+        });
 }
 
-bool QtOcctViewerWidget::setStandardView(viewer::StandardView view) {
-    return impl_->setStandardView(view);
+bool QtOcctViewerWidget::setStandardView(
+    viewer::StandardView view) {
+    return guardedBool(
+        "setStandardView",
+        [this, view] {
+            return impl_->setStandardView(view);
+        });
 }
 
-bool QtOcctViewerWidget::setProjection(viewer::CameraProjection projection) {
-    return impl_->setProjection(projection);
+bool QtOcctViewerWidget::setProjection(
+    viewer::CameraProjection projection) {
+    return guardedBool(
+        "setProjection",
+        [this, projection] {
+            return impl_->setProjection(projection);
+        });
 }
 
 void QtOcctViewerWidget::fitAll() {
-    impl_->fitAll();
+    guardedVoid(
+        "fitAll",
+        [this] { impl_->fitAll(); });
 }
 
 bool QtOcctViewerWidget::setReferenceScene(
     const viewer::ReferenceScene& scene) {
-    return impl_->setReferenceScene(scene);
+    return guardedBool(
+        "setReferenceScene",
+        [this, &scene] {
+            return impl_->setReferenceScene(scene);
+        });
 }
 
 bool QtOcctViewerWidget::setPresentationSelection(
     const viewer::PresentationSelection& selection) {
-    return impl_->setPresentationSelection(selection);
+    return guardedBool(
+        "setPresentationSelection",
+        [this, &selection] {
+            return impl_->setPresentationSelection(selection);
+        });
 }
 
 void QtOcctViewerWidget::setSelectionIntentHandler(
     viewer::SelectionIntentHandler handler) {
-    impl_->setSelectionIntentHandler(std::move(handler));
+    guardedVoid(
+        "setSelectionIntentHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setSelectionIntentHandler(
+                std::move(handler));
+        });
 }
 
 void QtOcctViewerWidget::zoomByFactor(double factor) {
-    impl_->zoomByFactor(factor);
+    guardedVoid(
+        "zoomByFactor",
+        [this, factor] {
+            impl_->zoomByFactor(factor);
+        });
 }
 
-void QtOcctViewerWidget::panByPixels(int delta_x, int delta_y) {
-    impl_->panByPixels(delta_x, delta_y);
+void QtOcctViewerWidget::panByPixels(
+    int delta_x,
+    int delta_y) {
+    guardedVoid(
+        "panByPixels",
+        [this, delta_x, delta_y] {
+            impl_->panByPixels(delta_x, delta_y);
+        });
 }
 
-void QtOcctViewerWidget::orbitByRadians(double horizontal, double vertical) {
-    impl_->orbitByRadians(horizontal, vertical);
+void QtOcctViewerWidget::orbitByRadians(
+    double horizontal,
+    double vertical) {
+    guardedVoid(
+        "orbitByRadians",
+        [this, horizontal, vertical] {
+            impl_->orbitByRadians(horizontal, vertical);
+        });
 }
 
 QPaintEngine* QtOcctViewerWidget::paintEngine() const {
@@ -625,22 +827,35 @@ QPaintEngine* QtOcctViewerWidget::paintEngine() const {
 
 void QtOcctViewerWidget::paintEvent(QPaintEvent* event) {
     Q_UNUSED(event);
-    impl_->ensureInitialized();
-    impl_->redraw();
+    guardedVoid(
+        "paintEvent",
+        [this] {
+            impl_->ensureInitialized();
+            impl_->redraw();
+        });
 }
 
 void QtOcctViewerWidget::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
-    impl_->resize();
+    guardedVoid(
+        "resizeEvent",
+        [this] { impl_->resize(); });
 }
 
 void QtOcctViewerWidget::showEvent(QShowEvent* event) {
     QWidget::showEvent(event);
-    impl_->ensureInitialized();
-    impl_->resize();
+    guardedVoid(
+        "showEvent",
+        [this] {
+            impl_->ensureInitialized();
+            impl_->resize();
+        });
 
     QTimer::singleShot(0, this, [this] {
-        if (isVisible()) impl_->resize();
+        if (!isVisible()) return;
+        guardedVoid(
+            "deferredResize",
+            [this] { impl_->resize(); });
     });
 }
 
@@ -649,20 +864,38 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
 
     if (event->button() == Qt::MiddleButton) {
         const auto point = event->position().toPoint();
-        impl_->beginMiddleDrag(
-            point.x(),
-            point.y(),
-            (event->modifiers() & Qt::ShiftModifier) != 0);
+        guardedVoid(
+            "middlePress",
+            [this, point, event] {
+                impl_->beginMiddleDrag(
+                    point.x(),
+                    point.y(),
+                    (event->modifiers() & Qt::ShiftModifier) != 0);
+            });
         event->accept();
         return;
     }
 
     if (event->button() == Qt::LeftButton) {
         const auto point = event->position().toPoint();
-        impl_->pickAtLogicalPoint(
-            point.x(),
-            point.y(),
-            (event->modifiers() & Qt::ControlModifier) != 0);
+        const bool toggle =
+            (event->modifiers() & Qt::ControlModifier) != 0;
+        guardedVoid(
+            "leftClickPick",
+            [this, point, toggle] {
+                impl_->pickAtLogicalPoint(
+                    point.x(),
+                    point.y(),
+                    toggle);
+            });
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::RightButton) {
+        // Reserved for a future context menu. WB-01A makes the
+        // current behavior an explicit no-op rather than delegating
+        // an uncontrolled input path to QWidget.
         event->accept();
         return;
     }
@@ -673,10 +906,16 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
 void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
     if ((event->buttons() & Qt::MiddleButton) != 0) {
         const auto point = event->position().toPoint();
-        impl_->updateMiddleDrag(
-            point.x(),
-            point.y(),
-            (event->modifiers() & Qt::ShiftModifier) != 0);
+        const bool orbit =
+            (event->modifiers() & Qt::ShiftModifier) != 0;
+        guardedVoid(
+            "middleDrag",
+            [this, point, orbit] {
+                impl_->updateMiddleDrag(
+                    point.x(),
+                    point.y(),
+                    orbit);
+            });
         event->accept();
         return;
     }
@@ -686,7 +925,14 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
 
 void QtOcctViewerWidget::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() == Qt::MiddleButton) {
-        impl_->endMiddleDrag();
+        guardedVoid(
+            "middleRelease",
+            [this] { impl_->endMiddleDrag(); });
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::RightButton) {
         event->accept();
         return;
     }
@@ -696,8 +942,17 @@ void QtOcctViewerWidget::mouseReleaseEvent(QMouseEvent* event) {
 
 void QtOcctViewerWidget::mouseDoubleClickEvent(QMouseEvent* event) {
     if (event->button() == Qt::MiddleButton) {
-        impl_->endMiddleDrag();
-        impl_->fitAll();
+        guardedVoid(
+            "middleDoubleClickFit",
+            [this] {
+                impl_->endMiddleDrag();
+                impl_->fitAll();
+            });
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::RightButton) {
         event->accept();
         return;
     }
@@ -707,10 +962,22 @@ void QtOcctViewerWidget::mouseDoubleClickEvent(QMouseEvent* event) {
 
 void QtOcctViewerWidget::wheelEvent(QWheelEvent* event) {
     const auto point = event->position().toPoint();
-    impl_->zoomAtLogicalPoint(
-        point.x(),
-        point.y(),
-        event->angleDelta().y());
+    const auto delta = event->angleDelta().y();
+    guardedVoid(
+        "wheelZoom",
+        [this, point, delta] {
+            impl_->zoomAtLogicalPoint(
+                point.x(),
+                point.y(),
+                delta);
+        });
+    event->accept();
+}
+
+void QtOcctViewerWidget::contextMenuEvent(
+    QContextMenuEvent* event) {
+    // WB-01A reserves right click for a future context menu.
+    // Until one exists, keep it an explicit no-op.
     event->accept();
 }
 

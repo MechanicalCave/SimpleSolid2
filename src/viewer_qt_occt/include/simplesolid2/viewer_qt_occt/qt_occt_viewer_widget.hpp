@@ -3,7 +3,7 @@
 #include <QWidget>
 #include <memory>
 #include <optional>
-class QPaintEngine; class QPaintEvent; class QResizeEvent; class QShowEvent; class QMouseEvent; class QWheelEvent;
+class QContextMenuEvent; class QPaintEngine; class QPaintEvent; class QResizeEvent; class QShowEvent; class QMouseEvent; class QWheelEvent;
 namespace simplesolid2::viewer_qt_occt {
 class QtOcctViewerWidget final
     : public QWidget,
@@ -26,7 +26,7 @@ protected:
  QPaintEngine* paintEngine() const override;
  void paintEvent(QPaintEvent* event) override; void resizeEvent(QResizeEvent* event) override; void showEvent(QShowEvent* event) override;
  void mousePressEvent(QMouseEvent* event) override; void mouseMoveEvent(QMouseEvent* event) override; void mouseReleaseEvent(QMouseEvent* event) override;
- void mouseDoubleClickEvent(QMouseEvent* event) override; void wheelEvent(QWheelEvent* event) override;
+ void mouseDoubleClickEvent(QMouseEvent* event) override; void wheelEvent(QWheelEvent* event) override; void contextMenuEvent(QContextMenuEvent* event) override;
 private:
  class Impl; std::unique_ptr<Impl> impl_;
 };
