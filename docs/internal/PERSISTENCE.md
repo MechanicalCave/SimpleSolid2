@@ -57,13 +57,18 @@ The current format identifier is `simplesolid.native-document`; container versio
 
 Shared persistence owns ZIP recognition, bounded parsing, common manifest recognition and container safety. It does not interpret Part engineering meaning.
 
-The Part domain owns `authored/document.json`. Current Part domain schema version 1 persists:
+The Part domain owns `authored/document.json`. Current Part domain schema version 2 persists:
 
 - Number;
 - Title;
 - Description;
 - Engineering Revision;
-- built-in Origin visibility.
+- built-in Origin visibility;
+- the ordered collection of Part-hosted Sketch records.
+
+Each SK-01 Sketch record persists a stable SketchId, built-in Origin-plane support, explicit SketchPlacement (origin plus local U/V axes) and persistent visibility. The Sketch is embedded authored Part state; it is not a standalone Document or file.
+
+Part schema version 1 remains readable. It restores an empty Sketch collection and opening it does not rewrite the file. A later successful Save writes current schema v2.
 
 DocumentId is stored only in the common manifest. ProjectId is not embedded in the Document. Workspace membership remains physical/runtime context.
 
@@ -107,6 +112,8 @@ The following state is not serialized as Part authored state:
 - camera / projection / pan / orbit / zoom;
 - selected set and primary selection;
 - reference grid runtime presentation;
+- active Sketch edit context;
+- Sketch support-pick tool state;
 - Qt objects;
 - Viewer provider objects and OCCT handles;
 - evaluated B-Rep or tessellation.
@@ -135,7 +142,7 @@ A `.ss2part` whose manifest declares another Document kind fails closed.
 <!-- section-id: internal.persistence.non-goals -->
 ## Current non-goals
 
-The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch persistence, modeled geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
+The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch 2D entity/constraint persistence, modeled geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
 
 The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented by PERSIST-01.
 
