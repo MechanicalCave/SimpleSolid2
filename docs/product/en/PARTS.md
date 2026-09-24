@@ -10,11 +10,13 @@ After opening a Project, use `New Part…` in the Workbench.
 
 The dialog shows the folder hierarchy of the current Workspace. Choose the target folder, enter the Part filename and confirm creation.
 
-A native Part file uses the extension:
+A native Part is one portable file and uses the extension:
 
 ```text
 .ss2part
 ```
+
+All durable Document content belongs to that one file. Moving or renaming the file changes its location, not its DocumentId.
 
 The application proposes `Part001.ss2part`, `Part002.ss2part`, and so on when those names are available.
 
@@ -139,4 +141,6 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 
 The current Part provides Document identity/properties, built-in Origin, persistent reference visibility and the shared stabilized 3D Workbench/Viewer foundation.
 
-It does not yet contain Sketch, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
+Very early test `.ss2part` files created before the current native format are not supported product data and are not migrated automatically.
+
+Part does not yet contain Sketch, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
