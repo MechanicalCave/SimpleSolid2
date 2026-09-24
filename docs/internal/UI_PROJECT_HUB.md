@@ -8,14 +8,16 @@
 
 The Qt application uses a `QStackedWidget` with Project Hub and Workspace pages.
 
-The Workspace shows the active Project name, ProjectId and Workspace path plus one shared `CadWorkbench`.
+The Workspace shows the active Project name, ProjectId and Workspace path plus a Document host.
 
-`CadWorkbenchShell` owns only fixed presentation regions:
+With zero open CAD Documents the host shows a neutral Workspace launch surface. It does not show an inactive Part editor. Creating/opening a Part activates the Part Workbench; future document kinds are routed to their appropriate editor by DocumentKind.
+
+`CadWorkbenchShell` owns only fixed presentation regions for an active CAD Document:
 
 ```text
 LEFT      Document Tree
-CENTER    Editor Surface / 3D Viewport
-RIGHT     Properties + Operations
+CENTER    tool-launch strip + Editor Surface / 3D Viewport
+RIGHT     Properties + contextual Operations
 BOTTOM    Document Tabs
 BELOW     Status / Diagnostics
 ```
@@ -44,9 +46,11 @@ Recent actions are `Open`, `Locate…` and `Remove from Recent`.
 No Recent entry is selected after Hub refresh. Open is enabled only for a selected, openable entry. Locate and Remove remain available for selected unavailable entries.
 
 <!-- section-id: internal.ui-project-hub.part-panel -->
-## Document controls inside the Workbench
+## Workspace launch and Part document controls
 
-The current Part composition exposes `New Part…`, `Open…`, `Refresh`, `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, Operations placeholder and bottom Document Tabs.
+The neutral Project Workspace exposes the current document-launch actions `New Part…`, neutral `Open…` and `Refresh`. These actions are not Part editor tools.
+
+Once a Part is active, its Workbench exposes `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, the editor tool-launch strip, contextual Operations and bottom Document Tabs.
 
 `New Part…` opens `WorkspaceLocationDialog`. It shows the current Workspace folder hierarchy, allows the user to choose a folder, enter the filename and explicitly `Create Folder`.
 
@@ -54,12 +58,14 @@ The location picker is constrained to the current Workspace. Private `.simplesol
 
 `Open…` opens `OpenDocumentDialog`. Candidates show Document kind, display/name information, location and status. The four columns are interactively resizable; the default layout keeps Name compact and gives Location the largest share of the dialog. Current discovery supplies Part entries only. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
 
-Opening an already open Document focuses its canonical existing DocumentSession instead of creating a second mutable session.
+Opening an already open Document focuses its canonical existing DocumentSession instead of creating a second mutable session. Closing the last open Document switches the host back to the neutral Workspace while the Project remains open.
 
 <!-- section-id: internal.ui-project-hub.workbench -->
 ## Tree, Properties and Viewport
 
-The active Part Tree contains the Part root and built-in Origin group with seven semantic references.
+The active Part Tree contains the Part root, built-in Origin group with seven semantic references and any hosted Sketch records.
+
+Existing Sketches can enter their runtime edit context through Tree double-click or the `Edit Sketch` context action. The Tree stores transient SketchId data for routing only; Tree row identity is not durable model identity.
 
 Tree uses extended multi-selection. Show/Hide context actions are available only when the complete selection supports the operation. Mixed semantic/non-reference selections fail closed.
 
@@ -67,7 +73,9 @@ Tree and Viewport are adapters of one document-scoped selected set plus primary 
 
 Properties shows common Document fields when no semantic object is primary. When a built-in Origin reference is primary, Properties switches to a read-only reference context showing role/type/identity/visibility.
 
-The central Editor Surface hosts the provider-neutral Document Viewport. Production composition injects the Windows Qt/OCCT provider.
+The central Editor Surface hosts the provider-neutral Document Viewport. A tool-launch strip immediately above it contains the current Part `Sketch` launcher. Production composition injects the Windows Qt/OCCT provider.
+
+Operations is contextual to the active tool/edit mode: it is idle when no tool is active, shows Sketch support-pick controls while creating a Sketch, and shows `Finish Sketch` while a Sketch is being edited.
 
 The ViewCube is a responsive overlay. At normal width it presents the regular CAD navigation surface; at narrow Editor widths it switches to a compact control instead of forcing the Editor Surface wider or overlapping the Properties panel.
 
@@ -79,6 +87,8 @@ Closing a dirty Part requires `Save`, `Discard` or `Cancel`.
 Closing the Project or application when any Part is dirty requires `Save All`, `Discard` or `Cancel`.
 
 A failed Save leaves the Part/Project open so authored in-memory changes are not silently lost.
+
+Before a DocumentSession or the owning ProjectSession is destroyed, Workbench runtime bindings are detached. This ordering is required because Tree/Viewer controllers use non-owning session pointers.
 
 <!-- section-id: internal.ui-project-hub.recovery -->
 ## Project recovery UX
