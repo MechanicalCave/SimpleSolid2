@@ -204,7 +204,6 @@ int main(int argc, char* argv[]) {
                 viewport,
                 viewport};
         }};
-    workbench.setProjectSession(&*opened.session);
     CHECK(viewport != nullptr);
 
     std::optional<core::DocumentId>
@@ -289,7 +288,9 @@ int main(int argc, char* argv[]) {
     CHECK(operations->text() ==
           QStringLiteral("No active tool."));
 
-    CHECK(workbench.activateOpenDocument(first_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(first_id),
+        workspace));
     CHECK(workbench.activeDocumentId().has_value());
     CHECK(*workbench.activeDocumentId() == first_id);
     CHECK(title->text() == QStringLiteral("Drive Shaft"));
@@ -303,7 +304,9 @@ int main(int argc, char* argv[]) {
     first_camera.scale = 42.0;
     CHECK(viewport->setCameraState(first_camera));
 
-    CHECK(workbench.activateOpenDocument(second_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(second_id),
+        workspace));
     CHECK(*workbench.activeDocumentId() == second_id);
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == viewer::CameraState{});
@@ -317,15 +320,21 @@ int main(int argc, char* argv[]) {
     second_camera.scale = 88.0;
     CHECK(viewport->setCameraState(second_camera));
 
-    CHECK(workbench.activateOpenDocument(first_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(first_id),
+        workspace));
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == first_camera);
 
-    CHECK(workbench.activateOpenDocument(second_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(second_id),
+        workspace));
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == second_camera);
 
-    CHECK(workbench.activateOpenDocument(first_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(first_id),
+        workspace));
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == first_camera);
 
@@ -558,13 +567,17 @@ int main(int argc, char* argv[]) {
     save->click();
     CHECK(!first_session->needsSave());
 
-    CHECK(workbench.activateOpenDocument(second_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(second_id),
+        workspace));
     CHECK(*workbench.activeDocumentId() == second_id);
     CHECK(title->text() == QStringLiteral("Housing"));
     CHECK(tree->topLevelItem(0)->text(0) ==
           QStringLiteral("Housing"));
 
-    CHECK(workbench.activateOpenDocument(first_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(first_id),
+        workspace));
     CHECK(*workbench.activeDocumentId() == first_id);
     CHECK(title->text() == QStringLiteral("Drive Shaft Rev"));
 
@@ -598,11 +611,13 @@ int main(int argc, char* argv[]) {
         first_session->needsSave() ==
         first_dirty_before_workspace);
 
-    CHECK(workbench.activateOpenDocument(second_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(second_id),
+        workspace));
     CHECK(*workbench.activeDocumentId() == second_id);
     CHECK(title->text() == QStringLiteral("Housing"));
 
-    workbench.clearProjectSession();
+    workbench.deactivateDocument();
     CHECK(!workbench.activeDocumentId().has_value());
     CHECK(!title->isEnabled());
 
