@@ -63,7 +63,7 @@ int main() {
     const auto root = temp.path / "Project";
 
     std::filesystem::create_directories(
-        root / ".simplesolid" / "internal");
+        root / std::filesystem::path{".simplesolid"} / "internal");
     std::filesystem::create_directories(
         root / "Parts" / "Sub");
     std::filesystem::create_directories(
@@ -86,27 +86,27 @@ int main() {
         std::filesystem::path{"Other"}));
     CHECK(!contains(
         listed.directories,
-        std::filesystem::path{".simplesolid"}));
+        std::filesystem::path{std::filesystem::path{".simplesolid"}}));
     CHECK(!contains(
         listed.directories,
-        std::filesystem::path{".simplesolid"} / "internal"));
+        std::filesystem::path{std::filesystem::path{".simplesolid"}} / "internal"));
 
     const auto created =
         service.createDirectory(
             root,
             "Parts",
-            "Generated");
+            std::filesystem::path{"Generated"});
     CHECK(created.ok());
     CHECK(created.relative_path ==
-          std::filesystem::path{"Parts"} / "Generated");
+          std::filesystem::path{"Parts"} / std::filesystem::path{"Generated"});
     CHECK(std::filesystem::is_directory(
-        root / "Parts" / "Generated"));
+        root / "Parts" / std::filesystem::path{"Generated"}));
 
     const auto duplicate =
         service.createDirectory(
             root,
             "Parts",
-            "Generated");
+            std::filesystem::path{"Generated"});
     CHECK(!duplicate.ok());
     CHECK(duplicate.diagnostic.code ==
           application::WorkspaceDirectoryErrorCode::
@@ -116,7 +116,7 @@ int main() {
         service.createDirectory(
             root,
             {},
-            ".simplesolid");
+            std::filesystem::path{".simplesolid"});
     CHECK(!reserved.ok());
     CHECK(reserved.diagnostic.code ==
           application::WorkspaceDirectoryErrorCode::
@@ -126,7 +126,7 @@ int main() {
         service.createDirectory(
             root,
             {},
-            "../Outside");
+            std::filesystem::path{"../Outside"});
     CHECK(!escape_name.ok());
     CHECK(escape_name.diagnostic.code ==
           application::WorkspaceDirectoryErrorCode::
@@ -135,8 +135,8 @@ int main() {
     const auto escape_parent =
         service.createDirectory(
             root,
-            "../Outside",
-            "Child");
+            std::filesystem::path{"../Outside"},
+            std::filesystem::path{"Child"});
     CHECK(!escape_parent.ok());
     CHECK(escape_parent.diagnostic.code ==
           application::WorkspaceDirectoryErrorCode::
@@ -145,8 +145,8 @@ int main() {
     const auto reserved_parent =
         service.createDirectory(
             root,
-            ".simplesolid",
-            "Child");
+            std::filesystem::path{".simplesolid"},
+            std::filesystem::path{"Child"});
     CHECK(!reserved_parent.ok());
     CHECK(reserved_parent.diagnostic.code ==
           application::WorkspaceDirectoryErrorCode::
@@ -156,7 +156,7 @@ int main() {
         service.createDirectory(
             root,
             "Missing",
-            "Child");
+            std::filesystem::path{"Child"});
     CHECK(!missing_parent.ok());
     CHECK(missing_parent.diagnostic.code ==
           application::WorkspaceDirectoryErrorCode::
