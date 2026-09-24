@@ -1,6 +1,6 @@
 # WB-01A — Workbench Stabilization & Document Dialog UX
 
-**Status:** ACCEPTED — REOPENED FOR FOLLOW-UP FIXES  
+**Status:** ACCEPTED  
 **Owner acceptance:** 2026-09-23  
 **Owner follow-up acceptance:** 2026-09-24  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -347,7 +347,7 @@ Te tematy nie są częścią WB-01A. Następnym planowanym większym krokiem po 
 
 ### Follow-up acceptance
 
-Follow-up jest ukończony, gdy:
+Follow-up został zaimplementowany w ramach WB-01A i jest gotowy do exact-head gate. Jest ukończony, gdy:
 - ręczne/native resize nie pozostawia artefaktów ViewCube;
 - automatyczne testy obejmują repaint/invalidation path możliwy do zweryfikowania mechanicznie oraz dotychczasową geometry containment regression;
 - nagłówki Open Document są interaktywne i mają zaakceptowane domyślne proporcje;
