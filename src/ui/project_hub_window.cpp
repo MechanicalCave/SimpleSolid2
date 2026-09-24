@@ -223,15 +223,130 @@ void ProjectHubWindow::buildWorkspacePage() {
     root->addWidget(workspace_id_);
     root->addWidget(workspace_path_);
 
+    workspace_content_ =
+        new QStackedWidget(workspace_page_);
+    workspace_content_->setObjectName(
+        QStringLiteral("workspaceDocumentHost"));
+
+    workspace_empty_page_ =
+        new QWidget(workspace_content_);
+    workspace_empty_page_->setObjectName(
+        QStringLiteral("workspaceEmptyPage"));
+    auto* empty_layout =
+        new QVBoxLayout(workspace_empty_page_);
+    empty_layout->addStretch(1);
+
+    auto* empty_title =
+        new QLabel(
+            QStringLiteral("No CAD Document is open."),
+            workspace_empty_page_);
+    auto empty_font = empty_title->font();
+    empty_font.setPointSize(
+        empty_font.pointSize() + 3);
+    empty_font.setBold(true);
+    empty_title->setFont(empty_font);
+    empty_title->setAlignment(Qt::AlignCenter);
+    empty_layout->addWidget(empty_title);
+
+    auto* empty_hint =
+        new QLabel(
+            QStringLiteral(
+                "Create a new Document or open an existing Document from this Project Workspace."),
+            workspace_empty_page_);
+    empty_hint->setAlignment(Qt::AlignCenter);
+    empty_hint->setWordWrap(true);
+    empty_layout->addWidget(empty_hint);
+
+    auto* launch_actions = new QHBoxLayout;
+    launch_actions->addStretch(1);
+
+    workspace_new_part_button_ =
+        new QPushButton(
+            QStringLiteral("New Part…"),
+            workspace_empty_page_);
+    workspace_new_part_button_->setObjectName(
+        QStringLiteral("workspaceNewPartButton"));
+    launch_actions->addWidget(
+        workspace_new_part_button_);
+
+    workspace_open_document_button_ =
+        new QPushButton(
+            QStringLiteral("Open…"),
+            workspace_empty_page_);
+    workspace_open_document_button_->setObjectName(
+        QStringLiteral("workspaceOpenDocumentButton"));
+    launch_actions->addWidget(
+        workspace_open_document_button_);
+
+    workspace_refresh_button_ =
+        new QPushButton(
+            QStringLiteral("Refresh"),
+            workspace_empty_page_);
+    workspace_refresh_button_->setObjectName(
+        QStringLiteral("workspaceRefreshButton"));
+    launch_actions->addWidget(
+        workspace_refresh_button_);
+
+    launch_actions->addStretch(1);
+    empty_layout->addLayout(launch_actions);
+    empty_layout->addStretch(2);
+
+    workspace_content_->addWidget(
+        workspace_empty_page_);
+
     cad_workbench_ =
-        new CadWorkbench(viewport_factory_, workspace_page_);
-    cad_workbench_->setObjectName(QStringLiteral("cadWorkbench"));
-    root->addWidget(cad_workbench_, 1);
+        new CadWorkbench(
+            viewport_factory_,
+            workspace_content_);
+    cad_workbench_->setObjectName(
+        QStringLiteral("cadWorkbench"));
+    workspace_content_->addWidget(
+        cad_workbench_);
+
+    cad_workbench_->setDocumentPresenceHandler(
+        [this](bool has_open_documents) {
+            workspace_content_->setCurrentWidget(
+                has_open_documents
+                    ? static_cast<QWidget*>(
+                          cad_workbench_)
+                    : workspace_empty_page_);
+        });
+
+    workspace_content_->setCurrentWidget(
+        workspace_empty_page_);
+    root->addWidget(workspace_content_, 1);
 
     auto* close_button =
         new QPushButton(QStringLiteral("Close Project"), workspace_page_);
+    close_button->setObjectName(
+        QStringLiteral("closeProjectButton"));
     root->addWidget(close_button);
 
+    QObject::connect(
+        workspace_new_part_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            static_cast<void>(
+                cad_workbench_->createPartInteractive(
+                    workspace_page_));
+        });
+    QObject::connect(
+        workspace_open_document_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            static_cast<void>(
+                cad_workbench_->openDocumentInteractive(
+                    workspace_page_));
+        });
+    QObject::connect(
+        workspace_refresh_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            cad_workbench_->refreshWorkspaceDocuments();
+        });
     QObject::connect(
         close_button,
         &QPushButton::clicked,
