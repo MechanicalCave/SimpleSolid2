@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-01_PART_SKETCH_HOST_LIFECYCLE.md"
 foundation_version: "1.0"
 accepted_adrs:
@@ -9,19 +9,19 @@ accepted_adrs:
   - "adr/ADR-0004-native-document-container-and-persistence.md"
   - "adr/ADR-0005-part-sketch-host-identity-and-edit-context.md"
 next:
-  - implement Sketch identity and Part-host support/placement model
-  - advance Part domain schema to v2 with schema-v1 read compatibility
-  - integrate Sketch tool and runtime edit context into the existing 3D Workbench
-  - complete docs and exact-head Windows verification
+  - no implementation work is active after SK-01
+  - Owner must accept the next explicit Sketch work contract before further product implementation
+  - suggested next slice is SK-02 for the minimal shared 2D authored model and first Line entity with stable entity identity
+  - Datum/Construction Plane and planar model-face Sketch support remain later explicit contracts
 notes:
-  - SK-01 accepted by Owner on 2026-09-24.
-  - SK-01 implements only empty Part-hosted Sketch lifecycle on XY/XZ/YZ built-in Origin planes.
-  - Sketch creation must use semantic Command -> Transaction -> PartDocument.
-  - SketchId, support, placement and visibility are durable authored state.
-  - active Sketch edit context, camera and grid state are runtime-only.
-  - same 3D Document Viewport remains active; camera alignment does not lock navigation.
-  - Datum/Construction Plane, planar model-face support and topology naming are explicitly deferred.
-  - no 2D entities, constraints, solver, Body/Feature/Extrude, Assembly or Drawing implementation is authorized.
-  - Part schema v1 remains readable as an empty Sketch collection; successful Save writes schema v2.
-  - documentation impact is required before completion.
+  - SK-01 accepted and implemented on 2026-09-24.
+  - Part now owns durable empty Sketch records with SketchId, Origin-plane support, SketchPlacement and visibility.
+  - supported SK-01 creation supports are XY/XZ/YZ built-in Origin planes only.
+  - Sketch creation uses semantic Command -> Transaction -> PartDocument and is one Undo/Redo entry.
+  - Part domain schema v2 persists hosted Sketch state; schema v1 remains readable and upgrades on later successful Save.
+  - Sketch editing stays in the same 3D Document Viewport; entry aligns camera/grid but normal navigation remains free.
+  - active Sketch edit context, camera and grid runtime state are not persisted.
+  - the compiled CTest suite contains 35 tests including SK-01 host and Workbench lifecycle regressions.
+  - no 2D entities, constraints, solver, Datum/Construction Plane, planar-face support, topology naming, Body/Feature/Extrude, Assembly or Drawing implementation is active.
+  - documentation impact is satisfied and Product Browser is current.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
