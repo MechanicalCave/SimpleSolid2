@@ -9,6 +9,17 @@ target_include_directories(simplesolid2_core
 
 target_compile_features(simplesolid2_core PUBLIC cxx_std_20)
 
+add_library(simplesolid2_sketch STATIC
+    sketch/sketch_id.cpp
+)
+
+target_include_directories(simplesolid2_sketch
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/sketch/include
+)
+
+target_compile_features(simplesolid2_sketch PUBLIC cxx_std_20)
+
 add_library(simplesolid2_miniz STATIC
     ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2/miniz.c
     ${PROJECT_SOURCE_DIR}/third_party/miniz-3.1.2/miniz_zip.c
@@ -55,6 +66,7 @@ target_compile_features(simplesolid2_persistence PUBLIC cxx_std_20)
 add_library(simplesolid2_part STATIC
     part/part_document.cpp
     part/part_document_store.cpp
+    part/part_sketch.cpp
 )
 
 target_include_directories(simplesolid2_part
@@ -66,6 +78,7 @@ target_link_libraries(simplesolid2_part
     PUBLIC
         simplesolid2_core
         simplesolid2_persistence
+        simplesolid2_sketch
 )
 
 target_include_directories(simplesolid2_part

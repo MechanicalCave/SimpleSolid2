@@ -88,6 +88,19 @@ Zachowanie zaznaczenia w Viewporcie:
 
 Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 
+<!-- section-id: product.parts.sketch-host -->
+## Tworzenie pustego Sketchu
+
+W Operations użyj `Sketch`, a następnie wskaż jedną z płaszczyzn `XY Plane`, `XZ Plane` albo `YZ Plane` w Origin. Płaszczyznę możesz wskazać w Document Tree albo — gdy jest widoczna — w viewporcie 3D.
+
+Po poprawnym wyborze Part tworzy trwały pusty Sketch i pozostaje w tym samym Workbench oraz tym samym viewporcie 3D. Kamera automatycznie ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnej płaszczyzny.
+
+Automatyczne ustawienie widoku nie blokuje kamery. Podczas aktywnego Sketchu nadal możesz używać Pan, Zoom, Orbit i ViewCube. Nawigacja nie zmienia położenia Sketchu i sama nie dirty'uje Dokumentu.
+
+Użyj `Finish Sketch`, aby zakończyć bieżący tryb edycji. Sketch pozostaje authored obiektem Parta, jest widoczny w Document Tree i po `Save` przeżywa Close/Reopen z tym samym SketchId, supportem i placementem.
+
+W SK-01 Sketch jest celowo pusty. Nie ma jeszcze Line/Arc/Circle, constraintów, wymiarów ani solvera. Support może być obecnie tylko jedną z trzech płaszczyzn Origin; płaszczyzny konstrukcyjne/Datum oraz płaskie ściany modelu będą osobnymi późniejszymi etapami.
+
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i ViewCube
 
@@ -110,7 +123,7 @@ Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, n
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin, do pliku `.ss2part`.
+`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketches z ich trwałą tożsamością/supportem/placementem, do pliku `.ss2part`.
 
 Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Discard` albo `Cancel`.
 
@@ -123,9 +136,9 @@ Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty.
 
 Po restarcie aplikacji otwórz ten sam Projekt.
 
-SimpleSolid ponownie skanuje Workspace. Zapisany Part zostaje odnaleziony z tym samym DocumentId, zapisanymi właściwościami i zapisaną widocznością Origin.
+SimpleSolid ponownie skanuje Workspace. Zapisany Part zostaje odnaleziony z tym samym DocumentId, zapisanymi właściwościami, zapisaną widocznością Origin oraz zapisanymi Sketches.
 
-Historia Undo/Redo, aktywne zaznaczenie i stan kamery nie są zapisywane do pliku i po ponownym otwarciu zaczynają się od nowa.
+Historia Undo/Redo, aktywne zaznaczenie, aktywny tryb edycji Sketchu i stan kamery nie są zapisywane do pliku i po ponownym otwarciu zaczynają się od nowa.
 
 <!-- section-id: product.parts.conflicts -->
 ## Konflikt DocumentId i niepoprawne pliki
@@ -139,8 +152,8 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wp
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji oraz wspólny ustabilizowany fundament Workbench/Viewer 3D.
+Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, wspólny ustabilizowany fundament Workbench/Viewer 3D oraz pierwszy host lifecycle dla pustych Sketchy na płaszczyznach Origin.
 
 Bardzo wczesne testowe pliki `.ss2part` utworzone przed wprowadzeniem obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Part nie zawiera jeszcze Sketch, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
+Part nie zawiera jeszcze geometrii 2D Sketchu, constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.

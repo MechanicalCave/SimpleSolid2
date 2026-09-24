@@ -2,8 +2,11 @@
 
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/core/document_reference.hpp>
+#include <simplesolid2/part/part_sketch.hpp>
 
+#include <optional>
 #include <utility>
+#include <vector>
 
 namespace simplesolid2::part {
 
@@ -18,6 +21,7 @@ struct PartPresentationState final {
 struct PartAuthoredState final {
     core::DocumentProperties properties;
     PartPresentationState presentation;
+    std::vector<PartSketch> sketches;
 
     friend bool operator==(const PartAuthoredState&, const PartAuthoredState&) = default;
 };
@@ -66,6 +70,13 @@ public:
         core::BuiltinReferenceRole role) const noexcept {
         return state_.presentation.builtin_references.visible(role);
     }
+
+    [[nodiscard]] const std::vector<PartSketch>& sketches() const noexcept {
+        return state_.sketches;
+    }
+
+    [[nodiscard]] const PartSketch* findSketch(
+        const sketch::SketchId& id) const noexcept;
 
 private:
     friend class PartDocumentTransaction;

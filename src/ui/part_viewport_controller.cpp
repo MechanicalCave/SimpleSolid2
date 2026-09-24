@@ -119,6 +119,9 @@ PartViewportController::PartViewportController(
 
 void PartViewportController::setDocumentSession(
     application::DocumentSession* session) {
+    if (session_ != session) {
+        sketch_edit_placement_.reset();
+    }
     session_ = session;
     tree_->setDocumentSession(session_);
 
@@ -132,6 +135,7 @@ void PartViewportController::clear() {
         session_ != nullptr;
 
     session_ = nullptr;
+    sketch_edit_placement_.reset();
     tree_->clear();
 
     if (viewport_ != nullptr && had_document_session) {
@@ -164,6 +168,12 @@ void PartViewportController::refreshPresentation() {
     static_cast<void>(
         viewport_->setReferenceScene(buildScene()));
     applySelectionToSurfaces();
+}
+
+void PartViewportController::setSketchEditPlacement(
+    std::optional<part::SketchPlacement> placement) {
+    sketch_edit_placement_ = std::move(placement);
+    refreshPresentation();
 }
 
 std::optional<core::BuiltinReferenceRole>
@@ -201,14 +211,39 @@ viewer::ReferenceScene PartViewportController::buildScene() const {
     viewer::ReferenceScene scene;
     if (session_ == nullptr) return scene;
 
-    scene.grid = viewer::GridPresentation{
-        {},
-        xAxis,
-        yAxis,
-        100.0,
-        10.0,
-        5U,
-        true};
+    if (sketch_edit_placement_) {
+        const auto& placement =
+            *sketch_edit_placement_;
+        scene.grid = viewer::GridPresentation{
+            {
+                placement.origin[0],
+                placement.origin[1],
+                placement.origin[2],
+            },
+            {
+                placement.u_axis[0],
+                placement.u_axis[1],
+                placement.u_axis[2],
+            },
+            {
+                placement.v_axis[0],
+                placement.v_axis[1],
+                placement.v_axis[2],
+            },
+            100.0,
+            10.0,
+            5U,
+            true};
+    } else {
+        scene.grid = viewer::GridPresentation{
+            {},
+            xAxis,
+            yAxis,
+            100.0,
+            10.0,
+            5U,
+            true};
+    }
 
     for (const auto role : core::builtin_reference_roles) {
         scene.references.push_back(

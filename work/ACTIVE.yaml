@@ -1,27 +1,27 @@
 version: 1
 status: completed
-active_work: "work/PERSIST-01_NATIVE_DOCUMENT_PERSISTENCE_ARCHITECTURE.md"
+active_work: "work/SK-01_PART_SKETCH_HOST_LIFECYCLE.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
   - "adr/ADR-0003-cad-workbench-viewport-and-sketch-integration.md"
   - "adr/ADR-0004-native-document-container-and-persistence.md"
+  - "adr/ADR-0005-part-sketch-host-identity-and-edit-context.md"
 next:
-  - no implementation work is active after PERSIST-01
-  - Owner must accept the next explicit work contract before further CAD-domain implementation
-  - planned next major work is Sketcher architecture and implementation using Part-hosted persistence
+  - no implementation work is active after SK-01
+  - Owner must accept the next explicit Sketch work contract before further product implementation
+  - suggested next slice is SK-02 for the minimal shared 2D authored model and first Line entity with stable entity identity
+  - Datum/Construction Plane and planar model-face Sketch support remain later explicit contracts
 notes:
-  - PERSIST-01 accepted and implemented on 2026-09-24.
-  - Native top-level Documents use one portable ZIP-compatible package.
-  - Container v1 requires manifest.json and authored/document.json; derived/* is optional and disposable.
-  - The common manifest owns recognition/version/kind/DocumentId dispatch only; Part owns Part-authored payload semantics.
-  - Part domain schema is v1 in the accepted native representation.
-  - Future Part-hosted Sketch authored state persists through Part ownership; Sketch Core does not own a standalone file.
-  - miniz 3.1.2 and nlohmann/json 3.12.0 are vendored and pinned; normal builds do not fetch them.
-  - The experimental line-based SS2PART v1/v2 format is intentionally unsupported and has no migration requirement.
-  - Container parsing is bounded and fail-closed for unsafe/duplicate entries, unsupported versions/features and malformed mandatory content.
-  - Existing Project/Document identity, discovery, atomic Save and canonical DocumentSession behavior remain intact.
-  - The compiled CTest suite contains 33 tests, including persist01.native_document_container.
-  - Assembly/Drawing semantic schemas, Sketch implementation, tile/icon browsing and thumbnail generation remain out of scope.
-  - Root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
+  - SK-01 accepted and implemented on 2026-09-24.
+  - Part now owns durable empty Sketch records with SketchId, Origin-plane support, SketchPlacement and visibility.
+  - supported SK-01 creation supports are XY/XZ/YZ built-in Origin planes only.
+  - Sketch creation uses semantic Command -> Transaction -> PartDocument and is one Undo/Redo entry.
+  - Part domain schema v2 persists hosted Sketch state; schema v1 remains readable and upgrades on later successful Save.
+  - Sketch editing stays in the same 3D Document Viewport; entry aligns camera/grid but normal navigation remains free.
+  - active Sketch edit context, camera and grid runtime state are not persisted.
+  - the compiled CTest suite contains 35 tests including SK-01 host and Workbench lifecycle regressions.
+  - no 2D entities, constraints, solver, Datum/Construction Plane, planar-face support, topology naming, Body/Feature/Extrude, Assembly or Drawing implementation is active.
+  - documentation impact is satisfied and Product Browser is current.
+  - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.

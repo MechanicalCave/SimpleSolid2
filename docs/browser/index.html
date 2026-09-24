@@ -112,9 +112,11 @@ The current discovery backend provides Part candidates only. The dialog is docum
 
 The Workspace location flow rejects targets outside the current Workspace, rejects existing target files, and keeps private `.simplesolid` metadata outside the normal Document location tree.
 
-The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description, Engineering Revision or persistent Origin visibility goes through semantic commands and PartDocument transactions.
+The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description, Engineering Revision, persistent Origin visibility or creating a Part-hosted Sketch goes through semantic commands and PartDocument transactions.
 
-Closing and reopening a Part destroys runtime Undo/Redo history while preserving saved authored state and DocumentId on disk.
+SK-01 Sketch creation starts from the Workbench `Sketch` tool, validates a selected XY/XZ/YZ built-in Origin plane, creates one durable empty Sketch and enters a runtime edit context in the same 3D Viewport. `Finish Sketch` ends that runtime context without deleting the authored Sketch.
+
+Closing and reopening a Part destroys runtime Undo/Redo and Sketch edit context while preserving saved authored state, including SketchId/support/placement/visibility, and DocumentId on disk.
 
 <!-- section-id: internal.application-lifecycle.workbench -->
 ## Active document and Workbench lifecycle
@@ -132,9 +134,9 @@ Closing a dirty Part prompts for `Save`, `Discard` or `Cancel`.
 
 Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure keeps the Project open.
 
-After application restart, Recent Projects restores the Project location. Opening the Project creates a fresh ProjectSession, rebuilds document discovery and can reopen the same durable DocumentId with the same saved authored properties and Origin visibility.
+After application restart, Recent Projects restores the Project location. Opening the Project creates a fresh ProjectSession, rebuilds document discovery and can reopen the same durable DocumentId with the same saved authored properties, Origin visibility and hosted Sketch records.
 
-Runtime camera, selection and tab state start fresh.
+Runtime camera, selection, active Sketch edit context and tab state start fresh.
 
 <!-- section-id: internal.application-lifecycle.relocate -->
 ## Project move and relocation
@@ -217,11 +219,13 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 33 tests.
+The compiled CTest suite contains 35 tests.
 
 Project/Hub, PART-01 and WB-01 coverage remains active.
 
 PERSIST-01 adds `persist01.native_document_container` coverage for the native ZIP+JSON package boundary, including round-trip read/write, mandatory entries, optional derived entries, unsupported container versions, malformed JSON, unsafe/duplicate ZIP entries, ZIP64 rejection and bounded physical file size.
+
+SK-01 adds `sk01.part_sketch_host` and `sk01.workbench_sketch_host` coverage for Origin-plane support validation, stable SketchId creation, one-entry Undo/Redo restoration, Part schema v2 round-trip plus schema-v1 read compatibility, Sketch Tree presentation, Sketch-plane grid/camera alignment for XY/XZ/YZ, free runtime navigation without authored mutation, Finish Sketch and Save/Close/Reopen identity preservation.
 
 WB-01A adds or extends deterministic coverage for:
 
@@ -342,6 +346,21 @@ The production executable creates the concrete provider only in the application 
 The concrete provider contains recoverable OCCT/standard exceptions at its public/event boundary, logs the failure and fails closed instead of allowing those exceptions to unwind through Workbench UI.
 
 Boundary tests reject OCCT/provider tokens from domain/application APIs and Workbench UI.
+
+<!-- section-id: internal.cad-workbench-viewer.sketch-edit -->
+## Part Sketch host and 3D edit context
+
+SK-01 adds the first durable Part-hosted Sketch lifecycle without adding 2D drawing entities.
+
+The Operations surface provides `Sketch`. While the tool is active, the user selects one semantic built-in Origin plane: XY, XZ or YZ. Origin axes/point are rejected. The selected Tree item or Viewer token is only command input; the durable Sketch support is the semantic built-in reference role.
+
+Creation executes through `CreatePartSketchCommand`, DocumentSession validation/history and a Part transaction. One successful creation adds one authored Sketch with stable SketchId, Origin-plane support, explicit SketchPlacement and persistent visibility. Undo removes that Sketch and Redo restores the same SketchId/state.
+
+The active Sketch editor remains the existing Document Viewport. On entry, the runtime grid changes to the Sketch U/V frame, the camera aligns normal to the support plane and Fit is requested. This is only an initial view: normal Pan, Zoom, Orbit and ViewCube navigation remain available immediately afterward and do not mutate SketchPlacement, DocumentRevision or dirty state.
+
+`Finish Sketch` exits only the runtime editor context. The authored Sketch remains in the Part and in the normal Document Tree. Switching/closing Documents clears the runtime edit context safely.
+
+SK-01 supports only empty Sketches on XY/XZ/YZ Origin planes. Datum/Construction Plane support, planar model-face support, topology naming, 2D entities, constraints and solver behavior remain outside this implementation.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and responsive ViewCube
@@ -492,9 +511,11 @@ Operational documentation rules are defined in `governance/DOCUMENTATION.md`.
 <!-- section-id: internal.part-documents.model -->
 ## Current model
 
-The current `PartDocument` is persistent but still contains no Sketch, Body, Feature or modeled solid geometry.
+The current `PartDocument` is persistent and can host durable empty Sketch objects, but it still contains no Sketch 2D entities, Body, Feature or modeled solid geometry.
 
-Its authored state consists of stable `DocumentId`, common Document Properties and persistent presentation state for the seven built-in Origin references.
+Its authored state consists of stable `DocumentId`, common Document Properties, persistent presentation state for the seven built-in Origin references and an ordered collection of Part-hosted Sketch records.
+
+Each SK-01 Sketch has stable `SketchId`, semantic support restricted to XY/XZ/YZ built-in Origin planes, explicit `SketchPlacement` and persistent visibility. Part owns these host semantics; the future reusable Sketch Core does not own Part support or persistence.
 
 `DocumentRevision` is a technical monotonic counter for successful semantic mutations within the loaded lifecycle.
 
@@ -522,7 +543,9 @@ Qt / caller
 → atomic domain commit
 ```
 
-Current commands include common Document Properties and batch built-in reference visibility.
+Current commands include common Document Properties, batch built-in reference visibility and `CreatePartSketchCommand`.
+
+Sketch creation revalidates that support is XY/XZ/YZ Origin plane, derives its initial placement, allocates a stable SketchId and commits the new hosted Sketch as one transaction/Undo entry. Undo removes that authored Sketch; Redo restores the same SketchId and authored state.
 
 A multi-selection Show/Hide is one semantic command, one successful revision increment and one Undo entry.
 
@@ -544,9 +567,11 @@ Closing and reopening creates fresh runtime history.
 
 The native extension is `.ss2part`.
 
-Current schema version 2 stores authored identity/properties plus a compact built-in Origin visibility mask. It does not serialize ProjectId, DocumentSession, Undo/Redo, camera, active selection, Qt objects, Viewer objects or OCCT handles.
+Current Part domain schema version 2 stores authored identity/properties, a compact built-in Origin visibility mask and the hosted Sketch collection. Each Sketch record stores SketchId, Origin-plane support, explicit placement and visibility.
 
-Schema version 1 remains readable. Opening v1 does not rewrite the file. A later successful Save publishes the current v2 schema with deterministic default Origin visibility for the migrated state.
+It does not serialize ProjectId, DocumentSession, Undo/Redo, active Sketch edit context, camera, active selection, Qt objects, Viewer objects or OCCT handles.
+
+Part schema version 1 remains readable as an empty Sketch collection. Opening v1 does not rewrite the file. A later successful Save publishes current schema v2.
 
 Save uses shared staged atomic-file persistence. The save checkpoint changes only after a successful write/replace.
 
@@ -562,9 +587,11 @@ When a resolved Part is already open, a second Open request returns the existing
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The shared CAD Workbench and Viewer can present the Part Origin and reference grid, but PartDocument still has no Sketch, Body, Feature, geometry evaluation, recompute graph, modeled topology, persistent topology naming or Material model.
+The shared CAD Workbench and Viewer can present the Part Origin, reference grid and the runtime edit context of an empty Part-hosted Sketch.
 
-The Viewer is not a second model: no OCCT object is durable Part identity or authored state.
+SK-01 does not yet provide Sketch entities, constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, geometry evaluation, recompute graph, modeled topology, persistent topology naming or Material model.
+
+The Viewer is not a second model: no OCCT object or Viewer token is durable Part/Sketch identity, support or authored state.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.persistence" data-kind="internal" data-lang="en" data-path="docs/internal/PERSISTENCE.md">
 # Persistence — As-built
@@ -626,13 +653,18 @@ The current format identifier is `simplesolid.native-document`; container versio
 
 Shared persistence owns ZIP recognition, bounded parsing, common manifest recognition and container safety. It does not interpret Part engineering meaning.
 
-The Part domain owns `authored/document.json`. Current Part domain schema version 1 persists:
+The Part domain owns `authored/document.json`. Current Part domain schema version 2 persists:
 
 - Number;
 - Title;
 - Description;
 - Engineering Revision;
-- built-in Origin visibility.
+- built-in Origin visibility;
+- the ordered collection of Part-hosted Sketch records.
+
+Each SK-01 Sketch record persists a stable SketchId, built-in Origin-plane support, explicit SketchPlacement (origin plus local U/V axes) and persistent visibility. The Sketch is embedded authored Part state; it is not a standalone Document or file.
+
+Part schema version 1 remains readable. It restores an empty Sketch collection and opening it does not rewrite the file. A later successful Save writes current schema v2.
 
 DocumentId is stored only in the common manifest. ProjectId is not embedded in the Document. Workspace membership remains physical/runtime context.
 
@@ -676,6 +708,8 @@ The following state is not serialized as Part authored state:
 - camera / projection / pan / orbit / zoom;
 - selected set and primary selection;
 - reference grid runtime presentation;
+- active Sketch edit context;
+- Sketch support-pick tool state;
 - Qt objects;
 - Viewer provider objects and OCCT handles;
 - evaluated B-Rep or tessellation.
@@ -704,7 +738,7 @@ A `.ss2part` whose manifest declares another Document kind fails closed.
 <!-- section-id: internal.persistence.non-goals -->
 ## Current non-goals
 
-The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch persistence, modeled geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
+The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch 2D entity/constraint persistence, modeled geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
 
 The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented by PERSIST-01.
 
@@ -1035,6 +1069,19 @@ Viewport selection behavior is:
 
 After `Save`, Origin visibility survives closing and restarting the application.
 
+<!-- section-id: product.parts.sketch-host -->
+## Creating an empty Sketch
+
+In Operations, use `Sketch`, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when it is visible, in the 3D Viewport.
+
+After a valid selection, Part creates a durable empty Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane.
+
+Automatic alignment does not lock the camera. While the Sketch is active you can still use Pan, Zoom, Orbit and ViewCube. Navigation does not change Sketch placement and does not dirty the Document by itself.
+
+Use `Finish Sketch` to leave the current edit context. The Sketch remains an authored Part object, stays in Document Tree and after `Save` survives Close/Reopen with the same SketchId, support and placement.
+
+In SK-01 the Sketch is intentionally empty. Line/Arc/Circle, constraints, dimensions and a solver are not available yet. Support is currently limited to the three Origin planes; Construction/Datum planes and planar model faces are separate later stages.
+
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and ViewCube
 
@@ -1057,7 +1104,7 @@ Navigation and camera changes are temporary view state. They do not dirty the Pa
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state, including Origin visibility, to its `.ss2part` file.
+`Save` writes the current authored Part state, including Origin visibility and created Sketches with their durable identity/support/placement, to its `.ss2part` file.
 
 When closing a Part with unsaved changes, the application requires `Save`, `Discard` or `Cancel`.
 
@@ -1070,9 +1117,9 @@ If saving fails, the Document/Project remains open.
 
 After restarting the application, open the same Project.
 
-SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties and saved Origin visibility.
+SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties, saved Origin visibility and saved Sketch records.
 
-Undo/Redo history, active selection and camera state are not stored in the file and start fresh after reopening.
+Undo/Redo history, active selection, active Sketch edit context and camera state are not stored in the file and start fresh after reopening.
 
 <!-- section-id: product.parts.conflicts -->
 ## DocumentId conflicts and invalid files
@@ -1086,11 +1133,11 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility and the shared stabilized 3D Workbench/Viewer foundation.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the shared stabilized 3D Workbench/Viewer foundation and the first host lifecycle for empty Sketches on Origin planes.
 
 Very early test `.ss2part` files created before the current native format are not supported product data and are not migrated automatically.
 
-Part does not yet contain Sketch, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
+Part does not yet contain Sketch 2D geometry, constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -1353,6 +1400,19 @@ Zachowanie zaznaczenia w Viewporcie:
 
 Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 
+<!-- section-id: product.parts.sketch-host -->
+## Tworzenie pustego Sketchu
+
+W Operations użyj `Sketch`, a następnie wskaż jedną z płaszczyzn `XY Plane`, `XZ Plane` albo `YZ Plane` w Origin. Płaszczyznę możesz wskazać w Document Tree albo — gdy jest widoczna — w viewporcie 3D.
+
+Po poprawnym wyborze Part tworzy trwały pusty Sketch i pozostaje w tym samym Workbench oraz tym samym viewporcie 3D. Kamera automatycznie ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnej płaszczyzny.
+
+Automatyczne ustawienie widoku nie blokuje kamery. Podczas aktywnego Sketchu nadal możesz używać Pan, Zoom, Orbit i ViewCube. Nawigacja nie zmienia położenia Sketchu i sama nie dirty'uje Dokumentu.
+
+Użyj `Finish Sketch`, aby zakończyć bieżący tryb edycji. Sketch pozostaje authored obiektem Parta, jest widoczny w Document Tree i po `Save` przeżywa Close/Reopen z tym samym SketchId, supportem i placementem.
+
+W SK-01 Sketch jest celowo pusty. Nie ma jeszcze Line/Arc/Circle, constraintów, wymiarów ani solvera. Support może być obecnie tylko jedną z trzech płaszczyzn Origin; płaszczyzny konstrukcyjne/Datum oraz płaskie ściany modelu będą osobnymi późniejszymi etapami.
+
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i ViewCube
 
@@ -1375,7 +1435,7 @@ Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, n
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin, do pliku `.ss2part`.
+`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketches z ich trwałą tożsamością/supportem/placementem, do pliku `.ss2part`.
 
 Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Discard` albo `Cancel`.
 
@@ -1388,9 +1448,9 @@ Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty.
 
 Po restarcie aplikacji otwórz ten sam Projekt.
 
-SimpleSolid ponownie skanuje Workspace. Zapisany Part zostaje odnaleziony z tym samym DocumentId, zapisanymi właściwościami i zapisaną widocznością Origin.
+SimpleSolid ponownie skanuje Workspace. Zapisany Part zostaje odnaleziony z tym samym DocumentId, zapisanymi właściwościami, zapisaną widocznością Origin oraz zapisanymi Sketches.
 
-Historia Undo/Redo, aktywne zaznaczenie i stan kamery nie są zapisywane do pliku i po ponownym otwarciu zaczynają się od nowa.
+Historia Undo/Redo, aktywne zaznaczenie, aktywny tryb edycji Sketchu i stan kamery nie są zapisywane do pliku i po ponownym otwarciu zaczynają się od nowa.
 
 <!-- section-id: product.parts.conflicts -->
 ## Konflikt DocumentId i niepoprawne pliki
@@ -1404,11 +1464,11 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wp
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji oraz wspólny ustabilizowany fundament Workbench/Viewer 3D.
+Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, wspólny ustabilizowany fundament Workbench/Viewer 3D oraz pierwszy host lifecycle dla pustych Sketchy na płaszczyznach Origin.
 
 Bardzo wczesne testowe pliki `.ss2part` utworzone przed wprowadzeniem obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Part nie zawiera jeszcze Sketch, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
+Part nie zawiera jeszcze geometrii 2D Sketchu, constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty

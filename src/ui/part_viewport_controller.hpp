@@ -2,6 +2,7 @@
 
 #include "part_document_tree_controller.hpp"
 
+#include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
 #include <QObject>
@@ -32,6 +33,9 @@ public:
     void clear();
     void resetRuntimeState();
     void refreshPresentation();
+
+    void setSketchEditPlacement(
+        std::optional<part::SketchPlacement> placement);
 
     void setSelectionChangedHandler(
         SelectionChangedHandler handler) {
@@ -71,6 +75,8 @@ private:
     PartDocumentTreeController* tree_{};
     viewer::IDocumentViewport* viewport_{};
     application::DocumentSession* session_{};
+    std::optional<part::SketchPlacement>
+        sketch_edit_placement_;
 
     std::unordered_map<std::string, SemanticSelection>
         selections_;

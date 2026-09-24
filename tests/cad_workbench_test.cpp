@@ -288,7 +288,7 @@ int main(int argc, char* argv[]) {
 
     CHECK(tabs->count() == 2);
     CHECK(operations->text().contains(
-        QStringLiteral("No modeling operations")));
+        QStringLiteral("Sketch creates")));
 
     CHECK(workbench.activateDocument(first_id));
     CHECK(workbench.activeDocumentId().has_value());

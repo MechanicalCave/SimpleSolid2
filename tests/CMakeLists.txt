@@ -278,6 +278,23 @@ add_test(
     COMMAND persist01_native_document_container_test
 )
 
+add_executable(sk01_part_sketch_host_test
+    sk01_part_sketch_host_test.cpp
+)
+
+target_link_libraries(sk01_part_sketch_host_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(sk01_part_sketch_host_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk01.part_sketch_host
+    COMMAND sk01_part_sketch_host_test
+)
+
+
 add_executable(part01_document_session_test
     document_session_test.cpp
 )
@@ -576,6 +593,44 @@ add_test(
     COMMAND wb01a_workbench_document_dialog_integration_test
 )
 set_tests_properties(wb01a.workbench_document_dialog_integration PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 30
+)
+
+
+add_executable(sk01_workbench_sketch_host_test
+    sk01_workbench_sketch_host_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
+)
+
+target_include_directories(sk01_workbench_sketch_host_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/application
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(sk01_workbench_sketch_host_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+        Qt6::Test
+)
+
+target_compile_features(sk01_workbench_sketch_host_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk01.workbench_sketch_host
+    COMMAND sk01_workbench_sketch_host_test
+)
+
+set_tests_properties(sk01.workbench_sketch_host PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 30
 )

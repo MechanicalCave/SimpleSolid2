@@ -135,6 +135,21 @@ std::vector<OpenDocumentCandidate> openDocumentCandidates(
     return result;
 }
 
+std::optional<viewer::StandardView>
+standardViewForSketchSupport(
+    core::BuiltinReferenceRole role) noexcept {
+    switch (role) {
+    case core::BuiltinReferenceRole::xy_plane:
+        return viewer::StandardView::top;
+    case core::BuiltinReferenceRole::xz_plane:
+        return viewer::StandardView::front;
+    case core::BuiltinReferenceRole::yz_plane:
+        return viewer::StandardView::right;
+    default:
+        return std::nullopt;
+    }
+}
+
 QString partDisplayName(const application::DocumentSession& session) {
     const auto& title = session.document().properties().title;
     if (!title.empty()) {
@@ -309,6 +324,7 @@ void CadWorkbench::buildUi() {
             const std::vector<core::BuiltinReferenceRole>&,
             std::optional<core::BuiltinReferenceRole> primary) {
             refreshPropertiesContext(primary);
+            tryCreateSketchFromSupport(primary);
         });
 
     auto* properties_content = new QWidget(shell_);
@@ -443,9 +459,26 @@ void CadWorkbench::buildUi() {
     auto* operations_layout = new QVBoxLayout(operations_content);
     operations_layout->setContentsMargins(0, 0, 0, 0);
 
+    sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Sketch"),
+            operations_content);
+    sketch_button_->setObjectName(
+        QStringLiteral("sketchToolButton"));
+    operations_layout->addWidget(sketch_button_);
+
+    finish_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Sketch"),
+            operations_content);
+    finish_sketch_button_->setObjectName(
+        QStringLiteral("finishSketchButton"));
+    operations_layout->addWidget(
+        finish_sketch_button_);
+
     operations_placeholder_ = new QLabel(
         QStringLiteral(
-            "No modeling operations are available in this scope."),
+            "Sketch creates an empty Part-hosted Sketch on an Origin plane."),
         operations_content);
     operations_placeholder_->setObjectName(
         QStringLiteral("operationsPlaceholder"));
@@ -496,6 +529,17 @@ void CadWorkbench::buildUi() {
         this,
         [this] { applyProperties(); });
     QObject::connect(
+        sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { startSketchTool(); });
+    QObject::connect(
+        finish_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { finishSketch(); });
+
+    QObject::connect(
         document_tabs_,
         &QTabBar::currentChanged,
         this,
@@ -509,6 +553,7 @@ void CadWorkbench::buildUi() {
 
 void CadWorkbench::setProjectSession(
     application::ProjectSession* session) {
+    clearSketchRuntimeContext();
     session_ = session;
     active_document_id_.reset();
     document_view_states_.clear();
@@ -527,6 +572,7 @@ void CadWorkbench::setProjectSession(
 }
 
 void CadWorkbench::clearProjectSession() {
+    clearSketchRuntimeContext();
     session_ = nullptr;
     active_document_id_.reset();
     document_view_states_.clear();
@@ -643,9 +689,18 @@ bool CadWorkbench::activateDocument(
 }
 
 void CadWorkbench::activateTab(int index) {
+    const auto requested_id =
+        tabDocumentId(index);
+
+    if (active_document_id_ &&
+        (!requested_id ||
+         *requested_id != *active_document_id_)) {
+        clearSketchRuntimeContext();
+    }
+
     captureActiveViewState();
 
-    const auto id = tabDocumentId(index);
+    const auto id = requested_id;
     if (!id || session_ == nullptr ||
         session_->documentSession(*id) == nullptr) {
         active_document_id_.reset();
@@ -812,6 +867,202 @@ void CadWorkbench::applyProperties() {
             : QStringLiteral("No authored property change."));
 }
 
+void CadWorkbench::startSketchTool() {
+    if (activeDocumentSession() == nullptr) {
+        return;
+    }
+
+    if (sketch_support_pick_active_) {
+        clearSketchRuntimeContext();
+        status_->setText(
+            QStringLiteral(
+                "Sketch creation cancelled."));
+        syncActionState();
+        return;
+    }
+
+    if (active_sketch_id_) {
+        status_->setText(
+            QStringLiteral(
+                "Finish the active Sketch before creating another one."));
+        return;
+    }
+
+    sketch_support_pick_active_ = true;
+    operations_placeholder_->setText(
+        QStringLiteral(
+            "Sketch: select XY, XZ or YZ Origin plane in the Tree or 3D Viewport."));
+    status_->setText(
+        QStringLiteral(
+            "Sketch tool active — select an Origin plane."));
+    syncActionState();
+}
+
+void CadWorkbench::tryCreateSketchFromSupport(
+    std::optional<core::BuiltinReferenceRole> support) {
+    if (!sketch_support_pick_active_) {
+        return;
+    }
+
+    if (!support) {
+        return;
+    }
+
+    if (!part::isSketchOriginPlane(*support)) {
+        status_->setText(
+            QStringLiteral(
+                "Sketch support must be XY, XZ or YZ Origin plane."));
+        return;
+    }
+
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    const auto created =
+        document_session->execute(
+            application::CreatePartSketchCommand{
+                *support});
+    if (!created.ok()) {
+        showFailure(created.diagnostic);
+        return;
+    }
+
+    if (!created.changed ||
+        !created.sketch_id) {
+        status_->setText(
+            QStringLiteral(
+                "Sketch was not created."));
+        return;
+    }
+
+    sketch_support_pick_active_ = false;
+
+    const auto created_id =
+        *created.sketch_id;
+
+    refreshActiveContext();
+    enterSketchEdit(created_id);
+
+    status_->setText(
+        QStringLiteral(
+            "Sketch created — editing in the 3D Viewport. "
+            "Pan/Zoom/Orbit remain available."));
+}
+
+void CadWorkbench::enterSketchEdit(
+    const sketch::SketchId& sketch_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        !active_document_id_) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    const auto* sketch =
+        document_session->document()
+            .findSketch(sketch_id);
+    if (sketch == nullptr) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    active_sketch_id_ = sketch_id;
+    sketch_edit_document_id_ =
+        *active_document_id_;
+
+    viewport_controller_->setSketchEditPlacement(
+        sketch->placement);
+
+    if (viewport_ != nullptr) {
+        const auto standard_view =
+            standardViewForSketchSupport(
+                sketch->support.builtin_plane);
+        if (standard_view) {
+            static_cast<void>(
+                viewport_->setStandardView(
+                    *standard_view));
+        }
+        viewport_->fitAll();
+    }
+
+    operations_placeholder_->setText(
+        QStringLiteral(
+            "Sketch edit context is active in the same 3D Viewport. "
+            "This SK-01 Sketch is intentionally empty; 2D entities come later."));
+    syncActionState();
+}
+
+void CadWorkbench::finishSketch() {
+    if (!active_sketch_id_) {
+        return;
+    }
+
+    clearSketchRuntimeContext();
+    status_->setText(
+        QStringLiteral(
+            "Sketch edit finished. The Sketch remains authored in the Part."));
+    syncActionState();
+}
+
+void CadWorkbench::clearSketchRuntimeContext() {
+    sketch_support_pick_active_ = false;
+    active_sketch_id_.reset();
+    sketch_edit_document_id_.reset();
+
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->setSketchEditPlacement(
+            std::nullopt);
+    }
+
+    if (operations_placeholder_ != nullptr) {
+        operations_placeholder_->setText(
+            QStringLiteral(
+                "Sketch creates an empty Part-hosted Sketch on an Origin plane."));
+    }
+}
+
+void CadWorkbench::reconcileSketchRuntimeContext() {
+    if (!active_sketch_id_) {
+        return;
+    }
+
+    if (!active_document_id_ ||
+        !sketch_edit_document_id_ ||
+        *active_document_id_ !=
+            *sketch_edit_document_id_) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    const auto* sketch =
+        document_session->document()
+            .findSketch(*active_sketch_id_);
+    if (sketch == nullptr) {
+        clearSketchRuntimeContext();
+        return;
+    }
+
+    viewport_controller_->setSketchEditPlacement(
+        sketch->placement);
+
+    operations_placeholder_->setText(
+        QStringLiteral(
+            "Sketch edit context is active in the same 3D Viewport. "
+            "This SK-01 Sketch is intentionally empty; 2D entities come later."));
+}
+
 void CadWorkbench::undo() {
     auto* document_session = activeDocumentSession();
     if (document_session == nullptr) return;
@@ -937,6 +1188,10 @@ void CadWorkbench::closeTab(int index) {
         active_document_id_.has_value() &&
         *active_document_id_ == *id;
 
+    if (closing_active) {
+        clearSketchRuntimeContext();
+    }
+
     int next_index = -1;
     {
         const QSignalBlocker blocked{document_tabs_};
@@ -1001,11 +1256,13 @@ void CadWorkbench::refreshActiveContext() {
     engineering_revision_->setEnabled(true);
 
     viewport_controller_->setDocumentSession(document_session);
+    reconcileSketchRuntimeContext();
     updateTabPresentation(document_session->documentId());
     syncActionState();
 }
 
 void CadWorkbench::clearActiveContext() {
+    clearSketchRuntimeContext();
     active_path_->setText(QStringLiteral("No Part is open."));
     active_id_->clear();
 
@@ -1150,6 +1407,23 @@ void CadWorkbench::syncActionState() {
     save_button_->setEnabled(
         active && document_session->needsSave());
     close_document_button_->setEnabled(active);
+
+    const bool editing_sketch =
+        active &&
+        active_sketch_id_.has_value() &&
+        sketch_edit_document_id_.has_value() &&
+        active_document_id_.has_value() &&
+        *sketch_edit_document_id_ ==
+            *active_document_id_;
+
+    sketch_button_->setText(
+        sketch_support_pick_active_
+            ? QStringLiteral("Cancel Sketch")
+            : QStringLiteral("Sketch"));
+    sketch_button_->setEnabled(
+        active && !editing_sketch);
+    finish_sketch_button_->setEnabled(
+        editing_sketch);
 
     new_part_button_->setEnabled(session_ != nullptr);
     open_document_button_->setEnabled(session_ != nullptr);

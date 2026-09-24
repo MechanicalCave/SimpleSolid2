@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -18,6 +19,11 @@ struct SetDocumentPropertiesCommand final {
 struct SetBuiltinReferenceVisibilityCommand final {
     std::vector<core::BuiltinReferenceRole> targets;
     bool visible{true};
+};
+
+struct CreatePartSketchCommand final {
+    core::BuiltinReferenceRole support{
+        core::BuiltinReferenceRole::xy_plane};
 };
 
 enum class DocumentSessionErrorCode {
@@ -39,6 +45,16 @@ struct DocumentSessionDiagnostic final {
 
 struct DocumentSessionResult final {
     bool changed{false};
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
+struct CreatePartSketchResult final {
+    bool changed{false};
+    std::optional<sketch::SketchId> sketch_id;
     DocumentSessionDiagnostic diagnostic;
 
     [[nodiscard]] bool ok() const noexcept {
@@ -76,6 +92,8 @@ public:
         const SetDocumentPropertiesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const SetBuiltinReferenceVisibilityCommand& command);
+    [[nodiscard]] CreatePartSketchResult execute(
+        const CreatePartSketchCommand& command);
     [[nodiscard]] DocumentSessionResult undo();
     [[nodiscard]] DocumentSessionResult redo();
     [[nodiscard]] DocumentSessionResult save();

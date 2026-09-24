@@ -3,11 +3,15 @@
 #include <nlohmann/json.hpp>
 
 #include <algorithm>
+#include <array>
 #include <cctype>
+#include <cmath>
 #include <cstdint>
+#include <set>
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 namespace simplesolid2::part {
 namespace {
@@ -51,10 +55,70 @@ PartSaveResult saveFailure(
     };
 }
 
+const char* supportRoleName(
+    core::BuiltinReferenceRole role) noexcept {
+    switch (role) {
+    case core::BuiltinReferenceRole::xy_plane:
+        return "xy_plane";
+    case core::BuiltinReferenceRole::xz_plane:
+        return "xz_plane";
+    case core::BuiltinReferenceRole::yz_plane:
+        return "yz_plane";
+    default:
+        return "";
+    }
+}
+
+std::optional<core::BuiltinReferenceRole>
+parseSupportRole(std::string_view value) noexcept {
+    if (value == "xy_plane") {
+        return core::BuiltinReferenceRole::xy_plane;
+    }
+    if (value == "xz_plane") {
+        return core::BuiltinReferenceRole::xz_plane;
+    }
+    if (value == "yz_plane") {
+        return core::BuiltinReferenceRole::yz_plane;
+    }
+    return std::nullopt;
+}
+
+nlohmann::json vectorJson(
+    const std::array<double, 3>& value) {
+    return nlohmann::json::array(
+        {value[0], value[1], value[2]});
+}
+
 std::string serializeAuthored(
     const PartDocument& document) {
     const auto& properties =
         document.properties();
+
+    nlohmann::json sketches =
+        nlohmann::json::array();
+    for (const auto& sketch : document.sketches()) {
+        sketches.push_back(
+            {
+                {"id", std::string{sketch.id.value()}},
+                {"support",
+                 {
+                     {"kind", "builtin_origin_plane"},
+                     {"builtin_plane",
+                      supportRoleName(
+                          sketch.support.builtin_plane)},
+                 }},
+                {"placement",
+                 {
+                     {"origin",
+                      vectorJson(sketch.placement.origin)},
+                     {"u_axis",
+                      vectorJson(sketch.placement.u_axis)},
+                     {"v_axis",
+                      vectorJson(sketch.placement.v_axis)},
+                 }},
+                {"visible", sketch.visible},
+            });
+    }
 
     nlohmann::json authored{
         {"properties",
@@ -72,6 +136,7 @@ std::string serializeAuthored(
                   document.presentation()
                       .builtin_references.mask())},
          }},
+        {"sketches", std::move(sketches)},
     };
 
     std::string text = authored.dump(2);
@@ -105,8 +170,148 @@ std::optional<std::uint8_t> parseVisibilityMask(
     return static_cast<std::uint8_t>(parsed);
 }
 
+std::optional<std::array<double, 3>>
+parseVector3(const nlohmann::json& value) {
+    if (!value.is_array() ||
+        value.size() != 3U) {
+        return std::nullopt;
+    }
+
+    std::array<double, 3> result{};
+    for (std::size_t index = 0U;
+         index < result.size();
+         ++index) {
+        const auto& item = value[index];
+        if (!item.is_number()) {
+            return std::nullopt;
+        }
+
+        const auto parsed = item.get<double>();
+        if (!std::isfinite(parsed)) {
+            return std::nullopt;
+        }
+        result[index] = parsed;
+    }
+
+    return result;
+}
+
+bool parseSketches(
+    const nlohmann::json& sketches_json,
+    std::vector<PartSketch>& sketches,
+    std::string& error) {
+    if (!sketches_json.is_array()) {
+        error = "Native Part sketches payload must be an array";
+        return false;
+    }
+
+    std::set<std::string> ids;
+
+    for (const auto& item : sketches_json) {
+        if (!item.is_object() ||
+            item.size() != 4U ||
+            !item.contains("id") ||
+            !item.contains("support") ||
+            !item.contains("placement") ||
+            !item.contains("visible") ||
+            !item["id"].is_string() ||
+            !item["visible"].is_boolean()) {
+            error = "Native Part contains malformed Sketch record";
+            return false;
+        }
+
+        const auto serialized_id =
+            item["id"].get<std::string>();
+        auto id =
+            sketch::SketchId::parse(
+                serialized_id);
+        if (!id) {
+            error = "Native Part contains invalid SketchId";
+            return false;
+        }
+        if (!ids.insert(serialized_id).second) {
+            error = "Native Part contains duplicate SketchId";
+            return false;
+        }
+
+        const auto& support_json =
+            item["support"];
+        if (!support_json.is_object() ||
+            support_json.size() != 2U ||
+            !support_json.contains("kind") ||
+            !support_json.contains("builtin_plane") ||
+            !support_json["kind"].is_string() ||
+            !support_json["builtin_plane"].is_string() ||
+            support_json["kind"].get<std::string>() !=
+                "builtin_origin_plane") {
+            error = "Native Part contains malformed Sketch support";
+            return false;
+        }
+
+        const auto role =
+            parseSupportRole(
+                support_json[
+                    "builtin_plane"].get<std::string>());
+        if (!role) {
+            error = "Native Part contains unsupported Sketch support";
+            return false;
+        }
+
+        const auto support =
+            partSketchSupportForBuiltinPlane(*role);
+        if (!support) {
+            error = "Native Part contains invalid Sketch support";
+            return false;
+        }
+
+        const auto& placement_json =
+            item["placement"];
+        if (!placement_json.is_object() ||
+            placement_json.size() != 3U ||
+            !placement_json.contains("origin") ||
+            !placement_json.contains("u_axis") ||
+            !placement_json.contains("v_axis")) {
+            error = "Native Part contains malformed Sketch placement";
+            return false;
+        }
+
+        const auto origin =
+            parseVector3(placement_json["origin"]);
+        const auto u_axis =
+            parseVector3(placement_json["u_axis"]);
+        const auto v_axis =
+            parseVector3(placement_json["v_axis"]);
+        if (!origin || !u_axis || !v_axis) {
+            error = "Native Part contains invalid Sketch placement vectors";
+            return false;
+        }
+
+        SketchPlacement placement{
+            *origin,
+            *u_axis,
+            *v_axis};
+        if (!sketchPlacementMatchesSupport(
+                placement,
+                *support)) {
+            error =
+                "Native Part Sketch placement does not match its Origin-plane support";
+            return false;
+        }
+
+        sketches.push_back(
+            PartSketch{
+                std::move(*id),
+                *support,
+                placement,
+                item["visible"].get<bool>()});
+    }
+
+    return true;
+}
+
 std::optional<PartAuthoredState> parseAuthored(
     const std::string& text,
+    int schema_version,
     std::string& error) {
     const auto authored =
         nlohmann::json::parse(
@@ -114,11 +319,18 @@ std::optional<PartAuthoredState> parseAuthored(
             nullptr,
             false);
 
+    const bool legacy_v1 =
+        schema_version == 1;
+    const std::size_t expected_fields =
+        legacy_v1 ? 2U : 3U;
+
     if (authored.is_discarded() ||
         !authored.is_object() ||
-        authored.size() != 2U ||
+        authored.size() != expected_fields ||
         !authored.contains("properties") ||
-        !authored.contains("presentation")) {
+        !authored.contains("presentation") ||
+        (!legacy_v1 &&
+         !authored.contains("sketches"))) {
         error =
             "Native Part authored payload has an invalid top-level schema";
         return std::nullopt;
@@ -183,6 +395,14 @@ std::optional<PartAuthoredState> parseAuthored(
             "engineering_revision"].get<std::string>();
     state.presentation.builtin_references =
         *visibility;
+
+    if (!legacy_v1 &&
+        !parseSketches(
+            authored["sketches"],
+            state.sketches,
+            error)) {
+        return std::nullopt;
+    }
 
     return state;
 }
@@ -324,8 +544,9 @@ PartLoadResult PartDocumentStore::load(
             path);
     }
 
-    if (descriptor.domain_schema_version !=
-        current_schema_version) {
+    if (descriptor.domain_schema_version != 1 &&
+        descriptor.domain_schema_version !=
+            current_schema_version) {
         return loadFailure(
             PartStoreErrorCode::unsupported_schema,
             "Unsupported native Part domain schema version",
@@ -346,6 +567,7 @@ PartLoadResult PartDocumentStore::load(
     auto state =
         parseAuthored(
             container.package->authored_json,
+            descriptor.domain_schema_version,
             parse_error);
     if (!state) {
         return loadFailure(
