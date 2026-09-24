@@ -6,7 +6,7 @@
 <!-- section-id: product.parts.create -->
 ## Creating a new Part
 
-After opening a Project, you first see a neutral Workspace with no active Part editor. Use `New Part…` there to create a Document and open its Part Workbench.
+After opening a Project, you see the Project Workspace Dashboard with no active Part editor. Use `New Part…` on the persistent Project Workspace toolbar to create a Document and open its Part Workbench. That toolbar remains visible while a Part is being edited.
 
 The dialog shows the folder hierarchy of the current Workspace. Choose the target folder, enter the Part filename and confirm creation.
 
@@ -38,15 +38,17 @@ Filename and path are not Document identity. You may rename or move the `.ss2par
 <!-- section-id: product.parts.workbench -->
 ## Opening Parts and using the Workbench
 
-Use `Open…` in the neutral Workspace to choose a discovered Document. Opening a Project by itself does not activate the Part Workbench; an editor appears only after a specific Document is created or opened.
+Use `Open…` on the persistent Project Workspace toolbar to choose a discovered Document. `Open…`, `New Part…` and `Refresh` remain available while another Part is already being edited. Opening a Project by itself does not activate the Part Workbench; an editor appears only after a specific Document is created or opened.
 
 The dialog shows Document kind, name, location and status. You can resize the columns by dragging the header separators; by default, Location receives more space than Name. The current product supplies Part Documents only, but the Open UI is not Part-specific.
 
 Invalid native files and DocumentId conflicts remain visible but cannot be opened as resolved Documents.
 
-Several Parts can remain open at once. Use the bottom Document Tabs to switch the active Part. Opening a Part that is already open activates the existing tab/session instead of creating a second mutable session. Closing the last Document returns to the neutral Workspace without closing the Project.
+Several Parts can remain open at once. The bottom Document Tabs belong to Project Workspace and switch the active Document. Opening a Part that is already open activates the existing tab/session instead of creating a second mutable session.
 
-The left side contains Document Tree. The center contains the 3D Viewport with a tool-launch strip above it. The right side contains Properties and contextual Operations. Status/diagnostic information is below the tabs.
+Use `Workspace` on the top toolbar to return to the Project Workspace Dashboard without closing any open Documents. Their tabs remain available, and clicking a tab returns to that Part. Navigating to Workspace does not Save or change authored state. Closing the last Document also returns to Workspace without closing the Project.
+
+In the active Part Workbench, the left side contains Document Tree. The center contains the 3D Viewport with a tool-launch strip above it. The right side contains Properties and contextual Operations. Status/diagnostic information belongs to the active Workbench.
 
 <!-- section-id: product.parts.edit -->
 ## Editing Document properties
@@ -133,7 +135,7 @@ When closing a Part with unsaved changes, the application requires `Save`, `Disc
 
 When closing the complete Project or application while any Part is dirty, the choices are `Save All`, `Discard` and `Cancel`.
 
-If saving fails, the Document/Project remains open. Closing the last open Part keeps the Project open and returns to the neutral Workspace.
+If saving fails, the Document/Project remains open. Closing the last open Part keeps the Project open and returns to the Project Workspace Dashboard. Using `Workspace` by itself never closes the Part.
 
 <!-- section-id: product.parts.restart -->
 ## Restart and reopen

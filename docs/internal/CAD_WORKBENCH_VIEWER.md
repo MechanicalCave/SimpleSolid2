@@ -6,7 +6,9 @@
 <!-- section-id: internal.cad-workbench-viewer.shell -->
 ## Shared Workbench shell
 
-WB-01 implements one reusable `CadWorkbenchShell` containing Document Tree, an editor tool-launch strip above the Editor Surface, Properties, contextual Operations, bottom Document Tabs and Status/Diagnostics.
+WB-01 implements one reusable `CadWorkbenchShell` containing Document Tree, an editor tool-launch strip above the Editor Surface, Properties, contextual Operations and Status/Diagnostics.
+
+WS-01 moves Project-level Document Tabs out of `CadWorkbenchShell` and into Project Workspace Shell. The Workbench shell therefore represents only one active CAD Document editor.
 
 The shell owns layout only. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
 
@@ -15,13 +17,15 @@ WB-01A stabilized the existing shell/Viewer interaction without adding a new CAD
 <!-- section-id: internal.cad-workbench-viewer.active-document -->
 ## Active document context
 
-ProjectSession may keep several canonical DocumentSessions open.
+ProjectSession may keep several canonical DocumentSessions open, while Project Workspace Shell owns `Workspace | Document(DocumentId)` navigation and Project-level Document Tabs.
 
-`CadWorkbench` owns one active DocumentId. Bottom tab changes switch the Tree, Properties, Viewer scene, selection and camera context while leaving other DocumentSessions open.
+`CadWorkbench` receives only the currently active Part `DocumentSession` plus Workspace path context needed for presentation. It does not own ProjectSession, discovery or tabs.
 
-Camera state is stored in a Workbench runtime map keyed by DocumentId. Closing a tab drops that runtime view state.
+Project-level tab changes ask the host to bind a different open DocumentSession. Navigating to Workspace detaches the Workbench without closing the DocumentSession. Returning to that Document rebinds it.
 
-SK-01A requires detach-before-destroy ordering: Tree/Viewport controllers are disconnected from the active DocumentSession before ProjectSession erases it. This prevents runtime cleanup from dereferencing a destroyed session during Document or Project close.
+Camera state is stored in Workbench runtime state keyed by DocumentId so Document → Workspace → Document and inter-Document switching can restore the view while the Project remains open. Project close resets that runtime state.
+
+SK-01A/WS-01 require detach-before-destroy ordering: Tree/Viewport controllers are disconnected from the active DocumentSession before ProjectSession erases it. This prevents runtime cleanup from dereferencing a destroyed session during Document or Project close.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
 ## Origin and reference scene

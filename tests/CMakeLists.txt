@@ -80,6 +80,7 @@ add_executable(ph02a_project_hub_selection_ux_test
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/project_workspace_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
 
@@ -138,6 +139,7 @@ add_executable(ph02b_project_hub_availability_ux_test
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/project_workspace_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
 
@@ -446,6 +448,14 @@ add_test(
 )
 
 
+add_test(
+    NAME ws01.project_workspace_boundaries
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_project_workspace_boundaries.cmake
+)
+
+
 add_executable(wb01_viewer_selection_test
     viewer_selection_test.cpp
 )
@@ -573,11 +583,15 @@ add_executable(wb01a_workbench_document_dialog_integration_test
     ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/project_workspace_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
 )
 target_include_directories(wb01a_workbench_document_dialog_integration_test
     PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/application
         ${PROJECT_SOURCE_DIR}/src/ui
 )
 target_link_libraries(wb01a_workbench_document_dialog_integration_test

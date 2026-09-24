@@ -1,10 +1,8 @@
 #include "cad_workbench.hpp"
 #include "cad_workbench_shell.hpp"
-#include "open_document_dialog.hpp"
 #include "part_document_tree_controller.hpp"
 #include "part_viewport_controller.hpp"
 #include "view_cube_widget.hpp"
-#include "workspace_location_dialog.hpp"
 
 #include <QFormLayout>
 #include <QGridLayout>
@@ -15,16 +13,11 @@
 #include <QMessageBox>
 #include <QPlainTextEdit>
 #include <QPushButton>
-#include <QSignalBlocker>
 #include <QStackedWidget>
-#include <QTabBar>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
 
-#include <algorithm>
-#include <iomanip>
-#include <sstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -58,83 +51,6 @@ QString fromFilesystemPath(const std::filesystem::path& value) {
 #endif
 }
 
-QString documentIndexStateLabel(application::DocumentIndexState state) {
-    switch (state) {
-    case application::DocumentIndexState::resolved:
-        return QStringLiteral("Ready");
-    case application::DocumentIndexState::identity_conflict:
-        return QStringLiteral("Identity conflict");
-    case application::DocumentIndexState::invalid:
-        return QStringLiteral("Invalid Part");
-    }
-    return QStringLiteral("Unavailable");
-}
-
-QString documentCandidateName(
-    const application::DocumentIndexEntry& entry) {
-    if (!entry.title.empty()) {
-        return fromUtf8(entry.title);
-    }
-
-    if (!entry.relative_paths.empty()) {
-        auto name = fromFilesystemPath(
-            entry.relative_paths.front().stem());
-        if (!name.isEmpty()) return name;
-    }
-
-    return QStringLiteral("<untitled>");
-}
-
-QString documentCandidateLocations(
-    const application::DocumentIndexEntry& entry) {
-    QString result;
-    for (const auto& path : entry.relative_paths) {
-        if (!result.isEmpty()) {
-            result += QStringLiteral("\n");
-        }
-        result += fromFilesystemPath(path);
-    }
-    return result;
-}
-
-std::vector<OpenDocumentCandidate> openDocumentCandidates(
-    const application::DocumentWorkspaceIndex& index) {
-    std::vector<OpenDocumentCandidate> result;
-    result.reserve(index.entries().size());
-
-    for (const auto& entry : index.entries()) {
-        const bool openable =
-            entry.state ==
-                application::DocumentIndexState::resolved &&
-            entry.document_id.has_value();
-
-        QString tooltip;
-        if (entry.document_id) {
-            tooltip =
-                QStringLiteral("DocumentId: ") +
-                fromUtf8(entry.document_id->value());
-        }
-        if (!entry.diagnostic.empty()) {
-            if (!tooltip.isEmpty()) {
-                tooltip += QStringLiteral("\n");
-            }
-            tooltip += fromUtf8(entry.diagnostic);
-        }
-
-        result.push_back(
-            OpenDocumentCandidate{
-                QStringLiteral("Part"),
-                documentCandidateName(entry),
-                documentCandidateLocations(entry),
-                documentIndexStateLabel(entry.state),
-                std::move(tooltip),
-                entry.document_id,
-                openable});
-    }
-
-    return result;
-}
-
 std::optional<viewer::StandardView>
 standardViewForSketchSupport(
     core::BuiltinReferenceRole role) noexcept {
@@ -150,20 +66,6 @@ standardViewForSketchSupport(
     }
 }
 
-QString partDisplayName(const application::DocumentSession& session) {
-    const auto& title = session.document().properties().title;
-    if (!title.empty()) {
-        return fromUtf8(title);
-    }
-
-    const auto stem = session.path().stem();
-    auto fallback = fromFilesystemPath(stem);
-    if (fallback.isEmpty()) {
-        fallback = QStringLiteral("<untitled Part>");
-    }
-    return fallback;
-}
-
 } // namespace
 
 CadWorkbench::CadWorkbench(QWidget* parent)
@@ -175,7 +77,9 @@ CadWorkbench::CadWorkbench(
     : QWidget{parent},
       viewport_factory_{std::move(viewport_factory)} {
     buildUi();
-    clearProjectSession();
+    deactivateDocument();
+    status_->setText(
+        QStringLiteral("No Part is active."));
 }
 
 void CadWorkbench::buildUi() {
@@ -212,7 +116,6 @@ void CadWorkbench::buildUi() {
     lifecycle_actions.addWidget(close_document_button_);
 
     document_tree_ = &shell_->documentTree();
-    document_tabs_ = &shell_->documentTabs();
     status_ = &shell_->statusLabel();
 
     tree_controller_ =
@@ -527,326 +430,72 @@ void CadWorkbench::buildUi() {
         this,
         [this] { finishSketch(); });
 
-    QObject::connect(
-        document_tabs_,
-        &QTabBar::currentChanged,
-        this,
-        [this](int index) { activateTab(index); });
-    QObject::connect(
-        document_tabs_,
-        &QTabBar::tabCloseRequested,
-        this,
-        [this](int index) { closeTab(index); });
-}
-
-void CadWorkbench::setProjectSession(
-    application::ProjectSession* session) {
-    clearSketchRuntimeContext();
-    session_ = session;
-    active_document_id_.reset();
-    document_view_states_.clear();
-    viewport_controller_->resetRuntimeState();
-    syncOpenTabs();
-    refreshWorkspaceIndex();
-
-    if (document_tabs_->count() > 0) {
-        activateTab(document_tabs_->currentIndex());
-    } else {
-        clearActiveContext();
-        status_->setText(
-            QStringLiteral(
-                "Project open. No CAD Document is active."));
-    }
-
-    notifyDocumentPresence();
-}
-
-void CadWorkbench::clearProjectSession() {
-    clearSketchRuntimeContext();
-    session_ = nullptr;
-    active_document_id_.reset();
-    document_view_states_.clear();
-    viewport_controller_->resetRuntimeState();
-
-    {
-        const QSignalBlocker blocked{document_tabs_};
-        while (document_tabs_->count() > 0) {
-            document_tabs_->removeTab(0);
-        }
-        document_tabs_->setCurrentIndex(-1);
-    }
-
-    clearActiveContext();
-    status_->setText(QStringLiteral("No Project is open."));
-    notifyDocumentPresence();
-}
-
-void CadWorkbench::refreshWorkspaceIndex() {
-    if (session_ == nullptr) {
-        status_->setText(QStringLiteral("No Project is open."));
-        return;
-    }
-
-    const auto refreshed = session_->refreshDocuments();
-    if (!refreshed.ok()) {
-        status_->setText(
-            QStringLiteral("Document discovery warning: ") +
-            fromUtf8(refreshed.diagnostic.message));
-        return;
-    }
-
-    status_->setText(
-        QStringLiteral("%1 native Part entr%2 available in Workspace.")
-            .arg(
-                static_cast<qulonglong>(
-                    session_->documentIndex().entries().size()))
-            .arg(
-                session_->documentIndex().entries().size() == 1U
-                    ? QStringLiteral("y")
-                    : QStringLiteral("ies")));
-
-    for (const auto& id : session_->openDocumentIds()) {
-        updateTabPresentation(id);
-    }
-}
-
-void CadWorkbench::syncOpenTabs() {
-    const QSignalBlocker blocked{document_tabs_};
-
-    while (document_tabs_->count() > 0) {
-        document_tabs_->removeTab(0);
-    }
-
-    if (session_ == nullptr) {
-        document_tabs_->setCurrentIndex(-1);
-        return;
-    }
-
-    for (const auto& id : session_->openDocumentIds()) {
-        ensureDocumentTab(id);
-    }
-
-    document_tabs_->setCurrentIndex(
-        document_tabs_->count() > 0 ? 0 : -1);
-}
-
-void CadWorkbench::ensureDocumentTab(
-    const core::DocumentId& document_id) {
-    if (session_ == nullptr || tabIndexFor(document_id) >= 0) return;
-
-    auto* document_session = session_->documentSession(document_id);
-    if (document_session == nullptr) return;
-
-    const int index = document_tabs_->addTab(
-        partDisplayName(*document_session));
-    document_tabs_->setTabData(
-        index,
-        fromUtf8(document_id.value()));
-    updateTabPresentation(document_id);
 }
 
 bool CadWorkbench::activateDocument(
-    const core::DocumentId& document_id) {
-    if (session_ == nullptr) return false;
-
-    auto opened = session_->openDocument(document_id);
-    if (!opened.ok()) {
-        showFailure(opened.diagnostic);
+    application::DocumentSession* session,
+    std::filesystem::path workspace_root) {
+    if (session == nullptr) {
+        deactivateDocument();
         return false;
     }
 
-    ensureDocumentTab(document_id);
-    const int index = tabIndexFor(document_id);
-    if (index < 0) return false;
-
-    document_tabs_->setCurrentIndex(index);
-    if (document_tabs_->currentIndex() == index) {
-        activateTab(index);
-    }
-
-    status_->setText(
-        opened.reused_session
-            ? QStringLiteral(
-                  "Part was already open; activated existing DocumentSession.")
-            : QStringLiteral("Part opened."));
-    notifyDocumentPresence();
-    return true;
-}
-
-void CadWorkbench::activateTab(int index) {
-    const auto requested_id =
-        tabDocumentId(index);
-
-    if (active_document_id_ &&
-        (!requested_id ||
-         *requested_id != *active_document_id_)) {
-        clearSketchRuntimeContext();
+    if (document_session_ == session) {
+        workspace_root_ = std::move(workspace_root);
+        refreshActiveContext();
+        status_->setText(
+            QStringLiteral("Part Document activated."));
+        return true;
     }
 
     captureActiveViewState();
-
-    const auto id = requested_id;
-    if (!id || session_ == nullptr ||
-        session_->documentSession(*id) == nullptr) {
-        active_document_id_.reset();
-        clearActiveContext();
-        return;
+    clearSketchRuntimeContext();
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->clear();
     }
 
-    active_document_id_ = *id;
+    document_session_ = session;
+    workspace_root_ = std::move(workspace_root);
+
     restoreActiveViewState();
     refreshActiveContext();
-}
-
-int CadWorkbench::tabIndexFor(
-    const core::DocumentId& document_id) const {
-    const auto id = fromUtf8(document_id.value());
-    for (int index = 0; index < document_tabs_->count(); ++index) {
-        if (document_tabs_->tabData(index).toString() == id) {
-            return index;
-        }
-    }
-    return -1;
-}
-
-std::optional<core::DocumentId>
-CadWorkbench::tabDocumentId(int index) const {
-    if (index < 0 || index >= document_tabs_->count()) {
-        return std::nullopt;
-    }
-
-    const auto encoded =
-        toUtf8(document_tabs_->tabData(index).toString());
-    return core::DocumentId::parse(encoded);
-}
-
-std::filesystem::path CadWorkbench::defaultPartPath() const {
-    if (session_ == nullptr) return "Part001.ss2part";
-
-    for (unsigned index = 1U; index <= 9999U; ++index) {
-        std::ostringstream name;
-        name << "Part" << std::setw(3) << std::setfill('0')
-             << index << ".ss2part";
-
-        const auto relative = std::filesystem::path{name.str()};
-        std::error_code ec;
-        if (!std::filesystem::exists(
-                session_->workspaceRoot() / relative,
-                ec) &&
-            !ec) {
-            return relative;
-        }
-    }
-
-    return "Part.ss2part";
-}
-
-bool CadWorkbench::createPartInteractive(
-    QWidget* dialog_parent) {
-    return newPart(dialog_parent);
-}
-
-bool CadWorkbench::openDocumentInteractive(
-    QWidget* dialog_parent) {
-    return openDocument(dialog_parent);
-}
-
-void CadWorkbench::refreshWorkspaceDocuments() {
-    refreshWorkspaceIndex();
-}
-
-bool CadWorkbench::hasOpenDocuments() const noexcept {
-    return document_tabs_ != nullptr &&
-           document_tabs_->count() > 0;
-}
-
-bool CadWorkbench::newPart(
-    QWidget* dialog_parent) {
-    if (session_ == nullptr) return false;
-
-    WorkspaceLocationDialog dialog{
-        session_->workspaceRoot(),
-        QStringLiteral("Part"),
-        QStringLiteral(".ss2part"),
-        fromFilesystemPath(
-            defaultPartPath().filename()),
-        dialog_parent != nullptr
-            ? dialog_parent
-            : this};
-
-    if (dialog.exec() != QDialog::Accepted) {
-        return false;
-    }
-
-    const auto relative =
-        dialog.selectedRelativeFilePath();
-    if (!relative) return false;
-
-    auto created =
-        session_->createPart(*relative);
-    if (!created.ok()) {
-        showFailure(created.diagnostic);
-        refreshWorkspaceIndex();
-        return false;
-    }
-
-    ensureDocumentTab(
-        created.session->documentId());
-    const int index =
-        tabIndexFor(
-            created.session->documentId());
-    document_tabs_->setCurrentIndex(index);
-    activateTab(index);
-    refreshWorkspaceIndex();
     status_->setText(
-        QStringLiteral(
-            "New Part created and saved."));
-    notifyDocumentPresence();
+        QStringLiteral("Part Document activated."));
     return true;
 }
 
-bool CadWorkbench::openDocument(
-    QWidget* dialog_parent) {
-    if (session_ == nullptr) return false;
-
-    const auto refreshed =
-        session_->refreshDocuments();
-    if (!refreshed.ok()) {
-        status_->setText(
-            QStringLiteral(
-                "Document discovery warning: ") +
-            fromUtf8(
-                refreshed.diagnostic.message));
+void CadWorkbench::deactivateDocument() {
+    if (document_session_ != nullptr) {
+        captureActiveViewState();
     }
 
-    OpenDocumentDialog dialog{
-        openDocumentCandidates(
-            session_->documentIndex()),
-        dialog_parent != nullptr
-            ? dialog_parent
-            : this};
+    clearSketchRuntimeContext();
+    document_session_ = nullptr;
+    workspace_root_.clear();
 
-    if (dialog.exec() != QDialog::Accepted) {
-        return false;
+    clearActiveContext();
+    status_->setText(
+        QStringLiteral("No Part Document is active."));
+}
+
+void CadWorkbench::resetRuntimeState() {
+    deactivateDocument();
+    document_view_states_.clear();
+    status_->setText(
+        QStringLiteral(
+            "No Part Document is active."));
+}
+
+void CadWorkbench::forgetDocumentRuntimeState(
+    const core::DocumentId& document_id) {
+    if (document_session_ != nullptr &&
+        document_session_->documentId() ==
+            document_id) {
+        deactivateDocument();
     }
 
-    const auto document_id =
-        dialog.selectedDocumentId();
-    if (!document_id) return false;
-
-    return activateDocument(*document_id);
-}
-
-application::DocumentSession*
-CadWorkbench::activeDocumentSession() noexcept {
-    if (session_ == nullptr || !active_document_id_) return nullptr;
-    return session_->documentSession(*active_document_id_);
-}
-
-const application::DocumentSession*
-CadWorkbench::activeDocumentSession() const noexcept {
-    if (session_ == nullptr || !active_document_id_) return nullptr;
-    return session_->documentSession(*active_document_id_);
+    document_view_states_.erase(
+        std::string{document_id.value()});
 }
 
 void CadWorkbench::applyProperties() {
@@ -1012,8 +661,7 @@ void CadWorkbench::enterSketchEdit(
     const sketch::SketchId& sketch_id) {
     auto* document_session =
         activeDocumentSession();
-    if (document_session == nullptr ||
-        !active_document_id_) {
+    if (document_session == nullptr) {
         clearSketchRuntimeContext();
         return;
     }
@@ -1028,7 +676,7 @@ void CadWorkbench::enterSketchEdit(
 
     active_sketch_id_ = sketch_id;
     sketch_edit_document_id_ =
-        *active_document_id_;
+        document_session->documentId();
 
     viewport_controller_->setSketchEditPlacement(
         sketch->placement);
@@ -1091,9 +739,9 @@ void CadWorkbench::reconcileSketchRuntimeContext() {
         return;
     }
 
-    if (!active_document_id_ ||
+    if (document_session_ == nullptr ||
         !sketch_edit_document_id_ ||
-        *active_document_id_ !=
+        document_session_->documentId() !=
             *sketch_edit_document_id_) {
         clearSketchRuntimeContext();
         return;
@@ -1158,132 +806,30 @@ void CadWorkbench::redo() {
 }
 
 void CadWorkbench::save() {
-    auto* document_session = activeDocumentSession();
+    auto* document_session =
+        activeDocumentSession();
     if (document_session == nullptr) return;
 
-    const auto result = document_session->save();
+    const auto result =
+        document_session->save();
     if (!result.ok()) {
         showFailure(result.diagnostic);
         return;
     }
 
-    refreshWorkspaceIndex();
     refreshActiveContext();
-    status_->setText(QStringLiteral("Part saved."));
+    status_->setText(
+        QStringLiteral("Part saved."));
 }
 
 void CadWorkbench::closeActiveDocument() {
-    if (!active_document_id_) return;
-    const int index = tabIndexFor(*active_document_id_);
-    if (index >= 0) {
-        closeTab(index);
-    }
-}
-
-void CadWorkbench::closeTab(int index) {
-    if (session_ == nullptr) return;
-
-    const auto id = tabDocumentId(index);
-    if (!id) return;
-
-    auto* document_session = session_->documentSession(*id);
-    if (document_session == nullptr) {
-        document_tabs_->removeTab(index);
+    if (document_session_ == nullptr ||
+        !close_document_handler_) {
         return;
     }
 
-    bool discard = false;
-    if (document_session->needsSave()) {
-        QMessageBox box{
-            QMessageBox::Warning,
-            QStringLiteral("Unsaved Part"),
-            QStringLiteral(
-                "This Part contains unsaved authored changes.\n"
-                "Save them before closing?"),
-            QMessageBox::NoButton,
-            this};
-
-        auto* save_button =
-            box.addButton(
-                QStringLiteral("Save"),
-                QMessageBox::AcceptRole);
-        auto* discard_button =
-            box.addButton(
-                QStringLiteral("Discard"),
-                QMessageBox::DestructiveRole);
-        auto* cancel_button =
-            box.addButton(
-                QStringLiteral("Cancel"),
-                QMessageBox::RejectRole);
-
-        box.exec();
-
-        if (box.clickedButton() == cancel_button ||
-            box.clickedButton() == nullptr) {
-            return;
-        }
-
-        if (box.clickedButton() == save_button) {
-            const auto saved = document_session->save();
-            if (!saved.ok()) {
-                showFailure(saved.diagnostic);
-                return;
-            }
-        } else if (box.clickedButton() == discard_button) {
-            discard = true;
-        }
-    }
-
-    const bool closing_active =
-        active_document_id_.has_value() &&
-        *active_document_id_ == *id;
-
-    // Runtime controllers keep non-owning DocumentSession pointers.
-    // Detach them while the owning ProjectSession still owns the
-    // session; closeDocument() may erase it immediately.
-    if (closing_active) {
-        clearSketchRuntimeContext();
-        viewport_controller_->clear();
-    }
-
-    if (!session_->closeDocument(*id, discard)) {
-        if (closing_active) {
-            refreshActiveContext();
-        }
-        status_->setText(
-            QStringLiteral(
-                "Part remains open because it still has unsaved changes."));
-        return;
-    }
-
-    document_view_states_.erase(
-        std::string{id->value()});
-
-    int next_index = -1;
-    {
-        const QSignalBlocker blocked{document_tabs_};
-        document_tabs_->removeTab(index);
-        if (document_tabs_->count() > 0) {
-            next_index = std::min(
-                index,
-                document_tabs_->count() - 1);
-            document_tabs_->setCurrentIndex(next_index);
-        } else {
-            document_tabs_->setCurrentIndex(-1);
-        }
-    }
-
-    if (closing_active) {
-        active_document_id_.reset();
-        if (next_index >= 0) {
-            activateTab(next_index);
-        } else {
-            clearActiveContext();
-        }
-    }
-
-    status_->setText(QStringLiteral("Part closed."));
-    notifyDocumentPresence();
+    close_document_handler_(
+        document_session_->documentId());
 }
 
 void CadWorkbench::refreshActiveContext() {
@@ -1306,7 +852,7 @@ void CadWorkbench::refreshActiveContext() {
     std::error_code ec;
     const auto relative = std::filesystem::relative(
         document_session->path(),
-        session_->workspaceRoot(),
+        workspace_root_,
         ec);
 
     active_path_->setText(
@@ -1325,8 +871,8 @@ void CadWorkbench::refreshActiveContext() {
 
     viewport_controller_->setDocumentSession(document_session);
     reconcileSketchRuntimeContext();
-    updateTabPresentation(document_session->documentId());
     syncActionState();
+    notifyDocumentStateChanged();
 }
 
 void CadWorkbench::clearActiveContext() {
@@ -1350,7 +896,7 @@ void CadWorkbench::clearActiveContext() {
 
 void CadWorkbench::captureActiveViewState() {
     if (viewport_ == nullptr ||
-        !active_document_id_.has_value()) {
+        document_session_ == nullptr) {
         return;
     }
 
@@ -1358,18 +904,20 @@ void CadWorkbench::captureActiveViewState() {
     if (!state) return;
 
     document_view_states_.insert_or_assign(
-        std::string{active_document_id_->value()},
+        std::string{
+            document_session_->documentId().value()},
         *state);
 }
 
 void CadWorkbench::restoreActiveViewState() {
     if (viewport_ == nullptr ||
-        !active_document_id_.has_value()) {
+        document_session_ == nullptr) {
         return;
     }
 
     const auto key =
-        std::string{active_document_id_->value()};
+        std::string{
+            document_session_->documentId().value()};
     const auto found =
         document_view_states_.find(key);
 
@@ -1480,9 +1028,9 @@ void CadWorkbench::syncActionState() {
         active &&
         active_sketch_id_.has_value() &&
         sketch_edit_document_id_.has_value() &&
-        active_document_id_.has_value() &&
+        document_session_ != nullptr &&
         *sketch_edit_document_id_ ==
-            *active_document_id_;
+            document_session_->documentId();
 
     sketch_button_->setText(
         QStringLiteral("Sketch"));
@@ -1503,119 +1051,12 @@ void CadWorkbench::syncActionState() {
 
 }
 
-void CadWorkbench::notifyDocumentPresence() {
-    if (document_presence_handler_) {
-        document_presence_handler_(
-            hasOpenDocuments());
+void CadWorkbench::notifyDocumentStateChanged() {
+    if (document_session_ != nullptr &&
+        document_state_changed_handler_) {
+        document_state_changed_handler_(
+            document_session_->documentId());
     }
-}
-
-void CadWorkbench::updateTabPresentation(
-    const core::DocumentId& document_id) {
-    if (session_ == nullptr) return;
-
-    const int index = tabIndexFor(document_id);
-    if (index < 0) return;
-
-    const auto* document_session =
-        session_->documentSession(document_id);
-    if (document_session == nullptr) return;
-
-    auto label = partDisplayName(*document_session);
-    if (document_session->needsSave()) {
-        label += QStringLiteral(" *");
-    }
-
-    document_tabs_->setTabText(index, label);
-    document_tabs_->setTabToolTip(
-        index,
-        QStringLiteral("DocumentId: ") +
-            fromUtf8(document_id.value()) +
-            QStringLiteral("\nPath: ") +
-            fromFilesystemPath(document_session->path()));
-}
-
-ProjectCloseDisposition CadWorkbench::prepareProjectClose() {
-    if (session_ == nullptr ||
-        !session_->hasDirtyDocuments()) {
-        return ProjectCloseDisposition::clean;
-    }
-
-    QMessageBox box{
-        QMessageBox::Warning,
-        QStringLiteral("Unsaved Parts"),
-        QStringLiteral(
-            "One or more open Parts contain unsaved authored changes.\n"
-            "Save all changes before closing the Project?"),
-        QMessageBox::NoButton,
-        this};
-
-    auto* save_button =
-        box.addButton(
-            QStringLiteral("Save All"),
-            QMessageBox::AcceptRole);
-    auto* discard_button =
-        box.addButton(
-            QStringLiteral("Discard"),
-            QMessageBox::DestructiveRole);
-    auto* cancel_button =
-        box.addButton(
-            QStringLiteral("Cancel"),
-            QMessageBox::RejectRole);
-
-    box.exec();
-
-    if (box.clickedButton() == cancel_button ||
-        box.clickedButton() == nullptr) {
-        return ProjectCloseDisposition::cancel;
-    }
-
-    if (box.clickedButton() == discard_button) {
-        return ProjectCloseDisposition::discard;
-    }
-
-    if (box.clickedButton() == save_button) {
-        const auto saved =
-            session_->saveAllDirtyDocuments();
-        if (!saved.ok()) {
-            showFailure(saved.diagnostic);
-            return ProjectCloseDisposition::cancel;
-        }
-
-        for (const auto& id : session_->openDocumentIds()) {
-            updateTabPresentation(id);
-        }
-        syncActionState();
-        return ProjectCloseDisposition::clean;
-    }
-
-    return ProjectCloseDisposition::cancel;
-}
-
-void CadWorkbench::showFailure(
-    const application::ProjectDocumentDiagnostic& diagnostic) {
-    auto message = fromUtf8(diagnostic.message);
-
-    if (!diagnostic.path.empty()) {
-        message +=
-            QStringLiteral("\n\nPath: ") +
-            fromFilesystemPath(diagnostic.path);
-    }
-
-    if (!diagnostic.candidates.empty()) {
-        message += QStringLiteral(
-            "\n\nConflicting locations:");
-        for (const auto& path : diagnostic.candidates) {
-            message +=
-                QStringLiteral("\n• ") +
-                fromFilesystemPath(path);
-        }
-    }
-
-    QMessageBox::warning(
-        this,
-        QStringLiteral("Part Document"),
-        message);
 }
 
 void CadWorkbench::showFailure(

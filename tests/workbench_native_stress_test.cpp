@@ -1,5 +1,6 @@
 #include "cad_workbench.hpp"
 
+#include <simplesolid2/application/project_session.hpp>
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
@@ -172,9 +173,10 @@ int main(int argc, char* argv[]) {
         }};
 
     workbench.resize(1200, 780);
-    workbench.setProjectSession(&*opened.session);
 
-    if (!workbench.activateDocument(document_id) ||
+    if (!workbench.activateDocument(
+            opened.session->documentSession(document_id),
+            workspace) ||
         viewport == nullptr) {
         return EXIT_FAILURE;
     }

@@ -5,7 +5,6 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QSplitter>
-#include <QTabBar>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
@@ -73,15 +72,6 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
 
     root->addWidget(splitter, 1);
 
-    document_tabs_ = new QTabBar(this);
-    document_tabs_->setObjectName(QStringLiteral("documentTabs"));
-    document_tabs_->setDocumentMode(true);
-    document_tabs_->setExpanding(false);
-    document_tabs_->setMovable(true);
-    document_tabs_->setTabsClosable(true);
-    document_tabs_->setUsesScrollButtons(true);
-    root->addWidget(document_tabs_);
-
     status_ = new QLabel(this);
     status_->setObjectName(QStringLiteral("workbenchStatus"));
     status_->setWordWrap(true);
@@ -98,10 +88,6 @@ QHBoxLayout& CadWorkbenchShell::editorToolsLayout() noexcept {
 
 QTreeWidget& CadWorkbenchShell::documentTree() noexcept {
     return *document_tree_;
-}
-
-QTabBar& CadWorkbenchShell::documentTabs() noexcept {
-    return *document_tabs_;
 }
 
 QLabel& CadWorkbenchShell::statusLabel() noexcept {

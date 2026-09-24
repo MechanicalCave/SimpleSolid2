@@ -4,7 +4,6 @@
 
 class QHBoxLayout;
 class QLabel;
-class QTabBar;
 class QTreeWidget;
 class QVBoxLayout;
 class QWidget;
@@ -18,7 +17,6 @@ public:
     [[nodiscard]] QHBoxLayout& documentActionsLayout() noexcept;
     [[nodiscard]] QHBoxLayout& editorToolsLayout() noexcept;
     [[nodiscard]] QTreeWidget& documentTree() noexcept;
-    [[nodiscard]] QTabBar& documentTabs() noexcept;
     [[nodiscard]] QLabel& statusLabel() noexcept;
 
     void setEditorSurface(QWidget* widget);
@@ -37,7 +35,6 @@ private:
     QHBoxLayout* editor_tools_layout_{};
     QVBoxLayout* properties_host_layout_{};
     QVBoxLayout* operations_host_layout_{};
-    QTabBar* document_tabs_{};
     QLabel* status_{};
 
     QWidget* editor_surface_{};

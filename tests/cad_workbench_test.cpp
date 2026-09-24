@@ -1,5 +1,6 @@
 #include "cad_workbench.hpp"
 
+#include <simplesolid2/application/project_session.hpp>
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
 #include <QAbstractItemView>
@@ -10,7 +11,6 @@
 #include <QLineEdit>
 #include <QPushButton>
 #include <QStackedWidget>
-#include <QTabBar>
 #include <QTreeWidget>
 #include <QWidget>
 
@@ -205,12 +205,16 @@ int main(int argc, char* argv[]) {
                 viewport,
                 viewport};
         }};
-    workbench.setProjectSession(&*opened.session);
     CHECK(viewport != nullptr);
 
-    auto* tabs =
-        workbench.findChild<QTabBar*>(
-            QStringLiteral("documentTabs"));
+    std::optional<core::DocumentId>
+        close_requested;
+    workbench.setCloseDocumentHandler(
+        [&close_requested](
+            const core::DocumentId& id) {
+            close_requested = id;
+        });
+
     auto* tree =
         workbench.findChild<QTreeWidget*>(
             QStringLiteral("documentTree"));
@@ -264,7 +268,6 @@ int main(int argc, char* argv[]) {
         workbench.findChild<QAction*>(
             QStringLiteral("viewCubeTopAction"));
 
-    CHECK(tabs != nullptr);
     CHECK(tree != nullptr);
     CHECK(editor != nullptr);
     CHECK(operations != nullptr);
@@ -283,14 +286,14 @@ int main(int argc, char* argv[]) {
     CHECK(reference_visibility != nullptr);
     CHECK(top_view_action != nullptr);
 
-    CHECK(tabs->count() == 2);
     CHECK(operations->text() ==
           QStringLiteral("No active tool."));
 
-    CHECK(workbench.activateDocument(first_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(first_id),
+        workspace));
     CHECK(workbench.activeDocumentId().has_value());
     CHECK(*workbench.activeDocumentId() == first_id);
-    CHECK(tabs->count() == 2);
     CHECK(title->text() == QStringLiteral("Drive Shaft"));
 
     viewer::CameraState first_camera;
@@ -302,7 +305,9 @@ int main(int argc, char* argv[]) {
     first_camera.scale = 42.0;
     CHECK(viewport->setCameraState(first_camera));
 
-    CHECK(workbench.activateDocument(second_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(second_id),
+        workspace));
     CHECK(*workbench.activeDocumentId() == second_id);
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == viewer::CameraState{});
@@ -316,15 +321,21 @@ int main(int argc, char* argv[]) {
     second_camera.scale = 88.0;
     CHECK(viewport->setCameraState(second_camera));
 
-    CHECK(workbench.activateDocument(first_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(first_id),
+        workspace));
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == first_camera);
 
-    CHECK(workbench.activateDocument(second_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(second_id),
+        workspace));
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == second_camera);
 
-    CHECK(workbench.activateDocument(first_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(first_id),
+        workspace));
     CHECK(viewport->cameraState().has_value());
     CHECK(*viewport->cameraState() == first_camera);
 
@@ -557,33 +568,58 @@ int main(int argc, char* argv[]) {
     save->click();
     CHECK(!first_session->needsSave());
 
-    CHECK(workbench.activateDocument(second_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(second_id),
+        workspace));
     CHECK(*workbench.activeDocumentId() == second_id);
     CHECK(title->text() == QStringLiteral("Housing"));
     CHECK(tree->topLevelItem(0)->text(0) ==
           QStringLiteral("Housing"));
 
-    CHECK(workbench.activateDocument(first_id));
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(first_id),
+        workspace));
     CHECK(*workbench.activeDocumentId() == first_id);
-    CHECK(tabs->count() == 2);
     CHECK(title->text() == QStringLiteral("Drive Shaft Rev"));
 
-    // SK-01A P0 regression: closing the active Part must detach
-    // Workbench/Viewer non-owning pointers before ProjectSession
-    // erases the owning DocumentSession.
+    // WS-01 boundary: Part Workbench requests close by stable
+    // DocumentId but does not erase Project-owned DocumentSessions.
     close_document->click();
     QApplication::processEvents();
+    CHECK(close_requested.has_value());
+    CHECK(*close_requested == first_id);
     CHECK(
-        opened.session->documentSession(first_id) ==
+        opened.session->documentSession(first_id) !=
         nullptr);
     CHECK(workbench.activeDocumentId().has_value());
+    CHECK(*workbench.activeDocumentId() == first_id);
+
+    const auto first_revision_before_workspace =
+        first_session->document().revision();
+    const bool first_dirty_before_workspace =
+        first_session->needsSave();
+
+    workbench.deactivateDocument();
+    CHECK(!workbench.activeDocumentId().has_value());
+    CHECK(!title->isEnabled());
+    CHECK(
+        opened.session->documentSession(first_id) !=
+        nullptr);
+    CHECK(
+        first_session->document().revision() ==
+        first_revision_before_workspace);
+    CHECK(
+        first_session->needsSave() ==
+        first_dirty_before_workspace);
+
+    CHECK(workbench.activateDocument(
+        opened.session->documentSession(second_id),
+        workspace));
     CHECK(*workbench.activeDocumentId() == second_id);
-    CHECK(tabs->count() == 1);
     CHECK(title->text() == QStringLiteral("Housing"));
 
-    workbench.clearProjectSession();
+    workbench.deactivateDocument();
     CHECK(!workbench.activeDocumentId().has_value());
-    CHECK(tabs->count() == 0);
     CHECK(!title->isEnabled());
 
     return EXIT_SUCCESS;

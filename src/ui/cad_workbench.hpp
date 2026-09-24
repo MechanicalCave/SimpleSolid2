@@ -1,6 +1,6 @@
 #pragma once
 
-#include <simplesolid2/application/project_session.hpp>
+#include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/sketch/sketch_id.hpp>
 #include <simplesolid2/viewer/camera_state.hpp>
 
@@ -18,7 +18,6 @@ class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
-class QTabBar;
 class QStackedWidget;
 class QTreeWidget;
 class QWidget;
@@ -30,12 +29,6 @@ class PartDocumentTreeController;
 class PartViewportController;
 class ViewCubeWidget;
 
-enum class ProjectCloseDisposition {
-    clean,
-    discard,
-    cancel,
-};
-
 class CadWorkbench final : public QWidget {
 public:
     explicit CadWorkbench(QWidget* parent = nullptr);
@@ -43,44 +36,43 @@ public:
         ViewportFactory viewport_factory,
         QWidget* parent = nullptr);
 
-    void setProjectSession(application::ProjectSession* session);
-    void clearProjectSession();
+    [[nodiscard]] bool activateDocument(
+        application::DocumentSession* session,
+        std::filesystem::path workspace_root);
+    void deactivateDocument();
+    void resetRuntimeState();
+    void forgetDocumentRuntimeState(
+        const core::DocumentId& document_id);
 
-    [[nodiscard]] ProjectCloseDisposition prepareProjectClose();
-
-    [[nodiscard]] std::optional<core::DocumentId> activeDocumentId() const {
-        return active_document_id_;
+    [[nodiscard]] std::optional<core::DocumentId>
+    activeDocumentId() const {
+        if (document_session_ == nullptr) {
+            return std::nullopt;
+        }
+        return document_session_->documentId();
     }
 
-    [[nodiscard]] bool activateDocument(const core::DocumentId& document_id);
+    using CloseDocumentHandler =
+        std::function<void(
+            const core::DocumentId&)>;
+    void setCloseDocumentHandler(
+        CloseDocumentHandler handler) {
+        close_document_handler_ =
+            std::move(handler);
+    }
 
-    [[nodiscard]] bool createPartInteractive(
-        QWidget* dialog_parent = nullptr);
-    [[nodiscard]] bool openDocumentInteractive(
-        QWidget* dialog_parent = nullptr);
-    void refreshWorkspaceDocuments();
-    [[nodiscard]] bool hasOpenDocuments() const noexcept;
-
-    using DocumentPresenceHandler =
-        std::function<void(bool has_open_documents)>;
-    void setDocumentPresenceHandler(
-        DocumentPresenceHandler handler) {
-        document_presence_handler_ =
+    using DocumentStateChangedHandler =
+        std::function<void(
+            const core::DocumentId&)>;
+    void setDocumentStateChangedHandler(
+        DocumentStateChangedHandler handler) {
+        document_state_changed_handler_ =
             std::move(handler);
     }
 
 private:
     void buildUi();
-    void refreshWorkspaceIndex();
-    void syncOpenTabs();
-    void ensureDocumentTab(const core::DocumentId& document_id);
-    void activateTab(int index);
-    void closeTab(int index);
 
-    [[nodiscard]] bool newPart(
-        QWidget* dialog_parent = nullptr);
-    [[nodiscard]] bool openDocument(
-        QWidget* dialog_parent = nullptr);
     void applyProperties();
     void startSketchTool();
     void cancelSketchTool();
@@ -105,31 +97,39 @@ private:
     void refreshPropertiesContext(
         std::optional<core::BuiltinReferenceRole> primary);
     void syncActionState();
-    void updateTabPresentation(const core::DocumentId& document_id);
-    void notifyDocumentPresence();
+    void notifyDocumentStateChanged();
 
-    [[nodiscard]] application::DocumentSession* activeDocumentSession() noexcept;
-    [[nodiscard]] const application::DocumentSession* activeDocumentSession() const noexcept;
-    [[nodiscard]] std::filesystem::path defaultPartPath() const;
-    [[nodiscard]] int tabIndexFor(const core::DocumentId& document_id) const;
-    [[nodiscard]] std::optional<core::DocumentId> tabDocumentId(int index) const;
+    [[nodiscard]] application::DocumentSession*
+    activeDocumentSession() noexcept {
+        return document_session_;
+    }
+    [[nodiscard]] const application::DocumentSession*
+    activeDocumentSession() const noexcept {
+        return document_session_;
+    }
 
-    void showFailure(const application::ProjectDocumentDiagnostic& diagnostic);
-    void showFailure(const application::DocumentSessionDiagnostic& diagnostic);
+    void showFailure(
+        const application::DocumentSessionDiagnostic& diagnostic);
 
-    application::ProjectSession* session_{};
-    std::optional<core::DocumentId> active_document_id_;
+    application::DocumentSession* document_session_{};
+    std::filesystem::path workspace_root_;
     ViewportFactory viewport_factory_;
     viewer::IDocumentViewport* viewport_{};
-    std::unordered_map<std::string, viewer::CameraState>
+    std::unordered_map<
+        std::string,
+        viewer::CameraState>
         document_view_states_;
+
     bool sketch_support_pick_active_{};
     std::optional<core::DocumentId>
         sketch_edit_document_id_;
     std::optional<sketch::SketchId>
         active_sketch_id_;
-    DocumentPresenceHandler
-        document_presence_handler_;
+
+    CloseDocumentHandler
+        close_document_handler_;
+    DocumentStateChangedHandler
+        document_state_changed_handler_;
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
@@ -164,7 +164,6 @@ private:
     QPushButton* cancel_sketch_button_{};
     QPushButton* finish_sketch_button_{};
 
-    QTabBar* document_tabs_{};
     QLabel* status_{};
 };
 

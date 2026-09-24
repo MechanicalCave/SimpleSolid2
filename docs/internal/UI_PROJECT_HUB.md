@@ -8,21 +8,28 @@
 
 The Qt application uses a `QStackedWidget` with Project Hub and Workspace pages.
 
-The Workspace shows the active Project name, ProjectId and Workspace path plus a Document host.
+The Workspace page contains a persistent Project Workspace Shell. It shows Project name, ProjectId and Workspace path and owns the Project-level navigation surfaces:
 
-With zero open CAD Documents the host shows a neutral Workspace launch surface. It does not show an inactive Part editor. Creating/opening a Part activates the Part Workbench; future document kinds are routed to their appropriate editor by DocumentKind.
+```text
+TOP       Project toolbar
+CONTENT   Workspace Dashboard or active Document Workbench
+BOTTOM    Project-level Document Tabs
+```
 
-`CadWorkbenchShell` owns only fixed presentation regions for an active CAD Document:
+The Project toolbar remains visible in both Workspace and Document contexts. Workspace Dashboard is a first-class Project surface, not only an empty-state placeholder; it remains reachable while Documents are open.
+
+Project Workspace navigation is runtime-only: `Workspace` or `Document(DocumentId)`. Open DocumentSessions may remain alive while Workspace Dashboard is visible.
+
+`CadWorkbenchShell` owns only fixed presentation regions for the active Part Document:
 
 ```text
 LEFT      Document Tree
 CENTER    tool-launch strip + Editor Surface / 3D Viewport
 RIGHT     Properties + contextual Operations
-BOTTOM    Document Tabs
 BELOW     Status / Diagnostics
 ```
 
-Domain/session adapters provide active content. The neutral Shell does not know PartDocument, AssemblyDocument or DrawingDocument.
+Document Tabs are deliberately outside `CadWorkbenchShell`. Future Assembly/Drawing editors can therefore use the same Project-level navigation without making Part Workbench their owner.
 
 <!-- section-id: internal.ui-project-hub.primary-actions -->
 ## Primary Project actions
@@ -48,9 +55,11 @@ No Recent entry is selected after Hub refresh. Open is enabled only for a select
 <!-- section-id: internal.ui-project-hub.part-panel -->
 ## Workspace launch and Part document controls
 
-The neutral Project Workspace exposes the current document-launch actions `New Part…`, neutral `Open…` and `Refresh`. These actions are not Part editor tools.
+The persistent Project toolbar exposes `Workspace`, `New Part…`, neutral `Open…`, `Refresh` and `Close Project`. These actions remain available while a Part is active and are not Part editor tools.
 
-Once a Part is active, its Workbench exposes `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, the editor tool-launch strip, contextual Operations and bottom Document Tabs.
+`Workspace` switches only the runtime navigation context to Project Dashboard. It does not close, save or mutate open Documents.
+
+Once a Part is active, its Workbench exposes `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, the editor tool-launch strip and contextual Operations. Project-level Document Tabs remain owned by Project Workspace Shell.
 
 `New Part…` opens `WorkspaceLocationDialog`. It shows the current Workspace folder hierarchy, allows the user to choose a folder, enter the filename and explicitly `Create Folder`.
 
@@ -58,7 +67,7 @@ The location picker is constrained to the current Workspace. Private `.simplesol
 
 `Open…` opens `OpenDocumentDialog`. Candidates show Document kind, display/name information, location and status. The four columns are interactively resizable; the default layout keeps Name compact and gives Location the largest share of the dialog. Current discovery supplies Part entries only. Invalid files and identity conflicts remain visible but cannot be opened as resolved DocumentIds.
 
-Opening an already open Document focuses its canonical existing DocumentSession instead of creating a second mutable session. Closing the last open Document switches the host back to the neutral Workspace while the Project remains open.
+Opening an already open Document focuses its canonical existing DocumentSession/tab instead of creating a second mutable session. Several Documents can remain open simultaneously. Selecting a Project-level tab navigates by DocumentId, not by tab index. Closing the last open Document returns to Workspace Dashboard while the Project remains open.
 
 <!-- section-id: internal.ui-project-hub.workbench -->
 ## Tree, Properties and Viewport
@@ -88,7 +97,7 @@ Closing the Project or application when any Part is dirty requires `Save All`, `
 
 A failed Save leaves the Part/Project open so authored in-memory changes are not silently lost.
 
-Before a DocumentSession or the owning ProjectSession is destroyed, Workbench runtime bindings are detached. This ordering is required because Tree/Viewer controllers use non-owning session pointers.
+Before a DocumentSession or the owning ProjectSession is destroyed, Project Workspace Shell detaches Workbench runtime bindings. This ordering is required because Tree/Viewer controllers use non-owning session pointers.
 
 <!-- section-id: internal.ui-project-hub.recovery -->
 ## Project recovery UX

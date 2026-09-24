@@ -216,10 +216,10 @@ void verifyNeutralWorkspaceAndCloseLifecycle(
 
     auto* workspace_host =
         window.findChild<QStackedWidget*>(
-            "workspaceDocumentHost");
-    auto* empty_page =
+            "workspaceContentHost");
+    auto* dashboard =
         window.findChild<QWidget*>(
-            "workspaceEmptyPage");
+            "workspaceDashboard");
     auto* cad_workbench =
         window.findChild<QWidget*>(
             "cadWorkbench");
@@ -240,7 +240,7 @@ void verifyNeutralWorkspaceAndCloseLifecycle(
         pages->currentWidget()->objectName() ==
         QStringLiteral("workspacePage"));
     CHECK(workspace_host != nullptr);
-    CHECK(empty_page != nullptr);
+    CHECK(dashboard != nullptr);
     CHECK(cad_workbench != nullptr);
     CHECK(new_part != nullptr);
     CHECK(close_document != nullptr);
@@ -248,8 +248,9 @@ void verifyNeutralWorkspaceAndCloseLifecycle(
     CHECK(tabs != nullptr);
     CHECK(
         workspace_host->currentWidget() ==
-        empty_page);
+        dashboard);
     CHECK(tabs->count() == 0);
+    CHECK(!tabs->isVisible());
 
     bool first_dialog_ok = false;
     QTimer::singleShot(
@@ -266,6 +267,7 @@ void verifyNeutralWorkspaceAndCloseLifecycle(
     QApplication::processEvents();
 
     CHECK(tabs->count() == 1);
+    CHECK(tabs->isVisible());
     CHECK(
         workspace_host->currentWidget() ==
         cad_workbench);
@@ -277,9 +279,10 @@ void verifyNeutralWorkspaceAndCloseLifecycle(
     QApplication::processEvents();
 
     CHECK(tabs->count() == 0);
+    CHECK(!tabs->isVisible());
     CHECK(
         workspace_host->currentWidget() ==
-        empty_page);
+        dashboard);
 
     bool second_dialog_ok = false;
     QTimer::singleShot(

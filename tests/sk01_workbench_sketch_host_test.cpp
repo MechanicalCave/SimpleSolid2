@@ -1,5 +1,6 @@
 #include "cad_workbench.hpp"
 
+#include <simplesolid2/application/project_session.hpp>
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
 #include <QAction>
@@ -204,11 +205,11 @@ int main(int argc, char* argv[]) {
                 viewport};
         }};
 
-    workbench.setProjectSession(
-        &*opened.session);
     CHECK(
         workbench.activateDocument(
-            document_id));
+            opened.session->documentSession(
+                document_id),
+            workspace));
     workbench.show();
     QApplication::processEvents();
     CHECK(viewport != nullptr);
@@ -490,7 +491,7 @@ int main(int argc, char* argv[]) {
     CHECK(session->save().ok());
     CHECK(!session->needsSave());
 
-    workbench.clearProjectSession();
+    workbench.deactivateDocument();
 
     CHECK(
         opened.session->closeDocument(
