@@ -1,5 +1,7 @@
 #include <simplesolid2/part/part_document.hpp>
 
+#include <algorithm>
+
 namespace simplesolid2::part {
 
 PartDocument PartDocument::create(core::DocumentId id) {
@@ -11,6 +13,20 @@ PartDocument PartDocument::restore(
     PartAuthoredState state,
     core::DocumentRevision revision) {
     return PartDocument{std::move(id), std::move(state), revision};
+}
+
+const PartSketch* PartDocument::findSketch(
+    const sketch::SketchId& id) const noexcept {
+    const auto found = std::find_if(
+        state_.sketches.begin(),
+        state_.sketches.end(),
+        [&id](const PartSketch& item) {
+            return item.id == id;
+        });
+
+    return found == state_.sketches.end()
+        ? nullptr
+        : &*found;
 }
 
 PartCommitResult PartDocument::commitState(PartAuthoredState state) {
