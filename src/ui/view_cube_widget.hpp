@@ -8,6 +8,7 @@ class QAction;
 class QEvent;
 class QMenu;
 class QPushButton;
+class QString;
 class QToolButton;
 class QWidget;
 
