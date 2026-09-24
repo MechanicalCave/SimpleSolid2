@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-01A_WORKBENCH_HOST_CORRECTIONS_AND_CLOSE_SAFETY.md"
+status: active
+active_work: "work/WS-01_PROJECT_WORKSPACE_NAVIGATION_AND_MULTI_DOCUMENT_HOST.md"
 foundation_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
@@ -9,21 +9,20 @@ accepted_adrs:
   - "adr/ADR-0004-native-document-container-and-persistence.md"
   - "adr/ADR-0005-part-sketch-host-identity-and-edit-context.md"
   - "adr/ADR-0006-workspace-document-workbench-and-tool-surfaces.md"
+  - "adr/ADR-0007-project-workspace-shell-and-document-navigation.md"
 next:
-  - no implementation work is active after SK-01A
-  - Owner must accept the next explicit work contract before further product implementation
-  - suggested next Sketch slice remains SK-02 for the minimal shared 2D authored model and first Line entity with stable entity identity
-  - Datum/Construction Plane and planar model-face Sketch support remain later explicit contracts
+  - implement Project Workspace Shell and explicit Workspace/Document navigation
+  - move Project Document Tabs and New/Open/Refresh ownership out of Part Workbench
+  - refactor Part Workbench to one-active-Part editor boundary
+  - add multi-Document navigation/close/dirty regressions
+  - update docs and run exact-head Windows verification
 notes:
-  - SK-01A accepted and implemented on 2026-09-24 from manual SK-01 validation findings.
-  - active Document and Project close now obey detach-before-destroy ordering for non-owning Workbench/Tree/Viewer session bindings.
-  - the manual active-Part close abort is covered by automated regressions.
-  - zero-document Project Workspace is neutral and no longer presents an inactive Part editor.
-  - document launch belongs to Workspace; Part editing tools belong to the active Part Workbench.
-  - Sketch launcher is above the 3D editor; Operations is contextual to active tool/edit state.
-  - existing Sketch edit entry works from Tree double-click and Edit Sketch context menu using stable SketchId routing.
-  - re-entering Sketch edit is runtime-only and does not dirty authored state.
-  - implementation gate #183 passed docs/verify/build and 35/35 CTest including native Workbench stress.
-  - no SK-02 2D geometry/constraints/solver, Datum/face support, Body/Feature, Assembly or Drawing implementation is active.
-  - documentation impact is satisfied and Product Browser is current.
+  - WS-01 accepted by Owner on 2026-09-24.
+  - Project Workspace Shell owns Project toolbar, Dashboard, Document Tabs and navigation.
+  - navigation is runtime-only: Workspace or Document(DocumentId).
+  - open DocumentSessions remain owned by ProjectSession and may stay open while Workspace is visible.
+  - Part Workbench edits one active Part only and no longer owns Project-level tabs/discovery.
+  - current routing supports Part only; Assembly/Drawing implementation is out of scope.
+  - no SK-02 2D geometry/constraints/solver work is active.
+  - documentation impact is required.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
