@@ -6,7 +6,7 @@
 <!-- section-id: product.parts.create -->
 ## Creating a new Part
 
-After opening a Project, use `New Part…` in the Workbench.
+After opening a Project, you first see a neutral Workspace with no active Part editor. Use `New Part…` there to create a Document and open its Part Workbench.
 
 The dialog shows the folder hierarchy of the current Workspace. Choose the target folder, enter the Part filename and confirm creation.
 
@@ -38,15 +38,15 @@ Filename and path are not Document identity. You may rename or move the `.ss2par
 <!-- section-id: product.parts.workbench -->
 ## Opening Parts and using the Workbench
 
-Use `Open…` to choose a discovered Document.
+Use `Open…` in the neutral Workspace to choose a discovered Document. Opening a Project by itself does not activate the Part Workbench; an editor appears only after a specific Document is created or opened.
 
 The dialog shows Document kind, name, location and status. You can resize the columns by dragging the header separators; by default, Location receives more space than Name. The current product supplies Part Documents only, but the Open UI is not Part-specific.
 
 Invalid native files and DocumentId conflicts remain visible but cannot be opened as resolved Documents.
 
-Several Parts can remain open at once. Use the bottom Document Tabs to switch the active Part. Opening a Part that is already open activates the existing tab/session instead of creating a second mutable session.
+Several Parts can remain open at once. Use the bottom Document Tabs to switch the active Part. Opening a Part that is already open activates the existing tab/session instead of creating a second mutable session. Closing the last Document returns to the neutral Workspace without closing the Project.
 
-The left side contains Document Tree. The center contains the 3D Viewport. The right side contains Properties and Operations. Status/diagnostic information is below the tabs.
+The left side contains Document Tree. The center contains the 3D Viewport with a tool-launch strip above it. The right side contains Properties and contextual Operations. Status/diagnostic information is below the tabs.
 
 <!-- section-id: product.parts.edit -->
 ## Editing Document properties
@@ -91,13 +91,17 @@ After `Save`, Origin visibility survives closing and restarting the application.
 <!-- section-id: product.parts.sketch-host -->
 ## Creating an empty Sketch
 
-In Operations, use `Sketch`, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when it is visible, in the 3D Viewport.
+Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when it is visible, in the 3D Viewport.
+
+Operations is not a permanent tool list. It shows controls for the current operation: Sketch support-pick context/Cancel while choosing the plane, then `Finish Sketch` after Sketch edit begins.
 
 After a valid selection, Part creates a durable empty Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane.
 
 Automatic alignment does not lock the camera. While the Sketch is active you can still use Pan, Zoom, Orbit and ViewCube. Navigation does not change Sketch placement and does not dirty the Document by itself.
 
 Use `Finish Sketch` to leave the current edit context. The Sketch remains an authored Part object, stays in Document Tree and after `Save` survives Close/Reopen with the same SketchId, support and placement.
+
+To edit an existing Sketch again, double-click it in Document Tree or use its `Edit Sketch` context-menu action. Entering edit by itself does not change authored state and does not require Save.
 
 In SK-01 the Sketch is intentionally empty. Line/Arc/Circle, constraints, dimensions and a solver are not available yet. Support is currently limited to the three Origin planes; Construction/Datum planes and planar model faces are separate later stages.
 
@@ -129,7 +133,7 @@ When closing a Part with unsaved changes, the application requires `Save`, `Disc
 
 When closing the complete Project or application while any Part is dirty, the choices are `Save All`, `Discard` and `Cancel`.
 
-If saving fails, the Document/Project remains open.
+If saving fails, the Document/Project remains open. Closing the last open Part keeps the Project open and returns to the neutral Workspace.
 
 <!-- section-id: product.parts.restart -->
 ## Restart and reopen
