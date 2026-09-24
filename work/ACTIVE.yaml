@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/WB-01A_WORKBENCH_STABILIZATION_AND_DOCUMENT_DIALOG_UX.md"
 foundation_version: "1.0"
 accepted_adrs:
@@ -7,18 +7,21 @@ accepted_adrs:
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
   - "adr/ADR-0003-cad-workbench-viewport-and-sketch-integration.md"
 next:
-  - implement WB-01A only within its accepted stabilization and document-dialog UX scope
-  - P0 native Viewport/Origin crash stabilization must be completed before P1 UX work
-  - then implement responsive ViewCube, Workspace Location Picker, neutral Open dialog, and final docs
+  - no implementation work is active after WB-01A
+  - Owner must accept the next explicit work contract before further CAD-domain implementation
   - no Sketch Core, Bodies, Features, modeled Part geometry, Assembly, Drawing, BOM, export model, or persistent topology naming without a later accepted contract
 notes:
   - DOC-01 and DOC-01A remain complete.
   - PART-01 remains complete.
   - WB-01 remains complete.
   - ADR-0003 remains the governing Workbench/Viewer architecture.
-  - WB-01A accepted by Owner on 2026-09-23.
-  - WB-01A is a stabilization and UX refinement contract, not a new CAD-domain milestone.
-  - Reported regressions include native Viewport clicks causing process exit, repeated Origin Show/Hide causing process exit, and ViewCube layout corruption at narrow Editor Surface widths.
-  - New Part currently lacks Workspace folder browsing/Create Folder; Open Part is too Part-specific for the shared Workbench UX.
-  - P0 must establish deterministic native stress coverage before P1 UX implementation.
+  - WB-01A accepted by Owner on 2026-09-23 and completed on 2026-09-24.
+  - P0 native Viewer/Origin stabilization is complete and covered by a 100-iteration real Windows Workbench/Qt/OCCT stress regression.
+  - Empty-space left click clears selection; Ctrl+left toggles selection; right click is controlled/reserved and is a no-op where no context menu exists.
+  - Native scene replacement clears provider detection/selection state before removing presentation objects and contains recoverable provider exceptions at the concrete Viewer boundary.
+  - ViewCube is responsive and switches to compact presentation at constrained Editor Surface widths without overlapping the right-side panels.
+  - New Part uses a Workspace-rooted location picker with folder browsing, explicit Create Folder and fail-closed path validation.
+  - Workbench exposes neutral Open… document UX; current discovery still supplies Part documents only.
+  - The implementation state through PR #39 passed the exact-head Windows gate with 32/32 CTest PASS.
+  - Internal and PL/EN product documentation describe the as-built WB-01A product.
   - Root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
