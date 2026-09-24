@@ -257,15 +257,9 @@ int main(int argc, char* argv[]) {
         workbench.findChild<QLabel*>(
             QStringLiteral("referencePropertyVisibility"));
 
-    QPushButton* top_view_button = nullptr;
-    for (auto* button :
-         workbench.findChildren<QPushButton*>(
-             QStringLiteral("viewCubeViewButton"))) {
-        if (button->text() == QStringLiteral("TOP")) {
-            top_view_button = button;
-            break;
-        }
-    }
+    auto* top_view_action =
+        workbench.findChild<QAction*>(
+            QStringLiteral("viewCubeTopAction"));
 
     CHECK(tabs != nullptr);
     CHECK(tree != nullptr);
@@ -283,7 +277,7 @@ int main(int argc, char* argv[]) {
     CHECK(properties_stack != nullptr);
     CHECK(reference_name != nullptr);
     CHECK(reference_visibility != nullptr);
-    CHECK(top_view_button != nullptr);
+    CHECK(top_view_action != nullptr);
 
     CHECK(tabs->count() == 2);
     CHECK(operations->text().contains(
@@ -342,7 +336,7 @@ int main(int argc, char* argv[]) {
     const auto navigation_revision =
         first_session_for_view->document().revision().value();
 
-    top_view_button->click();
+    top_view_action->trigger();
     CHECK(viewport->cameraState().has_value());
     CHECK(viewport->cameraState()->eye.z >
           viewport->cameraState()->target.z);
