@@ -1,5 +1,5 @@
 version: 1
-status: completed
+status: active
 active_work: "work/WB-01A_WORKBENCH_STABILIZATION_AND_DOCUMENT_DIALOG_UX.md"
 foundation_version: "1.0"
 accepted_adrs:
@@ -7,21 +7,17 @@ accepted_adrs:
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
   - "adr/ADR-0003-cad-workbench-viewport-and-sketch-integration.md"
 next:
-  - no implementation work is active after WB-01A
-  - Owner must accept the next explicit work contract before further CAD-domain implementation
-  - no Sketch Core, Bodies, Features, modeled Part geometry, Assembly, Drawing, BOM, export model, or persistent topology naming without a later accepted contract
+  - fix the native ViewCube repaint regression during Editor Surface/right-panel resize
+  - make Open Document columns interactively resizable with narrower default Name and wider Location
+  - update required documentation and close WB-01A again after exact-head PASS
+  - do not implement tile/icon view, thumbnails, preview cache, or native Document format changes in WB-01A
 notes:
   - DOC-01 and DOC-01A remain complete.
   - PART-01 remains complete.
   - WB-01 remains complete.
   - ADR-0003 remains the governing Workbench/Viewer architecture.
-  - WB-01A accepted by Owner on 2026-09-23 and completed on 2026-09-24.
-  - P0 native Viewer/Origin stabilization is complete and covered by a 100-iteration real Windows Workbench/Qt/OCCT stress regression.
-  - Empty-space left click clears selection; Ctrl+left toggles selection; right click is controlled/reserved and is a no-op where no context menu exists.
-  - Native scene replacement clears provider detection/selection state before removing presentation objects and contains recoverable provider exceptions at the concrete Viewer boundary.
-  - ViewCube is responsive and switches to compact presentation at constrained Editor Surface widths without overlapping the right-side panels.
-  - New Part uses a Workspace-rooted location picker with folder browsing, explicit Create Folder and fail-closed path validation.
-  - Workbench exposes neutral Open… document UX; current discovery still supplies Part documents only.
-  - The implementation state through PR #39 passed the exact-head Windows gate with 32/32 CTest PASS.
-  - Internal and PL/EN product documentation describe the as-built WB-01A product.
+  - WB-01A was completed on 2026-09-24 and explicitly reopened by Owner on 2026-09-24 for two in-scope P1 follow-up defects only.
+  - Follow-up scope is limited to native ViewCube repaint/invalidation and Open Document interactive column sizing.
+  - Tile/icon Document browsing and thumbnails are explicitly deferred.
+  - The next planned larger work after WB-01A is a separate Owner-approved D2 native Document persistence architecture contract before Sketcher implementation.
   - Root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
