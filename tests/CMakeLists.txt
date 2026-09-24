@@ -500,3 +500,28 @@ add_test(
     NAME wb01a.workspace_directory
     COMMAND wb01a_workspace_directory_test
 )
+
+
+add_executable(wb01a_document_dialog_ux_test
+    document_dialog_ux_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
+)
+target_include_directories(wb01a_document_dialog_ux_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+target_link_libraries(wb01a_document_dialog_ux_test
+    PRIVATE
+        simplesolid2_application
+        Qt6::Widgets
+        Qt6::Test
+)
+target_compile_features(wb01a_document_dialog_ux_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb01a.document_dialog_ux
+    COMMAND wb01a_document_dialog_ux_test
+)
+set_tests_properties(wb01a.document_dialog_ux PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
