@@ -1,7 +1,8 @@
 # ADR-0004 — Native Document Container and Persistence Architecture
 
-**Status:** PROPOSED  
+**Status:** ACCEPTED  
 **Date:** 2026-09-24  
+**Owner acceptance:** 2026-09-24  
 **Decision class:** D2 Architecture  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Related:** ADR-0001, ADR-0002, ADR-0003
@@ -154,22 +155,80 @@ Persistence must reject or explicitly diagnose:
 
 Unknown optional derived entries may be ignored.
 
-### 11. Physical representation is an explicit Owner gate
+### 11. Accepted physical representation — ZIP-compatible package
 
-The logical architecture above does not silently choose ZIP, custom binary framing, JSON-with-blobs, SQLite or another representation.
+Owner accepted the physical representation on 2026-09-24.
 
-Before implementation, PERSIST-01 must compare candidate physical representations against:
+A native SS2 Document is one user-visible file whose physical representation is a ZIP-compatible package.
 
-- single-file portability;
-- no provider/OCCT dependency;
-- no accidental Qt dependency in CAD domain semantics;
-- independent authored/derived entry integrity;
-- bounded safe parsing;
-- atomic whole-file publication;
-- support for future nested Sketch/Assembly/Drawing semantic data;
-- implementation/dependency cost on the Windows-first toolchain.
+Initial native extensions are domain-specific:
 
-The selected physical representation is a D2 decision recorded by updating this ADR before production implementation starts.
+```text
+Part      → .ss2part
+Assembly  → .ss2asm     (reserved; not implemented by PERSIST-01)
+Drawing   → .ss2draw    (reserved; not implemented by PERSIST-01)
+```
+
+The package structure is:
+
+```text
+<document file>
+├── manifest.json             mandatory common envelope
+├── authored/
+│   └── document.json         mandatory domain-owned authored payload
+└── derived/
+    └── ...                   optional disposable assets
+```
+
+ZIP is container mechanism only. It does not define CAD semantics.
+
+JSON is the initial structured representation for the common manifest and domain-authored payload. A later domain schema may deliberately introduce additional/binary authored entries through a new accepted schema contract without changing the rule that authored meaning belongs to the domain.
+
+### 12. Container v1 structural rules
+
+The initial container contract requires:
+
+- exactly one root `manifest.json`;
+- exactly one `authored/document.json`;
+- zero or more entries below `derived/`;
+- no mandatory semantic entry outside the common manifest and domain-owned authored namespace unless a later accepted schema adds it;
+- UTF-8 JSON for mandatory JSON entries;
+- canonical forward-slash entry names;
+- no absolute paths, `..`, backslash traversal aliases or unsafe entry names;
+- no duplicate entry names;
+- no encrypted entries;
+- bounded compressed/uncompressed sizes and entry count before allocation/extraction;
+- unknown mandatory structure fails closed;
+- unknown optional `derived/*` entries may be ignored.
+
+The common manifest v1 carries:
+
+```text
+format
+container_version
+document_kind
+document_id
+domain_schema_version
+authored_entry
+```
+
+with `authored_entry` equal to `authored/document.json` in container v1.
+
+The exact lexical serialization contract of `DocumentId` is not expanded by this ADR beyond the accepted Core identity contract. PERSIST-01 must not create a second identity format in persistence.
+
+### 13. Extension/kind coherence
+
+For native files recognized by extension, the extension and `document_kind` must agree.
+
+A `.ss2part` declaring another DocumentKind fails closed. The same rule applies to future implemented Assembly/Drawing native extensions.
+
+### 14. Dependency boundary
+
+ZIP and JSON libraries, if used, are persistence-format implementation dependencies only.
+
+They must not become CAD-domain semantic APIs, leak into Part/Assembly/Drawing public model contracts, or introduce Qt/OCCT/provider types into durable semantics.
+
+The concrete maintained ZIP/JSON implementation dependency is selected within PERSIST-01 before production container code is committed and documented in the build/toolchain.
 
 ## Consequences
 
