@@ -1,4 +1,4 @@
-# PERSIST-01 — Native Document Persistence Architecture & Part Migration
+# PERSIST-01 — Native Document Persistence Architecture
 
 **Status:** DRAFT — OWNER REVIEW REQUIRED  
 **Decision class:** D2 Architecture  
@@ -18,7 +18,7 @@ from
 Part-authored semantic schema
 ```
 
-and prove the architecture by migrating the existing Part persistence path without implementing Sketch, Assembly or Drawing semantics.
+and prove the architecture by replacing the current experimental Part persistence path without implementing Sketch, Assembly or Drawing semantics.
 
 The result must give the next Sketch contract a stable host persistence boundary: a Part-hosted Sketch will be authored Part state stored inside the Part native Document, not a standalone file owned by Sketch Core.
 
@@ -28,7 +28,7 @@ The current `SS2PART` line-based schema v2 stores only Document identity/propert
 
 The next major CAD contract will add a substantially richer authored model: embedded 2D Sketch state with stable local entity identities and constraints.
 
-Allowing the Sketch contract to invent file framing, migration and domain ownership at the same time would combine two independent D2 decisions and make persistence architecture accidental.
+Allowing the Sketch contract to invent file framing, versioning and domain ownership at the same time would combine independent D2 decisions and make persistence architecture accidental.
 
 PERSIST-01 therefore precedes Sketcher.
 
@@ -43,7 +43,7 @@ PERSIST-01 proposes:
 5. no ProjectId/path/provider/runtime identity in native Document semantics;
 6. optional physically isolated derived payloads that are disposable and non-authoritative;
 7. whole-file staged + atomic publication as the initial save model;
-8. legacy Part v1/v2 read compatibility and migration-on-successful-Save;
+8. the current experimental Part v1/v2 format is replaced without compatibility/migration support;
 9. Part owns all Part semantic serialization, including future hosted Sketches;
 10. physical container representation remains a D2 Owner decision after the evidence slice below.
 
@@ -104,7 +104,6 @@ The selected representation must be justified against:
 - domain/provider dependency boundaries;
 - future Sketch nested data;
 - future Assembly/Drawing reuse;
-- migration complexity;
 - dependency/toolchain burden;
 - testability and deterministic failure modes.
 
@@ -128,7 +127,7 @@ Implement only mechanisms proven common:
 
 ### Part persistence
 
-Migrate PartDocument persistence to the accepted representation.
+Replace PartDocument persistence with the accepted representation.
 
 Preserve current authored semantics:
 
@@ -141,13 +140,13 @@ Preserve current authored semantics:
 
 Part remains owner of Part semantic encoding/decoding.
 
-### Legacy migration
+### Early-development reset
 
-- load current legacy v1/v2 `.ss2part`;
-- do not rewrite on load;
-- successful Save publishes the new accepted representation;
-- preserve DocumentId and all authored source semantics;
-- failure leaves previous file authoritative.
+The present private v1/v2 `.ss2part` representation is intentionally unsupported after PERSIST-01.
+
+No legacy reader, migration path or compatibility fixture is required. Existing test Documents may be recreated.
+
+This is a one-time pre-product reset and must not be generalized into a policy of breaking accepted future native schemas.
 
 ### Discovery/lifecycle
 
@@ -194,7 +193,6 @@ No evaluated B-Rep, tessellation, Viewer object, OCCT handle, runtime topology i
 
 DocumentId remains stable across:
 
-- legacy migration;
 - Save;
 - rename;
 - move.
@@ -205,7 +203,7 @@ Path and filename remain location, not identity.
 
 Save checkpoint advances only after successful durable publication.
 
-A failed migration/save must not destroy or partially replace the previous valid file.
+A failed save must not destroy or partially replace the previous valid file.
 
 ### Forward failure
 
@@ -223,27 +221,22 @@ PERSIST-01 does not need to create any such asset.
 
 At minimum prove:
 
-1. current legacy Part v1 loads;
-2. current legacy Part v2 loads;
-3. legacy v1/v2 load does not rewrite source;
-4. Save of a loaded legacy Part writes the accepted new representation;
-5. migrated file reopens with the same DocumentId;
-6. migrated properties and Origin visibility are identical;
-7. newly created Part uses the new representation;
-8. Save → Close → Reopen preserves all current authored Part state;
-9. rename/move preserves DocumentId;
-10. duplicate DocumentId conflict still fails closed;
-11. unknown container version fails closed;
-12. unsupported Part schema fails closed;
-13. malformed/truncated mandatory envelope fails closed;
-14. malformed/missing authored payload fails closed;
-15. invalid DocumentId fails closed;
-16. oversized/unsafe content is rejected before unbounded allocation;
-17. failed staged write/replacement leaves the old file valid;
-18. optional unknown derived content, if supported by the selected representation, does not change authored meaning;
-19. no Qt/OCCT/provider identity crosses into Part durable semantics;
-20. existing Project/Part/Workbench lifecycle tests remain PASS;
-21. exact-head Windows docs/verify/build/CTest gate is PASS.
+1. newly created Part uses the accepted new representation;
+2. Save → Close → Reopen preserves all current authored Part state;
+3. rename/move preserves DocumentId;
+4. duplicate DocumentId conflict still fails closed;
+5. unknown container version fails closed;
+6. unsupported Part schema fails closed;
+7. malformed/truncated mandatory envelope fails closed;
+8. malformed/missing authored payload fails closed;
+9. invalid DocumentId fails closed;
+10. oversized/unsafe content is rejected before unbounded allocation;
+11. failed staged write/replacement leaves the old file valid;
+12. optional unknown derived content, if supported by the selected representation, does not change authored meaning;
+13. no Qt/OCCT/provider identity crosses into Part durable semantics;
+14. obsolete v1/v2 fixtures are rejected or removed rather than treated as supported legacy product data;
+15. existing Project/Part/Workbench lifecycle tests remain PASS;
+16. exact-head Windows docs/verify/build/CTest gate is PASS.
 
 ## 9. Delivery slices
 
@@ -255,10 +248,10 @@ Slice B
 shared native container/envelope primitives + safety tests
 
 Slice C
-Part semantic codec migration + legacy v1/v2 compatibility
+Part semantic codec replacement
 
 Slice D
-Workspace/discovery/lifecycle integration + migration tests
+Workspace/discovery/lifecycle integration + persistence safety tests
 
 Slice E
 docs + Product Browser + exact-head completion
@@ -270,21 +263,22 @@ No later slice starts if an earlier persistence invariant is unresolved.
 
 Internal docs: required  
 User/Product docs: required  
-Reason: this work changes native Part file representation, migration behavior and the durable persistence architecture that future Sketch/Assembly/Drawing will consume.
+Reason: this work replaces the experimental native Part representation and establishes the durable persistence architecture that future Sketch/Assembly/Drawing will consume.
 
 Internal docs must describe:
 - common envelope/container responsibility;
 - Part schema ownership;
 - version axes;
-- migration and atomic publication;
+- versioning and atomic publication;
 - authored vs derived boundaries;
-- supported legacy compatibility.
+- the explicit pre-product compatibility reset.
 
 Product docs PL/EN must describe only user-relevant behavior:
-- existing Part files remain readable;
-- opening does not silently rewrite them;
-- successful later Save may migrate them;
+- the accepted native Part format and extension;
+- normal Save → Close → Reopen behavior;
 - normal rename/move identity behavior remains unchanged.
+
+Because there is no supported pre-PERSIST-01 user data, product documentation does not promise compatibility with the obsolete experimental v1/v2 format.
 
 Generated Product Browser must be regenerated and Git-clean.
 
@@ -294,7 +288,7 @@ PERSIST-01 completes only when:
 
 - ADR-0004 is accepted with the physical representation explicitly selected;
 - the accepted native architecture is implemented for Part;
-- legacy v1/v2 compatibility and migration are proven;
+- the obsolete experimental v1/v2 path is removed from the supported persistence contract;
 - current Part lifecycle remains intact;
 - no Sketch/Assembly/Drawing semantic scope leaked into the work;
 - documentation is current;
