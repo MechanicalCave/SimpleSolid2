@@ -1,10 +1,11 @@
 # PERSIST-01 — Native Document Persistence Architecture
 
-**Status:** DRAFT — OWNER REVIEW REQUIRED  
+**Status:** ACCEPTED  
+**Owner acceptance:** 2026-09-24  
 **Decision class:** D2 Architecture  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Related ADRs:** ADR-0001, ADR-0002, ADR-0003  
-**Proposed ADR:** ADR-0004
+**Accepted ADR:** ADR-0004
 
 ## 1. Goal
 
@@ -45,71 +46,39 @@ PERSIST-01 proposes:
 7. whole-file staged + atomic publication as the initial save model;
 8. the current experimental Part v1/v2 format is replaced without compatibility/migration support;
 9. Part owns all Part semantic serialization, including future hosted Sketches;
-10. physical container representation remains a D2 Owner decision after the evidence slice below.
+10. physical representation is a ZIP-compatible package with mandatory `manifest.json` and `authored/document.json`, plus optional `derived/*`.
 
-These decisions become active only after Owner accepts ADR-0004 / this contract.
+These decisions were accepted by Owner on 2026-09-24.
 
-## 4. Decision Gate A — physical representation
+## 4. Decision Gate A — CLOSED
 
-Before production persistence implementation, compare at minimum:
+Owner accepted on 2026-09-24:
 
-### Candidate A — standard archive/container + structured manifest
+```text
+native SS2 Document
+= one ZIP-compatible package
+  + manifest.json
+  + authored/document.json
+  + optional derived/*
+```
 
-Examples: ZIP-compatible archive with a small manifest and separate authored/derived entries.
+ZIP is transport/container mechanism, not semantic schema.
 
-Strengths:
-- natural physical separation of entries;
-- standard tooling and binary payload support;
-- good portability.
+Mandatory structured entries use UTF-8 JSON in container v1.
 
-Risks:
-- no supported archive dependency is currently present in SS2;
-- Qt private ZIP APIs are not acceptable as an architecture dependency;
-- adding a library/toolchain dependency is itself part of the D2 decision.
+The accepted reasons are:
 
-### Candidate B — minimal SS2 framed container
+- natural physical separation of authored and disposable derived entries;
+- one portable user-visible file;
+- native binary asset support without Base64/hex expansion;
+- standard, inspectable container rather than an SS2-specific archive reinvention;
+- reusable persistence mechanics across Part/Assembly/Drawing without a universal domain schema;
+- good fit for future embedded Sketch data while leaving Sketch semantics to the host domain.
 
-A small SS2-owned binary framing format with magic/version and length-bounded named entries.
+The cost is an explicit maintained ZIP dependency plus JSON support. PERSIST-01 must select those implementation dependencies without exposing them through CAD-domain semantic APIs.
 
-Strengths:
-- no third-party dependency;
-- exact control over validation and deterministic semantics;
-- straightforward whole-file atomic write.
 
-Risks:
-- SS2 owns container parsing forever;
-- easy to reinvent archive concerns badly;
-- compression/checksum/evolution must be deliberately bounded.
-
-### Candidate C — single structured document representation
-
-A single structured textual/binary object containing envelope + authored state and optional encoded derived payloads.
-
-Strengths:
-- simplest implementation/dependency story.
-
-Risks:
-- weak physical isolation of derived assets;
-- binary payload encoding overhead;
-- malformed optional payload may be harder to isolate from authored semantics;
-- can become unwieldy as domains grow.
-
-### Gate criteria
-
-The selected representation must be justified against:
-
-- safety under malformed/untrusted files;
-- single-file portability;
-- independent authored/derived integrity;
-- domain/provider dependency boundaries;
-- future Sketch nested data;
-- future Assembly/Drawing reuse;
-- dependency/toolchain burden;
-- testability and deterministic failure modes.
-
-**No production format implementation begins until Owner explicitly accepts the selected representation.**
-
-## 5. Scope IN after Gate A acceptance
+## 5. Scope IN
 
 ### Shared persistence
 
@@ -242,7 +211,7 @@ At minimum prove:
 
 ```text
 Slice A
-D2 evidence + select physical representation + accept ADR-0004
+ACCEPTED: ZIP+JSON physical representation + ADR-0004
 
 Slice B
 shared native container/envelope primitives + safety tests
