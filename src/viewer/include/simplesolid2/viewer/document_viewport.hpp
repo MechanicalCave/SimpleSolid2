@@ -2,6 +2,7 @@
 
 #include <simplesolid2/viewer/camera_state.hpp>
 #include <simplesolid2/viewer/navigation.hpp>
+#include <simplesolid2/viewer/navigation_cube.hpp>
 #include <simplesolid2/viewer/reference_presentation.hpp>
 #include <simplesolid2/viewer/selection.hpp>
 #include <simplesolid2/viewer/sketch_presentation.hpp>
@@ -29,6 +30,25 @@ public:
         CameraProjection projection) = 0;
 
     virtual void fitAll() = 0;
+
+    virtual void setNavigationCubeActionHandler(
+        NavigationCubeActionHandler handler) {
+        (void)handler;
+    }
+
+    virtual bool animateCameraState(
+        const CameraState& state,
+        double duration_seconds,
+        bool fit_all) {
+        (void)duration_seconds;
+        if (!setCameraState(state)) {
+            return false;
+        }
+        if (fit_all) {
+            fitAll();
+        }
+        return true;
+    }
 
     virtual bool setReferenceScene(
         const ReferenceScene& scene) = 0;
