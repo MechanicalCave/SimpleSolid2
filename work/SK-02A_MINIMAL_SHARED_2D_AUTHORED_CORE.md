@@ -1,7 +1,7 @@
 # SK-02A — Minimal Shared 2D Authored Core
 
-**Status:** PROPOSED  
-**Owner acceptance:** pending  
+**Status:** ACCEPTED — COMPLETED  
+**Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0008, ADR-0009  
@@ -291,3 +291,36 @@ SK-02A completes only when:
 - completion bookkeeping records what was actually implemented.
 
 Completion does not activate Part integration or interactive Line tooling. The next roadmap work remains a separate explicit contract.
+
+
+## 10. Completion record
+
+SK-02A is complete.
+
+Implemented:
+
+- opaque stable model-local `EntityId` allocated by `SketchModel`;
+- finite Sketch-local physical U/V `Point2` values;
+- authored `Line` with independent Start/End coordinates;
+- exact-zero Line rejection with no epsilon/near-zero rejection policy;
+- minimal `SketchModel` add/find/erase/count lifecycle;
+- monotonic identity allocation in a continuing model instance so erased IDs are not immediately reused for different entities;
+- ordinary value-copy preserving EntityIds/allocator state while keeping authored storage independent;
+- dependency-boundary regression protection for Shared 2D;
+- internal as-built Shared 2D documentation and updated test inventory.
+
+Deliberately not implemented:
+
+- PartSketch authored-entity embedding;
+- Part persistence/schema changes;
+- DocumentSession commands or host Undo/Redo;
+- Viewer/Qt/OCCT Sketch presentation or pointer input;
+- Select/cursor/snapping/Origin runtime interaction;
+- constraints/solver, profiles/regions, projected/reference geometry.
+
+Verification evidence:
+
+- Windows PR gate #243 passed build and the complete CTest suite on implementation head `50ddff5a18033ede83c3be54abf6c6f088dd6a52`;
+- final exact-head verification is required after documentation and completion bookkeeping before merge.
+
+Completion authorizes no R2 mutation. R2 Part host integration requires a separate explicit Owner-accepted Work Contract.

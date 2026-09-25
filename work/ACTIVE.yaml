@@ -1,6 +1,6 @@
 version: 1
 status: completed
-active_work: "work/SK-R0_SKETCHER_FOUNDATION_AND_ROADMAP.md"
+active_work: "work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -15,18 +15,17 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - R1 is the next Sketch roadmap milestone: minimal host-neutral Shared 2D authored core
-  - work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md is a PROPOSED bounded R1 contract and is not active
-  - Owner acceptance of the final SK-02A contract is required before any production implementation
-  - no EntityId, Line, Part schema, Viewer Sketch input/presentation, selection, constraints, solver, projection or profile implementation is active
+  - SK-02A / R1 is complete after final exact-head PR verification and merge
+  - R2 is the next Sketch roadmap milestone: Part host integration and durable lifecycle
+  - R2 requires a separate explicit Owner-accepted Work Contract before any production mutation
+  - no Part schema, DocumentSession Sketch-entity command, Viewer Sketch input/presentation, selection, constraints, solver, projection or profile work is active
 notes:
-  - WS-01 remains the current product implementation baseline.
-  - SK-R0 is completed and merged; exact-head Windows gate #235 passed before merge.
-  - ADR-0008 freezes the Shared 2D / Sketcher semantic foundation.
-  - ADR-0009 freezes identity lifecycle, local frame/Origin/reference direction and Sketch interaction grammar before first 2D entity implementation.
-  - work/SKETCH_ROADMAP.md v1.1 is mandatory reconstruction context for later Sketch Work Contracts.
-  - roadmap milestones define staged goals/dependencies, not exact future contract count or private class/API designs.
-  - R1 remains unauthorized until a separate accepted Work Contract is activated.
-  - SS1 remains a donor only; SS2 Foundation/accepted ADRs are authoritative.
+  - SK-02A implements only the host-neutral Shared 2D authored Line core.
+  - Windows PR gate #243 passed build and the complete CTest suite on implementation head 50ddff5a18033ede83c3be54abf6c6f088dd6a52.
+  - final exact-head verification is required after as-built documentation and completion bookkeeping before merge.
+  - docs/internal/SHARED_2D.md is the current as-built description of the implemented Shared 2D core.
+  - ADR-0009 remains authoritative for identity lifecycle, local frame/Origin/reference direction and later interaction grammar.
+  - R2 remains unauthorized until a separate accepted Work Contract exists.
+  - SS1 remains donor-only and is not architecture authority.
   - Assembly/Drawing implementation remains unauthorized.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
