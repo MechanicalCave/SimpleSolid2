@@ -1,10 +1,12 @@
 #include "part_viewport_controller.hpp"
+#include "sketch_viewport_mapping.hpp"
 
 #include <QPointer>
 
 #include <algorithm>
 #include <array>
 #include <cstdint>
+#include <limits>
 #include <utility>
 
 namespace simplesolid2::ui {
@@ -108,45 +110,66 @@ PartViewportController::PartViewportController(
 
     if (viewport_ != nullptr) {
         const QPointer<PartViewportController> self{this};
+
         viewport_->setSelectionIntentHandler(
             [self](const viewer::SelectionIntent& intent) {
                 if (self) {
                     self->onViewportIntent(intent);
                 }
             });
+
+        viewport_->setSpatialPointerHandler(
+            [self](const viewer::SpatialPointerEvent& event) {
+                if (self) {
+                    self->onSpatialPointer(event);
+                }
+            });
+
+        applySketchViewportMode();
     }
 }
 
 void PartViewportController::setDocumentSession(
     application::DocumentSession* session) {
     if (session_ != session) {
-        sketch_edit_placement_.reset();
+        sketch_edit_id_.reset();
+        sketch_spatial_tool_input_ = false;
+        sketch_entity_bindings_.clear();
+        clearSketchPreview();
     }
+
     session_ = session;
     tree_->setDocumentSession(session_);
 
+    applySketchViewportMode();
     refreshPresentation();
     applySelectionToSurfaces();
     notifySelectionChanged();
 }
 
 void PartViewportController::clear() {
-    const bool had_document_session =
-        session_ != nullptr;
-
     session_ = nullptr;
-    sketch_edit_placement_.reset();
+    sketch_edit_id_.reset();
+    sketch_spatial_tool_input_ = false;
+    sketch_entity_bindings_.clear();
     tree_->clear();
 
-    if (viewport_ != nullptr && had_document_session) {
+    if (viewport_ != nullptr) {
         static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));
+        static_cast<void>(
+            viewport_->setSketchScene(
+                viewer::SketchScene{}));
+        static_cast<void>(
+            viewport_->setSketchPreviewScene(
+                viewer::SketchPreviewScene{}));
         static_cast<void>(
             viewport_->setPresentationSelection(
                 viewer::PresentationSelection{}));
     }
 
+    applySketchViewportMode();
     notifySelectionChanged();
 }
 
@@ -159,21 +182,126 @@ void PartViewportController::refreshPresentation() {
     if (viewport_ == nullptr) return;
 
     if (session_ == nullptr) {
+        sketch_entity_bindings_.clear();
         static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));
+        static_cast<void>(
+            viewport_->setSketchScene(
+                viewer::SketchScene{}));
         return;
     }
 
     static_cast<void>(
-        viewport_->setReferenceScene(buildScene()));
+        viewport_->setReferenceScene(
+            buildReferenceScene()));
+
+    const auto sketch_scene =
+        buildSketchScene();
+    static_cast<void>(
+        viewport_->setSketchScene(
+            sketch_scene
+                ? *sketch_scene
+                : viewer::SketchScene{}));
+
     applySelectionToSurfaces();
 }
 
-void PartViewportController::setSketchEditPlacement(
-    std::optional<part::SketchPlacement> placement) {
-    sketch_edit_placement_ = std::move(placement);
+void PartViewportController::setSketchEditSketch(
+    std::optional<sketch::SketchId> sketch_id) {
+    sketch_edit_id_ = std::move(sketch_id);
+    sketch_spatial_tool_input_ = false;
+    sketch_entity_bindings_.clear();
+    clearSketchPreview();
+
+    if (sketch_edit_id_ &&
+        activeSketch() == nullptr) {
+        sketch_edit_id_.reset();
+    }
+
+    applySketchViewportMode();
     refreshPresentation();
+}
+
+bool PartViewportController::setSketchPreview(
+    const std::vector<SketchPreviewLine2D>& lines) {
+    if (viewport_ == nullptr) {
+        return false;
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return false;
+    }
+
+    viewer::SketchPreviewScene scene;
+    scene.lines.reserve(lines.size());
+
+    for (const auto& line : lines) {
+        if (!line.valid()) {
+            return false;
+        }
+
+        const auto start =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                line.start);
+        const auto end =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                line.end);
+        if (!start || !end) {
+            return false;
+        }
+
+        scene.lines.push_back(
+            viewer::SketchPreviewLine{
+                *start,
+                *end});
+    }
+
+    if (!scene.valid()) {
+        return false;
+    }
+
+    return viewport_->setSketchPreviewScene(
+        scene);
+}
+
+void PartViewportController::clearSketchPreview() {
+    if (viewport_ != nullptr) {
+        static_cast<void>(
+            viewport_->setSketchPreviewScene(
+                viewer::SketchPreviewScene{}));
+    }
+}
+
+bool PartViewportController::setSketchSpatialToolInput(
+    bool enabled) {
+    if (enabled && activeSketch() == nullptr) {
+        return false;
+    }
+
+    sketch_spatial_tool_input_ = enabled;
+    applySketchViewportMode();
+    return true;
+}
+
+std::optional<SketchEntityAddress>
+PartViewportController::sketchEntityFor(
+    viewer::PresentationToken token) const {
+    if (!token.valid()) {
+        return std::nullopt;
+    }
+
+    const auto found =
+        sketch_entity_bindings_.find(
+            token.value);
+    return found ==
+            sketch_entity_bindings_.end()
+        ? std::nullopt
+        : std::optional<SketchEntityAddress>{
+              found->second};
 }
 
 std::optional<core::BuiltinReferenceRole>
@@ -207,13 +335,25 @@ PartViewportController::roleFor(
         : std::nullopt;
 }
 
-viewer::ReferenceScene PartViewportController::buildScene() const {
+const part::PartSketch*
+PartViewportController::activeSketch() const noexcept {
+    if (session_ == nullptr ||
+        !sketch_edit_id_) {
+        return nullptr;
+    }
+
+    return session_->document().findSketch(
+        *sketch_edit_id_);
+}
+
+viewer::ReferenceScene
+PartViewportController::buildReferenceScene() const {
     viewer::ReferenceScene scene;
     if (session_ == nullptr) return scene;
 
-    if (sketch_edit_placement_) {
+    if (const auto* hosted = activeSketch()) {
         const auto& placement =
-            *sketch_edit_placement_;
+            hosted->placement;
         scene.grid = viewer::GridPresentation{
             {
                 placement.origin[0],
@@ -254,6 +394,83 @@ viewer::ReferenceScene PartViewportController::buildScene() const {
     }
 
     return scene;
+}
+
+std::optional<viewer::SketchScene>
+PartViewportController::buildSketchScene() {
+    sketch_entity_bindings_.clear();
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return viewer::SketchScene{};
+    }
+
+    const auto origin =
+        detail::sketchPointToWorld(
+            hosted->placement,
+            sketch::Point2{0.0, 0.0});
+    if (!origin) {
+        return std::nullopt;
+    }
+
+    viewer::SketchScene scene;
+    scene.origin =
+        viewer::SketchOriginPresentation{
+            *origin};
+
+    const auto model_state =
+        hosted->model.state();
+    scene.lines.reserve(
+        model_state.lines.size());
+
+    for (const auto& line : model_state.lines) {
+        const auto start =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                line.start);
+        const auto end =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                line.end);
+        const auto token =
+            allocateSketchPresentationToken();
+
+        if (!start || !end || !token) {
+            sketch_entity_bindings_.clear();
+            return std::nullopt;
+        }
+
+        scene.lines.push_back(
+            viewer::SketchLinePresentation{
+                *token,
+                *start,
+                *end});
+
+        sketch_entity_bindings_.emplace(
+            token->value,
+            SketchEntityAddress{
+                hosted->id,
+                line.id});
+    }
+
+    if (!scene.valid()) {
+        sketch_entity_bindings_.clear();
+        return std::nullopt;
+    }
+
+    return scene;
+}
+
+std::optional<viewer::PresentationToken>
+PartViewportController::allocateSketchPresentationToken()
+    noexcept {
+    if (next_sketch_presentation_token_ ==
+        std::numeric_limits<std::uint64_t>::max()) {
+        return std::nullopt;
+    }
+
+    return viewer::PresentationToken{
+        next_sketch_presentation_token_++};
 }
 
 PartViewportController::SemanticSelection&
@@ -299,7 +516,10 @@ void PartViewportController::onTreeSelection(
 
 void PartViewportController::onViewportIntent(
     const viewer::SelectionIntent& intent) {
-    if (session_ == nullptr || !intent.valid()) return;
+    if (session_ == nullptr ||
+        !intent.valid()) {
+        return;
+    }
 
     auto& selection = activeSelection();
 
@@ -313,7 +533,9 @@ void PartViewportController::onViewportIntent(
     }
 
     const auto role = roleFor(intent.token);
-    if (!role) return;
+    if (!role) {
+        return;
+    }
 
     if (intent.mode ==
         viewer::SelectionIntentMode::replace) {
@@ -346,9 +568,39 @@ void PartViewportController::onViewportIntent(
     notifySelectionChanged();
 }
 
+void PartViewportController::onSpatialPointer(
+    const viewer::SpatialPointerEvent& event) {
+    if (!event.valid() ||
+        !sketch_pointer_handler_) {
+        return;
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return;
+    }
+
+    const auto local =
+        detail::sketchPointFromRay(
+            hosted->placement,
+            event.ray);
+    if (!local) {
+        return;
+    }
+
+    sketch_pointer_handler_(
+        SketchPointerInput{
+            hosted->id,
+            event.phase,
+            event.position,
+            *local});
+}
+
 void PartViewportController::applySelectionToSurfaces() {
     if (session_ == nullptr) {
-        tree_->setBuiltinReferenceSelection({}, std::nullopt);
+        tree_->setBuiltinReferenceSelection(
+            {},
+            std::nullopt);
         if (viewport_ != nullptr) {
             static_cast<void>(
                 viewport_->setPresentationSelection(
@@ -381,6 +633,36 @@ void PartViewportController::applySelectionToSurfaces() {
     static_cast<void>(
         viewport_->setPresentationSelection(
             presentation));
+}
+
+void PartViewportController::applySketchViewportMode() {
+    if (viewport_ == nullptr) {
+        return;
+    }
+
+    if (activeSketch() == nullptr) {
+        viewport_->setPrimaryPointerRouting(
+            viewer::PrimaryPointerRouting::
+                presentation_selection);
+        viewport_->setCursorMode(
+            viewer::ViewportCursorMode::
+                system_default);
+        return;
+    }
+
+    viewport_->setPrimaryPointerRouting(
+        sketch_spatial_tool_input_
+            ? viewer::PrimaryPointerRouting::
+                  spatial_tool_input
+            : viewer::PrimaryPointerRouting::
+                  presentation_selection);
+
+    viewport_->setCursorMode(
+        sketch_spatial_tool_input_
+            ? viewer::ViewportCursorMode::
+                  create_edit_crosshair
+            : viewer::ViewportCursorMode::
+                  select_pick_box);
 }
 
 void PartViewportController::notifySelectionChanged() {

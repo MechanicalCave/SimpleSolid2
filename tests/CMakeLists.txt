@@ -763,3 +763,63 @@ add_test(
     NAME sk03a.sketch_viewport_mapping
     COMMAND sk03a_sketch_viewport_mapping_test
 )
+
+
+add_executable(sk03a_part_viewport_controller_test
+    sk03a_part_viewport_controller_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+)
+
+target_include_directories(sk03a_part_viewport_controller_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(sk03a_part_viewport_controller_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(sk03a_part_viewport_controller_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk03a.part_viewport_controller
+    COMMAND sk03a_part_viewport_controller_test
+)
+
+set_tests_properties(sk03a.part_viewport_controller PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+
+add_executable(sk03a_viewer_native_input_test
+    sk03a_viewer_native_input_test.cpp
+)
+
+target_include_directories(sk03a_viewer_native_input_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(sk03a_viewer_native_input_test
+    PRIVATE
+        simplesolid2_part
+        simplesolid2_viewer
+        simplesolid2_viewer_qt_occt
+        Qt6::Widgets
+        Qt6::Test
+)
+
+target_compile_features(sk03a_viewer_native_input_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk03a.viewer_native_input
+    COMMAND sk03a_viewer_native_input_test
+)
+
+set_tests_properties(sk03a.viewer_native_input PROPERTIES
+    TIMEOUT 30
+)

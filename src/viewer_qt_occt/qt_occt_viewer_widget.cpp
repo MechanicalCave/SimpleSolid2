@@ -22,9 +22,12 @@
 #include <gp_Pnt.hxx>
 
 #include <QContextMenuEvent>
+#include <QCursor>
 #include <QDebug>
 #include <QMouseEvent>
+#include <QPainter>
 #include <QPaintEvent>
+#include <QPixmap>
 #include <QResizeEvent>
 #include <QShowEvent>
 #include <QTimer>
@@ -265,6 +268,114 @@ public:
         }
     }
 
+    bool setSketchScene(
+        const viewer::SketchScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearSketchScene();
+
+        try {
+            for (const auto& line : scene.lines) {
+                Handle(Geom_CartesianPoint) start =
+                    new Geom_CartesianPoint(
+                        toPoint(line.start));
+                Handle(Geom_CartesianPoint) end =
+                    new Geom_CartesianPoint(
+                        toPoint(line.end));
+                Handle(AIS_Line) object =
+                    new AIS_Line(start, end);
+
+                sketch_objects_.push_back(
+                    SketchObject{
+                        line.token,
+                        object});
+                context_->Display(object, false);
+            }
+
+            if (scene.origin) {
+                Handle(Geom_CartesianPoint) point =
+                    new Geom_CartesianPoint(
+                        toPoint(
+                            scene.origin->position));
+                sketch_origin_object_ =
+                    new AIS_Point(point);
+                context_->Display(
+                    sketch_origin_object_,
+                    false);
+                context_->Deactivate(
+                    sketch_origin_object_);
+                context_->SetColor(
+                    sketch_origin_object_,
+                    Quantity_Color{
+                        0.95, 0.78, 0.20,
+                        Quantity_TOC_RGB},
+                    false);
+            }
+
+            sketch_scene_ = scene;
+            applySelectionStyles();
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearSketchScene();
+            throw;
+        }
+    }
+
+    bool setSketchPreviewScene(
+        const viewer::SketchPreviewScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearSketchPreviewScene();
+
+        try {
+            for (const auto& line : scene.lines) {
+                Handle(Geom_CartesianPoint) start =
+                    new Geom_CartesianPoint(
+                        toPoint(line.start));
+                Handle(Geom_CartesianPoint) end =
+                    new Geom_CartesianPoint(
+                        toPoint(line.end));
+                Handle(AIS_Line) object =
+                    new AIS_Line(start, end);
+
+                context_->Display(object, false);
+                context_->SetColor(
+                    object,
+                    Quantity_Color{
+                        0.22, 0.82, 0.96,
+                        Quantity_TOC_RGB},
+                    false);
+                context_->SetWidth(
+                    object,
+                    1.6,
+                    false);
+                context_->Deactivate(object);
+                sketch_preview_objects_.push_back(
+                    object);
+            }
+
+            sketch_preview_scene_ = scene;
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearSketchPreviewScene();
+            throw;
+        }
+    }
+
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) {
         if (!selection.valid()) return false;
@@ -281,6 +392,111 @@ public:
     void setSelectionIntentHandler(
         viewer::SelectionIntentHandler handler) {
         selection_intent_handler_ = std::move(handler);
+    }
+
+    void setSpatialPointerHandler(
+        viewer::SpatialPointerHandler handler) {
+        spatial_pointer_handler_ =
+            std::move(handler);
+    }
+
+    void setPrimaryPointerRouting(
+        viewer::PrimaryPointerRouting routing) noexcept {
+        primary_pointer_routing_ = routing;
+    }
+
+    [[nodiscard]] viewer::PrimaryPointerRouting
+    primaryPointerRouting() const noexcept {
+        return primary_pointer_routing_;
+    }
+
+    void setCursorMode(
+        viewer::ViewportCursorMode mode) {
+        cursor_mode_ = mode;
+
+        switch (mode) {
+        case viewer::ViewportCursorMode::system_default:
+            owner_.unsetCursor();
+            return;
+
+        case viewer::ViewportCursorMode::select_pick_box: {
+            QPixmap pixmap{17, 17};
+            pixmap.fill(Qt::transparent);
+            QPainter painter{&pixmap};
+            painter.setPen(Qt::white);
+            painter.drawRect(5, 5, 6, 6);
+            painter.end();
+            owner_.setCursor(
+                QCursor{pixmap, 8, 8});
+            return;
+        }
+
+        case viewer::ViewportCursorMode::create_edit_crosshair:
+            owner_.setCursor(
+                QCursor{Qt::CrossCursor});
+            return;
+        }
+    }
+
+    bool emitSpatialPointer(
+        double logical_x,
+        double logical_y,
+        viewer::SpatialPointerPhase phase) {
+        ensureInitialized();
+        if (view_.IsNull() ||
+            !spatial_pointer_handler_) {
+            return false;
+        }
+
+        const auto dpr =
+            owner_.devicePixelRatioF();
+        const auto x =
+            static_cast<int>(
+                std::lround(
+                    logical_x * dpr));
+        const auto y =
+            static_cast<int>(
+                std::lround(
+                    logical_y * dpr));
+
+        double world_x{};
+        double world_y{};
+        double world_z{};
+        double direction_x{};
+        double direction_y{};
+        double direction_z{};
+
+        view_->ConvertWithProj(
+            x,
+            y,
+            world_x,
+            world_y,
+            world_z,
+            direction_x,
+            direction_y,
+            direction_z);
+
+        const viewer::SpatialPointerEvent event{
+            phase,
+            viewer::ViewportPoint2{
+                logical_x,
+                logical_y},
+            viewer::Ray3{
+                viewer::Point3{
+                    world_x,
+                    world_y,
+                    world_z},
+                viewer::Vec3{
+                    direction_x,
+                    direction_y,
+                    direction_z}}};
+
+        if (!event.valid()) {
+            return false;
+        }
+
+        spatial_pointer_handler_(event);
+        return true;
     }
 
     void pickAtLogicalPoint(
@@ -312,6 +528,15 @@ public:
                     if (entry.object == detected) {
                         detected_token = entry.token;
                         break;
+                    }
+                }
+
+                if (!detected_token) {
+                    for (const auto& entry : sketch_objects_) {
+                        if (entry.object == detected) {
+                            detected_token = entry.token;
+                            break;
+                        }
                     }
                 }
             }
@@ -378,6 +603,11 @@ public:
     struct ReferenceObject final {
         viewer::PresentationToken token;
         viewer::ReferencePresentationKind kind;
+        Handle(AIS_InteractiveObject) object;
+    };
+
+    struct SketchObject final {
+        viewer::PresentationToken token;
         Handle(AIS_InteractiveObject) object;
     };
 
@@ -461,6 +691,65 @@ public:
         Handle(AIS_Shape) object =
             new AIS_Shape(face.Shape());
         return object;
+    }
+
+    void clearSketchScene() noexcept {
+        if (!context_.IsNull()) {
+            guardedVoid(
+                "clearSketchDetected",
+                [this] {
+                    context_->ClearDetected(false);
+                });
+
+            for (const auto& entry : sketch_objects_) {
+                if (entry.object.IsNull()) continue;
+                const auto object = entry.object;
+                guardedVoid(
+                    "removeSketchObject",
+                    [this, object] {
+                        context_->Remove(
+                            object,
+                            false);
+                    });
+            }
+
+            if (!sketch_origin_object_.IsNull()) {
+                const auto object =
+                    sketch_origin_object_;
+                guardedVoid(
+                    "removeSketchOrigin",
+                    [this, object] {
+                        context_->Remove(
+                            object,
+                            false);
+                    });
+            }
+        }
+
+        sketch_objects_.clear();
+        sketch_origin_object_.Nullify();
+        sketch_scene_.lines.clear();
+        sketch_scene_.origin.reset();
+    }
+
+    void clearSketchPreviewScene() noexcept {
+        if (!context_.IsNull()) {
+            for (const auto& object :
+                 sketch_preview_objects_) {
+                if (object.IsNull()) continue;
+                const auto retained = object;
+                guardedVoid(
+                    "removeSketchPreviewObject",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+
+        sketch_preview_objects_.clear();
+        sketch_preview_scene_.lines.clear();
     }
 
     void clearReferenceScene() noexcept {
@@ -624,6 +913,37 @@ public:
                     false);
             }
         }
+
+        for (const auto& entry : sketch_objects_) {
+            if (entry.object.IsNull()) continue;
+
+            const bool selected =
+                isSelected(entry.token);
+            const bool primary =
+                selection_.primary &&
+                *selection_.primary == entry.token;
+
+            context_->SetColor(
+                entry.object,
+                primary
+                    ? Quantity_Color{
+                          1.0, 0.90, 0.25,
+                          Quantity_TOC_RGB}
+                    : selected
+                        ? Quantity_Color{
+                              1.0, 0.63, 0.18,
+                              Quantity_TOC_RGB}
+                        : Quantity_Color{
+                              0.92, 0.92, 0.94,
+                              Quantity_TOC_RGB},
+                false);
+            context_->SetWidth(
+                entry.object,
+                primary
+                    ? 4.0
+                    : (selected ? 3.0 : 2.0),
+                false);
+        }
     }
 
     void resize() {
@@ -701,9 +1021,23 @@ private:
     int last_mouse_y_{};
 
     viewer::ReferenceScene reference_scene_;
+    viewer::SketchScene sketch_scene_;
+    viewer::SketchPreviewScene sketch_preview_scene_;
     viewer::PresentationSelection selection_;
     viewer::SelectionIntentHandler selection_intent_handler_;
+    viewer::SpatialPointerHandler spatial_pointer_handler_;
+    viewer::PrimaryPointerRouting primary_pointer_routing_{
+        viewer::PrimaryPointerRouting::
+            presentation_selection};
+    viewer::ViewportCursorMode cursor_mode_{
+        viewer::ViewportCursorMode::
+            system_default};
     std::vector<ReferenceObject> reference_objects_;
+    std::vector<SketchObject> sketch_objects_;
+    std::vector<Handle(AIS_InteractiveObject)>
+        sketch_preview_objects_;
+    Handle(AIS_InteractiveObject)
+        sketch_origin_object_;
     std::vector<Handle(AIS_InteractiveObject)> grid_objects_;
 
     Handle(OpenGl_GraphicDriver) driver_;
@@ -774,6 +1108,24 @@ bool QtOcctViewerWidget::setReferenceScene(
         });
 }
 
+bool QtOcctViewerWidget::setSketchScene(
+    const viewer::SketchScene& scene) {
+    return guardedBool(
+        "setSketchScene",
+        [this, &scene] {
+            return impl_->setSketchScene(scene);
+        });
+}
+
+bool QtOcctViewerWidget::setSketchPreviewScene(
+    const viewer::SketchPreviewScene& scene) {
+    return guardedBool(
+        "setSketchPreviewScene",
+        [this, &scene] {
+            return impl_->setSketchPreviewScene(scene);
+        });
+}
+
 bool QtOcctViewerWidget::setPresentationSelection(
     const viewer::PresentationSelection& selection) {
     return guardedBool(
@@ -790,6 +1142,35 @@ void QtOcctViewerWidget::setSelectionIntentHandler(
         [this, handler = std::move(handler)]() mutable {
             impl_->setSelectionIntentHandler(
                 std::move(handler));
+        });
+}
+
+void QtOcctViewerWidget::setSpatialPointerHandler(
+    viewer::SpatialPointerHandler handler) {
+    guardedVoid(
+        "setSpatialPointerHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setSpatialPointerHandler(
+                std::move(handler));
+        });
+}
+
+void QtOcctViewerWidget::setPrimaryPointerRouting(
+    viewer::PrimaryPointerRouting routing) {
+    guardedVoid(
+        "setPrimaryPointerRouting",
+        [this, routing] {
+            impl_->setPrimaryPointerRouting(
+                routing);
+        });
+}
+
+void QtOcctViewerWidget::setCursorMode(
+    viewer::ViewportCursorMode mode) {
+    guardedVoid(
+        "setCursorMode",
+        [this, mode] {
+            impl_->setCursorMode(mode);
         });
 }
 
@@ -877,17 +1258,35 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
     }
 
     if (event->button() == Qt::LeftButton) {
-        const auto point = event->position().toPoint();
-        const bool toggle =
-            (event->modifiers() & Qt::ControlModifier) != 0;
-        guardedVoid(
-            "leftClickPick",
-            [this, point, toggle] {
-                impl_->pickAtLogicalPoint(
-                    point.x(),
-                    point.y(),
-                    toggle);
-            });
+        if (impl_->primaryPointerRouting() ==
+            viewer::PrimaryPointerRouting::
+                spatial_tool_input) {
+            const auto point = event->position();
+            guardedVoid(
+                "leftSpatialPress",
+                [this, point] {
+                    static_cast<void>(
+                        impl_->emitSpatialPointer(
+                            point.x(),
+                            point.y(),
+                            viewer::SpatialPointerPhase::
+                                primary_press));
+                });
+        } else {
+            const auto point =
+                event->position().toPoint();
+            const bool toggle =
+                (event->modifiers() &
+                 Qt::ControlModifier) != 0;
+            guardedVoid(
+                "leftClickPick",
+                [this, point, toggle] {
+                    impl_->pickAtLogicalPoint(
+                        point.x(),
+                        point.y(),
+                        toggle);
+                });
+        }
         event->accept();
         return;
     }
@@ -920,6 +1319,17 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
         return;
     }
 
+    const auto point = event->position();
+    guardedVoid(
+        "spatialMove",
+        [this, point] {
+            static_cast<void>(
+                impl_->emitSpatialPointer(
+                    point.x(),
+                    point.y(),
+                    viewer::SpatialPointerPhase::move));
+        });
+
     QWidget::mouseMoveEvent(event);
 }
 
@@ -928,6 +1338,25 @@ void QtOcctViewerWidget::mouseReleaseEvent(QMouseEvent* event) {
         guardedVoid(
             "middleRelease",
             [this] { impl_->endMiddleDrag(); });
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton &&
+        impl_->primaryPointerRouting() ==
+            viewer::PrimaryPointerRouting::
+                spatial_tool_input) {
+        const auto point = event->position();
+        guardedVoid(
+            "leftSpatialRelease",
+            [this, point] {
+                static_cast<void>(
+                    impl_->emitSpatialPointer(
+                        point.x(),
+                        point.y(),
+                        viewer::SpatialPointerPhase::
+                            primary_release));
+            });
         event->accept();
         return;
     }
