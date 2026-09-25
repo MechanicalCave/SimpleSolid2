@@ -74,6 +74,8 @@ standardViewForSketchSupport(
 CadWorkbench::CadWorkbench(QWidget* parent)
     : CadWorkbench{ViewportFactory{}, parent} {}
 
+CadWorkbench::~CadWorkbench() = default;
+
 CadWorkbench::CadWorkbench(
     ViewportFactory viewport_factory,
     QWidget* parent)
