@@ -706,3 +706,20 @@ add_test(
     NAME sk02b.sketch_entity_lifecycle
     COMMAND sk02b_sketch_entity_lifecycle_test
 )
+
+
+add_executable(sk02b_part_sketch_persistence_test
+    sk02b_part_sketch_persistence_test.cpp
+)
+
+target_link_libraries(sk02b_part_sketch_persistence_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(sk02b_part_sketch_persistence_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk02b.part_sketch_persistence
+    COMMAND sk02b_part_sketch_persistence_test
+)

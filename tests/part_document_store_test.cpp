@@ -339,7 +339,11 @@ int main() {
             "\"u_axis\":[1,0,0],"
             "\"v_axis\":[0,1,0]"
         "},"
-        "\"visible\":true"
+        "\"visible\":true,"
+        "\"model\":{"
+            "\"next_entity_id\":\"1\","
+            "\"lines\":[]"
+        "}"
         "}";
 
     writeBytes(
@@ -413,7 +417,11 @@ int main() {
                     "\"u_axis\":[1,0,0],"
                     "\"v_axis\":[0,1,0]"
                 "},"
-                "\"visible\":true"
+                "\"visible\":true,"
+                "\"model\":{"
+                    "\"next_entity_id\":\"1\","
+                    "\"lines\":[]"
+                "}"
                 "}]"
                 "}"));
 
