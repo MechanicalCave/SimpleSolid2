@@ -9,6 +9,7 @@
 #include <AIS_Point.hxx>
 #include <AIS_RubberBand.hxx>
 #include <AIS_Shape.hxx>
+#include <AIS_TextLabel.hxx>
 #include <AIS_ViewCube.hxx>
 #include <AIS_ViewCubeOwner.hxx>
 #include <Aspect_DisplayConnection.hxx>
@@ -17,10 +18,14 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <Geom_CartesianPoint.hxx>
 #include <Graphic3d_Camera.hxx>
+#include <Graphic3d_HorizontalTextAlignment.hxx>
 #include <Graphic3d_TransformPers.hxx>
+#include <Graphic3d_VerticalTextAlignment.hxx>
+#include <Graphic3d_ZLayerId.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Quantity_Color.hxx>
 #include <Standard_Failure.hxx>
+#include <TCollection_ExtendedString.hxx>
 #include <V3d_TypeOfOrientation.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
@@ -435,6 +440,10 @@ public:
         context_->Display(
             navigation_cube_,
             false);
+
+        createNavigationControlLabels();
+        syncNavigationControlVisibility();
+
         context_->UpdateCurrentViewer();
         view_->Redraw();
     }
@@ -485,6 +494,7 @@ public:
         camera->OrthogonalizeUp();
         camera->SetScale(state.scale);
         view_->Redraw();
+        syncNavigationControlVisibility();
         return true;
     }
 
@@ -509,6 +519,217 @@ public:
         if (view_.IsNull()) return;
         view_->FitAll(0.05, false);
         view_->Redraw();
+    }
+
+    struct NavigationControl final {
+        Handle(AIS_TextLabel) label;
+        viewer::NavigationCubeAction action;
+        int offset_x{};
+        int offset_y{};
+        int half_width{};
+        int half_height{};
+        bool face_only{};
+        bool visible{};
+    };
+
+    void createNavigationControlLabels() {
+        if (context_.IsNull()) return;
+
+        navigation_controls_.clear();
+
+        auto add =
+            [this](
+                const char* text,
+                viewer::NavigationCubeAction action,
+                int offset_x,
+                int offset_y,
+                int half_width,
+                int half_height,
+                bool face_only) {
+                Handle(AIS_TextLabel) label =
+                    new AIS_TextLabel();
+                label->SetText(
+                    TCollection_ExtendedString{text});
+                label->SetPosition(
+                    gp_Pnt{0.0, 0.0, 0.0});
+                label->SetColor(
+                    Quantity_Color{
+                        0.94,
+                        0.94,
+                        0.96,
+                        Quantity_TOC_RGB});
+                label->SetFontHeight(12.0);
+                label->SetHJustification(
+                    Graphic3d_HTA_CENTER);
+                label->SetVJustification(
+                    Graphic3d_VTA_CENTER);
+                label->SetZoomable(false);
+                label->SetZLayer(
+                    Graphic3d_ZLayerId_Topmost);
+                label->SetTransformPersistence(
+                    new Graphic3d_TransformPers(
+                        Graphic3d_TMF_2d,
+                        Aspect_TOTP_RIGHT_UPPER,
+                        Graphic3d_Vec2i{
+                            offset_x,
+                            offset_y}));
+                context_->Display(
+                    label,
+                    false);
+                context_->Deactivate(label);
+
+                navigation_controls_.push_back(
+                    NavigationControl{
+                        label,
+                        action,
+                        offset_x,
+                        offset_y,
+                        half_width,
+                        half_height,
+                        face_only,
+                        true});
+            };
+
+        add(
+            "HOME",
+            {viewer::NavigationCubeActionKind::home, {}},
+            158,
+            18,
+            28,
+            11,
+            false);
+
+        add(
+            "<",
+            {viewer::NavigationCubeActionKind::
+                 adjacent_left,
+             {}},
+            148,
+            86,
+            12,
+            15,
+            true);
+        add(
+            ">",
+            {viewer::NavigationCubeActionKind::
+                 adjacent_right,
+             {}},
+            24,
+            86,
+            12,
+            15,
+            true);
+        add(
+            "^",
+            {viewer::NavigationCubeActionKind::
+                 adjacent_up,
+             {}},
+            86,
+            22,
+            15,
+            12,
+            true);
+        add(
+            "v",
+            {viewer::NavigationCubeActionKind::
+                 adjacent_down,
+             {}},
+            86,
+            150,
+            15,
+            12,
+            true);
+
+        add(
+            "CCW90",
+            {viewer::NavigationCubeActionKind::
+                 roll_counterclockwise,
+             {}},
+            146,
+            46,
+            28,
+            10,
+            true);
+        add(
+            "CW90",
+            {viewer::NavigationCubeActionKind::
+                 roll_clockwise,
+             {}},
+            28,
+            46,
+            24,
+            10,
+            true);
+    }
+
+    void syncNavigationControlVisibility() {
+        if (context_.IsNull()) return;
+
+        const auto camera = cameraState();
+        const bool face_aligned =
+            camera &&
+            viewer::navigationCubeFaceAligned(
+                *camera);
+
+        for (auto& control : navigation_controls_) {
+            const bool next_visible =
+                !control.face_only ||
+                face_aligned;
+            if (next_visible == control.visible) {
+                continue;
+            }
+
+            if (next_visible) {
+                context_->Display(
+                    control.label,
+                    false);
+                context_->Deactivate(
+                    control.label);
+            } else {
+                context_->Erase(
+                    control.label,
+                    false);
+            }
+
+            control.visible = next_visible;
+        }
+    }
+
+    [[nodiscard]] std::optional<
+        viewer::NavigationCubeAction>
+    navigationControlAt(
+        int logical_x,
+        int logical_y) const {
+        for (const auto& control :
+             navigation_controls_) {
+            if (!control.visible) continue;
+
+            const int center_x =
+                owner_.width() -
+                control.offset_x;
+            const int center_y =
+                control.offset_y;
+
+            if (std::abs(
+                    logical_x -
+                    center_x) <=
+                    control.half_width &&
+                std::abs(
+                    logical_y -
+                    center_y) <=
+                    control.half_height) {
+                return control.action;
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    void emitNavigationCubeAction(
+        const viewer::NavigationCubeAction& action) {
+        if (navigation_cube_action_handler_) {
+            navigation_cube_action_handler_(action);
+        }
     }
 
     void setNavigationCubeActionHandler(
@@ -594,6 +815,17 @@ public:
             duration_seconds);
         navigation_animation_target_ = state;
         navigation_animation_fit_all_ = fit_all;
+
+        for (auto& control : navigation_controls_) {
+            if (control.face_only &&
+                control.visible) {
+                context_->Erase(
+                    control.label,
+                    false);
+                control.visible = false;
+            }
+        }
+
         navigation_animation_->StartTimer(
             0.0,
             1.0,
@@ -629,6 +861,8 @@ public:
             view_->FitAll(0.05, false);
             view_->Redraw();
         }
+
+        syncNavigationControlVisibility();
 
         navigation_animation_.Nullify();
         navigation_animation_target_.reset();
@@ -1163,6 +1397,13 @@ public:
             return false;
         }
 
+        if (navigationControlAt(
+                logical_x,
+                logical_y)) {
+            context_->ClearDetected(false);
+            return true;
+        }
+
         const auto dpr =
             owner_.devicePixelRatioF();
         const auto x =
@@ -1195,6 +1436,18 @@ public:
     bool activateNavigationCubeAt(
         int logical_x,
         int logical_y) {
+        ensureInitialized();
+
+        if (const auto control =
+                navigationControlAt(
+                    logical_x,
+                    logical_y)) {
+            navigation_cube_press_active_ = true;
+            context_->ClearDetected(false);
+            emitNavigationCubeAction(*control);
+            return true;
+        }
+
         if (!updateNavigationCubeHover(
                 logical_x,
                 logical_y)) {
@@ -1219,11 +1472,9 @@ public:
 
         context_->ClearDetected(false);
 
-        if (navigation_cube_action_handler_) {
-            navigation_cube_action_handler_(
-                viewer::NavigationCubeAction::
-                    orientTo(*target));
-        }
+        emitNavigationCubeAction(
+            viewer::NavigationCubeAction::
+                orientTo(*target));
 
         return true;
     }
@@ -1330,6 +1581,7 @@ public:
 
         view_->Rotate(angles.x, angles.y, angles.z, true);
         view_->Redraw();
+        syncNavigationControlVisibility();
     }
 
     void orbitByRadians(double horizontal, double vertical) {
@@ -1804,6 +2056,8 @@ private:
         navigation_animation_target_;
     bool navigation_animation_fit_all_{};
     bool navigation_cube_press_active_{};
+    std::vector<NavigationControl>
+        navigation_controls_;
     std::vector<ReferenceObject> reference_objects_;
     std::vector<SketchObject> sketch_objects_;
     std::vector<Handle(AIS_InteractiveObject)>
