@@ -154,7 +154,7 @@ int main() {
         {0, 1, 0}));
     CHECK(sameDirection(
         roll_cw->camera.up,
-        {-1, 0, 0}));
+        {1, 0, 0}));
 
     auto roll_ccw =
         viewer::navigationForCubeAction(
@@ -165,7 +165,7 @@ int main() {
     CHECK(roll_ccw.has_value());
     CHECK(sameDirection(
         roll_ccw->camera.up,
-        {1, 0, 0}));
+        {-1, 0, 0}));
 
     const auto home =
         viewer::navigationForCubeAction(
