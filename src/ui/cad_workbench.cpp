@@ -1,13 +1,16 @@
 #include "cad_workbench.hpp"
 #include "cad_workbench_shell.hpp"
 #include "part_document_tree_controller.hpp"
+#include "part_sketch_interaction_controller.hpp"
 #include "part_viewport_controller.hpp"
 #include "view_cube_widget.hpp"
 
+#include <QEvent>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -70,6 +73,8 @@ standardViewForSketchSupport(
 
 CadWorkbench::CadWorkbench(QWidget* parent)
     : CadWorkbench{ViewportFactory{}, parent} {}
+
+CadWorkbench::~CadWorkbench() = default;
 
 CadWorkbench::CadWorkbench(
     ViewportFactory viewport_factory,
@@ -164,6 +169,7 @@ void CadWorkbench::buildUi() {
         viewport_ = viewport_surface.viewport;
         auto* viewport_widget =
             viewport_surface.widget;
+        viewport_widget_ = viewport_widget;
 
         viewport_widget->setObjectName(
             QStringLiteral("documentViewport"));
@@ -215,6 +221,28 @@ void CadWorkbench::buildUi() {
         0,
         sketch_button_);
 
+    select_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Select"),
+            shell_);
+    select_sketch_button_->setObjectName(
+        QStringLiteral("selectSketchToolButton"));
+    select_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        1,
+        select_sketch_button_);
+
+    line_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Line"),
+            shell_);
+    line_sketch_button_->setObjectName(
+        QStringLiteral("lineSketchToolButton"));
+    line_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        2,
+        line_sketch_button_);
+
     viewport_controller_ =
         new PartViewportController(
             *tree_controller_,
@@ -227,6 +255,58 @@ void CadWorkbench::buildUi() {
             refreshPropertiesContext(primary);
             tryCreateSketchFromSupport(primary);
         });
+
+    sketch_interaction_controller_ =
+        std::make_unique<PartSketchInteractionController>(
+            *viewport_controller_);
+    sketch_interaction_controller_->setStateChangedHandler(
+        [this] {
+            syncSketchInteractionUi();
+            syncActionState();
+            notifyDocumentStateChanged();
+        });
+    sketch_interaction_controller_->setStatusHandler(
+        [this](const std::string& message) {
+            status_->setText(fromUtf8(message));
+        });
+    viewport_controller_->setSketchPointerHandler(
+        [this](const SketchPointerInput& input) {
+            if (sketch_interaction_controller_) {
+                sketch_interaction_controller_->onPointer(
+                    input);
+            }
+        });
+
+    command_line_widget_ = new QWidget(shell_);
+    command_line_widget_->setObjectName(
+        QStringLiteral("sketchCommandLine"));
+    command_line_widget_->setMaximumHeight(58);
+    auto* command_line_layout =
+        new QHBoxLayout(command_line_widget_);
+    command_line_layout->setContentsMargins(4, 2, 4, 2);
+
+    command_prompt_ =
+        new QLabel(
+            QStringLiteral("Command: SELECT"),
+            command_line_widget_);
+    command_prompt_->setObjectName(
+        QStringLiteral("sketchCommandPrompt"));
+    command_line_layout->addWidget(command_prompt_);
+
+    command_input_ =
+        new QLineEdit(command_line_widget_);
+    command_input_->setObjectName(
+        QStringLiteral("sketchCommandInput"));
+    command_input_->setPlaceholderText(
+        QStringLiteral("SELECT or LINE"));
+    command_line_layout->addWidget(command_input_, 1);
+    shell_->setCommandLineContent(
+        command_line_widget_);
+
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->installEventFilter(this);
+    }
+    command_input_->installEventFilter(this);
 
     auto* properties_content = new QWidget(shell_);
     properties_content->setObjectName(
@@ -360,6 +440,14 @@ void CadWorkbench::buildUi() {
     auto* operations_layout = new QVBoxLayout(operations_content);
     operations_layout->setContentsMargins(0, 0, 0, 0);
 
+    operations_placeholder_ = new QLabel(
+        QStringLiteral("Part modeling context."),
+        operations_content);
+    operations_placeholder_->setObjectName(
+        QStringLiteral("operationsPlaceholder"));
+    operations_placeholder_->setWordWrap(true);
+    operations_layout->addWidget(operations_placeholder_);
+
     cancel_sketch_button_ =
         new QPushButton(
             QStringLiteral("Cancel"),
@@ -369,6 +457,35 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         cancel_sketch_button_);
 
+    delete_selection_button_ =
+        new QPushButton(
+            QStringLiteral("Delete Selection"),
+            operations_content);
+    delete_selection_button_->setObjectName(
+        QStringLiteral("deleteSketchSelectionButton"));
+    operations_layout->addWidget(
+        delete_selection_button_);
+
+    finish_line_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Line"),
+            operations_content);
+    finish_line_button_->setObjectName(
+        QStringLiteral("finishSketchLineButton"));
+    operations_layout->addWidget(
+        finish_line_button_);
+
+    cancel_line_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel Line"),
+            operations_content);
+    cancel_line_button_->setObjectName(
+        QStringLiteral("cancelSketchLineButton"));
+    operations_layout->addWidget(
+        cancel_line_button_);
+
+    operations_layout->addStretch(1);
+
     finish_sketch_button_ =
         new QPushButton(
             QStringLiteral("Finish Sketch"),
@@ -377,15 +494,6 @@ void CadWorkbench::buildUi() {
         QStringLiteral("finishSketchButton"));
     operations_layout->addWidget(
         finish_sketch_button_);
-
-    operations_placeholder_ = new QLabel(
-        QStringLiteral("No active tool."),
-        operations_content);
-    operations_placeholder_->setObjectName(
-        QStringLiteral("operationsPlaceholder"));
-    operations_placeholder_->setWordWrap(true);
-    operations_layout->addWidget(operations_placeholder_);
-    operations_layout->addStretch(1);
 
     shell_->setOperationsContent(operations_content);
 
@@ -420,6 +528,16 @@ void CadWorkbench::buildUi() {
         this,
         [this] { startSketchTool(); });
     QObject::connect(
+        select_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchSelect(); });
+    QObject::connect(
+        line_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchLine(); });
+    QObject::connect(
         cancel_sketch_button_,
         &QPushButton::clicked,
         this,
@@ -429,7 +547,28 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { finishSketch(); });
+    QObject::connect(
+        finish_line_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { finishSketchLine(); });
+    QObject::connect(
+        cancel_line_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { cancelSketchLine(); });
+    QObject::connect(
+        delete_selection_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { deleteSketchSelection(); });
+    QObject::connect(
+        command_input_,
+        &QLineEdit::returnPressed,
+        this,
+        [this] { submitSketchCommandLine(); });
 
+    syncSketchInteractionUi();
 }
 
 bool CadWorkbench::activateDocument(
@@ -681,6 +820,12 @@ void CadWorkbench::enterSketchEdit(
     viewport_controller_->setSketchEditSketch(
         sketch_id);
 
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->begin(
+            *document_session,
+            sketch_id);
+    }
+
     if (viewport_ != nullptr) {
         const auto standard_view =
             standardViewForSketchSupport(
@@ -693,11 +838,81 @@ void CadWorkbench::enterSketchEdit(
         viewport_->fitAll();
     }
 
-    operations_placeholder_->setText(
-        QStringLiteral(
-            "Sketch edit context is active in the same 3D Viewport. "
-            "Authored Sketch geometry is presented; interactive tools come later."));
+    syncSketchInteractionUi();
     syncActionState();
+}
+
+void CadWorkbench::activateSketchSelect() {
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->activateSelect();
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::activateSketchLine() {
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->activateLine();
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::finishSketchLine() {
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->finishLine();
+    }
+    status_->setText(
+        QStringLiteral("Line finished — Select active."));
+}
+
+void CadWorkbench::cancelSketchLine() {
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->cancelLine();
+    }
+    status_->setText(
+        QStringLiteral("Line cancelled — committed segments preserved."));
+}
+
+void CadWorkbench::deleteSketchSelection() {
+    if (!sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->deleteSelection()) {
+        return;
+    }
+
+    status_->setText(
+        QStringLiteral("Sketch selection deleted."));
+}
+
+void CadWorkbench::submitSketchCommandLine() {
+    if (command_input_ == nullptr ||
+        !sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->active()) {
+        return;
+    }
+
+    const auto command =
+        command_input_->text().trimmed().toUpper();
+    if (command.isEmpty()) {
+        return;
+    }
+
+    if (command == QStringLiteral("SELECT")) {
+        activateSketchSelect();
+    } else if (command == QStringLiteral("LINE")) {
+        activateSketchLine();
+    } else {
+        status_->setText(
+            QStringLiteral("Unknown Sketch command."));
+        return;
+    }
+
+    command_input_->clear();
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
 }
 
 void CadWorkbench::finishSketch() {
@@ -714,6 +929,11 @@ void CadWorkbench::finishSketch() {
 
 void CadWorkbench::clearSketchRuntimeContext() {
     sketch_support_pick_active_ = false;
+
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->end();
+    }
+
     active_sketch_id_.reset();
     sketch_edit_document_id_.reset();
 
@@ -722,16 +942,7 @@ void CadWorkbench::clearSketchRuntimeContext() {
             std::nullopt);
     }
 
-    if (operations_placeholder_ != nullptr) {
-        operations_placeholder_->setText(
-            QStringLiteral("No active tool."));
-    }
-    if (cancel_sketch_button_ != nullptr) {
-        cancel_sketch_button_->setVisible(false);
-    }
-    if (finish_sketch_button_ != nullptr) {
-        finish_sketch_button_->setVisible(false);
-    }
+    syncSketchInteractionUi();
 }
 
 void CadWorkbench::reconcileSketchRuntimeContext() {
@@ -765,15 +976,29 @@ void CadWorkbench::reconcileSketchRuntimeContext() {
     viewport_controller_->setSketchEditSketch(
         *active_sketch_id_);
 
-    operations_placeholder_->setText(
-        QStringLiteral(
-            "Sketch edit context is active in the same 3D Viewport. "
-            "Authored Sketch geometry is presented; interactive tools come later."));
+    if (sketch_interaction_controller_) {
+        if (!sketch_interaction_controller_->active()) {
+            sketch_interaction_controller_->begin(
+                *document_session,
+                *active_sketch_id_);
+        } else {
+            static_cast<void>(
+                sketch_interaction_controller_->
+                    reconcileAfterHistory());
+        }
+    }
+
+    syncSketchInteractionUi();
 }
 
 void CadWorkbench::undo() {
     auto* document_session = activeDocumentSession();
     if (document_session == nullptr) return;
+
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active()) {
+        sketch_interaction_controller_->cancelForHistory();
+    }
 
     const auto result = document_session->undo();
     if (!result.ok()) {
@@ -791,6 +1016,11 @@ void CadWorkbench::undo() {
 void CadWorkbench::redo() {
     auto* document_session = activeDocumentSession();
     if (document_session == nullptr) return;
+
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active()) {
+        sketch_interaction_controller_->cancelForHistory();
+    }
 
     const auto result = document_session->redo();
     if (!result.ok()) {
@@ -1011,6 +1241,137 @@ void CadWorkbench::refreshPropertiesContext(
         reference_properties_page_);
 }
 
+bool CadWorkbench::eventFilter(
+    QObject* watched,
+    QEvent* event) {
+    if (event != nullptr &&
+        event->type() == QEvent::KeyPress) {
+        auto* key_event =
+            static_cast<QKeyEvent*>(event);
+
+        if (watched == command_input_) {
+            if (key_event->key() == Qt::Key_Escape) {
+                command_input_->clear();
+                if (viewport_widget_ != nullptr) {
+                    viewport_widget_->setFocus(
+                        Qt::OtherFocusReason);
+                }
+                return true;
+            }
+        } else if (watched == viewport_widget_ &&
+                   sketch_interaction_controller_ &&
+                   sketch_interaction_controller_->active()) {
+            if (key_event->key() == Qt::Key_Delete) {
+                deleteSketchSelection();
+                return true;
+            }
+
+            if (key_event->key() == Qt::Key_Escape) {
+                if (sketch_interaction_controller_->escape()) {
+                    status_->setText(
+                        QStringLiteral(
+                            "Sketch tool stage cancelled."));
+                }
+                return true;
+            }
+        }
+    }
+
+    return QWidget::eventFilter(watched, event);
+}
+
+void CadWorkbench::syncSketchInteractionUi() {
+    const bool editing =
+        sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active();
+
+    if (sketch_button_ != nullptr) {
+        sketch_button_->setVisible(!editing);
+    }
+
+    if (select_sketch_button_ != nullptr) {
+        select_sketch_button_->setVisible(editing);
+        select_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::select);
+    }
+
+    if (line_sketch_button_ != nullptr) {
+        line_sketch_button_->setVisible(editing);
+        line_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::line);
+    }
+
+    if (command_line_widget_ != nullptr) {
+        command_line_widget_->setVisible(editing);
+    }
+
+    if (!editing) {
+        if (operations_placeholder_ != nullptr &&
+            !sketch_support_pick_active_) {
+            operations_placeholder_->setText(
+                QStringLiteral("Part modeling context."));
+        }
+        if (delete_selection_button_ != nullptr) {
+            delete_selection_button_->setVisible(false);
+        }
+        if (finish_line_button_ != nullptr) {
+            finish_line_button_->setVisible(false);
+        }
+        if (cancel_line_button_ != nullptr) {
+            cancel_line_button_->setVisible(false);
+        }
+        return;
+    }
+
+    const auto tool =
+        sketch_interaction_controller_->tool();
+
+    if (tool == sketch::SketchTool::select) {
+        const auto selected =
+            sketch_interaction_controller_->selectedCount();
+        operations_placeholder_->setText(
+            QStringLiteral("Select — %1 Line%2 selected")
+                .arg(static_cast<qulonglong>(selected))
+                .arg(selected == 1U
+                         ? QString{}
+                         : QStringLiteral("s")));
+        delete_selection_button_->setVisible(true);
+        delete_selection_button_->setEnabled(
+            selected > 0U);
+        finish_line_button_->setVisible(false);
+        cancel_line_button_->setVisible(false);
+        command_prompt_->setText(
+            QStringLiteral("Command: SELECT"));
+        return;
+    }
+
+    delete_selection_button_->setVisible(false);
+    finish_line_button_->setVisible(true);
+    cancel_line_button_->setVisible(true);
+
+    const auto stage =
+        sketch_interaction_controller_->lineStage();
+    const bool next =
+        stage &&
+        *stage ==
+            sketch::LineStage::await_next_point;
+
+    operations_placeholder_->setText(
+        next
+            ? QStringLiteral("Line — Specify next point")
+            : QStringLiteral("Line — Specify first point"));
+    command_prompt_->setText(
+        next
+            ? QStringLiteral(
+                  "Command: LINE — Specify next point")
+            : QStringLiteral(
+                  "Command: LINE — Specify first point"));
+}
+
 void CadWorkbench::syncActionState() {
     const auto* document_session = activeDocumentSession();
     const bool active = document_session != nullptr;
@@ -1034,10 +1395,16 @@ void CadWorkbench::syncActionState() {
 
     sketch_button_->setText(
         QStringLiteral("Sketch"));
+    sketch_button_->setVisible(!editing_sketch);
     sketch_button_->setEnabled(
         active &&
         !editing_sketch &&
         !sketch_support_pick_active_);
+
+    select_sketch_button_->setVisible(
+        editing_sketch);
+    line_sketch_button_->setVisible(
+        editing_sketch);
 
     cancel_sketch_button_->setVisible(
         active && sketch_support_pick_active_);
@@ -1049,6 +1416,12 @@ void CadWorkbench::syncActionState() {
     finish_sketch_button_->setEnabled(
         editing_sketch);
 
+    if (command_line_widget_ != nullptr) {
+        command_line_widget_->setVisible(
+            editing_sketch);
+    }
+
+    syncSketchInteractionUi();
 }
 
 void CadWorkbench::notifyDocumentStateChanged() {

@@ -46,11 +46,20 @@ enum class SpatialPointerPhase : std::uint8_t {
     primary_release,
 };
 
+struct SpatialPointerModifiers final {
+    bool control{};
+
+    friend bool operator==(
+        const SpatialPointerModifiers&,
+        const SpatialPointerModifiers&) = default;
+};
+
 struct SpatialPointerEvent final {
     SpatialPointerPhase phase{
         SpatialPointerPhase::move};
     ViewportPoint2 position;
     Ray3 ray;
+    SpatialPointerModifiers modifiers{};
 
     [[nodiscard]] bool valid() const noexcept {
         return position.valid() &&

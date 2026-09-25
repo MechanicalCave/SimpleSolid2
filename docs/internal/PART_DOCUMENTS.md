@@ -99,6 +99,8 @@ If the active Sketch disappears through Undo/history, presentation fails closed 
 
 The Part model durably owns Shared 2D Line entities, and R3 presents the active Sketch's authored Lines plus intrinsic Origin in the shared 3D Viewport. Presentation tokens, preview and pointer input remain runtime-only and are not Part identity.
 
-SK-04A now provides neutral Select/Line runtime semantics, transient EntityId selection and an atomic semantic multi-entity Delete command, but the current product UI still does not wire those capabilities into interactive Sketch Line drawing/editing, point/rectangle selection or Delete. Constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming and Material model remain unavailable.
+The current Part Sketch edit UI now wires the neutral interaction state to the existing semantic commands: continuous Line creates one authored segment per `AddSketchLineCommand`/Undo entry, point and Window/Crossing rectangle selection remain transient EntityId state, and Delete executes one atomic `EraseSketchEntitiesCommand` for the selected set. Undo/Redo cancels pending Line runtime state before ordinary history and then reconciles surviving EntityIds against the current SketchModel.
+
+Constraints, dimensions, solver, grips/direct manipulation, snapping/inference, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming and Material model remain unavailable.
 
 The Viewer is not a second model: no OCCT object or Viewer token is durable Part/Sketch identity, support or authored state.

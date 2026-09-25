@@ -329,7 +329,7 @@ int main(int argc, char* argv[]) {
     CHECK(finish_button->isHidden());
     CHECK(
         operations_label->text() ==
-        QStringLiteral("No active tool."));
+        QStringLiteral("Part modeling context."));
 
     auto* session =
         opened.session->documentSession(
@@ -426,7 +426,7 @@ int main(int argc, char* argv[]) {
     CHECK(sketch_button->isEnabled());
     CHECK(
         operations_label->text() ==
-        QStringLiteral("No active tool."));
+        QStringLiteral("Part modeling context."));
     CHECK(session->document().sketches().size() == 1U);
     CHECK(viewport->scene().grid.has_value());
     CHECK(

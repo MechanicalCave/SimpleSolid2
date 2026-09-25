@@ -77,6 +77,7 @@ add_executable(ph02a_project_hub_selection_ux_test
     ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
@@ -136,6 +137,7 @@ add_executable(ph02b_project_hub_availability_ux_test
     ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
@@ -368,6 +370,7 @@ add_executable(wb01_cad_workbench_test
     ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
@@ -488,6 +491,7 @@ add_executable(wb01a_workbench_native_stress_test
     ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
@@ -582,6 +586,7 @@ add_executable(wb01a_workbench_document_dialog_integration_test
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
@@ -618,6 +623,7 @@ add_executable(sk01_workbench_sketch_host_test
     ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
@@ -768,6 +774,7 @@ add_test(
 add_executable(sk03a_part_viewport_controller_test
     sk03a_part_viewport_controller_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
 )
 
@@ -897,6 +904,7 @@ add_test(
 add_executable(sk04b_part_viewport_selection_bridge_test
     sk04b_part_viewport_selection_bridge_test.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
 )
 
@@ -945,4 +953,36 @@ add_test(
 
 set_tests_properties(sk04b.viewer_native_selection_query PROPERTIES
     TIMEOUT 30
+)
+
+
+add_executable(sk04c_part_sketch_interaction_controller_test
+    sk04c_part_sketch_interaction_controller_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
+)
+
+target_include_directories(sk04c_part_sketch_interaction_controller_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(sk04c_part_sketch_interaction_controller_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(sk04c_part_sketch_interaction_controller_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk04c.part_sketch_interaction_controller
+    COMMAND sk04c_part_sketch_interaction_controller_test
+)
+
+set_tests_properties(sk04c.part_sketch_interaction_controller PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )

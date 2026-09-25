@@ -32,6 +32,7 @@ struct SketchPointerInput final {
         viewer::SpatialPointerPhase::move};
     viewer::ViewportPoint2 viewport_position;
     sketch::Point2 position;
+    bool control{};
 };
 
 struct SketchEntityPointQueryResult final {

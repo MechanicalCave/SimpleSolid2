@@ -1,6 +1,6 @@
 version: 1
 status: completed
-active_work: "work/SK-04B_PROVIDER_NEUTRAL_SKETCH_SELECTION_QUERY_OVERLAY_BRIDGE.md"
+active_work: "work/SK-04C_END_TO_END_SELECT_CONTINUOUS_LINE_DELETE_WORKFLOW.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -15,13 +15,17 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - merge SK-04B only after the exact closeout HEAD passes the selected non-build CI tier
-  - prepare a separate SK-04C Work Contract for the end-to-end Select / continuous Line / Delete workflow and tool surfaces
-  - SK-04C remains unauthorized until explicit Owner acceptance
+  - merge SK-04C only after the exact closeout HEAD passes the selected CLOSURE CI tier
+  - stop at the completed R4 checkpoint
+  - prepare a separate R5 Work Contract only when the Owner chooses to continue
+  - R5 remains unauthorized until explicit Owner acceptance
 notes:
-  - SK-04B implementation exact head 7988d4c4b3613415e34892c4cfcaed00062e9366 passed FULL gate #297 with Build and 51/51 CTest tests.
-  - active-Sketch point/rectangle queries return runtime PresentationToken values only; Part/UI maps them to semantic SketchId plus EntityId.
-  - Window/Crossing membership is current-view screen-space presentation behavior.
-  - Sketch selection-box presentation is runtime-only and independent from authored/preview scenes.
-  - Part/UI pointer routing and cursor mode are independent so Select may use spatial_tool_input plus select_pick_box.
-  - R4 remains incomplete after SK-04B; SK-04C requires a separate explicit Owner-accepted Work Contract.
+  - Owner accepted SK-04C on 2026-09-25 after proposal CLOSURE gate #299 passed.
+  - implementation exact head 5a05ce393b0bf5ef7fc83e66244ef983504a7111 passed FULL gate #315 with Build and 52/52 CTest tests.
+  - documentation exact head 4c1a77e7f48392db2c7b17441f74af10dce2a6cd passed DOCS gate #320.
+  - one SketchInteractionState is the sole semantic interaction authority for active Sketch edit.
+  - Part context switches Editor Tools and Operations to Sketch context on edit entry and restores Part context on exit or fail-closed loss.
+  - Sketch Select/Line tools live above the Viewport; contextual Operations remain in the right panel; compact Command Line lives below the Viewport; global Status remains separate.
+  - rectangle selection replaces semantic selection and assigns no primary in R4.
+  - Command Line accepts SELECT and LINE only; coordinate input, snaps, constraints and grips remain outside R4.
+  - SK-04C completes R4; R5 is next but is not active.

@@ -350,7 +350,7 @@ int main(int argc, char* argv[]) {
     CHECK(top_view_action != nullptr);
 
     CHECK(operations->text() ==
-          QStringLiteral("No active tool."));
+          QStringLiteral("Part modeling context."));
 
     CHECK(workbench.activateDocument(
         opened.session->documentSession(first_id),

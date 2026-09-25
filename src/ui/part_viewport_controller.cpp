@@ -855,7 +855,8 @@ void PartViewportController::onSpatialPointer(
             hosted->id,
             event.phase,
             event.position,
-            *local});
+            *local,
+            event.modifiers.control});
 }
 
 void PartViewportController::applySelectionToSurfaces() {
