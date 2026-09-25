@@ -127,6 +127,7 @@ endforeach()
 add_library(simplesolid2_viewer STATIC
     viewer/camera_state.cpp
     viewer/navigation.cpp
+    viewer/navigation_cube.cpp
 )
 
 target_include_directories(simplesolid2_viewer
