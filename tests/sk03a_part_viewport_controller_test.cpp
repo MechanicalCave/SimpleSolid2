@@ -435,7 +435,14 @@ int main(int argc, char* argv[]) {
         viewport.routing_ ==
         viewer::PrimaryPointerRouting::
             presentation_selection);
-    CHECK(!controller.setSketchSpatialToolInput(true));
+    CHECK(
+        !controller.setSketchPrimaryPointerRouting(
+            viewer::PrimaryPointerRouting::
+                spatial_tool_input));
+    CHECK(
+        !controller.setSketchCursorMode(
+            viewer::ViewportCursorMode::
+                create_edit_crosshair));
 
     return EXIT_SUCCESS;
 }
