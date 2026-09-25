@@ -200,6 +200,8 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
 
     CHECK(cube.isVisible());
+    CHECK(cube.testAttribute(Qt::WA_NativeWindow));
+    CHECK(cube.winId() != 0);
     CHECK(!cube.compactMode());
     CHECK(containedBy(host, cube));
 
