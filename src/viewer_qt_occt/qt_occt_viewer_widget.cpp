@@ -6,8 +6,10 @@
 #include <AIS_InteractiveObject.hxx>
 #include <AIS_Line.hxx>
 #include <AIS_Point.hxx>
+#include <AIS_RubberBand.hxx>
 #include <AIS_Shape.hxx>
 #include <Aspect_DisplayConnection.hxx>
+#include <Aspect_TypeOfLine.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <Geom_CartesianPoint.hxx>
 #include <Graphic3d_Camera.hxx>
@@ -298,108 +300,13 @@ struct ScreenRect final {
             top_left);
 }
 
-class SelectionBoxOverlayWidget final
-    : public QWidget {
-public:
-    explicit SelectionBoxOverlayWidget(
-        QWidget* parent)
-        : QWidget{parent} {
-        setObjectName(
-            QStringLiteral(
-                "ss2SketchSelectionBoxOverlay"));
-        setAttribute(
-            Qt::WA_TransparentForMouseEvents,
-            true);
-        setAttribute(
-            Qt::WA_TranslucentBackground,
-            true);
-        setAutoFillBackground(false);
-        hide();
-    }
-
-    bool setOverlay(
-        const viewer::SketchSelectionBoxOverlay& overlay) {
-        if (!overlay.valid()) {
-            return false;
-        }
-
-        overlay_ = overlay;
-        show();
-        raise();
-        update();
-        return true;
-    }
-
-    void clearOverlay() {
-        overlay_.reset();
-        hide();
-        update();
-    }
-
-protected:
-    void paintEvent(QPaintEvent* event) override {
-        Q_UNUSED(event);
-        if (!overlay_) {
-            return;
-        }
-
-        QRectF rectangle{
-            QPointF{
-                overlay_->anchor.x,
-                overlay_->anchor.y},
-            QPointF{
-                overlay_->current.x,
-                overlay_->current.y}};
-        rectangle = rectangle.normalized();
-
-        const bool crossing =
-            overlay_->rule ==
-            viewer::SketchRectangleSelectionRule::
-                crossing;
-
-        QPainter painter{this};
-        painter.setRenderHint(
-            QPainter::Antialiasing,
-            false);
-
-        const QColor border =
-            crossing
-                ? QColor{90, 210, 130, 220}
-                : QColor{90, 145, 245, 220};
-        const QColor fill =
-            crossing
-                ? QColor{90, 210, 130, 35}
-                : QColor{90, 145, 245, 35};
-
-        QPen pen{border};
-        pen.setWidth(1);
-        pen.setStyle(
-            crossing
-                ? Qt::DashLine
-                : Qt::SolidLine);
-        painter.setPen(pen);
-        painter.setBrush(fill);
-        painter.drawRect(rectangle);
-    }
-
-private:
-    std::optional<
-        viewer::SketchSelectionBoxOverlay>
-        overlay_;
-};
 
 } // namespace
 
 class QtOcctViewerWidget::Impl final {
 public:
     explicit Impl(QtOcctViewerWidget& owner)
-        : owner_{owner},
-          selection_box_overlay_widget_{
-              new SelectionBoxOverlayWidget{
-                  &owner_}} {
-        selection_box_overlay_widget_->setGeometry(
-            owner_.rect());
-    }
+        : owner_{owner} {}
 
     void ensureInitialized() {
         if (!view_.IsNull()) return;
@@ -789,21 +696,94 @@ public:
 
     bool setSketchSelectionBoxOverlay(
         const viewer::SketchSelectionBoxOverlay& overlay) {
-        if (selection_box_overlay_widget_ == nullptr) {
+        if (!overlay.valid()) {
             return false;
         }
 
-        selection_box_overlay_widget_->setGeometry(
-            owner_.rect());
-        return selection_box_overlay_widget_
-            ->setOverlay(overlay);
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        const auto dpr = owner_.devicePixelRatioF();
+        const auto min_x = static_cast<Standard_Integer>(
+            std::lround(
+                std::min(overlay.anchor.x, overlay.current.x) *
+                dpr));
+        const auto min_y = static_cast<Standard_Integer>(
+            std::lround(
+                std::min(overlay.anchor.y, overlay.current.y) *
+                dpr));
+        const auto max_x = static_cast<Standard_Integer>(
+            std::lround(
+                std::max(overlay.anchor.x, overlay.current.x) *
+                dpr));
+        const auto max_y = static_cast<Standard_Integer>(
+            std::lround(
+                std::max(overlay.anchor.y, overlay.current.y) *
+                dpr));
+
+        const bool crossing =
+            overlay.rule ==
+            viewer::SketchRectangleSelectionRule::crossing;
+
+        const Quantity_Color border{
+            crossing ? 0.35 : 0.35,
+            crossing ? 0.82 : 0.57,
+            crossing ? 0.51 : 0.96,
+            Quantity_TOC_RGB};
+        const Quantity_Color fill = border;
+        const auto line_type =
+            crossing ? Aspect_TOL_DASH : Aspect_TOL_SOLID;
+
+        if (selection_rubber_band_.IsNull()) {
+            selection_rubber_band_ =
+                new AIS_RubberBand(
+                    border,
+                    line_type,
+                    fill,
+                    0.86,
+                    1.0);
+        } else {
+            selection_rubber_band_->SetLineColor(border);
+            selection_rubber_band_->SetLineType(line_type);
+            selection_rubber_band_->SetFillColor(fill);
+            selection_rubber_band_->SetFillTransparency(0.86);
+        }
+
+        selection_rubber_band_->SetRectangle(
+            min_x,
+            min_y,
+            max_x,
+            max_y);
+
+        if (!selection_rubber_band_visible_) {
+            context_->Display(
+                selection_rubber_band_,
+                false);
+            selection_rubber_band_visible_ = true;
+        } else {
+            context_->Redisplay(
+                selection_rubber_band_,
+                false);
+        }
+
+        context_->UpdateCurrentViewer();
+        return true;
     }
 
     void clearSketchSelectionBoxOverlay() {
-        if (selection_box_overlay_widget_ != nullptr) {
-            selection_box_overlay_widget_
-                ->clearOverlay();
+        if (context_.IsNull() ||
+            selection_rubber_band_.IsNull() ||
+            !selection_rubber_band_visible_) {
+            return;
         }
+
+        context_->Remove(
+            selection_rubber_band_,
+            false);
+        selection_rubber_band_visible_ = false;
+        context_->UpdateCurrentViewer();
     }
 
     void setSelectionIntentHandler(
@@ -1493,8 +1473,9 @@ private:
     viewer::ViewportCursorMode cursor_mode_{
         viewer::ViewportCursorMode::
             system_default};
-    SelectionBoxOverlayWidget*
-        selection_box_overlay_widget_{};
+    Handle(AIS_RubberBand)
+        selection_rubber_band_;
+    bool selection_rubber_band_visible_{};
     std::vector<ReferenceObject> reference_objects_;
     std::vector<SketchObject> sketch_objects_;
     std::vector<Handle(AIS_InteractiveObject)>
