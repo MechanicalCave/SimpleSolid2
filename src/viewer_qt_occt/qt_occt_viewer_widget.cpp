@@ -1383,11 +1383,6 @@ public:
     }
 
     void resize() {
-        if (selection_box_overlay_widget_ != nullptr) {
-            selection_box_overlay_widget_->setGeometry(
-                owner_.rect());
-        }
-
         if (view_.IsNull()) return;
         const auto native_window = view_->Window();
         if (!native_window.IsNull()) native_window->DoResize();
