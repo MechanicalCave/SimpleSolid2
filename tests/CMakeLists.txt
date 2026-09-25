@@ -723,3 +723,20 @@ add_test(
     NAME sk02b.part_sketch_persistence
     COMMAND sk02b_part_sketch_persistence_test
 )
+
+
+add_executable(sk03a_viewer_sketch_contracts_test
+    sk03a_viewer_sketch_contracts_test.cpp
+)
+
+target_link_libraries(sk03a_viewer_sketch_contracts_test
+    PRIVATE
+        simplesolid2_viewer
+)
+
+target_compile_features(sk03a_viewer_sketch_contracts_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk03a.viewer_sketch_contracts
+    COMMAND sk03a_viewer_sketch_contracts_test
+)
