@@ -21,6 +21,7 @@
 #include <gp_Pln.hxx>
 #include <gp_Pnt.hxx>
 
+#include <QColor>
 #include <QContextMenuEvent>
 #include <QCursor>
 #include <QDebug>
@@ -32,6 +33,7 @@
 #include <QShowEvent>
 #include <QTimer>
 #include <QWheelEvent>
+#include <QWidget>
 
 #include <algorithm>
 #include <cmath>
@@ -118,11 +120,286 @@ std::optional<viewer::CameraState> guardedCameraState(
     return std::nullopt;
 }
 
+template <typename Result, typename Function>
+Result guardedResult(
+    const char* operation,
+    Function&& function) noexcept {
+    try {
+        return function();
+    } catch (const Standard_Failure& failure) {
+        logProviderFailure(
+            operation,
+            failure.GetMessageString());
+    } catch (const std::exception& failure) {
+        logProviderFailure(
+            operation,
+            failure.what());
+    } catch (...) {
+        logProviderFailure(
+            operation,
+            "<unknown exception>");
+    }
+    return Result{};
+}
+
+struct ScreenPoint final {
+    double x{};
+    double y{};
+};
+
+struct ScreenRect final {
+    double min_x{};
+    double min_y{};
+    double max_x{};
+    double max_y{};
+
+    [[nodiscard]] bool contains(
+        ScreenPoint point) const noexcept {
+        return point.x >= min_x &&
+               point.x <= max_x &&
+               point.y >= min_y &&
+               point.y <= max_y;
+    }
+};
+
+[[nodiscard]] double pointSegmentDistanceSquared(
+    ScreenPoint point,
+    ScreenPoint start,
+    ScreenPoint end) noexcept {
+    const double dx = end.x - start.x;
+    const double dy = end.y - start.y;
+    const double length_squared =
+        dx * dx + dy * dy;
+
+    if (length_squared <= 0.0) {
+        const double px = point.x - start.x;
+        const double py = point.y - start.y;
+        return px * px + py * py;
+    }
+
+    const double parameter =
+        std::clamp(
+            ((point.x - start.x) * dx +
+             (point.y - start.y) * dy) /
+                length_squared,
+            0.0,
+            1.0);
+
+    const double closest_x =
+        start.x + parameter * dx;
+    const double closest_y =
+        start.y + parameter * dy;
+    const double px = point.x - closest_x;
+    const double py = point.y - closest_y;
+    return px * px + py * py;
+}
+
+[[nodiscard]] double cross2(
+    ScreenPoint a,
+    ScreenPoint b,
+    ScreenPoint c) noexcept {
+    return (b.x - a.x) * (c.y - a.y) -
+           (b.y - a.y) * (c.x - a.x);
+}
+
+[[nodiscard]] bool between(
+    double value,
+    double left,
+    double right) noexcept {
+    return value >= std::min(left, right) &&
+           value <= std::max(left, right);
+}
+
+[[nodiscard]] bool segmentIntersectsSegment(
+    ScreenPoint a,
+    ScreenPoint b,
+    ScreenPoint c,
+    ScreenPoint d) noexcept {
+    const double ab_c = cross2(a, b, c);
+    const double ab_d = cross2(a, b, d);
+    const double cd_a = cross2(c, d, a);
+    const double cd_b = cross2(c, d, b);
+
+    const auto opposite =
+        [](double left, double right) noexcept {
+            return (left < 0.0 && right > 0.0) ||
+                   (left > 0.0 && right < 0.0);
+        };
+
+    if (opposite(ab_c, ab_d) &&
+        opposite(cd_a, cd_b)) {
+        return true;
+    }
+
+    const auto on_segment =
+        [](ScreenPoint start,
+           ScreenPoint end,
+           ScreenPoint point,
+           double cross_value) noexcept {
+            return cross_value == 0.0 &&
+                   between(
+                       point.x,
+                       start.x,
+                       end.x) &&
+                   between(
+                       point.y,
+                       start.y,
+                       end.y);
+        };
+
+    return on_segment(a, b, c, ab_c) ||
+           on_segment(a, b, d, ab_d) ||
+           on_segment(c, d, a, cd_a) ||
+           on_segment(c, d, b, cd_b);
+}
+
+[[nodiscard]] bool segmentIntersectsRect(
+    ScreenPoint start,
+    ScreenPoint end,
+    const ScreenRect& rect) noexcept {
+    if (rect.contains(start) ||
+        rect.contains(end)) {
+        return true;
+    }
+
+    const ScreenPoint top_left{
+        rect.min_x,
+        rect.min_y};
+    const ScreenPoint top_right{
+        rect.max_x,
+        rect.min_y};
+    const ScreenPoint bottom_right{
+        rect.max_x,
+        rect.max_y};
+    const ScreenPoint bottom_left{
+        rect.min_x,
+        rect.max_y};
+
+    return
+        segmentIntersectsSegment(
+            start,
+            end,
+            top_left,
+            top_right) ||
+        segmentIntersectsSegment(
+            start,
+            end,
+            top_right,
+            bottom_right) ||
+        segmentIntersectsSegment(
+            start,
+            end,
+            bottom_right,
+            bottom_left) ||
+        segmentIntersectsSegment(
+            start,
+            end,
+            bottom_left,
+            top_left);
+}
+
+class SelectionBoxOverlayWidget final
+    : public QWidget {
+public:
+    explicit SelectionBoxOverlayWidget(
+        QWidget* parent)
+        : QWidget{parent} {
+        setObjectName(
+            QStringLiteral(
+                "ss2SketchSelectionBoxOverlay"));
+        setAttribute(
+            Qt::WA_TransparentForMouseEvents,
+            true);
+        setAttribute(
+            Qt::WA_TranslucentBackground,
+            true);
+        setAutoFillBackground(false);
+        hide();
+    }
+
+    bool setOverlay(
+        const viewer::SketchSelectionBoxOverlay& overlay) {
+        if (!overlay.valid()) {
+            return false;
+        }
+
+        overlay_ = overlay;
+        show();
+        raise();
+        update();
+        return true;
+    }
+
+    void clearOverlay() {
+        overlay_.reset();
+        hide();
+        update();
+    }
+
+protected:
+    void paintEvent(QPaintEvent* event) override {
+        Q_UNUSED(event);
+        if (!overlay_) {
+            return;
+        }
+
+        QRectF rectangle{
+            QPointF{
+                overlay_->anchor.x,
+                overlay_->anchor.y},
+            QPointF{
+                overlay_->current.x,
+                overlay_->current.y}};
+        rectangle = rectangle.normalized();
+
+        const bool crossing =
+            overlay_->rule ==
+            viewer::SketchRectangleSelectionRule::
+                crossing;
+
+        QPainter painter{this};
+        painter.setRenderHint(
+            QPainter::Antialiasing,
+            false);
+
+        const QColor border =
+            crossing
+                ? QColor{90, 210, 130, 220}
+                : QColor{90, 145, 245, 220};
+        const QColor fill =
+            crossing
+                ? QColor{90, 210, 130, 35}
+                : QColor{90, 145, 245, 35};
+
+        QPen pen{border};
+        pen.setWidth(1);
+        pen.setStyle(
+            crossing
+                ? Qt::DashLine
+                : Qt::SolidLine);
+        painter.setPen(pen);
+        painter.setBrush(fill);
+        painter.drawRect(rectangle);
+    }
+
+private:
+    std::optional<
+        viewer::SketchSelectionBoxOverlay>
+        overlay_;
+};
+
 } // namespace
 
 class QtOcctViewerWidget::Impl final {
 public:
-    explicit Impl(QtOcctViewerWidget& owner) : owner_{owner} {}
+    explicit Impl(QtOcctViewerWidget& owner)
+        : owner_{owner},
+          selection_box_overlay_widget_{
+              new SelectionBoxOverlayWidget{
+                  &owner_}} {
+        selection_box_overlay_widget_->setGeometry(
+            owner_.rect());
+    }
 
     void ensureInitialized() {
         if (!view_.IsNull()) return;
@@ -389,6 +666,146 @@ public:
         return true;
     }
 
+    viewer::SketchPointQueryResult
+    querySketchPresentation(
+        viewer::ViewportPoint2 point) {
+        if (!point.finite()) {
+            return {};
+        }
+
+        ensureInitialized();
+        if (view_.IsNull()) {
+            return {};
+        }
+
+        const double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            return {};
+        }
+
+        const ScreenPoint query{
+            point.x * dpr,
+            point.y * dpr};
+        const double tolerance =
+            6.0 * dpr;
+        double best_distance_squared =
+            tolerance * tolerance;
+        std::optional<viewer::PresentationToken>
+            best;
+
+        for (const auto& line :
+             sketch_scene_.lines) {
+            const auto start =
+                projectToScreen(line.start);
+            const auto end =
+                projectToScreen(line.end);
+            if (!start || !end) {
+                return {};
+            }
+
+            const double distance_squared =
+                pointSegmentDistanceSquared(
+                    query,
+                    *start,
+                    *end);
+            if (distance_squared <=
+                    best_distance_squared &&
+                (!best ||
+                 distance_squared <
+                     best_distance_squared)) {
+                best_distance_squared =
+                    distance_squared;
+                best = line.token;
+            }
+        }
+
+        return viewer::SketchPointQueryResult{
+            true,
+            best};
+    }
+
+    viewer::SketchRectangleQueryResult
+    querySketchPresentations(
+        const viewer::ViewportRect2& rectangle,
+        viewer::SketchRectangleSelectionRule rule) {
+        if (!rectangle.valid()) {
+            return {};
+        }
+
+        ensureInitialized();
+        if (view_.IsNull()) {
+            return {};
+        }
+
+        const double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            return {};
+        }
+
+        const ScreenRect screen_rect{
+            rectangle.minimum.x * dpr,
+            rectangle.minimum.y * dpr,
+            rectangle.maximum.x * dpr,
+            rectangle.maximum.y * dpr};
+
+        viewer::SketchRectangleQueryResult result;
+        result.completed = true;
+        result.tokens.reserve(
+            sketch_scene_.lines.size());
+
+        for (const auto& line :
+             sketch_scene_.lines) {
+            const auto start =
+                projectToScreen(line.start);
+            const auto end =
+                projectToScreen(line.end);
+            if (!start || !end) {
+                return {};
+            }
+
+            const bool hit =
+                rule ==
+                        viewer::SketchRectangleSelectionRule::
+                            window
+                    ? screen_rect.contains(*start) &&
+                          screen_rect.contains(*end)
+                    : segmentIntersectsRect(
+                          *start,
+                          *end,
+                          screen_rect);
+
+            if (hit) {
+                result.tokens.push_back(
+                    line.token);
+            }
+        }
+
+        return result;
+    }
+
+    bool setSketchSelectionBoxOverlay(
+        const viewer::SketchSelectionBoxOverlay& overlay) {
+        if (selection_box_overlay_widget_ == nullptr) {
+            return false;
+        }
+
+        selection_box_overlay_widget_->setGeometry(
+            owner_.rect());
+        return selection_box_overlay_widget_
+            ->setOverlay(overlay);
+    }
+
+    void clearSketchSelectionBoxOverlay() {
+        if (selection_box_overlay_widget_ != nullptr) {
+            selection_box_overlay_widget_
+                ->clearOverlay();
+        }
+    }
+
     void setSelectionIntentHandler(
         viewer::SelectionIntentHandler handler) {
         selection_intent_handler_ = std::move(handler);
@@ -612,6 +1029,28 @@ public:
 
     void orbitByRadians(double horizontal, double vertical) {
         orbitByScreenAngles({horizontal, vertical, 0.0});
+    }
+
+    [[nodiscard]] std::optional<ScreenPoint>
+    projectToScreen(
+        const viewer::Point3& point) const {
+        if (view_.IsNull() ||
+            !viewer::finite(point)) {
+            return std::nullopt;
+        }
+
+        int pixel_x{};
+        int pixel_y{};
+        view_->Convert(
+            point.x,
+            point.y,
+            point.z,
+            pixel_x,
+            pixel_y);
+
+        return ScreenPoint{
+            static_cast<double>(pixel_x),
+            static_cast<double>(pixel_y)};
     }
 
     struct ReferenceObject final {
@@ -961,6 +1400,11 @@ public:
     }
 
     void resize() {
+        if (selection_box_overlay_widget_ != nullptr) {
+            selection_box_overlay_widget_->setGeometry(
+                owner_.rect());
+        }
+
         if (view_.IsNull()) return;
         const auto native_window = view_->Window();
         if (!native_window.IsNull()) native_window->DoResize();
@@ -1046,6 +1490,8 @@ private:
     viewer::ViewportCursorMode cursor_mode_{
         viewer::ViewportCursorMode::
             system_default};
+    SelectionBoxOverlayWidget*
+        selection_box_overlay_widget_{};
     std::vector<ReferenceObject> reference_objects_;
     std::vector<SketchObject> sketch_objects_;
     std::vector<Handle(AIS_InteractiveObject)>
@@ -1146,6 +1592,50 @@ bool QtOcctViewerWidget::setPresentationSelection(
         "setPresentationSelection",
         [this, &selection] {
             return impl_->setPresentationSelection(selection);
+        });
+}
+
+viewer::SketchPointQueryResult
+QtOcctViewerWidget::querySketchPresentation(
+    viewer::ViewportPoint2 point) {
+    return guardedResult<
+        viewer::SketchPointQueryResult>(
+        "querySketchPresentation",
+        [this, point] {
+            return impl_->querySketchPresentation(
+                point);
+        });
+}
+
+viewer::SketchRectangleQueryResult
+QtOcctViewerWidget::querySketchPresentations(
+    const viewer::ViewportRect2& rectangle,
+    viewer::SketchRectangleSelectionRule rule) {
+    return guardedResult<
+        viewer::SketchRectangleQueryResult>(
+        "querySketchPresentations",
+        [this, &rectangle, rule] {
+            return impl_->querySketchPresentations(
+                rectangle,
+                rule);
+        });
+}
+
+bool QtOcctViewerWidget::setSketchSelectionBoxOverlay(
+    const viewer::SketchSelectionBoxOverlay& overlay) {
+    return guardedBool(
+        "setSketchSelectionBoxOverlay",
+        [this, &overlay] {
+            return impl_->setSketchSelectionBoxOverlay(
+                overlay);
+        });
+}
+
+void QtOcctViewerWidget::clearSketchSelectionBoxOverlay() {
+    guardedVoid(
+        "clearSketchSelectionBoxOverlay",
+        [this] {
+            impl_->clearSketchSelectionBoxOverlay();
         });
 }
 
