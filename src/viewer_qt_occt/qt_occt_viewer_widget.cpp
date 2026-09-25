@@ -11,7 +11,6 @@
 #include <AIS_Shape.hxx>
 #include <AIS_TextLabel.hxx>
 #include <AIS_ViewCube.hxx>
-#include <AIS_ViewCubeOwner.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_TypeOfLine.hxx>
 #include <Aspect_TypeOfTriedronPosition.hxx>
