@@ -114,21 +114,15 @@ Activate `Line`, click the first point, then click successive points to create c
 Support is currently limited to the three Origin planes. Arc/Circle, grips/direct manipulation, snapping/inference, constraints, dimensions, solver, coordinate entry, Construction/Datum planes and planar model faces remain separate later stages.
 
 <!-- section-id: product.parts.navigation -->
-## 3D navigation and ViewCube
+## 3D navigation and Navigation Cube
 
-The Part Workbench provides:
+The Part Workbench provides middle-button Pan, Shift + middle-button Orbit, mouse-wheel Zoom, Fit and Orthographic/Perspective projection.
 
-- middle-button Pan;
-- Shift + middle-button Orbit;
-- mouse-wheel Zoom;
-- Fit;
-- Front, Back, Left, Right, Top and Bottom views;
-- Isometric and corner orientations;
-- Orthographic / Perspective switching.
+A 3D Navigation Cube is shown in the upper-right of the 3D Viewport. It follows the current camera orientation. Click a labeled face for Front, Back, Left, Right, Top or Bottom; click an edge for the corresponding two-axis view; click a corner for the corresponding isometric view. Navigation transitions are animated.
 
-The ViewCube is an overlay in the upper-right of the 3D Viewport. It adapts when the Editor Surface becomes narrow instead of overlapping the Properties panel or forcing the Viewport to remain wide.
+When the view is aligned to a face, the controls around the Cube provide exact 90-degree moves to adjacent views and exact 90-degree clockwise/counterclockwise roll. Home returns to Top-Front-Right isometric orientation and performs Fit All.
 
-Use the regular or compact ViewCube controls for standard orientations, Fit and projection switching.
+Projection is independent from Cube orientation. The `ORTHO/PERSP` control next to the Cube switches only between Orthographic and Perspective. If the model is in Perspective, clicking a Cube face, edge, corner or Home keeps Perspective; the same actions keep Orthographic when Orthographic is active.
 
 Navigation and camera changes are temporary view state. They do not dirty the Part, do not require Save and do not create CAD Undo entries.
 

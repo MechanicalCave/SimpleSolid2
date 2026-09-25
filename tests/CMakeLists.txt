@@ -82,7 +82,6 @@ add_executable(ph02a_project_hub_selection_ux_test
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_workspace_shell.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
 
 target_include_directories(ph02a_project_hub_selection_ux_test
@@ -142,7 +141,6 @@ add_executable(ph02b_project_hub_availability_ux_test
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_workspace_shell.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
 
 target_include_directories(ph02b_project_hub_availability_ux_test
@@ -372,7 +370,6 @@ add_executable(wb01_cad_workbench_test
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
 
 target_include_directories(wb01_cad_workbench_test
@@ -493,7 +490,6 @@ add_executable(wb01a_workbench_native_stress_test
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
 )
 target_include_directories(wb01a_workbench_native_stress_test
     PRIVATE
@@ -514,30 +510,6 @@ add_test(
 )
 set_tests_properties(wb01a.workbench_native_stress PROPERTIES
     TIMEOUT 120
-)
-
-
-add_executable(wb01a_viewcube_responsive_test
-    view_cube_responsive_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
-)
-target_include_directories(wb01a_viewcube_responsive_test
-    PRIVATE
-        ${PROJECT_SOURCE_DIR}/src/ui
-)
-target_link_libraries(wb01a_viewcube_responsive_test
-    PRIVATE
-        simplesolid2_viewer
-        Qt6::Widgets
-        Qt6::Test
-)
-target_compile_features(wb01a_viewcube_responsive_test PRIVATE cxx_std_20)
-add_test(
-    NAME wb01a.viewcube_responsive
-    COMMAND wb01a_viewcube_responsive_test
-)
-set_tests_properties(wb01a.viewcube_responsive PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
 
@@ -591,7 +563,6 @@ add_executable(wb01a_workbench_document_dialog_integration_test
     ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/project_workspace_shell.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
 )
 target_include_directories(wb01a_workbench_document_dialog_integration_test
@@ -625,7 +596,6 @@ add_executable(sk01_workbench_sketch_host_test
     ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/view_cube_widget.cpp
     ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
 )
 
@@ -985,4 +955,45 @@ add_test(
 
 set_tests_properties(sk04c.part_sketch_interaction_controller PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+
+add_executable(wb01b_navigation_cube_semantics_test
+    wb01b_navigation_cube_semantics_test.cpp
+)
+
+target_link_libraries(wb01b_navigation_cube_semantics_test
+    PRIVATE
+        simplesolid2_viewer
+)
+
+target_compile_features(wb01b_navigation_cube_semantics_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME wb01b.navigation_cube_semantics
+    COMMAND wb01b_navigation_cube_semantics_test
+)
+
+
+add_executable(wb01b_navigation_cube_native_test
+    wb01b_navigation_cube_native_test.cpp
+)
+
+target_link_libraries(wb01b_navigation_cube_native_test
+    PRIVATE
+        simplesolid2_viewer
+        simplesolid2_viewer_qt_occt
+        Qt6::Widgets
+        Qt6::Test
+)
+
+target_compile_features(wb01b_navigation_cube_native_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME wb01b.navigation_cube_native
+    COMMAND wb01b_navigation_cube_native_test
+)
+
+set_tests_properties(wb01b.navigation_cube_native PROPERTIES
+    TIMEOUT 30
 )

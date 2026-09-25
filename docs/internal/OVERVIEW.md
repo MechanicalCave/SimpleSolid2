@@ -26,7 +26,7 @@ App start
 → bottom Document Tabs + one ActiveDocumentSession
 → Document Tree + built-in Origin
 → shared Properties / Operations surfaces
-→ OCCT-backed 3D Viewport + reference grid + responsive ViewCube
+→ OCCT-backed 3D Viewport + reference grid + provider-surface Navigation Cube + ORTHO/PERSP
 → Tree / Viewport selection synchronization
 → persistent Show / Hide of Origin references
 → Undo / Redo

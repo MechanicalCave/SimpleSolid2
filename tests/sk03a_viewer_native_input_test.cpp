@@ -98,6 +98,25 @@ void sendLeftClick(
         Qt::NoButton);
 }
 
+const viewer::SpatialPointerEvent* findLastMoveAt(
+    const std::vector<viewer::SpatialPointerEvent>& events,
+    const QPoint& point) {
+    for (auto it = events.rbegin();
+         it != events.rend();
+         ++it) {
+        if (it->phase ==
+                viewer::SpatialPointerPhase::move &&
+            it->position.x ==
+                static_cast<double>(point.x()) &&
+            it->position.y ==
+                static_cast<double>(point.y())) {
+            return &*it;
+        }
+    }
+
+    return nullptr;
+}
+
 std::optional<sketch::Point2>
 centerUvFromCamera(
     const part::SketchPlacement& placement,
@@ -273,6 +292,15 @@ int main(int argc, char* argv[]) {
         return fail("camera before orbit");
     }
 
+    const auto* center_event_before =
+        findLastMoveAt(
+            spatial_events,
+            center);
+    if (center_event_before == nullptr) {
+        return fail(
+            "missing synthetic center move before orbit");
+    }
+
     const auto expected_before =
         centerUvFromCamera(
             *placement,
@@ -280,7 +308,7 @@ int main(int argc, char* argv[]) {
     const auto actual_before =
         ui::detail::sketchPointFromRay(
             *placement,
-            spatial_events.back().ray);
+            center_event_before->ray);
     const auto tolerance_before =
         rasterWorldTolerance(
             widget,
@@ -299,7 +327,7 @@ int main(int argc, char* argv[]) {
         return failMapping(
             "center ray mapping before orbit",
             widget,
-            spatial_events.back(),
+            *center_event_before,
             *camera_before,
             expected_before,
             actual_before,
@@ -361,6 +389,15 @@ int main(int argc, char* argv[]) {
         return fail("move after orbit");
     }
 
+    const auto* center_event_after =
+        findLastMoveAt(
+            spatial_events,
+            center);
+    if (center_event_after == nullptr) {
+        return fail(
+            "missing synthetic center move after orbit");
+    }
+
     const auto expected_after =
         centerUvFromCamera(
             *placement,
@@ -368,7 +405,7 @@ int main(int argc, char* argv[]) {
     const auto actual_after =
         ui::detail::sketchPointFromRay(
             *placement,
-            spatial_events.back().ray);
+            center_event_after->ray);
     const auto tolerance_after =
         rasterWorldTolerance(
             widget,
@@ -387,7 +424,7 @@ int main(int argc, char* argv[]) {
         return failMapping(
             "center ray mapping after orbit",
             widget,
-            spatial_events.back(),
+            *center_event_after,
             *camera_after,
             expected_after,
             actual_after,

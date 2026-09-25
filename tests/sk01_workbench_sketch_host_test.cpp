@@ -77,6 +77,32 @@ public:
         ++fit_all_count_;
     }
 
+    void setNavigationCubeActionHandler(
+        viewer::NavigationCubeActionHandler handler) override {
+        navigation_cube_handler_ =
+            std::move(handler);
+    }
+
+    bool animateCameraState(
+        const viewer::CameraState& state,
+        double,
+        bool fit_all) override {
+        if (!setCameraState(state)) {
+            return false;
+        }
+        if (fit_all) {
+            fitAll();
+        }
+        return true;
+    }
+
+    void emitNavigationCubeAction(
+        const viewer::NavigationCubeAction& action) {
+        CHECK(static_cast<bool>(
+            navigation_cube_handler_));
+        navigation_cube_handler_(action);
+    }
+
     bool setReferenceScene(
         const viewer::ReferenceScene& scene) override {
         if (!scene.valid()) return false;
@@ -192,6 +218,8 @@ private:
             system_default};
     viewer::SelectionIntentHandler
         selection_handler_;
+    viewer::NavigationCubeActionHandler
+        navigation_cube_handler_;
     int fit_all_count_{};
     std::optional<viewer::StandardView>
         last_standard_view_;
@@ -295,9 +323,6 @@ int main(int argc, char* argv[]) {
     auto* tree =
         workbench.findChild<QTreeWidget*>(
             QStringLiteral("documentTree"));
-    auto* top_action =
-        workbench.findChild<QAction*>(
-            QStringLiteral("viewCubeTopAction"));
     auto* edit_sketch_action =
         workbench.findChild<QAction*>(
             QStringLiteral("editSketchAction"));
@@ -317,7 +342,6 @@ int main(int argc, char* argv[]) {
     CHECK(undo_button != nullptr);
     CHECK(redo_button != nullptr);
     CHECK(tree != nullptr);
-    CHECK(top_action != nullptr);
     CHECK(edit_sketch_action != nullptr);
     CHECK(operations_content != nullptr);
     CHECK(editor_host != nullptr);
@@ -407,9 +431,14 @@ int main(int argc, char* argv[]) {
     const auto revision_after_create =
         session->document().revision();
 
-    top_action->trigger();
+    viewport->emitNavigationCubeAction(
+        viewer::NavigationCubeAction::orientTo(
+            viewer::NavigationCubeTarget::top));
     QApplication::processEvents();
 
+    CHECK(
+        viewport->cameraState()->projection ==
+        viewer::CameraProjection::orthographic);
     CHECK(
         session->document().state() ==
         authored_after_create);

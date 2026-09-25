@@ -150,7 +150,6 @@ private:
     PartViewportController* viewport_controller_{};
     std::unique_ptr<PartSketchInteractionController>
         sketch_interaction_controller_;
-    ViewCubeWidget* view_cube_{};
 
     QPushButton* undo_button_{};
     QPushButton* redo_button_{};

@@ -1,6 +1,6 @@
 version: 1
 status: completed
-active_work: "work/SK-04C_END_TO_END_SELECT_CONTINUOUS_LINE_DELETE_WORKFLOW.md"
+active_work: "work/WB-01B_NATIVE_VIEWPORT_OVERLAY_COMPOSITION_STABILIZATION.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -14,9 +14,10 @@ accepted_adrs:
   - "adr/ADR-0007-project-workspace-shell-and-document-navigation.md"
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
+  - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - merge SK-04C only after the exact closeout HEAD passes the selected CLOSURE CI tier
-  - stop at the completed R4 checkpoint
+  - merge WB-01B only after the exact closeout HEAD passes the selected CLOSURE CI tier
+  - stop at the stabilized post-R4 checkpoint
   - prepare a separate R5 Work Contract only when the Owner chooses to continue
   - R5 remains unauthorized until explicit Owner acceptance
 notes:
@@ -29,3 +30,16 @@ notes:
   - rectangle selection replaces semantic selection and assigns no primary in R4.
   - Command Line accepts SELECT and LINE only; coordinate input, snaps, constraints and grips remain outside R4.
   - SK-04C completes R4; R5 is next but is not active.
+  - Manual post-R4 Windows validation reports visual composition defects for both Sketch selection-box overlay and ViewCube over the native Qt/OCCT viewport.
+  - WB-01B was explicitly Owner-accepted on 2026-09-25 after proposal CLOSURE gate #323 passed.
+  - WB-01B is the active bounded pre-R5 Viewer/UI stabilization; manual Windows visual verification is mandatory before completion.
+  - Manual verification of d923f24a01e3b7679bfd588db87dce59ce976b59 passed the corrected selection-box but failed the second native-sibling ViewCube composition experiment.
+  - Both D1 ViewCube native-window experiments were reverted.
+  - Owner accepted ADR-0010 on 2026-09-25; provider-surface 3D Navigation Cube implementation is now authorized inside WB-01B.
+
+  - Exact-head 53a291fbebf1ab2e1ee8205f2f851e8542dee677 passed FULL gate #370 and Owner manual Navigation Cube verification.
+  - Owner accepted the ADR-0010 independent ORTHO/PERSP amendment on 2026-09-25; orientation actions and Home must preserve projection and a separate provider-surface toggle changes projection only.
+
+  - Exact-head 6a762d90c97e1405c0c576dc3039dd02ff6069e6 passed FULL gate #381 and Owner manual verification of the independent ORTHO/PERSP amendment.
+  - WB-01B acceptance conditions are satisfied; status is completed pending closeout-only CLOSURE gate and merge.
+  - R5 remains inactive and requires a separate explicit Owner-accepted Work Contract.

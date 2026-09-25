@@ -76,6 +76,32 @@ public:
         ++fit_all_count_;
     }
 
+    void setNavigationCubeActionHandler(
+        viewer::NavigationCubeActionHandler handler) override {
+        navigation_cube_handler_ =
+            std::move(handler);
+    }
+
+    bool animateCameraState(
+        const viewer::CameraState& state,
+        double,
+        bool fit_all) override {
+        if (!setCameraState(state)) {
+            return false;
+        }
+        if (fit_all) {
+            fitAll();
+        }
+        return true;
+    }
+
+    void emitNavigationCubeAction(
+        const viewer::NavigationCubeAction& action) {
+        CHECK(static_cast<bool>(
+            navigation_cube_handler_));
+        navigation_cube_handler_(action);
+    }
+
     bool setReferenceScene(
         const viewer::ReferenceScene& scene) override {
         if (!scene.valid()) return false;
@@ -185,6 +211,8 @@ private:
         viewer::ViewportCursorMode::
             system_default};
     viewer::SelectionIntentHandler selection_handler_;
+    viewer::NavigationCubeActionHandler
+        navigation_cube_handler_;
     int fit_all_count_{};
 };
 
@@ -311,12 +339,6 @@ int main(int argc, char* argv[]) {
     auto* hide_references =
         workbench.findChild<QAction*>(
             QStringLiteral("hideBuiltinReferencesAction"));
-    auto* projection_button =
-        workbench.findChild<QPushButton*>(
-            QStringLiteral("viewCubeProjectionButton"));
-    auto* fit_button =
-        workbench.findChild<QPushButton*>(
-            QStringLiteral("viewCubeFitButton"));
     auto* properties_stack =
         workbench.findChild<QStackedWidget*>(
             QStringLiteral("propertiesContextStack"));
@@ -326,10 +348,6 @@ int main(int argc, char* argv[]) {
     auto* reference_visibility =
         workbench.findChild<QLabel*>(
             QStringLiteral("referencePropertyVisibility"));
-
-    auto* top_view_action =
-        workbench.findChild<QAction*>(
-            QStringLiteral("viewCubeTopAction"));
 
     CHECK(tree != nullptr);
     CHECK(editor != nullptr);
@@ -342,12 +360,9 @@ int main(int argc, char* argv[]) {
     CHECK(close_document != nullptr);
     CHECK(show_references != nullptr);
     CHECK(hide_references != nullptr);
-    CHECK(projection_button != nullptr);
-    CHECK(fit_button != nullptr);
     CHECK(properties_stack != nullptr);
     CHECK(reference_name != nullptr);
     CHECK(reference_visibility != nullptr);
-    CHECK(top_view_action != nullptr);
 
     CHECK(operations->text() ==
           QStringLiteral("Part modeling context."));
@@ -414,7 +429,9 @@ int main(int argc, char* argv[]) {
     const auto navigation_revision =
         first_session_for_view->document().revision().value();
 
-    top_view_action->trigger();
+    viewport->emitNavigationCubeAction(
+        viewer::NavigationCubeAction::orientTo(
+            viewer::NavigationCubeTarget::top));
     CHECK(viewport->cameraState().has_value());
     CHECK(viewport->cameraState()->eye.z >
           viewport->cameraState()->target.z);
@@ -424,23 +441,37 @@ int main(int argc, char* argv[]) {
           navigation_revision);
     CHECK(!first_session_for_view->needsSave());
 
-    projection_button->click();
-    CHECK(viewport->cameraState()->projection ==
-          viewer::CameraProjection::orthographic);
-    CHECK(first_session_for_view->document().revision().value() ==
-          navigation_revision);
-    CHECK(!first_session_for_view->needsSave());
-
     const auto fit_before = viewport->fitAllCount();
-    fit_button->click();
+    viewport->emitNavigationCubeAction(
+        {viewer::NavigationCubeActionKind::home, {}});
     CHECK(viewport->fitAllCount() == fit_before + 1);
-    CHECK(first_session_for_view->document().revision().value() ==
-          navigation_revision);
-    CHECK(!first_session_for_view->needsSave());
-
-    projection_button->click();
     CHECK(viewport->cameraState()->projection ==
           viewer::CameraProjection::perspective);
+    CHECK(first_session_for_view->document().revision().value() ==
+          navigation_revision);
+    CHECK(!first_session_for_view->needsSave());
+
+    const auto before_projection_toggle =
+        *viewport->cameraState();
+    viewport->emitNavigationCubeAction(
+        {viewer::NavigationCubeActionKind::
+             toggle_projection,
+         {}});
+    CHECK(
+        viewport->cameraState()->projection ==
+        viewer::CameraProjection::orthographic);
+    CHECK(
+        viewport->cameraState()->eye ==
+        before_projection_toggle.eye);
+    CHECK(
+        viewport->cameraState()->target ==
+        before_projection_toggle.target);
+    CHECK(
+        viewport->cameraState()->up ==
+        before_projection_toggle.up);
+    CHECK(first_session_for_view->document().revision().value() ==
+          navigation_revision);
+    CHECK(!first_session_for_view->needsSave());
 
     CHECK(properties_stack->currentWidget()->objectName() ==
           QStringLiteral("documentPropertiesPage"));

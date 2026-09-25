@@ -9,7 +9,6 @@
 #include <QItemSelectionModel>
 #include <QPushButton>
 #include <QSplitter>
-#include <QToolButton>
 #include <QTest>
 #include <QTimer>
 #include <QTreeWidget>
@@ -212,13 +211,6 @@ int main(int argc, char* argv[]) {
             auto* editor_surface =
                 workbench.findChild<QWidget*>(
                     QStringLiteral("editorSurface"));
-            auto* view_cube =
-                workbench.findChild<QWidget*>(
-                    QStringLiteral("viewCubeWidget"));
-            auto* compact_button =
-                workbench.findChild<QToolButton*>(
-                    QStringLiteral("viewCubeCompactButton"));
-
             EXPECT(tree != nullptr);
             EXPECT(hide_action != nullptr);
             EXPECT(show_action != nullptr);
@@ -226,8 +218,10 @@ int main(int argc, char* argv[]) {
             EXPECT(redo != nullptr);
             EXPECT(splitter != nullptr);
             EXPECT(editor_surface != nullptr);
-            EXPECT(view_cube != nullptr);
-            EXPECT(compact_button != nullptr);
+            EXPECT(
+                workbench.findChild<QWidget*>(
+                    QStringLiteral("viewCubeWidget")) ==
+                nullptr);
 
             auto* session =
                 opened.session->documentSession(
@@ -297,19 +291,11 @@ int main(int argc, char* argv[]) {
                     splitter->setSizes({180, 120, 560});
                     QApplication::processEvents();
 
-                    EXPECT(editor_surface->rect().contains(
-                        view_cube->geometry()));
-                    if (editor_surface->width() < 180) {
-                        EXPECT(compact_button->isVisible());
-                    }
-
                     tracePhase(iteration, "restore-editor");
                     workbench.resize(1200, 780);
                     splitter->setSizes({220, 620, 300});
                     QApplication::processEvents();
 
-                    EXPECT(editor_surface->rect().contains(
-                        view_cube->geometry()));
                 }
 
                 tracePhase(iteration, "navigation");

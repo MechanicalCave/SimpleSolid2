@@ -2,18 +2,31 @@
 
 #include "navigation_mapping.hpp"
 
+#include <AIS_AnimationCamera.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_InteractiveObject.hxx>
 #include <AIS_Line.hxx>
 #include <AIS_Point.hxx>
+#include <AIS_RubberBand.hxx>
 #include <AIS_Shape.hxx>
+#include <AIS_TextLabel.hxx>
+#include <AIS_ViewCube.hxx>
 #include <Aspect_DisplayConnection.hxx>
+#include <Aspect_TypeOfLine.hxx>
+#include <Aspect_TypeOfTriedronPosition.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <Geom_CartesianPoint.hxx>
 #include <Graphic3d_Camera.hxx>
+#include <Graphic3d_HorizontalTextAlignment.hxx>
+#include <Graphic3d_TransformPers.hxx>
+#include <Graphic3d_VerticalTextAlignment.hxx>
+#include <Graphic3d_Vec2.hxx>
+#include <Graphic3d_ZLayerId.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Quantity_Color.hxx>
 #include <Standard_Failure.hxx>
+#include <TCollection_ExtendedString.hxx>
+#include <V3d_TypeOfOrientation.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
 #include <WNT_Window.hxx>
@@ -298,95 +311,54 @@ struct ScreenRect final {
             top_left);
 }
 
-class SelectionBoxOverlayWidget final
-    : public QWidget {
-public:
-    explicit SelectionBoxOverlayWidget(
-        QWidget* parent)
-        : QWidget{parent} {
-        setObjectName(
-            QStringLiteral(
-                "ss2SketchSelectionBoxOverlay"));
-        setAttribute(
-            Qt::WA_TransparentForMouseEvents,
-            true);
-        setAttribute(
-            Qt::WA_TranslucentBackground,
-            true);
-        setAutoFillBackground(false);
-        hide();
+[[nodiscard]] std::optional<viewer::NavigationCubeTarget>
+navigationCubeTargetForOrientation(
+    V3d_TypeOfOrientation orientation) noexcept {
+    using Target = viewer::NavigationCubeTarget;
+
+    switch (orientation) {
+    case V3d_Yneg: return Target::front;
+    case V3d_Ypos: return Target::back;
+    case V3d_Xneg: return Target::left;
+    case V3d_Xpos: return Target::right;
+    case V3d_Zpos: return Target::top;
+    case V3d_Zneg: return Target::bottom;
+
+    case V3d_YnegZpos: return Target::top_front;
+    case V3d_YposZpos: return Target::top_back;
+    case V3d_XnegZpos: return Target::top_left;
+    case V3d_XposZpos: return Target::top_right;
+    case V3d_YnegZneg: return Target::bottom_front;
+    case V3d_YposZneg: return Target::bottom_back;
+    case V3d_XnegZneg: return Target::bottom_left;
+    case V3d_XposZneg: return Target::bottom_right;
+    case V3d_XnegYneg: return Target::front_left;
+    case V3d_XposYneg: return Target::front_right;
+    case V3d_XnegYpos: return Target::back_left;
+    case V3d_XposYpos: return Target::back_right;
+
+    case V3d_XnegYnegZpos:
+        return Target::top_front_left;
+    case V3d_XposYnegZpos:
+        return Target::top_front_right;
+    case V3d_XnegYposZpos:
+        return Target::top_back_left;
+    case V3d_XposYposZpos:
+        return Target::top_back_right;
+    case V3d_XnegYnegZneg:
+        return Target::bottom_front_left;
+    case V3d_XposYnegZneg:
+        return Target::bottom_front_right;
+    case V3d_XnegYposZneg:
+        return Target::bottom_back_left;
+    case V3d_XposYposZneg:
+        return Target::bottom_back_right;
     }
 
-    bool setOverlay(
-        const viewer::SketchSelectionBoxOverlay& overlay) {
-        if (!overlay.valid()) {
-            return false;
-        }
+    return std::nullopt;
+}
 
-        overlay_ = overlay;
-        show();
-        raise();
-        update();
-        return true;
-    }
 
-    void clearOverlay() {
-        overlay_.reset();
-        hide();
-        update();
-    }
-
-protected:
-    void paintEvent(QPaintEvent* event) override {
-        Q_UNUSED(event);
-        if (!overlay_) {
-            return;
-        }
-
-        QRectF rectangle{
-            QPointF{
-                overlay_->anchor.x,
-                overlay_->anchor.y},
-            QPointF{
-                overlay_->current.x,
-                overlay_->current.y}};
-        rectangle = rectangle.normalized();
-
-        const bool crossing =
-            overlay_->rule ==
-            viewer::SketchRectangleSelectionRule::
-                crossing;
-
-        QPainter painter{this};
-        painter.setRenderHint(
-            QPainter::Antialiasing,
-            false);
-
-        const QColor border =
-            crossing
-                ? QColor{90, 210, 130, 220}
-                : QColor{90, 145, 245, 220};
-        const QColor fill =
-            crossing
-                ? QColor{90, 210, 130, 35}
-                : QColor{90, 145, 245, 35};
-
-        QPen pen{border};
-        pen.setWidth(1);
-        pen.setStyle(
-            crossing
-                ? Qt::DashLine
-                : Qt::SolidLine);
-        painter.setPen(pen);
-        painter.setBrush(fill);
-        painter.drawRect(rectangle);
-    }
-
-private:
-    std::optional<
-        viewer::SketchSelectionBoxOverlay>
-        overlay_;
-};
 
 } // namespace
 
@@ -394,11 +366,16 @@ class QtOcctViewerWidget::Impl final {
 public:
     explicit Impl(QtOcctViewerWidget& owner)
         : owner_{owner},
-          selection_box_overlay_widget_{
-              new SelectionBoxOverlayWidget{
-                  &owner_}} {
-        selection_box_overlay_widget_->setGeometry(
-            owner_.rect());
+          navigation_animation_timer_{
+              new QTimer{&owner_}} {
+        navigation_animation_timer_->setInterval(16);
+        QObject::connect(
+            navigation_animation_timer_,
+            &QTimer::timeout,
+            &owner_,
+            [this] {
+                updateNavigationAnimation();
+            });
     }
 
     void ensureInitialized() {
@@ -424,6 +401,51 @@ public:
         viewer::CameraState initial;
         initial.projection = viewer::CameraProjection::orthographic;
         static_cast<void>(setCameraState(initial));
+
+        navigation_cube_ = new AIS_ViewCube();
+        navigation_cube_->SetAutoStartAnimation(false);
+        navigation_cube_->SetDrawAxes(false);
+        navigation_cube_->SetDrawEdges(true);
+        navigation_cube_->SetDrawVertices(true);
+        navigation_cube_->SetSize(58.0);
+        navigation_cube_->SetBoxFacetExtension(9.0);
+        navigation_cube_->SetBoxEdgeMinSize(5.0);
+        navigation_cube_->SetBoxCornerMinSize(6.0);
+        navigation_cube_->SetFontHeight(12.0);
+        navigation_cube_->SetFitSelected(false);
+        navigation_cube_->SetResetCamera(true);
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Yneg,
+            "FRONT");
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Ypos,
+            "BACK");
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Xneg,
+            "LEFT");
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Xpos,
+            "RIGHT");
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Zpos,
+            "TOP");
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Zneg,
+            "BOTTOM");
+        navigation_cube_->SetTransformPersistence(
+            new Graphic3d_TransformPers(
+                Graphic3d_TMF_TriedronPers,
+                Aspect_TOTP_RIGHT_UPPER,
+                Graphic3d_Vec2i{86, 86}));
+        context_->Display(
+            navigation_cube_,
+            false);
+
+        createNavigationControlLabels();
+        syncNavigationControlVisibility();
+
+        context_->UpdateCurrentViewer();
+        view_->Redraw();
     }
 
     std::optional<viewer::CameraState> cameraState() const {
@@ -472,6 +494,7 @@ public:
         camera->OrthogonalizeUp();
         camera->SetScale(state.scale);
         view_->Redraw();
+        syncNavigationControlVisibility();
         return true;
     }
 
@@ -496,6 +519,365 @@ public:
         if (view_.IsNull()) return;
         view_->FitAll(0.05, false);
         view_->Redraw();
+    }
+
+    struct NavigationControl final {
+        Handle(AIS_TextLabel) label;
+        viewer::NavigationCubeAction action;
+        int offset_x{};
+        int offset_y{};
+        int half_width{};
+        int half_height{};
+        bool face_only{};
+        bool visible{};
+    };
+
+    void createNavigationControlLabels() {
+        if (context_.IsNull()) return;
+
+        navigation_controls_.clear();
+
+        auto add =
+            [this](
+                const char* text,
+                viewer::NavigationCubeAction action,
+                int offset_x,
+                int offset_y,
+                int half_width,
+                int half_height,
+                bool face_only) {
+                Handle(AIS_TextLabel) label =
+                    new AIS_TextLabel();
+                label->SetText(
+                    TCollection_ExtendedString{text});
+                label->SetPosition(
+                    gp_Pnt{0.0, 0.0, 0.0});
+                label->SetColor(
+                    Quantity_Color{
+                        0.94,
+                        0.94,
+                        0.96,
+                        Quantity_TOC_RGB});
+                label->SetHeight(12.0);
+                label->SetHJustification(
+                    Graphic3d_HTA_CENTER);
+                label->SetVJustification(
+                    Graphic3d_VTA_CENTER);
+                label->SetZoomable(false);
+                label->SetZLayer(
+                    Graphic3d_ZLayerId_Topmost);
+                label->SetTransformPersistence(
+                    new Graphic3d_TransformPers(
+                        Graphic3d_TMF_2d,
+                        Aspect_TOTP_RIGHT_UPPER,
+                        Graphic3d_Vec2i{
+                            offset_x,
+                            offset_y}));
+                context_->Display(
+                    label,
+                    false);
+                context_->Deactivate(label);
+
+                navigation_controls_.push_back(
+                    NavigationControl{
+                        label,
+                        action,
+                        offset_x,
+                        offset_y,
+                        half_width,
+                        half_height,
+                        face_only,
+                        true});
+            };
+
+        add(
+            "HOME",
+            {viewer::NavigationCubeActionKind::home, {}},
+            158,
+            18,
+            28,
+            11,
+            false);
+
+        add(
+            "ORTHO/PERSP",
+            {viewer::NavigationCubeActionKind::
+                 toggle_projection,
+             {}},
+            86,
+            178,
+            42,
+            11,
+            false);
+
+        add(
+            "<",
+            {viewer::NavigationCubeActionKind::
+                 adjacent_left,
+             {}},
+            148,
+            86,
+            12,
+            15,
+            true);
+        add(
+            ">",
+            {viewer::NavigationCubeActionKind::
+                 adjacent_right,
+             {}},
+            24,
+            86,
+            12,
+            15,
+            true);
+        add(
+            "^",
+            {viewer::NavigationCubeActionKind::
+                 adjacent_up,
+             {}},
+            86,
+            22,
+            15,
+            12,
+            true);
+        add(
+            "v",
+            {viewer::NavigationCubeActionKind::
+                 adjacent_down,
+             {}},
+            86,
+            150,
+            15,
+            12,
+            true);
+
+        add(
+            "CCW90",
+            {viewer::NavigationCubeActionKind::
+                 roll_counterclockwise,
+             {}},
+            146,
+            46,
+            28,
+            10,
+            true);
+        add(
+            "CW90",
+            {viewer::NavigationCubeActionKind::
+                 roll_clockwise,
+             {}},
+            28,
+            46,
+            24,
+            10,
+            true);
+    }
+
+    void syncNavigationControlVisibility() {
+        if (context_.IsNull()) return;
+
+        const auto camera = cameraState();
+        const bool face_aligned =
+            camera &&
+            viewer::navigationCubeFaceAligned(
+                *camera);
+
+        for (auto& control : navigation_controls_) {
+            const bool next_visible =
+                !control.face_only ||
+                face_aligned;
+            if (next_visible == control.visible) {
+                continue;
+            }
+
+            if (next_visible) {
+                context_->Display(
+                    control.label,
+                    false);
+                context_->Deactivate(
+                    control.label);
+            } else {
+                context_->Erase(
+                    control.label,
+                    false);
+            }
+
+            control.visible = next_visible;
+        }
+    }
+
+    [[nodiscard]] std::optional<
+        viewer::NavigationCubeAction>
+    navigationControlAt(
+        int logical_x,
+        int logical_y) const {
+        for (const auto& control :
+             navigation_controls_) {
+            if (!control.visible) continue;
+
+            const int center_x =
+                owner_.width() -
+                control.offset_x;
+            const int center_y =
+                control.offset_y;
+
+            if (std::abs(
+                    logical_x -
+                    center_x) <=
+                    control.half_width &&
+                std::abs(
+                    logical_y -
+                    center_y) <=
+                    control.half_height) {
+                return control.action;
+            }
+        }
+
+        return std::nullopt;
+    }
+
+    void emitNavigationCubeAction(
+        const viewer::NavigationCubeAction& action) {
+        if (navigation_cube_action_handler_) {
+            navigation_cube_action_handler_(action);
+        }
+    }
+
+    void setNavigationCubeActionHandler(
+        viewer::NavigationCubeActionHandler handler) {
+        navigation_cube_action_handler_ =
+            std::move(handler);
+    }
+
+    bool animateCameraState(
+        const viewer::CameraState& state,
+        double duration_seconds,
+        bool fit_all) {
+        if (!viewer::validateCameraState(state).valid ||
+            !std::isfinite(duration_seconds) ||
+            duration_seconds < 0.0) {
+            return false;
+        }
+
+        ensureInitialized();
+        if (view_.IsNull()) {
+            return false;
+        }
+
+        if (!navigation_animation_.IsNull()) {
+            navigation_animation_->Stop();
+        }
+        navigation_animation_timer_->stop();
+
+        if (duration_seconds <= 0.0) {
+            if (!setCameraState(state)) {
+                return false;
+            }
+            if (fit_all) {
+                fitAll();
+            }
+            return true;
+        }
+
+        const auto current_camera =
+            view_->Camera();
+        if (current_camera.IsNull()) {
+            return false;
+        }
+
+        Handle(Graphic3d_Camera) start_camera =
+            new Graphic3d_Camera(current_camera);
+        Handle(Graphic3d_Camera) end_camera =
+            new Graphic3d_Camera(current_camera);
+
+        end_camera->SetProjectionType(
+            state.projection ==
+                    viewer::CameraProjection::orthographic
+                ? Graphic3d_Camera::
+                      Projection_Orthographic
+                : Graphic3d_Camera::
+                      Projection_Perspective);
+        end_camera->SetEyeAndCenter(
+            gp_Pnt{
+                state.eye.x,
+                state.eye.y,
+                state.eye.z},
+            gp_Pnt{
+                state.target.x,
+                state.target.y,
+                state.target.z});
+        end_camera->SetUp(
+            gp_Dir{
+                state.up.x,
+                state.up.y,
+                state.up.z});
+        end_camera->OrthogonalizeUp();
+        end_camera->SetScale(state.scale);
+
+        navigation_animation_ =
+            new AIS_AnimationCamera(
+                "SS2.NavigationCube",
+                view_);
+        navigation_animation_->SetCameraStart(
+            start_camera);
+        navigation_animation_->SetCameraEnd(
+            end_camera);
+        navigation_animation_->SetOwnDuration(
+            duration_seconds);
+        navigation_animation_target_ = state;
+        navigation_animation_fit_all_ = fit_all;
+
+        for (auto& control : navigation_controls_) {
+            if (control.face_only &&
+                control.visible) {
+                context_->Erase(
+                    control.label,
+                    false);
+                control.visible = false;
+            }
+        }
+
+        navigation_animation_->StartTimer(
+            0.0,
+            1.0,
+            true);
+        navigation_animation_timer_->start();
+        return true;
+    }
+
+    void updateNavigationAnimation() {
+        if (navigation_animation_.IsNull() ||
+            view_.IsNull()) {
+            navigation_animation_timer_->stop();
+            return;
+        }
+
+        static_cast<void>(
+            navigation_animation_->UpdateTimer());
+        view_->Redraw();
+
+        if (!navigation_animation_->IsStopped()) {
+            return;
+        }
+
+        navigation_animation_timer_->stop();
+
+        if (navigation_animation_target_) {
+            static_cast<void>(
+                setCameraState(
+                    *navigation_animation_target_));
+        }
+
+        if (navigation_animation_fit_all_) {
+            view_->FitAll(0.05, false);
+            view_->Redraw();
+        }
+
+        syncNavigationControlVisibility();
+
+        navigation_animation_.Nullify();
+        navigation_animation_target_.reset();
+        navigation_animation_fit_all_ = false;
     }
 
     bool setReferenceScene(
@@ -789,21 +1171,104 @@ public:
 
     bool setSketchSelectionBoxOverlay(
         const viewer::SketchSelectionBoxOverlay& overlay) {
-        if (selection_box_overlay_widget_ == nullptr) {
+        if (!overlay.valid()) {
             return false;
         }
 
-        selection_box_overlay_widget_->setGeometry(
-            owner_.rect());
-        return selection_box_overlay_widget_
-            ->setOverlay(overlay);
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        const auto dpr = owner_.devicePixelRatioF();
+        const auto min_x = static_cast<Standard_Integer>(
+            std::lround(
+                std::min(overlay.anchor.x, overlay.current.x) *
+                dpr));
+        const auto max_x = static_cast<Standard_Integer>(
+            std::lround(
+                std::max(overlay.anchor.x, overlay.current.x) *
+                dpr));
+
+        // Qt logical pointer coordinates use a top-left origin while
+        // AIS_RubberBand's 2D overlay uses bottom-left screen Y.
+        const auto viewport_height =
+            static_cast<Standard_Integer>(
+                std::lround(
+                    static_cast<double>(owner_.height()) *
+                    dpr));
+        const auto anchor_y =
+            viewport_height -
+            static_cast<Standard_Integer>(
+                std::lround(overlay.anchor.y * dpr));
+        const auto current_y =
+            viewport_height -
+            static_cast<Standard_Integer>(
+                std::lround(overlay.current.y * dpr));
+        const auto min_y = std::min(anchor_y, current_y);
+        const auto max_y = std::max(anchor_y, current_y);
+
+        const bool crossing =
+            overlay.rule ==
+            viewer::SketchRectangleSelectionRule::crossing;
+
+        const Quantity_Color border{
+            crossing ? 0.35 : 0.35,
+            crossing ? 0.82 : 0.57,
+            crossing ? 0.51 : 0.96,
+            Quantity_TOC_RGB};
+        const Quantity_Color fill = border;
+        const auto line_type =
+            crossing ? Aspect_TOL_DASH : Aspect_TOL_SOLID;
+
+        if (selection_rubber_band_.IsNull()) {
+            selection_rubber_band_ =
+                new AIS_RubberBand(
+                    border,
+                    line_type,
+                    fill,
+                    0.86,
+                    1.0);
+        } else {
+            selection_rubber_band_->SetLineColor(border);
+            selection_rubber_band_->SetLineType(line_type);
+            selection_rubber_band_->SetFillColor(fill);
+            selection_rubber_band_->SetFillTransparency(0.86);
+        }
+
+        selection_rubber_band_->SetRectangle(
+            min_x,
+            min_y,
+            max_x,
+            max_y);
+
+        if (!selection_rubber_band_visible_) {
+            context_->Display(
+                selection_rubber_band_,
+                false);
+            selection_rubber_band_visible_ = true;
+        } else {
+            context_->Redisplay(
+                selection_rubber_band_,
+                false);
+        }
+
+        context_->UpdateCurrentViewer();
+        return true;
     }
 
     void clearSketchSelectionBoxOverlay() {
-        if (selection_box_overlay_widget_ != nullptr) {
-            selection_box_overlay_widget_
-                ->clearOverlay();
+        if (context_.IsNull() ||
+            selection_rubber_band_.IsNull() ||
+            !selection_rubber_band_visible_) {
+            return;
         }
+
+        context_->Remove(
+            selection_rubber_band_,
+            false);
+        selection_rubber_band_visible_ = false;
+        context_->UpdateCurrentViewer();
     }
 
     void setSelectionIntentHandler(
@@ -933,6 +1398,105 @@ public:
         return true;
     }
 
+    bool updateNavigationCubeHover(
+        int logical_x,
+        int logical_y) {
+        ensureInitialized();
+        if (context_.IsNull() ||
+            view_.IsNull() ||
+            navigation_cube_.IsNull()) {
+            return false;
+        }
+
+        if (navigationControlAt(
+                logical_x,
+                logical_y)) {
+            context_->ClearDetected(false);
+            return true;
+        }
+
+        const auto dpr =
+            owner_.devicePixelRatioF();
+        const auto x =
+            static_cast<int>(
+                std::lround(
+                    static_cast<double>(logical_x) *
+                    dpr));
+        const auto y =
+            static_cast<int>(
+                std::lround(
+                    static_cast<double>(logical_y) *
+                    dpr));
+
+        context_->MoveTo(
+            x,
+            y,
+            view_,
+            true);
+
+        if (!context_->HasDetected()) {
+            return false;
+        }
+
+        const auto cube_owner =
+            Handle(AIS_ViewCubeOwner)::DownCast(
+                context_->DetectedOwner());
+        return !cube_owner.IsNull();
+    }
+
+    bool activateNavigationCubeAt(
+        int logical_x,
+        int logical_y) {
+        ensureInitialized();
+
+        if (const auto control =
+                navigationControlAt(
+                    logical_x,
+                    logical_y)) {
+            navigation_cube_press_active_ = true;
+            context_->ClearDetected(false);
+            emitNavigationCubeAction(*control);
+            return true;
+        }
+
+        if (!updateNavigationCubeHover(
+                logical_x,
+                logical_y)) {
+            return false;
+        }
+
+        navigation_cube_press_active_ = true;
+
+        const auto cube_owner =
+            Handle(AIS_ViewCubeOwner)::DownCast(
+                context_->DetectedOwner());
+        if (cube_owner.IsNull()) {
+            return false;
+        }
+
+        const auto target =
+            navigationCubeTargetForOrientation(
+                cube_owner->MainOrientation());
+        if (!target) {
+            return true;
+        }
+
+        context_->ClearDetected(false);
+
+        emitNavigationCubeAction(
+            viewer::NavigationCubeAction::
+                orientTo(*target));
+
+        return true;
+    }
+
+    bool consumeNavigationCubeRelease() noexcept {
+        const bool active =
+            navigation_cube_press_active_;
+        navigation_cube_press_active_ = false;
+        return active;
+    }
+
     void pickAtLogicalPoint(
         int logical_x,
         int logical_y,
@@ -1028,6 +1592,7 @@ public:
 
         view_->Rotate(angles.x, angles.y, angles.z, true);
         view_->Redraw();
+        syncNavigationControlVisibility();
     }
 
     void orbitByRadians(double horizontal, double vertical) {
@@ -1403,11 +1968,6 @@ public:
     }
 
     void resize() {
-        if (selection_box_overlay_widget_ != nullptr) {
-            selection_box_overlay_widget_->setGeometry(
-                owner_.rect());
-        }
-
         if (view_.IsNull()) return;
         const auto native_window = view_->Window();
         if (!native_window.IsNull()) native_window->DoResize();
@@ -1487,14 +2047,28 @@ private:
     viewer::PresentationSelection selection_;
     viewer::SelectionIntentHandler selection_intent_handler_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
+    viewer::NavigationCubeActionHandler
+        navigation_cube_action_handler_;
     viewer::PrimaryPointerRouting primary_pointer_routing_{
         viewer::PrimaryPointerRouting::
             presentation_selection};
     viewer::ViewportCursorMode cursor_mode_{
         viewer::ViewportCursorMode::
             system_default};
-    SelectionBoxOverlayWidget*
-        selection_box_overlay_widget_{};
+    Handle(AIS_RubberBand)
+        selection_rubber_band_;
+    bool selection_rubber_band_visible_{};
+
+    Handle(AIS_ViewCube) navigation_cube_;
+    Handle(AIS_AnimationCamera)
+        navigation_animation_;
+    QTimer* navigation_animation_timer_{};
+    std::optional<viewer::CameraState>
+        navigation_animation_target_;
+    bool navigation_animation_fit_all_{};
+    bool navigation_cube_press_active_{};
+    std::vector<NavigationControl>
+        navigation_controls_;
     std::vector<ReferenceObject> reference_objects_;
     std::vector<SketchObject> sketch_objects_;
     std::vector<Handle(AIS_InteractiveObject)>
@@ -1560,6 +2134,30 @@ void QtOcctViewerWidget::fitAll() {
     guardedVoid(
         "fitAll",
         [this] { impl_->fitAll(); });
+}
+
+void QtOcctViewerWidget::setNavigationCubeActionHandler(
+    viewer::NavigationCubeActionHandler handler) {
+    guardedVoid(
+        "setNavigationCubeActionHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setNavigationCubeActionHandler(
+                std::move(handler));
+        });
+}
+
+bool QtOcctViewerWidget::animateCameraState(
+    const viewer::CameraState& state,
+    double duration_seconds,
+    bool fit_all) {
+    return guardedBool(
+        "animateCameraState",
+        [this, &state, duration_seconds, fit_all] {
+            return impl_->animateCameraState(
+                state,
+                duration_seconds,
+                fit_all);
+        });
 }
 
 bool QtOcctViewerWidget::setReferenceScene(
@@ -1765,6 +2363,20 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
     }
 
     if (event->button() == Qt::LeftButton) {
+        const auto point =
+            event->position().toPoint();
+        if (guardedBool(
+                "navigationCubePress",
+                [this, point] {
+                    return impl_->
+                        activateNavigationCubeAt(
+                            point.x(),
+                            point.y());
+                })) {
+            event->accept();
+            return;
+        }
+
         if (impl_->primaryPointerRouting() ==
             viewer::PrimaryPointerRouting::
                 spatial_tool_input) {
@@ -1829,6 +2441,19 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
     }
 
     const auto point = event->position();
+    const auto point_int = point.toPoint();
+    if (guardedBool(
+            "navigationCubeHover",
+            [this, point_int] {
+                return impl_->
+                    updateNavigationCubeHover(
+                        point_int.x(),
+                        point_int.y());
+            })) {
+        event->accept();
+        return;
+    }
+
     guardedVoid(
         "spatialMove",
         [this, point, event] {
@@ -1849,6 +2474,12 @@ void QtOcctViewerWidget::mouseReleaseEvent(QMouseEvent* event) {
         guardedVoid(
             "middleRelease",
             [this] { impl_->endMiddleDrag(); });
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton &&
+        impl_->consumeNavigationCubeRelease()) {
         event->accept();
         return;
     }
