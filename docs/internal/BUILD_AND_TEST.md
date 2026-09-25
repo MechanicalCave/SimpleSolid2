@@ -60,8 +60,6 @@ SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `s
 
 SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage. These prove neutral Select/Line state transitions, exact-zero suppression, one outstanding Line request, commit-success/failure anchor behavior, hierarchical Esc/Finish/Cancel, EntityId selection/reconciliation, atomic batch Delete validation, one-command/one-transaction/one-Undo semantics and three continuous committed Line segments producing exactly three Undo entries.
 
-SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage for host-neutral Select/Line state, pending Line request acknowledgement, Finish/Cancel/Esc semantics, transient EntityId selection/reconciliation, atomic all-or-nothing multi-entity Delete, original-identity Undo/Redo restoration and one committed Line segment per history entry.
-
 WB-01A adds or extends deterministic coverage for:
 
 - empty-space selection clear and right-click no-op semantics;

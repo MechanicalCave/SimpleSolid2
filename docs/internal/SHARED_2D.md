@@ -107,25 +107,6 @@ Preview intent is transient and exists only while Line has an anchor and no unre
 
 The same interaction state owns transient semantic Sketch selection as `EntityId` values plus optional primary identity. Replace/toggle/clear/replace-many never store Viewer tokens. Reconciliation can prune identities that no longer exist in the current `SketchModel` without authored mutation.
 
-<!-- section-id: internal.shared-2d.interaction -->
-## Host-neutral Sketch interaction state
-
-SK-04A adds one runtime interaction authority inside the neutral Sketch target. It does not own Part/DocumentSession, Viewer, Qt or provider state.
-
-The implemented tool state is intentionally small:
-
-```text
-Select
-Line / AwaitFirstPoint
-Line / AwaitNextPoint
-```
-
-Select is the default. Activating Line enters AwaitFirstPoint. Accepting the first finite point stores a runtime anchor and enters AwaitNextPoint. Accepting a distinct next point creates a `LineSegmentIntent` request but does not advance the anchor until the host explicitly resolves that request as committed. A failed host commit preserves the previous anchor. Exact-zero segments produce no request and use no epsilon policy.
-
-Only one Line request may be outstanding. Runtime preview intent exists only while AwaitNextPoint has a valid anchor and no request is pending. Finish/Cancel clear uncommitted Line state and return Select. Hierarchical Esc first drops AwaitNextPoint back to AwaitFirstPoint, then a second Esc returns Select. Already committed authored Lines are never rolled back by tool cancellation.
-
-The same interaction state owns transient semantic selection as model-local `EntityId` values plus optional primary selection. It supports replace, toggle, clear, replace-many and explicit reconciliation against the current `SketchModel`. Viewer `PresentationToken` never enters this semantic selection state.
-
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
@@ -155,6 +136,6 @@ SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02
 
 SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for neutral authored/preview presentation contracts, U/V↔3D and ray→U/V mapping, runtime token bindings, fail-closed active-Sketch lifecycle, routing/cursor state and real Qt/OCCT spatial input before/after orbit.
 
-SK-04A adds `sk04a.sketch_interaction_state` and `sk04a.line_commit_protocol` coverage for Select/Line runtime semantics, explicit request/acknowledgement, continuous anchor progression, exact-zero suppression, Finish/Cancel/Esc behavior, transient EntityId selection and one-segment-per-Undo integration with `DocumentSession`.
+SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage for Select/Line runtime semantics, explicit request/acknowledgement, continuous anchor progression, exact-zero suppression, Finish/Cancel/Esc behavior, transient EntityId selection/reconciliation, atomic multi-entity Delete and one-segment-per-Undo integration with `DocumentSession`.
 
 The repository Windows FULL gate builds the exact implementation head and runs the complete CTest suite.
