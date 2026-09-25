@@ -710,18 +710,28 @@ public:
             std::lround(
                 std::min(overlay.anchor.x, overlay.current.x) *
                 dpr));
-        const auto min_y = static_cast<Standard_Integer>(
-            std::lround(
-                std::min(overlay.anchor.y, overlay.current.y) *
-                dpr));
         const auto max_x = static_cast<Standard_Integer>(
             std::lround(
                 std::max(overlay.anchor.x, overlay.current.x) *
                 dpr));
-        const auto max_y = static_cast<Standard_Integer>(
-            std::lround(
-                std::max(overlay.anchor.y, overlay.current.y) *
-                dpr));
+
+        // Qt logical pointer coordinates use a top-left origin while
+        // AIS_RubberBand's 2D overlay uses bottom-left screen Y.
+        const auto viewport_height =
+            static_cast<Standard_Integer>(
+                std::lround(
+                    static_cast<double>(owner_.height()) *
+                    dpr));
+        const auto anchor_y =
+            viewport_height -
+            static_cast<Standard_Integer>(
+                std::lround(overlay.anchor.y * dpr));
+        const auto current_y =
+            viewport_height -
+            static_cast<Standard_Integer>(
+                std::lround(overlay.current.y * dpr));
+        const auto min_y = std::min(anchor_y, current_y);
+        const auto max_y = std::max(anchor_y, current_y);
 
         const bool crossing =
             overlay.rule ==
