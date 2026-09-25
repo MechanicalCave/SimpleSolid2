@@ -648,3 +648,27 @@ set_tests_properties(sk01.workbench_sketch_host PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     TIMEOUT 30
 )
+
+
+add_executable(sk02a_shared_2d_core_test
+    sk02a_shared_2d_core_test.cpp
+)
+
+target_link_libraries(sk02a_shared_2d_core_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(sk02a_shared_2d_core_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk02a.shared_2d_core
+    COMMAND sk02a_shared_2d_core_test
+)
+
+add_test(
+    NAME sk02a.shared_2d_boundaries
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_sketch_boundaries.cmake
+)
