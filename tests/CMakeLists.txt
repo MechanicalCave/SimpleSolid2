@@ -823,3 +823,20 @@ add_test(
 set_tests_properties(sk03a.viewer_native_input PROPERTIES
     TIMEOUT 30
 )
+
+
+add_executable(sk04a_sketch_interaction_state_test
+    sk04a_sketch_interaction_state_test.cpp
+)
+
+target_link_libraries(sk04a_sketch_interaction_state_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(sk04a_sketch_interaction_state_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk04a.sketch_interaction_state
+    COMMAND sk04a_sketch_interaction_state_test
+)
