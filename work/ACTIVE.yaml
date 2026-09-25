@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/CI-01_TIERED_EXACT_HEAD_GATES.md"
+status: active
+active_work: "work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -15,13 +15,16 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - review proposed work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md
-  - R3 remains inactive until explicit Owner acceptance of SK-03A
-  - after acceptance, activate R3 before any production mutation
+  - implement SK-03A Slice A: neutral Viewer Sketch scene, preview, spatial pointer and cursor/routing contracts
+  - then PartViewportController authored-Sketch presentation and ray-to-U/V adapter
+  - then Qt/OCCT rendering/ray/routing/cursor behavior
+  - then CadWorkbench Sketch-edit integration and regression tests
+  - finish with as-built/product docs, FULL implementation gate and CLOSURE bookkeeping
 notes:
-  - R2 / SK-02B is completed and merged as aaabc3593cc69fd15daf9f1dad64c6dc8cb72007.
-  - CI-01 is completed and merged as 73fecc7f7147c9b0c37802851cf7fcbf562a4c09.
-  - CI-01 proved FULL on implementation head and CLOSURE on work-only completion suffix.
-  - SK-03A is proposal-only; no R3 production code is active.
-  - the proposal keeps PartViewportController as presentation/input adapter, not Sketch ToolState.
-  - R4 continuous Line workflow remains unauthorized.
+  - SK-03A is Owner-accepted on 2026-09-25 and is the active bounded R3 Work Contract.
+  - R2 / SK-02B is completed and merged.
+  - CI-01 tiered exact-head verification is completed and merged.
+  - PartViewportController remains a presentation/input adapter, not Sketch ToolState.
+  - active-Sketch authored presentation and runtime preview remain distinct channels.
+  - PresentationToken remains runtime-only and never replaces SketchId plus EntityId.
+  - R4 continuous Line workflow and semantic Sketch selection remain unauthorized.
