@@ -91,13 +91,13 @@ Zachowanie zaznaczenia w Viewporcie:
 Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 
 <!-- section-id: product.parts.sketch-host -->
-## Tworzenie pustego Sketchu
+## Tworzenie i wyświetlanie Sketchu
 
 Na pasku narzędzi bezpośrednio nad viewportem 3D użyj `Sketch`, a następnie wskaż jedną z płaszczyzn `XY Plane`, `XZ Plane` albo `YZ Plane` w Origin. Płaszczyznę możesz wskazać w Document Tree albo — gdy jest widoczna — w viewporcie 3D.
 
 Operations nie jest listą narzędzi. Pokazuje sterowanie bieżącą operacją: podczas wyboru płaszczyzny Sketchu zawiera kontekst wyboru/Cancel, a po wejściu do edycji pokazuje `Finish Sketch`.
 
-Po poprawnym wyborze Part tworzy trwały pusty Sketch i pozostaje w tym samym Workbench oraz tym samym viewporcie 3D. Kamera automatycznie ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnej płaszczyzny.
+Po poprawnym wyborze Part tworzy trwały Sketch i pozostaje w tym samym Workbench oraz tym samym viewporcie 3D. Kamera automatycznie ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnej płaszczyzny. Gdy Sketch jest aktywny, każda authored geometria Line już zapisana w tym Sketchu jest prezentowana w viewporcie razem ze znacznikiem Origin lokalnego `(0,0)` Sketchu.
 
 Automatyczne ustawienie widoku nie blokuje kamery. Podczas aktywnego Sketchu nadal możesz używać Pan, Zoom, Orbit i ViewCube. Nawigacja nie zmienia położenia Sketchu i sama nie dirty'uje Dokumentu.
 
@@ -105,7 +105,7 @@ Użyj `Finish Sketch`, aby zakończyć bieżący tryb edycji. Sketch pozostaje a
 
 Aby ponownie edytować istniejący Sketch, kliknij go dwukrotnie w Document Tree albo użyj jego menu kontekstowego `Edit Sketch`. Samo wejście do edycji nie zmienia authored state i nie wymaga Save.
 
-W SK-01 Sketch jest celowo pusty. Nie ma jeszcze Line/Arc/Circle, constraintów, wymiarów ani solvera. Support może być obecnie tylko jedną z trzech płaszczyzn Origin; płaszczyzny konstrukcyjne/Datum oraz płaskie ściany modelu będą osobnymi późniejszymi etapami.
+Bieżący UI nie udostępnia jeszcze interaktywnego workflow tworzenia/edycji Line, semantycznego zaznaczenia/usuwania elementów Sketchu, Arc/Circle, constraintów, wymiarów ani solvera. Istniejące authored Lines są widoczne podczas edycji Sketchu, ale ich tworzenie/manipulacja z viewportu jest późniejszym etapem. Support może być obecnie tylko jedną z trzech płaszczyzn Origin; płaszczyzny konstrukcyjne/Datum oraz płaskie ściany modelu będą osobnymi późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i ViewCube
@@ -129,7 +129,7 @@ Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, n
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketches z ich trwałą tożsamością/supportem/placementem, do pliku `.ss2part`.
+`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketches z ich trwałą tożsamością/supportem/placementem i osadzoną authored geometrią Line, do pliku `.ss2part`.
 
 Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Discard` albo `Cancel`.
 
@@ -158,8 +158,8 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wp
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, wspólny ustabilizowany fundament Workbench/Viewer 3D oraz pierwszy host lifecycle dla pustych Sketchy na płaszczyznach Origin.
+Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, wspólny ustabilizowany fundament Workbench/Viewer 3D, trwałe Sketches z osadzonymi authored danymi Line oraz prezentację aktywnego Sketchu (Lines + Origin) na płaszczyznach Origin.
 
 Bardzo wczesne testowe pliki `.ss2part` utworzone przed wprowadzeniem obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Part nie zawiera jeszcze geometrii 2D Sketchu, constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
+Bieżący UI nie udostępnia jeszcze interaktywnego rysowania/edycji Sketchu ani semantycznego zaznaczania jego elementów. Part nadal nie ma constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
