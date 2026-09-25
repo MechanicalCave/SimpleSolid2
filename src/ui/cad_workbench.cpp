@@ -440,6 +440,14 @@ void CadWorkbench::buildUi() {
     auto* operations_layout = new QVBoxLayout(operations_content);
     operations_layout->setContentsMargins(0, 0, 0, 0);
 
+    operations_placeholder_ = new QLabel(
+        QStringLiteral("Part modeling context."),
+        operations_content);
+    operations_placeholder_->setObjectName(
+        QStringLiteral("operationsPlaceholder"));
+    operations_placeholder_->setWordWrap(true);
+    operations_layout->addWidget(operations_placeholder_);
+
     cancel_sketch_button_ =
         new QPushButton(
             QStringLiteral("Cancel"),
@@ -476,6 +484,8 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         cancel_line_button_);
 
+    operations_layout->addStretch(1);
+
     finish_sketch_button_ =
         new QPushButton(
             QStringLiteral("Finish Sketch"),
@@ -484,15 +494,6 @@ void CadWorkbench::buildUi() {
         QStringLiteral("finishSketchButton"));
     operations_layout->addWidget(
         finish_sketch_button_);
-
-    operations_placeholder_ = new QLabel(
-        QStringLiteral("No active tool."),
-        operations_content);
-    operations_placeholder_->setObjectName(
-        QStringLiteral("operationsPlaceholder"));
-    operations_placeholder_->setWordWrap(true);
-    operations_layout->addWidget(operations_placeholder_);
-    operations_layout->addStretch(1);
 
     shell_->setOperationsContent(operations_content);
 
