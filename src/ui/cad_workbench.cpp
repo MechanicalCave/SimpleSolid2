@@ -1,13 +1,16 @@
 #include "cad_workbench.hpp"
 #include "cad_workbench_shell.hpp"
 #include "part_document_tree_controller.hpp"
+#include "part_sketch_interaction_controller.hpp"
 #include "part_viewport_controller.hpp"
 #include "view_cube_widget.hpp"
 
+#include <QEvent>
 #include <QFormLayout>
 #include <QGridLayout>
 #include <QFrame>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
@@ -164,6 +167,7 @@ void CadWorkbench::buildUi() {
         viewport_ = viewport_surface.viewport;
         auto* viewport_widget =
             viewport_surface.widget;
+        viewport_widget_ = viewport_widget;
 
         viewport_widget->setObjectName(
             QStringLiteral("documentViewport"));
@@ -215,6 +219,28 @@ void CadWorkbench::buildUi() {
         0,
         sketch_button_);
 
+    select_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Select"),
+            shell_);
+    select_sketch_button_->setObjectName(
+        QStringLiteral("selectSketchToolButton"));
+    select_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        1,
+        select_sketch_button_);
+
+    line_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Line"),
+            shell_);
+    line_sketch_button_->setObjectName(
+        QStringLiteral("lineSketchToolButton"));
+    line_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        2,
+        line_sketch_button_);
+
     viewport_controller_ =
         new PartViewportController(
             *tree_controller_,
@@ -227,6 +253,58 @@ void CadWorkbench::buildUi() {
             refreshPropertiesContext(primary);
             tryCreateSketchFromSupport(primary);
         });
+
+    sketch_interaction_controller_ =
+        std::make_unique<PartSketchInteractionController>(
+            *viewport_controller_);
+    sketch_interaction_controller_->setStateChangedHandler(
+        [this] {
+            syncSketchInteractionUi();
+            syncActionState();
+            notifyDocumentStateChanged();
+        });
+    sketch_interaction_controller_->setStatusHandler(
+        [this](const std::string& message) {
+            status_->setText(fromUtf8(message));
+        });
+    viewport_controller_->setSketchPointerHandler(
+        [this](const SketchPointerInput& input) {
+            if (sketch_interaction_controller_) {
+                sketch_interaction_controller_->onPointer(
+                    input);
+            }
+        });
+
+    command_line_widget_ = new QWidget(shell_);
+    command_line_widget_->setObjectName(
+        QStringLiteral("sketchCommandLine"));
+    command_line_widget_->setMaximumHeight(58);
+    auto* command_line_layout =
+        new QHBoxLayout(command_line_widget_);
+    command_line_layout->setContentsMargins(4, 2, 4, 2);
+
+    command_prompt_ =
+        new QLabel(
+            QStringLiteral("Command: SELECT"),
+            command_line_widget_);
+    command_prompt_->setObjectName(
+        QStringLiteral("sketchCommandPrompt"));
+    command_line_layout->addWidget(command_prompt_);
+
+    command_input_ =
+        new QLineEdit(command_line_widget_);
+    command_input_->setObjectName(
+        QStringLiteral("sketchCommandInput"));
+    command_input_->setPlaceholderText(
+        QStringLiteral("SELECT or LINE"));
+    command_line_layout->addWidget(command_input_, 1);
+    shell_->setCommandLineContent(
+        command_line_widget_);
+
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->installEventFilter(this);
+    }
+    command_input_->installEventFilter(this);
 
     auto* properties_content = new QWidget(shell_);
     properties_content->setObjectName(
@@ -369,6 +447,33 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         cancel_sketch_button_);
 
+    delete_selection_button_ =
+        new QPushButton(
+            QStringLiteral("Delete Selection"),
+            operations_content);
+    delete_selection_button_->setObjectName(
+        QStringLiteral("deleteSketchSelectionButton"));
+    operations_layout->addWidget(
+        delete_selection_button_);
+
+    finish_line_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Line"),
+            operations_content);
+    finish_line_button_->setObjectName(
+        QStringLiteral("finishSketchLineButton"));
+    operations_layout->addWidget(
+        finish_line_button_);
+
+    cancel_line_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel Line"),
+            operations_content);
+    cancel_line_button_->setObjectName(
+        QStringLiteral("cancelSketchLineButton"));
+    operations_layout->addWidget(
+        cancel_line_button_);
+
     finish_sketch_button_ =
         new QPushButton(
             QStringLiteral("Finish Sketch"),
@@ -420,6 +525,16 @@ void CadWorkbench::buildUi() {
         this,
         [this] { startSketchTool(); });
     QObject::connect(
+        select_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchSelect(); });
+    QObject::connect(
+        line_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchLine(); });
+    QObject::connect(
         cancel_sketch_button_,
         &QPushButton::clicked,
         this,
@@ -429,7 +544,28 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { finishSketch(); });
+    QObject::connect(
+        finish_line_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { finishSketchLine(); });
+    QObject::connect(
+        cancel_line_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { cancelSketchLine(); });
+    QObject::connect(
+        delete_selection_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { deleteSketchSelection(); });
+    QObject::connect(
+        command_input_,
+        &QLineEdit::returnPressed,
+        this,
+        [this] { submitSketchCommandLine(); });
 
+    syncSketchInteractionUi();
 }
 
 bool CadWorkbench::activateDocument(
