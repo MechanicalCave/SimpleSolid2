@@ -20,7 +20,7 @@
 #include <Graphic3d_HorizontalTextAlignment.hxx>
 #include <Graphic3d_TransformPers.hxx>
 #include <Graphic3d_VerticalTextAlignment.hxx>
-#include <Graphic3d_Vec2i.hxx>
+#include <Graphic3d_Vec2.hxx>
 #include <Graphic3d_ZLayerId.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Quantity_Color.hxx>
