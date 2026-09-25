@@ -4,8 +4,8 @@
 **Owner acceptance:** pending  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Architecture:** ADR-0008  
-**Program roadmap:** `work/SKETCH_ROADMAP.md` v1.0  
+**Architecture:** ADR-0008, ADR-0009  
+**Program roadmap:** `work/SKETCH_ROADMAP.md` v1.1  
 **Roadmap milestone:** R1 — Minimal Shared 2D authored core
 
 ## 1. Goal
@@ -56,14 +56,16 @@ Required semantics:
 - identities are unique within that model;
 - identity is independent from collection index, insertion address, pointer value, display name and Viewer token;
 - ordinary value-copy of authored model state preserves entity identities;
-- creating another entity does not change existing identities.
+- creating another entity does not change existing identities;
+- deleting an entity does not authorize the continuing model instance to immediately reassign that EntityId to a different semantic entity;
+- state-copy/history-style replication preserves existing identity, while future semantic duplication/Copy-Paste must create fresh identity.
 
 R1-A does **not** freeze:
 
 - external/global uniqueness;
 - textual serialization;
 - persistence representation;
-- delete/reuse policy;
+- the exact allocation mechanism needed later to preserve non-aliasing across Undo/Redo/save-reopen;
 - a universal cross-domain reference type.
 
 The concrete C++ representation remains an implementation detail unless a later accepted contract requires more.
@@ -75,11 +77,12 @@ Introduce the smallest neutral 2D coordinate/value representation required by Li
 Required semantics:
 
 - coordinates are in Sketch-local U/V space;
+- U/V represent physical model-length coordinates in the host Sketch frame, never screen/pixel coordinates;
 - accepted authored coordinates are finite real values;
 - NaN and ±Infinity fail closed before authored model mutation;
 - no Qt, OCCT, screen/pixel or host placement types cross this boundary.
 
-No unit-display, screen transform, snap or tolerance framework is introduced.
+No unit-display UI, screen transform, snap or tolerance framework is introduced. R1-A does not encode host placement or 3D scale into Shared 2D geometry.
 
 ### 3.3 First authored primitive: Line
 
@@ -104,9 +107,11 @@ Required behavior:
 - add one valid Line and obtain/observe its stable EntityId;
 - query entity count;
 - resolve an existing Line by EntityId;
-- unknown EntityId fails cleanly;
+- erase an existing Line by EntityId;
+- lookup/erase of an unknown EntityId fails cleanly without mutation;
 - invalid Line input leaves the model unchanged;
 - adding multiple Lines produces distinct EntityIds;
+- erase followed by add in the continuing model instance does not reuse the erased Line's EntityId for the new Line;
 - equal coordinates between endpoints of different Lines are allowed and create no implicit relation.
 
 The collection must not imply profile topology, connectivity or constraint graph semantics.
@@ -124,6 +129,8 @@ Copying a model:
 - introduces no runtime/session identity.
 
 This does not integrate with DocumentSession in R1-A.
+
+R1-A intentionally does not implement semantic user Copy/Paste. The architecture distinction is only that history/state copying preserves identity, while future duplication must allocate fresh identity.
 
 ## 4. Explicit architecture boundaries
 
@@ -144,6 +151,10 @@ R1-A must not add those dependencies to public or private Sketch Core code.
 
 No Viewer token, pointer, container index or Qt object may become EntityId.
 
+The model must not introduce Origin as an ordinary authored Point entity merely to anticipate later snapping. ADR-0009 defines Sketch Origin as an intrinsic reference; its concrete representation is outside R1-A.
+
+R1-A may expose authored values directly because no constraint evaluator exists yet, but it must not create an API contract that makes future evaluated geometry architecturally impossible or forces later consumers to treat authored storage as permanent final geometry.
+
 No persistent mutation path outside Shared 2D itself is introduced because no host is integrated yet.
 
 If implementation appears to require Part, persistence, Viewer, constraints, a solver, a generalized topology framework or a universal SubElement/reference API, stop and amend/split the contract instead of expanding scope.
@@ -163,6 +174,9 @@ dynamic input
 Viewport pointer input
 Sketch presentation in Viewer
 selection
+default Select runtime tool
+cursor presentation / pick-box / crosshair
+intrinsic Origin presentation/snap
 grips
 SubElement public API
 standalone Point entity
@@ -176,7 +190,10 @@ solver / DOF
 measure / diagnostics implementation
 intersection engine
 profiles / planar regions
-Trim / Extend / Offset
+projected/reference geometry
+planar-face Sketch support
+Projection Engine integration
+Trim / Extend / Split / Offset
 Extrude / Body / Feature
 Assembly / Drawing integration
 ```
@@ -195,13 +212,18 @@ At minimum prove:
 6. Two added Lines receive different EntityIds.
 7. Lookup by existing EntityId returns the authored Line geometry.
 8. Lookup by unknown EntityId fails cleanly without mutation.
-9. Exact zero-length Line input is rejected and leaves entity count unchanged.
-10. Two different Lines may have endpoints with exactly equal coordinates without sharing authored identity or creating another authored object/relation.
-11. Copying authored Sketch model state preserves EntityIds and geometry.
-12. Mutating/replacing geometry in one copied state during semantic tests cannot mutate the other state through aliasing.
-13. Entity identity does not derive from collection index or object address.
-14. Existing SketchId, Part, persistence, Workbench, Viewer and full regression tests remain PASS.
-15. Exact-head Windows documentation/verify/build/CTest gate is PASS.
+9. Erasing an existing EntityId removes exactly that Line and leaves unrelated Lines unchanged.
+10. Erasing an unknown EntityId fails cleanly without mutation.
+11. Erase followed by adding another Line does not immediately reuse the erased EntityId in the continuing model instance.
+12. Exact zero-length Line input is rejected and leaves entity count unchanged.
+13. Two different Lines may have endpoints with exactly equal coordinates without sharing authored identity or creating another authored object/relation.
+14. Copying authored Sketch model state preserves EntityIds and geometry.
+15. Erasing/changing one copied model state during semantic tests cannot mutate the other state through aliasing.
+16. Entity identity does not derive from collection index or object address.
+17. Reordering/compacting private storage, if implementation performs it, cannot change existing EntityIds.
+18. R1-A introduces no authored Origin Point, selection state, Viewer token or host placement into Shared 2D authored entities.
+19. Existing SketchId, Part, persistence, Workbench, Viewer and full regression tests remain PASS.
+20. Exact-head Windows documentation/verify/build/CTest gate is PASS.
 
 The tests should prefer semantic behavior over exact private storage layout.
 
@@ -237,7 +259,7 @@ Slice B
 Line authored value + validation tests
 
 Slice C
-minimal Sketch model ownership/lookup/value-copy tests
+minimal Sketch model add/lookup/erase/value-copy/non-reuse tests
 
 Slice D
 internal as-built docs + full regression + exact-head gate
@@ -254,7 +276,7 @@ Reason: SK-02A introduces the first implemented Shared 2D authored entity model 
 ## Roadmap impact
 
 Roadmap milestone: R1 — Minimal Shared 2D authored core  
-Roadmap version: 1.0  
+Roadmap version: 1.1  
 Roadmap change: none; this contract implements the first bounded slice of R1.
 
 ## 9. Completion
