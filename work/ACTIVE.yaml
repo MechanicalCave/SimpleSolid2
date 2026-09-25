@@ -1,7 +1,9 @@
 version: 1
-status: completed
-active_work: "work/WS-01_PROJECT_WORKSPACE_NAVIGATION_AND_MULTI_DOCUMENT_HOST.md"
+status: active
+active_work: "work/SK-R0_SKETCHER_FOUNDATION_AND_ROADMAP.md"
 foundation_version: "1.0"
+program_roadmap: "work/SKETCH_ROADMAP.md"
+program_roadmap_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -10,23 +12,19 @@ accepted_adrs:
   - "adr/ADR-0005-part-sketch-host-identity-and-edit-context.md"
   - "adr/ADR-0006-workspace-document-workbench-and-tool-surfaces.md"
   - "adr/ADR-0007-project-workspace-shell-and-document-navigation.md"
+  - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
 next:
-  - no implementation work is active after WS-01
-  - Owner must accept the next explicit work contract before further product implementation
-  - suggested next Sketch slice is SK-02 for the minimal shared 2D authored model and first Line entity with stable entity identity
-  - Assembly/Drawing Workbenches and their New-document actions remain later explicit contracts
+  - complete SK-R0 by verifying the accepted Sketcher foundation, roadmap and reconstruction path on exact head
+  - after SK-R0 completion, R1 is the next roadmap milestone
+  - R1 production implementation requires a separate explicit Owner-accepted Work Contract
+  - no EntityId, Line, Part schema, Viewer Sketch input/presentation or solver implementation is authorized by SK-R0
 notes:
-  - WS-01 accepted and implemented on 2026-09-24.
-  - Project Workspace Shell owns Project toolbar, Dashboard, Project-level Document Tabs and Workspace/Document navigation.
-  - navigation is runtime-only and independent from the set of open DocumentSessions.
-  - multiple Part DocumentSessions may remain open while Workspace Dashboard is visible.
-  - Project toolbar remains available while editing a Part, so additional Documents can be created/opened without closing the current one.
-  - Project-level tabs route by stable DocumentId and reflect dirty state.
-  - Part CadWorkbench is now a one-active-Document editor boundary and does not know ProjectSession or own Project navigation/discovery/tabs.
-  - detach-before-destroy remains mandatory when closing Documents or Project.
-  - dedicated ws01.project_workspace_boundaries regression locks the ownership boundary.
-  - final exact-head gate #230 passed documentation verification, bootstrap verification, build and the complete CTest suite on 817d0fd25b4a234bd9a8aa99e0c6ae46f6df513a.
-  - tested WS-01 tree b095045ddb32eb7290be3cbecd2226dbad23a97a is identical to merged main commit de78c3993b7e3d5aab561a4f4bc35423f44ea743 tree.
-  - no Assembly/Drawing implementation or SK-02 geometry/constraints/solver work is active.
-  - documentation impact is satisfied and Product Browser is current.
+  - WS-01 is completed; main implementation baseline remains the tested WS-01 tree.
+  - SK-R0 is governance/architecture work only and changes no CAD product behavior.
+  - ADR-0008 freezes Shared 2D / Sketcher semantic boundaries agreed before first 2D entity implementation.
+  - work/SKETCH_ROADMAP.md v1.0 is the durable program roadmap for later small Sketch contracts.
+  - AGENTS reconstruction order now requires reading an accepted roadmap referenced by ACTIVE before the active Work Contract.
+  - roadmap milestones define staged goals/dependencies, not exact future contract count or class/API designs.
+  - R1 will target the minimal host-neutral authored 2D core only after a separate accepted contract.
+  - Assembly/Drawing implementation remains unauthorized.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
