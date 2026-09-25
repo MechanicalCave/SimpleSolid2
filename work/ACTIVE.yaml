@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-04C_END_TO_END_SELECT_CONTINUOUS_LINE_DELETE_WORKFLOW.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -15,16 +15,17 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - implement SK-04C only inside the accepted contract and contextual UI semantics
-  - run focused tests, then exact-head FULL Windows PR gate
-  - update required internal/product documentation before completion
+  - merge SK-04C only after the exact closeout HEAD passes the selected CLOSURE CI tier
+  - stop at the completed R4 checkpoint
+  - prepare a separate R5 Work Contract only when the Owner chooses to continue
+  - R5 remains unauthorized until explicit Owner acceptance
 notes:
   - Owner accepted SK-04C on 2026-09-25 after proposal CLOSURE gate #299 passed.
+  - implementation exact head 5a05ce393b0bf5ef7fc83e66244ef983504a7111 passed FULL gate #315 with Build and 52/52 CTest tests.
+  - documentation exact head 4c1a77e7f48392db2c7b17441f74af10dce2a6cd passed DOCS gate #320.
   - one SketchInteractionState is the sole semantic interaction authority for active Sketch edit.
-  - Part context switches Editor Tools and Operations to Sketch context on edit entry and restores Part context on exit/fail-closed loss.
+  - Part context switches Editor Tools and Operations to Sketch context on edit entry and restores Part context on exit or fail-closed loss.
   - Sketch Select/Line tools live above the Viewport; contextual Operations remain in the right panel; compact Command Line lives below the Viewport; global Status remains separate.
   - rectangle selection replaces semantic selection and assigns no primary in R4.
-  - Ctrl point-selection modifier is sampled on release; Ctrl-additive rectangle selection remains R5.
-  - Command Line accepts SELECT and LINE only; recognized submission returns focus to Viewport; text-focus Esc/Delete do not invoke Sketch tool actions.
-  - RMB command grammar remains out of scope.
-  - R4 completes only after SK-04C implementation, documentation and exact-head verification succeed.
+  - Command Line accepts SELECT and LINE only; coordinate input, snaps, constraints and grips remain outside R4.
+  - SK-04C completes R4; R5 is next but is not active.
