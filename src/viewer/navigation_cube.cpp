@@ -202,8 +202,8 @@ cameraForRoll(
 
     const auto next_up =
         clockwise
-            ? (*right * -1.0)
-            : *right;
+            ? *right
+            : (*right * -1.0);
 
     return cameraForOrientation(
         current,
