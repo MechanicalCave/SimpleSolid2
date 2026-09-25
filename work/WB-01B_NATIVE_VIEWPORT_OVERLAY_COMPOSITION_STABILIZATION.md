@@ -4,7 +4,7 @@
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D1 local design + implementation; stop for D2 if ownership/public Viewer contracts must change  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Architecture:** ADR-0003, ADR-0006  
+**Architecture:** ADR-0003, ADR-0006, ADR-0010  
 **Program roadmap:** `work/SKETCH_ROADMAP.md` v1.1  
 **Roadmap impact:** none; R4 remains completed and R5 remains next but inactive
 
@@ -203,3 +203,28 @@ WB-01B therefore treats the Sketch selection-box defect as solved but the ViewCu
 Completion of WB-01B restores a clean post-R4 checkpoint.
 
 It does not activate R5. Any R5 implementation still requires a separate explicit Owner-accepted Work Contract.
+
+
+## 14. Accepted D2 implementation amendment
+
+Owner accepted ADR-0010 on 2026-09-25.
+
+WB-01B is amended to implement the accepted provider-surface 3D Navigation Cube before closeout.
+
+The amended implementation must provide exactly the ADR-0010 behavior:
+
+- camera-synchronized Cube orientation;
+- six labeled interactive faces;
+- all 12 interactive edges;
+- all 8 interactive corners;
+- animated deterministic camera transitions;
+- adjacent-view arrows for exact 90-degree face changes;
+- roll arrows for exact ±90-degree roll;
+- fixed Home = Top-Front-Right ISO + Fit All + Orthographic;
+- Orthographic-only Cube navigation;
+- no Cube drag-orbit;
+- no generic overlay framework.
+
+The existing QWidget ViewCube may be used only as donor/reference during migration and must not remain a competing visible authority when the provider-surface Cube is active.
+
+Required closeout evidence remains exact-head FULL CI plus explicit manual Windows visual verification. R5 remains inactive.
