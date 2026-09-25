@@ -17,7 +17,8 @@ The target currently contains:
 - opaque model-local `EntityId`;
 - canonical decimal identity transport for `EntityId` and `EntityIdCursor`;
 - the first authored primitive, `Line`;
-- the value-semantic `SketchModel` plus validated state/restore transfer.
+- the value-semantic `SketchModel` plus validated state/restore transfer;
+- host-neutral runtime `SketchInteractionState` for Select/Line tool semantics and transient EntityId selection.
 
 Each persistent Part-hosted Sketch now embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
 
@@ -84,6 +85,28 @@ restore(state)
 
 `erase` removes exactly the addressed Line and returns false for an invalid or unknown ID. Storage compaction does not alter the identities of remaining Lines.
 
+<!-- section-id: internal.shared-2d.interaction -->
+## Sketch interaction state
+
+SK-04A adds one host-neutral runtime interaction authority inside Shared 2D. It is not authored Sketch state and is never persisted.
+
+The default tool is `Select`. Activating `Line` enters `AwaitFirstPoint`; accepting the first finite point establishes a runtime anchor and enters `AwaitNextPoint`. A subsequent distinct finite point produces a `LineSegmentIntent`, but the state does not execute Part/Application commands itself.
+
+The Line commit handoff is explicitly two-phase:
+
+```text
+runtime accepts candidate endpoint
+→ pending LineSegmentIntent
+→ host executes semantic AddSketchLineCommand
+→ host acknowledges success/failure
+```
+
+Only successful acknowledgement advances the continuous-Line anchor. Failure preserves the previous anchor. Exact-zero candidate segments produce no request and introduce no epsilon policy.
+
+Preview intent is transient and exists only while Line has an anchor and no unresolved commit request. Finish/Cancel return to Select and discard only uncommitted runtime state. Esc is hierarchical: AwaitNextPoint → AwaitFirstPoint → Select.
+
+The same interaction state owns transient semantic Sketch selection as `EntityId` values plus optional primary identity. Replace/toggle/clear/replace-many never store Viewer tokens. Reconciliation can prune identities that no longer exist in the current `SketchModel` without authored mutation.
+
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
@@ -91,8 +114,8 @@ The current Shared 2D / Part integration now has R3 runtime presentation/input a
 
 The current product still does not implement:
 
-- semantic Sketch entity selection or rectangle selection;
-- interactive Line creation/Delete;
+- Viewport/Workbench wiring for semantic Sketch entity selection or rectangle selection;
+- end-to-end interactive Line creation and Delete UI;
 - intrinsic Origin snapping;
 - grips/direct manipulation;
 - Circle, Arc or construction geometry;
@@ -112,5 +135,7 @@ Those capabilities are governed by the accepted Sketch roadmap and require later
 SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part ownership, value-copy isolation, semantic Add/Erase commands, live Undo/Redo identity high-water, schema-v3 persistence, v1/v2 backward readability and Save→Close→Reopen identity/geometry preservation.
 
 SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for neutral authored/preview presentation contracts, U/V↔3D and ray→U/V mapping, runtime token bindings, fail-closed active-Sketch lifecycle, routing/cursor state and real Qt/OCCT spatial input before/after orbit.
+
+SK-04A adds `sk04a.sketch_interaction_state` and `sk04a.line_commit_protocol` coverage for Select/Line runtime semantics, explicit request/acknowledgement, continuous anchor progression, exact-zero suppression, Finish/Cancel/Esc behavior, transient EntityId selection and one-segment-per-Undo integration with `DocumentSession`.
 
 The repository Windows FULL gate builds the exact implementation head and runs the complete CTest suite.

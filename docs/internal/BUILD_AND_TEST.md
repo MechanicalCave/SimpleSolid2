@@ -44,7 +44,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 45 tests.
+The compiled CTest suite contains 48 tests.
 
 Project/Hub, PART-01 and WB-01 coverage remains active.
 
@@ -57,6 +57,8 @@ SK-02A adds `sk02a.shared_2d_core` and `sk02a.shared_2d_boundaries` coverage for
 SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part-owned Shared 2D value state, Add/Erase command history, live identity high-water, schema-v3 strict validation, v1/v2 backward readability and Save/Close/Reopen identity preservation.
 
 SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for provider-neutral authored/preview scenes, Sketch-frame U/V↔3D conversion, ray→U/V failure behavior, active-Sketch presentation/token bindings, preview non-mutation, fail-closed runtime lifecycle, exclusive primary routing, cursor modes and real Qt/OCCT spatial input before/after camera orbit.
+
+SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage for host-neutral Select/Line state, pending Line request acknowledgement, Finish/Cancel/Esc semantics, transient EntityId selection/reconciliation, atomic all-or-nothing multi-entity Delete, original-identity Undo/Redo restoration and one committed Line segment per history entry.
 
 WB-01A adds or extends deterministic coverage for:
 
