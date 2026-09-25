@@ -180,7 +180,6 @@ add_executable(simplesolid2
     ui/project_creation_dialog.cpp
     ui/project_hub_window.cpp
     ui/project_workspace_shell.cpp
-    ui/view_cube_widget.cpp
     ui/workspace_location_dialog.cpp
 )
 
