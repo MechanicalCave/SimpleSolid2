@@ -840,3 +840,20 @@ add_test(
     NAME sk04a.sketch_interaction_state
     COMMAND sk04a_sketch_interaction_state_test
 )
+
+
+add_executable(sk04a_batch_delete_test
+    sk04a_batch_delete_test.cpp
+)
+
+target_link_libraries(sk04a_batch_delete_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(sk04a_batch_delete_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk04a.batch_delete
+    COMMAND sk04a_batch_delete_test
+)
