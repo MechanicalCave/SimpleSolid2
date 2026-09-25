@@ -154,7 +154,7 @@ function Test-SuccessfulFullGate {
             }
         }
     } catch {
-        Write-Warning "Unable to verify prior FULL evidence for $Sha: $($_.Exception.Message)"
+        Write-Warning "Unable to verify prior FULL evidence for ${Sha}: $($_.Exception.Message)"
         return $false
     }
 
