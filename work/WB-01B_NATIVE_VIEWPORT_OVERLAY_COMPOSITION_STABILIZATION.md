@@ -220,11 +220,27 @@ The amended implementation must provide exactly the ADR-0010 behavior:
 - animated deterministic camera transitions;
 - adjacent-view arrows for exact 90-degree face changes;
 - roll arrows for exact ±90-degree roll;
-- fixed Home = Top-Front-Right ISO + Fit All + Orthographic;
-- Orthographic-only Cube navigation;
+- fixed Home = Top-Front-Right ISO + Fit All while preserving projection;
+- independent Orthographic/Perspective projection selected by a provider-surface control next to the Cube;
 - no Cube drag-orbit;
 - no generic overlay framework.
 
 The existing QWidget ViewCube may be used only as donor/reference during migration and must not remain a competing visible authority when the provider-surface Cube is active.
 
 Required closeout evidence remains exact-head FULL CI plus explicit manual Windows visual verification. R5 remains inactive.
+
+
+## 15. Manual pass and accepted projection amendment
+
+Exact-head `53a291fbebf1ab2e1ee8205f2f851e8542dee677` passed Windows FULL gate #370 and Owner manual verification of the provider-surface Navigation Cube. The Owner reported the Cube working very well, including the new in-surface composition path.
+
+During that manual verification the Owner clarified that the earlier "Orthographic-only" statement referred to the Cube presentation, not to removal of Perspective viewing for the model.
+
+Owner accepted the ADR-0010 amendment on 2026-09-25:
+
+- Cube orientation and projection are independent;
+- face/edge/corner/adjacent/roll actions preserve current projection;
+- Home = Top-Front-Right ISO + Fit All and preserves current projection;
+- a separate provider-surface `ORTHO/PERSP` toggle is placed next to the Cube and changes only projection.
+
+This amendment is bounded to the existing WB-01B Navigation Cube implementation. R5 remains inactive.
