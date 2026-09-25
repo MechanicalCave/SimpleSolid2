@@ -63,7 +63,7 @@ The following are accepted architecture and must be read from ADR-0008 rather th
 
 ### R0 — Foundation freeze and durable roadmap
 
-**Status:** active under `work/SK-R0_SKETCHER_FOUNDATION_AND_ROADMAP.md`
+**Status:** completed
 
 Goal:
 
@@ -249,11 +249,11 @@ These topics require explicit later evidence and must not be silently frozen by 
 Current:
 
 ```text
-R0  in progress
-R1  not started
+R0  completed
+R1  next — not started
 R2  not started
 R3  not started
 R4+ not started
 ```
 
-The next implementation milestone after successful R0 completion is R1. R1 must begin with a separate accepted Work Contract; this roadmap does not itself authorize production code changes.
+R1 is the next implementation milestone. It must begin with a separate explicit Owner-accepted Work Contract; this roadmap does not itself authorize production code changes.
