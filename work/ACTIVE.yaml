@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md"
+status: active
+active_work: "work/SK-04A_SKETCH_INTERACTION_STATE_AND_BATCH_DELETE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -15,12 +15,16 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - review proposed work/SK-04A_SKETCH_INTERACTION_STATE_AND_BATCH_DELETE.md
-  - SK-04A remains inactive until explicit Owner acceptance
-  - SK-04B and SK-04C remain future R4 contracts
+  - implement SK-04A host-neutral Sketch interaction state
+  - implement atomic EraseSketchEntitiesCommand with one-transaction/one-Undo semantics
+  - add focused semantic/history/boundary tests
+  - finish internal as-built docs, FULL implementation gate and completion bookkeeping
 notes:
-  - R3 / SK-03A is completed and merged as be7abbbb97f59bfbb4d35cc714eaadc1576b5bae.
-  - Owner accepted the R4 delivery direction and A/B/C decomposition on 2026-09-25.
-  - SK-04A proposal freezes no production change until explicit Work Contract acceptance.
-  - proposed R4 decisions include one segment per Undo, atomic batch Delete, Ctrl-toggle, Window/Crossing drag direction, hierarchical Esc and Cancel without rollback of committed Lines.
-  - R4 remains incomplete and unauthorized for production implementation.
+  - SK-04A was explicitly Owner-accepted on 2026-09-25 and is the active bounded R4 Work Contract.
+  - R4 is active but remains incomplete after SK-04A; SK-04B and SK-04C require separate Owner-accepted Work Contracts.
+  - one committed Line segment equals one AddSketchLineCommand and one Undo entry.
+  - Line state advances its continuous anchor only after host commit success acknowledgement.
+  - explicit Cancel/Finish never roll back already committed Lines.
+  - Sketch selection stores EntityId only; Viewer PresentationToken remains runtime presentation transport.
+  - batch Delete validates the whole target set before mutation and commits atomically as one Undo entry.
+  - Ctrl-toggle and Left-to-Right Window / Right-to-Left Crossing are accepted R4 interaction semantics for later adapters.
