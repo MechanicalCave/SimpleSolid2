@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -15,19 +15,18 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - implement SK-02B Slice A: embed one value-semantic Shared 2D SketchModel in each PartSketch
-  - then implement durable EntityId transport and live identity high-water semantics
-  - then AddSketchLine / EraseSketchEntity commands with Undo/Redo/dirty behavior
-  - then Part schema v3 with v1/v2 backward readability and Save-Close-Reopen proof
-  - finish with as-built docs, completion bookkeeping and final exact-head Windows gate
+  - SK-02B / R2 is complete after final exact-head PR verification and merge
+  - R3 is the next Sketch roadmap milestone: provider-neutral Sketch presentation and tool-input boundary
+  - R3 requires a separate explicit Owner-accepted Work Contract before any production mutation
+  - no Viewer Sketch presentation/input, Select/cursor workflow, constraints, solver, projection or profile work is active
 notes:
-  - SK-02B is Owner-accepted on 2026-09-25 and is the active bounded R2 Work Contract.
-  - R2 integrates the completed Shared 2D model into Part lifecycle without moving Part/persistence/application semantics into Sketch Core.
-  - EntityId remains model-local; outside one SketchModel the semantic address requires SketchId plus EntityId.
-  - live Undo/Redo history must not rewind a continuing Sketch identity allocation high-water.
-  - technical identity high-water alone must not create false user-visible dirty state.
-  - Part schema v3 is planned; v1/v2 remain readable and are not rewritten until Save.
-  - Viewer/UI/selection/snapping/constraints/solver/projection remain out of scope.
+  - R2 embeds Shared 2D SketchModel by value in PartSketch and adds semantic Add/Erase lifecycle.
+  - Part schema v3 persists canonical model-local EntityIds, next_entity_id and authored Lines.
+  - schema v1/v2 remain readable; successful Save publishes schema v3.
+  - DocumentSession preserves per-Sketch live identity high-water across Undo/Redo without making cursor-only advancement user-visible dirty state.
+  - final exact-head Windows docs/verify/build/CTest gate is required before merge.
+  - ADR-0009 remains authoritative for later Origin, selection, cursor and interaction grammar.
+  - R3 remains unauthorized until a separate accepted Work Contract exists.
   - SS1 remains donor-only and is not architecture authority.
   - Assembly/Drawing implementation remains unauthorized.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.

@@ -293,9 +293,9 @@ Current:
 ```text
 R0  completed
 R1  completed
-R2  active — SK-02B
-R3  not started
+R2  completed
+R3  next — not started
 R4+ not started
 ```
 
-R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is active under the explicit Owner-accepted `work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md` Work Contract and remains bounded to that contract.
+R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is completed by `work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md`. R3 is next and remains unauthorized until a separate explicit Owner-accepted Work Contract is activated.

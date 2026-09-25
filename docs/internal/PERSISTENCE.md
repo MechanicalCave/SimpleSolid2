@@ -57,7 +57,7 @@ The current format identifier is `simplesolid.native-document`; container versio
 
 Shared persistence owns ZIP recognition, bounded parsing, common manifest recognition and container safety. It does not interpret Part engineering meaning.
 
-The Part domain owns `authored/document.json`. Current Part domain schema version 2 persists:
+The Part domain owns `authored/document.json`. Current Part domain schema version 3 persists:
 
 - Number;
 - Title;
@@ -66,9 +66,11 @@ The Part domain owns `authored/document.json`. Current Part domain schema versio
 - built-in Origin visibility;
 - the ordered collection of Part-hosted Sketch records.
 
-Each SK-01 Sketch record persists a stable SketchId, built-in Origin-plane support, explicit SketchPlacement (origin plus local U/V axes) and persistent visibility. The Sketch is embedded authored Part state; it is not a standalone Document or file.
+Each Sketch record persists stable SketchId, built-in Origin-plane support, explicit SketchPlacement (origin plus local U/V axes), visibility and its embedded Shared 2D model.
 
-Part schema version 1 remains readable. It restores an empty Sketch collection and opening it does not rewrite the file. A later successful Save writes current schema v2.
+The schema-v3 model contains `next_entity_id` as a canonical positive unsigned-decimal string and a `lines` array. Each Line stores its canonical model-local EntityId string plus finite two-component Start/End U/V arrays. EntityId strings are deliberately not JSON numbers.
+
+Part schemas v1 and v2 remain readable. V1 restores an empty Sketch collection. V2 restores the existing host Sketch records with empty Shared 2D models and an initial EntityId cursor. Opening old schemas does not rewrite the file. A later successful Save writes current schema v3.
 
 DocumentId is stored only in the common manifest. ProjectId is not embedded in the Document. Workspace membership remains physical/runtime context.
 
@@ -133,6 +135,8 @@ A rename or move inside the Workspace does not change DocumentId.
 
 If multiple native Part files declare one DocumentId, discovery records an identity conflict containing all relative paths and resolution/open by that DocumentId fails closed. No automatic ID rewrite is performed.
 
+Schema-v3 Sketch model loading additionally rejects malformed/non-canonical identity strings, duplicate EntityIds within one SketchModel, EntityIds greater than or equal to `next_entity_id`, invalid finite coordinates and exact-zero Lines. The same local EntityId value in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
+
 Container v1 rejects unsafe or ambiguous input, including unsupported container versions, ZIP64, encrypted/unsupported entries, duplicate entry names, unsafe entry paths, missing mandatory entries, oversized content, invalid mandatory JSON and unsupported Part domain schemas.
 
 A `.ss2part` whose manifest declares another Document kind fails closed.
@@ -142,7 +146,7 @@ A `.ss2part` whose manifest declares another Document kind fails closed.
 <!-- section-id: internal.persistence.non-goals -->
 ## Current non-goals
 
-The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch 2D entity/constraint persistence, modeled geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
+The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch constraints/dimensions/solver state, modeled solid geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
 
 The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented by PERSIST-01.
 

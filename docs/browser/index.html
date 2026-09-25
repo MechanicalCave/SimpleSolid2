@@ -241,7 +241,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 37 tests.
+The compiled CTest suite contains 40 tests.
 
 Project/Hub, PART-01 and WB-01 coverage remains active.
 
@@ -250,6 +250,8 @@ PERSIST-01 adds `persist01.native_document_container` coverage for the native ZI
 SK-01 adds `sk01.part_sketch_host` and `sk01.workbench_sketch_host` coverage for Origin-plane support validation, stable SketchId creation, one-entry Undo/Redo restoration, Part schema v2 round-trip plus schema-v1 read compatibility, Sketch Tree presentation, Sketch-plane grid/camera alignment for XY/XZ/YZ, free runtime navigation without authored mutation, Finish Sketch and Save/Close/Reopen identity preservation.
 
 SK-02A adds `sk02a.shared_2d_core` and `sk02a.shared_2d_boundaries` coverage for the host-neutral authored 2D core: finite Sketch-local U/V values, opaque stable model-local EntityId, exact-zero Line rejection without an epsilon policy, equal-coordinate-but-independent endpoints, add/find/erase semantics, identity non-reuse in a continuing model instance, independent value-copy state and dependency-boundary enforcement.
+
+SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part-owned Shared 2D value state, Add/Erase command history, live identity high-water, schema-v3 strict validation, v1/v2 backward readability and Save/Close/Reopen identity preservation.
 
 WB-01A adds or extends deterministic coverage for:
 
@@ -545,11 +547,11 @@ Operational documentation rules are defined in `governance/DOCUMENTATION.md`.
 <!-- section-id: internal.part-documents.model -->
 ## Current model
 
-The current `PartDocument` is persistent and can host durable empty Sketch objects, but it still contains no Sketch 2D entities, Body, Feature or modeled solid geometry.
+The current `PartDocument` is persistent and hosts durable Part Sketch objects with embedded Shared 2D authored Line geometry. It still contains no Body, Feature or modeled solid B-Rep.
 
 Its authored state consists of stable `DocumentId`, common Document Properties, persistent presentation state for the seven built-in Origin references and an ordered collection of Part-hosted Sketch records.
 
-Each SK-01 Sketch has stable `SketchId`, semantic support restricted to XY/XZ/YZ built-in Origin planes, explicit `SketchPlacement` and persistent visibility. Part owns these host semantics; the future reusable Sketch Core does not own Part support or persistence.
+Each Part Sketch has stable `SketchId`, semantic support restricted to XY/XZ/YZ built-in Origin planes, explicit `SketchPlacement`, persistent visibility and one value-owned `sketch::SketchModel`. Part owns host support/placement/visibility/persistence semantics; Shared 2D owns the embedded entity identity and authored 2D geometry.
 
 `DocumentRevision` is a technical monotonic counter for successful semantic mutations within the loaded lifecycle.
 
@@ -577,9 +579,11 @@ Qt / caller
 → atomic domain commit
 ```
 
-Current commands include common Document Properties, batch built-in reference visibility and `CreatePartSketchCommand`.
+Current commands include common Document Properties, batch built-in reference visibility, `CreatePartSketchCommand`, `AddSketchLineCommand` and `EraseSketchEntityCommand`.
 
-Sketch creation revalidates that support is XY/XZ/YZ Origin plane, derives its initial placement, allocates a stable SketchId and commits the new hosted Sketch as one transaction/Undo entry. Undo removes that authored Sketch; Redo restores the same SketchId and authored state.
+Sketch creation revalidates that support is XY/XZ/YZ Origin plane, derives its initial placement, allocates a stable SketchId and commits the new hosted Sketch as one transaction/Undo entry. Add Line targets `SketchId` plus Start/End and returns the allocated model-local `EntityId`. Erase targets `SketchId + EntityId` and fails closed when either target is stale or unknown.
+
+Each successful Add or Erase is one Part transaction, one history entry and one revision increment. Undo restores semantic authored state; Redo reapplies it. A session-local cursor table keyed by SketchId preserves the maximum observed EntityId allocation cursor even when history temporarily rewinds geometry or removes/recreates the Sketch through Undo/Redo.
 
 A multi-selection Show/Hide is one semantic command, one successful revision increment and one Undo entry.
 
@@ -601,11 +605,13 @@ Closing and reopening creates fresh runtime history.
 
 The native extension is `.ss2part`.
 
-Current Part domain schema version 2 stores authored identity/properties, a compact built-in Origin visibility mask and the hosted Sketch collection. Each Sketch record stores SketchId, Origin-plane support, explicit placement and visibility.
+Current Part domain schema version 3 stores authored identity/properties, a compact built-in Origin visibility mask and the hosted Sketch collection. Each Sketch record stores SketchId, Origin-plane support, explicit placement, visibility and an embedded Shared 2D model.
+
+The schema-v3 model stores canonical decimal `next_entity_id` plus ordered Line records containing canonical model-local EntityId and finite Start/End U/V coordinates. Duplicate IDs, non-canonical IDs, IDs outside the cursor range and invalid Line geometry fail closed.
 
 It does not serialize ProjectId, DocumentSession, Undo/Redo, active Sketch edit context, camera, active selection, Qt objects, Viewer objects or OCCT handles.
 
-Part schema version 1 remains readable as an empty Sketch collection. Opening v1 does not rewrite the file. A later successful Save publishes current schema v2.
+Part schema versions 1 and 2 remain readable. Schema v1 restores no Sketches; v2 restores its hosted Sketches with empty Shared 2D models. Opening either does not rewrite the file. A later successful Save publishes current schema v3.
 
 Save uses shared staged atomic-file persistence. The save checkpoint changes only after a successful write/replace.
 
@@ -621,9 +627,9 @@ When a resolved Part is already open, a second Open request returns the existing
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The shared CAD Workbench and Viewer can present the Part Origin, reference grid and the runtime edit context of an empty Part-hosted Sketch.
+The Part model now durably owns Shared 2D Line entities, but the shared CAD Workbench and Viewer still present only the Part Origin, reference grid and Sketch edit context; interactive authored-Line presentation/editing belongs to later roadmap milestones.
 
-SK-01 does not yet provide Sketch entities, constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, geometry evaluation, recompute graph, modeled topology, persistent topology naming or Material model.
+The current product still does not provide interactive Sketch selection/drawing, constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming or Material model.
 
 The Viewer is not a second model: no OCCT object or Viewer token is durable Part/Sketch identity, support or authored state.
 </script>
@@ -687,7 +693,7 @@ The current format identifier is `simplesolid.native-document`; container versio
 
 Shared persistence owns ZIP recognition, bounded parsing, common manifest recognition and container safety. It does not interpret Part engineering meaning.
 
-The Part domain owns `authored/document.json`. Current Part domain schema version 2 persists:
+The Part domain owns `authored/document.json`. Current Part domain schema version 3 persists:
 
 - Number;
 - Title;
@@ -696,9 +702,11 @@ The Part domain owns `authored/document.json`. Current Part domain schema versio
 - built-in Origin visibility;
 - the ordered collection of Part-hosted Sketch records.
 
-Each SK-01 Sketch record persists a stable SketchId, built-in Origin-plane support, explicit SketchPlacement (origin plus local U/V axes) and persistent visibility. The Sketch is embedded authored Part state; it is not a standalone Document or file.
+Each Sketch record persists stable SketchId, built-in Origin-plane support, explicit SketchPlacement (origin plus local U/V axes), visibility and its embedded Shared 2D model.
 
-Part schema version 1 remains readable. It restores an empty Sketch collection and opening it does not rewrite the file. A later successful Save writes current schema v2.
+The schema-v3 model contains `next_entity_id` as a canonical positive unsigned-decimal string and a `lines` array. Each Line stores its canonical model-local EntityId string plus finite two-component Start/End U/V arrays. EntityId strings are deliberately not JSON numbers.
+
+Part schemas v1 and v2 remain readable. V1 restores an empty Sketch collection. V2 restores the existing host Sketch records with empty Shared 2D models and an initial EntityId cursor. Opening old schemas does not rewrite the file. A later successful Save writes current schema v3.
 
 DocumentId is stored only in the common manifest. ProjectId is not embedded in the Document. Workspace membership remains physical/runtime context.
 
@@ -763,6 +771,8 @@ A rename or move inside the Workspace does not change DocumentId.
 
 If multiple native Part files declare one DocumentId, discovery records an identity conflict containing all relative paths and resolution/open by that DocumentId fails closed. No automatic ID rewrite is performed.
 
+Schema-v3 Sketch model loading additionally rejects malformed/non-canonical identity strings, duplicate EntityIds within one SketchModel, EntityIds greater than or equal to `next_entity_id`, invalid finite coordinates and exact-zero Lines. The same local EntityId value in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
+
 Container v1 rejects unsafe or ambiguous input, including unsupported container versions, ZIP64, encrypted/unsupported entries, duplicate entry names, unsafe entry paths, missing mandatory entries, oversized content, invalid mandatory JSON and unsupported Part domain schemas.
 
 A `.ss2part` whose manifest declares another Document kind fails closed.
@@ -772,7 +782,7 @@ A `.ss2part` whose manifest declares another Document kind fails closed.
 <!-- section-id: internal.persistence.non-goals -->
 ## Current non-goals
 
-The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch 2D entity/constraint persistence, modeled geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
+The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch constraints/dimensions/solver state, modeled solid geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
 
 The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented by PERSIST-01.
 
@@ -877,10 +887,11 @@ The target currently contains:
 - durable host-level `SketchId`;
 - Sketch-local `Point2` coordinate values;
 - opaque model-local `EntityId`;
+- canonical decimal identity transport for `EntityId` and `EntityIdCursor`;
 - the first authored primitive, `Line`;
-- the minimal value-semantic `SketchModel`.
+- the value-semantic `SketchModel` plus validated state/restore transfer.
 
-It has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
+Each persistent Part-hosted Sketch now embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
 
 <!-- section-id: internal.shared-2d.coordinates -->
 ## Sketch-local coordinates
@@ -896,13 +907,15 @@ The host-specific mapping from local U/V into 3D remains outside Shared 2D.
 
 `EntityId` is an opaque stable identity scoped to one `SketchModel`.
 
-The default-constructed value is invalid. Valid IDs are allocated by `SketchModel`; there is intentionally no public numeric accessor or persistence representation in SK-02A.
+The default-constructed `EntityId` is invalid. Valid IDs are allocated by `SketchModel`.
 
-Current allocation is monotonic within the continuing model instance. Erasing an entity does not make its ID immediately available for a different entity.
+R2 adds canonical unsigned-decimal transport without exposing numeric arithmetic as CAD semantics: `EntityId::parse/serialized` and `EntityIdCursor::parse/serialized` accept canonical positive decimal strings only. Leading-zero, zero, non-decimal and overflow values fail closed.
 
-Ordinary value-copy of `SketchModel` preserves existing EntityIds and allocator state while copying the authored storage by value. Mutating one copied state therefore does not alias another copied state.
+Allocation is monotonic. `EntityIdCursor` records the next allocatable identity high-water. Erasing an entity never lowers it. `SketchModel::state/restore` validates uniqueness, geometry and the invariant that every stored EntityId is lower than the cursor.
 
-This implementation detail is not a persistence contract. Future save/reopen and Undo/Redo integration must preserve the semantic identity rules from ADR-0009.
+Ordinary value-copy preserves EntityIds and cursor state while copying authored storage by value. Mutating one copied state therefore does not alias another copied state.
+
+Semantic `SketchModel` equality intentionally compares authored entity content rather than the technical cursor. This allows Undo to return to a saved authored state without becoming falsely dirty solely because the live identity lineage has advanced.
 
 <!-- section-id: internal.shared-2d.line -->
 ## Authored Line
@@ -931,6 +944,10 @@ addLine(start, end)
 findLine(EntityId)
 erase(EntityId)
 entityCount()
+entityIdCursor()
+preserveEntityIdCursor(cursor)
+state()
+restore(state)
 ```
 
 `addLine` validates finite coordinates and exact non-zero length before mutation. Invalid geometry is rejected with `std::invalid_argument`.
@@ -942,10 +959,8 @@ entityCount()
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
-The current Shared 2D core does not yet implement:
+The current Shared 2D / Part integration still does not implement:
 
-- Part-host embedding of authored entities or Part persistence schema changes;
-- DocumentSession commands or host Undo/Redo;
 - intrinsic Origin runtime presentation or snapping;
 - Viewer presentation, pointer-to-plane input, Select or cursor behavior;
 - grips/direct manipulation;
@@ -962,6 +977,8 @@ Those capabilities are governed by the accepted Sketch roadmap and require later
 `sk02a.shared_2d_core` proves authored Line validation, identity, lookup/erase, non-reuse, equal-coordinate endpoint independence and value-copy isolation.
 
 `sk02a.shared_2d_boundaries` guards the Shared 2D source tree against accidental dependencies on Part, Application, Persistence, Viewer, Qt and OCCT/provider tokens.
+
+SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part ownership, value-copy isolation, semantic Add/Erase commands, live Undo/Redo identity high-water, schema-v3 persistence, v1/v2 backward readability and Save→Close→Reopen identity/geometry preservation.
 
 The repository Windows gate builds the exact PR head and runs the complete CTest suite.
 </script>

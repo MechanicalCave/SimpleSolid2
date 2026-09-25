@@ -15,10 +15,11 @@ The target currently contains:
 - durable host-level `SketchId`;
 - Sketch-local `Point2` coordinate values;
 - opaque model-local `EntityId`;
+- canonical decimal identity transport for `EntityId` and `EntityIdCursor`;
 - the first authored primitive, `Line`;
-- the minimal value-semantic `SketchModel`.
+- the value-semantic `SketchModel` plus validated state/restore transfer.
 
-It has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
+Each persistent Part-hosted Sketch now embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
 
 <!-- section-id: internal.shared-2d.coordinates -->
 ## Sketch-local coordinates
@@ -34,13 +35,15 @@ The host-specific mapping from local U/V into 3D remains outside Shared 2D.
 
 `EntityId` is an opaque stable identity scoped to one `SketchModel`.
 
-The default-constructed value is invalid. Valid IDs are allocated by `SketchModel`; there is intentionally no public numeric accessor or persistence representation in SK-02A.
+The default-constructed `EntityId` is invalid. Valid IDs are allocated by `SketchModel`.
 
-Current allocation is monotonic within the continuing model instance. Erasing an entity does not make its ID immediately available for a different entity.
+R2 adds canonical unsigned-decimal transport without exposing numeric arithmetic as CAD semantics: `EntityId::parse/serialized` and `EntityIdCursor::parse/serialized` accept canonical positive decimal strings only. Leading-zero, zero, non-decimal and overflow values fail closed.
 
-Ordinary value-copy of `SketchModel` preserves existing EntityIds and allocator state while copying the authored storage by value. Mutating one copied state therefore does not alias another copied state.
+Allocation is monotonic. `EntityIdCursor` records the next allocatable identity high-water. Erasing an entity never lowers it. `SketchModel::state/restore` validates uniqueness, geometry and the invariant that every stored EntityId is lower than the cursor.
 
-This implementation detail is not a persistence contract. Future save/reopen and Undo/Redo integration must preserve the semantic identity rules from ADR-0009.
+Ordinary value-copy preserves EntityIds and cursor state while copying authored storage by value. Mutating one copied state therefore does not alias another copied state.
+
+Semantic `SketchModel` equality intentionally compares authored entity content rather than the technical cursor. This allows Undo to return to a saved authored state without becoming falsely dirty solely because the live identity lineage has advanced.
 
 <!-- section-id: internal.shared-2d.line -->
 ## Authored Line
@@ -69,6 +72,10 @@ addLine(start, end)
 findLine(EntityId)
 erase(EntityId)
 entityCount()
+entityIdCursor()
+preserveEntityIdCursor(cursor)
+state()
+restore(state)
 ```
 
 `addLine` validates finite coordinates and exact non-zero length before mutation. Invalid geometry is rejected with `std::invalid_argument`.
@@ -80,10 +87,8 @@ entityCount()
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
-The current Shared 2D core does not yet implement:
+The current Shared 2D / Part integration still does not implement:
 
-- Part-host embedding of authored entities or Part persistence schema changes;
-- DocumentSession commands or host Undo/Redo;
 - intrinsic Origin runtime presentation or snapping;
 - Viewer presentation, pointer-to-plane input, Select or cursor behavior;
 - grips/direct manipulation;
@@ -100,5 +105,7 @@ Those capabilities are governed by the accepted Sketch roadmap and require later
 `sk02a.shared_2d_core` proves authored Line validation, identity, lookup/erase, non-reuse, equal-coordinate endpoint independence and value-copy isolation.
 
 `sk02a.shared_2d_boundaries` guards the Shared 2D source tree against accidental dependencies on Part, Application, Persistence, Viewer, Qt and OCCT/provider tokens.
+
+SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part ownership, value-copy isolation, semantic Add/Erase commands, live Undo/Redo identity high-water, schema-v3 persistence, v1/v2 backward readability and Save→Close→Reopen identity/geometry preservation.
 
 The repository Windows gate builds the exact PR head and runs the complete CTest suite.

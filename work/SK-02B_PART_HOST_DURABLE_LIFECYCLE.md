@@ -1,6 +1,6 @@
 # SK-02B — Part Host Integration and Durable Sketch Lifecycle
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -485,3 +485,34 @@ SK-02B completes only when:
 - completion bookkeeping reflects the tested implementation.
 
 Completion does not activate R3 Viewer/input/presentation work. R3 requires a separate explicit Owner-accepted Work Contract.
+
+
+## 10. Completion record
+
+SK-02B is complete.
+
+Implemented:
+
+- each persistent PartSketch owns one value-semantic Shared 2D SketchModel;
+- canonical decimal EntityId and EntityIdCursor transport with no public numeric identity arithmetic;
+- validated SketchModel state/restore transfer;
+- session-local per-Sketch identity high-water that is not rewound by Undo/Redo history;
+- AddSketchLine and EraseSketchEntity semantic commands through the existing Part transaction/history path;
+- semantic dirty-state behavior that ignores high-water-only advancement;
+- Part schema v3 persistence of next_entity_id and authored Lines;
+- strict persisted model validation;
+- schema-v1 and schema-v2 backward readability with Save migration to v3;
+- Save → Close → Reopen preservation of SketchId, EntityId, authored geometry and persisted non-reuse cursor;
+- focused R2 semantic/persistence regression tests.
+
+Deliberately not implemented:
+
+- Viewer presentation or pointer-to-Sketch input;
+- Select/rectangle selection/cursor UX;
+- interactive continuous Line tooling;
+- Origin runtime snap;
+- grips, Object Snap, inference, constraints/solver, profiles or projection.
+
+Final exact-head Windows documentation/verify/build/CTest verification is required on the completion head before merge.
+
+Completion authorizes no R3 production mutation. R3 requires a separate explicit Owner-accepted Work Contract.
