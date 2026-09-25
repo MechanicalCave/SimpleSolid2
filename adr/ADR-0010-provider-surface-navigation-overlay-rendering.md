@@ -71,7 +71,7 @@ All six faces are interactive and labeled:
 - Top
 - Bottom
 
-Clicking a face animates the camera to the corresponding orthographic face view.
+Clicking a face animates the camera to the corresponding canonical face orientation while preserving the current projection mode.
 
 The opposite faces remain reachable naturally as the Cube rotates; they are not hidden semantically just because they are initially on the far side.
 
@@ -125,7 +125,7 @@ Top-Front-Right isometric orientation
 +
 Fit All
 +
-Orthographic projection
+preserve current projection
 ```
 
 Home is fixed in this stage. User-defined Home views are out of scope.
@@ -140,11 +140,13 @@ Exact timing/easing is an implementation detail as long as the final camera stat
 
 ### Projection policy
 
-Navigation Cube actions always operate in **Orthographic** projection.
+Camera orientation and camera projection are independent.
 
-The old Cube projection-toggle action is removed.
+Face, edge, corner, adjacent-view, roll and Home actions preserve the current projection mode. A user in Perspective remains in Perspective after Navigation Cube orientation actions; a user in Orthographic remains in Orthographic.
 
-Perspective is not exposed through the Navigation Cube in this stage.
+A separate provider-surface `ORTHO/PERSP` control is presented next to the Cube. It changes only the camera projection and does not change view direction, target, up orientation or fit.
+
+The Cube itself remains an orientation indicator/manipulator and does not need a perspective-distorted visual representation.
 
 ### No Cube drag-orbit
 
@@ -210,7 +212,6 @@ This ADR does not authorize:
 - changing Sketch selection semantics;
 - changing camera persistence policy;
 - free drag-orbit on the Cube;
-- Perspective controls on the Cube;
 - user-defined Home orientation;
 - configurable Cube skins/themes beyond what is needed for legibility;
 - navigation compass/ring features beyond the explicitly listed 90-degree arrows.
@@ -254,7 +255,9 @@ An implementing Work Contract must prove:
 - opposite/back-side orientations are reachable;
 - adjacent-view arrows produce exact 90-degree camera changes;
 - roll arrows produce exact ±90-degree roll while preserving viewing direction;
-- Home produces exact Top-Front-Right ISO + Fit All + Orthographic;
+- Home produces exact Top-Front-Right ISO + Fit All while preserving the current projection;
+- every Cube orientation action preserves the current Orthographic/Perspective mode;
+- the adjacent `ORTHO/PERSP` control toggles only projection and preserves camera orientation;
 - all Cube navigation transitions animate and land on deterministic exact final camera states;
 - Cube navigation creates no CAD authored state, dirty state or Undo history;
 - ordinary Pan/Orbit/Zoom remains functional;
@@ -275,3 +278,20 @@ Reason: this changes both Viewer/UI ownership and the visible navigation workflo
 Acceptance of this ADR authorizes a bounded WB-01B implementation amendment for the provider-surface 3D Navigation Cube described above.
 
 It does not activate R5.
+
+
+## Accepted amendment — independent ORTHO/PERSP projection
+
+**Owner acceptance:** 2026-09-25
+
+The Owner clarified and accepted that projection is independent from Navigation Cube orientation.
+
+This amendment supersedes the earlier Orthographic-only wording in this ADR:
+
+- Navigation Cube orientation actions preserve the current camera projection;
+- `Home` remains Top-Front-Right ISO + Fit All and preserves projection;
+- a separate provider-surface `ORTHO/PERSP` control sits next to the Cube;
+- that control changes only the projection mode;
+- the Cube visual itself remains the same orientation cube in both projection modes.
+
+No other ADR-0010 behavior is changed.
