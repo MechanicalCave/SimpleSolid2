@@ -1,7 +1,7 @@
 # WB-01B — Native Viewport Overlay Composition Stabilization
 
-**Status:** PROPOSED  
-**Owner acceptance:** pending  
+**Status:** ACCEPTED  
+**Owner acceptance:** 2026-09-25  
 **Decision class:** D1 local design + implementation; stop for D2 if ownership/public Viewer contracts must change  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0006  
