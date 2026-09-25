@@ -2,20 +2,25 @@
 
 #include "navigation_mapping.hpp"
 
+#include <AIS_AnimationCamera.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_InteractiveObject.hxx>
 #include <AIS_Line.hxx>
 #include <AIS_Point.hxx>
 #include <AIS_RubberBand.hxx>
 #include <AIS_Shape.hxx>
+#include <AIS_ViewCube.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_TypeOfLine.hxx>
+#include <Aspect_TypeOfTriedronPosition.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <Geom_CartesianPoint.hxx>
 #include <Graphic3d_Camera.hxx>
+#include <Graphic3d_TransformPers.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Quantity_Color.hxx>
 #include <Standard_Failure.hxx>
+#include <V3d_TypeOfOrientation.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
 #include <WNT_Window.hxx>
@@ -299,6 +304,54 @@ struct ScreenRect final {
             bottom_left,
             top_left);
 }
+
+[[nodiscard]] std::optional<viewer::NavigationCubeTarget>
+navigationCubeTargetForOrientation(
+    V3d_TypeOfOrientation orientation) noexcept {
+    using Target = viewer::NavigationCubeTarget;
+
+    switch (orientation) {
+    case V3d_Yneg: return Target::front;
+    case V3d_Ypos: return Target::back;
+    case V3d_Xneg: return Target::left;
+    case V3d_Xpos: return Target::right;
+    case V3d_Zpos: return Target::top;
+    case V3d_Zneg: return Target::bottom;
+
+    case V3d_YnegZpos: return Target::top_front;
+    case V3d_YposZpos: return Target::top_back;
+    case V3d_XnegZpos: return Target::top_left;
+    case V3d_XposZpos: return Target::top_right;
+    case V3d_YnegZneg: return Target::bottom_front;
+    case V3d_YposZneg: return Target::bottom_back;
+    case V3d_XnegZneg: return Target::bottom_left;
+    case V3d_XposZneg: return Target::bottom_right;
+    case V3d_XnegYneg: return Target::front_left;
+    case V3d_XposYneg: return Target::front_right;
+    case V3d_XnegYpos: return Target::back_left;
+    case V3d_XposYpos: return Target::back_right;
+
+    case V3d_XnegYnegZpos:
+        return Target::top_front_left;
+    case V3d_XposYnegZpos:
+        return Target::top_front_right;
+    case V3d_XnegYposZpos:
+        return Target::top_back_left;
+    case V3d_XposYposZpos:
+        return Target::top_back_right;
+    case V3d_XnegYnegZneg:
+        return Target::bottom_front_left;
+    case V3d_XposYnegZneg:
+        return Target::bottom_front_right;
+    case V3d_XnegYposZneg:
+        return Target::bottom_back_left;
+    case V3d_XposYposZneg:
+        return Target::bottom_back_right;
+    }
+
+    return std::nullopt;
+}
+
 
 
 } // namespace
