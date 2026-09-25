@@ -4,6 +4,7 @@
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
 #include <QApplication>
+#include <QMouseEvent>
 #include <QTest>
 
 #include <cmath>
@@ -46,6 +47,23 @@ bool sameUv(
     const sketch::Point2& right) {
     return near(left.u, right.u) &&
            near(left.v, right.v);
+}
+
+void sendMouseMove(
+    QWidget& widget,
+    const QPoint& local) {
+    const QPoint global =
+        widget.mapToGlobal(local);
+    QMouseEvent event{
+        QEvent::MouseMove,
+        QPointF{local},
+        QPointF{global},
+        Qt::NoButton,
+        Qt::NoButton,
+        Qt::NoModifier};
+    QApplication::sendEvent(
+        &widget,
+        &event);
 }
 
 } // namespace
@@ -119,8 +137,8 @@ int main(int argc, char* argv[]) {
         center.y() - 19};
 
     // Prove passive pointer movement independently from primary actions.
-    QTest::mouseMove(&widget, offset);
-    QTest::mouseMove(&widget, center);
+    sendMouseMove(widget, offset);
+    sendMouseMove(widget, center);
     QApplication::processEvents();
 
     bool saw_move = false;
@@ -224,8 +242,8 @@ int main(int argc, char* argv[]) {
         return fail("camera after orbit");
     }
 
-    QTest::mouseMove(&widget, offset);
-    QTest::mouseMove(&widget, center);
+    sendMouseMove(widget, offset);
+    sendMouseMove(widget, center);
     QApplication::processEvents();
     if (spatial_events.empty()) {
         return fail("move after orbit");
