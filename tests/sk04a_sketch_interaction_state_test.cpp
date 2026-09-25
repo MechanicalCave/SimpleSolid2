@@ -164,11 +164,46 @@ int main() {
     CHECK(!state.lineStage().has_value());
     CHECK(!state.lineAnchor().has_value());
 
+    // Finish from AwaitFirstPoint is also a clean return to Select.
+    state.activateLine();
+    CHECK(
+        state.lineStage() ==
+        sketch::LineStage::await_first_point);
+    state.finishTool();
+    CHECK(
+        state.tool() ==
+        sketch::SketchTool::select);
+    CHECK(!state.lineRequestPending());
+
+    // Finish from AwaitNextPoint clears uncommitted pending request state.
     state.activateLine();
     CHECK(
         state.acceptLinePoint(a).outcome ==
         sketch::LinePointOutcome::
             first_point_accepted);
+    CHECK(
+        state.acceptLinePoint(b).outcome ==
+        sketch::LinePointOutcome::
+            segment_requested);
+    CHECK(state.lineRequestPending());
+    state.finishTool();
+    CHECK(
+        state.tool() ==
+        sketch::SketchTool::select);
+    CHECK(!state.lineRequestPending());
+    CHECK(!state.lineAnchor().has_value());
+
+    // Esc from AwaitNextPoint, including a pending segment request,
+    // cancels only the pending stage and keeps Line active at first point.
+    state.activateLine();
+    CHECK(
+        state.acceptLinePoint(a).outcome ==
+        sketch::LinePointOutcome::
+            first_point_accepted);
+    CHECK(
+        state.acceptLinePoint(b).outcome ==
+        sketch::LinePointOutcome::
+            segment_requested);
     CHECK(state.escape());
     CHECK(
         state.tool() ==
@@ -177,6 +212,7 @@ int main() {
         state.lineStage() ==
         sketch::LineStage::await_first_point);
     CHECK(!state.lineAnchor().has_value());
+    CHECK(!state.lineRequestPending());
 
     CHECK(state.escape());
     CHECK(
@@ -267,6 +303,18 @@ int main() {
     CHECK(
         state.selectedEntities() ==
         before_invalid);
+
+    CHECK(state.replaceSelection(
+        std::vector<sketch::EntityId>{
+            id1,
+            id2,
+            id3},
+        id2));
+    CHECK(state.primarySelection() == id2);
+
+    state.clearSelection();
+    CHECK(state.selectedEntities().empty());
+    CHECK(!state.primarySelection().has_value());
 
     CHECK(state.replaceSelection(
         std::vector<sketch::EntityId>{
