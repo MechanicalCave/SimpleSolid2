@@ -1152,6 +1152,88 @@ public:
         return true;
     }
 
+    bool updateNavigationCubeHover(
+        int logical_x,
+        int logical_y) {
+        ensureInitialized();
+        if (context_.IsNull() ||
+            view_.IsNull() ||
+            navigation_cube_.IsNull()) {
+            return false;
+        }
+
+        const auto dpr =
+            owner_.devicePixelRatioF();
+        const auto x =
+            static_cast<int>(
+                std::lround(
+                    static_cast<double>(logical_x) *
+                    dpr));
+        const auto y =
+            static_cast<int>(
+                std::lround(
+                    static_cast<double>(logical_y) *
+                    dpr));
+
+        context_->MoveTo(
+            x,
+            y,
+            view_,
+            true);
+
+        if (!context_->HasDetected()) {
+            return false;
+        }
+
+        const auto cube_owner =
+            Handle(AIS_ViewCubeOwner)::DownCast(
+                context_->DetectedOwner());
+        return !cube_owner.IsNull();
+    }
+
+    bool activateNavigationCubeAt(
+        int logical_x,
+        int logical_y) {
+        if (!updateNavigationCubeHover(
+                logical_x,
+                logical_y)) {
+            return false;
+        }
+
+        navigation_cube_press_active_ = true;
+
+        const auto cube_owner =
+            Handle(AIS_ViewCubeOwner)::DownCast(
+                context_->DetectedOwner());
+        if (cube_owner.IsNull()) {
+            return false;
+        }
+
+        const auto target =
+            navigationCubeTargetForOrientation(
+                cube_owner->MainOrientation());
+        if (!target) {
+            return true;
+        }
+
+        context_->ClearDetected(false);
+
+        if (navigation_cube_action_handler_) {
+            navigation_cube_action_handler_(
+                viewer::NavigationCubeAction::
+                    orientTo(*target));
+        }
+
+        return true;
+    }
+
+    bool consumeNavigationCubeRelease() noexcept {
+        const bool active =
+            navigation_cube_press_active_;
+        navigation_cube_press_active_ = false;
+        return active;
+    }
+
     void pickAtLogicalPoint(
         int logical_x,
         int logical_y,
@@ -1701,6 +1783,8 @@ private:
     viewer::PresentationSelection selection_;
     viewer::SelectionIntentHandler selection_intent_handler_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
+    viewer::NavigationCubeActionHandler
+        navigation_cube_action_handler_;
     viewer::PrimaryPointerRouting primary_pointer_routing_{
         viewer::PrimaryPointerRouting::
             presentation_selection};
@@ -1710,6 +1794,15 @@ private:
     Handle(AIS_RubberBand)
         selection_rubber_band_;
     bool selection_rubber_band_visible_{};
+
+    Handle(AIS_ViewCube) navigation_cube_;
+    Handle(AIS_AnimationCamera)
+        navigation_animation_;
+    QTimer* navigation_animation_timer_{};
+    std::optional<viewer::CameraState>
+        navigation_animation_target_;
+    bool navigation_animation_fit_all_{};
+    bool navigation_cube_press_active_{};
     std::vector<ReferenceObject> reference_objects_;
     std::vector<SketchObject> sketch_objects_;
     std::vector<Handle(AIS_InteractiveObject)>
@@ -1980,6 +2073,20 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
     }
 
     if (event->button() == Qt::LeftButton) {
+        const auto point =
+            event->position().toPoint();
+        if (guardedBool(
+                "navigationCubePress",
+                [this, point] {
+                    return impl_->
+                        activateNavigationCubeAt(
+                            point.x(),
+                            point.y());
+                })) {
+            event->accept();
+            return;
+        }
+
         if (impl_->primaryPointerRouting() ==
             viewer::PrimaryPointerRouting::
                 spatial_tool_input) {
@@ -2044,6 +2151,19 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
     }
 
     const auto point = event->position();
+    const auto point_int = point.toPoint();
+    if (guardedBool(
+            "navigationCubeHover",
+            [this, point_int] {
+                return impl_->
+                    updateNavigationCubeHover(
+                        point_int.x(),
+                        point_int.y());
+            })) {
+        event->accept();
+        return;
+    }
+
     guardedVoid(
         "spatialMove",
         [this, point, event] {
@@ -2064,6 +2184,12 @@ void QtOcctViewerWidget::mouseReleaseEvent(QMouseEvent* event) {
         guardedVoid(
             "middleRelease",
             [this] { impl_->endMiddleDrag(); });
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton &&
+        impl_->consumeNavigationCubeRelease()) {
         event->accept();
         return;
     }
