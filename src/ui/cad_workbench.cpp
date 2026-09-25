@@ -160,9 +160,6 @@ void CadWorkbench::buildUi() {
     auto* editor_container = new QFrame(shell_);
     editor_container->setObjectName(
         QStringLiteral("editorSurface"));
-    editor_container->setAttribute(
-        Qt::WA_NativeWindow,
-        true);
     editor_container->setFrameShape(QFrame::StyledPanel);
     auto* editor_layout =
         new QGridLayout(editor_container);
