@@ -1,7 +1,7 @@
 # SK-04B — Provider-neutral Sketch Selection Query, Box Overlay and Token Bridge
 
-**Status:** PROPOSED  
-**Owner acceptance:** pending  
+**Status:** ACCEPTED  
+**Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009  
