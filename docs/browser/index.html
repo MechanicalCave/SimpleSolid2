@@ -442,15 +442,15 @@ Undo/Redo first calls the interaction state's history cancellation, clears previ
 Snapping/inference, coordinate/value entry, constraints, grips/direct manipulation, additional primitives and RMB command grammar remain later roadmap work. Sketch support remains limited to XY/XZ/YZ Origin planes; Datum/Construction Plane and planar model-face support remain later stages.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
-## Navigation and responsive ViewCube
+## Navigation and provider-surface Navigation Cube
 
-The shared viewport supports middle-button Pan, Shift + middle-button Orbit, wheel Zoom, Fit All, six orthogonal standard views, Isometric and eight corner orientations, plus Orthographic/Perspective.
+The shared viewport supports middle-button Pan, Shift + middle-button Orbit, wheel Zoom, Fit All, Orthographic/Perspective projection and a provider-surface 3D Navigation Cube.
 
-`ViewCubeWidget` is an overlay in the shared Editor Surface and invokes only `IDocumentViewport`.
+The visible Cube is rendered and hit-tested inside the Qt/OCCT native graphics surface. The former QWidget ViewCube is no longer a competing product authority. The common Viewer boundary carries only provider-neutral navigation actions; Qt/OCCT owns Cube pixels, labels, DPI anchoring, hit testing and animation presentation.
 
-WB-01A replaced the fixed button-grid presentation with a compact responsive CAD navigation control. It tracks its host Editor Surface and switches to a compact mode when space is constrained, so narrow splitter layouts do not force a large Viewer minimum width or overlap the right-side panels.
+The Cube follows the current camera orientation relative to the model/world axes. Its six labeled faces, 12 edges and 8 corners select canonical orientations. Face/edge/corner transitions are animated. When a canonical face is active, adjacent-view arrows perform exact 90-degree view changes and CW/CCW controls perform exact 90-degree roll. Home selects Top-Front-Right isometric orientation and Fit All.
 
-Because the production Qt/OCCT viewport is a native `WA_PaintOnScreen` child, ordinary QWidget overlay composition is not reliable enough to claim artifact-free ViewCube presentation on Windows. The current ViewCube remains UI-owned and uses the existing coalesced underlay-refresh workaround, but manual WB-01B verification has shown that stale/overdrawn artifacts can still occur. Two native-window composition variants were tested and rejected; they are not part of the current implementation. A provider-surface ViewCube requires a separate D2 architecture decision. Visual artifact freedom cannot be inferred from layout/repaint-count tests alone.
+Camera orientation and projection are independent. Cube orientation actions and Home preserve the current projection mode. A separate provider-surface `ORTHO/PERSP` control next to the Cube changes only the projection; it does not change camera direction, target, up vector or Fit state. The Cube itself remains the same orientation manipulator in both projection modes.
 
 Navigation changes are runtime-only and do not increment DocumentRevision, set needsSave or create CAD Undo entries.
 
@@ -473,6 +473,7 @@ Persistent Origin visibility is authored state and is intentionally separate.
 Closing/reopening the application recreates runtime view and selection state while preserving saved visibility in the Part file.
 
 The native WB-01A stress regression runs the real Workbench and Qt/OCCT Viewer through 100 iterations combining clicks, empty-space clear, Ctrl-selection, right-click no-op, Show/Hide, Undo/Redo, navigation and repeated narrow/wide resizing.
+
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.overview" data-kind="internal" data-lang="en" data-path="docs/internal/OVERVIEW.md">
 # SimpleSolid 2.0 — Internal As-built Overview
@@ -503,7 +504,7 @@ App start
 → bottom Document Tabs + one ActiveDocumentSession
 → Document Tree + built-in Origin
 → shared Properties / Operations surfaces
-→ OCCT-backed 3D Viewport + reference grid + responsive ViewCube
+→ OCCT-backed 3D Viewport + reference grid + provider-surface Navigation Cube + ORTHO/PERSP
 → Tree / Viewport selection synchronization
 → persistent Show / Hide of Origin references
 → Undo / Redo
@@ -580,6 +581,7 @@ Canonical current-state sources are:
 `docs/browser/index.html` is generated from canonical Markdown.
 
 Operational documentation rules are defined in `governance/DOCUMENTATION.md`.
+
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.part-documents" data-kind="internal" data-lang="en" data-path="docs/internal/PART_DOCUMENTS.md">
 # Part Documents — As-built
@@ -1359,21 +1361,15 @@ Activate `Line`, click the first point, then click successive points to create c
 Support is currently limited to the three Origin planes. Arc/Circle, grips/direct manipulation, snapping/inference, constraints, dimensions, solver, coordinate entry, Construction/Datum planes and planar model faces remain separate later stages.
 
 <!-- section-id: product.parts.navigation -->
-## 3D navigation and ViewCube
+## 3D navigation and Navigation Cube
 
-The Part Workbench provides:
+The Part Workbench provides middle-button Pan, Shift + middle-button Orbit, mouse-wheel Zoom, Fit and Orthographic/Perspective projection.
 
-- middle-button Pan;
-- Shift + middle-button Orbit;
-- mouse-wheel Zoom;
-- Fit;
-- Front, Back, Left, Right, Top and Bottom views;
-- Isometric and corner orientations;
-- Orthographic / Perspective switching.
+A 3D Navigation Cube is shown in the upper-right of the 3D Viewport. It follows the current camera orientation. Click a labeled face for Front, Back, Left, Right, Top or Bottom; click an edge for the corresponding two-axis view; click a corner for the corresponding isometric view. Navigation transitions are animated.
 
-The ViewCube is an overlay in the upper-right of the 3D Viewport. It adapts when the Editor Surface becomes narrow instead of overlapping the Properties panel or forcing the Viewport to remain wide.
+When the view is aligned to a face, the controls around the Cube provide exact 90-degree moves to adjacent views and exact 90-degree clockwise/counterclockwise roll. Home returns to Top-Front-Right isometric orientation and performs Fit All.
 
-Use the regular or compact ViewCube controls for standard orientations, Fit and projection switching.
+Projection is independent from Cube orientation. The `ORTHO/PERSP` control next to the Cube switches only between Orthographic and Perspective. If the model is in Perspective, clicking a Cube face, edge, corner or Home keeps Perspective; the same actions keep Orthographic when Orthographic is active.
 
 Navigation and camera changes are temporary view state. They do not dirty the Part, do not require Save and do not create CAD Undo entries.
 
@@ -1414,6 +1410,7 @@ The current Part provides Document identity/properties, built-in Origin, persist
 Very early test `.ss2part` files created before the current native format are not supported product data and are not migrated automatically.
 
 The current UI provides the first complete authored Sketch Line workflow: contextual Select/Line tools, continuous Line creation with preview, point and Window/Crossing selection, atomic Delete, Undo/Redo integration, Operations and a compact SELECT/LINE Command Line. It still lacks grips/direct manipulation, snapping/inference, coordinate entry, constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
+
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -1702,21 +1699,15 @@ Po aktywacji `Line` kliknij pierwszy punkt, a potem kolejne punkty, aby tworzyć
 Support może być obecnie tylko jedną z trzech płaszczyzn Origin. Arc/Circle, grips/direct manipulation, snapping/inference, wprowadzanie współrzędnych, constraints, wymiary, solver, płaszczyzny Construction/Datum oraz płaskie ściany modelu pozostają późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
-## Nawigacja 3D i ViewCube
+## Nawigacja 3D i Navigation Cube
 
-Workbench Parta udostępnia:
+Workbench Parta udostępnia Pan środkowym przyciskiem myszy, Orbit przez Shift + środkowy przycisk myszy, Zoom kółkiem, Fit oraz projekcję Orthographic/Perspective.
 
-- Pan środkowym przyciskiem myszy;
-- Orbit przez Shift + środkowy przycisk myszy;
-- Zoom kółkiem myszy;
-- Fit;
-- widoki Front, Back, Left, Right, Top i Bottom;
-- Isometric oraz orientacje narożne;
-- przełączanie Orthographic / Perspective.
+W prawym górnym rogu viewportu 3D znajduje się przestrzenny Navigation Cube, który podąża za aktualną orientacją kamery. Kliknij opisaną ścianę, aby przejść do Front, Back, Left, Right, Top albo Bottom; krawędź wybiera odpowiadający widok dwuosiowy, a narożnik — odpowiadający widok izometryczny. Przejścia orientacji są animowane.
 
-ViewCube jest overlayem w prawym górnym rogu viewportu 3D. Gdy Editor Surface staje się wąski, ViewCube przechodzi w układ kompaktowy zamiast nachodzić na Properties albo wymuszać szeroki Viewport.
+Gdy widok jest wyrównany do ściany, kontrolki wokół Cube umożliwiają dokładne przejścia o 90° do sąsiednich widoków oraz roll o dokładnie 90° zgodnie lub przeciwnie do ruchu wskazówek zegara. Home ustawia Top-Front-Right ISO i wykonuje Fit All.
 
-Do standardowych orientacji, Fit i przełączania projekcji możesz używać normalnego albo kompaktowego wariantu ViewCube.
+Projekcja jest niezależna od orientacji Cube. Kontrolka `ORTHO/PERSP` obok Cube przełącza wyłącznie Orthographic/Perspective. Jeśli model jest w Perspective, kliknięcie ściany, krawędzi, narożnika albo Home zachowuje Perspective; analogicznie akcje te zachowują Orthographic, gdy jest ono aktywne.
 
 Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, nie wymagają Save i nie tworzą wpisów CAD Undo.
 
@@ -1757,6 +1748,7 @@ Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, tr
 Bardzo wczesne testowe pliki `.ss2part` utworzone przed wprowadzeniem obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
 Bieżący UI zapewnia pierwszy kompletny workflow authored Sketch Line: kontekstowe narzędzia Select/Line, ciągłe tworzenie Line z preview, point selection i Window/Crossing rectangle selection, atomowy Delete, integrację Undo/Redo, Operations oraz kompaktowy Command Line dla SELECT/LINE. Nadal brakuje grips/direct manipulation, snapping/inference, wprowadzania współrzędnych, constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty
