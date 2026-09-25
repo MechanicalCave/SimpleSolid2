@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-04B_PROVIDER_NEUTRAL_SKETCH_SELECTION_QUERY_OVERLAY_BRIDGE.md"
+status: active
+active_work: "work/SK-04C_END_TO_END_SELECT_CONTINUOUS_LINE_DELETE_WORKFLOW.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -15,15 +15,16 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - review proposed work/SK-04C_END_TO_END_SELECT_CONTINUOUS_LINE_DELETE_WORKFLOW.md
-  - SK-04C remains inactive until explicit Owner acceptance
-  - successful SK-04C completion would complete R4; R5 would still require a separate contract
+  - implement SK-04C only inside the accepted contract and contextual UI semantics
+  - run focused tests, then exact-head FULL Windows PR gate
+  - update required internal/product documentation before completion
 notes:
-  - SK-04A and SK-04B are completed.
-  - SK-04B merged as 28d27927dacdc356d9047b79905fa697d6dbc3fd after FULL #297 and DOCS #298.
-  - SK-04C proposal adds no production authorization until explicit Owner acceptance.
-  - proposed SK-04C owns one SketchInteractionState per active Sketch edit and wires toolbar, viewport, Operations and compact Command Line as adapters.
-  - proposed Select uses point/Ctrl-toggle plus Window/Crossing rectangle replacement; rectangle selection has no semantic primary in R4.
-  - proposed Line commits on primary press, one segment per AddSketchLineCommand/Undo entry.
-  - proposed Command Line accepts only SELECT and LINE activation; precision coordinate input remains R7.
-  - proposed Undo/Redo cancels uncommitted Line runtime state before ordinary document history.
+  - Owner accepted SK-04C on 2026-09-25 after proposal CLOSURE gate #299 passed.
+  - one SketchInteractionState is the sole semantic interaction authority for active Sketch edit.
+  - Part context switches Editor Tools and Operations to Sketch context on edit entry and restores Part context on exit/fail-closed loss.
+  - Sketch Select/Line tools live above the Viewport; contextual Operations remain in the right panel; compact Command Line lives below the Viewport; global Status remains separate.
+  - rectangle selection replaces semantic selection and assigns no primary in R4.
+  - Ctrl point-selection modifier is sampled on release; Ctrl-additive rectangle selection remains R5.
+  - Command Line accepts SELECT and LINE only; recognized submission returns focus to Viewport; text-focus Esc/Delete do not invoke Sketch tool actions.
+  - RMB command grammar remains out of scope.
+  - R4 completes only after SK-04C implementation, documentation and exact-head verification succeed.
