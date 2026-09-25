@@ -1,8 +1,8 @@
 # ADR-0010 — Provider-surface 3D Navigation Cube
 
-**Status:** PROPOSED  
+**Status:** ACCEPTED  
 **Date:** 2026-09-25  
-**Owner acceptance:** pending  
+**Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Related:** ADR-0003, ADR-0006, WB-01B
