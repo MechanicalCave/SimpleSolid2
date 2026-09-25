@@ -95,9 +95,11 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 
 Na pasku narzędzi bezpośrednio nad viewportem 3D użyj `Sketch`, a następnie wskaż jedną z płaszczyzn `XY Plane`, `XZ Plane` albo `YZ Plane` w Origin. Płaszczyznę możesz wskazać w Document Tree albo — gdy jest widoczna — w viewporcie 3D.
 
-Operations nie jest listą narzędzi. Pokazuje sterowanie bieżącą operacją: podczas wyboru płaszczyzny Sketchu zawiera kontekst wyboru/Cancel, a po wejściu do edycji pokazuje `Finish Sketch`.
+Operations nie jest stałą listą narzędzi. Pokazuje sterowanie bieżącą operacją: podczas wyboru płaszczyzny Sketchu zawiera kontekst wyboru/Cancel, a podczas edycji — kontekstowe akcje Sketchera. Po wyjściu ze Sketch Edit pasek narzędzi i Operations wracają do kontekstu Part modeling.
 
-Po poprawnym wyborze Part tworzy trwały Sketch i pozostaje w tym samym Workbench oraz tym samym viewporcie 3D. Kamera automatycznie ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnej płaszczyzny. Gdy Sketch jest aktywny, każda authored geometria Line już zapisana w tym Sketchu jest prezentowana w viewporcie razem ze znacznikiem Origin lokalnego `(0,0)` Sketchu.
+Po poprawnym wyborze Part tworzy trwały Sketch i pozostaje w tym samym Workbench oraz tym samym viewporcie 3D. Kamera automatycznie ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnej płaszczyzny. Podczas Sketch Edit pasek narzędzi przełącza się na `Select` i `Line`; Operations pokazuje stan i akcje bieżącego narzędzia Sketchera; a pod viewportem pojawia się kompaktowy Command Line. Na tym etapie Command Line obsługuje `SELECT` i `LINE`.
+
+Każda authored geometria Line już zapisana w tym Sketchu jest prezentowana w viewporcie razem ze znacznikiem Origin lokalnego `(0,0)` Sketchu.
 
 Automatyczne ustawienie widoku nie blokuje kamery. Podczas aktywnego Sketchu nadal możesz używać Pan, Zoom, Orbit i ViewCube. Nawigacja nie zmienia położenia Sketchu i sama nie dirty'uje Dokumentu.
 
@@ -105,7 +107,11 @@ Użyj `Finish Sketch`, aby zakończyć bieżący tryb edycji. Sketch pozostaje a
 
 Aby ponownie edytować istniejący Sketch, kliknij go dwukrotnie w Document Tree albo użyj jego menu kontekstowego `Edit Sketch`. Samo wejście do edycji nie zmienia authored state i nie wymaga Save.
 
-Bieżący UI nie udostępnia jeszcze interaktywnego workflow tworzenia/edycji Line, semantycznego zaznaczenia/usuwania elementów Sketchu, Arc/Circle, constraintów, wymiarów ani solvera. Istniejące authored Lines są widoczne podczas edycji Sketchu, ale ich tworzenie/manipulacja z viewportu jest późniejszym etapem. Support może być obecnie tylko jedną z trzech płaszczyzn Origin; płaszczyzny konstrukcyjne/Datum oraz płaskie ściany modelu będą osobnymi późniejszymi etapami.
+W Sketch Edit domyślnym narzędziem jest `Select`. Lewy klik na Line zastępuje semantyczne zaznaczenie, Ctrl+lewy klik przełącza wskazaną Line, a przeciągnięcie prostokąta wykonuje Window selection z lewej do prawej albo Crossing selection z prawej do lewej. Rectangle selection zastępuje bieżące zaznaczenie. `Delete Selection` w Operations lub klawisz Delete, gdy viewport ma focus w Sketch Select, usuwa zaznaczone Lines jako jedną operację Undo.
+
+Po aktywacji `Line` kliknij pierwszy punkt, a potem kolejne punkty, aby tworzyć ciągłe segmenty. Rubber-band preview jest tylko stanem runtime; każdy zatwierdzony segment jest osobnym krokiem Undo. `Finish Line` i `Cancel Line` wracają do Select bez wycofywania już zatwierdzonych segmentów. Esc najpierw anuluje bieżący etap Line, a następnie wraca z Line do Select; nie kończy całego Sketchu. Undo/Redo najpierw porzuca oczekujący etap Line, a potem wykonuje zwykłą historię Dokumentu.
+
+Support może być obecnie tylko jedną z trzech płaszczyzn Origin. Arc/Circle, grips/direct manipulation, snapping/inference, wprowadzanie współrzędnych, constraints, wymiary, solver, płaszczyzny Construction/Datum oraz płaskie ściany modelu pozostają późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i ViewCube
@@ -162,4 +168,4 @@ Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, tr
 
 Bardzo wczesne testowe pliki `.ss2part` utworzone przed wprowadzeniem obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Bieżący UI nie udostępnia jeszcze interaktywnego rysowania/edycji Sketchu ani semantycznego zaznaczania jego elementów. Part nadal nie ma constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
+Bieżący UI zapewnia pierwszy kompletny workflow authored Sketch Line: kontekstowe narzędzia Select/Line, ciągłe tworzenie Line z preview, point selection i Window/Crossing rectangle selection, atomowy Delete, integrację Undo/Redo, Operations oraz kompaktowy Command Line dla SELECT/LINE. Nadal brakuje grips/direct manipulation, snapping/inference, wprowadzania współrzędnych, constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
