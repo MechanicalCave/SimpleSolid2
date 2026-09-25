@@ -91,13 +91,13 @@ Viewport selection behavior is:
 After `Save`, Origin visibility survives closing and restarting the application.
 
 <!-- section-id: product.parts.sketch-host -->
-## Creating an empty Sketch
+## Creating and viewing a Sketch
 
 Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when it is visible, in the 3D Viewport.
 
 Operations is not a permanent tool list. It shows controls for the current operation: Sketch support-pick context/Cancel while choosing the plane, then `Finish Sketch` after Sketch edit begins.
 
-After a valid selection, Part creates a durable empty Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane.
+After a valid selection, Part creates a durable Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane. While the Sketch is active, any authored Line geometry already stored in that Sketch is presented in the viewport together with an Origin marker for the Sketch's local `(0,0)`.
 
 Automatic alignment does not lock the camera. While the Sketch is active you can still use Pan, Zoom, Orbit and ViewCube. Navigation does not change Sketch placement and does not dirty the Document by itself.
 
@@ -105,7 +105,7 @@ Use `Finish Sketch` to leave the current edit context. The Sketch remains an aut
 
 To edit an existing Sketch again, double-click it in Document Tree or use its `Edit Sketch` context-menu action. Entering edit by itself does not change authored state and does not require Save.
 
-In SK-01 the Sketch is intentionally empty. Line/Arc/Circle, constraints, dimensions and a solver are not available yet. Support is currently limited to the three Origin planes; Construction/Datum planes and planar model faces are separate later stages.
+The current UI does not yet provide an interactive Line creation/edit workflow, Sketch-entity selection/Delete, Arc/Circle, constraints, dimensions or a solver. Existing authored Lines are visible when the Sketch is edited, but creating/manipulating them from the viewport is a later step. Support is currently limited to the three Origin planes; Construction/Datum planes and planar model faces are separate later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and ViewCube
@@ -129,7 +129,7 @@ Navigation and camera changes are temporary view state. They do not dirty the Pa
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state, including Origin visibility and created Sketches with their durable identity/support/placement, to its `.ss2part` file.
+`Save` writes the current authored Part state, including Origin visibility and created Sketches with their durable identity/support/placement and embedded authored Line geometry, to its `.ss2part` file.
 
 When closing a Part with unsaved changes, the application requires `Save`, `Discard` or `Cancel`.
 
@@ -158,8 +158,8 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the shared stabilized 3D Workbench/Viewer foundation and the first host lifecycle for empty Sketches on Origin planes.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the shared stabilized 3D Workbench/Viewer foundation, durable Sketches with embedded authored Line data and active-Sketch Line/Origin presentation on Origin planes.
 
 Very early test `.ss2part` files created before the current native format are not supported product data and are not migrated automatically.
 
-Part does not yet contain Sketch 2D geometry, constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
+The current UI does not yet provide interactive Sketch drawing/editing or semantic Sketch-entity selection, and Part still lacks constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.

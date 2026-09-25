@@ -678,8 +678,8 @@ void CadWorkbench::enterSketchEdit(
     sketch_edit_document_id_ =
         document_session->documentId();
 
-    viewport_controller_->setSketchEditPlacement(
-        sketch->placement);
+    viewport_controller_->setSketchEditSketch(
+        sketch_id);
 
     if (viewport_ != nullptr) {
         const auto standard_view =
@@ -696,7 +696,7 @@ void CadWorkbench::enterSketchEdit(
     operations_placeholder_->setText(
         QStringLiteral(
             "Sketch edit context is active in the same 3D Viewport. "
-            "This SK-01 Sketch is intentionally empty; 2D entities come later."));
+            "Authored Sketch geometry is presented; interactive tools come later."));
     syncActionState();
 }
 
@@ -718,7 +718,7 @@ void CadWorkbench::clearSketchRuntimeContext() {
     sketch_edit_document_id_.reset();
 
     if (viewport_controller_ != nullptr) {
-        viewport_controller_->setSketchEditPlacement(
+        viewport_controller_->setSketchEditSketch(
             std::nullopt);
     }
 
@@ -762,13 +762,13 @@ void CadWorkbench::reconcileSketchRuntimeContext() {
         return;
     }
 
-    viewport_controller_->setSketchEditPlacement(
-        sketch->placement);
+    viewport_controller_->setSketchEditSketch(
+        *active_sketch_id_);
 
     operations_placeholder_->setText(
         QStringLiteral(
             "Sketch edit context is active in the same 3D Viewport. "
-            "This SK-01 Sketch is intentionally empty; 2D entities come later."));
+            "Authored Sketch geometry is presented; interactive tools come later."));
 }
 
 void CadWorkbench::undo() {

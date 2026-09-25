@@ -94,6 +94,16 @@ public:
         return scene.valid();
     }
 
+    bool setSketchScene(
+        const viewer::SketchScene& scene) override {
+        return scene.valid();
+    }
+
+    bool setSketchPreviewScene(
+        const viewer::SketchPreviewScene& scene) override {
+        return scene.valid();
+    }
+
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override {
         return selection.valid();
@@ -104,6 +114,22 @@ public:
         handler_ = std::move(handler);
     }
 
+    void setSpatialPointerHandler(
+        viewer::SpatialPointerHandler handler) override {
+        spatial_handler_ =
+            std::move(handler);
+    }
+
+    void setPrimaryPointerRouting(
+        viewer::PrimaryPointerRouting routing) override {
+        routing_ = routing;
+    }
+
+    void setCursorMode(
+        viewer::ViewportCursorMode mode) override {
+        cursor_mode_ = mode;
+    }
+
     [[nodiscard]] int fitCount() const noexcept {
         return fit_count_;
     }
@@ -111,6 +137,13 @@ public:
 private:
     viewer::CameraState state_;
     viewer::SelectionIntentHandler handler_;
+    viewer::SpatialPointerHandler spatial_handler_;
+    viewer::PrimaryPointerRouting routing_{
+        viewer::PrimaryPointerRouting::
+            presentation_selection};
+    viewer::ViewportCursorMode cursor_mode_{
+        viewer::ViewportCursorMode::
+            system_default};
     int fit_count_{};
 };
 

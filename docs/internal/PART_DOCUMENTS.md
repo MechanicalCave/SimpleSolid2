@@ -83,11 +83,22 @@ A DocumentId resolves only when exactly one valid native file in the Workspace d
 
 When a resolved Part is already open, a second Open request returns the existing canonical DocumentSession rather than creating a second mutable session for the same DocumentId.
 
+<!-- section-id: internal.part-documents.sketch-presentation -->
+## Active Sketch presentation and spatial input
+
+R3 does not change Part persistence or authored commands. It adds a runtime adapter around the current authoritative Part state.
+
+While a Part Sketch is actively edited, `PartViewportController` rebuilds a neutral authored Sketch scene from the current embedded `SketchModel`, transforms Line endpoints from U/V to 3D through `SketchPlacement`, presents the intrinsic Origin as a non-authored overlay and keeps runtime presentation-token bindings back to `SketchId + EntityId`.
+
+A separate preview scene is transient and independently replaceable/clearable. Neutral provider rays are intersected with the active Sketch frame above the provider to produce Sketch-local U/V. These operations do not change Part revision, dirty state, history or persistence.
+
+If the active Sketch disappears through Undo/history, presentation fails closed and the runtime edit/input state is cleared.
+
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The Part model now durably owns Shared 2D Line entities, but the shared CAD Workbench and Viewer still present only the Part Origin, reference grid and Sketch edit context; interactive authored-Line presentation/editing belongs to later roadmap milestones.
+The Part model durably owns Shared 2D Line entities, and R3 presents the active Sketch's authored Lines plus intrinsic Origin in the shared 3D Viewport. Presentation tokens, preview and pointer input remain runtime-only and are not Part identity.
 
-The current product still does not provide interactive Sketch selection/drawing, constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming or Material model.
+The current product still does not provide interactive Sketch Line drawing/editing, semantic Sketch selection, rectangle selection/Delete, constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming or Material model.
 
 The Viewer is not a second model: no OCCT object or Viewer token is durable Part/Sketch identity, support or authored state.

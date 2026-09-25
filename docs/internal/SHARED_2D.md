@@ -28,7 +28,7 @@ Each persistent Part-hosted Sketch now embeds one `SketchModel` by value. That h
 
 These values represent physical model-length coordinates in the host Sketch frame. Shared 2D does not store the Part/3D placement, camera transform, screen coordinates, snap tolerance or display units.
 
-The host-specific mapping from local U/V into 3D remains outside Shared 2D.
+The host-specific mapping from local U/V into 3D remains outside Shared 2D. SK-03A implements that mapping in the Part/UI adapter using `SketchPlacement`; the neutral Shared 2D model remains unaware of Viewer, camera and provider state.
 
 <!-- section-id: internal.shared-2d.identity -->
 ## Entity identity
@@ -87,10 +87,13 @@ restore(state)
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
-The current Shared 2D / Part integration still does not implement:
+The current Shared 2D / Part integration now has R3 runtime presentation/input adapters outside the Shared 2D target: active authored Lines can be presented, intrinsic Origin is a runtime overlay, and provider-neutral rays can be mapped to active Sketch U/V. Those runtime capabilities do not add authored state to `simplesolid2_sketch`.
 
-- intrinsic Origin runtime presentation or snapping;
-- Viewer presentation, pointer-to-plane input, Select or cursor behavior;
+The current product still does not implement:
+
+- semantic Sketch entity selection or rectangle selection;
+- interactive Line creation/Delete;
+- intrinsic Origin snapping;
 - grips/direct manipulation;
 - Circle, Arc or construction geometry;
 - snapping, inference, dimensions, constraints or solver evaluation;
@@ -108,4 +111,6 @@ Those capabilities are governed by the accepted Sketch roadmap and require later
 
 SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part ownership, value-copy isolation, semantic Add/Erase commands, live Undo/Redo identity high-water, schema-v3 persistence, v1/v2 backward readability and Save→Close→Reopen identity/geometry preservation.
 
-The repository Windows gate builds the exact PR head and runs the complete CTest suite.
+SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for neutral authored/preview presentation contracts, U/V↔3D and ray→U/V mapping, runtime token bindings, fail-closed active-Sketch lifecycle, routing/cursor state and real Qt/OCCT spatial input before/after orbit.
+
+The repository Windows FULL gate builds the exact implementation head and runs the complete CTest suite.

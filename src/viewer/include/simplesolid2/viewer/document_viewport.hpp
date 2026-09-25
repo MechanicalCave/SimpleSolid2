@@ -4,6 +4,8 @@
 #include <simplesolid2/viewer/navigation.hpp>
 #include <simplesolid2/viewer/reference_presentation.hpp>
 #include <simplesolid2/viewer/selection.hpp>
+#include <simplesolid2/viewer/sketch_presentation.hpp>
+#include <simplesolid2/viewer/spatial_pointer.hpp>
 
 #include <optional>
 
@@ -30,11 +32,26 @@ public:
     virtual bool setReferenceScene(
         const ReferenceScene& scene) = 0;
 
+    virtual bool setSketchScene(
+        const SketchScene& scene) = 0;
+
+    virtual bool setSketchPreviewScene(
+        const SketchPreviewScene& scene) = 0;
+
     virtual bool setPresentationSelection(
         const PresentationSelection& selection) = 0;
 
     virtual void setSelectionIntentHandler(
         SelectionIntentHandler handler) = 0;
+
+    virtual void setSpatialPointerHandler(
+        SpatialPointerHandler handler) = 0;
+
+    virtual void setPrimaryPointerRouting(
+        PrimaryPointerRouting routing) = 0;
+
+    virtual void setCursorMode(
+        ViewportCursorMode mode) = 0;
 };
 
 } // namespace simplesolid2::viewer

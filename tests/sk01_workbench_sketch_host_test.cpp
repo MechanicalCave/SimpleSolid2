@@ -84,6 +84,20 @@ public:
         return true;
     }
 
+    bool setSketchScene(
+        const viewer::SketchScene& scene) override {
+        if (!scene.valid()) return false;
+        sketch_scene_ = scene;
+        return true;
+    }
+
+    bool setSketchPreviewScene(
+        const viewer::SketchPreviewScene& scene) override {
+        if (!scene.valid()) return false;
+        sketch_preview_scene_ = scene;
+        return true;
+    }
+
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override {
         if (!selection.valid()) return false;
@@ -95,6 +109,22 @@ public:
         viewer::SelectionIntentHandler handler) override {
         selection_handler_ =
             std::move(handler);
+    }
+
+    void setSpatialPointerHandler(
+        viewer::SpatialPointerHandler handler) override {
+        spatial_pointer_handler_ =
+            std::move(handler);
+    }
+
+    void setPrimaryPointerRouting(
+        viewer::PrimaryPointerRouting routing) override {
+        routing_ = routing;
+    }
+
+    void setCursorMode(
+        viewer::ViewportCursorMode mode) override {
+        cursor_mode_ = mode;
     }
 
     void emitSelectionIntent(
@@ -126,7 +156,16 @@ public:
 private:
     viewer::CameraState state_;
     viewer::ReferenceScene scene_;
+    viewer::SketchScene sketch_scene_;
+    viewer::SketchPreviewScene sketch_preview_scene_;
     viewer::PresentationSelection selection_;
+    viewer::SpatialPointerHandler spatial_pointer_handler_;
+    viewer::PrimaryPointerRouting routing_{
+        viewer::PrimaryPointerRouting::
+            presentation_selection};
+    viewer::ViewportCursorMode cursor_mode_{
+        viewer::ViewportCursorMode::
+            system_default};
     viewer::SelectionIntentHandler
         selection_handler_;
     int fit_all_count_{};

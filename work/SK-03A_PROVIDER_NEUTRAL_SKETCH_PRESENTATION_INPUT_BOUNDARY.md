@@ -1,6 +1,6 @@
 # SK-03A — Provider-neutral Sketch Presentation and Tool-input Boundary
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -534,3 +534,19 @@ SK-03A completes only when:
 - completion bookkeeping passes the appropriate exact-head CI-01 tier.
 
 Completion does not activate R4. R4 requires a separate explicit Owner-accepted Work Contract.
+
+
+## 12. Completion record
+
+SK-03A implementation is complete.
+
+Evidence:
+
+- implementation exact head `53798bd3248375a898b760069274286a9ed0b7cd` passed FULL Windows gate #274, including Build and all 45 CTest tests;
+- as-built and Product documentation plus generated Browser passed exact-head DOCS gate #281 on `7a73b9b09c98ad46aca2e5da2c757989a83bea7c`;
+- no production-code change follows the green FULL implementation head;
+- this completion bookkeeping changes only `work/**` and must pass the CI-01 CLOSURE tier before merge.
+
+Implemented R3 boundaries include provider-neutral authored active-Sketch presentation, independent transient preview, intrinsic Origin overlay, runtime PresentationToken ↔ SketchId + EntityId binding, spatial pointer Ray3 transport, SketchPlacement ray → U/V mapping, primary routing modes, cursor modes, fail-closed edit-context cleanup and preserved global navigation.
+
+R4 is not activated by this completion. Continuous Line creation, semantic Sketch selection, rectangle selection, Delete and Command Line integration require a separate explicit Owner-accepted Work Contract.
