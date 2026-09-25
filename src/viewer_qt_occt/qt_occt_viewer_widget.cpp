@@ -600,6 +600,17 @@ public:
             false);
 
         add(
+            "ORTHO/PERSP",
+            {viewer::NavigationCubeActionKind::
+                 toggle_projection,
+             {}},
+            86,
+            178,
+            42,
+            11,
+            false);
+
+        add(
             "<",
             {viewer::NavigationCubeActionKind::
                  adjacent_left,
