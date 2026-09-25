@@ -1,6 +1,6 @@
 # SK-R0 — Sketcher Foundation & Program Roadmap
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture / governance  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -118,3 +118,23 @@ Roadmap change: establishes the initial accepted Sketch program roadmap.
 R0 completes only when the accepted foundation, roadmap and reconstruction path are present together and repository verification passes.
 
 Completion authorizes no 2D implementation by itself. The next product mutation still requires a separately accepted small Work Contract derived from the roadmap.
+
+
+## 7. Completion record
+
+SK-R0 governance/architecture work is complete.
+
+Completed state:
+
+- ADR-0008 freezes the accepted Shared 2D / Sketcher semantic foundation before the first 2D entity implementation;
+- `work/SKETCH_ROADMAP.md` v1.0 establishes milestones R0–R11 and separates architecture authority, program sequencing and bounded Work Contracts;
+- independent authored Line endpoint semantics, optional authored relations, runtime-only snap/inference/input mechanics, read-only diagnostics and derived planar-region semantics are recorded as accepted architecture;
+- provider-neutral Viewer/input/presentation direction is preserved and no Qt/OCCT detail becomes Sketch semantic identity;
+- `AGENTS.md` requires reading any accepted roadmap referenced by `work/ACTIVE.yaml` before the active Work Contract;
+- `work/ACTIVE.yaml` records this roadmap as the durable Sketch program context;
+- no production CAD source, persistence schema or user-visible product behavior changed;
+- Windows PR gate #233 passed documentation dispatch/verification, bootstrap verification, build and the complete CTest suite on the pre-completion R0 head.
+
+This completion bookkeeping changes the branch head, therefore the PR must pass one final exact-head Windows gate before merge.
+
+Completion does not authorize R1 implementation. R1 requires a separate explicit Owner-accepted Work Contract derived from `work/SKETCH_ROADMAP.md`.
