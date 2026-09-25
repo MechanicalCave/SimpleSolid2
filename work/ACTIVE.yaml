@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -15,16 +15,19 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - rerun the exact-head Windows gate after fixing the legacy-v2 persistence test file-handle lifetime
-  - merge SK-02B only after docs/verify/build/full CTest pass on the exact completion head
-  - R3 remains unauthorized until R2 is merged and a separate Owner-accepted Work Contract exists
+  - SK-02B / R2 is complete after final exact-head completion-bookkeeping verification and merge
+  - R3 is the next Sketch roadmap milestone: provider-neutral Sketch presentation and tool-input boundary
+  - R3 requires a separate explicit Owner-accepted Work Contract before any production mutation
+  - no Viewer Sketch presentation/input, Select/cursor workflow, constraints, solver, projection or profile work is active
 notes:
-  - SK-02B remains the active bounded R2 Work Contract.
-  - Gate #255 exposed a Windows test-harness file-handle lifetime issue before atomic Save; that fixture now closes the verification stream explicitly.
-  - Gate #257 built successfully and passed 40 of 41 tests; the final synthetic 1e400 JSON fixture was rejected by the native container before Part-domain parsing, as required by fail-closed container validation.
-  - verification now tests non-finite SketchModel restore separately and asserts JSON numeric overflow rejection at the native-container boundary; no production validation was weakened.
+  - Gate #258 passed the full Windows documentation/verify/build/CTest suite on implementation head 94f63d110a7837168f6ddcdb1132d80865420a2a.
+  - this completion-bookkeeping head still requires one final exact-head Windows gate before merge.
+  - R2 embeds Shared 2D SketchModel by value in PartSketch and adds semantic Add/Erase lifecycle.
   - Part schema v3 persists canonical model-local EntityIds, next_entity_id and authored Lines.
   - schema v1/v2 remain readable; successful Save publishes schema v3.
   - DocumentSession preserves per-Sketch live identity high-water across Undo/Redo without false dirty state.
-  - Viewer/UI/selection/snapping/constraints/solver/projection remain out of scope.
+  - docs/internal/SHARED_2D.md, PART_DOCUMENTS.md and PERSISTENCE.md describe the as-built R2 behavior.
+  - R3 remains unauthorized until a separate accepted Work Contract exists.
+  - SS1 remains donor-only and is not architecture authority.
+  - Assembly/Drawing implementation remains unauthorized.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.

@@ -86,6 +86,8 @@ No product/CAD implementation belongs to R0.
 
 ### R1 — Minimal Shared 2D authored core
 
+**Status:** completed
+
 Goal:
 
 - establish the smallest reusable authored 2D model;
@@ -110,6 +112,8 @@ Deliberately outside R1:
 
 ### R2 — Part host integration and durable lifecycle
 
+**Status:** completed
+
 Goal:
 
 - embed the Shared 2D authored model inside the existing Part-hosted Sketch without transferring host semantics into Sketch Core;
@@ -126,6 +130,8 @@ Deliberately outside R2:
 - constraints/solver.
 
 ### R3 — Provider-neutral Sketch presentation and tool-input boundary
+
+**Status:** next — not started
 
 Goal:
 

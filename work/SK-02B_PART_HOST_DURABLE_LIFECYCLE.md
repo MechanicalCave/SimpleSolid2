@@ -1,6 +1,6 @@
 # SK-02B — Part Host Integration and Durable Sketch Lifecycle
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -487,9 +487,9 @@ SK-02B completes only when:
 Completion does not activate R3 Viewer/input/presentation work. R3 requires a separate explicit Owner-accepted Work Contract.
 
 
-## 10. Completion candidate
+## 10. Completion record
 
-SK-02B implementation and documentation are complete pending a passing final exact-head Windows gate.
+SK-02B is complete.
 
 Implemented:
 
@@ -513,6 +513,8 @@ Deliberately not implemented:
 - Origin runtime snap;
 - grips, Object Snap, inference, constraints/solver, profiles or projection.
 
-Gate #255 exposed and fixed a Windows test-harness file-handle lifetime issue before atomic Save. Gate #257 then reached the final malformed fixture and showed that the native container correctly rejects JSON numeric overflow (1e400) before Part-domain parsing. The verification is split accordingly: SketchModel restore rejects non-finite geometry, while the native container test asserts overflow authored JSON is rejected at the container boundary. A new final exact-head Windows documentation/verify/build/CTest pass is required before completion/merge.
+Gate #255 exposed and fixed a Windows test-harness file-handle lifetime issue before atomic Save. Gate #257 then showed that the native container correctly rejects JSON numeric overflow (1e400) before Part-domain parsing; verification was split at the correct boundary. Gate #258 passed the full exact-head Windows documentation/verify/build/CTest suite on implementation head `94f63d110a7837168f6ddcdb1132d80865420a2a`.
+
+This completion-bookkeeping commit requires one final exact-head Windows gate before merge so the merged tree is exactly the tested completion tree.
 
 Completion authorizes no R3 production mutation. R3 requires a separate explicit Owner-accepted Work Contract.
