@@ -292,10 +292,10 @@ Current:
 
 ```text
 R0  completed
-R1  active — SK-02A
-R2  not started
+R1  completed
+R2  next — not started
 R3  not started
 R4+ not started
 ```
 
-R1 is active under the explicit Owner-accepted `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md` Work Contract. Work remains bounded to that contract.
+R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is the next milestone and remains unauthorized until a separate explicit Owner-accepted Work Contract is activated.
