@@ -160,6 +160,9 @@ void CadWorkbench::buildUi() {
     auto* editor_container = new QFrame(shell_);
     editor_container->setObjectName(
         QStringLiteral("editorSurface"));
+    editor_container->setAttribute(
+        Qt::WA_NativeWindow,
+        true);
     editor_container->setFrameShape(QFrame::StyledPanel);
     auto* editor_layout =
         new QGridLayout(editor_container);
@@ -185,7 +188,7 @@ void CadWorkbench::buildUi() {
         view_cube_ =
             new ViewCubeWidget(
                 viewport_,
-                viewport_widget,
+                editor_container,
                 viewport_widget);
     } else {
         if (viewport_surface.widget != nullptr) {
