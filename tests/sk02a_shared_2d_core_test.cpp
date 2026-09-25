@@ -65,10 +65,10 @@ int main() {
     CHECK(first != nullptr);
     CHECK(second != nullptr);
     CHECK(first->id() == first_id);
-    CHECK(first->start() == Point2{0.0, 0.0});
-    CHECK(first->end() == Point2{10.0, 0.0});
-    CHECK(second->start() == Point2{10.0, 0.0});
-    CHECK(second->end() == Point2{10.0, 5.0});
+    CHECK((first->start() == Point2{0.0, 0.0}));
+    CHECK((first->end() == Point2{10.0, 0.0}));
+    CHECK((second->start() == Point2{10.0, 0.0}));
+    CHECK((second->end() == Point2{10.0, 5.0}));
 
     // Equal endpoint coordinates are merely equal values. They do not create
     // another authored object, shared Point identity or persistent relation.
@@ -95,8 +95,8 @@ int main() {
     second = model.findLine(second_id);
     CHECK(second != nullptr);
     CHECK(second->id() == second_id);
-    CHECK(second->start() == Point2{10.0, 0.0});
-    CHECK(second->end() == Point2{10.0, 5.0});
+    CHECK((second->start() == Point2{10.0, 0.0}));
+    CHECK((second->end() == Point2{10.0, 5.0}));
 
     CHECK(!model.erase(first_id));
     CHECK(!model.erase(EntityId{}));
