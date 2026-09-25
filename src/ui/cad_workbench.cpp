@@ -202,10 +202,17 @@ void CadWorkbench::buildUi() {
                     return;
                 }
 
+                const double duration_seconds =
+                    action.kind ==
+                            viewer::NavigationCubeActionKind::
+                                toggle_projection
+                        ? 0.0
+                        : 0.28;
+
                 static_cast<void>(
                     viewport_->animateCameraState(
                         navigation->camera,
-                        0.28,
+                        duration_seconds,
                         navigation->fit_all));
             });
     } else {
