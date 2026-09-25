@@ -14,10 +14,11 @@ accepted_adrs:
   - "adr/ADR-0007-project-workspace-shell-and-document-navigation.md"
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
+  - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
   - keep the manually verified AIS_RubberBand selection-box fix
-  - review proposed ADR-0010 for provider-surface ViewCube presentation
-  - do not implement the D2 ViewCube architecture without explicit Owner acceptance
+  - implement the accepted ADR-0010 provider-surface 3D Navigation Cube inside WB-01B
+  - keep the implementation bounded to the accepted Navigation Cube semantics and provider-neutral Viewer boundary
   - after an accepted ViewCube solution, require exact-head FULL plus manual Windows visual verification before WB-01B closeout
   - keep R5 inactive until WB-01B is completed and separately accepted R5 work exists
 notes:
@@ -34,4 +35,5 @@ notes:
   - WB-01B was explicitly Owner-accepted on 2026-09-25 after proposal CLOSURE gate #323 passed.
   - WB-01B is the active bounded pre-R5 Viewer/UI stabilization; manual Windows visual verification is mandatory before completion.
   - Manual verification of d923f24a01e3b7679bfd588db87dce59ce976b59 passed the corrected selection-box but failed the second native-sibling ViewCube composition experiment.
-  - Both D1 ViewCube native-window experiments were reverted; further provider-surface ViewCube work requires explicit D2 acceptance.
+  - Both D1 ViewCube native-window experiments were reverted.
+  - Owner accepted ADR-0010 on 2026-09-25; provider-surface 3D Navigation Cube implementation is now authorized inside WB-01B.
