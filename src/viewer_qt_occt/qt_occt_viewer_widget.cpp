@@ -558,7 +558,7 @@ public:
                         0.94,
                         0.96,
                         Quantity_TOC_RGB});
-                label->SetFontHeight(12.0);
+                label->SetHeight(12.0);
                 label->SetHJustification(
                     Graphic3d_HTA_CENTER);
                 label->SetVJustification(
