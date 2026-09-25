@@ -207,22 +207,35 @@ int main(int argc, char* argv[]) {
             revisionless_overlay));
     QApplication::processEvents();
 
-    auto* overlay_widget =
+    CHECK(
         widget.findChild<QWidget*>(
             QStringLiteral(
-                "ss2SketchSelectionBoxOverlay"));
-    CHECK(overlay_widget != nullptr);
-    CHECK(overlay_widget->isVisible());
+                "ss2SketchSelectionBoxOverlay")) ==
+        nullptr);
 
-    CHECK(widget.setSketchSelectionBoxOverlay(
-        viewer::SketchSelectionBoxOverlay{
-            revisionless_overlay.anchor,
-            revisionless_overlay.current,
-            viewer::SketchRectangleSelectionRule::
-                crossing}));
+    for (int iteration = 0;
+         iteration < 100;
+         ++iteration) {
+        const auto offset =
+            static_cast<double>(iteration % 20);
+        CHECK(widget.setSketchSelectionBoxOverlay(
+            viewer::SketchSelectionBoxOverlay{
+                {
+                    revisionless_overlay.anchor.x - offset,
+                    revisionless_overlay.anchor.y},
+                {
+                    revisionless_overlay.current.x + offset,
+                    revisionless_overlay.current.y},
+                (iteration % 2) == 0
+                    ? viewer::SketchRectangleSelectionRule::
+                          window
+                    : viewer::SketchRectangleSelectionRule::
+                          crossing}));
+        QApplication::processEvents();
+    }
+
     widget.clearSketchSelectionBoxOverlay();
     QApplication::processEvents();
-    CHECK(!overlay_widget->isVisible());
 
     const auto after_overlay =
         widget.querySketchPresentations(
