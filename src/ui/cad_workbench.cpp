@@ -3,7 +3,6 @@
 #include "part_document_tree_controller.hpp"
 #include "part_sketch_interaction_controller.hpp"
 #include "part_viewport_controller.hpp"
-#include "view_cube_widget.hpp"
 
 #include <QEvent>
 #include <QFormLayout>
@@ -182,11 +181,33 @@ void CadWorkbench::buildUi() {
             0,
             0);
 
-        view_cube_ =
-            new ViewCubeWidget(
-                viewport_,
-                editor_container,
-                viewport_widget);
+        viewport_->setNavigationCubeActionHandler(
+            [this](
+                const viewer::NavigationCubeAction& action) {
+                if (viewport_ == nullptr) {
+                    return;
+                }
+
+                const auto current =
+                    viewport_->cameraState();
+                if (!current) {
+                    return;
+                }
+
+                const auto navigation =
+                    viewer::navigationForCubeAction(
+                        *current,
+                        action);
+                if (!navigation) {
+                    return;
+                }
+
+                static_cast<void>(
+                    viewport_->animateCameraState(
+                        navigation->camera,
+                        0.28,
+                        navigation->fit_all));
+            });
     } else {
         if (viewport_surface.widget != nullptr) {
             viewport_surface.widget->deleteLater();
