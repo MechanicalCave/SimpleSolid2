@@ -47,28 +47,33 @@ Tree selection updates the existing built-in-reference authority. Qt/OCCT legacy
 
 The controller pushes one coherent selection to Tree and Viewer. Primary selection drives Properties.
 
-Current mouse grammar is:
+Current mouse grammar depends on semantic context. Outside Sketch edit, built-in reference selection keeps the existing replace/toggle/blank-clear behavior. During Sketch Select, primary pointer input is routed through the Sketch coordinator:
 
 ```text
-Left click                 → replace semantic selection
-Ctrl + Left click          → toggle semantic selection member
-Left click on empty space  → clear semantic selection
+Left click Line            → replace Sketch EntityId selection
+Ctrl + Left click Line     → toggle Sketch EntityId selection
+Left click blank           → clear Sketch EntityId selection
+Ctrl + Left click blank    → keep Sketch selection
+Left-to-right drag         → Window rectangle replacement
+Right-to-left drag         → Crossing rectangle replacement
 Middle drag                → Pan
 Shift + Middle drag        → Orbit
 Mouse wheel                → Zoom
-Right click                → reserved; currently controlled no-op where no menu exists
+Right click                → reserved; controlled no-op
 ```
+
+Rectangle selection deliberately assigns no primary EntityId in R4 so provider query order cannot become semantic ordering.
 
 Transient OCCT detection/highlight is not semantic selection. SK-04B keeps Sketch hit testing independent from the mutable OCCT selection set: authored active-Sketch Lines are projected through the current view and queried in screen space. Point query returns the nearest eligible Line within provider pick tolerance. Rectangle query supports explicit `window` (projected segment fully contained) and `crossing` (projected segment intersects/touches or is contained) rules. Built-in references, grid, intrinsic Sketch Origin and transient preview Lines are outside these Sketch queries.
 
-Pointer routing and cursor mode remain independent runtime axes. Entering Sketch edit still defaults to presentation-selection routing with the Select pick-box cursor, but the Part/UI adapter can now legally configure `spatial_tool_input + select_pick_box` for the future Select drag workflow or `spatial_tool_input + create_edit_crosshair` for create/edit tools.
+Pointer routing and cursor mode remain independent runtime axes. Entering Sketch edit now creates one bounded `PartSketchInteractionController`, resets the single `SketchInteractionState` to Select and configures `spatial_tool_input + select_pick_box`. Activating Line keeps spatial routing and switches to `create_edit_crosshair`. The toolbar, Operations, Command Line and keyboard handlers are adapters to that same interaction authority.
 
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
 `IDocumentViewport` is provider-neutral. It exposes camera/navigation, the existing reference scene, an active-Sketch authored scene, a separate transient Sketch preview scene, presentation selection, neutral selection-intent transport, neutral spatial-pointer transport, primary-pointer routing, runtime cursor mode, active-Sketch point/rectangle presentation queries and a separate runtime selection-box overlay channel.
 
-`QtOcctViewerWidget` implements that contract behind the `viewer_qt_occt` module. Provider-native Qt events and OCCT view objects do not cross the boundary: spatial input is exported only as logical viewport coordinates plus a finite 3D `Ray3`.
+`QtOcctViewerWidget` implements that contract behind the `viewer_qt_occt` module. Provider-native Qt events and OCCT view objects do not cross the boundary: spatial input is exported as logical viewport coordinates plus a finite 3D `Ray3` and the smallest neutral modifier state required by the active interaction. SK-04C transports Control as provider-neutral runtime data; Qt modifier enums remain provider-local.
 
 The production executable creates the concrete provider only in the application composition root and injects it as a neutral `ViewportSurface`.
 
@@ -81,7 +86,9 @@ Boundary tests reject OCCT/provider tokens from domain/application APIs and Work
 
 SK-01 adds the durable Part-hosted Sketch lifecycle. SK-02B embeds durable Shared 2D Line geometry, and SK-03A adds its provider-neutral active-Sketch presentation/input boundary without implementing interactive Line creation.
 
-The editor toolbar above the 3D Viewport provides the Part `Sketch` launcher. Operations is reserved for the active tool/edit context rather than acting as a permanent tool catalog. During support pick it presents contextual guidance/Cancel; during Sketch edit it presents `Finish Sketch`.
+The editor toolbar above the 3D Viewport is contextual. In Part modeling it provides the Part `Sketch` launcher. Entering Sketch edit replaces that tool surface with `Select` and `Line`, whose checked state is projected from the single interaction state. Operations remains contextual rather than a permanent catalog: during support pick it presents guidance/Cancel; during Sketch Select it presents selection state and Delete Selection; during Line it presents the point prompt plus Finish Line/Cancel Line; `Finish Sketch` remains the whole-context action. Leaving or losing Sketch edit restores the Part modeling surfaces.
+
+A compact Sketch Command Line is hosted directly below the central Viewport while Sketch edit is active. It accepts only `SELECT` and `LINE` in R4 and invokes the same coordinator methods as the toolbar. Recognized submission returns focus to the Viewport; text-focus Esc/Delete remain local to the text control. Global Workbench Status remains a separate diagnostic/result channel.
 
 While the Sketch tool is active, the user selects one semantic built-in Origin plane: XY, XZ or YZ. Origin axes/point are rejected. The selected Tree item or Viewer token is only command input; the durable Sketch support is the semantic built-in reference role.
 
@@ -95,7 +102,11 @@ Switching/closing Documents clears the runtime edit context safely. If history r
 
 R3 also provides an independent transient Line-preview channel and maps provider rays back into active Sketch U/V through the metric `SketchPlacement`. The mapping therefore remains valid after camera orbit and is not based on screen orientation. Preview/ray activity is runtime-only and does not mutate authored state, revision, dirty state or Undo history.
 
-SK-04A now provides host-neutral Select/Line runtime semantics and EntityId selection, while SK-04B provides the provider-neutral point/rectangle query, token bridge and selection-box presentation required to drive that state. The current UI still does not wire those pieces into the final Select click/drag workflow, Delete action or continuous Line workflow; that end-to-end integration remains SK-04C. Command Line input, snapping, constraints and grips remain later roadmap work. Sketch support remains limited to XY/XZ/YZ Origin planes; Datum/Construction Plane and planar model-face support remain later stages.
+SK-04C wires SK-04A and SK-04B through one bounded Part/UI coordinator. Line accepts points on primary press, renders rubber-band preview on move and executes exactly one `AddSketchLineCommand` for each committed segment. Successful commits refresh authored presentation and advance the continuous anchor; exact-zero candidates create no command/history entry. Select performs point queries on release and Window/Crossing rectangle queries after a logical-pixel drag threshold. Delete executes one atomic `EraseSketchEntitiesCommand` for the current semantic EntityId set.
+
+Undo/Redo first calls the interaction state's history cancellation, clears preview/box state and returns to Select, then runs ordinary DocumentSession history. If the Sketch survives, selection is reconciled against the current SketchModel and projected through newly rebuilt presentation tokens. If history removes the active Sketch, edit closes fail-closed.
+
+Snapping/inference, coordinate/value entry, constraints, grips/direct manipulation, additional primitives and RMB command grammar remain later roadmap work. Sketch support remains limited to XY/XZ/YZ Origin planes; Datum/Construction Plane and planar model-face support remain later stages.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and responsive ViewCube
@@ -122,7 +133,7 @@ There is no modeled Part B-Rep in WB-01/WB-01A. The OCCT provider is presentatio
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle query results, selection-box overlay, pointer routing and cursor mode are runtime-only.
+Selection, primary selection, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle query results, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select drag state and Command Line text/prompt state are runtime-only.
 
 Persistent Origin visibility is authored state and is intentionally separate.
 
