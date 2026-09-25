@@ -1,4 +1,5 @@
 #include <simplesolid2/viewer/navigation_cube.hpp>
+#include <simplesolid2/viewer/navigation.hpp>
 
 #include <cmath>
 
