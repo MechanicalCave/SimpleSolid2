@@ -1870,6 +1870,30 @@ void QtOcctViewerWidget::fitAll() {
         [this] { impl_->fitAll(); });
 }
 
+void QtOcctViewerWidget::setNavigationCubeActionHandler(
+    viewer::NavigationCubeActionHandler handler) {
+    guardedVoid(
+        "setNavigationCubeActionHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setNavigationCubeActionHandler(
+                std::move(handler));
+        });
+}
+
+bool QtOcctViewerWidget::animateCameraState(
+    const viewer::CameraState& state,
+    double duration_seconds,
+    bool fit_all) {
+    return guardedBool(
+        "animateCameraState",
+        [this, &state, duration_seconds, fit_all] {
+            return impl_->animateCameraState(
+                state,
+                duration_seconds,
+                fit_all);
+        });
+}
+
 bool QtOcctViewerWidget::setReferenceScene(
     const viewer::ReferenceScene& scene) {
     return guardedBool(
