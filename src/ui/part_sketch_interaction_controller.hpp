@@ -9,6 +9,7 @@
 #include <functional>
 #include <optional>
 #include <string>
+#include <utility>
 
 namespace simplesolid2::ui {
 
