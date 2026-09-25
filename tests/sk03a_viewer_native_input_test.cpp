@@ -52,7 +52,8 @@ int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
 
     viewer_qt_occt::QtOcctViewerWidget widget;
-    widget.resize(900, 640);
+    // Use odd dimensions so one integer pixel is the exact viewport center.
+    widget.resize(901, 641);
     widget.show();
 
     if (!QTest::qWaitForWindowExposed(
