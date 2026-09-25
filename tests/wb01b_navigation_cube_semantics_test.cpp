@@ -78,7 +78,7 @@ int main() {
         CHECK(next.has_value());
         CHECK(
             next->projection ==
-            viewer::CameraProjection::orthographic);
+            camera.projection);
         CHECK(near(next->scale, camera.scale));
         CHECK(next->target == camera.target);
         CHECK(sameDirection(
@@ -176,11 +176,52 @@ int main() {
     CHECK(home->fit_all);
     CHECK(
         home->camera.projection ==
-        viewer::CameraProjection::orthographic);
+        camera.projection);
     CHECK(sameDirection(
         home->camera.target -
             home->camera.eye,
         {-1, 1, -1}));
+
+    const auto toggled =
+        viewer::navigationForCubeAction(
+            camera,
+            {viewer::NavigationCubeActionKind::
+                 toggle_projection,
+             {}});
+    CHECK(toggled.has_value());
+    CHECK(!toggled->fit_all);
+    CHECK(
+        toggled->camera.projection ==
+        viewer::CameraProjection::orthographic);
+    CHECK(
+        toggled->camera.eye ==
+        camera.eye);
+    CHECK(
+        toggled->camera.target ==
+        camera.target);
+    CHECK(
+        toggled->camera.up ==
+        camera.up);
+
+    const auto toggled_back =
+        viewer::navigationForCubeAction(
+            toggled->camera,
+            {viewer::NavigationCubeActionKind::
+                 toggle_projection,
+             {}});
+    CHECK(toggled_back.has_value());
+    CHECK(
+        toggled_back->camera.projection ==
+        viewer::CameraProjection::perspective);
+    CHECK(
+        toggled_back->camera.eye ==
+        camera.eye);
+    CHECK(
+        toggled_back->camera.target ==
+        camera.target);
+    CHECK(
+        toggled_back->camera.up ==
+        camera.up);
 
     const auto iso =
         viewer::cameraForNavigationCubeTarget(
