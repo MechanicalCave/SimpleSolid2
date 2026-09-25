@@ -986,3 +986,20 @@ add_test(
 set_tests_properties(sk04c.part_sketch_interaction_controller PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+
+add_executable(wb01b_navigation_cube_semantics_test
+    wb01b_navigation_cube_semantics_test.cpp
+)
+
+target_link_libraries(wb01b_navigation_cube_semantics_test
+    PRIVATE
+        simplesolid2_viewer
+)
+
+target_compile_features(wb01b_navigation_cube_semantics_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME wb01b.navigation_cube_semantics
+    COMMAND wb01b_navigation_cube_semantics_test
+)
