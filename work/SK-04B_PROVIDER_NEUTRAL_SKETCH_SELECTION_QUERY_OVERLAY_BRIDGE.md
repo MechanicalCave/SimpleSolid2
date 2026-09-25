@@ -1,6 +1,6 @@
 # SK-04B — Provider-neutral Sketch Selection Query, Box Overlay and Token Bridge
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -546,3 +546,22 @@ SK-04B completes only when:
 - completion bookkeeping passes the appropriate exact-head CI tier.
 
 Completion of SK-04B does not activate SK-04C automatically. SK-04C requires a separate explicit Owner-accepted Work Contract.
+
+
+## 19. Completion record
+
+SK-04B implementation is complete.
+
+Evidence:
+
+- implementation exact head `7988d4c4b3613415e34892c4cfcaed00062e9366` passed FULL Windows gate #297;
+- Build passed and the complete suite passed 51/51 CTest tests;
+- `sk04b.viewer_selection_query_contracts` proves finite screen-space query/overlay contracts, normalized rectangles, unique valid tokens and explicit provider-failure versus completed-empty results;
+- `sk04b.part_viewport_selection_bridge` proves current token → `SketchId + EntityId`, reverse EntityId → current token mapping, stale-token rejection after presentation rebuild, semantic highlight projection, overlay non-mutation and independent routing/cursor control;
+- `sk04b.viewer_native_selection_query` proves real Qt/OCCT point and Window/Crossing queries, exclusion of reference/Origin/preview presentation, runtime overlay behavior and current-view querying after orbit;
+- legacy built-in reference selection and existing global navigation remain covered by the full regression suite;
+- no Sketch Core authored semantics, DocumentSession commands, Part persistence schema or Product UI workflow were changed.
+
+This closeout changes only `docs/** + work/**` after the green FULL implementation head and must pass the CI-01 non-build documentation tier before merge.
+
+SK-04B completes only the second bounded contract of R4. R4 remains incomplete. SK-04C is next and requires a separate explicit Owner-accepted Work Contract before implementation.
