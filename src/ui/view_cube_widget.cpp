@@ -313,7 +313,6 @@ ViewCubeWidget::ViewCubeWidget(
       host_{parent},
       repaint_target_{repaint_target} {
     setObjectName(QStringLiteral("viewCubeWidget"));
-    setAttribute(Qt::WA_NativeWindow, true);
     setFrameShape(QFrame::StyledPanel);
     setSizePolicy(
         QSizePolicy::Fixed,
