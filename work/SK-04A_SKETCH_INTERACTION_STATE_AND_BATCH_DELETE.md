@@ -593,7 +593,7 @@ At minimum prove:
 37. FULL exact-head gate passes on implementation.
 38. Completion bookkeeping uses the appropriate CI-01 non-build tier.
 
-## 15. Documentation impact
+## Documentation Impact
 
 Internal docs: required  
 User/Product docs: not required  
