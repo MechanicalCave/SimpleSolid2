@@ -112,10 +112,10 @@ The same interaction state owns transient semantic Sketch selection as `EntityId
 
 The current Shared 2D / Part integration now has R3 runtime presentation/input adapters outside the Shared 2D target: active authored Lines can be presented, intrinsic Origin is a runtime overlay, and provider-neutral rays can be mapped to active Sketch U/V. Those runtime capabilities do not add authored state to `simplesolid2_sketch`.
 
+The current product now wires the Shared 2D interaction state end-to-end through the Part Sketch edit context. Select click/Ctrl-toggle, Window/Crossing rectangle replacement, continuous Line creation, transient rubber-band preview, atomic multi-entity Delete, hierarchical Esc and history cancellation are runtime/application adapters around the same host-neutral state.
+
 The current product still does not implement:
 
-- Viewport/Workbench wiring for semantic Sketch entity selection or rectangle selection;
-- end-to-end interactive Line creation and Delete UI;
 - intrinsic Origin snapping;
 - grips/direct manipulation;
 - Circle, Arc or construction geometry;
@@ -137,5 +137,7 @@ SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02
 SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for neutral authored/preview presentation contracts, U/V↔3D and ray→U/V mapping, runtime token bindings, fail-closed active-Sketch lifecycle, routing/cursor state and real Qt/OCCT spatial input before/after orbit.
 
 SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage for Select/Line runtime semantics, explicit request/acknowledgement, continuous anchor progression, exact-zero suppression, Finish/Cancel/Esc behavior, transient EntityId selection/reconciliation, atomic multi-entity Delete and one-segment-per-Undo integration with `DocumentSession`.
+
+SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the bounded host coordinator: default Select, spatial-tool routing/cursor projection, continuous Line commits, runtime preview, point selection, Ctrl-toggle sampled at release, Crossing rectangle replacement without primary identity, atomic Delete, history reconciliation, exact-zero suppression and hierarchical Esc.
 
 The repository Windows FULL gate builds the exact implementation head and runs the complete CTest suite.
