@@ -1,6 +1,6 @@
 # CI-01 — Tiered Exact-Head Verification
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D1 repository workflow / governance implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)
@@ -130,3 +130,14 @@ Reason: this changes repository build/test/verification workflow, not product be
 - incremental compilation/cache policy;
 - changing compiler/toolchain;
 - remote build farm design.
+
+## Completion record
+
+CI-01 implementation is complete.
+
+- implementation head `d7aa0ae06046d2ac22831b2f4765b56dedac22c3` passed Windows PR gate #261 in FULL mode;
+- classifier self-test passed and the implementation head was correctly classified FULL because workflow/scripts changed;
+- this completion commit changes only `work/**` and is intentionally used to prove the CLOSURE tier;
+- final merge is allowed only if the exact completion HEAD passes the stable `windows-msvc` summary check in CLOSURE mode without Build/CTest.
+
+CI-01 does not authorize R3 implementation. R3 still requires a separate explicit Owner-accepted Work Contract.
