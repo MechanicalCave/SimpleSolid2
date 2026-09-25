@@ -15,13 +15,15 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - merge SK-04B only after the exact closeout HEAD passes the selected non-build CI tier
-  - prepare a separate SK-04C Work Contract for the end-to-end Select / continuous Line / Delete workflow and tool surfaces
-  - SK-04C remains unauthorized until explicit Owner acceptance
+  - review proposed work/SK-04C_END_TO_END_SELECT_CONTINUOUS_LINE_DELETE_WORKFLOW.md
+  - SK-04C remains inactive until explicit Owner acceptance
+  - successful SK-04C completion would complete R4; R5 would still require a separate contract
 notes:
-  - SK-04B implementation exact head 7988d4c4b3613415e34892c4cfcaed00062e9366 passed FULL gate #297 with Build and 51/51 CTest tests.
-  - active-Sketch point/rectangle queries return runtime PresentationToken values only; Part/UI maps them to semantic SketchId plus EntityId.
-  - Window/Crossing membership is current-view screen-space presentation behavior.
-  - Sketch selection-box presentation is runtime-only and independent from authored/preview scenes.
-  - Part/UI pointer routing and cursor mode are independent so Select may use spatial_tool_input plus select_pick_box.
-  - R4 remains incomplete after SK-04B; SK-04C requires a separate explicit Owner-accepted Work Contract.
+  - SK-04A and SK-04B are completed.
+  - SK-04B merged as 28d27927dacdc356d9047b79905fa697d6dbc3fd after FULL #297 and DOCS #298.
+  - SK-04C proposal adds no production authorization until explicit Owner acceptance.
+  - proposed SK-04C owns one SketchInteractionState per active Sketch edit and wires toolbar, viewport, Operations and compact Command Line as adapters.
+  - proposed Select uses point/Ctrl-toggle plus Window/Crossing rectangle replacement; rectangle selection has no semantic primary in R4.
+  - proposed Line commits on primary press, one segment per AddSketchLineCommand/Undo entry.
+  - proposed Command Line accepts only SELECT and LINE activation; precision coordinate input remains R7.
+  - proposed Undo/Redo cancels uncommitted Line runtime state before ordinary document history.
