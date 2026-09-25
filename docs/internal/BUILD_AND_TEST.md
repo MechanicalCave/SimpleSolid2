@@ -58,6 +58,8 @@ SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02
 
 SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for provider-neutral authored/preview scenes, Sketch-frame U/V↔3D conversion, ray→U/V failure behavior, active-Sketch presentation/token bindings, preview non-mutation, fail-closed runtime lifecycle, exclusive primary routing, cursor modes and real Qt/OCCT spatial input before/after camera orbit.
 
+SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage. These prove neutral Select/Line state transitions, exact-zero suppression, one outstanding Line request, commit-success/failure anchor behavior, hierarchical Esc/Finish/Cancel, EntityId selection/reconciliation, atomic batch Delete validation, one-command/one-transaction/one-Undo semantics and three continuous committed Line segments producing exactly three Undo entries.
+
 SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage for host-neutral Select/Line state, pending Line request acknowledgement, Finish/Cancel/Esc semantics, transient EntityId selection/reconciliation, atomic all-or-nothing multi-entity Delete, original-identity Undo/Redo restoration and one committed Line segment per history entry.
 
 WB-01A adds or extends deterministic coverage for:

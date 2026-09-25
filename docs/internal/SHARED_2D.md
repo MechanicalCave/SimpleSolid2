@@ -107,6 +107,25 @@ Preview intent is transient and exists only while Line has an anchor and no unre
 
 The same interaction state owns transient semantic Sketch selection as `EntityId` values plus optional primary identity. Replace/toggle/clear/replace-many never store Viewer tokens. Reconciliation can prune identities that no longer exist in the current `SketchModel` without authored mutation.
 
+<!-- section-id: internal.shared-2d.interaction -->
+## Host-neutral Sketch interaction state
+
+SK-04A adds one runtime interaction authority inside the neutral Sketch target. It does not own Part/DocumentSession, Viewer, Qt or provider state.
+
+The implemented tool state is intentionally small:
+
+```text
+Select
+Line / AwaitFirstPoint
+Line / AwaitNextPoint
+```
+
+Select is the default. Activating Line enters AwaitFirstPoint. Accepting the first finite point stores a runtime anchor and enters AwaitNextPoint. Accepting a distinct next point creates a `LineSegmentIntent` request but does not advance the anchor until the host explicitly resolves that request as committed. A failed host commit preserves the previous anchor. Exact-zero segments produce no request and use no epsilon policy.
+
+Only one Line request may be outstanding. Runtime preview intent exists only while AwaitNextPoint has a valid anchor and no request is pending. Finish/Cancel clear uncommitted Line state and return Select. Hierarchical Esc first drops AwaitNextPoint back to AwaitFirstPoint, then a second Esc returns Select. Already committed authored Lines are never rolled back by tool cancellation.
+
+The same interaction state owns transient semantic selection as model-local `EntityId` values plus optional primary selection. It supports replace, toggle, clear, replace-many and explicit reconciliation against the current `SketchModel`. Viewer `PresentationToken` never enters this semantic selection state.
+
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 

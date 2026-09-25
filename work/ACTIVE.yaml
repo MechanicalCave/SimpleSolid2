@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-04A_SKETCH_INTERACTION_STATE_AND_BATCH_DELETE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -15,16 +15,12 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - implement SK-04A host-neutral Sketch interaction state
-  - implement atomic EraseSketchEntitiesCommand with one-transaction/one-Undo semantics
-  - add focused semantic/history/boundary tests
-  - finish internal as-built docs, FULL implementation gate and completion bookkeeping
+  - merge SK-04A only after the exact closeout HEAD passes the selected non-build CI tier
+  - prepare a separate SK-04B Work Contract for provider-neutral point/rectangle selection queries and selection-box overlay
+  - SK-04B remains unauthorized until explicit Owner acceptance
 notes:
-  - SK-04A was explicitly Owner-accepted on 2026-09-25 and is the active bounded R4 Work Contract.
-  - R4 is active but remains incomplete after SK-04A; SK-04B and SK-04C require separate Owner-accepted Work Contracts.
-  - one committed Line segment equals one AddSketchLineCommand and one Undo entry.
-  - Line state advances its continuous anchor only after host commit success acknowledgement.
-  - explicit Cancel/Finish never roll back already committed Lines.
-  - Sketch selection stores EntityId only; Viewer PresentationToken remains runtime presentation transport.
-  - batch Delete validates the whole target set before mutation and commits atomically as one Undo entry.
-  - Ctrl-toggle and Left-to-Right Window / Right-to-Left Crossing are accepted R4 interaction semantics for later adapters.
+  - SK-04A implementation exact head 1cb71449247f166c8a972b5560b29863f4fae282 passed FULL gate #288 with Build and 48/48 CTest tests.
+  - SK-04A establishes host-neutral Select/Line runtime state, explicit Line request acknowledgement and EntityId-only transient selection.
+  - EraseSketchEntitiesCommand validates atomically and commits one transaction/revision/Undo entry for the whole batch.
+  - one successfully committed Line segment remains one AddSketchLineCommand and one Undo entry.
+  - R4 remains incomplete after SK-04A; SK-04B and SK-04C require separate explicit Owner-accepted Work Contracts.
