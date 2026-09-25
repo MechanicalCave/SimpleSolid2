@@ -209,6 +209,20 @@ void PartViewportController::refreshPresentation() {
 
 void PartViewportController::setSketchEditSketch(
     std::optional<sketch::SketchId> sketch_id) {
+    if (sketch_edit_id_ == sketch_id) {
+        if (sketch_edit_id_ &&
+            activeSketch() == nullptr) {
+            sketch_edit_id_.reset();
+            sketch_spatial_tool_input_ = false;
+            sketch_entity_bindings_.clear();
+            clearSketchPreview();
+        }
+
+        applySketchViewportMode();
+        refreshPresentation();
+        return;
+    }
+
     sketch_edit_id_ = std::move(sketch_id);
     sketch_spatial_tool_input_ = false;
     sketch_entity_bindings_.clear();

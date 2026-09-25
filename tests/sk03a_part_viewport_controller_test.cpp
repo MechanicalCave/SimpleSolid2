@@ -196,9 +196,9 @@ int main(int argc, char* argv[]) {
     controller.setSketchEditSketch(sketch_id);
     CHECK(viewport.sketch_scene_.lines.size() == 2U);
     CHECK(viewport.sketch_scene_.origin.has_value());
-    CHECK(
+    CHECK((
         viewport.sketch_scene_.origin->position ==
-        viewer::Point3{0.0, 0.0, 0.0});
+        viewer::Point3{0.0, 0.0, 0.0}));
     CHECK(
         viewport.routing_ ==
         viewer::PrimaryPointerRouting::
@@ -225,12 +225,12 @@ int main(int argc, char* argv[]) {
     CHECK(first_address->entity_id == *first.entity_id);
     CHECK(second_address->entity_id == *second.entity_id);
 
-    CHECK(
+    CHECK((
         viewport.sketch_scene_.lines[0].start ==
-        viewer::Point3{1.0, 2.0, 0.0});
-    CHECK(
+        viewer::Point3{1.0, 2.0, 0.0}));
+    CHECK((
         viewport.sketch_scene_.lines[0].end ==
-        viewer::Point3{4.0, 2.0, 0.0});
+        viewer::Point3{4.0, 2.0, 0.0}));
 
     const auto revision_before_preview =
         session.document().revision();
@@ -247,12 +247,12 @@ int main(int argc, char* argv[]) {
                     sketch::Point2{7.0, 3.0}},
             }));
     CHECK(viewport.preview_scene_.lines.size() == 1U);
-    CHECK(
+    CHECK((
         viewport.preview_scene_.lines[0].start ==
-        viewer::Point3{2.0, 3.0, 0.0});
-    CHECK(
+        viewer::Point3{2.0, 3.0, 0.0}));
+    CHECK((
         viewport.preview_scene_.lines[0].end ==
-        viewer::Point3{7.0, 3.0, 0.0});
+        viewer::Point3{7.0, 3.0, 0.0}));
 
     controller.clearSketchPreview();
     CHECK(viewport.preview_scene_.lines.empty());
@@ -282,9 +282,9 @@ int main(int argc, char* argv[]) {
     CHECK(
         resolved->phase ==
         viewer::SpatialPointerPhase::move);
-    CHECK(
+    CHECK((
         resolved->position ==
-        sketch::Point2{3.0, 5.0});
+        sketch::Point2{3.0, 5.0}));
 
     CHECK(controller.setSketchSpatialToolInput(true));
     CHECK(

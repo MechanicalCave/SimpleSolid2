@@ -36,14 +36,14 @@ void checkPoint(
     double x,
     double y,
     double z) {
-    CHECK(actual == viewer::Point3{x, y, z});
+    CHECK((actual == viewer::Point3{x, y, z}));
 }
 
 void checkUv(
     const sketch::Point2& actual,
     double u,
     double v) {
-    CHECK(actual == sketch::Point2{u, v});
+    CHECK((actual == sketch::Point2{u, v}));
 }
 
 } // namespace
