@@ -95,6 +95,30 @@ public:
         return selection.valid();
     }
 
+    viewer::SketchPointQueryResult
+    querySketchPresentation(
+        viewer::ViewportPoint2 point) override {
+        return viewer::SketchPointQueryResult{
+            point.valid(),
+            std::nullopt};
+    }
+
+    viewer::SketchRectangleQueryResult
+    querySketchPresentations(
+        const viewer::ViewportRect2& rectangle,
+        viewer::SketchRectangleSelectionRule) override {
+        return viewer::SketchRectangleQueryResult{
+            rectangle.valid(),
+            {}};
+    }
+
+    bool setSketchSelectionBoxOverlay(
+        const viewer::SketchSelectionBoxOverlay& overlay) override {
+        return overlay.valid();
+    }
+
+    void clearSketchSelectionBoxOverlay() override {}
+
     void setSelectionIntentHandler(
         viewer::SelectionIntentHandler handler) override {
         selection_handler_ =
@@ -286,7 +310,23 @@ int main(int argc, char* argv[]) {
         resolved->position ==
         sketch::Point2{3.0, 5.0}));
 
-    CHECK(controller.setSketchSpatialToolInput(true));
+    CHECK(
+        controller.setSketchPrimaryPointerRouting(
+            viewer::PrimaryPointerRouting::
+                spatial_tool_input));
+    CHECK(
+        viewport.routing_ ==
+        viewer::PrimaryPointerRouting::
+            spatial_tool_input);
+    CHECK(
+        viewport.cursor_mode_ ==
+        viewer::ViewportCursorMode::
+            select_pick_box);
+
+    CHECK(
+        controller.setSketchCursorMode(
+            viewer::ViewportCursorMode::
+                create_edit_crosshair));
     CHECK(
         viewport.routing_ ==
         viewer::PrimaryPointerRouting::
@@ -296,7 +336,19 @@ int main(int argc, char* argv[]) {
         viewer::ViewportCursorMode::
             create_edit_crosshair);
 
-    CHECK(controller.setSketchSpatialToolInput(false));
+    CHECK(
+        controller.setSketchCursorMode(
+            viewer::ViewportCursorMode::
+                select_pick_box));
+    CHECK(
+        viewport.routing_ ==
+        viewer::PrimaryPointerRouting::
+            spatial_tool_input);
+
+    CHECK(
+        controller.setSketchPrimaryPointerRouting(
+            viewer::PrimaryPointerRouting::
+                presentation_selection));
     CHECK(
         viewport.routing_ ==
         viewer::PrimaryPointerRouting::
@@ -356,7 +408,14 @@ int main(int argc, char* argv[]) {
                     sketch::Point2{1.0, 1.0},
                     sketch::Point2{2.0, 1.0}},
             }));
-    CHECK(controller.setSketchSpatialToolInput(true));
+    CHECK(
+        controller.setSketchPrimaryPointerRouting(
+            viewer::PrimaryPointerRouting::
+                spatial_tool_input));
+    CHECK(
+        controller.setSketchCursorMode(
+            viewer::ViewportCursorMode::
+                create_edit_crosshair));
     CHECK(!viewport.preview_scene_.lines.empty());
 
     CHECK(session.undo().changed);
@@ -376,7 +435,14 @@ int main(int argc, char* argv[]) {
         viewport.routing_ ==
         viewer::PrimaryPointerRouting::
             presentation_selection);
-    CHECK(!controller.setSketchSpatialToolInput(true));
+    CHECK(
+        !controller.setSketchPrimaryPointerRouting(
+            viewer::PrimaryPointerRouting::
+                spatial_tool_input));
+    CHECK(
+        !controller.setSketchCursorMode(
+            viewer::ViewportCursorMode::
+                create_edit_crosshair));
 
     return EXIT_SUCCESS;
 }

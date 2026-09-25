@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-04B_PROVIDER_NEUTRAL_SKETCH_SELECTION_QUERY_OVERLAY_BRIDGE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -15,15 +15,13 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - implement SK-04B provider-neutral active-Sketch point and rectangle queries
-  - implement runtime selection-box overlay and Part/UI token bridge
-  - decouple Sketch spatial routing from cursor mode in PartViewportController
-  - add focused neutral/controller/native provider tests
-  - finish internal docs, FULL implementation gate and completion bookkeeping
+  - merge SK-04B only after the exact closeout HEAD passes the selected non-build CI tier
+  - prepare a separate SK-04C Work Contract for the end-to-end Select / continuous Line / Delete workflow and tool surfaces
+  - SK-04C remains unauthorized until explicit Owner acceptance
 notes:
-  - SK-04B was explicitly Owner-accepted on 2026-09-25 and is the active bounded R4 Work Contract.
-  - R4 remains incomplete after SK-04B; SK-04C requires a separate Owner-accepted Work Contract.
-  - point/rectangle query returns runtime PresentationToken only and does not own semantic selection.
-  - rectangle membership is current-view Window/Crossing behavior.
-  - Select must be able to use spatial_tool_input with select_pick_box cursor.
-  - legacy built-in reference SelectionIntent remains supported.
+  - SK-04B implementation exact head 7988d4c4b3613415e34892c4cfcaed00062e9366 passed FULL gate #297 with Build and 51/51 CTest tests.
+  - active-Sketch point/rectangle queries return runtime PresentationToken values only; Part/UI maps them to semantic SketchId plus EntityId.
+  - Window/Crossing membership is current-view screen-space presentation behavior.
+  - Sketch selection-box presentation is runtime-only and independent from authored/preview scenes.
+  - Part/UI pointer routing and cursor mode are independent so Select may use spatial_tool_input plus select_pick_box.
+  - R4 remains incomplete after SK-04B; SK-04C requires a separate explicit Owner-accepted Work Contract.

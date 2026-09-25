@@ -53,6 +53,20 @@ public:
     [[nodiscard]] bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override;
 
+    [[nodiscard]] viewer::SketchPointQueryResult
+    querySketchPresentation(
+        viewer::ViewportPoint2 point) override;
+
+    [[nodiscard]] viewer::SketchRectangleQueryResult
+    querySketchPresentations(
+        const viewer::ViewportRect2& rectangle,
+        viewer::SketchRectangleSelectionRule rule) override;
+
+    [[nodiscard]] bool setSketchSelectionBoxOverlay(
+        const viewer::SketchSelectionBoxOverlay& overlay) override;
+
+    void clearSketchSelectionBoxOverlay() override;
+
     void setSelectionIntentHandler(
         viewer::SelectionIntentHandler handler) override;
 

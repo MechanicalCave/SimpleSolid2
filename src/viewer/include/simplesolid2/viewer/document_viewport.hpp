@@ -5,6 +5,7 @@
 #include <simplesolid2/viewer/reference_presentation.hpp>
 #include <simplesolid2/viewer/selection.hpp>
 #include <simplesolid2/viewer/sketch_presentation.hpp>
+#include <simplesolid2/viewer/sketch_selection_query.hpp>
 #include <simplesolid2/viewer/spatial_pointer.hpp>
 
 #include <optional>
@@ -40,6 +41,20 @@ public:
 
     virtual bool setPresentationSelection(
         const PresentationSelection& selection) = 0;
+
+    [[nodiscard]] virtual SketchPointQueryResult
+    querySketchPresentation(
+        ViewportPoint2 point) = 0;
+
+    [[nodiscard]] virtual SketchRectangleQueryResult
+    querySketchPresentations(
+        const ViewportRect2& rectangle,
+        SketchRectangleSelectionRule rule) = 0;
+
+    virtual bool setSketchSelectionBoxOverlay(
+        const SketchSelectionBoxOverlay& overlay) = 0;
+
+    virtual void clearSketchSelectionBoxOverlay() = 0;
 
     virtual void setSelectionIntentHandler(
         SelectionIntentHandler handler) = 0;

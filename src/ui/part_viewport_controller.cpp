@@ -133,9 +133,15 @@ void PartViewportController::setDocumentSession(
     application::DocumentSession* session) {
     if (session_ != session) {
         sketch_edit_id_.reset();
-        sketch_spatial_tool_input_ = false;
+        sketch_primary_pointer_routing_ =
+            viewer::PrimaryPointerRouting::
+                presentation_selection;
+        sketch_cursor_mode_ =
+            viewer::ViewportCursorMode::
+                select_pick_box;
         sketch_entity_bindings_.clear();
         clearSketchPreview();
+        clearSketchSelectionBoxOverlay();
     }
 
     session_ = session;
@@ -150,8 +156,14 @@ void PartViewportController::setDocumentSession(
 void PartViewportController::clear() {
     session_ = nullptr;
     sketch_edit_id_.reset();
-    sketch_spatial_tool_input_ = false;
+    sketch_primary_pointer_routing_ =
+        viewer::PrimaryPointerRouting::
+            presentation_selection;
+    sketch_cursor_mode_ =
+        viewer::ViewportCursorMode::
+            select_pick_box;
     sketch_entity_bindings_.clear();
+    clearSketchSelectionBoxOverlay();
     tree_->clear();
 
     if (viewport_ != nullptr) {
@@ -184,6 +196,7 @@ void PartViewportController::refreshPresentation() {
     if (session_ == nullptr) {
         sketch_entity_bindings_.clear();
         clearSketchPreview();
+        clearSketchSelectionBoxOverlay();
         applySketchViewportMode();
         static_cast<void>(
             viewport_->setReferenceScene(
@@ -197,9 +210,15 @@ void PartViewportController::refreshPresentation() {
     if (sketch_edit_id_ &&
         activeSketch() == nullptr) {
         sketch_edit_id_.reset();
-        sketch_spatial_tool_input_ = false;
+        sketch_primary_pointer_routing_ =
+            viewer::PrimaryPointerRouting::
+                presentation_selection;
+        sketch_cursor_mode_ =
+            viewer::ViewportCursorMode::
+                select_pick_box;
         sketch_entity_bindings_.clear();
         clearSketchPreview();
+        clearSketchSelectionBoxOverlay();
         applySketchViewportMode();
     }
 
@@ -224,9 +243,15 @@ void PartViewportController::setSketchEditSketch(
         if (sketch_edit_id_ &&
             activeSketch() == nullptr) {
             sketch_edit_id_.reset();
-            sketch_spatial_tool_input_ = false;
+            sketch_primary_pointer_routing_ =
+                viewer::PrimaryPointerRouting::
+                    presentation_selection;
+            sketch_cursor_mode_ =
+                viewer::ViewportCursorMode::
+                    select_pick_box;
             sketch_entity_bindings_.clear();
             clearSketchPreview();
+            clearSketchSelectionBoxOverlay();
         }
 
         applySketchViewportMode();
@@ -235,9 +260,15 @@ void PartViewportController::setSketchEditSketch(
     }
 
     sketch_edit_id_ = std::move(sketch_id);
-    sketch_spatial_tool_input_ = false;
+    sketch_primary_pointer_routing_ =
+        viewer::PrimaryPointerRouting::
+            presentation_selection;
+    sketch_cursor_mode_ =
+        viewer::ViewportCursorMode::
+            select_pick_box;
     sketch_entity_bindings_.clear();
     clearSketchPreview();
+    clearSketchSelectionBoxOverlay();
 
     if (sketch_edit_id_ &&
         activeSketch() == nullptr) {
@@ -301,15 +332,122 @@ void PartViewportController::clearSketchPreview() {
     }
 }
 
-bool PartViewportController::setSketchSpatialToolInput(
-    bool enabled) {
-    if (enabled && activeSketch() == nullptr) {
+bool PartViewportController::setSketchPrimaryPointerRouting(
+    viewer::PrimaryPointerRouting routing) {
+    if (activeSketch() == nullptr) {
         return false;
     }
 
-    sketch_spatial_tool_input_ = enabled;
+    sketch_primary_pointer_routing_ = routing;
     applySketchViewportMode();
     return true;
+}
+
+bool PartViewportController::setSketchCursorMode(
+    viewer::ViewportCursorMode mode) {
+    if (activeSketch() == nullptr) {
+        return false;
+    }
+
+    sketch_cursor_mode_ = mode;
+    applySketchViewportMode();
+    return true;
+}
+
+SketchEntityPointQueryResult
+PartViewportController::querySketchEntityAt(
+    viewer::ViewportPoint2 point) {
+    if (viewport_ == nullptr ||
+        activeSketch() == nullptr ||
+        !point.valid()) {
+        return {};
+    }
+
+    const auto queried =
+        viewport_->querySketchPresentation(point);
+    if (!queried.valid() ||
+        !queried.completed) {
+        return {};
+    }
+
+    if (!queried.token) {
+        return {true, std::nullopt};
+    }
+
+    const auto address =
+        sketchEntityFor(*queried.token);
+    if (!address ||
+        !sketch_edit_id_ ||
+        address->sketch_id != *sketch_edit_id_) {
+        return {};
+    }
+
+    return {true, address};
+}
+
+SketchEntityRectangleQueryResult
+PartViewportController::querySketchEntities(
+    const viewer::ViewportRect2& rectangle,
+    viewer::SketchRectangleSelectionRule rule) {
+    if (viewport_ == nullptr ||
+        activeSketch() == nullptr ||
+        !rectangle.valid()) {
+        return {};
+    }
+
+    const auto queried =
+        viewport_->querySketchPresentations(
+            rectangle,
+            rule);
+    if (!queried.valid() ||
+        !queried.completed) {
+        return {};
+    }
+
+    SketchEntityRectangleQueryResult result;
+    result.completed = true;
+    result.hits.reserve(queried.tokens.size());
+
+    for (const auto token : queried.tokens) {
+        const auto address =
+            sketchEntityFor(token);
+        if (!address ||
+            !sketch_edit_id_ ||
+            address->sketch_id != *sketch_edit_id_) {
+            return {};
+        }
+
+        const auto duplicate =
+            std::find(
+                result.hits.begin(),
+                result.hits.end(),
+                *address);
+        if (duplicate != result.hits.end()) {
+            return {};
+        }
+
+        result.hits.push_back(*address);
+    }
+
+    return result;
+}
+
+bool PartViewportController::setSketchSelectionBoxOverlay(
+    const viewer::SketchSelectionBoxOverlay& overlay) {
+    if (viewport_ == nullptr ||
+        activeSketch() == nullptr ||
+        !overlay.valid()) {
+        return false;
+    }
+
+    return viewport_->setSketchSelectionBoxOverlay(
+        overlay);
+}
+
+void PartViewportController::clearSketchSelectionBoxOverlay() {
+    if (viewport_ != nullptr) {
+        viewport_->clearSketchSelectionBoxOverlay();
+    }
 }
 
 std::optional<SketchEntityAddress>
@@ -327,6 +465,105 @@ PartViewportController::sketchEntityFor(
         ? std::nullopt
         : std::optional<SketchEntityAddress>{
               found->second};
+}
+
+std::optional<viewer::PresentationToken>
+PartViewportController::sketchPresentationFor(
+    sketch::EntityId entity_id) const {
+    if (!entity_id.valid() ||
+        !sketch_edit_id_ ||
+        activeSketch() == nullptr) {
+        return std::nullopt;
+    }
+
+    for (const auto& [token_value, address] :
+         sketch_entity_bindings_) {
+        if (address.sketch_id == *sketch_edit_id_ &&
+            address.entity_id == entity_id) {
+            return viewer::PresentationToken{
+                token_value};
+        }
+    }
+
+    return std::nullopt;
+}
+
+bool PartViewportController::projectSketchEntitySelection(
+    const std::vector<sketch::EntityId>& selected,
+    std::optional<sketch::EntityId> primary) {
+    if (viewport_ == nullptr ||
+        activeSketch() == nullptr) {
+        return false;
+    }
+
+    if (primary &&
+        std::find(
+            selected.begin(),
+            selected.end(),
+            *primary) == selected.end()) {
+        return false;
+    }
+
+    viewer::PresentationSelection presentation;
+
+    const auto* reference_selection =
+        static_cast<const PartViewportController&>(
+            *this)
+            .activeSelection();
+
+    if (reference_selection != nullptr) {
+        presentation.selected.reserve(
+            reference_selection->selected.size() +
+            selected.size());
+
+        for (const auto role :
+             reference_selection->selected) {
+            presentation.selected.push_back(
+                tokenFor(role));
+        }
+
+        if (reference_selection->primary) {
+            presentation.primary =
+                tokenFor(
+                    *reference_selection->primary);
+        }
+    } else {
+        presentation.selected.reserve(
+            selected.size());
+    }
+
+    std::vector<sketch::EntityId> unique;
+    unique.reserve(selected.size());
+
+    for (const auto id : selected) {
+        if (!id.valid() ||
+            std::find(
+                unique.begin(),
+                unique.end(),
+                id) != unique.end()) {
+            return false;
+        }
+
+        const auto token =
+            sketchPresentationFor(id);
+        if (!token) {
+            return false;
+        }
+
+        unique.push_back(id);
+        presentation.selected.push_back(*token);
+
+        if (primary && id == *primary) {
+            presentation.primary = *token;
+        }
+    }
+
+    if (!presentation.valid()) {
+        return false;
+    }
+
+    return viewport_->setPresentationSelection(
+        presentation);
 }
 
 std::optional<core::BuiltinReferenceRole>
@@ -676,18 +913,10 @@ void PartViewportController::applySketchViewportMode() {
     }
 
     viewport_->setPrimaryPointerRouting(
-        sketch_spatial_tool_input_
-            ? viewer::PrimaryPointerRouting::
-                  spatial_tool_input
-            : viewer::PrimaryPointerRouting::
-                  presentation_selection);
+        sketch_primary_pointer_routing_);
 
     viewport_->setCursorMode(
-        sketch_spatial_tool_input_
-            ? viewer::ViewportCursorMode::
-                  create_edit_crosshair
-            : viewer::ViewportCursorMode::
-                  select_pick_box);
+        sketch_cursor_mode_);
 }
 
 void PartViewportController::notifySelectionChanged() {

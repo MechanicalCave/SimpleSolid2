@@ -875,3 +875,74 @@ add_test(
     NAME sk04a.line_commit_protocol
     COMMAND sk04a_line_commit_protocol_test
 )
+
+
+add_executable(sk04b_viewer_selection_query_contracts_test
+    sk04b_viewer_selection_query_contracts_test.cpp
+)
+
+target_link_libraries(sk04b_viewer_selection_query_contracts_test
+    PRIVATE
+        simplesolid2_viewer
+)
+
+target_compile_features(sk04b_viewer_selection_query_contracts_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk04b.viewer_selection_query_contracts
+    COMMAND sk04b_viewer_selection_query_contracts_test
+)
+
+
+add_executable(sk04b_part_viewport_selection_bridge_test
+    sk04b_part_viewport_selection_bridge_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+)
+
+target_include_directories(sk04b_part_viewport_selection_bridge_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(sk04b_part_viewport_selection_bridge_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(sk04b_part_viewport_selection_bridge_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk04b.part_viewport_selection_bridge
+    COMMAND sk04b_part_viewport_selection_bridge_test
+)
+
+set_tests_properties(sk04b.part_viewport_selection_bridge PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
+
+add_executable(sk04b_viewer_native_selection_query_test
+    sk04b_viewer_native_selection_query_test.cpp
+)
+
+target_link_libraries(sk04b_viewer_native_selection_query_test
+    PRIVATE
+        simplesolid2_viewer
+        simplesolid2_viewer_qt_occt
+        Qt6::Widgets
+        Qt6::Test
+)
+
+target_compile_features(sk04b_viewer_native_selection_query_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk04b.viewer_native_selection_query
+    COMMAND sk04b_viewer_native_selection_query_test
+)
+
+set_tests_properties(sk04b.viewer_native_selection_query PROPERTIES
+    TIMEOUT 30
+)
