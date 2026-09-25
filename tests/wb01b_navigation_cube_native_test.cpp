@@ -111,6 +111,21 @@ int main(int argc, char* argv[]) {
         viewer::NavigationCubeActionKind::home);
     CHECK(spatial_primary == 0);
 
+    // Projection is a separate provider-surface control next to the Cube.
+    last_action.reset();
+    QTest::mouseClick(
+        &widget,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        QPoint{widget.width() - 86, 178});
+    QApplication::processEvents();
+    CHECK(last_action.has_value());
+    CHECK(
+        last_action->kind ==
+        viewer::NavigationCubeActionKind::
+            toggle_projection);
+    CHECK(spatial_primary == 0);
+
     // Face-aligned view exposes adjacent-view and roll controls.
     last_action.reset();
     QTest::mouseClick(
