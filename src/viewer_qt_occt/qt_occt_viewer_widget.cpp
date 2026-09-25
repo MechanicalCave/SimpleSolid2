@@ -401,8 +401,22 @@ public:
     }
 
     void setPrimaryPointerRouting(
-        viewer::PrimaryPointerRouting routing) noexcept {
+        viewer::PrimaryPointerRouting routing) {
+        if (primary_pointer_routing_ == routing) {
+            return;
+        }
+
         primary_pointer_routing_ = routing;
+
+        if (routing ==
+                viewer::PrimaryPointerRouting::
+                    spatial_tool_input &&
+            !context_.IsNull()) {
+            // Spatial tool callbacks may synchronously rebuild presentation.
+            // Drop stale provider detection before entering that route.
+            context_->ClearDetected(false);
+            context_->UpdateCurrentViewer();
+        }
     }
 
     [[nodiscard]] viewer::PrimaryPointerRouting

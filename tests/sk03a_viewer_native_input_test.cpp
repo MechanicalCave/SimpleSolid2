@@ -7,6 +7,7 @@
 #include <QMouseEvent>
 #include <QTest>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -18,8 +19,26 @@ using namespace simplesolid2;
 
 namespace {
 
-bool near(double left, double right) {
-    return std::abs(left - right) <= 1.0e-5;
+bool near(
+    double left,
+    double right,
+    double tolerance) {
+    return std::abs(left - right) <= tolerance;
+}
+
+double rasterWorldTolerance(
+    const QWidget& widget,
+    const viewer::CameraState& camera) {
+    const auto physical_height =
+        std::max(
+            1.0,
+            static_cast<double>(widget.height()) *
+                widget.devicePixelRatioF());
+
+    // Camera scale is the orthographic vertical world extent. Allow a few
+    // physical pixels for integer raster quantization and Qt/OCCT rounding,
+    // but remain tight enough to catch a wrong DPR or coordinate transform.
+    return 3.0 * camera.scale / physical_height;
 }
 
 int fail(std::string_view stage) {
@@ -29,21 +48,110 @@ int fail(std::string_view stage) {
     return EXIT_FAILURE;
 }
 
-void sendMouseMove(
+void sendMouseEvent(
     QWidget& widget,
-    const QPoint& local) {
+    QEvent::Type type,
+    const QPoint& local,
+    Qt::MouseButton button,
+    Qt::MouseButtons buttons,
+    Qt::KeyboardModifiers modifiers =
+        Qt::NoModifier) {
     const QPoint global =
         widget.mapToGlobal(local);
     QMouseEvent event{
-        QEvent::MouseMove,
+        type,
         QPointF{local},
         QPointF{global},
-        Qt::NoButton,
-        Qt::NoButton,
-        Qt::NoModifier};
+        button,
+        buttons,
+        modifiers};
     QApplication::sendEvent(
         &widget,
         &event);
+}
+
+void sendMouseMove(
+    QWidget& widget,
+    const QPoint& local) {
+    sendMouseEvent(
+        widget,
+        QEvent::MouseMove,
+        local,
+        Qt::NoButton,
+        Qt::NoButton);
+}
+
+void sendLeftClick(
+    QWidget& widget,
+    const QPoint& local) {
+    sendMouseEvent(
+        widget,
+        QEvent::MouseButtonPress,
+        local,
+        Qt::LeftButton,
+        Qt::LeftButton);
+    sendMouseEvent(
+        widget,
+        QEvent::MouseButtonRelease,
+        local,
+        Qt::LeftButton,
+        Qt::NoButton);
+}
+
+std::optional<sketch::Point2>
+centerUvFromCamera(
+    const part::SketchPlacement& placement,
+    const viewer::CameraState& camera) {
+    return ui::detail::sketchPointFromRay(
+        placement,
+        viewer::Ray3{
+            camera.eye,
+            camera.target - camera.eye});
+}
+
+int failMapping(
+    std::string_view stage,
+    const QWidget& widget,
+    const viewer::SpatialPointerEvent& event,
+    const viewer::CameraState& camera,
+    const std::optional<sketch::Point2>& expected,
+    const std::optional<sketch::Point2>& actual,
+    double tolerance) {
+    std::cerr
+        << "SK-03A native input mapping failure: "
+        << stage
+        << "\n  widget=" << widget.width() << 'x' << widget.height()
+        << " dpr=" << widget.devicePixelRatioF()
+        << " tolerance=" << tolerance
+        << "\n  logical=(" << event.position.x << ',' << event.position.y << ')'
+        << "\n  ray.origin=(" << event.ray.origin.x << ','
+        << event.ray.origin.y << ',' << event.ray.origin.z << ')'
+        << "\n  ray.direction=(" << event.ray.direction.x << ','
+        << event.ray.direction.y << ',' << event.ray.direction.z << ')'
+        << "\n  camera.eye=(" << camera.eye.x << ','
+        << camera.eye.y << ',' << camera.eye.z << ')'
+        << "\n  camera.target=(" << camera.target.x << ','
+        << camera.target.y << ',' << camera.target.z << ')'
+        << "\n  camera.scale=" << camera.scale;
+
+    if (expected) {
+        std::cerr
+            << "\n  expected_uv=("
+            << expected->u << ',' << expected->v << ')';
+    } else {
+        std::cerr << "\n  expected_uv=<none>";
+    }
+
+    if (actual) {
+        std::cerr
+            << "\n  actual_uv=("
+            << actual->u << ',' << actual->v << ')';
+    } else {
+        std::cerr << "\n  actual_uv=<none>";
+    }
+
+    std::cerr << '\n';
+    return EXIT_FAILURE;
 }
 
 } // namespace
@@ -159,14 +267,43 @@ int main(int argc, char* argv[]) {
         return fail("XY placement");
     }
 
+    const auto camera_before =
+        widget.cameraState();
+    if (!camera_before) {
+        return fail("camera before orbit");
+    }
+
+    const auto expected_before =
+        centerUvFromCamera(
+            *placement,
+            *camera_before);
     const auto actual_before =
         ui::detail::sketchPointFromRay(
             *placement,
             spatial_events.back().ray);
-    if (!actual_before ||
-        !near(actual_before->u, 0.0) ||
-        !near(actual_before->v, 0.0)) {
-        return fail("center ray mapping before orbit");
+    const auto tolerance_before =
+        rasterWorldTolerance(
+            widget,
+            *camera_before);
+
+    if (!expected_before ||
+        !actual_before ||
+        !near(
+            actual_before->u,
+            expected_before->u,
+            tolerance_before) ||
+        !near(
+            actual_before->v,
+            expected_before->v,
+            tolerance_before)) {
+        return failMapping(
+            "center ray mapping before orbit",
+            widget,
+            spatial_events.back(),
+            *camera_before,
+            expected_before,
+            actual_before,
+            tolerance_before);
     }
 
     // Prove primary routing is exclusive: spatial mode emits press/release
@@ -175,16 +312,7 @@ int main(int argc, char* argv[]) {
     const auto selections_before_spatial_click =
         selection_intents;
 
-    QTest::mousePress(
-        &widget,
-        Qt::LeftButton,
-        Qt::NoModifier,
-        center);
-    QTest::mouseRelease(
-        &widget,
-        Qt::LeftButton,
-        Qt::NoModifier,
-        center);
+    sendLeftClick(widget, center);
     QApplication::processEvents();
 
     bool saw_press = false;
@@ -233,14 +361,37 @@ int main(int argc, char* argv[]) {
         return fail("move after orbit");
     }
 
+    const auto expected_after =
+        centerUvFromCamera(
+            *placement,
+            *camera_after);
     const auto actual_after =
         ui::detail::sketchPointFromRay(
             *placement,
             spatial_events.back().ray);
-    if (!actual_after ||
-        !near(actual_after->u, 0.0) ||
-        !near(actual_after->v, 0.0)) {
-        return fail("center ray mapping after orbit");
+    const auto tolerance_after =
+        rasterWorldTolerance(
+            widget,
+            *camera_after);
+
+    if (!expected_after ||
+        !actual_after ||
+        !near(
+            actual_after->u,
+            expected_after->u,
+            tolerance_after) ||
+        !near(
+            actual_after->v,
+            expected_after->v,
+            tolerance_after)) {
+        return failMapping(
+            "center ray mapping after orbit",
+            widget,
+            spatial_events.back(),
+            *camera_after,
+            expected_after,
+            actual_after,
+            tolerance_after);
     }
 
     // Presentation-selection mode owns the primary click. Passive movement
@@ -258,10 +409,8 @@ int main(int argc, char* argv[]) {
     const auto selections_before_pick =
         selection_intents;
 
-    QTest::mouseClick(
-        &widget,
-        Qt::LeftButton,
-        Qt::NoModifier,
+    sendLeftClick(
+        widget,
         QPoint{5, 5});
     QApplication::processEvents();
 

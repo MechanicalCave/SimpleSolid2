@@ -336,5 +336,47 @@ int main(int argc, char* argv[]) {
         viewer::PrimaryPointerRouting::
             presentation_selection);
 
+    // A hosted Sketch can disappear through history while the controller
+    // still carries its runtime edit ID. refreshPresentation() must fail
+    // closed: clear authored/preview presentation and restore normal routing.
+    const auto transient =
+        session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xz_plane});
+    CHECK(transient.ok());
+    CHECK(transient.sketch_id.has_value());
+
+    controller.setSketchEditSketch(
+        *transient.sketch_id);
+    CHECK(viewport.sketch_scene_.origin.has_value());
+    CHECK(
+        controller.setSketchPreview(
+            {
+                ui::SketchPreviewLine2D{
+                    sketch::Point2{1.0, 1.0},
+                    sketch::Point2{2.0, 1.0}},
+            }));
+    CHECK(controller.setSketchSpatialToolInput(true));
+    CHECK(!viewport.preview_scene_.lines.empty());
+
+    CHECK(session.undo().changed);
+    CHECK(
+        session.document().findSketch(
+            *transient.sketch_id) == nullptr);
+
+    controller.refreshPresentation();
+    CHECK(viewport.sketch_scene_.lines.empty());
+    CHECK(!viewport.sketch_scene_.origin.has_value());
+    CHECK(viewport.preview_scene_.lines.empty());
+    CHECK(
+        viewport.cursor_mode_ ==
+        viewer::ViewportCursorMode::
+            system_default);
+    CHECK(
+        viewport.routing_ ==
+        viewer::PrimaryPointerRouting::
+            presentation_selection);
+    CHECK(!controller.setSketchSpatialToolInput(true));
+
     return EXIT_SUCCESS;
 }

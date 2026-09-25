@@ -183,6 +183,8 @@ void PartViewportController::refreshPresentation() {
 
     if (session_ == nullptr) {
         sketch_entity_bindings_.clear();
+        clearSketchPreview();
+        applySketchViewportMode();
         static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));
@@ -190,6 +192,15 @@ void PartViewportController::refreshPresentation() {
             viewport_->setSketchScene(
                 viewer::SketchScene{}));
         return;
+    }
+
+    if (sketch_edit_id_ &&
+        activeSketch() == nullptr) {
+        sketch_edit_id_.reset();
+        sketch_spatial_tool_input_ = false;
+        sketch_entity_bindings_.clear();
+        clearSketchPreview();
+        applySketchViewportMode();
     }
 
     static_cast<void>(
