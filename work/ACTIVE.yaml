@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/WB-01B_NATIVE_VIEWPORT_OVERLAY_COMPOSITION_STABILIZATION.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,11 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - keep the manually verified AIS_RubberBand selection-box fix
-  - implement the accepted ADR-0010 provider-surface 3D Navigation Cube inside WB-01B
-  - implement the accepted ADR-0010 independent ORTHO/PERSP amendment without redesigning the manually verified Cube
-  - require a new exact-head FULL plus focused manual Windows verification of projection preservation/toggle before WB-01B closeout
-  - keep R5 inactive until WB-01B is completed and separately accepted R5 work exists
+  - merge WB-01B only after the exact closeout HEAD passes the selected CLOSURE CI tier
+  - stop at the stabilized post-R4 checkpoint
+  - prepare a separate R5 Work Contract only when the Owner chooses to continue
+  - R5 remains unauthorized until explicit Owner acceptance
 notes:
   - Owner accepted SK-04C on 2026-09-25 after proposal CLOSURE gate #299 passed.
   - implementation exact head 5a05ce393b0bf5ef7fc83e66244ef983504a7111 passed FULL gate #315 with Build and 52/52 CTest tests.
@@ -40,3 +39,7 @@ notes:
 
   - Exact-head 53a291fbebf1ab2e1ee8205f2f851e8542dee677 passed FULL gate #370 and Owner manual Navigation Cube verification.
   - Owner accepted the ADR-0010 independent ORTHO/PERSP amendment on 2026-09-25; orientation actions and Home must preserve projection and a separate provider-surface toggle changes projection only.
+
+  - Exact-head 6a762d90c97e1405c0c576dc3039dd02ff6069e6 passed FULL gate #381 and Owner manual verification of the independent ORTHO/PERSP amendment.
+  - WB-01B acceptance conditions are satisfied; status is completed pending closeout-only CLOSURE gate and merge.
+  - R5 remains inactive and requires a separate explicit Owner-accepted Work Contract.
