@@ -1,6 +1,6 @@
 # SK-04C — End-to-end Select, Continuous Line and Delete Workflow
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -823,3 +823,23 @@ SK-04C completes only when:
 - verified closeout tree equals merged tree.
 
 Completion of SK-04C completes R4 but does not activate R5. Any R5 direct-manipulation/grip work requires a separate explicit Owner-accepted Work Contract.
+
+## 26. Completion record
+
+SK-04C implementation is complete and closes roadmap milestone R4.
+
+Evidence:
+
+- implementation exact head `5a05ce393b0bf5ef7fc83e66244ef983504a7111` passed FULL Windows gate #315;
+- Build passed and the complete compiled suite passed 52/52 CTest tests;
+- `sk04c.part_sketch_interaction_controller` proves the single bounded interaction coordinator, default Select, continuous Line command/Undo granularity, runtime preview, point/Ctrl selection, Crossing rectangle replacement without primary identity, atomic Delete, history reconciliation, exact-zero suppression and hierarchical Esc;
+- existing Workbench, Sketch host, Viewer, navigation and prior Sketch regressions remain green in the exact-head FULL suite;
+- required internal and bilingual Product documentation is current;
+- documentation exact head `4c1a77e7f48392db2c7b17441f74af10dce2a6cd` passed DOCS Windows gate #320;
+- Product Browser was regenerated from canonical Markdown;
+- no snapping, coordinate grammar, grips, constraints, new geometry primitives or persistence changes were introduced.
+
+This final bookkeeping suffix changes only `work/**` and must pass the CI-01 CLOSURE tier before merge.
+
+Completion of SK-04C completes R4. R5 is the next roadmap milestone but is not active and requires a separate explicit Owner-accepted Work Contract.
+
