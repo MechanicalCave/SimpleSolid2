@@ -241,7 +241,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 41 tests.
+The compiled CTest suite contains 45 tests.
 
 Project/Hub, PART-01 and WB-01 coverage remains active.
 
@@ -252,6 +252,8 @@ SK-01 adds `sk01.part_sketch_host` and `sk01.workbench_sketch_host` coverage for
 SK-02A adds `sk02a.shared_2d_core` and `sk02a.shared_2d_boundaries` coverage for the host-neutral authored 2D core: finite Sketch-local U/V values, opaque stable model-local EntityId, exact-zero Line rejection without an epsilon policy, equal-coordinate-but-independent endpoints, add/find/erase semantics, identity non-reuse in a continuing model instance, independent value-copy state and dependency-boundary enforcement.
 
 SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part-owned Shared 2D value state, Add/Erase command history, live identity high-water, schema-v3 strict validation, v1/v2 backward readability and Save/Close/Reopen identity preservation.
+
+SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for provider-neutral authored/preview scenes, Sketch-frame U/V↔3D conversion, ray→U/V failure behavior, active-Sketch presentation/token bindings, preview non-mutation, fail-closed runtime lifecycle, exclusive primary routing, cursor modes and real Qt/OCCT spatial input before/after camera orbit.
 
 WB-01A adds or extends deterministic coverage for:
 
@@ -366,7 +368,7 @@ WB-01A scene replacement clears native detected/selected state before removing p
 
 The current Part viewport controller owns document-scoped runtime selected set plus primary selection.
 
-Tree selection updates that authority. Qt/OCCT picking emits only neutral `SelectionIntent` values carrying `PresentationToken`; the controller maps tokens back to semantic built-in roles.
+Tree selection updates that authority. Qt/OCCT picking emits only neutral `SelectionIntent` values carrying `PresentationToken`; the controller maps reference tokens back to semantic built-in roles. R3 also assigns runtime tokens to presented authored Sketch Lines and keeps a runtime `PresentationToken ↔ SketchId + EntityId` binding, but semantic Sketch-entity selection is deliberately deferred to R4.
 
 The controller pushes one coherent selection to Tree and Viewer. Primary selection drives Properties.
 
@@ -382,14 +384,14 @@ Mouse wheel                → Zoom
 Right click                → reserved; currently controlled no-op where no menu exists
 ```
 
-Transient OCCT detection/highlight is not semantic selection.
+Transient OCCT detection/highlight is not semantic selection. Entering Sketch edit defaults the viewport to presentation-selection routing with a small pick-box cursor. The separate `spatial_tool_input` route is available to future create/edit tools and delivers neutral move/primary-press/primary-release events without also emitting `SelectionIntent` for the same primary action.
 
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-`IDocumentViewport` is provider-neutral. It exposes camera/navigation, reference scene, presentation selection and selection-intent transport.
+`IDocumentViewport` is provider-neutral. It exposes camera/navigation, the existing reference scene, an active-Sketch authored scene, a separate transient Sketch preview scene, presentation selection, neutral selection-intent transport, neutral spatial-pointer transport, primary-pointer routing and runtime cursor mode.
 
-`QtOcctViewerWidget` implements that contract behind the `viewer_qt_occt` module.
+`QtOcctViewerWidget` implements that contract behind the `viewer_qt_occt` module. Provider-native Qt events and OCCT view objects do not cross the boundary: spatial input is exported only as logical viewport coordinates plus a finite 3D `Ray3`.
 
 The production executable creates the concrete provider only in the application composition root and injects it as a neutral `ViewportSurface`.
 
@@ -400,7 +402,7 @@ Boundary tests reject OCCT/provider tokens from domain/application APIs and Work
 <!-- section-id: internal.cad-workbench-viewer.sketch-edit -->
 ## Part Sketch host and 3D edit context
 
-SK-01 adds the first durable Part-hosted Sketch lifecycle without adding 2D drawing entities.
+SK-01 adds the durable Part-hosted Sketch lifecycle. SK-02B embeds durable Shared 2D Line geometry, and SK-03A adds its provider-neutral active-Sketch presentation/input boundary without implementing interactive Line creation.
 
 The editor toolbar above the 3D Viewport provides the Part `Sketch` launcher. Operations is reserved for the active tool/edit context rather than acting as a permanent tool catalog. During support pick it presents contextual guidance/Cancel; during Sketch edit it presents `Finish Sketch`.
 
@@ -408,13 +410,15 @@ While the Sketch tool is active, the user selects one semantic built-in Origin p
 
 Creation executes through `CreatePartSketchCommand`, DocumentSession validation/history and a Part transaction. One successful creation adds one authored Sketch with stable SketchId, Origin-plane support, explicit SketchPlacement and persistent visibility. Undo removes that Sketch and Redo restores the same SketchId/state.
 
-The active Sketch editor remains the existing Document Viewport. On entry, the runtime grid changes to the Sketch U/V frame, the camera aligns normal to the support plane and Fit is requested. This is only an initial view: normal Pan, Zoom, Orbit and ViewCube navigation remain available immediately afterward and do not mutate SketchPlacement, DocumentRevision or dirty state.
+The active Sketch editor remains the existing Document Viewport. On entry, the runtime grid changes to the Sketch U/V frame, the camera aligns normal to the support plane and Fit is requested. The active Sketch's authored Lines are transformed from local U/V into 3D presentation, and the intrinsic Sketch Origin is shown as a runtime overlay rather than authored Point geometry. This is only an initial view: normal Pan, Zoom, Orbit and ViewCube navigation remain available immediately afterward and do not mutate SketchPlacement, DocumentRevision or dirty state.
 
 `Finish Sketch` exits only the runtime editor context. The authored Sketch remains in the Part and in the normal Document Tree. An existing Sketch re-enters edit by Tree double-click or `Edit Sketch` context action; the Tree carries only transient SketchId metadata and the Workbench revalidates that stable ID against the active Part before editing. Re-entering edit is runtime-only and does not dirty the Part.
 
-Switching/closing Documents clears the runtime edit context safely.
+Switching/closing Documents clears the runtime edit context safely. If history removes the Sketch currently named by the runtime edit context, the controller fails closed: active-Sketch presentation and preview are cleared and ordinary viewport routing/cursor state is restored.
 
-SK-01 supports only empty Sketches on XY/XZ/YZ Origin planes. Datum/Construction Plane support, planar model-face support, topology naming, 2D entities, constraints and solver behavior remain outside this implementation.
+R3 also provides an independent transient Line-preview channel and maps provider rays back into active Sketch U/V through the metric `SketchPlacement`. The mapping therefore remains valid after camera orbit and is not based on screen orientation. Preview/ray activity is runtime-only and does not mutate authored state, revision, dirty state or Undo history.
+
+The current UI still does not create or edit Line geometry interactively. Semantic Sketch selection, rectangle selection, Delete, continuous Line workflow, Command Line input, snapping, constraints and grips remain later roadmap work. Sketch support remains limited to XY/XZ/YZ Origin planes; Datum/Construction Plane and planar model-face support remain later stages.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and responsive ViewCube
@@ -432,7 +436,7 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
-The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid and selected/primary visual emphasis.
+The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid, active-Sketch authored Lines, the intrinsic active-Sketch Origin overlay, a separate transient Line-preview channel and selected/primary visual emphasis.
 
 Principal reference planes use finite provider presentation geometry; no native OCCT presentation object is durable semantic identity.
 
@@ -441,7 +445,7 @@ There is no modeled Part B-Rep in WB-01/WB-01A. The OCCT provider is presentatio
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, camera, projection, transient detection and grid presentation are runtime-only.
+Selection, primary selection, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, pointer routing and cursor mode are runtime-only.
 
 Persistent Origin visibility is authored state and is intentionally separate.
 
@@ -642,12 +646,23 @@ A DocumentId resolves only when exactly one valid native file in the Workspace d
 
 When a resolved Part is already open, a second Open request returns the existing canonical DocumentSession rather than creating a second mutable session for the same DocumentId.
 
+<!-- section-id: internal.part-documents.sketch-presentation -->
+## Active Sketch presentation and spatial input
+
+R3 does not change Part persistence or authored commands. It adds a runtime adapter around the current authoritative Part state.
+
+While a Part Sketch is actively edited, `PartViewportController` rebuilds a neutral authored Sketch scene from the current embedded `SketchModel`, transforms Line endpoints from U/V to 3D through `SketchPlacement`, presents the intrinsic Origin as a non-authored overlay and keeps runtime presentation-token bindings back to `SketchId + EntityId`.
+
+A separate preview scene is transient and independently replaceable/clearable. Neutral provider rays are intersected with the active Sketch frame above the provider to produce Sketch-local U/V. These operations do not change Part revision, dirty state, history or persistence.
+
+If the active Sketch disappears through Undo/history, presentation fails closed and the runtime edit/input state is cleared.
+
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The Part model now durably owns Shared 2D Line entities, but the shared CAD Workbench and Viewer still present only the Part Origin, reference grid and Sketch edit context; interactive authored-Line presentation/editing belongs to later roadmap milestones.
+The Part model durably owns Shared 2D Line entities, and R3 presents the active Sketch's authored Lines plus intrinsic Origin in the shared 3D Viewport. Presentation tokens, preview and pointer input remain runtime-only and are not Part identity.
 
-The current product still does not provide interactive Sketch selection/drawing, constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming or Material model.
+The current product still does not provide interactive Sketch Line drawing/editing, semantic Sketch selection, rectangle selection/Delete, constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming or Material model.
 
 The Viewer is not a second model: no OCCT object or Viewer token is durable Part/Sketch identity, support or authored state.
 </script>
@@ -918,7 +933,7 @@ Each persistent Part-hosted Sketch now embeds one `SketchModel` by value. That h
 
 These values represent physical model-length coordinates in the host Sketch frame. Shared 2D does not store the Part/3D placement, camera transform, screen coordinates, snap tolerance or display units.
 
-The host-specific mapping from local U/V into 3D remains outside Shared 2D.
+The host-specific mapping from local U/V into 3D remains outside Shared 2D. SK-03A implements that mapping in the Part/UI adapter using `SketchPlacement`; the neutral Shared 2D model remains unaware of Viewer, camera and provider state.
 
 <!-- section-id: internal.shared-2d.identity -->
 ## Entity identity
@@ -977,10 +992,13 @@ restore(state)
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
-The current Shared 2D / Part integration still does not implement:
+The current Shared 2D / Part integration now has R3 runtime presentation/input adapters outside the Shared 2D target: active authored Lines can be presented, intrinsic Origin is a runtime overlay, and provider-neutral rays can be mapped to active Sketch U/V. Those runtime capabilities do not add authored state to `simplesolid2_sketch`.
 
-- intrinsic Origin runtime presentation or snapping;
-- Viewer presentation, pointer-to-plane input, Select or cursor behavior;
+The current product still does not implement:
+
+- semantic Sketch entity selection or rectangle selection;
+- interactive Line creation/Delete;
+- intrinsic Origin snapping;
 - grips/direct manipulation;
 - Circle, Arc or construction geometry;
 - snapping, inference, dimensions, constraints or solver evaluation;
@@ -998,7 +1016,9 @@ Those capabilities are governed by the accepted Sketch roadmap and require later
 
 SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part ownership, value-copy isolation, semantic Add/Erase commands, live Undo/Redo identity high-water, schema-v3 persistence, v1/v2 backward readability and Save→Close→Reopen identity/geometry preservation.
 
-The repository Windows gate builds the exact PR head and runs the complete CTest suite.
+SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for neutral authored/preview presentation contracts, U/V↔3D and ray→U/V mapping, runtime token bindings, fail-closed active-Sketch lifecycle, routing/cursor state and real Qt/OCCT spatial input before/after orbit.
+
+The repository Windows FULL gate builds the exact implementation head and runs the complete CTest suite.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.ui-project-hub" data-kind="internal" data-lang="en" data-path="docs/internal/UI_PROJECT_HUB.md">
 # Project Hub and CAD Workbench UI — As-built
@@ -1266,13 +1286,13 @@ Viewport selection behavior is:
 After `Save`, Origin visibility survives closing and restarting the application.
 
 <!-- section-id: product.parts.sketch-host -->
-## Creating an empty Sketch
+## Creating and viewing a Sketch
 
 Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when it is visible, in the 3D Viewport.
 
 Operations is not a permanent tool list. It shows controls for the current operation: Sketch support-pick context/Cancel while choosing the plane, then `Finish Sketch` after Sketch edit begins.
 
-After a valid selection, Part creates a durable empty Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane.
+After a valid selection, Part creates a durable Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane. While the Sketch is active, any authored Line geometry already stored in that Sketch is presented in the viewport together with an Origin marker for the Sketch's local `(0,0)`.
 
 Automatic alignment does not lock the camera. While the Sketch is active you can still use Pan, Zoom, Orbit and ViewCube. Navigation does not change Sketch placement and does not dirty the Document by itself.
 
@@ -1280,7 +1300,7 @@ Use `Finish Sketch` to leave the current edit context. The Sketch remains an aut
 
 To edit an existing Sketch again, double-click it in Document Tree or use its `Edit Sketch` context-menu action. Entering edit by itself does not change authored state and does not require Save.
 
-In SK-01 the Sketch is intentionally empty. Line/Arc/Circle, constraints, dimensions and a solver are not available yet. Support is currently limited to the three Origin planes; Construction/Datum planes and planar model faces are separate later stages.
+The current UI does not yet provide an interactive Line creation/edit workflow, Sketch-entity selection/Delete, Arc/Circle, constraints, dimensions or a solver. Existing authored Lines are visible when the Sketch is edited, but creating/manipulating them from the viewport is a later step. Support is currently limited to the three Origin planes; Construction/Datum planes and planar model faces are separate later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and ViewCube
@@ -1304,7 +1324,7 @@ Navigation and camera changes are temporary view state. They do not dirty the Pa
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state, including Origin visibility and created Sketches with their durable identity/support/placement, to its `.ss2part` file.
+`Save` writes the current authored Part state, including Origin visibility and created Sketches with their durable identity/support/placement and embedded authored Line geometry, to its `.ss2part` file.
 
 When closing a Part with unsaved changes, the application requires `Save`, `Discard` or `Cancel`.
 
@@ -1333,11 +1353,11 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the shared stabilized 3D Workbench/Viewer foundation and the first host lifecycle for empty Sketches on Origin planes.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the shared stabilized 3D Workbench/Viewer foundation, durable Sketches with embedded authored Line data and active-Sketch Line/Origin presentation on Origin planes.
 
 Very early test `.ss2part` files created before the current native format are not supported product data and are not migrated automatically.
 
-Part does not yet contain Sketch 2D geometry, constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
+The current UI does not yet provide interactive Sketch drawing/editing or semantic Sketch-entity selection, and Part still lacks constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -1603,13 +1623,13 @@ Zachowanie zaznaczenia w Viewporcie:
 Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 
 <!-- section-id: product.parts.sketch-host -->
-## Tworzenie pustego Sketchu
+## Tworzenie i wyświetlanie Sketchu
 
 Na pasku narzędzi bezpośrednio nad viewportem 3D użyj `Sketch`, a następnie wskaż jedną z płaszczyzn `XY Plane`, `XZ Plane` albo `YZ Plane` w Origin. Płaszczyznę możesz wskazać w Document Tree albo — gdy jest widoczna — w viewporcie 3D.
 
 Operations nie jest listą narzędzi. Pokazuje sterowanie bieżącą operacją: podczas wyboru płaszczyzny Sketchu zawiera kontekst wyboru/Cancel, a po wejściu do edycji pokazuje `Finish Sketch`.
 
-Po poprawnym wyborze Part tworzy trwały pusty Sketch i pozostaje w tym samym Workbench oraz tym samym viewporcie 3D. Kamera automatycznie ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnej płaszczyzny.
+Po poprawnym wyborze Part tworzy trwały Sketch i pozostaje w tym samym Workbench oraz tym samym viewporcie 3D. Kamera automatycznie ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnej płaszczyzny. Gdy Sketch jest aktywny, każda authored geometria Line już zapisana w tym Sketchu jest prezentowana w viewporcie razem ze znacznikiem Origin lokalnego `(0,0)` Sketchu.
 
 Automatyczne ustawienie widoku nie blokuje kamery. Podczas aktywnego Sketchu nadal możesz używać Pan, Zoom, Orbit i ViewCube. Nawigacja nie zmienia położenia Sketchu i sama nie dirty'uje Dokumentu.
 
@@ -1617,7 +1637,7 @@ Użyj `Finish Sketch`, aby zakończyć bieżący tryb edycji. Sketch pozostaje a
 
 Aby ponownie edytować istniejący Sketch, kliknij go dwukrotnie w Document Tree albo użyj jego menu kontekstowego `Edit Sketch`. Samo wejście do edycji nie zmienia authored state i nie wymaga Save.
 
-W SK-01 Sketch jest celowo pusty. Nie ma jeszcze Line/Arc/Circle, constraintów, wymiarów ani solvera. Support może być obecnie tylko jedną z trzech płaszczyzn Origin; płaszczyzny konstrukcyjne/Datum oraz płaskie ściany modelu będą osobnymi późniejszymi etapami.
+Bieżący UI nie udostępnia jeszcze interaktywnego workflow tworzenia/edycji Line, semantycznego zaznaczenia/usuwania elementów Sketchu, Arc/Circle, constraintów, wymiarów ani solvera. Istniejące authored Lines są widoczne podczas edycji Sketchu, ale ich tworzenie/manipulacja z viewportu jest późniejszym etapem. Support może być obecnie tylko jedną z trzech płaszczyzn Origin; płaszczyzny konstrukcyjne/Datum oraz płaskie ściany modelu będą osobnymi późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i ViewCube
@@ -1641,7 +1661,7 @@ Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, n
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketches z ich trwałą tożsamością/supportem/placementem, do pliku `.ss2part`.
+`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketches z ich trwałą tożsamością/supportem/placementem i osadzoną authored geometrią Line, do pliku `.ss2part`.
 
 Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Discard` albo `Cancel`.
 
@@ -1670,11 +1690,11 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wp
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, wspólny ustabilizowany fundament Workbench/Viewer 3D oraz pierwszy host lifecycle dla pustych Sketchy na płaszczyznach Origin.
+Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, wspólny ustabilizowany fundament Workbench/Viewer 3D, trwałe Sketches z osadzonymi authored danymi Line oraz prezentację aktywnego Sketchu (Lines + Origin) na płaszczyznach Origin.
 
 Bardzo wczesne testowe pliki `.ss2part` utworzone przed wprowadzeniem obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Part nie zawiera jeszcze geometrii 2D Sketchu, constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
+Bieżący UI nie udostępnia jeszcze interaktywnego rysowania/edycji Sketchu ani semantycznego zaznaczania jego elementów. Part nadal nie ma constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material ani narzędzi Assembly/Drawing.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty
