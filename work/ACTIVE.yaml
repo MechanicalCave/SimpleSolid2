@@ -15,13 +15,13 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - merge CI-01 only after the exact completion HEAD passes CLOSURE without Build/CTest
-  - after CI-01 merge, prepare a separate R3 Work Contract
-  - R3 remains unauthorized until explicit Owner acceptance
+  - review proposed work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md
+  - R3 remains inactive until explicit Owner acceptance of SK-03A
+  - after acceptance, activate R3 before any production mutation
 notes:
-  - R2 / SK-02B is completed and merged as aaabc3593cc69fd15daf9f1dad64c6dc8cb72007 after exact-head gate #259.
-  - CI-01 implementation head d7aa0ae06046d2ac22831b2f4765b56dedac22c3 passed FULL gate #261.
-  - this completion commit is intentionally work/** only and must be classified CLOSURE.
-  - CLOSURE must validate exact-head governance/docs invariants without Build/CTest.
-  - the optimization changes verification cost, not runtime test requirements.
-  - R3 remains unauthorized.
+  - R2 / SK-02B is completed and merged as aaabc3593cc69fd15daf9f1dad64c6dc8cb72007.
+  - CI-01 is completed and merged as 73fecc7f7147c9b0c37802851cf7fcbf562a4c09.
+  - CI-01 proved FULL on implementation head and CLOSURE on work-only completion suffix.
+  - SK-03A is proposal-only; no R3 production code is active.
+  - the proposal keeps PartViewportController as presentation/input adapter, not Sketch ToolState.
+  - R4 continuous Line workflow remains unauthorized.
