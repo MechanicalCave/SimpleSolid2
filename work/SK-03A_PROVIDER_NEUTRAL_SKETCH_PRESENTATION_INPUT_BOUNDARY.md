@@ -1,7 +1,7 @@
 # SK-03A — Provider-neutral Sketch Presentation and Tool-input Boundary
 
-**Status:** PROPOSED  
-**Owner acceptance:** pending  
+**Status:** ACCEPTED  
+**Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009  
