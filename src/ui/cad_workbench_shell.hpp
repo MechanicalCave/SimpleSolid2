@@ -20,6 +20,7 @@ public:
     [[nodiscard]] QLabel& statusLabel() noexcept;
 
     void setEditorSurface(QWidget* widget);
+    void setCommandLineContent(QWidget* widget);
     void setPropertiesContent(QWidget* widget);
     void setOperationsContent(QWidget* widget);
 
@@ -38,6 +39,7 @@ private:
     QLabel* status_{};
 
     QWidget* editor_surface_{};
+    QWidget* command_line_content_{};
     QWidget* properties_content_{};
     QWidget* operations_content_{};
 };
