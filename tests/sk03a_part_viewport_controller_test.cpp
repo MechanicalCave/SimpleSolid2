@@ -95,6 +95,30 @@ public:
         return selection.valid();
     }
 
+    viewer::SketchPointQueryResult
+    querySketchPresentation(
+        viewer::ViewportPoint2 point) override {
+        return viewer::SketchPointQueryResult{
+            point.finite(),
+            std::nullopt};
+    }
+
+    viewer::SketchRectangleQueryResult
+    querySketchPresentations(
+        const viewer::ViewportRect2& rectangle,
+        viewer::SketchRectangleSelectionRule) override {
+        return viewer::SketchRectangleQueryResult{
+            rectangle.valid(),
+            {}};
+    }
+
+    bool setSketchSelectionBoxOverlay(
+        const viewer::SketchSelectionBoxOverlay& overlay) override {
+        return overlay.valid();
+    }
+
+    void clearSketchSelectionBoxOverlay() override {}
+
     void setSelectionIntentHandler(
         viewer::SelectionIntentHandler handler) override {
         selection_handler_ =

@@ -875,3 +875,20 @@ add_test(
     NAME sk04a.line_commit_protocol
     COMMAND sk04a_line_commit_protocol_test
 )
+
+
+add_executable(sk04b_viewer_selection_query_contracts_test
+    sk04b_viewer_selection_query_contracts_test.cpp
+)
+
+target_link_libraries(sk04b_viewer_selection_query_contracts_test
+    PRIVATE
+        simplesolid2_viewer
+)
+
+target_compile_features(sk04b_viewer_selection_query_contracts_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk04b.viewer_selection_query_contracts
+    COMMAND sk04b_viewer_selection_query_contracts_test
+)
