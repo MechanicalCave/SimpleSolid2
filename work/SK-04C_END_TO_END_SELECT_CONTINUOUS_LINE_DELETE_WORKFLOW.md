@@ -1,7 +1,7 @@
 # SK-04C — End-to-end Select, Continuous Line and Delete Workflow
 
-**Status:** PROPOSED  
-**Owner acceptance:** pending  
+**Status:** ACCEPTED  
+**Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009  
@@ -163,6 +163,48 @@ Activating Line:
 - configures `spatial_tool_input + create_edit_crosshair`;
 - enters AwaitFirstPoint.
 
+### 5.1 Contextual editor surfaces
+
+The Editor Tools surface and Operations panel follow the active semantic editing context.
+
+Outside Sketch edit, the Workbench presents the tool and Operations surfaces appropriate to the Part modeling context.
+
+Entering Sketch edit switches those surfaces to the Sketch editing context:
+
+- Editor Tools above the Viewport expose Sketch tools such as Select and Line;
+- Operations on the right exposes contextual Sketch/tool state and actions;
+- the compact Command Line is part of the central editor surface directly below the Viewport;
+- the global Workbench Status remains a separate channel below the main shell;
+- visual active/checked tool state is derived from the single Sketch interaction authority and is not independent UI state.
+
+Leaving Sketch edit restores the Part modeling Editor Tools and Operations surfaces.
+
+Conceptually:
+
+```text
+Part modeling context
+→ enter Sketch edit
+→ Sketch Editor Tools + Sketch Operations + Sketch Command Line
+→ finish/lose Sketch edit context
+→ Part modeling Editor Tools + Part Operations
+```
+
+The same restoration applies to fail-closed edit termination caused by Document switch/close, history removal of the active Sketch, or other loss of valid edit context.
+
+This bounded Part ↔ Sketch switching is not authorization for a universal mode/framework abstraction.
+
+### 5.2 Tool hierarchy
+
+While Sketch edit is active:
+
+- Select and Line are mutually exclusive tool presentations;
+- their checked/active state is projected from `SketchInteractionState`;
+- tool-specific actions appear in Operations above the whole-context `Finish Sketch` action;
+- `Finish Line` / `Cancel Line` act only on the current Line tool;
+- `Finish Sketch` exits the whole Sketch edit context.
+
+Select and Line are not presented as active Part-modeling tools outside Sketch edit.
+
 ## 6. Provider-neutral modifier transport
 
 SK-04C may extend neutral spatial pointer input with the smallest runtime modifier data required by R4 point selection.
@@ -202,6 +244,8 @@ This is transient runtime UI state, not authored or persisted state.
 A primary press begins a possible Select interaction.
 
 If release occurs without establishing a rectangle drag, SK-04C performs the SK-04B point query at the release position.
+
+The Control modifier used for point-selection semantics is sampled from the release event that resolves the semantic click. Press-time Control state does not become a separate selection authority.
 
 Point query failure:
 
@@ -480,7 +524,19 @@ Unknown/non-empty input:
 
 Empty submission is a no-op.
 
-### 14.3 Explicitly not R4
+### 14.3 Focus behavior
+
+Submitting a recognized `SELECT` or `LINE` command transfers interaction focus back to the Viewport so pointer interaction can continue immediately.
+
+While the Command Line text field owns focus:
+
+- Delete does not invoke CAD Delete;
+- Esc first cancels/clears the text-entry interaction and does not mutate Sketch tool state;
+- Qt text-editing behavior remains local to the text control.
+
+Command Line prompt/state is distinct from the global Workbench Status channel. Prompt text describes the current command/input request; Status reports operation outcomes, failures and application messages.
+
+### 14.4 Explicitly not R4
 
 The Command Line does not parse:
 
@@ -550,6 +606,8 @@ At minimum:
 - viewport cursor follows the active Select/Line mode.
 
 Exact shortcut implementation may use Qt shortcuts/event filtering internally, but Qt key enums do not become domain semantics.
+
+Right mouse button remains reserved/no-op in SK-04C. This contract does not introduce context menus, repeat-last-command, Finish/Cancel shortcuts or other RMB command grammar.
 
 ## 17. Navigation coexistence
 
