@@ -188,13 +188,15 @@ Reason: this is a runtime Viewer/Qt composition stabilization with no intended u
 
 ## 12. Manual verification evidence
 
-Manual Windows verification of exact FULL-green candidate `2faac1fe94011b1bf9666ab7edd30e40a508748b` produced mixed results:
+Manual Windows verification produced the following evidence:
 
-- Sketch selection-box composition improved materially: dragging the box no longer caused the 3D viewport to disappear or reveal black/Workspace background.
-- The first AIS_RubberBand implementation exposed a coordinate-system defect: the visual rectangle Y axis was inverted relative to Qt pointer input.
-- ViewCube still produced stale artifacts. The first D1 experiment (making ViewCube a native child of the native viewport) therefore failed manual acceptance and is not considered a solution.
+- exact FULL-green candidate `2faac1fe94011b1bf9666ab7edd30e40a508748b`: Sketch selection-box composition improved materially — dragging no longer caused the 3D viewport to disappear or reveal black/Workspace background;
+- the first AIS_RubberBand implementation exposed an inverted visual Y axis relative to Qt pointer input;
+- ViewCube still produced stale artifacts with the first D1 experiment (native child of the native viewport), so that experiment failed manual acceptance;
+- exact FULL-green candidate `d923f24a01e3b7679bfd588db87dce59ce976b59`: selection-box with explicit Qt-top-left → OCCT-bottom-left Y conversion passed manual visual verification;
+- the second ViewCube D1 experiment (native ViewCube and native OCCT viewport as sibling windows under a native Editor Surface) still produced stale/overdrawn ViewCube artifacts and therefore also failed manual acceptance.
 
-Follow-up D1 candidate keeps the successful in-surface AIS_RubberBand strategy with explicit Qt-top-left → OCCT-bottom-left Y conversion, and changes ViewCube composition to native sibling windows under a native Editor Surface host. This preserves UI ownership, geometry and public Viewer contracts while testing Windows-native sibling z-order instead of child-over-native-surface composition.
+WB-01B therefore treats the Sketch selection-box defect as solved but the ViewCube defect as unresolved. The failed ViewCube composition experiments are reverted rather than retained. Further ViewCube work must stop at the D2 boundary defined by this contract if it requires moving ViewCube rendering/ownership into the Viewer provider or changing public Viewer contracts.
 
 ## 13. Completion boundary
 
