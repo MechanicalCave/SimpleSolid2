@@ -64,6 +64,8 @@ SK-04B adds `sk04b.viewer_selection_query_contracts`, `sk04b.part_viewport_selec
 
 SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the single active Sketch interaction coordinator, continuous Line command/Undo granularity, transient preview, point/Ctrl selection, Window/Crossing rectangle replacement without primary identity, atomic Delete, history reconciliation and hierarchical Esc. Legacy Workbench/Sketch-host tests also verify the contextual Part ↔ Sketch Operations state.
 
+WB-01B strengthens the native Windows overlay path without changing CAD semantics: the real Qt/OCCT selection query test repeatedly exercises OCCT-native rubber-band show/update/clear, the responsive ViewCube test verifies native-child composition, and the real Workbench stress test verifies that ViewCube is hosted as a native child of the native viewport. These automated checks prove lifecycle/non-regression mechanics but not the absence of visual framebuffer artifacts. WB-01B therefore also requires explicit manual visual verification on the exact Windows implementation build before closeout.
+
 WB-01A adds or extends deterministic coverage for:
 
 - empty-space selection clear and right-click no-op semantics;
