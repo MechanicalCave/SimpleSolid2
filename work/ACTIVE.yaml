@@ -3,7 +3,7 @@ status: completed
 active_work: "work/SK-R0_SKETCHER_FOUNDATION_AND_ROADMAP.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
-program_roadmap_version: "1.0"
+program_roadmap_version: "1.1"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -13,19 +13,20 @@ accepted_adrs:
   - "adr/ADR-0006-workspace-document-workbench-and-tool-surfaces.md"
   - "adr/ADR-0007-project-workspace-shell-and-document-navigation.md"
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
+  - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - SK-R0 is complete after final exact-head PR verification and merge
   - R1 is the next Sketch roadmap milestone: minimal host-neutral Shared 2D authored core
-  - R1 production implementation requires a separate explicit Owner-accepted Work Contract
-  - no EntityId, Line, Part schema, Viewer Sketch input/presentation, constraints, solver or profile implementation is active
+  - work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md is a PROPOSED bounded R1 contract and is not active
+  - Owner acceptance of the final SK-02A contract is required before any production implementation
+  - no EntityId, Line, Part schema, Viewer Sketch input/presentation, selection, constraints, solver, projection or profile implementation is active
 notes:
   - WS-01 remains the current product implementation baseline.
-  - SK-R0 changes governance/architecture/program memory only and changes no CAD product behavior.
-  - ADR-0008 freezes the accepted Shared 2D / Sketcher semantic foundation.
-  - work/SKETCH_ROADMAP.md v1.0 is mandatory reconstruction context for later Sketch Work Contracts.
-  - roadmap milestones define staged goals/dependencies, not exact future contract count or class/API designs.
-  - Windows PR gate #233 passed docs verification, bootstrap verification, build and the complete CTest suite on the pre-completion R0 head.
-  - final exact-head verification is required after this completion bookkeeping before merge.
-  - R1 remains unauthorized until a separate accepted Work Contract exists.
+  - SK-R0 is completed and merged; exact-head Windows gate #235 passed before merge.
+  - ADR-0008 freezes the Shared 2D / Sketcher semantic foundation.
+  - ADR-0009 freezes identity lifecycle, local frame/Origin/reference direction and Sketch interaction grammar before first 2D entity implementation.
+  - work/SKETCH_ROADMAP.md v1.1 is mandatory reconstruction context for later Sketch Work Contracts.
+  - roadmap milestones define staged goals/dependencies, not exact future contract count or private class/API designs.
+  - R1 remains unauthorized until a separate accepted Work Contract is activated.
+  - SS1 remains a donor only; SS2 Foundation/accepted ADRs are authoritative.
   - Assembly/Drawing implementation remains unauthorized.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.

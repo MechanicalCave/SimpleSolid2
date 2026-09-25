@@ -1,10 +1,10 @@
 # Sketcher Program Roadmap
 
 **Status:** ACCEPTED  
-**Version:** 1.0  
+**Version:** 1.1  
 **Owner acceptance:** 2026-09-25  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Architecture:** ADR-0008  
+**Architecture:** ADR-0008, ADR-0009  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher
 
 ## 1. Purpose
@@ -44,7 +44,7 @@ The roadmap is not a second Foundation and must not override accepted architectu
 
 ## 3. Frozen agreements
 
-The following are accepted architecture and must be read from ADR-0008 rather than re-decided by individual implementation contracts:
+The following are accepted architecture and must be read from ADR-0008 and ADR-0009 rather than re-decided by individual implementation contracts:
 
 1. Shared 2D / Sketch Core is host-neutral and does not depend on Part/Assembly/Drawing, Qt, OCCT or filesystem paths.
 2. Authored primitive geometry is directly editable design intent.
@@ -58,6 +58,17 @@ The following are accepted architecture and must be read from ADR-0008 rather th
 10. Shared 2D owns geometric region analysis; Part owns the modeling meaning of consuming a region.
 11. Viewer/input/presentation integration remains provider-neutral.
 12. Part-hosted Sketch editing remains in the common 3D Document Viewport.
+13. Sketch-local U/V are physical model-length coordinates hosted by a stable orthonormal frame; current Origin-plane Sketch (0,0) maps to Part Origin.
+14. Sketch Origin (0,0) is an intrinsic immutable reference, not ordinary user-authored Point geometry.
+15. Entity identity must not silently alias a different semantic entity after delete/reorder/storage compaction; state copies preserve identity while semantic duplication creates fresh identity.
+16. Authored and evaluated Sketch geometry are distinct architectural layers even while initial evaluation is identity.
+17. Durable future sub-element references use stable entity identity plus semantic element role, never coordinate/index/provider identity.
+18. Select is the default Sketch tool; cancelling/finishing other tools returns to Select rather than an undefined no-tool state.
+19. Sketch selection is transient semantic runtime state supporting point and rectangular selection; it is never persisted CAD intent.
+20. When a geometry primitive reaches a user-facing interactive milestone, create/present/select/delete is the minimum usable lifecycle.
+21. Select uses pick-box style cursor presentation in the Viewport; create/edit tools use crosshair-style presentation; UI controls use normal widget/system cursors.
+22. Pointer-to-Sketch input must remain correct after camera orbit and therefore maps spatial pointer/ray input onto the active Sketch plane/frame.
+23. Projected/reference geometry is semantically distinct from ordinary editable local geometry and follows host-domain projection policy.
 
 ## 4. Milestones
 
@@ -81,7 +92,9 @@ Goal:
 - introduce stable model-local entity identity;
 - introduce finite 2D coordinate/value semantics;
 - implement the first Line primitive with independent authored start/end coordinates;
-- establish minimal entity collection/lookup/validation semantics;
+- establish minimal entity add/lookup/erase/validation semantics;
+- prove stable identity does not derive from storage/index and is not immediately reused after erase in the continuing model instance;
+- preserve value-copy identity semantics needed by future host history;
 - prove behavior with semantic tests.
 
 Deliberately outside R1:
@@ -118,7 +131,9 @@ Goal:
 
 - extend the neutral Viewer/application boundary for authored Sketch presentation;
 - provide runtime preview presentation separate from authored geometry;
-- provide provider-neutral pointer/cursor input suitable for mapping to active Sketch U/V;
+- provide provider-neutral spatial pointer/cursor input suitable for mathematically mapping to active Sketch U/V even after orbit;
+- provide Sketch presentation for authored geometry plus intrinsic Origin/reference overlays without turning them into Viewer-owned CAD state;
+- establish runtime cursor-mode presentation (Select pick-box versus create/edit crosshair) separately from snap/pick/geometric tolerances;
 - preserve normal camera/navigation behavior;
 - establish the runtime tool-state boundary without implementing the whole Sketcher.
 
@@ -129,6 +144,7 @@ This milestone is the gate that prevents Qt/OCCT event details or presentation t
 Goal:
 
 - expose Sketch tools while in Sketch edit context;
+- make Select the default active Sketch tool;
 - implement one active Line tool state;
 - first-point and next-point workflow;
 - rubber-band preview;
@@ -137,16 +153,21 @@ Goal:
 - predictable finish/cancel behavior;
 - define and test the commit/Undo granularity explicitly in the R4 Work Contract rather than inheriting it accidentally from UI implementation;
 - introduce the compact Command Line concept as an adapter to the same tool state;
-- Operations presents contextual Line state/actions rather than owning another Line implementation.
+- Operations presents contextual Line state/actions rather than owning another Line implementation;
+- returning from Line activation/finish/cancel ends in Select;
+- make committed Line geometry point-selectable by semantic EntityId;
+- support rectangular selection for geometry that is impractical to point-pick;
+- support semantic Delete of selected Line geometry through the ordinary command/transaction/Undo path;
+- keep selection transient and provider-token-free.
 
-Advanced snapping, constraints and dynamic input are not prerequisites for proving this workflow.
+Advanced snapping, constraints, grips/direct manipulation and dynamic input are not prerequisites for proving this workflow.
 
-### R5 — Sketch selection and direct manipulation
+### R5 — Sketch direct manipulation and selection refinement
 
 Goal:
 
-- generalize document-scoped semantic selection to Sketch entities;
-- primary selection remains coherent between Tree/Viewport/Properties/Tools as applicable;
+- refine the R4 semantic selection foundation for multi-selection/primary-selection interactions as required;
+- keep selection coherent between Viewport/Properties/Tools as applicable;
 - expose runtime Line grips for start/end/center;
 - dragging an endpoint edits only that endpoint unless authored constraints later require otherwise;
 - center grip translates the whole Line without creating a midpoint entity;
@@ -221,23 +242,44 @@ Goal:
 
 Before persistent Part feature implementation, explicitly decide associative versus snapshot input semantics, durable reference/rebinding policy and failure behavior. R11 does not pre-authorize a Body/Feature/Extrude architecture.
 
+
+### R12 — Planar-face Sketch support and projected reference geometry
+
+Goal:
+
+- introduce a semantically stable Part planar-face support contract without persisting raw kernel/provider face identity;
+- derive a stable orthonormal Sketch frame whose orientation does not silently flip with provider topology order/orientation;
+- support provider-neutral exact projection/materialization of representable support/reference edges into Sketch-local U/V;
+- expose projected/reference curves as semantically read-only reference geometry that can be inspected/snapped according to later interaction contracts;
+- respect Foundation projection policy: explicit Part-local Project Edge remains snapshot/capture by default;
+- explicitly decide automatic support-face boundary snapshot-versus-support-associative behavior before implementation;
+- explicitly decide projected-reference participation in profile/region construction before implementation.
+
+SS1 projection/reference code may be audited as donor mechanism/test material only after compatibility review.
+
+
 ## 5. Deliberately open decisions
 
 The roadmap does not decide ahead of evidence:
 
-- exact `EntityId` representation/serialization;
+- exact `EntityId` representation/serialization/allocation mechanism across persistence and history;
 - exact public Sketch model C++ API;
 - universal sub-element/reference API;
 - standalone Point entity semantics;
 - exact persistence JSON for entities;
-- exact Viewer Sketch-scene and input APIs;
-- exact keyboard aliases/Enter/Esc/Space/RMB grammar;
+- exact Viewer Sketch-scene, spatial pointer/ray and input APIs;
+- exact selection modifier/window-vs-crossing gestures;
+- exact cursor pixel sizes/colors/HiDPI rendering;
+- exact keyboard aliases/Enter/Esc/Space/RMB grammar beyond the accepted Esc-to-Select direction;
 - exact dynamic-input UX;
 - exact numerical tolerances;
 - exact constraint set and solver technology;
 - auto-constraint policy;
 - exact Arc/Circle authoring variants;
-- exact Trim/Extend topology policy;
+- exact Trim/Extend/Split identity policy;
+- exact planar-face semantic reference and stable frame derivation;
+- automatic support-boundary projection snapshot-versus-associative policy;
+- projected/reference geometry participation in region/profile construction;
 - durable region identity;
 - future Part feature graph/history/body architecture;
 - associative versus snapshot consumption of Sketch regions by future Part operations.
