@@ -1,6 +1,6 @@
 # SK-04A — Sketch Interaction State and Atomic Batch Delete
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -622,3 +622,19 @@ SK-04A completes only when:
 - completion bookkeeping passes the appropriate exact-head CI tier.
 
 Completion of SK-04A does not activate SK-04B automatically. SK-04B requires a separate explicit Owner-accepted Work Contract.
+
+
+## 18. Completion record
+
+SK-04A implementation is complete.
+
+Evidence:
+
+- implementation exact head `1cb71449247f166c8a972b5560b29863f4fae282` passed FULL Windows gate #288;
+- Build passed and the complete suite passed 48/48 CTest tests;
+- `sk04a.sketch_interaction_state` proves the host-neutral Select/Line state machine, explicit request acknowledgement, exact-zero suppression, preview semantics, Finish/Cancel/Esc and EntityId selection/reconciliation;
+- `sk04a.batch_delete` proves atomic prevalidation, one-revision/one-history-entry batch deletion, cross-Sketch isolation and Undo/Redo restoration of original EntityIds/geometry;
+- `sk04a.line_commit_protocol` proves three successful continuous segments create exactly three Add Line history entries and tool cancellation does not rollback committed authored geometry;
+- no Viewer, Qt/OCCT, persistence schema or Product UI behavior was added.
+
+SK-04A completes only the first bounded contract of R4. R4 remains incomplete. SK-04B is next and requires a separate explicit Owner-accepted Work Contract before implementation.

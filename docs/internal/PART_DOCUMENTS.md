@@ -38,11 +38,11 @@ Qt / caller
 → atomic domain commit
 ```
 
-Current commands include common Document Properties, batch built-in reference visibility, `CreatePartSketchCommand`, `AddSketchLineCommand` and `EraseSketchEntityCommand`.
+Current commands include common Document Properties, batch built-in reference visibility, `CreatePartSketchCommand`, `AddSketchLineCommand`, `EraseSketchEntityCommand` and atomic `EraseSketchEntitiesCommand`.
 
-Sketch creation revalidates that support is XY/XZ/YZ Origin plane, derives its initial placement, allocates a stable SketchId and commits the new hosted Sketch as one transaction/Undo entry. Add Line targets `SketchId` plus Start/End and returns the allocated model-local `EntityId`. Erase targets `SketchId + EntityId` and fails closed when either target is stale or unknown.
+Sketch creation revalidates that support is XY/XZ/YZ Origin plane, derives its initial placement, allocates a stable SketchId and commits the new hosted Sketch as one transaction/Undo entry. Add Line targets `SketchId` plus Start/End and returns the allocated model-local `EntityId`. Single Erase targets `SketchId + EntityId`. Batch Erase targets one SketchId plus a non-empty EntityId set and validates the entire set before mutation; invalid, duplicate, stale or unknown identities reject the whole command with no partial erase.
 
-Each successful Add or Erase is one Part transaction, one history entry and one revision increment. Undo restores semantic authored state; Redo reapplies it. A session-local cursor table keyed by SketchId preserves the maximum observed EntityId allocation cursor even when history temporarily rewinds geometry or removes/recreates the Sketch through Undo/Redo.
+Each successful Add or single Erase is one Part transaction, one history entry and one revision increment. `EraseSketchEntitiesCommand` validates the complete non-empty EntityId set before mutation; invalid, duplicate, stale or unknown targets fail without partial erase. A successful batch, whether one entity or many, is one Part transaction, one history entry and one revision increment. Undo restores every deleted entity with its original EntityId and geometry; Redo removes the same authored set again. A session-local cursor table keyed by SketchId preserves the maximum observed EntityId allocation cursor even when history temporarily rewinds geometry or removes/recreates the Sketch through Undo/Redo.
 
 A multi-selection Show/Hide is one semantic command, one successful revision increment and one Undo entry.
 
@@ -99,6 +99,6 @@ If the active Sketch disappears through Undo/history, presentation fails closed 
 
 The Part model durably owns Shared 2D Line entities, and R3 presents the active Sketch's authored Lines plus intrinsic Origin in the shared 3D Viewport. Presentation tokens, preview and pointer input remain runtime-only and are not Part identity.
 
-The current product still does not provide interactive Sketch Line drawing/editing, semantic Sketch selection, rectangle selection/Delete, constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming or Material model.
+SK-04A now provides neutral Select/Line runtime semantics, transient EntityId selection and an atomic semantic multi-entity Delete command, but the current product UI still does not wire those capabilities into interactive Sketch Line drawing/editing, point/rectangle selection or Delete. Constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming and Material model remain unavailable.
 
 The Viewer is not a second model: no OCCT object or Viewer token is durable Part/Sketch identity, support or authored state.

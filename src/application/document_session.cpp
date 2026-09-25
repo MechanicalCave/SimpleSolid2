@@ -1,6 +1,7 @@
 #include <simplesolid2/application/document_session.hpp>
 
 #include <algorithm>
+#include <set>
 #include <stdexcept>
 #include <utility>
 
@@ -295,6 +296,63 @@ DocumentSessionResult DocumentSession::execute(
     return commitCommandState(
         std::move(after),
         "Part transaction failed while erasing Sketch entity");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EraseSketchEntitiesCommand& command) {
+    if (command.entity_ids.empty()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Erase Sketch Entities requires at least one EntityId",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Erase Sketch Entities target SketchId does not exist",
+            path_);
+    }
+
+    std::set<sketch::EntityId> unique;
+    for (const auto id : command.entity_ids) {
+        if (!id.valid()) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Erase Sketch Entities contains an invalid EntityId",
+                path_);
+        }
+
+        if (!unique.insert(id).second) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Erase Sketch Entities contains duplicate EntityIds",
+                path_);
+        }
+
+        if (target->model.findLine(id) == nullptr) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Erase Sketch Entities target EntityId does not exist",
+                path_);
+        }
+    }
+
+    for (const auto id : command.entity_ids) {
+        if (!target->model.erase(id)) {
+            return failure(
+                DocumentSessionErrorCode::transaction_failure,
+                "Erase Sketch Entities validation diverged before commit",
+                path_);
+        }
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while erasing Sketch entities");
 }
 
 DocumentSessionResult DocumentSession::applyHistoricalState(

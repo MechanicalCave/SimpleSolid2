@@ -241,7 +241,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 45 tests.
+The compiled CTest suite contains 48 tests.
 
 Project/Hub, PART-01 and WB-01 coverage remains active.
 
@@ -254,6 +254,8 @@ SK-02A adds `sk02a.shared_2d_core` and `sk02a.shared_2d_boundaries` coverage for
 SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part-owned Shared 2D value state, Add/Erase command history, live identity high-water, schema-v3 strict validation, v1/v2 backward readability and Save/Close/Reopen identity preservation.
 
 SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for provider-neutral authored/preview scenes, Sketch-frame U/V↔3D conversion, ray→U/V failure behavior, active-Sketch presentation/token bindings, preview non-mutation, fail-closed runtime lifecycle, exclusive primary routing, cursor modes and real Qt/OCCT spatial input before/after camera orbit.
+
+SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage. These prove neutral Select/Line state transitions, exact-zero suppression, one outstanding Line request, commit-success/failure anchor behavior, hierarchical Esc/Finish/Cancel, EntityId selection/reconciliation, atomic batch Delete validation, one-command/one-transaction/one-Undo semantics and three continuous committed Line segments producing exactly three Undo entries.
 
 WB-01A adds or extends deterministic coverage for:
 
@@ -601,11 +603,11 @@ Qt / caller
 → atomic domain commit
 ```
 
-Current commands include common Document Properties, batch built-in reference visibility, `CreatePartSketchCommand`, `AddSketchLineCommand` and `EraseSketchEntityCommand`.
+Current commands include common Document Properties, batch built-in reference visibility, `CreatePartSketchCommand`, `AddSketchLineCommand`, `EraseSketchEntityCommand` and atomic `EraseSketchEntitiesCommand`.
 
-Sketch creation revalidates that support is XY/XZ/YZ Origin plane, derives its initial placement, allocates a stable SketchId and commits the new hosted Sketch as one transaction/Undo entry. Add Line targets `SketchId` plus Start/End and returns the allocated model-local `EntityId`. Erase targets `SketchId + EntityId` and fails closed when either target is stale or unknown.
+Sketch creation revalidates that support is XY/XZ/YZ Origin plane, derives its initial placement, allocates a stable SketchId and commits the new hosted Sketch as one transaction/Undo entry. Add Line targets `SketchId` plus Start/End and returns the allocated model-local `EntityId`. Single Erase targets `SketchId + EntityId`. Batch Erase targets one SketchId plus a non-empty EntityId set and validates the entire set before mutation; invalid, duplicate, stale or unknown identities reject the whole command with no partial erase.
 
-Each successful Add or Erase is one Part transaction, one history entry and one revision increment. Undo restores semantic authored state; Redo reapplies it. A session-local cursor table keyed by SketchId preserves the maximum observed EntityId allocation cursor even when history temporarily rewinds geometry or removes/recreates the Sketch through Undo/Redo.
+Each successful Add or single Erase is one Part transaction, one history entry and one revision increment. `EraseSketchEntitiesCommand` validates the complete non-empty EntityId set before mutation; invalid, duplicate, stale or unknown targets fail without partial erase. A successful batch, whether one entity or many, is one Part transaction, one history entry and one revision increment. Undo restores every deleted entity with its original EntityId and geometry; Redo removes the same authored set again. A session-local cursor table keyed by SketchId preserves the maximum observed EntityId allocation cursor even when history temporarily rewinds geometry or removes/recreates the Sketch through Undo/Redo.
 
 A multi-selection Show/Hide is one semantic command, one successful revision increment and one Undo entry.
 
@@ -662,7 +664,7 @@ If the active Sketch disappears through Undo/history, presentation fails closed 
 
 The Part model durably owns Shared 2D Line entities, and R3 presents the active Sketch's authored Lines plus intrinsic Origin in the shared 3D Viewport. Presentation tokens, preview and pointer input remain runtime-only and are not Part identity.
 
-The current product still does not provide interactive Sketch Line drawing/editing, semantic Sketch selection, rectangle selection/Delete, constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming or Material model.
+SK-04A now provides neutral Select/Line runtime semantics, transient EntityId selection and an atomic semantic multi-entity Delete command, but the current product UI still does not wire those capabilities into interactive Sketch Line drawing/editing, point/rectangle selection or Delete. Constraints, dimensions, solver, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming and Material model remain unavailable.
 
 The Viewer is not a second model: no OCCT object or Viewer token is durable Part/Sketch identity, support or authored state.
 </script>
@@ -922,7 +924,8 @@ The target currently contains:
 - opaque model-local `EntityId`;
 - canonical decimal identity transport for `EntityId` and `EntityIdCursor`;
 - the first authored primitive, `Line`;
-- the value-semantic `SketchModel` plus validated state/restore transfer.
+- the value-semantic `SketchModel` plus validated state/restore transfer;
+- host-neutral runtime `SketchInteractionState` for Select/Line tool semantics and transient EntityId selection.
 
 Each persistent Part-hosted Sketch now embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
 
@@ -989,6 +992,28 @@ restore(state)
 
 `erase` removes exactly the addressed Line and returns false for an invalid or unknown ID. Storage compaction does not alter the identities of remaining Lines.
 
+<!-- section-id: internal.shared-2d.interaction -->
+## Sketch interaction state
+
+SK-04A adds one host-neutral runtime interaction authority inside Shared 2D. It is not authored Sketch state and is never persisted.
+
+The default tool is `Select`. Activating `Line` enters `AwaitFirstPoint`; accepting the first finite point establishes a runtime anchor and enters `AwaitNextPoint`. A subsequent distinct finite point produces a `LineSegmentIntent`, but the state does not execute Part/Application commands itself.
+
+The Line commit handoff is explicitly two-phase:
+
+```text
+runtime accepts candidate endpoint
+→ pending LineSegmentIntent
+→ host executes semantic AddSketchLineCommand
+→ host acknowledges success/failure
+```
+
+Only successful acknowledgement advances the continuous-Line anchor. Failure preserves the previous anchor. Exact-zero candidate segments produce no request and introduce no epsilon policy.
+
+Preview intent is transient and exists only while Line has an anchor and no unresolved commit request. Finish/Cancel return to Select and discard only uncommitted runtime state. Esc is hierarchical: AwaitNextPoint → AwaitFirstPoint → Select.
+
+The same interaction state owns transient semantic Sketch selection as `EntityId` values plus optional primary identity. Replace/toggle/clear/replace-many never store Viewer tokens. Reconciliation can prune identities that no longer exist in the current `SketchModel` without authored mutation.
+
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
@@ -996,8 +1021,8 @@ The current Shared 2D / Part integration now has R3 runtime presentation/input a
 
 The current product still does not implement:
 
-- semantic Sketch entity selection or rectangle selection;
-- interactive Line creation/Delete;
+- Viewport/Workbench wiring for semantic Sketch entity selection or rectangle selection;
+- end-to-end interactive Line creation and Delete UI;
 - intrinsic Origin snapping;
 - grips/direct manipulation;
 - Circle, Arc or construction geometry;
@@ -1017,6 +1042,8 @@ Those capabilities are governed by the accepted Sketch roadmap and require later
 SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part ownership, value-copy isolation, semantic Add/Erase commands, live Undo/Redo identity high-water, schema-v3 persistence, v1/v2 backward readability and Save→Close→Reopen identity/geometry preservation.
 
 SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for neutral authored/preview presentation contracts, U/V↔3D and ray→U/V mapping, runtime token bindings, fail-closed active-Sketch lifecycle, routing/cursor state and real Qt/OCCT spatial input before/after orbit.
+
+SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage for Select/Line runtime semantics, explicit request/acknowledgement, continuous anchor progression, exact-zero suppression, Finish/Cancel/Esc behavior, transient EntityId selection/reconciliation, atomic multi-entity Delete and one-segment-per-Undo integration with `DocumentSession`.
 
 The repository Windows FULL gate builds the exact implementation head and runs the complete CTest suite.
 </script>
