@@ -118,6 +118,13 @@ void CadWorkbenchShell::setEditorSurface(QWidget* widget) {
         widget);
 }
 
+void CadWorkbenchShell::setCommandLineContent(QWidget* widget) {
+    replaceContent(
+        *editor_host_layout_,
+        command_line_content_,
+        widget);
+}
+
 void CadWorkbenchShell::setPropertiesContent(QWidget* widget) {
     replaceContent(
         *properties_host_layout_,
