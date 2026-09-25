@@ -872,7 +872,8 @@ public:
     bool emitSpatialPointer(
         double logical_x,
         double logical_y,
-        viewer::SpatialPointerPhase phase) {
+        viewer::SpatialPointerPhase phase,
+        bool control) {
         ensureInitialized();
         if (view_.IsNull() ||
             !spatial_pointer_handler_) {
@@ -920,7 +921,9 @@ public:
                 viewer::Vec3{
                     direction_x,
                     direction_y,
-                    direction_z}}};
+                    direction_z}},
+            viewer::SpatialPointerModifiers{
+                control}};
 
         if (!event.valid()) {
             return false;
@@ -1768,13 +1771,15 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
             const auto point = event->position();
             guardedVoid(
                 "leftSpatialPress",
-                [this, point] {
+                [this, point, event] {
                     static_cast<void>(
                         impl_->emitSpatialPointer(
                             point.x(),
                             point.y(),
                             viewer::SpatialPointerPhase::
-                                primary_press));
+                                primary_press,
+                            (event->modifiers() &
+                             Qt::ControlModifier) != 0));
                 });
         } else {
             const auto point =
@@ -1826,12 +1831,14 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
     const auto point = event->position();
     guardedVoid(
         "spatialMove",
-        [this, point] {
+        [this, point, event] {
             static_cast<void>(
                 impl_->emitSpatialPointer(
                     point.x(),
                     point.y(),
-                    viewer::SpatialPointerPhase::move));
+                    viewer::SpatialPointerPhase::move,
+                    (event->modifiers() &
+                     Qt::ControlModifier) != 0));
         });
 
     QWidget::mouseMoveEvent(event);
@@ -1853,13 +1860,15 @@ void QtOcctViewerWidget::mouseReleaseEvent(QMouseEvent* event) {
         const auto point = event->position();
         guardedVoid(
             "leftSpatialRelease",
-            [this, point] {
+            [this, point, event] {
                 static_cast<void>(
                     impl_->emitSpatialPointer(
                         point.x(),
                         point.y(),
                         viewer::SpatialPointerPhase::
-                            primary_release));
+                            primary_release,
+                        (event->modifiers() &
+                         Qt::ControlModifier) != 0));
             });
         event->accept();
         return;
