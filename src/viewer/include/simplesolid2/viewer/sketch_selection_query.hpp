@@ -59,8 +59,12 @@ struct SketchPointQueryResult final {
     std::optional<PresentationToken> token;
 
     [[nodiscard]] bool valid() const noexcept {
-        return completed ||
-               !token.has_value();
+        if (!completed) {
+            return !token.has_value();
+        }
+
+        return !token.has_value() ||
+               token->valid();
     }
 };
 

@@ -218,6 +218,7 @@ void PartViewportController::refreshPresentation() {
                 select_pick_box;
         sketch_entity_bindings_.clear();
         clearSketchPreview();
+        clearSketchSelectionBoxOverlay();
         applySketchViewportMode();
     }
 
@@ -243,11 +244,11 @@ void PartViewportController::setSketchEditSketch(
             activeSketch() == nullptr) {
             sketch_edit_id_.reset();
             sketch_primary_pointer_routing_ =
-            viewer::PrimaryPointerRouting::
-                presentation_selection;
-        sketch_cursor_mode_ =
-            viewer::ViewportCursorMode::
-                select_pick_box;
+                viewer::PrimaryPointerRouting::
+                    presentation_selection;
+            sketch_cursor_mode_ =
+                viewer::ViewportCursorMode::
+                    select_pick_box;
             sketch_entity_bindings_.clear();
             clearSketchPreview();
             clearSketchSelectionBoxOverlay();
@@ -505,8 +506,12 @@ bool PartViewportController::projectSketchEntitySelection(
 
     viewer::PresentationSelection presentation;
 
-    if (const auto* reference_selection =
-            activeSelection()) {
+    const auto* reference_selection =
+        static_cast<const PartViewportController&>(
+            *this)
+            .activeSelection();
+
+    if (reference_selection != nullptr) {
         presentation.selected.reserve(
             reference_selection->selected.size() +
             selected.size());

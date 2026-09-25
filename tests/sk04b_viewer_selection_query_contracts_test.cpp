@@ -77,6 +77,11 @@ int main() {
         PresentationToken{7U}};
     CHECK(!impossible.valid());
 
+    SketchPointQueryResult invalid_completed{
+        true,
+        PresentationToken{}};
+    CHECK(!invalid_completed.valid());
+
     SketchRectangleQueryResult failed_rect;
     CHECK(failed_rect.valid());
     CHECK(!failed_rect.completed);
