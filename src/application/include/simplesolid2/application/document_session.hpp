@@ -5,6 +5,7 @@
 
 #include <cstddef>
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <string>
 #include <utility>
@@ -24,6 +25,17 @@ struct SetBuiltinReferenceVisibilityCommand final {
 struct CreatePartSketchCommand final {
     core::BuiltinReferenceRole support{
         core::BuiltinReferenceRole::xy_plane};
+};
+
+struct AddSketchLineCommand final {
+    sketch::SketchId sketch_id;
+    sketch::Point2 start;
+    sketch::Point2 end;
+};
+
+struct EraseSketchEntityCommand final {
+    sketch::SketchId sketch_id;
+    sketch::EntityId entity_id;
 };
 
 enum class DocumentSessionErrorCode {
@@ -55,6 +67,16 @@ struct DocumentSessionResult final {
 struct CreatePartSketchResult final {
     bool changed{false};
     std::optional<sketch::SketchId> sketch_id;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
+struct AddSketchLineResult final {
+    bool changed{false};
+    std::optional<sketch::EntityId> entity_id;
     DocumentSessionDiagnostic diagnostic;
 
     [[nodiscard]] bool ok() const noexcept {
@@ -94,6 +116,10 @@ public:
         const SetBuiltinReferenceVisibilityCommand& command);
     [[nodiscard]] CreatePartSketchResult execute(
         const CreatePartSketchCommand& command);
+    [[nodiscard]] AddSketchLineResult execute(
+        const AddSketchLineCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EraseSketchEntityCommand& command);
     [[nodiscard]] DocumentSessionResult undo();
     [[nodiscard]] DocumentSessionResult redo();
     [[nodiscard]] DocumentSessionResult save();
@@ -112,12 +138,19 @@ private:
         const part::PartAuthoredState& expected_current,
         const part::PartAuthoredState& target);
 
+    void absorbSketchEntityIdCursors(
+        const part::PartAuthoredState& state);
+    void applySketchEntityIdCursors(
+        part::PartAuthoredState& state) const;
+
     std::filesystem::path path_;
     part::PartDocument document_;
     part::PartAuthoredState saved_state_;
     core::DocumentRevision expected_revision_;
     std::vector<HistoryEntry> history_;
     std::size_t cursor_{0};
+    std::map<sketch::SketchId, sketch::EntityIdCursor>
+        sketch_entity_id_cursors_;
     part::PartDocumentStore store_;
 };
 

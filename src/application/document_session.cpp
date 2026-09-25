@@ -1,5 +1,7 @@
 #include <simplesolid2/application/document_session.hpp>
 
+#include <algorithm>
+#include <stdexcept>
 #include <utility>
 
 namespace simplesolid2::application {
@@ -27,6 +29,21 @@ DocumentSessionResult success(bool changed = false) {
     return DocumentSessionResult{changed, DocumentSessionDiagnostic{}};
 }
 
+part::PartSketch* findSketch(
+    part::PartAuthoredState& state,
+    const sketch::SketchId& id) noexcept {
+    const auto found = std::find_if(
+        state.sketches.begin(),
+        state.sketches.end(),
+        [&id](const part::PartSketch& item) {
+            return item.id == id;
+        });
+
+    return found == state.sketches.end()
+        ? nullptr
+        : &*found;
+}
+
 } // namespace
 
 DocumentSession::DocumentSession(
@@ -35,7 +52,9 @@ DocumentSession::DocumentSession(
     : path_{std::move(path)},
       document_{std::move(document)},
       saved_state_{document_.state()},
-      expected_revision_{document_.revision()} {}
+      expected_revision_{document_.revision()} {
+    absorbSketchEntityIdCursors(document_.state());
+}
 
 DocumentSessionResult DocumentSession::verifyRevision() const {
     if (document_.revision() != expected_revision_) {
@@ -53,6 +72,8 @@ DocumentSessionResult DocumentSession::commitCommandState(
     if (const auto verified = verifyRevision(); !verified.ok()) {
         return verified;
     }
+
+    applySketchEntityIdCursors(after);
 
     if (after == document_.state()) {
         return success(false);
@@ -79,6 +100,7 @@ DocumentSessionResult DocumentSession::commitCommandState(
     history_.swap(prepared);
     cursor_ = history_.size();
     expected_revision_ = document_.revision();
+    absorbSketchEntityIdCursors(document_.state());
     return success(true);
 }
 
@@ -192,6 +214,89 @@ CreatePartSketchResult DocumentSession::execute(
         DocumentSessionDiagnostic{}};
 }
 
+AddSketchLineResult DocumentSession::execute(
+    const AddSketchLineCommand& command) {
+    auto after = document_.state();
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Add Sketch Line target SketchId does not exist",
+            path_);
+        return AddSketchLineResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    std::optional<sketch::EntityId> entity_id;
+    try {
+        entity_id =
+            target->model.addLine(
+                command.start,
+                command.end);
+    } catch (const std::invalid_argument&) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Add Sketch Line contains invalid authored geometry",
+            path_);
+        return AddSketchLineResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    } catch (const std::overflow_error&) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Sketch EntityId allocation space is exhausted",
+            path_);
+        return AddSketchLineResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while adding Sketch Line");
+    if (!committed.ok() || !committed.changed) {
+        return AddSketchLineResult{
+            committed.changed,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return AddSketchLineResult{
+        true,
+        *entity_id,
+        DocumentSessionDiagnostic{}};
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EraseSketchEntityCommand& command) {
+    auto after = document_.state();
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Erase Sketch Entity target SketchId does not exist",
+            path_);
+    }
+
+    if (!target->model.erase(command.entity_id)) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Erase Sketch Entity target EntityId does not exist",
+            path_);
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while erasing Sketch entity");
+}
+
 DocumentSessionResult DocumentSession::applyHistoricalState(
     const part::PartAuthoredState& expected_current,
     const part::PartAuthoredState& target) {
@@ -205,8 +310,11 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
             path_);
     }
 
+    auto adjusted_target = target;
+    applySketchEntityIdCursors(adjusted_target);
+
     part::PartDocumentTransaction transaction{document_};
-    transaction.replaceState(target);
+    transaction.replaceState(std::move(adjusted_target));
     const auto committed = transaction.commit();
     if (!committed.ok() || !committed.changed) {
         return failure(
@@ -217,7 +325,47 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
     }
 
     expected_revision_ = document_.revision();
+    absorbSketchEntityIdCursors(document_.state());
     return success(true);
+}
+
+void DocumentSession::absorbSketchEntityIdCursors(
+    const part::PartAuthoredState& state) {
+    for (const auto& hosted : state.sketches) {
+        const auto observed =
+            hosted.model.entityIdCursor();
+
+        const auto found =
+            sketch_entity_id_cursors_.find(
+                hosted.id);
+        if (found ==
+            sketch_entity_id_cursors_.end()) {
+            sketch_entity_id_cursors_.emplace(
+                hosted.id,
+                observed);
+            continue;
+        }
+
+        if (observed > found->second) {
+            found->second = observed;
+        }
+    }
+}
+
+void DocumentSession::applySketchEntityIdCursors(
+    part::PartAuthoredState& state) const {
+    for (auto& hosted : state.sketches) {
+        const auto found =
+            sketch_entity_id_cursors_.find(
+                hosted.id);
+        if (found ==
+            sketch_entity_id_cursors_.end()) {
+            continue;
+        }
+
+        hosted.model.preserveEntityIdCursor(
+            found->second);
+    }
 }
 
 DocumentSessionResult DocumentSession::undo() {
