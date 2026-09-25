@@ -135,7 +135,7 @@ Goal:
 - continuous successive segment creation;
 - commit each accepted segment through the semantic command/transaction path;
 - predictable finish/cancel behavior;
-- one Undo entry per committed segment unless a later explicitly accepted contract changes that policy;
+- define and test the commit/Undo granularity explicitly in the R4 Work Contract rather than inheriting it accidentally from UI implementation;
 - introduce the compact Command Line concept as an adapter to the same tool state;
 - Operations presents contextual Line state/actions rather than owning another Line implementation.
 
