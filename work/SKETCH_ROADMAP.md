@@ -147,7 +147,7 @@ This milestone is the gate that prevents Qt/OCCT event details or presentation t
 
 ### R4 — First complete continuous Line workflow
 
-**Status:** next — not started
+**Status:** active — SK-04A
 
 Goal:
 
@@ -275,7 +275,6 @@ The roadmap does not decide ahead of evidence:
 - universal sub-element/reference API;
 - standalone Point entity semantics;
 - exact persistence JSON for entities;
-- exact selection modifier/window-vs-crossing gestures;
 - exact cursor pixel sizes/colors/HiDPI rendering;
 - exact keyboard aliases/Enter/Esc/Space/RMB grammar beyond the accepted Esc-to-Select direction;
 - exact dynamic-input UX;
@@ -302,8 +301,8 @@ R0  completed
 R1  completed
 R2  completed
 R3  completed
-R4  next — not started
+R4  active — SK-04A
 R5+ not started
 ```
 
-R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is completed by `work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md`. R3 is completed by `work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md`. R4 is next and remains unauthorized until a separate explicit Owner-accepted Work Contract exists.
+R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is completed by `work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md`. R3 is completed by `work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md`. R4 is active under the explicit Owner-accepted `work/SK-04A_SKETCH_INTERACTION_STATE_AND_BATCH_DELETE.md` Work Contract; R4 remains incomplete until the later SK-04B/SK-04C contracts are separately accepted and completed.
