@@ -10,10 +10,12 @@
 
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
 
+class QEvent;
 class QLabel;
 class QLineEdit;
 class QPlainTextEdit;
@@ -26,6 +28,7 @@ namespace simplesolid2::ui {
 
 class CadWorkbenchShell;
 class PartDocumentTreeController;
+class PartSketchInteractionController;
 class PartViewportController;
 class ViewCubeWidget;
 
@@ -70,6 +73,9 @@ public:
             std::move(handler);
     }
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
     void buildUi();
 
@@ -83,6 +89,13 @@ private:
     void enterSketchEdit(
         const sketch::SketchId& sketch_id);
     void finishSketch();
+    void activateSketchSelect();
+    void activateSketchLine();
+    void finishSketchLine();
+    void cancelSketchLine();
+    void deleteSketchSelection();
+    void submitSketchCommandLine();
+    void syncSketchInteractionUi();
     void clearSketchRuntimeContext();
     void reconcileSketchRuntimeContext();
     void undo();
@@ -134,6 +147,8 @@ private:
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
     PartViewportController* viewport_controller_{};
+    std::unique_ptr<PartSketchInteractionController>
+        sketch_interaction_controller_;
     ViewCubeWidget* view_cube_{};
 
     QPushButton* undo_button_{};
@@ -143,6 +158,7 @@ private:
 
     QTreeWidget* document_tree_{};
     QWidget* editor_surface_{};
+    QWidget* viewport_widget_{};
 
     QStackedWidget* properties_stack_{};
     QWidget* document_properties_page_{};
@@ -161,8 +177,17 @@ private:
 
     QLabel* operations_placeholder_{};
     QPushButton* sketch_button_{};
+    QPushButton* select_sketch_button_{};
+    QPushButton* line_sketch_button_{};
     QPushButton* cancel_sketch_button_{};
     QPushButton* finish_sketch_button_{};
+    QPushButton* finish_line_button_{};
+    QPushButton* cancel_line_button_{};
+    QPushButton* delete_selection_button_{};
+
+    QWidget* command_line_widget_{};
+    QLabel* command_prompt_{};
+    QLineEdit* command_input_{};
 
     QLabel* status_{};
 };
