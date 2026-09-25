@@ -117,14 +117,14 @@ The shared viewport supports middle-button Pan, Shift + middle-button Orbit, whe
 
 WB-01A replaced the fixed button-grid presentation with a compact responsive CAD navigation control. It tracks its host Editor Surface and switches to a compact mode when space is constrained, so narrow splitter layouts do not force a large Viewer minimum width or overlap the right-side panels.
 
-Because the production Qt/OCCT viewport is a native `WA_PaintOnScreen` child, overlay movement/resize explicitly schedules a coalesced repaint of the underlying Viewer surface. This prevents stale ViewCube pixels from remaining after splitter or right-panel resize without changing the provider-neutral Viewer API.
+Because the production Qt/OCCT viewport is a native `WA_PaintOnScreen` child, ordinary non-native QWidget siblings are not a reliable composition mechanism on Windows. WB-01B therefore keeps ViewCube UI-owned but hosts it directly on the native viewport as a native child window so Windows z-order/composition applies between native surfaces. The existing coalesced underlay refresh remains a repaint aid, not proof that stale pixels cannot occur. Visual artifact freedom is verified manually on the exact Windows build because layout/repaint-count tests cannot prove framebuffer correctness.
 
 Navigation changes are runtime-only and do not increment DocumentRevision, set needsSave or create CAD Undo entries.
 
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
-The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid, active-Sketch authored Lines, the intrinsic active-Sketch Origin overlay, a separate transient Line-preview channel, a runtime Sketch selection-box overlay and selected/primary visual emphasis. SK-04B Sketch point/rectangle queries operate from the provider's current 3D→screen projection of authored Sketch Lines rather than creating an OCCT semantic selection set.
+The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid, active-Sketch authored Lines, the intrinsic active-Sketch Origin overlay, a separate transient Line-preview channel, a runtime Sketch selection-box overlay and selected/primary visual emphasis. The Sketch selection-box is rendered by OCCT `AIS_RubberBand` in the same native graphics surface rather than by a translucent QWidget above `WA_PaintOnScreen`. SK-04B Sketch point/rectangle queries still operate from the provider's current 3D→screen projection of authored Sketch Lines rather than creating an OCCT semantic selection set.
 
 Principal reference planes use finite provider presentation geometry; no native OCCT presentation object is durable semantic identity.
 
