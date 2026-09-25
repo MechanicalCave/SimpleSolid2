@@ -44,7 +44,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 40 tests.
+The compiled CTest suite contains 41 tests.
 
 Project/Hub, PART-01 and WB-01 coverage remains active.
 

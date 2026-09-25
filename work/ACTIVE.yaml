@@ -1,5 +1,5 @@
 version: 1
-status: completed
+status: active
 active_work: "work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -15,18 +15,15 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - SK-02B / R2 is complete after final exact-head PR verification and merge
-  - R3 is the next Sketch roadmap milestone: provider-neutral Sketch presentation and tool-input boundary
-  - R3 requires a separate explicit Owner-accepted Work Contract before any production mutation
-  - no Viewer Sketch presentation/input, Select/cursor workflow, constraints, solver, projection or profile work is active
+  - rerun the exact-head Windows gate after fixing the legacy-v2 persistence test file-handle lifetime
+  - merge SK-02B only after docs/verify/build/full CTest pass on the exact completion head
+  - R3 remains unauthorized until R2 is merged and a separate Owner-accepted Work Contract exists
 notes:
-  - R2 embeds Shared 2D SketchModel by value in PartSketch and adds semantic Add/Erase lifecycle.
+  - SK-02B remains the active bounded R2 Work Contract.
+  - Gate #255 built successfully and passed 40 of 41 tests; sk02b.part_sketch_persistence failed because its verification ifstream remained open across atomic Save on Windows.
+  - the failure is in the test harness file-handle lifetime, not a permission to weaken atomic persistence behavior.
   - Part schema v3 persists canonical model-local EntityIds, next_entity_id and authored Lines.
   - schema v1/v2 remain readable; successful Save publishes schema v3.
-  - DocumentSession preserves per-Sketch live identity high-water across Undo/Redo without making cursor-only advancement user-visible dirty state.
-  - final exact-head Windows docs/verify/build/CTest gate is required before merge.
-  - ADR-0009 remains authoritative for later Origin, selection, cursor and interaction grammar.
-  - R3 remains unauthorized until a separate accepted Work Contract exists.
-  - SS1 remains donor-only and is not architecture authority.
-  - Assembly/Drawing implementation remains unauthorized.
+  - DocumentSession preserves per-Sketch live identity high-water across Undo/Redo without false dirty state.
+  - Viewer/UI/selection/snapping/constraints/solver/projection remain out of scope.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.

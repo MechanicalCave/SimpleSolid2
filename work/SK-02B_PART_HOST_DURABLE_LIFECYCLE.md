@@ -1,6 +1,6 @@
 # SK-02B — Part Host Integration and Durable Sketch Lifecycle
 
-**Status:** ACCEPTED — COMPLETED  
+**Status:** ACCEPTED  
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -487,9 +487,9 @@ SK-02B completes only when:
 Completion does not activate R3 Viewer/input/presentation work. R3 requires a separate explicit Owner-accepted Work Contract.
 
 
-## 10. Completion record
+## 10. Completion candidate
 
-SK-02B is complete.
+SK-02B implementation and documentation are complete pending a passing final exact-head Windows gate.
 
 Implemented:
 
@@ -513,6 +513,6 @@ Deliberately not implemented:
 - Origin runtime snap;
 - grips, Object Snap, inference, constraints/solver, profiles or projection.
 
-Final exact-head Windows documentation/verify/build/CTest verification is required on the completion head before merge.
+Gate #255 reached the R2 persistence test and exposed a test-harness file-handle bug: the legacy-v2 verification stream remained open before atomic Save on Windows. The test closes that stream explicitly before Save. A new final exact-head Windows documentation/verify/build/CTest pass is required before completion/merge.
 
 Completion authorizes no R3 production mutation. R3 requires a separate explicit Owner-accepted Work Contract.
