@@ -35,6 +35,7 @@ class ViewCubeWidget;
 class CadWorkbench final : public QWidget {
 public:
     explicit CadWorkbench(QWidget* parent = nullptr);
+    ~CadWorkbench() override;
     CadWorkbench(
         ViewportFactory viewport_factory,
         QWidget* parent = nullptr);
