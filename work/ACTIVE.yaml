@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/WB-01B_NATIVE_VIEWPORT_OVERLAY_COMPOSITION_STABILIZATION.md"
+status: proposed
+active_work: "work/SK-05A_LINE_DIRECT_MANIPULATION_AND_PRIMARY_SELECTION.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -16,10 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - merge WB-01B only after the exact closeout HEAD passes the selected CLOSURE CI tier
-  - stop at the stabilized post-R4 checkpoint
-  - prepare a separate R5 Work Contract only when the Owner chooses to continue
-  - R5 remains unauthorized until explicit Owner acceptance
+  - review the proposed SK-05A Line direct-manipulation contract
+  - do not implement SK-05A before explicit Owner acceptance
+  - keep R5 implementation unauthorized until that acceptance
+  - keep R6+ inactive
 notes:
   - Owner accepted SK-04C on 2026-09-25 after proposal CLOSURE gate #299 passed.
   - implementation exact head 5a05ce393b0bf5ef7fc83e66244ef983504a7111 passed FULL gate #315 with Build and 52/52 CTest tests.
@@ -43,3 +43,6 @@ notes:
   - Exact-head 6a762d90c97e1405c0c576dc3039dd02ff6069e6 passed FULL gate #381 and Owner manual verification of the independent ORTHO/PERSP amendment.
   - WB-01B acceptance conditions are satisfied; status is completed pending closeout-only CLOSURE gate and merge.
   - R5 remains inactive and requires a separate explicit Owner-accepted Work Contract.
+
+  - WB-01B merged to main as 5d75e561571c83ac50a241a0c4b5cf0e212c05f2 after FULL #381, Owner manual PASS and CLOSURE #382.
+  - SK-05A is a proposal for the first bounded R5 slice; no R5 implementation is authorized yet.
