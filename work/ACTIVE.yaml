@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-R0_SKETCHER_FOUNDATION_AND_ROADMAP.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -14,17 +14,18 @@ accepted_adrs:
   - "adr/ADR-0007-project-workspace-shell-and-document-navigation.md"
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
 next:
-  - complete SK-R0 by verifying the accepted Sketcher foundation, roadmap and reconstruction path on exact head
-  - after SK-R0 completion, R1 is the next roadmap milestone
+  - SK-R0 is complete after final exact-head PR verification and merge
+  - R1 is the next Sketch roadmap milestone: minimal host-neutral Shared 2D authored core
   - R1 production implementation requires a separate explicit Owner-accepted Work Contract
-  - no EntityId, Line, Part schema, Viewer Sketch input/presentation or solver implementation is authorized by SK-R0
+  - no EntityId, Line, Part schema, Viewer Sketch input/presentation, constraints, solver or profile implementation is active
 notes:
-  - WS-01 is completed; main implementation baseline remains the tested WS-01 tree.
-  - SK-R0 is governance/architecture work only and changes no CAD product behavior.
-  - ADR-0008 freezes Shared 2D / Sketcher semantic boundaries agreed before first 2D entity implementation.
-  - work/SKETCH_ROADMAP.md v1.0 is the durable program roadmap for later small Sketch contracts.
-  - AGENTS reconstruction order now requires reading an accepted roadmap referenced by ACTIVE before the active Work Contract.
+  - WS-01 remains the current product implementation baseline.
+  - SK-R0 changes governance/architecture/program memory only and changes no CAD product behavior.
+  - ADR-0008 freezes the accepted Shared 2D / Sketcher semantic foundation.
+  - work/SKETCH_ROADMAP.md v1.0 is mandatory reconstruction context for later Sketch Work Contracts.
   - roadmap milestones define staged goals/dependencies, not exact future contract count or class/API designs.
-  - R1 will target the minimal host-neutral authored 2D core only after a separate accepted contract.
+  - Windows PR gate #233 passed docs verification, bootstrap verification, build and the complete CTest suite on the pre-completion R0 head.
+  - final exact-head verification is required after this completion bookkeeping before merge.
+  - R1 remains unauthorized until a separate accepted Work Contract exists.
   - Assembly/Drawing implementation remains unauthorized.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
