@@ -973,3 +973,27 @@ add_test(
     NAME wb01b.navigation_cube_semantics
     COMMAND wb01b_navigation_cube_semantics_test
 )
+
+
+add_executable(wb01b_navigation_cube_native_test
+    wb01b_navigation_cube_native_test.cpp
+)
+
+target_link_libraries(wb01b_navigation_cube_native_test
+    PRIVATE
+        simplesolid2_viewer
+        simplesolid2_viewer_qt_occt
+        Qt6::Widgets
+        Qt6::Test
+)
+
+target_compile_features(wb01b_navigation_cube_native_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME wb01b.navigation_cube_native
+    COMMAND wb01b_navigation_cube_native_test
+)
+
+set_tests_properties(wb01b.navigation_cube_native PROPERTIES
+    TIMEOUT 30
+)
