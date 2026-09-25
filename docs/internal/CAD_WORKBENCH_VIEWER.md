@@ -43,7 +43,7 @@ WB-01A scene replacement clears native detected/selected state before removing p
 
 The current Part viewport controller owns document-scoped runtime selected set plus primary selection.
 
-Tree selection updates that authority. Qt/OCCT picking emits only neutral `SelectionIntent` values carrying `PresentationToken`; the controller maps tokens back to semantic built-in roles.
+Tree selection updates that authority. Qt/OCCT picking emits only neutral `SelectionIntent` values carrying `PresentationToken`; the controller maps reference tokens back to semantic built-in roles. R3 also assigns runtime tokens to presented authored Sketch Lines and keeps a runtime `PresentationToken ↔ SketchId + EntityId` binding, but semantic Sketch-entity selection is deliberately deferred to R4.
 
 The controller pushes one coherent selection to Tree and Viewer. Primary selection drives Properties.
 
@@ -59,14 +59,14 @@ Mouse wheel                → Zoom
 Right click                → reserved; currently controlled no-op where no menu exists
 ```
 
-Transient OCCT detection/highlight is not semantic selection.
+Transient OCCT detection/highlight is not semantic selection. Entering Sketch edit defaults the viewport to presentation-selection routing with a small pick-box cursor. The separate `spatial_tool_input` route is available to future create/edit tools and delivers neutral move/primary-press/primary-release events without also emitting `SelectionIntent` for the same primary action.
 
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-`IDocumentViewport` is provider-neutral. It exposes camera/navigation, reference scene, presentation selection and selection-intent transport.
+`IDocumentViewport` is provider-neutral. It exposes camera/navigation, the existing reference scene, an active-Sketch authored scene, a separate transient Sketch preview scene, presentation selection, neutral selection-intent transport, neutral spatial-pointer transport, primary-pointer routing and runtime cursor mode.
 
-`QtOcctViewerWidget` implements that contract behind the `viewer_qt_occt` module.
+`QtOcctViewerWidget` implements that contract behind the `viewer_qt_occt` module. Provider-native Qt events and OCCT view objects do not cross the boundary: spatial input is exported only as logical viewport coordinates plus a finite 3D `Ray3`.
 
 The production executable creates the concrete provider only in the application composition root and injects it as a neutral `ViewportSurface`.
 
@@ -77,7 +77,7 @@ Boundary tests reject OCCT/provider tokens from domain/application APIs and Work
 <!-- section-id: internal.cad-workbench-viewer.sketch-edit -->
 ## Part Sketch host and 3D edit context
 
-SK-01 adds the first durable Part-hosted Sketch lifecycle without adding 2D drawing entities.
+SK-01 adds the durable Part-hosted Sketch lifecycle. SK-02B embeds durable Shared 2D Line geometry, and SK-03A adds its provider-neutral active-Sketch presentation/input boundary without implementing interactive Line creation.
 
 The editor toolbar above the 3D Viewport provides the Part `Sketch` launcher. Operations is reserved for the active tool/edit context rather than acting as a permanent tool catalog. During support pick it presents contextual guidance/Cancel; during Sketch edit it presents `Finish Sketch`.
 
@@ -85,13 +85,15 @@ While the Sketch tool is active, the user selects one semantic built-in Origin p
 
 Creation executes through `CreatePartSketchCommand`, DocumentSession validation/history and a Part transaction. One successful creation adds one authored Sketch with stable SketchId, Origin-plane support, explicit SketchPlacement and persistent visibility. Undo removes that Sketch and Redo restores the same SketchId/state.
 
-The active Sketch editor remains the existing Document Viewport. On entry, the runtime grid changes to the Sketch U/V frame, the camera aligns normal to the support plane and Fit is requested. This is only an initial view: normal Pan, Zoom, Orbit and ViewCube navigation remain available immediately afterward and do not mutate SketchPlacement, DocumentRevision or dirty state.
+The active Sketch editor remains the existing Document Viewport. On entry, the runtime grid changes to the Sketch U/V frame, the camera aligns normal to the support plane and Fit is requested. The active Sketch's authored Lines are transformed from local U/V into 3D presentation, and the intrinsic Sketch Origin is shown as a runtime overlay rather than authored Point geometry. This is only an initial view: normal Pan, Zoom, Orbit and ViewCube navigation remain available immediately afterward and do not mutate SketchPlacement, DocumentRevision or dirty state.
 
 `Finish Sketch` exits only the runtime editor context. The authored Sketch remains in the Part and in the normal Document Tree. An existing Sketch re-enters edit by Tree double-click or `Edit Sketch` context action; the Tree carries only transient SketchId metadata and the Workbench revalidates that stable ID against the active Part before editing. Re-entering edit is runtime-only and does not dirty the Part.
 
-Switching/closing Documents clears the runtime edit context safely.
+Switching/closing Documents clears the runtime edit context safely. If history removes the Sketch currently named by the runtime edit context, the controller fails closed: active-Sketch presentation and preview are cleared and ordinary viewport routing/cursor state is restored.
 
-SK-01 supports only empty Sketches on XY/XZ/YZ Origin planes. Datum/Construction Plane support, planar model-face support, topology naming, 2D entities, constraints and solver behavior remain outside this implementation.
+R3 also provides an independent transient Line-preview channel and maps provider rays back into active Sketch U/V through the metric `SketchPlacement`. The mapping therefore remains valid after camera orbit and is not based on screen orientation. Preview/ray activity is runtime-only and does not mutate authored state, revision, dirty state or Undo history.
+
+The current UI still does not create or edit Line geometry interactively. Semantic Sketch selection, rectangle selection, Delete, continuous Line workflow, Command Line input, snapping, constraints and grips remain later roadmap work. Sketch support remains limited to XY/XZ/YZ Origin planes; Datum/Construction Plane and planar model-face support remain later stages.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and responsive ViewCube
@@ -109,7 +111,7 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
-The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid and selected/primary visual emphasis.
+The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid, active-Sketch authored Lines, the intrinsic active-Sketch Origin overlay, a separate transient Line-preview channel and selected/primary visual emphasis.
 
 Principal reference planes use finite provider presentation geometry; no native OCCT presentation object is durable semantic identity.
 
@@ -118,7 +120,7 @@ There is no modeled Part B-Rep in WB-01/WB-01A. The OCCT provider is presentatio
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, camera, projection, transient detection and grid presentation are runtime-only.
+Selection, primary selection, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, pointer routing and cursor mode are runtime-only.
 
 Persistent Origin visibility is authored state and is intentionally separate.
 
