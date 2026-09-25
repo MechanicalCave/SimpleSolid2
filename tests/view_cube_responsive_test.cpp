@@ -113,7 +113,7 @@ public:
     querySketchPresentation(
         viewer::ViewportPoint2 point) override {
         return viewer::SketchPointQueryResult{
-            point.finite(),
+            point.valid(),
             std::nullopt};
     }
 

@@ -89,7 +89,7 @@ public:
     viewer::SketchPointQueryResult
     querySketchPresentation(
         viewer::ViewportPoint2 point) override {
-        if (!point.finite()) return {};
+        if (!point.valid()) return {};
         return point_query_;
     }
 

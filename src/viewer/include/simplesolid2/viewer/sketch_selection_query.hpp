@@ -15,8 +15,8 @@ struct ViewportRect2 final {
     ViewportPoint2 maximum;
 
     [[nodiscard]] bool valid() const noexcept {
-        return minimum.finite() &&
-               maximum.finite() &&
+        return minimum.valid() &&
+               maximum.valid() &&
                maximum.x > minimum.x &&
                maximum.y > minimum.y;
     }
@@ -30,8 +30,8 @@ struct ViewportRect2 final {
 normalizedViewportRect(
     ViewportPoint2 first,
     ViewportPoint2 second) noexcept {
-    if (!first.finite() ||
-        !second.finite() ||
+    if (!first.valid() ||
+        !second.valid() ||
         first.x == second.x ||
         first.y == second.y) {
         return std::nullopt;
@@ -104,8 +104,8 @@ struct SketchSelectionBoxOverlay final {
         SketchRectangleSelectionRule::window};
 
     [[nodiscard]] bool valid() const noexcept {
-        return anchor.finite() &&
-               current.finite();
+        return anchor.valid() &&
+               current.valid();
     }
 
     friend bool operator==(

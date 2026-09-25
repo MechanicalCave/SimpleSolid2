@@ -669,7 +669,7 @@ public:
     viewer::SketchPointQueryResult
     querySketchPresentation(
         viewer::ViewportPoint2 point) {
-        if (!point.finite()) {
+        if (!point.valid()) {
             return {};
         }
 

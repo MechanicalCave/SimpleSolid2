@@ -359,7 +359,7 @@ PartViewportController::querySketchEntityAt(
     viewer::ViewportPoint2 point) {
     if (viewport_ == nullptr ||
         activeSketch() == nullptr ||
-        !point.finite()) {
+        !point.valid()) {
         return {};
     }
 
