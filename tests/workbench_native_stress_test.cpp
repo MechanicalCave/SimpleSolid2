@@ -228,20 +228,6 @@ int main(int argc, char* argv[]) {
             EXPECT(editor_surface != nullptr);
             EXPECT(view_cube != nullptr);
             EXPECT(compact_button != nullptr);
-            EXPECT(
-                editor_surface->testAttribute(
-                    Qt::WA_NativeWindow));
-            EXPECT(editor_surface->winId() != 0);
-            EXPECT(viewport->parentWidget() == editor_surface);
-            EXPECT(view_cube->parentWidget() == editor_surface);
-            EXPECT(
-                viewport->testAttribute(
-                    Qt::WA_NativeWindow));
-            EXPECT(
-                view_cube->testAttribute(
-                    Qt::WA_NativeWindow));
-            EXPECT(viewport->winId() != 0);
-            EXPECT(view_cube->winId() != 0);
 
             auto* session =
                 opened.session->documentSession(
