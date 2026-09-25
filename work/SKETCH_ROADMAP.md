@@ -147,7 +147,7 @@ This milestone is the gate that prevents Qt/OCCT event details or presentation t
 
 ### R4 — First complete continuous Line workflow
 
-**Status:** in progress — SK-04A completed; SK-04B next
+**Status:** active — SK-04A completed; SK-04B active
 
 Goal:
 
@@ -301,8 +301,8 @@ R0  completed
 R1  completed
 R2  completed
 R3  completed
-R4  in progress — SK-04A completed; SK-04B next
+R4  active — SK-04A completed; SK-04B active
 R5+ not started
 ```
 
-R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is completed by `work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md`. R3 is completed by `work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md`. R4 is in progress: `work/SK-04A_SKETCH_INTERACTION_STATE_AND_BATCH_DELETE.md` is completed; SK-04B is next but remains unauthorized until a separate explicit Owner-accepted Work Contract exists.
+R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is completed by `work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md`. R3 is completed by `work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md`. R4 is active: `work/SK-04A_SKETCH_INTERACTION_STATE_AND_BATCH_DELETE.md` is completed and `work/SK-04B_PROVIDER_NEUTRAL_SKETCH_SELECTION_QUERY_OVERLAY_BRIDGE.md` is the current explicit Owner-accepted contract.
