@@ -13,7 +13,7 @@ void check(bool value, const char* expression, int line) {
         std::cerr
             << "SK-02B Part Sketch model CHECK failed at line "
             << line << ": " << expression << '\n';
-        std::abort();
+        std::exit(EXIT_FAILURE);
     }
 }
 
