@@ -41,6 +41,14 @@ public:
 
     void fitAll() override;
 
+    void setNavigationCubeActionHandler(
+        viewer::NavigationCubeActionHandler handler) override;
+
+    [[nodiscard]] bool animateCameraState(
+        const viewer::CameraState& state,
+        double duration_seconds,
+        bool fit_all) override;
+
     [[nodiscard]] bool setReferenceScene(
         const viewer::ReferenceScene& scene) override;
 
