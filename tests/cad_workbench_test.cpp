@@ -436,7 +436,7 @@ int main(int argc, char* argv[]) {
     CHECK(viewport->cameraState()->eye.z >
           viewport->cameraState()->target.z);
     CHECK(viewport->cameraState()->projection ==
-          viewer::CameraProjection::orthographic);
+          viewer::CameraProjection::perspective);
     CHECK(first_session_for_view->document().revision().value() ==
           navigation_revision);
     CHECK(!first_session_for_view->needsSave());
@@ -446,7 +446,29 @@ int main(int argc, char* argv[]) {
         {viewer::NavigationCubeActionKind::home, {}});
     CHECK(viewport->fitAllCount() == fit_before + 1);
     CHECK(viewport->cameraState()->projection ==
-          viewer::CameraProjection::orthographic);
+          viewer::CameraProjection::perspective);
+    CHECK(first_session_for_view->document().revision().value() ==
+          navigation_revision);
+    CHECK(!first_session_for_view->needsSave());
+
+    const auto before_projection_toggle =
+        *viewport->cameraState();
+    viewport->emitNavigationCubeAction(
+        {viewer::NavigationCubeActionKind::
+             toggle_projection,
+         {}});
+    CHECK(
+        viewport->cameraState()->projection ==
+        viewer::CameraProjection::orthographic);
+    CHECK(
+        viewport->cameraState()->eye ==
+        before_projection_toggle.eye);
+    CHECK(
+        viewport->cameraState()->target ==
+        before_projection_toggle.target);
+    CHECK(
+        viewport->cameraState()->up ==
+        before_projection_toggle.up);
     CHECK(first_session_for_view->document().revision().value() ==
           navigation_revision);
     CHECK(!first_session_for_view->needsSave());
