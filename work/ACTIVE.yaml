@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-04A_SKETCH_INTERACTION_STATE_AND_BATCH_DELETE.md"
+status: active
+active_work: "work/SK-04B_PROVIDER_NEUTRAL_SKETCH_SELECTION_QUERY_OVERLAY_BRIDGE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -15,14 +15,15 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - review proposed work/SK-04B_PROVIDER_NEUTRAL_SKETCH_SELECTION_QUERY_OVERLAY_BRIDGE.md
-  - SK-04B remains inactive until explicit Owner acceptance
-  - SK-04C remains the later final R4 end-to-end workflow contract
+  - implement SK-04B provider-neutral active-Sketch point and rectangle queries
+  - implement runtime selection-box overlay and Part/UI token bridge
+  - decouple Sketch spatial routing from cursor mode in PartViewportController
+  - add focused neutral/controller/native provider tests
+  - finish internal docs, FULL implementation gate and completion bookkeeping
 notes:
-  - R3 is completed.
-  - R4 is in progress; SK-04A is completed and merged as b7f92746e2ded15b54cb3b47fe98dd1e4590f216.
-  - SK-04B proposal adds no production authorization until explicit Owner acceptance.
-  - proposed SK-04B keeps point/rectangle hit testing provider-owned but semantic selection EntityId-owned.
-  - proposed rectangle semantics are view-space Window/Crossing and do not create authored geometry.
-  - proposed Part/UI adapter decouples spatial pointer routing from cursor mode so Select may use spatial input with pick-box cursor.
-  - SK-04C remains unauthorized.
+  - SK-04B was explicitly Owner-accepted on 2026-09-25 and is the active bounded R4 Work Contract.
+  - R4 remains incomplete after SK-04B; SK-04C requires a separate Owner-accepted Work Contract.
+  - point/rectangle query returns runtime PresentationToken only and does not own semantic selection.
+  - rectangle membership is current-view Window/Crossing behavior.
+  - Select must be able to use spatial_tool_input with select_pick_box cursor.
+  - legacy built-in reference SelectionIntent remains supported.
