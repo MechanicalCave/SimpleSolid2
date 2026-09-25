@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-R0_SKETCHER_FOUNDATION_AND_ROADMAP.md"
+status: active
+active_work: "work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -15,18 +15,17 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - R1 is the next Sketch roadmap milestone: minimal host-neutral Shared 2D authored core
-  - work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md is a PROPOSED bounded R1 contract and is not active
-  - Owner acceptance of the final SK-02A contract is required before any production implementation
-  - no EntityId, Line, Part schema, Viewer Sketch input/presentation, selection, constraints, solver, projection or profile implementation is active
+  - implement SK-02A Slice A: neutral finite U/V coordinate semantics plus opaque model-local EntityId
+  - then implement Line authored value and exact-zero validation
+  - then minimal Sketch model add/lookup/erase/value-copy/non-reuse semantics
+  - finish with internal as-built docs and exact-head Windows verification
 notes:
-  - WS-01 remains the current product implementation baseline.
-  - SK-R0 is completed and merged; exact-head Windows gate #235 passed before merge.
-  - ADR-0008 freezes the Shared 2D / Sketcher semantic foundation.
-  - ADR-0009 freezes identity lifecycle, local frame/Origin/reference direction and Sketch interaction grammar before first 2D entity implementation.
-  - work/SKETCH_ROADMAP.md v1.1 is mandatory reconstruction context for later Sketch Work Contracts.
-  - roadmap milestones define staged goals/dependencies, not exact future contract count or private class/API designs.
-  - R1 remains unauthorized until a separate accepted Work Contract is activated.
-  - SS1 remains a donor only; SS2 Foundation/accepted ADRs are authoritative.
+  - SK-02A is Owner-accepted on 2026-09-25 and is the active bounded R1 Work Contract.
+  - R1 changes are limited to host-neutral Shared 2D authored core; Part/Application/Persistence/Qt/Viewer/OCCT integration is out of scope.
+  - ADR-0009 governs identity lifecycle, local frame/Origin/reference direction and later interaction grammar.
+  - EntityId representation remains an implementation detail; identity must not derive from collection index, pointer, Viewer token or host identity.
+  - exact zero-length Line is invalid; no epsilon/near-zero policy is introduced in SK-02A.
+  - state/value copy preserves identity; future semantic duplication must allocate fresh identity.
+  - SS1 remains donor-only and is not architecture authority.
   - Assembly/Drawing implementation remains unauthorized.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
