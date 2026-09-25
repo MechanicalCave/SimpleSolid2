@@ -513,6 +513,6 @@ Deliberately not implemented:
 - Origin runtime snap;
 - grips, Object Snap, inference, constraints/solver, profiles or projection.
 
-Gate #255 reached the R2 persistence test and exposed a test-harness file-handle bug: the legacy-v2 verification stream remained open before atomic Save on Windows. The test closes that stream explicitly before Save. A new final exact-head Windows documentation/verify/build/CTest pass is required before completion/merge.
+Gate #255 exposed and fixed a Windows test-harness file-handle lifetime issue before atomic Save. Gate #257 then reached the final malformed fixture and showed that the native container correctly rejects JSON numeric overflow (1e400) before Part-domain parsing. The verification is split accordingly: SketchModel restore rejects non-finite geometry, while the native container test asserts overflow authored JSON is rejected at the container boundary. A new final exact-head Windows documentation/verify/build/CTest pass is required before completion/merge.
 
 Completion authorizes no R3 production mutation. R3 requires a separate explicit Owner-accepted Work Contract.

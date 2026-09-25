@@ -20,8 +20,9 @@ next:
   - R3 remains unauthorized until R2 is merged and a separate Owner-accepted Work Contract exists
 notes:
   - SK-02B remains the active bounded R2 Work Contract.
-  - Gate #255 built successfully and passed 40 of 41 tests; sk02b.part_sketch_persistence failed because its verification ifstream remained open across atomic Save on Windows.
-  - the failure is in the test harness file-handle lifetime, not a permission to weaken atomic persistence behavior.
+  - Gate #255 exposed a Windows test-harness file-handle lifetime issue before atomic Save; that fixture now closes the verification stream explicitly.
+  - Gate #257 built successfully and passed 40 of 41 tests; the final synthetic 1e400 JSON fixture was rejected by the native container before Part-domain parsing, as required by fail-closed container validation.
+  - verification now tests non-finite SketchModel restore separately and asserts JSON numeric overflow rejection at the native-container boundary; no production validation was weakened.
   - Part schema v3 persists canonical model-local EntityIds, next_entity_id and authored Lines.
   - schema v1/v2 remain readable; successful Save publishes schema v3.
   - DocumentSession preserves per-Sketch live identity high-water across Undo/Redo without false dirty state.

@@ -84,6 +84,14 @@ int main() {
              std::move(duplicate_state))
              .has_value());
 
+    auto non_finite_state = captured;
+    non_finite_state.lines.front().start.u =
+        std::numeric_limits<double>::infinity();
+    CHECK(
+        !sketch::SketchModel::restore(
+             std::move(non_finite_state))
+             .has_value());
+
     TempDirectory temp;
     const auto path =
         temp.path / "Lifecycle.ss2part";

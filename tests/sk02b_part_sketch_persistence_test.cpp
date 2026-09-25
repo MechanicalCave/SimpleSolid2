@@ -429,15 +429,32 @@ int main() {
         "]"
         "}"));
 
-    CHECK(malformedV3ModelRejected(
-        temp.path / "NonFinite.ss2part",
-        store,
-        "{"
-        "\"next_entity_id\":\"2\","
-        "\"lines\":["
-            "{\"id\":\"1\",\"start\":[1e400,0],\"end\":[1,0]}"
-        "]"
-        "}"));
+    const auto non_finite_authored =
+        authoredWithSketches(
+            "[" +
+            v3SketchRecord(
+                sketch::SketchId::generate(),
+                "{"
+                "\"next_entity_id\":\"2\","
+                "\"lines\":["
+                    "{\"id\":\"1\",\"start\":[1e400,0],\"end\":[1,0]}"
+                "]"
+                "}") +
+            "]");
+    const auto non_finite_container =
+        persistence::buildNativeDocumentContainer(
+            persistence::NativeDocumentDescriptor{
+                "part",
+                std::string{
+                    core::DocumentId::generate().value()},
+                3,
+            },
+            non_finite_authored);
+    CHECK(!non_finite_container.ok());
+    CHECK(
+        non_finite_container.diagnostic.code ==
+        persistence::NativeContainerErrorCode::
+            invalid_authored_json);
 
     return EXIT_SUCCESS;
 }
