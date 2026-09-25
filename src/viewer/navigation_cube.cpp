@@ -130,8 +130,6 @@ cameraForOrientation(
         current.target -
         (*direction * camera_distance);
     result.up = *up;
-    result.projection =
-        CameraProjection::orthographic;
 
     if (!validateCameraState(result).valid) {
         return std::nullopt;
@@ -268,12 +266,18 @@ navigationForCubeAction(
                     top_front_right);
         fit_all = true;
         break;
+
+    case NavigationCubeActionKind::toggle_projection:
+        camera = cameraWithProjection(
+            current,
+            current.projection ==
+                    CameraProjection::orthographic
+                ? CameraProjection::perspective
+                : CameraProjection::orthographic);
+        break;
     }
 
     if (!camera) return std::nullopt;
-
-    camera->projection =
-        CameraProjection::orthographic;
 
     return NavigationCubeNavigation{
         *camera,
