@@ -359,7 +359,18 @@ navigationCubeTargetForOrientation(
 class QtOcctViewerWidget::Impl final {
 public:
     explicit Impl(QtOcctViewerWidget& owner)
-        : owner_{owner} {}
+        : owner_{owner},
+          navigation_animation_timer_{
+              new QTimer{&owner_}} {
+        navigation_animation_timer_->setInterval(16);
+        QObject::connect(
+            navigation_animation_timer_,
+            &QTimer::timeout,
+            &owner_,
+            [this] {
+                updateNavigationAnimation();
+            });
+    }
 
     void ensureInitialized() {
         if (!view_.IsNull()) return;
@@ -384,6 +395,47 @@ public:
         viewer::CameraState initial;
         initial.projection = viewer::CameraProjection::orthographic;
         static_cast<void>(setCameraState(initial));
+
+        navigation_cube_ = new AIS_ViewCube();
+        navigation_cube_->SetAutoStartAnimation(false);
+        navigation_cube_->SetDrawAxes(false);
+        navigation_cube_->SetDrawEdges(true);
+        navigation_cube_->SetDrawVertices(true);
+        navigation_cube_->SetSize(58.0);
+        navigation_cube_->SetBoxFacetExtension(9.0);
+        navigation_cube_->SetBoxEdgeMinSize(5.0);
+        navigation_cube_->SetBoxCornerMinSize(6.0);
+        navigation_cube_->SetFontHeight(12.0);
+        navigation_cube_->SetFitSelected(false);
+        navigation_cube_->SetResetCamera(true);
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Yneg,
+            "FRONT");
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Ypos,
+            "BACK");
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Xneg,
+            "LEFT");
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Xpos,
+            "RIGHT");
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Zpos,
+            "TOP");
+        navigation_cube_->SetBoxSideLabel(
+            V3d_Zneg,
+            "BOTTOM");
+        navigation_cube_->SetTransformPersistence(
+            new Graphic3d_TransformPers(
+                Graphic3d_TMF_TriedronPers,
+                Aspect_TOTP_RIGHT_UPPER,
+                Graphic3d_Vec2i{86, 86}));
+        context_->Display(
+            navigation_cube_,
+            false);
+        context_->UpdateCurrentViewer();
+        view_->Redraw();
     }
 
     std::optional<viewer::CameraState> cameraState() const {
@@ -456,6 +508,130 @@ public:
         if (view_.IsNull()) return;
         view_->FitAll(0.05, false);
         view_->Redraw();
+    }
+
+    void setNavigationCubeActionHandler(
+        viewer::NavigationCubeActionHandler handler) {
+        navigation_cube_action_handler_ =
+            std::move(handler);
+    }
+
+    bool animateCameraState(
+        const viewer::CameraState& state,
+        double duration_seconds,
+        bool fit_all) {
+        if (!viewer::validateCameraState(state).valid ||
+            !std::isfinite(duration_seconds) ||
+            duration_seconds < 0.0) {
+            return false;
+        }
+
+        ensureInitialized();
+        if (view_.IsNull()) {
+            return false;
+        }
+
+        if (!navigation_animation_.IsNull()) {
+            navigation_animation_->Stop();
+        }
+        navigation_animation_timer_->stop();
+
+        if (duration_seconds <= 0.0) {
+            if (!setCameraState(state)) {
+                return false;
+            }
+            if (fit_all) {
+                fitAll();
+            }
+            return true;
+        }
+
+        const auto current_camera =
+            view_->Camera();
+        if (current_camera.IsNull()) {
+            return false;
+        }
+
+        Handle(Graphic3d_Camera) start_camera =
+            new Graphic3d_Camera(current_camera);
+        Handle(Graphic3d_Camera) end_camera =
+            new Graphic3d_Camera(current_camera);
+
+        end_camera->SetProjectionType(
+            state.projection ==
+                    viewer::CameraProjection::orthographic
+                ? Graphic3d_Camera::
+                      Projection_Orthographic
+                : Graphic3d_Camera::
+                      Projection_Perspective);
+        end_camera->SetEyeAndCenter(
+            gp_Pnt{
+                state.eye.x,
+                state.eye.y,
+                state.eye.z},
+            gp_Pnt{
+                state.target.x,
+                state.target.y,
+                state.target.z});
+        end_camera->SetUp(
+            gp_Dir{
+                state.up.x,
+                state.up.y,
+                state.up.z});
+        end_camera->OrthogonalizeUp();
+        end_camera->SetScale(state.scale);
+
+        navigation_animation_ =
+            new AIS_AnimationCamera(
+                "SS2.NavigationCube",
+                view_);
+        navigation_animation_->SetCameraStart(
+            start_camera);
+        navigation_animation_->SetCameraEnd(
+            end_camera);
+        navigation_animation_->SetOwnDuration(
+            duration_seconds);
+        navigation_animation_target_ = state;
+        navigation_animation_fit_all_ = fit_all;
+        navigation_animation_->StartTimer(
+            0.0,
+            1.0,
+            true);
+        navigation_animation_timer_->start();
+        return true;
+    }
+
+    void updateNavigationAnimation() {
+        if (navigation_animation_.IsNull() ||
+            view_.IsNull()) {
+            navigation_animation_timer_->stop();
+            return;
+        }
+
+        static_cast<void>(
+            navigation_animation_->UpdateTimer());
+        view_->Redraw();
+
+        if (!navigation_animation_->IsStopped()) {
+            return;
+        }
+
+        navigation_animation_timer_->stop();
+
+        if (navigation_animation_target_) {
+            static_cast<void>(
+                setCameraState(
+                    *navigation_animation_target_));
+        }
+
+        if (navigation_animation_fit_all_) {
+            view_->FitAll(0.05, false);
+            view_->Redraw();
+        }
+
+        navigation_animation_.Nullify();
+        navigation_animation_target_.reset();
+        navigation_animation_fit_all_ = false;
     }
 
     bool setReferenceScene(
