@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -15,16 +15,14 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - implement SK-03A Slice A: neutral Viewer Sketch scene, preview, spatial pointer and cursor/routing contracts
-  - then PartViewportController authored-Sketch presentation and ray-to-U/V adapter
-  - then Qt/OCCT rendering/ray/routing/cursor behavior
-  - then CadWorkbench Sketch-edit integration and regression tests
-  - finish with as-built/product docs, FULL implementation gate and CLOSURE bookkeeping
+  - merge SK-03A only after the exact completion HEAD passes CLOSURE
+  - prepare a separate R4 Work Contract for the first complete continuous Line workflow
+  - R4 remains unauthorized until explicit Owner acceptance
 notes:
-  - SK-03A is Owner-accepted on 2026-09-25 and is the active bounded R3 Work Contract.
-  - R2 / SK-02B is completed and merged.
-  - CI-01 tiered exact-head verification is completed and merged.
-  - PartViewportController remains a presentation/input adapter, not Sketch ToolState.
-  - active-Sketch authored presentation and runtime preview remain distinct channels.
+  - SK-03A implementation head 53798bd3248375a898b760069274286a9ed0b7cd passed FULL gate #274 with Build and 45/45 CTest tests.
+  - SK-03A documentation head 7a73b9b09c98ad46aca2e5da2c757989a83bea7c passed DOCS gate #281 without Build/CTest.
+  - this completion commit is intentionally work/** only and must be classified CLOSURE.
+  - active-Sketch authored presentation and runtime preview are distinct channels.
+  - provider-neutral Ray3 maps to active Sketch U/V above the provider using SketchPlacement.
   - PresentationToken remains runtime-only and never replaces SketchId plus EntityId.
   - R4 continuous Line workflow and semantic Sketch selection remain unauthorized.

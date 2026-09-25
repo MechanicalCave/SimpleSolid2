@@ -131,7 +131,7 @@ Deliberately outside R2:
 
 ### R3 — Provider-neutral Sketch presentation and tool-input boundary
 
-**Status:** next — not started
+**Status:** completed
 
 Goal:
 
@@ -146,6 +146,8 @@ Goal:
 This milestone is the gate that prevents Qt/OCCT event details or presentation tokens from defining Sketch semantics.
 
 ### R4 — First complete continuous Line workflow
+
+**Status:** next — not started
 
 Goal:
 
@@ -273,7 +275,6 @@ The roadmap does not decide ahead of evidence:
 - universal sub-element/reference API;
 - standalone Point entity semantics;
 - exact persistence JSON for entities;
-- exact Viewer Sketch-scene, spatial pointer/ray and input APIs;
 - exact selection modifier/window-vs-crossing gestures;
 - exact cursor pixel sizes/colors/HiDPI rendering;
 - exact keyboard aliases/Enter/Esc/Space/RMB grammar beyond the accepted Esc-to-Select direction;
@@ -300,8 +301,9 @@ Current:
 R0  completed
 R1  completed
 R2  completed
-R3  active — SK-03A
-R4+ not started
+R3  completed
+R4  next — not started
+R5+ not started
 ```
 
-R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is completed by `work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md`. R3 is active under the explicit Owner-accepted `work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md` Work Contract.
+R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is completed by `work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md`. R3 is completed by `work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md`. R4 is next and remains unauthorized until a separate explicit Owner-accepted Work Contract exists.
