@@ -186,6 +186,16 @@ Internal docs: required
 User/Product docs: not required  
 Reason: this is a runtime Viewer/Qt composition stabilization with no intended user workflow or CAD semantic change; internal as-built claims about overlay repaint correctness must be corrected.
 
+## 12. Manual verification evidence
+
+Manual Windows verification of exact FULL-green candidate `2faac1fe94011b1bf9666ab7edd30e40a508748b` produced mixed results:
+
+- Sketch selection-box composition improved materially: dragging the box no longer caused the 3D viewport to disappear or reveal black/Workspace background.
+- The first AIS_RubberBand implementation exposed a coordinate-system defect: the visual rectangle Y axis was inverted relative to Qt pointer input.
+- ViewCube still produced stale artifacts. The first D1 experiment (making ViewCube a native child of the native viewport) therefore failed manual acceptance and is not considered a solution.
+
+Follow-up D1 candidate keeps the successful in-surface AIS_RubberBand strategy with explicit Qt-top-left → OCCT-bottom-left Y conversion, and changes ViewCube composition to native sibling windows under a native Editor Surface host. This preserves UI ownership, geometry and public Viewer contracts while testing Windows-native sibling z-order instead of child-over-native-surface composition.
+
 ## 13. Completion boundary
 
 Completion of WB-01B restores a clean post-R4 checkpoint.
