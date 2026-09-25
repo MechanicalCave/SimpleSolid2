@@ -15,10 +15,10 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - merge SK-04C only after the exact closeout HEAD passes the selected CLOSURE CI tier
-  - stop at the completed R4 checkpoint
-  - prepare a separate R5 Work Contract only when the Owner chooses to continue
-  - R5 remains unauthorized until explicit Owner acceptance
+  - review proposed work/WB-01B_NATIVE_VIEWPORT_OVERLAY_COMPOSITION_STABILIZATION.md
+  - keep production implementation inactive until explicit Owner acceptance of WB-01B
+  - fix native overlay composition before beginning R5
+  - R5 remains unauthorized until separate explicit Owner acceptance
 notes:
   - Owner accepted SK-04C on 2026-09-25 after proposal CLOSURE gate #299 passed.
   - implementation exact head 5a05ce393b0bf5ef7fc83e66244ef983504a7111 passed FULL gate #315 with Build and 52/52 CTest tests.
@@ -29,3 +29,5 @@ notes:
   - rectangle selection replaces semantic selection and assigns no primary in R4.
   - Command Line accepts SELECT and LINE only; coordinate input, snaps, constraints and grips remain outside R4.
   - SK-04C completes R4; R5 is next but is not active.
+  - Manual post-R4 Windows validation reports visual composition defects for both Sketch selection-box overlay and ViewCube over the native Qt/OCCT viewport.
+  - Proposed WB-01B is a bounded pre-R5 Viewer/UI stabilization; it is not active until explicit Owner acceptance.
