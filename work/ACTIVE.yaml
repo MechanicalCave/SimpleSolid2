@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-04C_END_TO_END_SELECT_CONTINUOUS_LINE_DELETE_WORKFLOW.md"
+status: active
+active_work: "work/WB-01B_NATIVE_VIEWPORT_OVERLAY_COMPOSITION_STABILIZATION.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -15,10 +15,10 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - review proposed work/WB-01B_NATIVE_VIEWPORT_OVERLAY_COMPOSITION_STABILIZATION.md
-  - keep production implementation inactive until explicit Owner acceptance of WB-01B
-  - fix native overlay composition before beginning R5
-  - R5 remains unauthorized until separate explicit Owner acceptance
+  - investigate and stabilize native Qt/OCCT overlay composition under accepted WB-01B
+  - strengthen native overlay lifecycle regression coverage
+  - require exact-head FULL gate plus explicit manual Windows visual verification before closeout
+  - keep R5 inactive until WB-01B is completed and separately accepted R5 work exists
 notes:
   - Owner accepted SK-04C on 2026-09-25 after proposal CLOSURE gate #299 passed.
   - implementation exact head 5a05ce393b0bf5ef7fc83e66244ef983504a7111 passed FULL gate #315 with Build and 52/52 CTest tests.
@@ -30,4 +30,5 @@ notes:
   - Command Line accepts SELECT and LINE only; coordinate input, snaps, constraints and grips remain outside R4.
   - SK-04C completes R4; R5 is next but is not active.
   - Manual post-R4 Windows validation reports visual composition defects for both Sketch selection-box overlay and ViewCube over the native Qt/OCCT viewport.
-  - Proposed WB-01B is a bounded pre-R5 Viewer/UI stabilization; it is not active until explicit Owner acceptance.
+  - WB-01B was explicitly Owner-accepted on 2026-09-25 after proposal CLOSURE gate #323 passed.
+  - WB-01B is the active bounded pre-R5 Viewer/UI stabilization; manual Windows visual verification is mandatory before completion.
