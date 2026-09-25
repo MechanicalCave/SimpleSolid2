@@ -89,6 +89,12 @@ nlohmann::json vectorJson(
         {value[0], value[1], value[2]});
 }
 
+nlohmann::json pointJson(
+    const sketch::Point2& value) {
+    return nlohmann::json::array(
+        {value.u, value.v});
+}
+
 std::string serializeAuthored(
     const PartDocument& document) {
     const auto& properties =
@@ -96,27 +102,47 @@ std::string serializeAuthored(
 
     nlohmann::json sketches =
         nlohmann::json::array();
-    for (const auto& sketch : document.sketches()) {
+    for (const auto& hosted : document.sketches()) {
+        const auto model_state =
+            hosted.model.state();
+
+        nlohmann::json lines =
+            nlohmann::json::array();
+        for (const auto& line : model_state.lines) {
+            lines.push_back(
+                {
+                    {"id", line.id.serialized()},
+                    {"start", pointJson(line.start)},
+                    {"end", pointJson(line.end)},
+                });
+        }
+
         sketches.push_back(
             {
-                {"id", std::string{sketch.id.value()}},
+                {"id", std::string{hosted.id.value()}},
                 {"support",
                  {
                      {"kind", "builtin_origin_plane"},
                      {"builtin_plane",
                       supportRoleName(
-                          sketch.support.builtin_plane)},
+                          hosted.support.builtin_plane)},
                  }},
                 {"placement",
                  {
                      {"origin",
-                      vectorJson(sketch.placement.origin)},
+                      vectorJson(hosted.placement.origin)},
                      {"u_axis",
-                      vectorJson(sketch.placement.u_axis)},
+                      vectorJson(hosted.placement.u_axis)},
                      {"v_axis",
-                      vectorJson(sketch.placement.v_axis)},
+                      vectorJson(hosted.placement.v_axis)},
                  }},
-                {"visible", sketch.visible},
+                {"visible", hosted.visible},
+                {"model",
+                 {
+                     {"next_entity_id",
+                      model_state.next_entity_id.serialized()},
+                     {"lines", std::move(lines)},
+                 }},
             });
     }
 
@@ -196,8 +222,113 @@ parseVector3(const nlohmann::json& value) {
     return result;
 }
 
+std::optional<sketch::Point2>
+parsePoint2(const nlohmann::json& value) {
+    if (!value.is_array() ||
+        value.size() != 2U) {
+        return std::nullopt;
+    }
+
+    sketch::Point2 result;
+    for (std::size_t index = 0U;
+         index < 2U;
+         ++index) {
+        const auto& item = value[index];
+        if (!item.is_number()) {
+            return std::nullopt;
+        }
+
+        const auto parsed = item.get<double>();
+        if (!std::isfinite(parsed)) {
+            return std::nullopt;
+        }
+
+        if (index == 0U) {
+            result.u = parsed;
+        } else {
+            result.v = parsed;
+        }
+    }
+
+    return result;
+}
+
+std::optional<sketch::SketchModel>
+parseSketchModel(
+    const nlohmann::json& model_json,
+    std::string& error) {
+    if (!model_json.is_object() ||
+        model_json.size() != 2U ||
+        !model_json.contains("next_entity_id") ||
+        !model_json.contains("lines") ||
+        !model_json["next_entity_id"].is_string() ||
+        !model_json["lines"].is_array()) {
+        error =
+            "Native Part contains malformed Sketch model";
+        return std::nullopt;
+    }
+
+    const auto cursor =
+        sketch::EntityIdCursor::parse(
+            model_json[
+                "next_entity_id"].get<std::string>());
+    if (!cursor) {
+        error =
+            "Native Part contains invalid Sketch next_entity_id";
+        return std::nullopt;
+    }
+
+    sketch::SketchModelState state;
+    state.next_entity_id = *cursor;
+
+    for (const auto& item :
+         model_json["lines"]) {
+        if (!item.is_object() ||
+            item.size() != 3U ||
+            !item.contains("id") ||
+            !item.contains("start") ||
+            !item.contains("end") ||
+            !item["id"].is_string()) {
+            error =
+                "Native Part contains malformed Sketch Line record";
+            return std::nullopt;
+        }
+
+        const auto id =
+            sketch::EntityId::parse(
+                item["id"].get<std::string>());
+        const auto start =
+            parsePoint2(item["start"]);
+        const auto end =
+            parsePoint2(item["end"]);
+        if (!id || !start || !end) {
+            error =
+                "Native Part contains invalid Sketch Line values";
+            return std::nullopt;
+        }
+
+        state.lines.push_back(
+            sketch::SketchLineState{
+                *id,
+                *start,
+                *end});
+    }
+
+    auto model =
+        sketch::SketchModel::restore(
+            std::move(state));
+    if (!model) {
+        error =
+            "Native Part contains inconsistent Sketch model identity or geometry";
+        return std::nullopt;
+    }
+
+    return model;
+}
+
 bool parseSketches(
     const nlohmann::json& sketches_json,
+    int schema_version,
     std::vector<PartSketch>& sketches,
     std::string& error) {
     if (!sketches_json.is_array()) {
@@ -205,15 +336,21 @@ bool parseSketches(
         return false;
     }
 
+    const bool schema_v3 =
+        schema_version == 3;
+    const std::size_t expected_fields =
+        schema_v3 ? 5U : 4U;
+
     std::set<std::string> ids;
 
     for (const auto& item : sketches_json) {
         if (!item.is_object() ||
-            item.size() != 4U ||
+            item.size() != expected_fields ||
             !item.contains("id") ||
             !item.contains("support") ||
             !item.contains("placement") ||
             !item.contains("visible") ||
+            (schema_v3 && !item.contains("model")) ||
             !item["id"].is_string() ||
             !item["visible"].is_boolean()) {
             error = "Native Part contains malformed Sketch record";
@@ -298,12 +435,25 @@ bool parseSketches(
             return false;
         }
 
+        sketch::SketchModel model;
+        if (schema_v3) {
+            auto parsed_model =
+                parseSketchModel(
+                    item["model"],
+                    error);
+            if (!parsed_model) {
+                return false;
+            }
+            model = std::move(*parsed_model);
+        }
+
         sketches.push_back(
             PartSketch{
                 std::move(*id),
                 *support,
                 placement,
-                item["visible"].get<bool>()});
+                item["visible"].get<bool>(),
+                std::move(model)});
     }
 
     return true;
@@ -399,6 +549,7 @@ std::optional<PartAuthoredState> parseAuthored(
     if (!legacy_v1 &&
         !parseSketches(
             authored["sketches"],
+            schema_version,
             state.sketches,
             error)) {
         return std::nullopt;
@@ -545,6 +696,7 @@ PartLoadResult PartDocumentStore::load(
     }
 
     if (descriptor.domain_schema_version != 1 &&
+        descriptor.domain_schema_version != 2 &&
         descriptor.domain_schema_version !=
             current_schema_version) {
         return loadFailure(

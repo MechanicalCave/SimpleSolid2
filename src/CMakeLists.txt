@@ -10,6 +10,7 @@ target_include_directories(simplesolid2_core
 target_compile_features(simplesolid2_core PUBLIC cxx_std_20)
 
 add_library(simplesolid2_sketch STATIC
+    sketch/entity_id.cpp
     sketch/sketch_id.cpp
     sketch/sketch_model.cpp
 )

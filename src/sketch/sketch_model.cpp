@@ -2,7 +2,9 @@
 
 #include <algorithm>
 #include <limits>
+#include <set>
 #include <stdexcept>
+#include <utility>
 
 namespace simplesolid2::sketch {
 
@@ -71,6 +73,60 @@ bool SketchModel::erase(
 
     lines_.erase(found);
     return true;
+}
+
+void SketchModel::preserveEntityIdCursor(
+    EntityIdCursor cursor) noexcept {
+    if (cursor.next_value_ > next_entity_value_) {
+        next_entity_value_ = cursor.next_value_;
+    }
+}
+
+SketchModelState SketchModel::state() const {
+    SketchModelState result;
+    result.next_entity_id =
+        EntityIdCursor{next_entity_value_};
+    result.lines.reserve(lines_.size());
+
+    for (const auto& line : lines_) {
+        result.lines.push_back(
+            SketchLineState{
+                line.id(),
+                line.start(),
+                line.end()});
+    }
+
+    return result;
+}
+
+std::optional<SketchModel> SketchModel::restore(
+    SketchModelState state) {
+    std::set<EntityId> ids;
+
+    SketchModel model;
+    model.lines_.reserve(state.lines.size());
+
+    for (const auto& item : state.lines) {
+        if (!item.id.valid() ||
+            item.id.value_ >=
+                state.next_entity_id.next_value_ ||
+            !item.start.finite() ||
+            !item.end.finite() ||
+            item.start == item.end ||
+            !ids.insert(item.id).second) {
+            return std::nullopt;
+        }
+
+        model.lines_.push_back(
+            Line{
+                item.id,
+                item.start,
+                item.end});
+    }
+
+    model.next_entity_value_ =
+        state.next_entity_id.next_value_;
+    return model;
 }
 
 } // namespace simplesolid2::sketch

@@ -672,3 +672,54 @@ add_test(
         -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_sketch_boundaries.cmake
 )
+
+
+add_executable(sk02b_part_sketch_model_test
+    sk02b_part_sketch_model_test.cpp
+)
+
+target_link_libraries(sk02b_part_sketch_model_test
+    PRIVATE
+        simplesolid2_part
+)
+
+target_compile_features(sk02b_part_sketch_model_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk02b.part_sketch_model
+    COMMAND sk02b_part_sketch_model_test
+)
+
+
+add_executable(sk02b_sketch_entity_lifecycle_test
+    sk02b_sketch_entity_lifecycle_test.cpp
+)
+
+target_link_libraries(sk02b_sketch_entity_lifecycle_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(sk02b_sketch_entity_lifecycle_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk02b.sketch_entity_lifecycle
+    COMMAND sk02b_sketch_entity_lifecycle_test
+)
+
+
+add_executable(sk02b_part_sketch_persistence_test
+    sk02b_part_sketch_persistence_test.cpp
+)
+
+target_link_libraries(sk02b_part_sketch_persistence_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(sk02b_part_sketch_persistence_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk02b.part_sketch_persistence
+    COMMAND sk02b_part_sketch_persistence_test
+)

@@ -86,6 +86,8 @@ No product/CAD implementation belongs to R0.
 
 ### R1 — Minimal Shared 2D authored core
 
+**Status:** completed
+
 Goal:
 
 - establish the smallest reusable authored 2D model;
@@ -110,6 +112,8 @@ Deliberately outside R1:
 
 ### R2 — Part host integration and durable lifecycle
 
+**Status:** completed
+
 Goal:
 
 - embed the Shared 2D authored model inside the existing Part-hosted Sketch without transferring host semantics into Sketch Core;
@@ -126,6 +130,8 @@ Deliberately outside R2:
 - constraints/solver.
 
 ### R3 — Provider-neutral Sketch presentation and tool-input boundary
+
+**Status:** next — not started
 
 Goal:
 
@@ -293,9 +299,9 @@ Current:
 ```text
 R0  completed
 R1  completed
-R2  next — not started
+R2  active — SK-02B
 R3  not started
 R4+ not started
 ```
 
-R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is the next milestone and remains unauthorized until a separate explicit Owner-accepted Work Contract is activated.
+R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 remains active under `work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md` until its final exact-head gate passes. R3 remains unauthorized.

@@ -1,6 +1,6 @@
 version: 1
 status: completed
-active_work: "work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md"
+active_work: "work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -15,17 +15,19 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - SK-02A / R1 is complete after final exact-head PR verification and merge
-  - R2 is the next Sketch roadmap milestone: Part host integration and durable lifecycle
-  - R2 requires a separate explicit Owner-accepted Work Contract before any production mutation
-  - no Part schema, DocumentSession Sketch-entity command, Viewer Sketch input/presentation, selection, constraints, solver, projection or profile work is active
+  - SK-02B / R2 is complete after final exact-head completion-bookkeeping verification and merge
+  - R3 is the next Sketch roadmap milestone: provider-neutral Sketch presentation and tool-input boundary
+  - R3 requires a separate explicit Owner-accepted Work Contract before any production mutation
+  - no Viewer Sketch presentation/input, Select/cursor workflow, constraints, solver, projection or profile work is active
 notes:
-  - SK-02A implements only the host-neutral Shared 2D authored Line core.
-  - Windows PR gate #243 passed build and the complete CTest suite on implementation head 50ddff5a18033ede83c3be54abf6c6f088dd6a52.
-  - final exact-head verification is required after as-built documentation and completion bookkeeping before merge.
-  - docs/internal/SHARED_2D.md is the current as-built description of the implemented Shared 2D core.
-  - ADR-0009 remains authoritative for identity lifecycle, local frame/Origin/reference direction and later interaction grammar.
-  - R2 remains unauthorized until a separate accepted Work Contract exists.
+  - Gate #258 passed the full Windows documentation/verify/build/CTest suite on implementation head 94f63d110a7837168f6ddcdb1132d80865420a2a.
+  - this completion-bookkeeping head still requires one final exact-head Windows gate before merge.
+  - R2 embeds Shared 2D SketchModel by value in PartSketch and adds semantic Add/Erase lifecycle.
+  - Part schema v3 persists canonical model-local EntityIds, next_entity_id and authored Lines.
+  - schema v1/v2 remain readable; successful Save publishes schema v3.
+  - DocumentSession preserves per-Sketch live identity high-water across Undo/Redo without false dirty state.
+  - docs/internal/SHARED_2D.md, PART_DOCUMENTS.md and PERSISTENCE.md describe the as-built R2 behavior.
+  - R3 remains unauthorized until a separate accepted Work Contract exists.
   - SS1 remains donor-only and is not architecture authority.
   - Assembly/Drawing implementation remains unauthorized.
   - root .\ss2.ps1 docs and Windows exact-head verification remain mandatory.
