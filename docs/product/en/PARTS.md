@@ -95,9 +95,11 @@ After `Save`, Origin visibility survives closing and restarting the application.
 
 Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when it is visible, in the 3D Viewport.
 
-Operations is not a permanent tool list. It shows controls for the current operation: Sketch support-pick context/Cancel while choosing the plane, then `Finish Sketch` after Sketch edit begins.
+Operations is not a permanent tool list. It shows controls for the current operation: Sketch support-pick context/Cancel while choosing the plane, then contextual Sketch actions while editing. Outside Sketch edit, the tool strip and Operations return to the Part-modeling context.
 
-After a valid selection, Part creates a durable Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane. While the Sketch is active, any authored Line geometry already stored in that Sketch is presented in the viewport together with an Origin marker for the Sketch's local `(0,0)`.
+After a valid selection, Part creates a durable Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane. While Sketch edit is active, the tool strip switches to `Select` and `Line`; Operations shows the current Sketch/tool state and actions; and a compact Command Line appears below the Viewport. The Command Line accepts `SELECT` and `LINE` in this stage.
+
+Any authored Line geometry already stored in that Sketch is presented in the viewport together with an Origin marker for the Sketch's local `(0,0)`.
 
 Automatic alignment does not lock the camera. While the Sketch is active you can still use Pan, Zoom, Orbit and ViewCube. Navigation does not change Sketch placement and does not dirty the Document by itself.
 
@@ -105,7 +107,11 @@ Use `Finish Sketch` to leave the current edit context. The Sketch remains an aut
 
 To edit an existing Sketch again, double-click it in Document Tree or use its `Edit Sketch` context-menu action. Entering edit by itself does not change authored state and does not require Save.
 
-The current UI does not yet provide an interactive Line creation/edit workflow, Sketch-entity selection/Delete, Arc/Circle, constraints, dimensions or a solver. Existing authored Lines are visible when the Sketch is edited, but creating/manipulating them from the viewport is a later step. Support is currently limited to the three Origin planes; Construction/Datum planes and planar model faces are separate later stages.
+In Sketch edit, `Select` is the default tool. Left-click a Line to replace the semantic selection, Ctrl+Left-click a Line to toggle it, and drag a rectangle for Window selection left-to-right or Crossing selection right-to-left. Rectangle selection replaces the current selection. `Delete Selection` in Operations, or Delete while the Viewport owns Sketch Select focus, removes the selected Lines as one Undoable operation.
+
+Activate `Line`, click the first point, then click successive points to create continuous segments. The rubber-band preview is temporary; each committed segment is one Undo step. `Finish Line` or `Cancel Line` returns to Select without rolling back already committed segments. Esc cancels the pending Line stage first and then returns Line to Select; it does not finish the Sketch. Undo/Redo first abandons any pending Line stage, then applies normal document history.
+
+Support is currently limited to the three Origin planes. Arc/Circle, grips/direct manipulation, snapping/inference, constraints, dimensions, solver, coordinate entry, Construction/Datum planes and planar model faces remain separate later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and ViewCube
@@ -162,4 +168,4 @@ The current Part provides Document identity/properties, built-in Origin, persist
 
 Very early test `.ss2part` files created before the current native format are not supported product data and are not migrated automatically.
 
-The current UI does not yet provide interactive Sketch drawing/editing or semantic Sketch-entity selection, and Part still lacks constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
+The current UI provides the first complete authored Sketch Line workflow: contextual Select/Line tools, continuous Line creation with preview, point and Window/Crossing selection, atomic Delete, Undo/Redo integration, Operations and a compact SELECT/LINE Command Line. It still lacks grips/direct manipulation, snapping/inference, coordinate entry, constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
