@@ -109,15 +109,15 @@ Undo/Redo first calls the interaction state's history cancellation, clears previ
 Snapping/inference, coordinate/value entry, constraints, grips/direct manipulation, additional primitives and RMB command grammar remain later roadmap work. Sketch support remains limited to XY/XZ/YZ Origin planes; Datum/Construction Plane and planar model-face support remain later stages.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
-## Navigation and responsive ViewCube
+## Navigation and provider-surface Navigation Cube
 
-The shared viewport supports middle-button Pan, Shift + middle-button Orbit, wheel Zoom, Fit All, six orthogonal standard views, Isometric and eight corner orientations, plus Orthographic/Perspective.
+The shared viewport supports middle-button Pan, Shift + middle-button Orbit, wheel Zoom, Fit All, Orthographic/Perspective projection and a provider-surface 3D Navigation Cube.
 
-`ViewCubeWidget` is an overlay in the shared Editor Surface and invokes only `IDocumentViewport`.
+The visible Cube is rendered and hit-tested inside the Qt/OCCT native graphics surface. The former QWidget ViewCube is no longer a competing product authority. The common Viewer boundary carries only provider-neutral navigation actions; Qt/OCCT owns Cube pixels, labels, DPI anchoring, hit testing and animation presentation.
 
-WB-01A replaced the fixed button-grid presentation with a compact responsive CAD navigation control. It tracks its host Editor Surface and switches to a compact mode when space is constrained, so narrow splitter layouts do not force a large Viewer minimum width or overlap the right-side panels.
+The Cube follows the current camera orientation relative to the model/world axes. Its six labeled faces, 12 edges and 8 corners select canonical orientations. Face/edge/corner transitions are animated. When a canonical face is active, adjacent-view arrows perform exact 90-degree view changes and CW/CCW controls perform exact 90-degree roll. Home selects Top-Front-Right isometric orientation and Fit All.
 
-Because the production Qt/OCCT viewport is a native `WA_PaintOnScreen` child, ordinary QWidget overlay composition is not reliable enough to claim artifact-free ViewCube presentation on Windows. The current ViewCube remains UI-owned and uses the existing coalesced underlay-refresh workaround, but manual WB-01B verification has shown that stale/overdrawn artifacts can still occur. Two native-window composition variants were tested and rejected; they are not part of the current implementation. A provider-surface ViewCube requires a separate D2 architecture decision. Visual artifact freedom cannot be inferred from layout/repaint-count tests alone.
+Camera orientation and projection are independent. Cube orientation actions and Home preserve the current projection mode. A separate provider-surface `ORTHO/PERSP` control next to the Cube changes only the projection; it does not change camera direction, target, up vector or Fit state. The Cube itself remains the same orientation manipulator in both projection modes.
 
 Navigation changes are runtime-only and do not increment DocumentRevision, set needsSave or create CAD Undo entries.
 
