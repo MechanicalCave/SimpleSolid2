@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/CI-01_TIERED_EXACT_HEAD_GATES.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -15,13 +15,13 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - implement CI-01 tiered exact-head classifier and workflow
-  - prove FULL on the implementation head
-  - append bookkeeping-only completion commit and prove CLOSURE without Build/CTest
-  - after CI-01 merge, prepare a separate R3 Work Contract before any R3 production mutation
+  - merge CI-01 only after the exact completion HEAD passes CLOSURE without Build/CTest
+  - after CI-01 merge, prepare a separate R3 Work Contract
+  - R3 remains unauthorized until explicit Owner acceptance
 notes:
   - R2 / SK-02B is completed and merged as aaabc3593cc69fd15daf9f1dad64c6dc8cb72007 after exact-head gate #259.
-  - tested and merged R2 trees are identical.
-  - CI-01 is Owner-accepted on 2026-09-25.
-  - the optimization may change verification cost but may not weaken exact-revision evidence.
+  - CI-01 implementation head d7aa0ae06046d2ac22831b2f4765b56dedac22c3 passed FULL gate #261.
+  - this completion commit is intentionally work/** only and must be classified CLOSURE.
+  - CLOSURE must validate exact-head governance/docs invariants without Build/CTest.
+  - the optimization changes verification cost, not runtime test requirements.
   - R3 remains unauthorized.
