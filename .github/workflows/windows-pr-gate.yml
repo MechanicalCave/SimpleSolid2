@@ -9,12 +9,11 @@ on:
       - opened
       - synchronize
       - reopened
-      - edited
     paths:
       - "src/**"
       - "docs/**"
       - "work/**"
-      - "governance/DOCUMENTATION.md"
+      - "governance/**"
       - "AGENTS.md"
       - "README.md"
       - "tests/**"
@@ -26,35 +25,85 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
-  windows-msvc:
+  classify:
     if: >
       github.event_name == 'workflow_dispatch' ||
       github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    outputs:
+      mode: ${{ steps.classify.outputs.mode }}
+      trusted_full_sha: ${{ steps.classify.outputs.trusted_full_sha }}
+      diff_start_sha: ${{ steps.classify.outputs.diff_start_sha }}
+      head_sha: ${{ steps.classify.outputs.head_sha }}
+    steps:
+      - name: Checkout exact candidate revision with history
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          clean: true
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          expected="${{ github.event.pull_request.head.sha || github.sha }}"
+          actual="$(git rev-parse HEAD)"
+          echo "[gate] expected SHA: $expected"
+          echo "[gate] checkout SHA: $actual"
+          test "$actual" = "$expected"
+
+      - name: Classifier self-test
+        shell: pwsh
+        run: ./scripts/ci/ss2-pr-gate-classifier.ps1 -SelfTest
+
+      - name: Resolve verification tier
+        id: classify
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          GATE_EVENT_NAME: ${{ github.event_name }}
+          GATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+          GATE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
+        run: |
+          ./scripts/ci/ss2-pr-gate-classifier.ps1 `
+            -Repository "${{ github.repository }}" `
+            -WorkflowFile "windows-pr-gate.yml" `
+            -EventName $env:GATE_EVENT_NAME `
+            -HeadSha $env:GATE_HEAD_SHA `
+            -BaseSha $env:GATE_BASE_SHA `
+            -GitHubToken $env:GITHUB_TOKEN `
+            -OutputPath $env:GITHUB_OUTPUT
+
+  full:
+    name: windows-msvc-full
+    needs: classify
+    if: needs.classify.outputs.mode == 'full'
     runs-on:
       - self-hosted
       - windows
       - x64
       - simplesolid2-native
     timeout-minutes: 45
-
     defaults:
       run:
         shell: >-
           C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
           -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass
           -Command "& ([scriptblock]::Create((Get-Content -Raw -LiteralPath '{0}')))"
-
     steps:
       - name: Checkout exact tested revision
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: ${{ needs.classify.outputs.head_sha }}
           clean: true
           fetch-depth: 1
           persist-credentials: false
@@ -62,7 +111,7 @@ jobs:
       - name: Verify exact checkout
         run: |
           $ErrorActionPreference = "Stop"
-          $expected = "${{ github.event.pull_request.head.sha || github.sha }}"
+          $expected = "${{ needs.classify.outputs.head_sha }}"
           $actual = (git rev-parse HEAD).Trim()
           Write-Host "[runner] machine: $env:COMPUTERNAME"
           Write-Host "[runner] workspace: $env:GITHUB_WORKSPACE"
@@ -105,3 +154,126 @@ jobs:
           $ErrorActionPreference = "Stop"
           .\ss2.ps1 test
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  docs:
+    name: windows-docs
+    needs: classify
+    if: needs.classify.outputs.mode == 'docs'
+    runs-on:
+      - self-hosted
+      - windows
+      - x64
+      - simplesolid2-native
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: >-
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+          -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -Command "& ([scriptblock]::Create((Get-Content -Raw -LiteralPath '{0}')))"
+    steps:
+      - name: Checkout exact documentation revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.classify.outputs.head_sha }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        run: |
+          $expected = "${{ needs.classify.outputs.head_sha }}"
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $expected) { throw "Checkout SHA mismatch: expected $expected, got $actual" }
+
+      - name: Regenerate and verify documentation
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\ss2.ps1 docs
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git diff --exit-code -- docs/browser/index.html
+          if ($LASTEXITCODE -ne 0) {
+              throw "Documentation Browser is stale."
+          }
+          .\scripts\ss2-docs.ps1 -Check -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  closure:
+    name: windows-closure
+    needs: classify
+    if: needs.classify.outputs.mode == 'closure'
+    runs-on:
+      - self-hosted
+      - windows
+      - x64
+      - simplesolid2-native
+    timeout-minutes: 5
+    defaults:
+      run:
+        shell: >-
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+          -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -Command "& ([scriptblock]::Create((Get-Content -Raw -LiteralPath '{0}')))"
+    steps:
+      - name: Checkout exact closure revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.classify.outputs.head_sha }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        run: |
+          $expected = "${{ needs.classify.outputs.head_sha }}"
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $expected) { throw "Checkout SHA mismatch: expected $expected, got $actual" }
+
+      - name: Verify governance and documentation invariants
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\scripts\ss2-docs.ps1 -Check -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  gate:
+    name: windows-msvc
+    if: >
+      always() &&
+      (github.event_name == 'workflow_dispatch' ||
+       github.event.pull_request.head.repo.full_name == github.repository)
+    needs:
+      - classify
+      - full
+      - docs
+      - closure
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require selected verification tier
+        shell: bash
+        env:
+          MODE: ${{ needs.classify.outputs.mode }}
+          CLASSIFY_RESULT: ${{ needs.classify.result }}
+          FULL_RESULT: ${{ needs.full.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+          CLOSURE_RESULT: ${{ needs.closure.result }}
+          TRUSTED_FULL_SHA: ${{ needs.classify.outputs.trusted_full_sha }}
+        run: |
+          set -euo pipefail
+          echo "[gate] mode=$MODE"
+          echo "[gate] trusted_full_sha=$TRUSTED_FULL_SHA"
+          echo "[gate] classify=$CLASSIFY_RESULT full=$FULL_RESULT docs=$DOCS_RESULT closure=$CLOSURE_RESULT"
+          if [[ "$CLASSIFY_RESULT" != "success" ]]; then
+            echo "Classifier did not succeed." >&2
+            exit 1
+          fi
+          case "$MODE" in
+            full) selected="$FULL_RESULT" ;;
+            docs) selected="$DOCS_RESULT" ;;
+            closure) selected="$CLOSURE_RESULT" ;;
+            *) echo "Unknown gate mode: $MODE" >&2; exit 1 ;;
+          esac
+          if [[ "$selected" != "success" ]]; then
+            echo "Selected $MODE tier did not succeed: $selected" >&2
+            exit 1
+          fi
+          echo "[gate] selected $MODE tier succeeded"

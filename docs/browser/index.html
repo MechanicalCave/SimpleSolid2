@@ -277,21 +277,39 @@ Tests must not be weakened to obtain a pass.
 <!-- section-id: internal.build-test.ci -->
 ## Windows PR gate
 
-The GitHub workflow is `.github/workflows/windows-pr-gate.yml` on the self-hosted Windows runner labeled `simplesolid2-native`.
-
-The gate checks out the exact PR head SHA and performs:
+The GitHub workflow is `.github/workflows/windows-pr-gate.yml`. It preserves exact-head verification while classifying the unverified suffix into three tiers.
 
 ```text
-exact checkout
-→ .\ss2.ps1 docs
-→ verify generated Browser is Git-clean
-→ machine-local setup
-→ ss2 verify
-→ build
-→ CTest
+FULL
+  source / tests / build scripts / workflow / other runtime-affecting change
+  → exact checkout
+  → docs dispatcher/freshness
+  → machine-local setup
+  → ss2 verify
+  → build
+  → full CTest
+
+DOCS
+  docs/governance-only suffix
+  → exact checkout
+  → regenerate Browser and require Git-clean output
+  → documentation validation/self-test
+  → no CAD build or CTest
+
+CLOSURE
+  work/** bookkeeping-only suffix
+  → exact checkout
+  → documentation/governance validation/self-test
+  → no CAD build or CTest
 ```
 
-The explicit root `ss2.ps1 docs` step is a dispatcher regression check.
+For a PR that already has a successful `windows-msvc-full` job on an exact ancestor SHA, the classifier examines only the commits after that trusted SHA. If no such evidence can be verified, classification falls back to the complete base-to-head PR diff; any runtime-affecting path then requires FULL.
+
+The classifier is fail-closed: unknown/mixed paths, workflow/scripts, source, tests and CMake select FULL. A stable final `windows-msvc` summary check succeeds only when the selected tier succeeds.
+
+PR title/body edits do not trigger or cancel verification. Only content-relevant PR events do.
+
+The explicit root `ss2.ps1 docs` step remains a dispatcher regression check in FULL and DOCS tiers.
 
 <!-- section-id: internal.build-test.docs-validation -->
 ## Documentation validation
