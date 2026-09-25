@@ -44,7 +44,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 51 tests.
+The compiled CTest suite contains 52 tests.
 
 Project/Hub, PART-01 and WB-01 coverage remains active.
 
@@ -61,6 +61,8 @@ SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `s
 SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage. These prove neutral Select/Line state transitions, exact-zero suppression, one outstanding Line request, commit-success/failure anchor behavior, hierarchical Esc/Finish/Cancel, EntityId selection/reconciliation, atomic batch Delete validation, one-command/one-transaction/one-Undo semantics and three continuous committed Line segments producing exactly three Undo entries.
 
 SK-04B adds `sk04b.viewer_selection_query_contracts`, `sk04b.part_viewport_selection_bridge` and `sk04b.viewer_native_selection_query` coverage. These prove finite logical query contracts and failure/no-hit distinction, active-Sketch token↔EntityId mapping, stale-token rejection, reverse highlight projection, independent routing/cursor configuration, runtime selection-box behavior, current-view Window/Crossing projected-Line classification, reference/origin/preview exclusion and real Qt/OCCT query behavior before/after orbit.
+
+SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the single active Sketch interaction coordinator, continuous Line command/Undo granularity, transient preview, point/Ctrl selection, Window/Crossing rectangle replacement without primary identity, atomic Delete, history reconciliation and hierarchical Esc. Legacy Workbench/Sketch-host tests also verify the contextual Part ↔ Sketch Operations state.
 
 WB-01A adds or extends deterministic coverage for:
 
