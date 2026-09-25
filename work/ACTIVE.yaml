@@ -15,12 +15,14 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - merge SK-04A only after the exact closeout HEAD passes the selected non-build CI tier
-  - prepare a separate SK-04B Work Contract for provider-neutral point/rectangle selection queries and selection-box overlay
-  - SK-04B remains unauthorized until explicit Owner acceptance
+  - review proposed work/SK-04B_PROVIDER_NEUTRAL_SKETCH_SELECTION_QUERY_OVERLAY_BRIDGE.md
+  - SK-04B remains inactive until explicit Owner acceptance
+  - SK-04C remains the later final R4 end-to-end workflow contract
 notes:
-  - SK-04A implementation exact head 1cb71449247f166c8a972b5560b29863f4fae282 passed FULL gate #288 with Build and 48/48 CTest tests.
-  - SK-04A establishes host-neutral Select/Line runtime state, explicit Line request acknowledgement and EntityId-only transient selection.
-  - EraseSketchEntitiesCommand validates atomically and commits one transaction/revision/Undo entry for the whole batch.
-  - one successfully committed Line segment remains one AddSketchLineCommand and one Undo entry.
-  - R4 remains incomplete after SK-04A; SK-04B and SK-04C require separate explicit Owner-accepted Work Contracts.
+  - R3 is completed.
+  - R4 is in progress; SK-04A is completed and merged as b7f92746e2ded15b54cb3b47fe98dd1e4590f216.
+  - SK-04B proposal adds no production authorization until explicit Owner acceptance.
+  - proposed SK-04B keeps point/rectangle hit testing provider-owned but semantic selection EntityId-owned.
+  - proposed rectangle semantics are view-space Window/Crossing and do not create authored geometry.
+  - proposed Part/UI adapter decouples spatial pointer routing from cursor mode so Select may use spatial input with pick-box cursor.
+  - SK-04C remains unauthorized.
