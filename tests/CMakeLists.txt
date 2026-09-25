@@ -946,3 +946,34 @@ add_test(
 set_tests_properties(sk04b.viewer_native_selection_query PROPERTIES
     TIMEOUT 30
 )
+
+
+add_executable(sk04c_part_sketch_interaction_controller_test
+    sk04c_part_sketch_interaction_controller_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
+)
+
+target_include_directories(sk04c_part_sketch_interaction_controller_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(sk04c_part_sketch_interaction_controller_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(sk04c_part_sketch_interaction_controller_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk04c.part_sketch_interaction_controller
+    COMMAND sk04c_part_sketch_interaction_controller_test
+)
+
+set_tests_properties(sk04c.part_sketch_interaction_controller PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
