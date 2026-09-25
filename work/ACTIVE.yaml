@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-04A_SKETCH_INTERACTION_STATE_AND_BATCH_DELETE.md"
+status: active
+active_work: "work/SK-04B_PROVIDER_NEUTRAL_SKETCH_SELECTION_QUERY_OVERLAY_BRIDGE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.1"
@@ -15,12 +15,15 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
 next:
-  - merge SK-04A only after the exact closeout HEAD passes the selected non-build CI tier
-  - prepare a separate SK-04B Work Contract for provider-neutral point/rectangle selection queries and selection-box overlay
-  - SK-04B remains unauthorized until explicit Owner acceptance
+  - implement SK-04B provider-neutral active-Sketch point and rectangle queries
+  - implement runtime selection-box overlay and Part/UI token bridge
+  - decouple Sketch spatial routing from cursor mode in PartViewportController
+  - add focused neutral/controller/native provider tests
+  - finish internal docs, FULL implementation gate and completion bookkeeping
 notes:
-  - SK-04A implementation exact head 1cb71449247f166c8a972b5560b29863f4fae282 passed FULL gate #288 with Build and 48/48 CTest tests.
-  - SK-04A establishes host-neutral Select/Line runtime state, explicit Line request acknowledgement and EntityId-only transient selection.
-  - EraseSketchEntitiesCommand validates atomically and commits one transaction/revision/Undo entry for the whole batch.
-  - one successfully committed Line segment remains one AddSketchLineCommand and one Undo entry.
-  - R4 remains incomplete after SK-04A; SK-04B and SK-04C require separate explicit Owner-accepted Work Contracts.
+  - SK-04B was explicitly Owner-accepted on 2026-09-25 and is the active bounded R4 Work Contract.
+  - R4 remains incomplete after SK-04B; SK-04C requires a separate Owner-accepted Work Contract.
+  - point/rectangle query returns runtime PresentationToken only and does not own semantic selection.
+  - rectangle membership is current-view Window/Crossing behavior.
+  - Select must be able to use spatial_tool_input with select_pick_box cursor.
+  - legacy built-in reference SelectionIntent remains supported.
