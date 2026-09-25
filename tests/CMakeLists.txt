@@ -740,3 +740,26 @@ add_test(
     NAME sk03a.viewer_sketch_contracts
     COMMAND sk03a_viewer_sketch_contracts_test
 )
+
+
+add_executable(sk03a_sketch_viewport_mapping_test
+    sk03a_sketch_viewport_mapping_test.cpp
+)
+
+target_include_directories(sk03a_sketch_viewport_mapping_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(sk03a_sketch_viewport_mapping_test
+    PRIVATE
+        simplesolid2_part
+        simplesolid2_viewer
+)
+
+target_compile_features(sk03a_sketch_viewport_mapping_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk03a.sketch_viewport_mapping
+    COMMAND sk03a_sketch_viewport_mapping_test
+)
