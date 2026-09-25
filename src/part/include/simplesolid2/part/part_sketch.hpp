@@ -2,6 +2,7 @@
 
 #include <simplesolid2/core/document_reference.hpp>
 #include <simplesolid2/sketch/sketch_id.hpp>
+#include <simplesolid2/sketch/sketch_model.hpp>
 
 #include <array>
 #include <optional>
@@ -36,6 +37,7 @@ struct PartSketch final {
     PartSketchSupport support;
     SketchPlacement placement;
     bool visible{true};
+    sketch::SketchModel model;
 
     friend bool operator==(
         const PartSketch&,

@@ -24,6 +24,12 @@ public:
         return lines_.size();
     }
 
+    friend bool operator==(
+        const SketchModel& lhs,
+        const SketchModel& rhs) noexcept {
+        return lhs.lines_ == rhs.lines_;
+    }
+
 private:
     std::vector<Line> lines_;
     std::uint64_t next_entity_value_{1U};
