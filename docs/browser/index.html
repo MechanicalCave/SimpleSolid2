@@ -450,7 +450,7 @@ The shared viewport supports middle-button Pan, Shift + middle-button Orbit, whe
 
 WB-01A replaced the fixed button-grid presentation with a compact responsive CAD navigation control. It tracks its host Editor Surface and switches to a compact mode when space is constrained, so narrow splitter layouts do not force a large Viewer minimum width or overlap the right-side panels.
 
-Because the production Qt/OCCT viewport is a native `WA_PaintOnScreen` child, ordinary non-native QWidget siblings are not a reliable composition mechanism on Windows. WB-01B therefore keeps ViewCube UI-owned but hosts it directly on the native viewport as a native child window so Windows z-order/composition applies between native surfaces. The existing coalesced underlay refresh remains a repaint aid, not proof that stale pixels cannot occur. Visual artifact freedom is verified manually on the exact Windows build because layout/repaint-count tests cannot prove framebuffer correctness.
+Because the production Qt/OCCT viewport is a native `WA_PaintOnScreen` child, ordinary non-native QWidget overlays are not a reliable composition mechanism on Windows. WB-01B keeps ViewCube UI-owned but makes the Editor Surface, OCCT viewport and ViewCube native-window participants; ViewCube and viewport are sibling native children under the native Editor Surface host. The existing coalesced underlay refresh remains a repaint aid, not proof that stale pixels cannot occur. Visual artifact freedom is verified manually on the exact Windows build because layout/repaint-count tests cannot prove framebuffer correctness.
 
 Navigation changes are runtime-only and do not increment DocumentRevision, set needsSave or create CAD Undo entries.
 
