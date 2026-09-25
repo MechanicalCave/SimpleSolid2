@@ -29,26 +29,6 @@ int fail(std::string_view stage) {
     return EXIT_FAILURE;
 }
 
-std::optional<sketch::Point2>
-centerUvFromCamera(
-    const part::SketchPlacement& placement,
-    const viewer::CameraState& camera) {
-    const auto direction =
-        camera.target - camera.eye;
-    return ui::detail::sketchPointFromRay(
-        placement,
-        viewer::Ray3{
-            camera.eye,
-            direction});
-}
-
-bool sameUv(
-    const sketch::Point2& left,
-    const sketch::Point2& right) {
-    return near(left.u, right.u) &&
-           near(left.v, right.v);
-}
-
 void sendMouseMove(
     QWidget& widget,
     const QPoint& local) {
@@ -93,6 +73,17 @@ int main(int argc, char* argv[]) {
     if (!widget.setSketchScene(scene)) {
         return fail("authored Sketch scene");
     }
+
+    const viewer::CameraState sketch_camera{
+        viewer::Point3{0.0, 0.0, 100.0},
+        viewer::Point3{0.0, 0.0, 0.0},
+        viewer::Vec3{0.0, 1.0, 0.0},
+        viewer::CameraProjection::orthographic,
+        100.0};
+    if (!widget.setCameraState(sketch_camera)) {
+        return fail("known Sketch camera");
+    }
+    QApplication::processEvents();
 
     viewer::SketchPreviewScene preview;
     preview.lines.push_back(
@@ -167,24 +158,13 @@ int main(int argc, char* argv[]) {
         return fail("XY placement");
     }
 
-    const auto camera_before =
-        widget.cameraState();
-    if (!camera_before) {
-        return fail("camera before orbit");
-    }
-    const auto expected_before =
-        centerUvFromCamera(
-            *placement,
-            *camera_before);
     const auto actual_before =
         ui::detail::sketchPointFromRay(
             *placement,
             spatial_events.back().ray);
-    if (!expected_before ||
-        !actual_before ||
-        !sameUv(
-            *expected_before,
-            *actual_before)) {
+    if (!actual_before ||
+        !near(actual_before->u, 0.0) ||
+        !near(actual_before->v, 0.0)) {
         return fail("center ray mapping before orbit");
     }
 
@@ -241,6 +221,9 @@ int main(int argc, char* argv[]) {
     if (!camera_after) {
         return fail("camera after orbit");
     }
+    if (camera_after->eye == sketch_camera.eye) {
+        return fail("orbit did not change camera");
+    }
 
     sendMouseMove(widget, offset);
     sendMouseMove(widget, center);
@@ -249,19 +232,13 @@ int main(int argc, char* argv[]) {
         return fail("move after orbit");
     }
 
-    const auto expected_after =
-        centerUvFromCamera(
-            *placement,
-            *camera_after);
     const auto actual_after =
         ui::detail::sketchPointFromRay(
             *placement,
             spatial_events.back().ray);
-    if (!expected_after ||
-        !actual_after ||
-        !sameUv(
-            *expected_after,
-            *actual_after)) {
+    if (!actual_after ||
+        !near(actual_after->u, 0.0) ||
+        !near(actual_after->v, 0.0)) {
         return fail("center ray mapping after orbit");
     }
 
