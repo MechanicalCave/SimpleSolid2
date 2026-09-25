@@ -47,6 +47,7 @@ enum class NavigationCubeActionKind {
     roll_clockwise,
     roll_counterclockwise,
     home,
+    toggle_projection,
 };
 
 struct NavigationCubeAction final {
