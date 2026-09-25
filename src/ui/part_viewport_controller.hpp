@@ -34,6 +34,16 @@ struct SketchPointerInput final {
     sketch::Point2 position;
 };
 
+struct SketchEntityPointQueryResult final {
+    bool completed{};
+    std::optional<SketchEntityAddress> hit;
+};
+
+struct SketchEntityRectangleQueryResult final {
+    bool completed{};
+    std::vector<SketchEntityAddress> hits;
+};
+
 struct SketchPreviewLine2D final {
     sketch::Point2 start;
     sketch::Point2 end;
@@ -73,8 +83,25 @@ public:
         const std::vector<SketchPreviewLine2D>& lines);
     void clearSketchPreview();
 
-    [[nodiscard]] bool setSketchSpatialToolInput(
-        bool enabled);
+    [[nodiscard]] bool setSketchPrimaryPointerRouting(
+        viewer::PrimaryPointerRouting routing);
+
+    [[nodiscard]] bool setSketchCursorMode(
+        viewer::ViewportCursorMode mode);
+
+    [[nodiscard]] SketchEntityPointQueryResult
+    querySketchEntityAt(
+        viewer::ViewportPoint2 point);
+
+    [[nodiscard]] SketchEntityRectangleQueryResult
+    querySketchEntities(
+        const viewer::ViewportRect2& rectangle,
+        viewer::SketchRectangleSelectionRule rule);
+
+    [[nodiscard]] bool setSketchSelectionBoxOverlay(
+        const viewer::SketchSelectionBoxOverlay& overlay);
+
+    void clearSketchSelectionBoxOverlay();
 
     void setSketchPointerHandler(
         SketchPointerHandler handler) {
@@ -85,6 +112,14 @@ public:
     [[nodiscard]] std::optional<SketchEntityAddress>
     sketchEntityFor(
         viewer::PresentationToken token) const;
+
+    [[nodiscard]] std::optional<viewer::PresentationToken>
+    sketchPresentationFor(
+        sketch::EntityId entity_id) const;
+
+    [[nodiscard]] bool projectSketchEntitySelection(
+        const std::vector<sketch::EntityId>& selected,
+        std::optional<sketch::EntityId> primary);
 
     void setSelectionChangedHandler(
         SelectionChangedHandler handler) {
@@ -140,7 +175,14 @@ private:
     application::DocumentSession* session_{};
     std::optional<sketch::SketchId>
         sketch_edit_id_;
-    bool sketch_spatial_tool_input_{};
+    viewer::PrimaryPointerRouting
+        sketch_primary_pointer_routing_{
+            viewer::PrimaryPointerRouting::
+                presentation_selection};
+    viewer::ViewportCursorMode
+        sketch_cursor_mode_{
+            viewer::ViewportCursorMode::
+                select_pick_box};
 
     std::unordered_map<std::string, SemanticSelection>
         selections_;
