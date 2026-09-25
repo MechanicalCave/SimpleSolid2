@@ -1,6 +1,6 @@
 # WB-01B — Native Viewport Overlay Composition Stabilization
 
-**Status:** ACCEPTED  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-25  
 **Decision class:** D1 local design + implementation; stop for D2 if ownership/public Viewer contracts must change  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -183,8 +183,8 @@ WB-01B completes only when:
 ## Documentation Impact
 
 Internal docs: required  
-User/Product docs: not required  
-Reason: this is a runtime Viewer/Qt composition stabilization with no intended user workflow or CAD semantic change; internal as-built claims about overlay repaint correctness must be corrected.
+User/Product docs: required  
+Reason: the accepted ADR-0010 amendment changes the visible Navigation Cube workflow by adding an independent ORTHO/PERSP control; internal ownership/current-state documentation and PL/EN product documentation must both remain current.
 
 ## 12. Manual verification evidence
 
@@ -244,3 +244,21 @@ Owner accepted the ADR-0010 amendment on 2026-09-25:
 - a separate provider-surface `ORTHO/PERSP` toggle is placed next to the Cube and changes only projection.
 
 This amendment is bounded to the existing WB-01B Navigation Cube implementation. R5 remains inactive.
+
+
+## 16. Final closeout evidence
+
+WB-01B completion evidence:
+
+- exact-head `6a762d90c97e1405c0c576dc3039dd02ff6069e6` passed Windows FULL gate #381;
+- that gate passed documentation freshness, bootstrap verification, Build and Test;
+- the Owner manually verified the same exact-head candidate on Windows and reported success for the accepted independent projection behavior;
+- Perspective remains Perspective after Cube face/edge/corner orientation actions;
+- `ORTHO/PERSP` changes projection independently from orientation;
+- Home preserves the current projection while applying Top-Front-Right ISO + Fit All;
+- the previously manually verified provider-surface Cube composition remains the production path;
+- the AIS_RubberBand selection-box fix remains retained;
+- required internal and PL/EN product documentation is current and the generated Documentation Browser passed freshness verification;
+- R5 remains inactive and unauthorized.
+
+All WB-01B acceptance conditions are satisfied. The work item is complete subject only to the repository CLOSURE gate on the closeout-only revision.
