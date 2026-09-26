@@ -16,10 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
-  - propose SK-07C or later for Copy/repeated Copy and fresh-identity transform semantics on the shared transform core
+  - review work/SK-07C_COPY_REPEATED_COPY_AND_FRESH_IDENTITY.md as the proposed third bounded R7 Work Contract
+  - require explicit Owner acceptance before any SK-07C production implementation
   - preserve completed SK-07A/SK-07B Move/Rotate/Scale/Mirror and Select/Create/Modify behavior as the implementation baseline
-  - keep Repeat Last Command and R8+ inactive
+  - keep Copy modifier for grips/Rotate/Scale/Mirror, Repeat Last Command and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -114,3 +114,8 @@ notes:
   - Final exact-head Windows FULL #510 passed on dc58b767e2e3effbff90ba62d90a7a5f70fda5c5 with documentation freshness, Build, selector checks, 63/63 unfiltered CTest tests and stable windows-msvc.
   - SK-07B acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
   - Copy/repeated Copy, fresh transform-created EntityIds, Repeat Last Command, numeric/Dynamic Input, snapping/inference and R8+ remain inactive.
+
+  - SK-07C is proposed on 2026-09-27 as the third bounded R7 slice: normal translation COPY, repeated placements and fresh EntityId lifecycle.
+  - The proposal keeps source entities selected, creates fresh identities per placement and requires non-reuse across Undo/Redo/save-reopen.
+  - Grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, numeric/Dynamic Input and R8+ remain inactive.
+  - SK-07C is not active until explicit Owner acceptance.
