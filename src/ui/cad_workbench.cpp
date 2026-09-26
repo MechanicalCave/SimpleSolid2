@@ -1098,6 +1098,18 @@ void CadWorkbench::finishSketchLine() {
         status_->setText(
             QStringLiteral("Move finished — Select active."));
         break;
+    case sketch::SketchTool::rotate:
+        status_->setText(
+            QStringLiteral("Rotate finished — Select active."));
+        break;
+    case sketch::SketchTool::scale:
+        status_->setText(
+            QStringLiteral("Scale finished — Select active."));
+        break;
+    case sketch::SketchTool::mirror:
+        status_->setText(
+            QStringLiteral("Mirror finished — Select active."));
+        break;
     case sketch::SketchTool::select:
         break;
     }
@@ -1131,6 +1143,18 @@ void CadWorkbench::cancelSketchLine() {
     case sketch::SketchTool::move:
         status_->setText(
             QStringLiteral("Move cancelled — selection preserved."));
+        break;
+    case sketch::SketchTool::rotate:
+        status_->setText(
+            QStringLiteral("Rotate cancelled — selection preserved."));
+        break;
+    case sketch::SketchTool::scale:
+        status_->setText(
+            QStringLiteral("Scale cancelled — selection preserved."));
+        break;
+    case sketch::SketchTool::mirror:
+        status_->setText(
+            QStringLiteral("Mirror cancelled — selection preserved."));
         break;
     case sketch::SketchTool::select:
         break;
