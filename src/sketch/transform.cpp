@@ -67,7 +67,7 @@ captureSketchTransformGeometry(
 std::optional<SketchTransformGeometry>
 translateSketchGeometry(
     const SketchTransformGeometry& geometry,
-    Point2 delta) noexcept {
+    Point2 delta) {
     if (geometry.empty() ||
         !delta.finite()) {
         return std::nullopt;
