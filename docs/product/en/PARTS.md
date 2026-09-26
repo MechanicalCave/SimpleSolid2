@@ -156,7 +156,7 @@ A placement exactly at Base Point does not create an invisible coincident copy. 
 
 Esc ends the active COPY session while preserving the source selection. Copies already committed during that session remain in the Sketch. Undo/Redo acts on individual committed placements; Redo restores the same copied EntityIds, and a new COPY after Undo does not reuse IDs that belonged to a previously committed and undone copy.
 
-The identity high-water is stored in the existing Part format. Therefore COPY → Undo can still leave the Document requiring Save even when visible geometry has returned exactly to the last saved geometry.
+Undo does not rewind the session-local identity high-water, so a new COPY in the same session does not reuse IDs from the undone copy. If Undo restores exactly the last saved authored state, the Document remains clean as before. When a later committed copy is saved normally, the existing Part format also persists the current `next_entity_id`.
 
 ### Rotate
 
