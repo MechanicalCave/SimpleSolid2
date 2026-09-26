@@ -518,7 +518,8 @@ int main(int argc, char* argv[]) {
             "Move — Select objects; Enter/Space/RMB to continue"));
     CHECK(
         command_prompt->text() ==
-        QStringLiteral("Command: MOVE — Select objects"));
+        QStringLiteral(
+            "Command: MOVE — Select objects; Enter/Space/RMB to continue"));
 
     QTest::keyClick(
         viewport,
