@@ -156,7 +156,7 @@ Placement dokładnie w Base Point nie tworzy niewidocznej nakładającej się ko
 
 Esc kończy bieżącą sesję COPY i zachowuje source selection. Kopie zatwierdzone wcześniej w tej samej sesji pozostają w Sketchu. Undo/Redo działa na poszczególnych zatwierdzonych placementach; Redo przywraca te same EntityId kopii, a nowe COPY po Undo nie wykorzystuje ponownie ID wcześniej zatwierdzonej i cofniętej kopii.
 
-Stan high-water identyfikatorów jest zapisywany w istniejącym formacie Part. Dlatego po COPY → Undo dokument może nadal wymagać Save nawet wtedy, gdy widoczna geometria wróciła dokładnie do ostatnio zapisanego stanu.
+Undo nie cofa session-local high-water identyfikatorów, więc nowy COPY w tej samej sesji nie wykorzystuje ponownie ID cofniętej kopii. Jeżeli Undo przywróci dokładnie ostatnio zapisany authored state, dokument pozostaje clean jak wcześniej. Gdy późniejsza zatwierdzona kopia zostanie normalnie zapisana, istniejący format Part utrwala także aktualny `next_entity_id`.
 
 ### Rotate
 
