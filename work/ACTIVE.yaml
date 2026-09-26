@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-06A_CIRCLE_ARC_CORE_BREADTH.md"
+status: active
+active_work: "work/SK-07A_COMMON_TRANSFORM_CORE_AND_MOVE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.2"
@@ -16,10 +16,13 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - review work/SK-07A_COMMON_TRANSFORM_CORE_AND_MOVE.md as the proposed first R7 Work Contract
-  - require explicit Owner acceptance before any R7 production implementation
-  - keep completed R6 as the implementation baseline
-  - keep Rotate/Scale/Mirror/Copy/Repeat Last Command and R8+ inactive
+  - implement accepted SK-07A within the bounded shared-transform + MOVE scope
+  - begin with provider-independent mixed Line/Circle/Arc translation semantics
+  - route existing Center-grip Move and normal toolbar/Command-Line MOVE through the same transform path
+  - implement selection-first and command-first MOVE with explicit Base Point
+  - use FAST/SUBSYSTEM Sketch/UI checkpoints during implementation
+  - require exact-head Windows FULL plus Owner manual verification before completion
+  - keep remaining R7 transforms/Copy/Repeat Last Command and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -86,4 +89,6 @@ notes:
   - The proposal makes existing Center-grip Move and toolbar/Command-Line MOVE converge on one provider-independent translation path.
   - Selection-first uses the existing non-empty selection immediately; command-first MOVE with empty selection collects semantic objects before Base Point.
   - Rotate, Scale, Mirror, Copy, Space CycleEditMode, ordinary-Select RMB context and Repeat Last Command remain outside SK-07A.
-  - SK-07A is not active until explicit Owner acceptance.
+  - Owner explicitly accepted SK-07A on 2026-09-26; this bounded R7A slice is active.
+
+  - SK-07A activation does not authorize Rotate, Scale, Mirror, Copy, semantic Space CycleEditMode, ordinary-Select RMB context or Repeat Last Command.
