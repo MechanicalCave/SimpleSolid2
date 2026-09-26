@@ -1549,15 +1549,14 @@ bool CadWorkbench::eventFilter(
         auto* mouse_event =
             static_cast<QMouseEvent*>(event);
         if (mouse_event->button() == Qt::RightButton &&
-            sketch_interaction_controller_->tool() ==
-                sketch::SketchTool::move &&
-            sketch_interaction_controller_->moveStage() ==
-                sketch::MoveStage::select_objects) {
+            sketch_interaction_controller_->
+                commonTransformStage() ==
+                sketch::CommonTransformStage::select_objects) {
             if (sketch_interaction_controller_->
-                    completeMoveSelection()) {
+                    completeTransformSelection()) {
                 status_->setText(
                     QStringLiteral(
-                        "MOVE objects accepted — specify Base Point."));
+                        "Transform objects accepted."));
             }
             return true;
         }
@@ -1607,32 +1606,38 @@ bool CadWorkbench::eventFilter(
                 return true;
             }
 
-            if (sketch_interaction_controller_->tool() ==
-                    sketch::SketchTool::move) {
-                const auto stage =
-                    sketch_interaction_controller_->moveStage();
-
+            const auto transform_stage =
+                sketch_interaction_controller_->
+                    commonTransformStage();
+            if (transform_stage) {
                 if ((key_event->key() == Qt::Key_Return ||
                      key_event->key() == Qt::Key_Enter ||
                      key_event->key() == Qt::Key_Space) &&
-                    stage ==
-                        sketch::MoveStage::select_objects) {
+                    *transform_stage ==
+                        sketch::CommonTransformStage::
+                            select_objects) {
                     if (sketch_interaction_controller_->
-                            completeMoveSelection()) {
+                            completeTransformSelection()) {
                         status_->setText(
                             QStringLiteral(
-                                "MOVE objects accepted — specify Base Point."));
+                                "Transform objects accepted."));
                     }
                     return true;
                 }
 
+                const bool final_stage =
+                    *transform_stage ==
+                        sketch::CommonTransformStage::
+                            await_destination ||
+                    *transform_stage ==
+                        sketch::CommonTransformStage::
+                            await_axis_end;
                 if ((key_event->key() == Qt::Key_Return ||
                      key_event->key() == Qt::Key_Enter) &&
-                    stage ==
-                        sketch::MoveStage::await_destination) {
+                    final_stage) {
                     static_cast<void>(
                         sketch_interaction_controller_->
-                            commitMove());
+                            commitTransform());
                     return true;
                 }
             }
