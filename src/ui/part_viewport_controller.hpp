@@ -218,6 +218,10 @@ private:
         sketch_entity_bindings_;
     std::uint64_t next_sketch_presentation_token_{
         0x10000U};
+    bool sketch_grip_projection_valid_{};
+    bool projected_grips_visible_{};
+    std::vector<sketch::EntityId>
+        projected_grip_selection_;
 
     SelectionChangedHandler selection_changed_handler_;
     SketchPointerHandler sketch_pointer_handler_;

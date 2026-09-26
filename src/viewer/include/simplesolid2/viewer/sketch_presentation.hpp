@@ -2,6 +2,7 @@
 
 #include <simplesolid2/viewer/reference_presentation.hpp>
 
+#include <cstddef>
 #include <cstdint>
 #include <optional>
 #include <vector>

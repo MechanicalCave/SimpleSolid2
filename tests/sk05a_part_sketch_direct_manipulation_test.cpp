@@ -27,7 +27,8 @@ void check(bool value, const char* expression, int line) {
     }
 }
 
-#define CHECK(expr) check(static_cast<bool>(expr), #expr, __LINE__)
+#define CHECK(...) \
+    check(static_cast<bool>((__VA_ARGS__)), #__VA_ARGS__, __LINE__)
 
 class TestViewport final
     : public QWidget,

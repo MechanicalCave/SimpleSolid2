@@ -221,6 +221,9 @@ void PartViewportController::resetRuntimeState() {
 void PartViewportController::refreshPresentation() {
     if (viewport_ == nullptr) return;
 
+    sketch_grip_projection_valid_ = false;
+    projected_grip_selection_.clear();
+
     if (session_ == nullptr) {
         sketch_entity_bindings_.clear();
         clearSketchPreview();
@@ -648,64 +651,75 @@ bool PartViewportController::projectSketchInteraction(
         return false;
     }
 
-    viewer::SketchGripScene grip_scene;
-    if (grips_visible) {
-        grip_scene.grips.reserve(
-            selected.size() * 3U);
+    if (!sketch_grip_projection_valid_ ||
+        projected_grips_visible_ != grips_visible ||
+        projected_grip_selection_ != selected) {
+        viewer::SketchGripScene grip_scene;
+        if (grips_visible) {
+            grip_scene.grips.reserve(
+                selected.size() * 3U);
 
-        for (const auto id : selected) {
-            const auto* line =
-                hosted->model.findLine(id);
-            const auto token =
-                sketchPresentationFor(id);
-            if (line == nullptr || !token) {
-                return false;
+            for (const auto id : selected) {
+                const auto* line =
+                    hosted->model.findLine(id);
+                const auto token =
+                    sketchPresentationFor(id);
+                if (line == nullptr || !token) {
+                    return false;
+                }
+
+                const sketch::Point2 center{
+                    (line->start().u + line->end().u) * 0.5,
+                    (line->start().v + line->end().v) * 0.5};
+
+                const auto start =
+                    detail::sketchPointToWorld(
+                        hosted->placement,
+                        line->start());
+                const auto middle =
+                    detail::sketchPointToWorld(
+                        hosted->placement,
+                        center);
+                const auto end =
+                    detail::sketchPointToWorld(
+                        hosted->placement,
+                        line->end());
+                if (!start || !middle || !end) {
+                    return false;
+                }
+
+                grip_scene.grips.push_back(
+                    viewer::SketchGripPresentation{
+                        {*token,
+                         viewer::SketchGripRole::
+                             line_start},
+                        *start});
+                grip_scene.grips.push_back(
+                    viewer::SketchGripPresentation{
+                        {*token,
+                         viewer::SketchGripRole::
+                             line_center},
+                        *middle});
+                grip_scene.grips.push_back(
+                    viewer::SketchGripPresentation{
+                        {*token,
+                         viewer::SketchGripRole::
+                             line_end},
+                        *end});
             }
-
-            const sketch::Point2 center{
-                (line->start().u + line->end().u) * 0.5,
-                (line->start().v + line->end().v) * 0.5};
-
-            const auto start =
-                detail::sketchPointToWorld(
-                    hosted->placement,
-                    line->start());
-            const auto middle =
-                detail::sketchPointToWorld(
-                    hosted->placement,
-                    center);
-            const auto end =
-                detail::sketchPointToWorld(
-                    hosted->placement,
-                    line->end());
-            if (!start || !middle || !end) {
-                return false;
-            }
-
-            grip_scene.grips.push_back(
-                viewer::SketchGripPresentation{
-                    {*token,
-                     viewer::SketchGripRole::
-                         line_start},
-                    *start});
-            grip_scene.grips.push_back(
-                viewer::SketchGripPresentation{
-                    {*token,
-                     viewer::SketchGripRole::
-                         line_center},
-                    *middle});
-            grip_scene.grips.push_back(
-                viewer::SketchGripPresentation{
-                    {*token,
-                     viewer::SketchGripRole::
-                         line_end},
-                    *end});
         }
-    }
 
-    if (!viewport_->setSketchGripScene(
-            grip_scene)) {
-        return false;
+        if (!viewport_->setSketchGripScene(
+                grip_scene)) {
+            sketch_grip_projection_valid_ = false;
+            return false;
+        }
+
+        projected_grips_visible_ =
+            grips_visible;
+        projected_grip_selection_ =
+            selected;
+        sketch_grip_projection_valid_ = true;
     }
 
     viewer::SketchInteractionPresentation
