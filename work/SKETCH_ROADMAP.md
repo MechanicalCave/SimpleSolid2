@@ -598,6 +598,8 @@ Goal:
 R5 does not need to ship Rotate/Scale/Mirror/Copy, precision input, snaps or constraints.
 
 ### R6 — Circle and Arc core breadth
+**Status:** active — SK-06A accepted 2026-09-26
+
 Goal:
 
 - implement canonical Circle center+radius;

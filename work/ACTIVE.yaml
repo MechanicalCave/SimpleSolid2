@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/CI-02_TIERED_TEST_EXECUTION_AND_BUILD_EFFICIENCY.md"
+status: active
+active_work: "work/SK-06A_CIRCLE_ARC_CORE_BREADTH.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.2"
@@ -16,9 +16,13 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - CI-02 is merged; keep FAST for draft runtime iterations, SUBSYSTEM for explicit checkpoints and FULL for final runtime certification
-  - stop at the completed R5 + CI-02 checkpoint
-  - keep R6+ inactive until a separate explicit Owner-accepted Work Contract is activated
+  - implement accepted SK-06A within the bounded R6 Circle/Arc scope
+  - start with Shared 2D mixed primitive model and Part persistence v4
+  - then creation/presentation/selection and bounded direct manipulation
+  - use FAST/SUBSYSTEM Sketch checkpoints during implementation
+  - require exact-head Windows FULL for the final runtime candidate
+  - require explicit manual Windows verification before completion
+  - keep R7+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -67,3 +71,9 @@ notes:
 
   - CI-02 merged to main as 0494fe0da1bc346ff5c062e73691ecc407e94c77 after FULL #417 and CLOSURE #419.
   - Repository is at a clean completed R5 + CI-02 checkpoint; R6+ remains inactive.
+
+  - Owner explicitly accepted SK-06A on 2026-09-26; R6 is active only through this bounded contract.
+  - The accepted grip language is role-neutral: all grips are hollow when idle, hollow with cyan emphasis on hover, and filled yellow when active/captured.
+  - The proposal treats Circle/Arc durable model plus Part persistence v4 as D2 and therefore requires explicit Owner acceptance before production mutation.
+
+  - R7+ remains inactive and requires a separate explicit Owner-accepted Work Contract.
