@@ -958,6 +958,28 @@ public:
                 context_->Display(object, false);
             }
 
+            for (const auto& curve : scene.curves) {
+                for (std::size_t index = 1U;
+                     index < curve.points.size();
+                     ++index) {
+                    Handle(Geom_CartesianPoint) start =
+                        new Geom_CartesianPoint(
+                            toPoint(
+                                curve.points[index - 1U]));
+                    Handle(Geom_CartesianPoint) end =
+                        new Geom_CartesianPoint(
+                            toPoint(curve.points[index]));
+                    Handle(AIS_Line) object =
+                        new AIS_Line(start, end);
+
+                    sketch_objects_.push_back(
+                        SketchObject{
+                            curve.token,
+                            object});
+                    context_->Display(object, false);
+                }
+            }
+
             if (scene.origin) {
                 Handle(Geom_CartesianPoint) point =
                     new Geom_CartesianPoint(
@@ -1211,29 +1233,56 @@ public:
         std::optional<viewer::PresentationToken>
             best;
 
+        const auto consider_segment =
+            [&](viewer::PresentationToken token,
+                const viewer::Point3& start_point,
+                const viewer::Point3& end_point) {
+                const auto start =
+                    projectToScreen(start_point);
+                const auto end =
+                    projectToScreen(end_point);
+                if (!start || !end) {
+                    return false;
+                }
+
+                const double distance_squared =
+                    pointSegmentDistanceSquared(
+                        query,
+                        *start,
+                        *end);
+                if (distance_squared <=
+                        best_distance_squared &&
+                    (!best ||
+                     distance_squared <
+                         best_distance_squared)) {
+                    best_distance_squared =
+                        distance_squared;
+                    best = token;
+                }
+                return true;
+            };
+
         for (const auto& line :
              sketch_scene_.lines) {
-            const auto start =
-                projectToScreen(line.start);
-            const auto end =
-                projectToScreen(line.end);
-            if (!start || !end) {
+            if (!consider_segment(
+                    line.token,
+                    line.start,
+                    line.end)) {
                 return {};
             }
+        }
 
-            const double distance_squared =
-                pointSegmentDistanceSquared(
-                    query,
-                    *start,
-                    *end);
-            if (distance_squared <=
-                    best_distance_squared &&
-                (!best ||
-                 distance_squared <
-                     best_distance_squared)) {
-                best_distance_squared =
-                    distance_squared;
-                best = line.token;
+        for (const auto& curve :
+             sketch_scene_.curves) {
+            for (std::size_t index = 1U;
+                 index < curve.points.size();
+                 ++index) {
+                if (!consider_segment(
+                        curve.token,
+                        curve.points[index - 1U],
+                        curve.points[index])) {
+                    return {};
+                }
             }
         }
 
@@ -1277,30 +1326,69 @@ public:
             bool any_intersection{};
         };
         std::vector<SemanticHitState> semantic;
-        semantic.reserve(sketch_scene_.lines.size());
+        semantic.reserve(
+            sketch_scene_.lines.size() +
+            sketch_scene_.curves.size());
 
-        for (const auto& line : sketch_scene_.lines) {
-            const auto start = projectToScreen(line.start);
-            const auto end = projectToScreen(line.end);
-            if (!start || !end) return {};
+        const auto accumulate_segment =
+            [&](viewer::PresentationToken token,
+                const viewer::Point3& start_point,
+                const viewer::Point3& end_point) {
+                const auto start =
+                    projectToScreen(start_point);
+                const auto end =
+                    projectToScreen(end_point);
+                if (!start || !end) return false;
 
-            auto found = std::find_if(
-                semantic.begin(), semantic.end(),
-                [&line](const SemanticHitState& state) {
-                    return state.token == line.token;
-                });
-            if (found == semantic.end()) {
-                semantic.push_back({line.token, true, false});
-                found = std::prev(semantic.end());
+                auto found = std::find_if(
+                    semantic.begin(),
+                    semantic.end(),
+                    [token](
+                        const SemanticHitState& state) {
+                        return state.token == token;
+                    });
+                if (found == semantic.end()) {
+                    semantic.push_back(
+                        {token, true, false});
+                    found = std::prev(
+                        semantic.end());
+                }
+
+                found->all_inside =
+                    found->all_inside &&
+                    screen_rect.contains(*start) &&
+                    screen_rect.contains(*end);
+                found->any_intersection =
+                    found->any_intersection ||
+                    segmentIntersectsRect(
+                        *start,
+                        *end,
+                        screen_rect);
+                return true;
+            };
+
+        for (const auto& line :
+             sketch_scene_.lines) {
+            if (!accumulate_segment(
+                    line.token,
+                    line.start,
+                    line.end)) {
+                return {};
             }
+        }
 
-            found->all_inside =
-                found->all_inside &&
-                screen_rect.contains(*start) &&
-                screen_rect.contains(*end);
-            found->any_intersection =
-                found->any_intersection ||
-                segmentIntersectsRect(*start, *end, screen_rect);
+        for (const auto& curve :
+             sketch_scene_.curves) {
+            for (std::size_t index = 1U;
+                 index < curve.points.size();
+                 ++index) {
+                if (!accumulate_segment(
+                        curve.token,
+                        curve.points[index - 1U],
+                        curve.points[index])) {
+                    return {};
+                }
+            }
         }
 
         result.tokens.reserve(semantic.size());
