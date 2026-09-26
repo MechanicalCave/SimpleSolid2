@@ -49,7 +49,7 @@ Ordinary value-copy and Undo/Redo state replication preserve existing EntityIds.
 
 `DocumentSession` preserves the highest observed cursor for each Sketch across history movement. Undo of a COPY placement removes the copied entities but does not make their committed IDs allocatable again. Redo restores the same copied IDs. A new COPY after Undo allocates above the preserved high-water rather than aliasing the abandoned IDs.
 
-The high-water cursor is also durable state for Save/reopen. Semantic `SketchModel` equality still compares authored entity content rather than the technical cursor so history-state matching remains stable, but `DocumentSession::needsSave()` separately detects a cursor difference from the last saved state. Therefore COPY → Undo can require Save even when visible geometry has returned exactly to the prior saved geometry.
+The session-local high-water cursor survives Undo even when authored geometry returns exactly to the last saved state. Existing semantic dirty-state behavior is preserved: Undo back to the saved authored state remains clean. A new COPY in that continuing session still allocates above the preserved high-water, and saving the later committed authored state persists the resulting `next_entity_id` under schema v4.
 
 Schema-v4 persistence already stores `next_entity_id`; SK-07C uses that existing field and introduces no persistence migration.
 
@@ -193,7 +193,7 @@ The SK-07B common-transform set `sk07b.transform_core`, `sk07b.common_transform_
 SK-07C adds:
 
 - `sk07c.copy_interaction_state` — selection-first/command-first COPY, frozen source/Base Point, repeated placement from the original snapshot and history cancellation;
-- `sk07c.copy_command` — atomic mixed duplication, fresh identity, Undo/Redo identity restoration, non-reuse after Undo, allocator-only dirty state, schema-v4 high-water Save/reopen and stale-revision failure;
+- `sk07c.copy_command` — atomic mixed duplication, fresh identity, Undo/Redo identity restoration, non-reuse after Undo, schema-v4 high-water Save/reopen and stale-revision failure;
 - `sk07c.copy_controller` — zero-displacement rejection, repeated placements, source-selection retention, separate per-placement history and stale-revision controller behavior.
 
 The Workbench Sketch-host regression verifies Select/Create/Modify presentation plus toolbar/Command-Line activation including COPY. Final work-item completion additionally requires the repository's exact-head Windows FULL gate and Owner manual Windows verification.
