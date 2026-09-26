@@ -4,7 +4,8 @@
 **Proposed:** 2026-09-26  
 **Owner acceptance:** 2026-09-26  
 **Owner manual Windows verification:** PASS — 2026-09-26  
-**Exact runtime Windows FULL:** #475 — `bb218f8d9cff1c1c2ffc45e091a69c485190e97e` — PASS  
+**Initial runtime Windows FULL:** #475 — `bb218f8d9cff1c1c2ffc45e091a69c485190e97e` — PASS  
+**Final exact-head Windows FULL:** #479 — `188e58f17e4c3964a858129d1af9170c2402f4fb` — PASS  
 **Documentation gates:** #476 / #477 — PASS  
 **Decision class:** D2 interaction/transform architecture + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -395,9 +396,11 @@ Completion requires:
 
 SK-07A completed its bounded first R7 slice on 2026-09-26.
 
-- Exact runtime head `bb218f8d9cff1c1c2ffc45e091a69c485190e97e` passed Windows FULL #475: Build succeeded and 60/60 unfiltered CTest tests passed.
+- Runtime head `bb218f8d9cff1c1c2ffc45e091a69c485190e97e` passed Windows FULL #475: Build succeeded and 60/60 unfiltered CTest tests passed.
 - Documentation-only head `afc442ffad2ad90b87d84bd7b55e9297018fe27e` passed DOCS #476 and ready-for-review DOCS #477, including generated Product Browser freshness and stable `windows-msvc`.
 - Owner manual Windows verification passed the accepted MOVE functionality.
 - The Owner noted one non-blocking UI organization improvement for the next R7 slice: organize Sketch tool buttons into explicit **Create** and **Modify** sections instead of continuing a flat row.
 - That toolbar grouping is intentionally deferred and does not reopen SK-07A.
+- A non-functional source comment was added after manual verification solely to establish an exact-head FULL checkpoint over the complete documented candidate.
+- Final exact-head Windows FULL #479 passed on `188e58f17e4c3964a858129d1af9170c2402f4fb`: Build, unfiltered CTest and stable `windows-msvc` all succeeded.
 - Rotate/Scale/Mirror/Copy and the remaining R7 command grammar remain outside this completed contract.

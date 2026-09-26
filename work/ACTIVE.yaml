@@ -97,3 +97,7 @@ notes:
   - Owner deferred one UI organization improvement to the next R7 slice: Sketch tool buttons should be grouped into explicit Create and Modify sections instead of extending one flat row.
   - The toolbar grouping note is UX organization only; SK-07A behavior is accepted and must not be reopened for that deferred change.
   - Remaining R7 transforms/Copy/Repeat Last Command require a separate explicit Owner-accepted Work Contract.
+
+  - After documentation and manual PASS, non-functional transform-authority comments established final exact-head runtime checkpoint 188e58f17e4c3964a858129d1af9170c2402f4fb.
+  - Final exact-head Windows FULL #479 passed on 188e58f17e4c3964a858129d1af9170c2402f4fb with Build, unfiltered CTest and stable windows-msvc all successful.
+  - SK-07A now awaits only the work-only CLOSURE gate and merge.
