@@ -19,6 +19,7 @@ void PartSketchInteractionController::begin(
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
+    move_revision_.reset();
 
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
@@ -33,6 +34,7 @@ void PartSketchInteractionController::end() {
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
+    move_revision_.reset();
 
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clearSketchPreview();
@@ -81,6 +83,11 @@ PartSketchInteractionController::arcStage() const noexcept {
     return interaction_.arcStage();
 }
 
+std::optional<sketch::MoveStage>
+PartSketchInteractionController::moveStage() const noexcept {
+    return interaction_.moveStage();
+}
+
 std::size_t
 PartSketchInteractionController::selectedCount() const noexcept {
     return interaction_.selectedEntities().size();
@@ -98,6 +105,7 @@ void PartSketchInteractionController::activateSelect() {
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
+    move_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     configureForCurrentTool();
@@ -113,6 +121,7 @@ void PartSketchInteractionController::activateLine() {
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
+    move_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     projectSelection();
@@ -128,6 +137,7 @@ void PartSketchInteractionController::activateCircle() {
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
+    move_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     projectSelection();
@@ -143,12 +153,67 @@ void PartSketchInteractionController::activateArc() {
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
+    move_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
     notifyStateChanged();
+}
+
+bool PartSketchInteractionController::activateMove() {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr || session_ == nullptr) {
+        return false;
+    }
+
+    if (!interaction_.activateMove(hosted->model)) {
+        return false;
+    }
+
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    move_revision_ =
+        interaction_.moveStage() ==
+                sketch::MoveStage::await_base_point
+            ? std::optional<core::DocumentRevision>{
+                  session_->document().revision()}
+            : std::nullopt;
+
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::
+completeMoveSelection() {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr || session_ == nullptr) {
+        return false;
+    }
+
+    if (!interaction_.completeMoveSelection(
+            hosted->model)) {
+        return false;
+    }
+
+    move_revision_ =
+        session_->document().revision();
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    viewport_controller_->clearSketchPreview();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    return true;
 }
 
 void PartSketchInteractionController::finishLine() {
@@ -164,11 +229,16 @@ bool PartSketchInteractionController::escape() {
 
     const bool was_manipulating =
         interaction_.directManipulationActive();
+    const bool was_moving =
+        interaction_.tool() == sketch::SketchTool::move;
     const bool changed = interaction_.escape();
     if (!changed) return false;
 
     if (was_manipulating) {
         manipulation_revision_.reset();
+    }
+    if (was_moving) {
+        move_revision_.reset();
     }
 
     press_anchor_.reset();
@@ -213,6 +283,41 @@ bool PartSketchInteractionController::deleteSelection() {
     return true;
 }
 
+application::DocumentSessionResult
+PartSketchInteractionController::executeGeometryUpdate(
+    const sketch::SketchTransformGeometry& geometry,
+    core::DocumentRevision expected_revision) {
+    application::UpdateSketchGeometryCommand command{
+        *sketch_id_,
+        expected_revision,
+        {},
+        {},
+        {}};
+    command.lines.reserve(geometry.lines.size());
+    command.circles.reserve(geometry.circles.size());
+    command.arcs.reserve(geometry.arcs.size());
+
+    for (const auto& line : geometry.lines) {
+        command.lines.push_back(
+            {line.id, line.start, line.end});
+    }
+    for (const auto& circle : geometry.circles) {
+        command.circles.push_back(
+            {circle.id, circle.center, circle.radius});
+    }
+    for (const auto& arc : geometry.arcs) {
+        command.arcs.push_back(
+            {
+                arc.id,
+                arc.center,
+                arc.radius,
+                arc.start_angle,
+                arc.sweep_angle});
+    }
+
+    return session_->execute(command);
+}
+
 bool PartSketchInteractionController::
 commitDirectManipulation() {
     if (!active() ||
@@ -229,36 +334,10 @@ commitDirectManipulation() {
         return false;
     }
 
-    application::UpdateSketchGeometryCommand command{
-        *sketch_id_,
-        *manipulation_revision_,
-        {},
-        {},
-        {}};
-    command.lines.reserve(geometry->lines.size());
-    command.circles.reserve(geometry->circles.size());
-    command.arcs.reserve(geometry->arcs.size());
-
-    for (const auto& line : geometry->lines) {
-        command.lines.push_back(
-            {line.id, line.start, line.end});
-    }
-    for (const auto& circle : geometry->circles) {
-        command.circles.push_back(
-            {circle.id, circle.center, circle.radius});
-    }
-    for (const auto& arc : geometry->arcs) {
-        command.arcs.push_back(
-            {
-                arc.id,
-                arc.center,
-                arc.radius,
-                arc.start_angle,
-                arc.sweep_angle});
-    }
-
     const auto result =
-        session_->execute(command);
+        executeGeometryUpdate(
+            *geometry,
+            *manipulation_revision_);
 
     interaction_.finishDirectManipulation();
     manipulation_revision_.reset();
@@ -291,11 +370,67 @@ commitDirectManipulation() {
     return true;
 }
 
+bool PartSketchInteractionController::commitMove() {
+    if (!active() ||
+        interaction_.tool() != sketch::SketchTool::move ||
+        interaction_.moveStage() !=
+            sketch::MoveStage::await_destination ||
+        !move_revision_) {
+        return false;
+    }
+
+    const auto geometry =
+        interaction_.moveGeometryState();
+    if (!geometry) {
+        reportStatus(
+            "MOVE has no valid destination geometry.");
+        return false;
+    }
+
+    const auto result =
+        executeGeometryUpdate(
+            *geometry,
+            *move_revision_);
+
+    interaction_.finishMove();
+    move_revision_.reset();
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    viewport_controller_->refreshPresentation();
+
+    const auto* hosted = activeSketch();
+    if (hosted != nullptr) {
+        interaction_.reconcileSelection(hosted->model);
+    }
+
+    configureForCurrentTool();
+    projectSelection();
+    projectInteraction();
+    notifyStateChanged();
+
+    if (!result.ok()) {
+        reportStatus(
+            result.diagnostic.message.empty()
+                ? std::string{"MOVE commit failed."}
+                : result.diagnostic.message);
+        return false;
+    }
+
+    reportStatus(
+        result.changed
+            ? std::string{"MOVE committed."}
+            : std::string{"MOVE completed with no authored change."});
+    return true;
+}
+
 void PartSketchInteractionController::cancelForHistory() {
     if (!active()) return;
 
     interaction_.cancelForHistory();
     manipulation_revision_.reset();
+    move_revision_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     viewport_controller_->clearSketchPreview();
@@ -315,6 +450,7 @@ bool PartSketchInteractionController::reconcileAfterHistory() {
     interaction_.reconcileSelection(hosted->model);
     interaction_.clearHover();
     manipulation_revision_.reset();
+    move_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->refreshPresentation();
     projectSelection();
@@ -344,6 +480,9 @@ void PartSketchInteractionController::onPointer(
         return;
     case sketch::SketchTool::arc:
         handleArcPointer(input);
+        return;
+    case sketch::SketchTool::move:
+        handleMovePointer(input);
         return;
     }
 }
@@ -758,6 +897,187 @@ void PartSketchInteractionController::handleArcPointer(
     }
 }
 
+void PartSketchInteractionController::handleMovePointer(
+    const SketchPointerInput& input) {
+    const auto stage = interaction_.moveStage();
+    if (!stage) return;
+
+    if (*stage == sketch::MoveStage::select_objects) {
+        switch (input.phase) {
+        case viewer::SpatialPointerPhase::primary_press:
+            interaction_.clearHover();
+            projectInteraction();
+            press_anchor_ = input.viewport_position;
+            rectangle_drag_active_ = false;
+            viewport_controller_->clearSketchSelectionBoxOverlay();
+            return;
+
+        case viewer::SpatialPointerPhase::move: {
+            if (!press_anchor_) {
+                updateHover(input.viewport_position);
+                return;
+            }
+
+            const auto dx =
+                input.viewport_position.x -
+                press_anchor_->x;
+            const auto dy =
+                input.viewport_position.y -
+                press_anchor_->y;
+
+            if (!rectangle_drag_active_) {
+                if (dx == 0.0 || dy == 0.0 ||
+                    std::hypot(dx, dy) <
+                        drag_threshold_pixels) {
+                    return;
+                }
+                rectangle_drag_active_ = true;
+                interaction_.clearHover();
+                projectInteraction();
+            }
+
+            updateRectangleOverlay(
+                input.viewport_position);
+            return;
+        }
+
+        case viewer::SpatialPointerPhase::primary_release:
+            break;
+        }
+
+        if (!press_anchor_) return;
+
+        const auto anchor = *press_anchor_;
+        press_anchor_.reset();
+
+        if (rectangle_drag_active_) {
+            rectangle_drag_active_ = false;
+            viewport_controller_->
+                clearSketchSelectionBoxOverlay();
+
+            const auto rectangle =
+                viewer::normalizedViewportRect(
+                    anchor,
+                    input.viewport_position);
+            if (!rectangle) return;
+
+            const auto rule =
+                input.viewport_position.x >= anchor.x
+                    ? viewer::SketchRectangleSelectionRule::
+                          window
+                    : viewer::SketchRectangleSelectionRule::
+                          crossing;
+
+            const auto queried =
+                viewport_controller_->
+                    querySketchEntities(
+                        *rectangle,
+                        rule);
+            if (!queried.completed) {
+                reportStatus(
+                    "MOVE rectangle query failed.");
+                return;
+            }
+
+            std::vector<sketch::EntityId> ids;
+            ids.reserve(queried.hits.size());
+            for (const auto& hit : queried.hits) {
+                if (hit.sketch_id != *sketch_id_) {
+                    reportStatus(
+                        "MOVE rectangle query returned stale context.");
+                    return;
+                }
+                ids.push_back(hit.entity_id);
+            }
+
+            const bool accepted =
+                input.control
+                    ? interaction_.toggleSelection(
+                          std::move(ids))
+                    : interaction_.addSelection(
+                          std::move(ids));
+            if (!accepted) {
+                reportStatus(
+                    "MOVE object selection was rejected.");
+                return;
+            }
+
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            return;
+        }
+
+        const auto queried =
+            viewport_controller_->querySketchEntityAt(
+                input.viewport_position);
+        if (!queried.completed) {
+            reportStatus(
+                "MOVE point query failed.");
+            return;
+        }
+
+        if (queried.hit) {
+            if (queried.hit->sketch_id !=
+                *sketch_id_) {
+                reportStatus(
+                    "MOVE point query returned stale context.");
+                return;
+            }
+
+            if (input.control) {
+                static_cast<void>(
+                    interaction_.toggleSelection(
+                        queried.hit->entity_id));
+            } else {
+                static_cast<void>(
+                    interaction_.addSelection(
+                        queried.hit->entity_id));
+            }
+
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+        }
+
+        // Blank LMB is intentionally a no-op while collecting MOVE objects.
+        return;
+    }
+
+    const auto resolved =
+        sketch::resolveSketchInput(input.position);
+
+    if (*stage == sketch::MoveStage::await_base_point) {
+        if (input.phase ==
+                viewer::SpatialPointerPhase::primary_press &&
+            resolved &&
+            interaction_.acceptMoveBasePoint(
+                *resolved)) {
+            viewport_controller_->clearSketchPreview();
+            configureForCurrentTool();
+            projectInteraction();
+            notifyStateChanged();
+        }
+        return;
+    }
+
+    if (*stage != sketch::MoveStage::await_destination) {
+        return;
+    }
+
+    if (input.phase ==
+        viewer::SpatialPointerPhase::move) {
+        updateMovePreview(input.position);
+        return;
+    }
+
+    if (input.phase ==
+        viewer::SpatialPointerPhase::primary_press) {
+        updateMovePreview(input.position);
+        static_cast<void>(commitMove());
+    }
+}
+
 void PartSketchInteractionController::updateRectangleOverlay(
     viewer::ViewportPoint2 current) {
     if (!press_anchor_) return;
@@ -777,13 +1097,22 @@ void PartSketchInteractionController::updateRectangleOverlay(
 
 void PartSketchInteractionController::updateHover(
     viewer::ViewportPoint2 point) {
-    if (interaction_.tool() !=
-            sketch::SketchTool::select ||
+    const bool select_mode =
+        interaction_.tool() ==
+        sketch::SketchTool::select;
+    const bool move_collect_mode =
+        interaction_.tool() ==
+            sketch::SketchTool::move &&
+        interaction_.moveStage() ==
+            sketch::MoveStage::select_objects;
+
+    if ((!select_mode && !move_collect_mode) ||
         interaction_.directManipulationActive()) {
         return;
     }
 
-    if (!interaction_.selectedEntities().empty()) {
+    if (select_mode &&
+        !interaction_.selectedEntities().empty()) {
         const auto grip =
             viewport_controller_->querySketchGripAt(
                 point);
@@ -881,6 +1210,26 @@ updateDirectManipulationPreview(
     }
 }
 
+void PartSketchInteractionController::updateMovePreview(
+    sketch::Point2 raw_input) {
+    const auto resolved =
+        sketch::resolveSketchInput(raw_input);
+    if (!resolved ||
+        !interaction_.updateMoveDestination(
+            *resolved)) {
+        viewport_controller_->clearSketchPreview();
+        return;
+    }
+
+    const auto geometry =
+        interaction_.moveGeometryState();
+    if (!geometry ||
+        !viewport_controller_->setSketchGeometryPreview(
+            *geometry)) {
+        viewport_controller_->clearSketchPreview();
+    }
+}
+
 void PartSketchInteractionController::projectSelection() {
     if (!active()) return;
 
@@ -911,10 +1260,17 @@ void PartSketchInteractionController::configureForCurrentTool() {
             viewer::PrimaryPointerRouting::
                 spatial_tool_input));
 
+    const bool pick_box =
+        interaction_.tool() ==
+            sketch::SketchTool::select ||
+        (interaction_.tool() ==
+             sketch::SketchTool::move &&
+         interaction_.moveStage() ==
+             sketch::MoveStage::select_objects);
+
     static_cast<void>(
         viewport_controller_->setSketchCursorMode(
-            interaction_.tool() ==
-                    sketch::SketchTool::select
+            pick_box
                 ? viewer::ViewportCursorMode::
                       select_pick_box
                 : viewer::ViewportCursorMode::

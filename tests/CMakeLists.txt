@@ -1028,6 +1028,50 @@ add_test(
     COMMAND sk06a_circle_arc_interaction_state_test
 )
 
+add_executable(sk07a_transform_core_test
+    sk07a_transform_core_test.cpp
+)
+
+target_link_libraries(sk07a_transform_core_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(sk07a_transform_core_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk07a.transform_core
+    COMMAND sk07a_transform_core_test
+)
+
+add_executable(sk07a_move_controller_test
+    sk07a_move_controller_test.cpp
+)
+
+target_include_directories(sk07a_move_controller_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/application
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(sk07a_move_controller_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(sk07a_move_controller_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk07a.move_controller
+    COMMAND sk07a_move_controller_test
+)
+
+set_tests_properties(sk07a.move_controller PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # CI-02 test metadata. FULL remains the unfiltered CTest suite.
 # New tests are intentionally not FAST by default; authors classify them explicitly.
 set(_ss2_fast_tests
@@ -1088,6 +1132,8 @@ set(_ss2_fast_tests
     sk05a.part_sketch_direct_manipulation
     sk06a.circle_arc_model_persistence
     sk06a.circle_arc_interaction_state
+    sk07a.transform_core
+    sk07a.move_controller
 )
 set_property(TEST ${_ss2_fast_tests} APPEND PROPERTY LABELS "tier-fast")
 set_property(TEST wb01a.workbench_native_stress APPEND PROPERTY LABELS
@@ -1118,6 +1164,8 @@ set(_ss2_sketch_tests
     sk05a.part_sketch_direct_manipulation
     sk06a.circle_arc_model_persistence
     sk06a.circle_arc_interaction_state
+    sk07a.transform_core
+    sk07a.move_controller
 )
 set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
 
@@ -1156,6 +1204,7 @@ set(_ss2_part_tests
     sk04a.line_commit_protocol
     sk05a.line_geometry_command
     sk06a.circle_arc_model_persistence
+    sk07a.move_controller
 )
 set_property(TEST ${_ss2_part_tests} APPEND PROPERTY LABELS "subsystem-part")
 
@@ -1177,6 +1226,7 @@ set(_ss2_application_tests
     sk04a.line_commit_protocol
     sk05a.line_geometry_command
     sk06a.circle_arc_model_persistence
+    sk07a.move_controller
 )
 set_property(TEST ${_ss2_application_tests} APPEND PROPERTY LABELS "subsystem-application")
 
@@ -1219,6 +1269,7 @@ set(_ss2_viewer_tests
     sk04b.viewer_native_selection_query
     sk04c.part_sketch_interaction_controller
     sk05a.part_sketch_direct_manipulation
+    sk07a.move_controller
 )
 set_property(TEST ${_ss2_viewer_tests} APPEND PROPERTY LABELS "subsystem-viewer")
 
@@ -1235,6 +1286,7 @@ set(_ss2_ui_tests
     sk04b.part_viewport_selection_bridge
     sk04c.part_sketch_interaction_controller
     sk05a.part_sketch_direct_manipulation
+    sk07a.move_controller
 )
 set_property(TEST ${_ss2_ui_tests} APPEND PROPERTY LABELS "subsystem-ui")
 
@@ -1261,6 +1313,7 @@ set(_ss2_ui_test_targets
     sk04b_part_viewport_selection_bridge_test
     sk04c_part_sketch_interaction_controller_test
     sk05a_part_sketch_direct_manipulation_test
+    sk07a_move_controller_test
 )
 foreach(_target IN LISTS _ss2_ui_test_targets)
     target_link_libraries(${_target} PRIVATE simplesolid2_ui)
