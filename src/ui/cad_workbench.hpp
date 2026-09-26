@@ -94,6 +94,7 @@ private:
     void activateSketchLine();
     void activateSketchCircle();
     void activateSketchArc();
+    void activateSketchMove();
     void finishSketchLine();
     void cancelSketchLine();
     void deleteSketchSelection();
@@ -183,6 +184,7 @@ private:
     QPushButton* line_sketch_button_{};
     QPushButton* circle_sketch_button_{};
     QPushButton* arc_sketch_button_{};
+    QPushButton* move_sketch_button_{};
     QPushButton* cancel_sketch_button_{};
     QPushButton* finish_sketch_button_{};
     QPushButton* finish_line_button_{};
