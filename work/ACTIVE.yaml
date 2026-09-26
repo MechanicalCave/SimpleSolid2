@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/CI-02_TIERED_TEST_EXECUTION_AND_BUILD_EFFICIENCY.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,19 +16,15 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - implement accepted CI-02 FAST/SUBSYSTEM/FULL test tiers
-  - preserve CI-01 exact-head DOCS/CLOSURE trusted-FULL behavior
-  - remove redundant CI Test-step rebuild
-  - centralize duplicated production UI compilation where practical
-  - require exact-head Windows FULL for the final CI-02 implementation candidate
-  - update internal build/test documentation and Product Browser
-  - run closeout CLOSURE before merge
-  - keep R6+ inactive
+  - merge CI-02 only after the exact closeout HEAD passes the selected CLOSURE CI tier
+  - use FAST for draft runtime iterations, SUBSYSTEM for explicit checkpoints and FULL for final runtime certification
+  - keep R6+ inactive until separately contracted
+
 notes:
   - R0 through R4 are completed.
   - WB-01B merged to main as 5d75e561571c83ac50a241a0c4b5cf0e212c05f2 after FULL #381, Owner manual PASS and CLOSURE #382.
   - Owner accepted Sketcher roadmap v1.2 and revised SK-05A on 2026-09-26.
-  - R5 is active only through the bounded SK-05A contract; R6+ is not authorized.
+  - R5 is completed by SK-05A; R6+ is not authorized.
   - Selection grammar is additive ordinary LMB/Window/Crossing, Ctrl toggle, blank/Esc clear in Select, semantic primary, hover/preselection, grips on all selected editable entities and exactly one active grip.
   - Direct manipulation freezes a selection snapshot; entity-specific Reshape affects the handle owner, while common transforms affect the selection snapshot.
   - Grip-started manipulation uses the active grip as pivot/base and has no in-session Base Point replacement.
@@ -60,3 +56,11 @@ notes:
   - SK-05A merged to main as 8674d416639ab4c16e40a4cee6a84cdf7a78254c after FULL #402, Owner manual PASS and CLOSURE #403.
   - Owner accepted CI-02 on 2026-09-26 after discussing repository scaling and preserving mandatory FULL merge evidence.
   - CI-02 is repository/build workflow work only; it does not activate R6+ or change CAD semantics.
+
+  - Exact implementation head 0bd414d78bf984069d872cfa58a3fe43ec189296 passed Windows FULL gate #417.
+  - FULL #417 passed documentation freshness, setup, ss2 verify, test-tier self-test, shared-UI Build, FAST/SUBSYSTEM selector checks and 56/56 unfiltered CTest tests.
+  - Full CTest remained 102.85 s because wb01a.workbench_native_stress alone consumed 94.66 s; the tier-fast label accounted for 55 tests and 8.16 s*proc in the same run.
+  - CI Test now uses -NoBuild after the explicit Build step, removing the previous redundant second build.
+  - Production UI translation units compile once through simplesolid2_ui and UI-oriented tests link that production target.
+  - CI-02 acceptance conditions are satisfied; status is completed pending closeout-only CLOSURE gate and merge.
+  - R6+ remains inactive and requires a separate accepted Work Contract.

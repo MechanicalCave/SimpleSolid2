@@ -1,6 +1,6 @@
 # CI-02 — Tiered Test Execution and Build Efficiency
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-26  
 **Decision class:** D1 repository workflow / build implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)
@@ -194,3 +194,23 @@ Completion requires:
 - closeout CLOSURE passes.
 
 R6+ remains inactive and requires its own separate accepted Work Contract.
+
+
+## 13. Completion record
+
+CI-02 implementation is complete.
+
+- exact implementation head `0bd414d78bf984069d872cfa58a3fe43ec189296` passed Windows FULL gate #417;
+- documentation dispatcher/freshness, machine setup and `ss2 verify` passed;
+- the test-tier dispatcher self-test passed, including rejection of unknown SUBSYSTEM values and multi-subsystem selector normalization;
+- FAST and SUBSYSTEM CTest selectors were validated against the configured suite before FULL execution;
+- FULL remained unfiltered and passed 56/56 tests;
+- full CTest time was 102.85 s; the native Workbench stress test accounted for 94.66 s, while tests carrying `tier-fast` accounted for 8.16 s*proc across 55 tests;
+- the FULL Test step used `-NoBuild` after the successful explicit Build step, removing the previous redundant rebuild;
+- production UI implementation now compiles once as `simplesolid2_ui`, and UI-oriented tests link that production library instead of recompiling the same `src/ui/*.cpp` files;
+- draft runtime source changes are classified FAST, ready runtime changes are classified FULL, and verification-infrastructure changes fail closed to FULL;
+- CI-01 trusted-FULL-ancestor DOCS/CLOSURE semantics remain intact;
+- internal build/test documentation and the generated Product Browser are current;
+- no CAD/domain semantics changed and R6+ remains inactive.
+
+All CI-02 acceptance conditions are satisfied. The work item is complete subject only to the repository CLOSURE gate on this bookkeeping-only revision.
