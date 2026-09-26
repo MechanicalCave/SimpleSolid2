@@ -1270,34 +1270,46 @@ public:
 
         viewer::SketchRectangleQueryResult result;
         result.completed = true;
-        result.tokens.reserve(
-            sketch_scene_.lines.size());
 
-        for (const auto& line :
-             sketch_scene_.lines) {
-            const auto start =
-                projectToScreen(line.start);
-            const auto end =
-                projectToScreen(line.end);
-            if (!start || !end) {
-                return {};
+        struct SemanticHitState final {
+            viewer::PresentationToken token;
+            bool all_inside{true};
+            bool any_intersection{};
+        };
+        std::vector<SemanticHitState> semantic;
+        semantic.reserve(sketch_scene_.lines.size());
+
+        for (const auto& line : sketch_scene_.lines) {
+            const auto start = projectToScreen(line.start);
+            const auto end = projectToScreen(line.end);
+            if (!start || !end) return {};
+
+            auto found = std::find_if(
+                semantic.begin(), semantic.end(),
+                [&line](const SemanticHitState& state) {
+                    return state.token == line.token;
+                });
+            if (found == semantic.end()) {
+                semantic.push_back({line.token, true, false});
+                found = std::prev(semantic.end());
             }
 
+            found->all_inside =
+                found->all_inside &&
+                screen_rect.contains(*start) &&
+                screen_rect.contains(*end);
+            found->any_intersection =
+                found->any_intersection ||
+                segmentIntersectsRect(*start, *end, screen_rect);
+        }
+
+        result.tokens.reserve(semantic.size());
+        for (const auto& state : semantic) {
             const bool hit =
-                rule ==
-                        viewer::SketchRectangleSelectionRule::
-                            window
-                    ? screen_rect.contains(*start) &&
-                          screen_rect.contains(*end)
-                    : segmentIntersectsRect(
-                          *start,
-                          *end,
-                          screen_rect);
-
-            if (hit) {
-                result.tokens.push_back(
-                    line.token);
-            }
+                rule == viewer::SketchRectangleSelectionRule::window
+                    ? state.all_inside
+                    : state.any_intersection;
+            if (hit) result.tokens.push_back(state.token);
         }
 
         return result;

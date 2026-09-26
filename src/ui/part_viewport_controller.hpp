@@ -97,6 +97,10 @@ public:
 
     [[nodiscard]] bool setSketchPreview(
         const std::vector<SketchPreviewLine2D>& lines);
+    [[nodiscard]] bool setSketchCirclePreview(
+        const sketch::CircleIntent& circle);
+    [[nodiscard]] bool setSketchArcPreview(
+        const sketch::ArcIntent& arc);
     void clearSketchPreview();
 
     [[nodiscard]] bool setSketchPrimaryPointerRouting(

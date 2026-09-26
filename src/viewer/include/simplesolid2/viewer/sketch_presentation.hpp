@@ -45,19 +45,8 @@ struct SketchScene final {
             }
         }
 
-        for (std::size_t left = 0U;
-             left < lines.size();
-             ++left) {
-            for (std::size_t right = left + 1U;
-                 right < lines.size();
-                 ++right) {
-                if (lines[left].token ==
-                    lines[right].token) {
-                    return false;
-                }
-            }
-        }
-
+        // Circle and Arc may be tessellated into multiple segments
+        // that share one semantic presentation token.
         return true;
     }
 };
@@ -90,6 +79,15 @@ enum class SketchGripRole : std::uint8_t {
     line_start,
     line_center,
     line_end,
+    circle_center,
+    circle_quadrant_pos_u,
+    circle_quadrant_pos_v,
+    circle_quadrant_neg_u,
+    circle_quadrant_neg_v,
+    arc_center,
+    arc_start,
+    arc_end,
+    arc_mid,
 };
 
 struct SketchGripKey final {
