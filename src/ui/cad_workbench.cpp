@@ -1855,39 +1855,6 @@ void CadWorkbench::syncSketchInteractionUi() {
     }
 
     delete_selection_button_->setVisible(false);
-        finish_line_button_->setVisible(false);
-        cancel_line_button_->setVisible(false);
-
-        const auto stage =
-            sketch_interaction_controller_->moveStage();
-        if (stage == sketch::MoveStage::select_objects) {
-            operations_placeholder_->setText(
-                QStringLiteral(
-                    "Move — Select objects; Enter/Space/RMB to continue"));
-            command_prompt_->setText(
-                QStringLiteral(
-                    "Command: MOVE — Select objects"));
-        } else if (
-            stage ==
-            sketch::MoveStage::await_destination) {
-            operations_placeholder_->setText(
-                QStringLiteral(
-                    "Move — Specify destination point"));
-            command_prompt_->setText(
-                QStringLiteral(
-                    "Command: MOVE — Specify destination point"));
-        } else {
-            operations_placeholder_->setText(
-                QStringLiteral(
-                    "Move — Specify Base Point"));
-            command_prompt_->setText(
-                QStringLiteral(
-                    "Command: MOVE — Specify Base Point"));
-        }
-        return;
-    }
-
-    delete_selection_button_->setVisible(false);
     finish_line_button_->setVisible(true);
     cancel_line_button_->setVisible(true);
 
