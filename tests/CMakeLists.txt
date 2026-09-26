@@ -72,16 +72,6 @@ find_package(Qt6 6 REQUIRED COMPONENTS Widgets Test)
 
 add_executable(ph02a_project_hub_selection_ux_test
     project_hub_selection_ux_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/project_workspace_shell.cpp
 )
 
 target_include_directories(ph02a_project_hub_selection_ux_test
@@ -131,16 +121,6 @@ add_test(
 
 add_executable(ph02b_project_hub_availability_ux_test
     project_hub_availability_ux_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/project_workspace_shell.cpp
 )
 
 target_include_directories(ph02b_project_hub_availability_ux_test
@@ -190,7 +170,6 @@ add_test(
 
 add_executable(ph02c_project_creation_dialog_test
     project_creation_dialog_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
 )
 
 target_include_directories(ph02c_project_creation_dialog_test
@@ -363,13 +342,6 @@ add_test(
 
 add_executable(wb01_cad_workbench_test
     cad_workbench_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
 )
 
 target_include_directories(wb01_cad_workbench_test
@@ -483,13 +455,6 @@ set_tests_properties(wb01.viewer_native_smoke PROPERTIES
 
 add_executable(wb01a_workbench_native_stress_test
     workbench_native_stress_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
 )
 target_include_directories(wb01a_workbench_native_stress_test
     PRIVATE
@@ -529,8 +494,6 @@ add_test(
 
 add_executable(wb01a_document_dialog_ux_test
     document_dialog_ux_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
 )
 target_include_directories(wb01a_document_dialog_ux_test
     PRIVATE
@@ -554,16 +517,6 @@ set_tests_properties(wb01a.document_dialog_ux PROPERTIES
 
 add_executable(wb01a_workbench_document_dialog_integration_test
     workbench_document_dialog_integration_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/project_creation_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/project_hub_window.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/project_workspace_shell.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
 )
 target_include_directories(wb01a_workbench_document_dialog_integration_test
     PRIVATE
@@ -590,13 +543,6 @@ set_tests_properties(wb01a.workbench_document_dialog_integration PROPERTIES
 
 add_executable(sk01_workbench_sketch_host_test
     sk01_workbench_sketch_host_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/cad_workbench_shell.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/open_document_dialog.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/workspace_location_dialog.cpp
 )
 
 target_include_directories(sk01_workbench_sketch_host_test
@@ -743,9 +689,6 @@ add_test(
 
 add_executable(sk03a_part_viewport_controller_test
     sk03a_part_viewport_controller_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
 )
 
 target_include_directories(sk03a_part_viewport_controller_test
@@ -873,9 +816,6 @@ add_test(
 
 add_executable(sk04b_part_viewport_selection_bridge_test
     sk04b_part_viewport_selection_bridge_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
 )
 
 target_include_directories(sk04b_part_viewport_selection_bridge_test
@@ -928,10 +868,6 @@ set_tests_properties(sk04b.viewer_native_selection_query PROPERTIES
 
 add_executable(sk04c_part_sketch_interaction_controller_test
     sk04c_part_sketch_interaction_controller_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
 )
 
 target_include_directories(sk04c_part_sketch_interaction_controller_test
@@ -1035,9 +971,6 @@ add_test(
 
 add_executable(sk05a_part_sketch_direct_manipulation_test
     sk05a_part_sketch_direct_manipulation_test.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
-    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
 )
 
 target_include_directories(sk05a_part_sketch_direct_manipulation_test
@@ -1062,3 +995,234 @@ add_test(
 set_tests_properties(sk05a.part_sketch_direct_manipulation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
+
+# CI-02 test metadata. FULL remains the unfiltered CTest suite.
+# New tests are intentionally not FAST by default; authors classify them explicitly.
+set(_ss2_fast_tests
+    ph01.project_workspace_metadata
+    ph01.project_session
+    ph01.recent_project_store
+    ph01.project_hub_lifecycle
+    ph01.app_smoke
+    ph02a.project_hub_selection_ux
+    ph02b.project_hub_recent_availability
+    ph02b.project_hub_availability_ux
+    ph02c.project_creation_workflow
+    ph02c.project_creation_dialog
+    part01.document_primitives
+    part01.part_document_transaction
+    part01.part_document_store
+    persist01.native_document_container
+    sk01.part_sketch_host
+    part01.document_session
+    part01.document_workspace
+    part01.project_document_lifecycle
+    part01.project_dirty_close
+    wb01.cad_workbench
+    wb01.viewer_camera_state
+    wb01.viewer_navigation
+    wb01.viewer_reference_presentation
+    wb01.viewer_navigation_mapping
+    wb01.viewer_boundaries
+    wb01.builtin_reference
+    wb01.workbench_shell_boundaries
+    ws01.project_workspace_boundaries
+    wb01.viewer_selection
+    wb01.viewer_native_smoke
+    wb01a.workspace_directory
+    wb01a.document_dialog_ux
+    wb01a.workbench_document_dialog_integration
+    sk01.workbench_sketch_host
+    sk02a.shared_2d_core
+    sk02a.shared_2d_boundaries
+    sk02b.part_sketch_model
+    sk02b.sketch_entity_lifecycle
+    sk02b.part_sketch_persistence
+    sk03a.viewer_sketch_contracts
+    sk03a.sketch_viewport_mapping
+    sk03a.part_viewport_controller
+    sk03a.viewer_native_input
+    sk04a.sketch_interaction_state
+    sk04a.batch_delete
+    sk04a.line_commit_protocol
+    sk04b.viewer_selection_query_contracts
+    sk04b.part_viewport_selection_bridge
+    sk04b.viewer_native_selection_query
+    sk04c.part_sketch_interaction_controller
+    wb01b.navigation_cube_semantics
+    wb01b.navigation_cube_native
+    sk05a.direct_manipulation_state
+    sk05a.line_geometry_command
+    sk05a.part_sketch_direct_manipulation
+)
+set_property(TEST ${_ss2_fast_tests} APPEND PROPERTY LABELS "tier-fast")
+set_property(TEST wb01a.workbench_native_stress APPEND PROPERTY LABELS
+    "tier-full-only" "native" "stress"
+)
+
+set(_ss2_sketch_tests
+    sk01.part_sketch_host
+    sk01.workbench_sketch_host
+    sk02a.shared_2d_core
+    sk02a.shared_2d_boundaries
+    sk02b.part_sketch_model
+    sk02b.sketch_entity_lifecycle
+    sk02b.part_sketch_persistence
+    sk03a.viewer_sketch_contracts
+    sk03a.sketch_viewport_mapping
+    sk03a.part_viewport_controller
+    sk03a.viewer_native_input
+    sk04a.sketch_interaction_state
+    sk04a.batch_delete
+    sk04a.line_commit_protocol
+    sk04b.viewer_selection_query_contracts
+    sk04b.part_viewport_selection_bridge
+    sk04b.viewer_native_selection_query
+    sk04c.part_sketch_interaction_controller
+    sk05a.direct_manipulation_state
+    sk05a.line_geometry_command
+    sk05a.part_sketch_direct_manipulation
+)
+set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
+
+set(_ss2_project_tests
+    ph01.project_workspace_metadata
+    ph01.project_session
+    ph01.recent_project_store
+    ph01.project_hub_lifecycle
+    ph01.app_smoke
+    ph02a.project_hub_selection_ux
+    ph02b.project_hub_recent_availability
+    ph02b.project_hub_availability_ux
+    ph02c.project_creation_workflow
+    ph02c.project_creation_dialog
+    ws01.project_workspace_boundaries
+    wb01a.workspace_directory
+    part01.project_document_lifecycle
+    part01.project_dirty_close
+    wb01a.workbench_document_dialog_integration
+)
+set_property(TEST ${_ss2_project_tests} APPEND PROPERTY LABELS "subsystem-project")
+
+set(_ss2_part_tests
+    part01.document_primitives
+    part01.part_document_transaction
+    part01.part_document_store
+    part01.document_session
+    part01.document_workspace
+    part01.project_document_lifecycle
+    part01.project_dirty_close
+    sk01.part_sketch_host
+    sk02b.part_sketch_model
+    sk02b.sketch_entity_lifecycle
+    sk02b.part_sketch_persistence
+    sk04a.batch_delete
+    sk04a.line_commit_protocol
+    sk05a.line_geometry_command
+)
+set_property(TEST ${_ss2_part_tests} APPEND PROPERTY LABELS "subsystem-part")
+
+set(_ss2_application_tests
+    ph01.project_workspace_metadata
+    ph01.project_session
+    ph01.recent_project_store
+    ph01.project_hub_lifecycle
+    ph02b.project_hub_recent_availability
+    ph02c.project_creation_workflow
+    part01.document_session
+    part01.document_workspace
+    part01.project_document_lifecycle
+    part01.project_dirty_close
+    wb01a.workspace_directory
+    sk02b.sketch_entity_lifecycle
+    sk02b.part_sketch_persistence
+    sk04a.batch_delete
+    sk04a.line_commit_protocol
+    sk05a.line_geometry_command
+)
+set_property(TEST ${_ss2_application_tests} APPEND PROPERTY LABELS "subsystem-application")
+
+set(_ss2_persistence_tests
+    part01.part_document_store
+    persist01.native_document_container
+    part01.project_document_lifecycle
+    sk02b.part_sketch_persistence
+    sk05a.line_geometry_command
+)
+set_property(TEST ${_ss2_persistence_tests} APPEND PROPERTY LABELS "subsystem-persistence")
+
+set(_ss2_core_tests
+    part01.document_primitives
+    wb01.builtin_reference
+    wb01.viewer_boundaries
+    wb01.workbench_shell_boundaries
+    ws01.project_workspace_boundaries
+    sk02a.shared_2d_boundaries
+)
+set_property(TEST ${_ss2_core_tests} APPEND PROPERTY LABELS "subsystem-core")
+
+set(_ss2_viewer_tests
+    wb01.viewer_camera_state
+    wb01.viewer_navigation
+    wb01.viewer_reference_presentation
+    wb01.viewer_navigation_mapping
+    wb01.viewer_boundaries
+    wb01.viewer_selection
+    wb01.viewer_native_smoke
+    wb01b.navigation_cube_semantics
+    wb01b.navigation_cube_native
+    sk03a.viewer_sketch_contracts
+    sk03a.sketch_viewport_mapping
+    sk03a.part_viewport_controller
+    sk03a.viewer_native_input
+    sk04b.viewer_selection_query_contracts
+    sk04b.part_viewport_selection_bridge
+    sk04b.viewer_native_selection_query
+    sk04c.part_sketch_interaction_controller
+    sk05a.part_sketch_direct_manipulation
+)
+set_property(TEST ${_ss2_viewer_tests} APPEND PROPERTY LABELS "subsystem-viewer")
+
+set(_ss2_ui_tests
+    ph02a.project_hub_selection_ux
+    ph02b.project_hub_availability_ux
+    ph02c.project_creation_dialog
+    wb01.cad_workbench
+    wb01.workbench_shell_boundaries
+    wb01a.document_dialog_ux
+    wb01a.workbench_document_dialog_integration
+    sk01.workbench_sketch_host
+    sk03a.part_viewport_controller
+    sk04b.part_viewport_selection_bridge
+    sk04c.part_sketch_interaction_controller
+    sk05a.part_sketch_direct_manipulation
+)
+set_property(TEST ${_ss2_ui_tests} APPEND PROPERTY LABELS "subsystem-ui")
+
+set(_ss2_native_tests
+    wb01.viewer_native_smoke
+    wb01a.workbench_native_stress
+    sk03a.viewer_native_input
+    sk04b.viewer_native_selection_query
+    wb01b.navigation_cube_native
+)
+set_property(TEST ${_ss2_native_tests} APPEND PROPERTY LABELS "native")
+
+# Production UI implementation is compiled once in src/simplesolid2_ui and linked here.
+set(_ss2_ui_test_targets
+    ph02a_project_hub_selection_ux_test
+    ph02b_project_hub_availability_ux_test
+    ph02c_project_creation_dialog_test
+    wb01_cad_workbench_test
+    wb01a_workbench_native_stress_test
+    wb01a_document_dialog_ux_test
+    wb01a_workbench_document_dialog_integration_test
+    sk01_workbench_sketch_host_test
+    sk03a_part_viewport_controller_test
+    sk04b_part_viewport_selection_bridge_test
+    sk04c_part_sketch_interaction_controller_test
+    sk05a_part_sketch_direct_manipulation_test
+)
+foreach(_target IN LISTS _ss2_ui_test_targets)
+    target_link_libraries(${_target} PRIVATE simplesolid2_ui)
+endforeach()
