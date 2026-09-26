@@ -443,6 +443,47 @@ bool PartViewportController::setSketchArcPreview(
     return !lines.empty() && setSketchPreview(lines);
 }
 
+bool PartViewportController::setSketchGeometryPreview(
+    const sketch::DirectManipulationGeometry& geometry) {
+    if (geometry.empty()) return false;
+
+    std::vector<SketchPreviewLine2D> lines;
+    lines.reserve(
+        geometry.lines.size() +
+        geometry.circles.size() * 96U +
+        geometry.arcs.size() * 48U);
+
+    for (const auto& line : geometry.lines) {
+        lines.push_back({line.start, line.end});
+    }
+
+    for (const auto& circle : geometry.circles) {
+        const auto segments = curveSegments(
+            circle.center,
+            circle.radius,
+            0.0,
+            2.0 * std::numbers::pi_v<double>);
+        if (segments.empty()) return false;
+        for (const auto& segment : segments) {
+            lines.push_back({segment.start, segment.end});
+        }
+    }
+
+    for (const auto& arc : geometry.arcs) {
+        const auto segments = curveSegments(
+            arc.center,
+            arc.radius,
+            arc.start_angle,
+            arc.sweep_angle);
+        if (segments.empty()) return false;
+        for (const auto& segment : segments) {
+            lines.push_back({segment.start, segment.end});
+        }
+    }
+
+    return setSketchPreview(lines);
+}
+
 void PartViewportController::clearSketchPreview() {
     if (viewport_ != nullptr) {
         static_cast<void>(
