@@ -11,7 +11,7 @@ param(
 
     [ValidateSet("fast","subsystem","full")]
     [string]$Tier = "full",
-    [string]$Subsystem = "",
+    [string[]]$Subsystem = @(),
     [switch]$NoBuild,
     [switch]$ListOnly,
     [switch]$SelfTest
