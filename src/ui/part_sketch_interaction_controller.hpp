@@ -31,6 +31,8 @@ public:
     [[nodiscard]] std::optional<sketch::LineStage>
     lineStage() const noexcept;
     [[nodiscard]] std::size_t selectedCount() const noexcept;
+    [[nodiscard]] bool directManipulationActive()
+        const noexcept;
 
     void activateSelect();
     void activateLine();
@@ -39,6 +41,7 @@ public:
     [[nodiscard]] bool escape();
 
     [[nodiscard]] bool deleteSelection();
+    [[nodiscard]] bool commitDirectManipulation();
 
     void cancelForHistory();
     [[nodiscard]] bool reconcileAfterHistory();
@@ -62,7 +65,14 @@ private:
     void handleSelectPointer(const SketchPointerInput& input);
     void handleLinePointer(const SketchPointerInput& input);
     void updateRectangleOverlay(viewer::ViewportPoint2 current);
+    void updateHover(viewer::ViewportPoint2 point);
+    [[nodiscard]] bool beginDirectManipulation(
+        sketch::LineGripRef grip);
+    void updateDirectManipulationPreview(
+        sketch::Point2 raw_input);
+
     void projectSelection();
+    void projectInteraction();
     void configureForCurrentTool();
     void notifyStateChanged();
     void reportStatus(std::string message);
@@ -74,6 +84,8 @@ private:
 
     std::optional<viewer::ViewportPoint2> press_anchor_;
     bool rectangle_drag_active_{};
+    std::optional<core::DocumentRevision>
+        manipulation_revision_;
 
     StateChangedHandler state_changed_handler_;
     StatusHandler status_handler_;

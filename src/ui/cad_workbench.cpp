@@ -1298,7 +1298,20 @@ bool CadWorkbench::eventFilter(
                 if (sketch_interaction_controller_->escape()) {
                     status_->setText(
                         QStringLiteral(
-                            "Sketch tool stage cancelled."));
+                            "Sketch interaction cancelled."));
+                }
+                return true;
+            }
+
+            if ((key_event->key() == Qt::Key_Return ||
+                 key_event->key() == Qt::Key_Enter) &&
+                sketch_interaction_controller_->
+                    directManipulationActive()) {
+                if (sketch_interaction_controller_->
+                        commitDirectManipulation()) {
+                    status_->setText(
+                        QStringLiteral(
+                            "Sketch edit committed."));
                 }
                 return true;
             }

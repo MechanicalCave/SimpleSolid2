@@ -40,6 +40,20 @@ struct SketchEntityPointQueryResult final {
     std::optional<SketchEntityAddress> hit;
 };
 
+struct SketchGripAddress final {
+    sketch::SketchId sketch_id;
+    sketch::LineGripRef grip;
+
+    friend bool operator==(
+        const SketchGripAddress&,
+        const SketchGripAddress&) = default;
+};
+
+struct SketchGripPointQueryResult final {
+    bool completed{};
+    std::optional<SketchGripAddress> hit;
+};
+
 struct SketchEntityRectangleQueryResult final {
     bool completed{};
     std::vector<SketchEntityAddress> hits;
@@ -94,6 +108,10 @@ public:
     querySketchEntityAt(
         viewer::ViewportPoint2 point);
 
+    [[nodiscard]] SketchGripPointQueryResult
+    querySketchGripAt(
+        viewer::ViewportPoint2 point);
+
     [[nodiscard]] SketchEntityRectangleQueryResult
     querySketchEntities(
         const viewer::ViewportRect2& rectangle,
@@ -121,6 +139,13 @@ public:
     [[nodiscard]] bool projectSketchEntitySelection(
         const std::vector<sketch::EntityId>& selected,
         std::optional<sketch::EntityId> primary);
+
+    [[nodiscard]] bool projectSketchInteraction(
+        const std::vector<sketch::EntityId>& selected,
+        std::optional<sketch::EntityId> hovered_entity,
+        std::optional<sketch::LineGripRef> hovered_grip,
+        std::optional<sketch::LineGripRef> active_grip,
+        bool grips_visible);
 
     void setSelectionChangedHandler(
         SelectionChangedHandler handler) {
