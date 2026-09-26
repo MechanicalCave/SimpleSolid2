@@ -54,6 +54,32 @@ const Line* SketchModel::findLine(
         : &*found;
 }
 
+bool SketchModel::updateLine(
+    EntityId id,
+    Point2 start,
+    Point2 end) noexcept {
+    if (!id.valid() ||
+        !start.finite() ||
+        !end.finite() ||
+        start == end) {
+        return false;
+    }
+
+    const auto found = std::find_if(
+        lines_.begin(),
+        lines_.end(),
+        [id](const Line& line) {
+            return line.id() == id;
+        });
+
+    if (found == lines_.end()) {
+        return false;
+    }
+
+    *found = Line{id, start, end};
+    return true;
+}
+
 bool SketchModel::erase(
     EntityId id) noexcept {
     if (!id.valid()) {

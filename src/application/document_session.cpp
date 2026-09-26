@@ -355,6 +355,78 @@ DocumentSessionResult DocumentSession::execute(
         "Part transaction failed while erasing Sketch entities");
 }
 
+DocumentSessionResult DocumentSession::execute(
+    const UpdateSketchLinesCommand& command) {
+    if (command.lines.empty()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Update Sketch Lines requires at least one Line",
+            path_);
+    }
+
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Update Sketch Lines was started from a stale DocumentRevision",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Update Sketch Lines target SketchId does not exist",
+            path_);
+    }
+
+    std::set<sketch::EntityId> unique;
+    for (const auto& line : command.lines) {
+        if (!line.entity_id.valid() ||
+            !line.start.finite() ||
+            !line.end.finite() ||
+            line.start == line.end) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Update Sketch Lines contains invalid authored geometry",
+                path_);
+        }
+
+        if (!unique.insert(line.entity_id).second) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Update Sketch Lines contains duplicate EntityIds",
+                path_);
+        }
+
+        if (target->model.findLine(
+                line.entity_id) == nullptr) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Update Sketch Lines target EntityId does not exist",
+                path_);
+        }
+    }
+
+    for (const auto& line : command.lines) {
+        if (!target->model.updateLine(
+                line.entity_id,
+                line.start,
+                line.end)) {
+            return failure(
+                DocumentSessionErrorCode::transaction_failure,
+                "Update Sketch Lines validation diverged before commit",
+                path_);
+        }
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while updating Sketch Lines");
+}
+
 DocumentSessionResult DocumentSession::applyHistoricalState(
     const part::PartAuthoredState& expected_current,
     const part::PartAuthoredState& target) {

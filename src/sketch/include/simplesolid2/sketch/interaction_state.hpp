@@ -50,6 +50,50 @@ struct LinePointResult final {
     std::optional<LineSegmentIntent> request;
 };
 
+enum class LineHandleRole : std::uint8_t {
+    start,
+    center,
+    end,
+};
+
+enum class DirectEditMode : std::uint8_t {
+    reshape,
+    move,
+};
+
+struct LineGripRef final {
+    EntityId entity_id;
+    LineHandleRole role{LineHandleRole::center};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return entity_id.valid();
+    }
+
+    friend bool operator==(
+        const LineGripRef&,
+        const LineGripRef&) = default;
+};
+
+struct ResolvedSketchInput final {
+    Point2 position;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return position.finite();
+    }
+
+    friend bool operator==(
+        const ResolvedSketchInput&,
+        const ResolvedSketchInput&) = default;
+};
+
+[[nodiscard]] inline std::optional<ResolvedSketchInput>
+resolveSketchInput(Point2 raw) noexcept {
+    if (!raw.finite()) {
+        return std::nullopt;
+    }
+    return ResolvedSketchInput{raw};
+}
+
 class SketchInteractionState final {
 public:
     [[nodiscard]] SketchTool tool() const noexcept {
@@ -101,11 +145,20 @@ public:
         return primary_;
     }
 
+    [[nodiscard]] bool addSelection(
+        EntityId id);
+
+    [[nodiscard]] bool addSelection(
+        std::vector<EntityId> ids);
+
     [[nodiscard]] bool replaceSelection(
         EntityId id);
 
     [[nodiscard]] bool toggleSelection(
         EntityId id);
+
+    [[nodiscard]] bool toggleSelection(
+        std::vector<EntityId> ids);
 
     void clearSelection() noexcept;
 
@@ -116,7 +169,66 @@ public:
     void reconcileSelection(
         const SketchModel& model);
 
+    [[nodiscard]] std::optional<EntityId>
+    hoveredEntity() const noexcept {
+        return hovered_entity_;
+    }
+
+    [[nodiscard]] std::optional<LineGripRef>
+    hoveredGrip() const noexcept {
+        return hovered_grip_;
+    }
+
+    [[nodiscard]] bool setHoveredEntity(
+        std::optional<EntityId> entity) noexcept;
+
+    [[nodiscard]] bool setHoveredGrip(
+        std::optional<LineGripRef> grip) noexcept;
+
+    void clearHover() noexcept;
+
+    [[nodiscard]] bool directManipulationActive()
+        const noexcept {
+        return manipulation_.has_value();
+    }
+
+    [[nodiscard]] std::optional<LineGripRef>
+    activeGrip() const noexcept;
+
+    [[nodiscard]] std::optional<DirectEditMode>
+    directEditMode() const noexcept;
+
+    [[nodiscard]] bool beginDirectManipulation(
+        const SketchModel& model,
+        LineGripRef grip);
+
+    [[nodiscard]] bool updateDirectManipulation(
+        ResolvedSketchInput input) noexcept;
+
+    [[nodiscard]] std::optional<
+        std::vector<SketchLineState>>
+    directManipulationGeometry() const;
+
+    void finishDirectManipulation() noexcept;
+    void cancelDirectManipulation() noexcept;
+
 private:
+    struct DirectManipulationSession final {
+        LineGripRef active_grip;
+        DirectEditMode mode{DirectEditMode::reshape};
+        std::vector<EntityId> selection_snapshot;
+        std::vector<SketchLineState> initial_geometry;
+        Point2 pivot;
+        ResolvedSketchInput current_input;
+    };
+
+    [[nodiscard]] std::optional<EntityId>
+    deterministicPrimary() const noexcept;
+
+    [[nodiscard]] bool selectionMutable() const noexcept {
+        return !manipulation_.has_value();
+    }
+
     void resetLineToSelect() noexcept;
     void resetLineStage() noexcept;
 
@@ -129,6 +241,9 @@ private:
 
     std::vector<EntityId> selected_;
     std::optional<EntityId> primary_;
+    std::optional<EntityId> hovered_entity_;
+    std::optional<LineGripRef> hovered_grip_;
+    std::optional<DirectManipulationSession> manipulation_;
 };
 
 } // namespace simplesolid2::sketch

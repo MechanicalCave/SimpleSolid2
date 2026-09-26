@@ -37,6 +37,11 @@ public:
     [[nodiscard]] const Line* findLine(
         EntityId id) const noexcept;
 
+    [[nodiscard]] bool updateLine(
+        EntityId id,
+        Point2 start,
+        Point2 end) noexcept;
+
     [[nodiscard]] bool erase(
         EntityId id) noexcept;
 
