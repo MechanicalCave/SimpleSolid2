@@ -989,6 +989,10 @@ void CadWorkbench::finishSketchLine() {
         status_->setText(
             QStringLiteral("Arc finished — Select active."));
         break;
+    case sketch::SketchTool::move:
+        status_->setText(
+            QStringLiteral("Move finished — Select active."));
+        break;
     case sketch::SketchTool::select:
         break;
     }
@@ -1018,6 +1022,10 @@ void CadWorkbench::cancelSketchLine() {
         status_->setText(
             QStringLiteral(
                 "Arc cancelled — committed arcs preserved."));
+        break;
+    case sketch::SketchTool::move:
+        status_->setText(
+            QStringLiteral("Move cancelled — selection preserved."));
         break;
     case sketch::SketchTool::select:
         break;
