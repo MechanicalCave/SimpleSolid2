@@ -22,7 +22,9 @@
 #include <Graphic3d_VerticalTextAlignment.hxx>
 #include <Graphic3d_Vec2.hxx>
 #include <Graphic3d_ZLayerId.hxx>
+#include <NCollection_HArray1.hxx>
 #include <OpenGl_GraphicDriver.hxx>
+#include <Prs3d_PointAspect.hxx>
 #include <Quantity_Color.hxx>
 #include <Standard_Failure.hxx>
 #include <TCollection_ExtendedString.hxx>
@@ -66,6 +68,65 @@ void logProviderFailure(
         << operation
         << ":"
         << (message != nullptr ? message : "<no message>");
+}
+
+[[nodiscard]] occ::handle<NCollection_HArray1<std::uint8_t>>
+squareMarkerBitmap(
+    int size,
+    bool filled) {
+    if (size < 3) {
+        size = 3;
+    }
+
+    const int bytes_per_row =
+        (size + 7) / 8;
+    const int byte_count =
+        bytes_per_row * size;
+
+    occ::handle<NCollection_HArray1<std::uint8_t>>
+        bitmap =
+            new NCollection_HArray1<std::uint8_t>(
+                0,
+                byte_count - 1);
+    bitmap->Init(0U);
+
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const bool set =
+                filled ||
+                x == 0 ||
+                y == 0 ||
+                x == size - 1 ||
+                y == size - 1;
+            if (!set) continue;
+
+            const int index =
+                y * bytes_per_row +
+                x / 8;
+            const auto bit =
+                static_cast<std::uint8_t>(
+                    0x80U >> (x % 8));
+            bitmap->ChangeValue(index) =
+                static_cast<std::uint8_t>(
+                    bitmap->Value(index) |
+                    bit);
+        }
+    }
+
+    return bitmap;
+}
+
+[[nodiscard]] int gripMarkerPixelSize(
+    double logical_size,
+    double dpr) noexcept {
+    const auto raw =
+        static_cast<int>(
+            std::lround(logical_size * dpr));
+    int size = std::clamp(raw, 5, 31);
+    if ((size % 2) == 0) {
+        ++size;
+    }
+    return size;
 }
 
 template <typename Function>
@@ -1069,6 +1130,7 @@ public:
         }
 
         clearSketchGripScene();
+        ensureSketchGripAspects();
 
         try {
             for (const auto& grip : scene.grips) {
@@ -1077,13 +1139,16 @@ public:
                         toPoint(grip.position));
                 Handle(AIS_Point) object =
                     new AIS_Point(point);
+                object->Attributes()->SetPointAspect(
+                    sketch_grip_idle_aspect_);
 
                 context_->Display(object, false);
                 context_->Deactivate(object);
                 sketch_grip_objects_.push_back(
                     SketchGripObject{
                         grip.key,
-                        object});
+                        object,
+                        SketchGripVisualState::idle});
             }
 
             sketch_grip_scene_ = scene;
@@ -1877,7 +1942,9 @@ public:
 
     struct SketchGripObject final {
         viewer::SketchGripKey key;
-        Handle(AIS_InteractiveObject) object;
+        Handle(AIS_Point) object;
+        SketchGripVisualState visual_state{
+            SketchGripVisualState::idle};
     };
 
     [[nodiscard]] static gp_Pnt toPoint(
@@ -2247,10 +2314,77 @@ public:
         }
     }
 
+    enum class SketchGripVisualState
+        : std::uint8_t {
+        idle,
+        hovered,
+        active,
+    };
+
+    [[nodiscard]] bool ensureSketchGripAspects() {
+        double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            dpr = 1.0;
+        }
+
+        if (sketch_grip_aspect_dpr_ == dpr &&
+            !sketch_grip_idle_aspect_.IsNull() &&
+            !sketch_grip_hover_aspect_.IsNull() &&
+            !sketch_grip_active_aspect_.IsNull()) {
+            return false;
+        }
+
+        const int idle_size =
+            gripMarkerPixelSize(7.0, dpr);
+        const int hover_size =
+            gripMarkerPixelSize(8.0, dpr);
+        const int active_size =
+            gripMarkerPixelSize(9.0, dpr);
+
+        sketch_grip_idle_aspect_ =
+            new Prs3d_PointAspect(
+                Quantity_Color{
+                    1.0, 0.63, 0.18,
+                    Quantity_TOC_RGB},
+                idle_size,
+                idle_size,
+                squareMarkerBitmap(
+                    idle_size,
+                    false));
+        sketch_grip_hover_aspect_ =
+            new Prs3d_PointAspect(
+                Quantity_Color{
+                    0.22, 0.82, 0.96,
+                    Quantity_TOC_RGB},
+                hover_size,
+                hover_size,
+                squareMarkerBitmap(
+                    hover_size,
+                    false));
+        sketch_grip_active_aspect_ =
+            new Prs3d_PointAspect(
+                Quantity_Color{
+                    1.0, 0.90, 0.25,
+                    Quantity_TOC_RGB},
+                active_size,
+                active_size,
+                squareMarkerBitmap(
+                    active_size,
+                    true));
+
+        sketch_grip_aspect_dpr_ = dpr;
+        return true;
+    }
+
     void applySketchInteractionStyles() {
         if (context_.IsNull()) return;
 
-        for (const auto& entry :
+        const bool aspect_changed =
+            ensureSketchGripAspects();
+
+        for (auto& entry :
              sketch_grip_objects_) {
             if (entry.object.IsNull()) continue;
 
@@ -2265,24 +2399,33 @@ public:
                 *sketch_interaction_presentation_.
                     hovered_grip == entry.key;
 
-            context_->SetColor(
-                entry.object,
+            const auto next_state =
                 active
-                    ? Quantity_Color{
-                          1.0, 0.90, 0.25,
-                          Quantity_TOC_RGB}
+                    ? SketchGripVisualState::active
                     : hovered
-                        ? Quantity_Color{
-                              0.22, 0.82, 0.96,
-                              Quantity_TOC_RGB}
-                        : Quantity_Color{
-                              1.0, 0.63, 0.18,
-                              Quantity_TOC_RGB},
-                false);
-            context_->SetWidth(
+                        ? SketchGripVisualState::hovered
+                        : SketchGripVisualState::idle;
+
+            if (!aspect_changed &&
+                next_state == entry.visual_state) {
+                continue;
+            }
+
+            const auto& aspect =
+                next_state ==
+                        SketchGripVisualState::active
+                    ? sketch_grip_active_aspect_
+                    : next_state ==
+                              SketchGripVisualState::hovered
+                        ? sketch_grip_hover_aspect_
+                        : sketch_grip_idle_aspect_;
+
+            entry.object->Attributes()->
+                SetPointAspect(aspect);
+            context_->Redisplay(
                 entry.object,
-                active ? 5.0 : (hovered ? 4.0 : 3.0),
                 false);
+            entry.visual_state = next_state;
         }
     }
 
@@ -2291,6 +2434,7 @@ public:
         const auto native_window = view_->Window();
         if (!native_window.IsNull()) native_window->DoResize();
         view_->MustBeResized();
+        applySketchInteractionStyles();
         view_->Redraw();
     }
 
@@ -2395,6 +2539,13 @@ private:
     std::vector<SketchObject> sketch_objects_;
     std::vector<SketchGripObject>
         sketch_grip_objects_;
+    double sketch_grip_aspect_dpr_{};
+    occ::handle<Prs3d_PointAspect>
+        sketch_grip_idle_aspect_;
+    occ::handle<Prs3d_PointAspect>
+        sketch_grip_hover_aspect_;
+    occ::handle<Prs3d_PointAspect>
+        sketch_grip_active_aspect_;
     std::vector<Handle(AIS_InteractiveObject)>
         sketch_preview_objects_;
     Handle(AIS_InteractiveObject)
