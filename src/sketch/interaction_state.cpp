@@ -243,6 +243,15 @@ SketchInteractionState::arcStage() const noexcept {
         : std::nullopt;
 }
 
+std::optional<MoveStage>
+SketchInteractionState::moveStage() const noexcept {
+    return tool_ == SketchTool::move &&
+                   move_session_
+        ? std::optional<MoveStage>{
+              move_session_->stage}
+        : std::nullopt;
+}
+
 void SketchInteractionState::activateLine() noexcept {
     manipulation_.reset();
     resetMoveStage();
@@ -271,6 +280,132 @@ void SketchInteractionState::activateArc() noexcept {
     resetLineStage();
     resetCircleStage();
     resetArcStage();
+}
+
+bool SketchInteractionState::activateMove(
+    const SketchModel& model) {
+    manipulation_.reset();
+    clearHover();
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+
+    MoveSession session;
+    if (selected_.empty()) {
+        session.stage = MoveStage::select_objects;
+        tool_ = SketchTool::move;
+        move_session_ = std::move(session);
+        return true;
+    }
+
+    const auto geometry =
+        captureSketchTransformGeometry(
+            model,
+            selected_);
+    if (!geometry) {
+        resetToSelect();
+        return false;
+    }
+
+    session.stage = MoveStage::await_base_point;
+    session.selection_snapshot = selected_;
+    session.initial_geometry = *geometry;
+    tool_ = SketchTool::move;
+    move_session_ = std::move(session);
+    return true;
+}
+
+bool SketchInteractionState::completeMoveSelection(
+    const SketchModel& model) {
+    if (tool_ != SketchTool::move ||
+        !move_session_ ||
+        move_session_->stage !=
+            MoveStage::select_objects ||
+        selected_.empty()) {
+        return false;
+    }
+
+    const auto geometry =
+        captureSketchTransformGeometry(
+            model,
+            selected_);
+    if (!geometry) {
+        return false;
+    }
+
+    move_session_->selection_snapshot = selected_;
+    move_session_->initial_geometry = *geometry;
+    move_session_->base_point.reset();
+    move_session_->current_destination.reset();
+    move_session_->stage =
+        MoveStage::await_base_point;
+    clearHover();
+    return true;
+}
+
+bool SketchInteractionState::acceptMoveBasePoint(
+    ResolvedSketchInput input) noexcept {
+    if (tool_ != SketchTool::move ||
+        !move_session_ ||
+        move_session_->stage !=
+            MoveStage::await_base_point ||
+        !input.valid() ||
+        move_session_->selection_snapshot.empty() ||
+        move_session_->initial_geometry.empty()) {
+        return false;
+    }
+
+    move_session_->base_point = input.position;
+    move_session_->current_destination = input;
+    move_session_->stage =
+        MoveStage::await_destination;
+    clearHover();
+    return true;
+}
+
+bool SketchInteractionState::updateMoveDestination(
+    ResolvedSketchInput input) noexcept {
+    if (tool_ != SketchTool::move ||
+        !move_session_ ||
+        move_session_->stage !=
+            MoveStage::await_destination ||
+        !move_session_->base_point ||
+        !input.valid()) {
+        return false;
+    }
+
+    move_session_->current_destination = input;
+    return true;
+}
+
+std::optional<SketchTransformGeometry>
+SketchInteractionState::moveGeometryState() const {
+    if (tool_ != SketchTool::move ||
+        !move_session_ ||
+        move_session_->stage !=
+            MoveStage::await_destination ||
+        !move_session_->base_point ||
+        !move_session_->current_destination) {
+        return std::nullopt;
+    }
+
+    const Point2 delta{
+        move_session_->current_destination->position.u -
+            move_session_->base_point->u,
+        move_session_->current_destination->position.v -
+            move_session_->base_point->v};
+
+    return translateSketchGeometry(
+        move_session_->initial_geometry,
+        delta);
+}
+
+void SketchInteractionState::finishMove() noexcept {
+    if (tool_ != SketchTool::move) {
+        return;
+    }
+    resetToSelect();
+    clearHover();
 }
 
 LinePointResult
@@ -627,6 +762,7 @@ bool SketchInteractionState::escape() noexcept {
 
 void SketchInteractionState::cancelForHistory() noexcept {
     manipulation_.reset();
+    resetMoveStage();
     clearHover();
     resetToSelect();
 }
@@ -1235,6 +1371,11 @@ void SketchInteractionState::resetArcStage()
     arc_start_.reset();
     arc_through_.reset();
     pending_arc_request_.reset();
+}
+
+void SketchInteractionState::resetMoveStage()
+    noexcept {
+    move_session_.reset();
 }
 
 } // namespace simplesolid2::sketch
