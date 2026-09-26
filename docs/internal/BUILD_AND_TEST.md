@@ -48,18 +48,18 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains **58 tests**.
+The compiled CTest suite contains **60 tests**.
 
-All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. In particular, the native selection-query test still exercises real Qt/OCCT grip lifecycle/hit testing before and after camera orbit, while the long native Workbench stress test remains FULL-only.
+All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
-SK-06A adds:
+SK-07A adds:
 
-- `sk06a.circle_arc_model_persistence` — mixed Line/Circle/Arc model identity, canonical validation, semantic add/update/delete/history, schema-v4 persistence, Save/load identity preservation and malformed unknown-kind rejection;
-- `sk06a.circle_arc_interaction_state` — Circle Center+Radius and Arc Start/Through/End state/preview semantics, CW/CCW and short/long Arc canonicalization, duplicate/collinear failure, mixed frozen-selection Move and owner-only Circle/Arc reshape invariants.
+- `sk07a.transform_core` — provider-independent mixed Line/Circle/Arc translation, finite validation, identity/parameter preservation, frozen capture and parity with Center-grip Move;
+- `sk07a.move_controller` — selection-first and command-first MOVE lifecycle, Base Point/destination preview, atomic transaction/history semantics, zero-delta no-op, stale revision failure, selection preservation and schema-v4 Save/reload identity preservation.
 
-SK-06A also generalizes existing provider/controller paths so the pre-existing native/query/direct-manipulation tests execute against semantic curve presentation and the DPI-aware state-based square grip implementation.
+The existing `sk01.workbench_sketch_host` regression also covers toolbar and Command-Line MOVE adapters plus text-focus Space behavior.
 
-At exact head `518e8f3a5feb56a04d2c2067553d8697e02ceadf`, Windows FULL #440 passed Build and **58/58** unfiltered CTest tests. In that run `tier-fast` contained 57 tests; the long native Workbench stress test remained the sole `tier-full-only` test.
+At exact runtime head `bb218f8d9cff1c1c2ffc45e091a69c485190e97e`, Windows FULL #475 passed Build and **60/60** unfiltered CTest tests. `tier-fast` contained 59 tests; `wb01a.workbench_native_stress` remained the sole long FULL-only test.
 
 Repository documentation validation runs outside CTest through `ss2 verify`. Tests must not be weakened to obtain a pass.
 

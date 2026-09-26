@@ -45,7 +45,7 @@ PartViewportController owns document-scoped built-in-reference selection, while 
 
 Qt/OCCT picking/query surfaces emit only runtime `PresentationToken` values. The controller maps Sketch tokens immediately to `SketchId + EntityId`; provider object identity and presentation tokens never enter authored CAD state.
 
-During Sketch Select the grammar is shared by Line/Circle/Arc:
+Ordinary Sketch Select keeps the established Line/Circle/Arc grammar:
 
 ```text
 Left click unselected entity → add it and make it primary
@@ -60,14 +60,13 @@ Esc in Select                → clear selection
 Middle drag                  → Pan
 Shift + Middle drag          → Orbit
 Mouse wheel                  → Zoom
-Right click                  → reserved; controlled no-op
 ```
 
-Rectangle results are canonicalized as semantic EntityIds and provider result order never chooses primary.
+Normal MOVE reuses that same semantic query/selection bridge. Selection-first MOVE freezes an existing non-empty selection immediately. Command-first MOVE starts with an empty selection in Select objects mode: click/Ctrl/Window/Crossing collect entities, blank LMB is a no-op, and Enter/Space/RMB completes collection only when non-empty. Grips are hidden/inactive during normal MOVE stages.
 
-Sketch point/rectangle queries are independent from mutable OCCT selection. Lines are projected as segments; Circle/Arc use deterministic semantic curve presentations tessellated only for runtime drawing/query. Point queries return the nearest eligible semantic token inside bounded screen tolerance. Window requires the projected authored presentation to be fully contained; Crossing accepts intersection/touch/containment. Built-in references, grid, intrinsic Sketch Origin and transient preview are excluded.
+Rectangle results are canonicalized as semantic EntityIds and provider result order never chooses primary. Sketch point/rectangle queries remain independent from mutable OCCT selection.
 
-Pointer routing and cursor mode remain independent runtime axes. Sketch edit uses `spatial_tool_input`; Select projects the pick-box cursor, while Line/Circle/Arc creation and direct edit use the crosshair path. Toolbar, Operations, Command Line and keyboard handlers are adapters to the same interaction authority.
+Pointer routing and cursor mode remain independent runtime axes. Ordinary Select and MOVE object collection use the pick-box cursor; creation tools, MOVE Base Point/destination and direct edit use the crosshair path. Toolbar, Operations, Command Line, keyboard and bounded RMB handling are adapters to the same semantic interaction authority.
 
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
@@ -83,31 +82,26 @@ The production executable creates the concrete Qt/OCCT provider only in the comp
 <!-- section-id: internal.cad-workbench-viewer.sketch-edit -->
 ## Part Sketch host and 3D edit context
 
-SK-01 through SK-05A established durable Sketch hosting, provider-neutral presentation/input, Select/Line interaction and direct manipulation. SK-06A extends that same path with Circle and Arc rather than introducing another editor authority.
+SK-01 through SK-06A established durable Sketch hosting, provider-neutral presentation/input, Line/Circle/Arc creation, selection and direct manipulation. SK-07A adds normal MOVE through the same semantic interaction and transaction path.
 
-In Part modeling the editor toolbar provides `Sketch`. In Sketch edit it provides checkable `Select`, `Line`, `Circle` and `Arc`. Operations remains contextual: Select shows selection/Delete; creation tools show their current point stage plus Finish/Cancel for that tool; `Finish Sketch` exits the entire edit context. The compact Command Line below the viewport accepts `SELECT`, `LINE`, `CIRCLE` and `ARC`.
+In Part modeling the editor toolbar provides `Sketch`. In Sketch edit it provides checkable `Select`, `Line`, `Circle`, `Arc` and `Move`. The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC` and `MOVE`.
 
-Sketch creation still supports only XY/XZ/YZ built-in Origin planes and runs through `CreatePartSketchCommand`, DocumentSession and a Part transaction. Entering edit aligns the initial camera/grid to the Sketch frame without locking later Pan/Zoom/Orbit/ViewCube navigation.
+Creation behavior is unchanged. For MOVE:
 
-The active Sketch authored scene now presents Line/Circle/Arc plus the intrinsic runtime Origin marker. Circle and Arc are canonical semantic entities; runtime tessellation exists only in presentation/preview.
+- selection-first: activate Move with a non-empty semantic selection and immediately enter Specify Base Point;
+- command-first: activate Move with empty selection, collect objects by point/Ctrl/Window/Crossing, then Enter/Space/RMB to continue;
+- Base Point: accept any finite resolved Sketch-local point without authored mutation;
+- destination: preview the frozen mixed Line/Circle/Arc set using one delta `destination - base`;
+- LMB or Enter commits a valid destination; Esc cancels and preserves the affected selection;
+- zero-delta completion returns to Select without revision, dirty-state or history change.
 
-Creation adapters use the same resolved-input seam:
+The provider-independent translation core is shared by normal MOVE and Center-grip Move. Center grips still move the complete frozen selection using the grip start as implicit base. Owner-only reshape semantics for Line/Circle/Arc are unchanged.
 
-- Line: continuous first/next point;
-- Circle: Center then Radius; exact zero radius creates no command;
-- Arc: Start, Through, End; duplicate/collinear/invalid triples create no command.
+A non-zero accepted MOVE executes one semantic `UpdateSketchGeometryCommand`, validates the captured revision and all frozen EntityIds, stages one Part state, commits atomically, increments revision once and creates one Undo entry. EntityIds are preserved. Undo/Redo first cancels transient MOVE/direct manipulation, then runs ordinary DocumentSession history and reconciles surviving semantic selection.
 
-Each successful primitive creation executes one semantic add command, creates one fresh EntityId, one revision change and one Undo entry. The tool remains active for the next primitive. Pre-existing selection remains stored while creation tools hide/deactivate grips; newly created geometry is not auto-selected.
+Switching tools or Documents clears uncommitted MOVE state safely. Save/Close/Reopen uses unchanged Part schema v4; moved canonical geometry and EntityIds persist without a migration.
 
-Select projects grips for every selected editable entity. All grips use the same state-based square marker language: hollow idle, hollow cyan hover, filled yellow active/captured; marker size is DPI/screen-space aware and hit tolerance is independent from visible pixels. Line exposes Start/Center/End; Circle exposes Center and four quadrants; Arc exposes Center/Start/End/Mid.
-
-Center grips start common Move over the complete frozen mixed selection. Line Start/End, Circle quadrant and Arc Start/End/Mid start owner-only reshape. Preview uses the transient Sketch preview channel and does not change authored state/history. LMB/Enter commits one semantic `UpdateSketchGeometryCommand`; Esc cancels preview while preserving selection. The command validates captured revision and all targeted EntityIds, stages one Part state and commits atomically while preserving edited EntityIds.
-
-Mixed Delete uses one semantic erase command for the selected EntityId set and is all-or-nothing. Undo/Redo first cancels transient creation/manipulation state, then uses ordinary DocumentSession history and reconciles surviving semantic selection against newly rebuilt presentation tokens.
-
-Switching/closing Documents clears runtime edit state safely. If history removes the active Sketch, presentation/preview/grips are cleared and ordinary viewport routing is restored.
-
-Snapping/inference, numeric input, constraints, authored dimensions, R7 common transforms/Copy and broader Sketch support remain later roadmap work.
+Space inside text-entry focus remains text input. SK-07A does not activate Rotate/Scale/Mirror/Copy, semantic Space CycleEditMode, ordinary-Select RMB context or Repeat Last Command.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and provider-surface Navigation Cube
@@ -138,10 +132,10 @@ There is still no modeled Part B-Rep at this milestone; the OCCT provider remain
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, hover, active grip, direct-manipulation session, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select drag state and Command Line text/prompt state are runtime-only.
+Selection, primary selection, hover, active grip, direct-manipulation session, normal MOVE stage/frozen snapshot/Base Point/current destination, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/MOVE drag state and Command Line text/prompt state are runtime-only.
 
-Persistent Origin visibility is authored state and is intentionally separate.
+Persistent Origin visibility and authored Sketch geometry remain separate domain state.
 
-Closing/reopening the application recreates runtime view and selection state while preserving saved visibility in the Part file.
+Closing/reopening the application recreates runtime view/interaction state while preserving saved authored geometry and visibility in the Part file.
 
-The native WB-01A stress regression runs the real Workbench and Qt/OCCT Viewer through 100 iterations combining clicks, empty-space clear, Ctrl-selection, right-click no-op, Show/Hide, Undo/Redo, navigation and repeated narrow/wide resizing.
+The native WB-01A stress regression continues to exercise the real Workbench and Qt/OCCT Viewer through repeated selection, navigation, resizing and lifecycle operations; SK-07A does not create a second provider-owned transform or selection state.
