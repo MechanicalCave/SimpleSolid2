@@ -34,6 +34,8 @@ public:
     circleStage() const noexcept;
     [[nodiscard]] std::optional<sketch::ArcStage>
     arcStage() const noexcept;
+    [[nodiscard]] std::optional<sketch::MoveStage>
+    moveStage() const noexcept;
     [[nodiscard]] std::size_t selectedCount() const noexcept;
     [[nodiscard]] bool directManipulationActive()
         const noexcept;
@@ -44,6 +46,9 @@ public:
     void activateLine();
     void activateCircle();
     void activateArc();
+    [[nodiscard]] bool activateMove();
+    [[nodiscard]] bool completeMoveSelection();
+    [[nodiscard]] bool commitMove();
     void finishLine();
     void cancelLine();
     [[nodiscard]] bool escape();
@@ -74,12 +79,19 @@ private:
     void handleLinePointer(const SketchPointerInput& input);
     void handleCirclePointer(const SketchPointerInput& input);
     void handleArcPointer(const SketchPointerInput& input);
+    void handleMovePointer(const SketchPointerInput& input);
     void updateRectangleOverlay(viewer::ViewportPoint2 current);
     void updateHover(viewer::ViewportPoint2 point);
     [[nodiscard]] bool beginDirectManipulation(
         sketch::SketchGripRef grip);
     void updateDirectManipulationPreview(
         sketch::Point2 raw_input);
+    void updateMovePreview(
+        sketch::Point2 raw_input);
+    [[nodiscard]] application::DocumentSessionResult
+    executeGeometryUpdate(
+        const sketch::SketchTransformGeometry& geometry,
+        core::DocumentRevision expected_revision);
 
     void projectSelection();
     void projectInteraction();
@@ -96,6 +108,8 @@ private:
     bool rectangle_drag_active_{};
     std::optional<core::DocumentRevision>
         manipulation_revision_;
+    std::optional<core::DocumentRevision>
+        move_revision_;
 
     StateChangedHandler state_changed_handler_;
     StatusHandler status_handler_;

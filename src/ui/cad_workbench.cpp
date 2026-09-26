@@ -13,6 +13,7 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QMessageBox>
+#include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -293,6 +294,17 @@ void CadWorkbench::buildUi() {
         4,
         arc_sketch_button_);
 
+    move_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Move"),
+            shell_);
+    move_sketch_button_->setObjectName(
+        QStringLiteral("moveSketchToolButton"));
+    move_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        5,
+        move_sketch_button_);
+
     viewport_controller_ =
         new PartViewportController(
             *tree_controller_,
@@ -348,7 +360,7 @@ void CadWorkbench::buildUi() {
     command_input_->setObjectName(
         QStringLiteral("sketchCommandInput"));
     command_input_->setPlaceholderText(
-        QStringLiteral("SELECT, LINE, CIRCLE or ARC"));
+        QStringLiteral("SELECT, LINE, CIRCLE, ARC or MOVE"));
     command_line_layout->addWidget(command_input_, 1);
     shell_->setCommandLineContent(
         command_line_widget_);
@@ -597,6 +609,11 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchArc(); });
+    QObject::connect(
+        move_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchMove(); });
     QObject::connect(
         cancel_sketch_button_,
         &QPushButton::clicked,
@@ -938,6 +955,18 @@ void CadWorkbench::activateSketchArc() {
     }
 }
 
+void CadWorkbench::activateSketchMove() {
+    if (sketch_interaction_controller_ &&
+        !sketch_interaction_controller_->activateMove()) {
+        status_->setText(
+            QStringLiteral("MOVE could not be activated."));
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
 void CadWorkbench::finishSketchLine() {
     if (!sketch_interaction_controller_) {
         return;
@@ -959,6 +988,10 @@ void CadWorkbench::finishSketchLine() {
     case sketch::SketchTool::arc:
         status_->setText(
             QStringLiteral("Arc finished — Select active."));
+        break;
+    case sketch::SketchTool::move:
+        status_->setText(
+            QStringLiteral("Move finished — Select active."));
         break;
     case sketch::SketchTool::select:
         break;
@@ -989,6 +1022,10 @@ void CadWorkbench::cancelSketchLine() {
         status_->setText(
             QStringLiteral(
                 "Arc cancelled — committed arcs preserved."));
+        break;
+    case sketch::SketchTool::move:
+        status_->setText(
+            QStringLiteral("Move cancelled — selection preserved."));
         break;
     case sketch::SketchTool::select:
         break;
@@ -1026,6 +1063,8 @@ void CadWorkbench::submitSketchCommandLine() {
         activateSketchCircle();
     } else if (command == QStringLiteral("ARC")) {
         activateSketchArc();
+    } else if (command == QStringLiteral("MOVE")) {
+        activateSketchMove();
     } else {
         status_->setText(
             QStringLiteral("Unknown Sketch command."));
@@ -1368,6 +1407,28 @@ bool CadWorkbench::eventFilter(
     QObject* watched,
     QEvent* event) {
     if (event != nullptr &&
+        event->type() == QEvent::MouseButtonPress &&
+        watched == viewport_widget_ &&
+        sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active()) {
+        auto* mouse_event =
+            static_cast<QMouseEvent*>(event);
+        if (mouse_event->button() == Qt::RightButton &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::move &&
+            sketch_interaction_controller_->moveStage() ==
+                sketch::MoveStage::select_objects) {
+            if (sketch_interaction_controller_->
+                    completeMoveSelection()) {
+                status_->setText(
+                    QStringLiteral(
+                        "MOVE objects accepted — specify Base Point."));
+            }
+            return true;
+        }
+    }
+
+    if (event != nullptr &&
         event->type() == QEvent::KeyPress) {
         auto* key_event =
             static_cast<QKeyEvent*>(event);
@@ -1409,6 +1470,36 @@ bool CadWorkbench::eventFilter(
                             "Sketch edit committed."));
                 }
                 return true;
+            }
+
+            if (sketch_interaction_controller_->tool() ==
+                    sketch::SketchTool::move) {
+                const auto stage =
+                    sketch_interaction_controller_->moveStage();
+
+                if ((key_event->key() == Qt::Key_Return ||
+                     key_event->key() == Qt::Key_Enter ||
+                     key_event->key() == Qt::Key_Space) &&
+                    stage ==
+                        sketch::MoveStage::select_objects) {
+                    if (sketch_interaction_controller_->
+                            completeMoveSelection()) {
+                        status_->setText(
+                            QStringLiteral(
+                                "MOVE objects accepted — specify Base Point."));
+                    }
+                    return true;
+                }
+
+                if ((key_event->key() == Qt::Key_Return ||
+                     key_event->key() == Qt::Key_Enter) &&
+                    stage ==
+                        sketch::MoveStage::await_destination) {
+                    static_cast<void>(
+                        sketch_interaction_controller_->
+                            commitMove());
+                    return true;
+                }
             }
         }
     }
@@ -1457,6 +1548,14 @@ void CadWorkbench::syncSketchInteractionUi() {
                 sketch::SketchTool::arc);
     }
 
+    if (move_sketch_button_ != nullptr) {
+        move_sketch_button_->setVisible(editing);
+        move_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::move);
+    }
+
     if (command_line_widget_ != nullptr) {
         command_line_widget_->setVisible(editing);
     }
@@ -1498,6 +1597,40 @@ void CadWorkbench::syncSketchInteractionUi() {
         cancel_line_button_->setVisible(false);
         command_prompt_->setText(
             QStringLiteral("Command: SELECT"));
+        return;
+    }
+
+    if (tool == sketch::SketchTool::move) {
+        delete_selection_button_->setVisible(false);
+        finish_line_button_->setVisible(false);
+        cancel_line_button_->setVisible(false);
+
+        const auto stage =
+            sketch_interaction_controller_->moveStage();
+        if (stage == sketch::MoveStage::select_objects) {
+            operations_placeholder_->setText(
+                QStringLiteral(
+                    "Move — Select objects; Enter/Space/RMB to continue"));
+            command_prompt_->setText(
+                QStringLiteral(
+                    "Command: MOVE — Select objects"));
+        } else if (
+            stage ==
+            sketch::MoveStage::await_destination) {
+            operations_placeholder_->setText(
+                QStringLiteral(
+                    "Move — Specify destination point"));
+            command_prompt_->setText(
+                QStringLiteral(
+                    "Command: MOVE — Specify destination point"));
+        } else {
+            operations_placeholder_->setText(
+                QStringLiteral(
+                    "Move — Specify Base Point"));
+            command_prompt_->setText(
+                QStringLiteral(
+                    "Command: MOVE — Specify Base Point"));
+        }
         return;
     }
 
@@ -1624,6 +1757,8 @@ void CadWorkbench::syncActionState() {
     circle_sketch_button_->setVisible(
         editing_sketch);
     arc_sketch_button_->setVisible(
+        editing_sketch);
+    move_sketch_button_->setVisible(
         editing_sketch);
 
     cancel_sketch_button_->setVisible(

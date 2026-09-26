@@ -93,35 +93,37 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie i wyświetlanie Sketchu
 
-Na pasku narzędzi bezpośrednio nad viewportem 3D użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin. Płaszczyznę możesz wybrać w Document Tree lub — gdy jest widoczna — w viewporcie 3D.
+Na pasku nad viewportem 3D użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin. Płaszczyznę możesz wybrać w Document Tree lub — gdy jest widoczna — w viewporcie 3D.
 
-Po poprawnym wyborze Part tworzy trwały Sketch w tym samym Workbench i viewporcie. Kamera początkowo ustawia się prostopadle do płaszczyzny Sketchu, a siatka przechodzi do jego lokalnego układu, ale Pan, Zoom, Orbit i ViewCube pozostają dostępne i nie dirty'ują Dokumentu.
+Podczas Sketch Edit pasek narzędzi udostępnia `Select`, `Line`, `Circle`, `Arc` i `Move`. Kompaktowy Command Line obsługuje `SELECT`, `LINE`, `CIRCLE`, `ARC` i `MOVE`.
 
-Podczas Sketch Edit pasek narzędzi udostępnia `Select`, `Line`, `Circle` i `Arc`. Operations pokazuje etap bieżącego narzędzia oraz akcje kontekstowe, a kompaktowy Command Line obsługuje `SELECT`, `LINE`, `CIRCLE` i `ARC`.
+Tworzenie Line/Circle/Arc i zwykłe selection zachowują dotychczasową gramatykę. Zaznaczone edytowalne entities pokazują grips kodujące stan: pusty kwadrat w idle, pusty cyan na hover i pełny żółty dla aktywnego/captured gripa. Center grip przesuwa cały zamrożony mieszany selection; owner-only reshape zachowuje dotychczasową semantykę prymitywu.
 
-Zapisane geometrie Line, Circle i Arc są prezentowane razem ze znacznikiem lokalnego Origin `(0,0)` Sketchu. `Finish Sketch` kończy edycję, ale authored Sketch pozostaje w Parcie i po Save/Close/Reopen zachowuje SketchId, support, placement oraz authored entities. Istniejący Sketch można ponownie otworzyć dwuklikiem w Document Tree albo przez `Edit Sketch` bez zmiany authored state.
+### Move
 
-`Select` działa addytywnie dla wszystkich trzech typów prymitywów. Zwykły lewy klik dodaje niezaznaczoną entity i czyni ją primary; klik już zaznaczonej zachowuje członkostwo i ustawia primary. Ctrl+lewy klik przełącza członkostwo. Drag z lewej do prawej to Window, z prawej do lewej to Crossing; zwykły prostokąt dodaje trafienia, Ctrl+prostokąt je przełącza. Klik w puste tło lub Esc w Select czyści selection. `Delete Selection` albo Delete usuwa mieszany zestaw Line/Circle/Arc atomowo jako jedną operację Undo.
+`Move` działa na dowolnym mieszanym selection Line/Circle/Arc.
 
-Każda zaznaczona edytowalna entity pokazuje kwadratowe runtime grips. Idle to mały pusty kwadrat, hover ma pusty kwadrat z cyjanowym podkreśleniem, a grip aktywny/captured jest wypełniony na żółto i może być nieco większy. Rozmiar pozostaje screen-space/DPI-aware, a tolerancja trafienia jest niezależna od widocznych pikseli. Grip ma priorytet trafienia nad geometrią pod nim.
+Jeżeli obiekty są już zaznaczone, aktywuj `Move`, wskaż **Base Point**, a potem punkt docelowy. Cały zamrożony selection pokazuje preview jednego sztywnego przesunięcia `destination - base`.
 
-Semantyka gripów:
+Jeżeli nic nie jest zaznaczone, uruchom `Move` najpierw. Komenda przechodzi do **Select objects**:
 
-- Line: Start/End zmienia tylko tę Line; Center przesuwa cały zamrożony selection.
-- Circle: Center przesuwa cały zamrożony selection; cztery gripy quadrant zmieniają tylko promień właściciela przy stałym center.
-- Arc: Center przesuwa cały zamrożony selection; Start/End zmieniają tylko ten Arc z zachowaniem canonical center/radius i reguł gałęzi; Arc/Mid zmienia wyłącznie radius przy zachowaniu center oraz kierunków Start/End.
+- klik dodaje obiekt;
+- Ctrl+klik przełącza członkostwo;
+- drag z lewej do prawej używa Window;
+- drag z prawej do lewej używa Crossing;
+- Ctrl+prostokąt przełącza trafienia;
+- blank LMB niczego nie czyści;
+- Enter, Space albo RMB kończy wybór, gdy zaznaczono co najmniej jeden obiekt.
 
-Podgląd direct manipulation jest wyłącznie runtime: nie dirty'uje Dokumentu, nie zmienia revision, nie przydziela EntityId i nie tworzy historii Undo. Po aktywacji gripa możesz puścić przycisk myszy, swobodnie poruszać wskaźnikiem, a następny LMB lub Enter zatwierdza bieżący poprawny preview. Esc anuluje tylko preview i zachowuje selection. Zatwierdzony mieszany Move jest jedną atomową operacją i jednym krokiem Undo; edytowane entities zachowują EntityId. Undo/Redo najpierw anuluje transient interaction, potem wykonuje zwykłą historię Dokumentu.
+Następnie wskaż Base Point i destination. LMB albo Enter zatwierdza poprawny punkt docelowy. Esc anuluje bieżący MOVE i zachowuje objęty nim selection. Przesunięcie o zero jest czystym no-op: nie zmienia authored state i nie tworzy kroku Undo.
 
-Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowo utworzona geometria nie jest automatycznie zaznaczana.
+Preview MOVE jest wyłącznie runtime. Niezerowy commit jest jedną atomową operacją i jednym krokiem Undo, zachowuje EntityId i współpracuje ze zwykłym Undo/Redo. Save/Close/Reopen zachowuje przesuniętą geometrię w istniejącym formacie Part.
 
-- `Line`: kliknij pierwszy punkt, potem kolejne punkty ciągłych segmentów; każdy zatwierdzony segment to jeden krok Undo.
-- `Circle`: kliknij Center, potem punkt Radius. Zerowy promień jest ignorowany. Po poprawnym commit Circle pozostaje aktywny dla następnego okręgu.
-- `Arc`: kliknij Start, Through, potem End. Te trzy punkty wyznaczają skierowaną ścieżkę kołową, w tym CW/CCW i wariant short/long. Duplikaty/kollinearność/niepoprawna geometria nie commitują. Po sukcesie Arc pozostaje aktywny dla następnego łuku.
+Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uruchamia akcji CAD.
 
-Operations udostępnia Finish/Cancel dla aktywnego narzędzia tworzenia. Esc najpierw anuluje bieżący niekompletny etap punktowy, a dopiero potem wraca narzędziem do Select; nie kończy całego Sketchu.
+Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję. Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin.
 
-Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin. Snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, wspólne transformacje/Copy z R7, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
+Rotate, Scale, Mirror, Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
@@ -170,8 +172,8 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wp
 
 Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, ustabilizowany fundament Workbench/Viewer 3D oraz trwałe Sketches na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
 
-Bieżący Sketch UI zapewnia Select/Line/Circle/Arc, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, Move mieszanego selection, ograniczony owner-only reshape, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
+Bieżący Sketch UI zapewnia Select/Line/Circle/Arc, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, normalny mieszany MOVE w wariancie selection-first lub command-first z Base Point, Center-grip Move, ograniczony owner-only reshape, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
 
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Nadal brakuje snapping/inference, coordinate/Dynamic Input, constraintów/solvera, authored dimensions, wspólnych transformacji/Copy z R7, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+Nadal brakuje Rotate/Scale/Mirror/Copy, repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.

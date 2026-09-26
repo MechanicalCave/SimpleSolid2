@@ -18,7 +18,8 @@ The target currently contains:
 - canonical decimal identity transport for `EntityId` and `EntityIdCursor`;
 - canonical authored primitives `Line`, `Circle` and `Arc`;
 - the value-semantic mixed-primitive `SketchModel` plus validated state/restore transfer;
-- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips and bounded direct manipulation.
+- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips, bounded direct manipulation and normal MOVE command stages;
+- a provider-independent mixed-primitive translation core shared by Center-grip Move and normal MOVE.
 
 Each persistent Part-hosted Sketch embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
 
@@ -114,46 +115,50 @@ One host-neutral `SketchInteractionState` remains the runtime interaction author
 
 The default tool is Select. Creation tools preserve the existing semantic selection while grips are hidden/inactive, and newly created geometry is not auto-selected.
 
-Line keeps the continuous Start/Next-point grammar. Circle uses Center → Radius; exact zero radius produces no commit request. Arc uses Start → Through → End; duplicate accepted points, collinear triples or any invalid circumcircle/sweep fail closed. Circle and Arc remain active after a successful commit awaiting the next primitive until Esc, Select or another tool is chosen.
+Line keeps the continuous Start/Next-point grammar. Circle uses Center → Radius; exact zero radius produces no commit request. Arc uses Start → Through → End; duplicate accepted points, collinear triples or any invalid circumcircle/sweep fail closed.
 
-The same state owns transient selection as `EntityId` values plus optional primary identity. Point selection is additive, Ctrl toggles membership, Window/Crossing adds (or toggles with Ctrl), provider result order does not choose primary, and blank LMB / Select-mode Esc follow the established clear hierarchy across Line/Circle/Arc.
+The same state owns transient selection as `EntityId` values plus optional primary identity. Point selection is additive, Ctrl toggles membership, Window/Crossing adds or toggles, and provider result order never chooses primary.
 
-Selected editable entities expose semantic grips:
+SK-07A adds normal `MOVE` without introducing another selection owner. Selection-first MOVE immediately freezes the existing non-empty selection and asks for a Base Point. Command-first MOVE starts with Select objects; click/Ctrl/Window/Crossing reuse the existing semantic query bridge, blank LMB is a no-op, and Enter/Space/RMB completes object collection only when non-empty. After collection, the frozen semantic set cannot change until the command completes or is cancelled.
+
+Normal MOVE stores a resolved Sketch-local Base Point and previews one translation delta `destination - base` from the interaction-start authored snapshot. Preview never compounds from a prior frame. Zero delta is a valid no-op completion.
+
+Selected editable entities still expose semantic grips:
 
 - Line: Start, Center, End;
 - Circle: Center plus four quadrant radius grips;
 - Arc: Center, Start, End and Arc/Mid.
 
-Grip references contain semantic `EntityId + SketchGripRole`; Viewer presentation tokens remain outside Shared 2D.
+Center grips perform the same mixed Line/Circle/Arc semantic translation as normal MOVE, using the grip's interaction-start point as the implicit base. Line Start/End, Circle quadrant and Arc Start/End/Mid remain owner-only Reshape.
 
-A `DirectManipulationSession` freezes the current selection and interaction-start geometry. Center grips perform a common Move of the complete frozen mixed selection. Line Start/End, Circle quadrant, and Arc Start/End/Mid perform owner-only Reshape. Circle radius reshape preserves center; Arc Mid changes radius only; Arc Start/End preserve center/radius and the required fixed endpoint/branch semantics, failing closed on ambiguous invalid boundaries.
-
-Pointer values flow through the shared `ResolvedSketchInput` seam. Preview geometry is transient only: it never mutates `SketchModel`, revision, dirty state, identity allocation or Undo history. LMB/Enter commit through the host semantic command; Esc cancels the manipulation and preserves selection. Selection mutation is rejected while manipulation is active.
+Pointer values flow through the shared `ResolvedSketchInput` seam. Preview is runtime-only: it never mutates `SketchModel`, revision, dirty state, identity allocation or Undo history. Accepted non-zero MOVE/reshape commits through the host semantic geometry-update command and Part transaction. Esc cancels transient state and preserves the affected selection. Undo/Redo cancels any active transient MOVE/direct manipulation before global history.
 
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
 The current Part integration presents and edits authored Line/Circle/Arc through runtime adapters outside the Shared 2D target. Active authored geometry is mapped from Sketch U/V to the Part support frame, while the intrinsic Sketch Origin remains a runtime overlay.
 
-R6 intentionally stops at primitive breadth and bounded grips/direct manipulation. The product still does not implement:
+R7 has started only through SK-07A. Normal MOVE and the shared translation core are implemented; the product still does not implement:
 
+- Rotate, uniform Scale, Mirror or Copy/repeated Copy;
+- grip Copy modifier, semantic Space CycleEditMode, ordinary-Select RMB context or Repeat Last Command;
 - intrinsic Origin snapping;
 - snapping/Object Snap, tracking, Ortho/Polar/Grid Snap or geometric inference;
 - numeric coordinate/dynamic input;
 - authored dimensions, constraints or solver evaluation;
-- Rectangle/Polyline durable semantics or R7 common Move/Copy/Rotate/Scale/Mirror command grammar;
+- Rectangle/Polyline durable semantics;
 - intersections, profiles/regions or projected/reference geometry;
 - planar-face Sketch support.
 
-Those capabilities remain governed by later roadmap milestones and separate accepted Work Contracts.
+Those capabilities remain governed by later accepted Work Contracts.
 
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-Existing SK-02A through SK-05A tests continue to cover Shared 2D dependency boundaries, Line semantics, Part hosting, persistence/history, provider-neutral presentation/input, selection, hover/grips and Line direct manipulation.
+Existing SK-02A through SK-06A tests continue to cover Shared 2D dependency boundaries, primitive semantics, Part hosting, persistence/history, provider-neutral presentation/input, selection, hover/grips and direct manipulation.
 
-SK-06A adds `sk06a.circle_arc_model_persistence` and `sk06a.circle_arc_interaction_state`. They cover Circle/Arc canonical validation, a shared mixed-primitive EntityId cursor, strict state/restore, schema-v4 persistence and malformed-kind rejection, Circle Center+Radius creation state, Arc Start/Through/End short/long and CW/CCW canonicalization, duplicate/collinear failure, mixed frozen-selection Move, owner-only Circle/Arc reshape and transient/history cancellation semantics.
+SK-07A adds `sk07a.transform_core` and `sk07a.move_controller`. They cover mixed Line/Circle/Arc translation, finite validation, EntityId preservation, parity between Center-grip Move and normal MOVE, selection-first and command-first staging, frozen selection, Base Point/destination preview, atomic commit, zero-delta no-op, stale revision failure, history cancellation and schema-v4 Save/reload identity preservation.
 
-Existing controller/native tests exercise the generalized semantic token bridge, grip scene lifecycle/hit testing and camera navigation. The Qt/OCCT provider now executes those tests with semantic curve presentation plus DPI-aware square grip aspects.
+The existing Workbench Sketch-host regression also verifies toolbar/Command-Line MOVE activation and that Space in text-entry focus remains text input.
 
-The exact implementation head `518e8f3a5feb56a04d2c2067553d8697e02ceadf` passed Windows FULL gate #440 with 58/58 CTest tests. Owner manual Windows verification remains the final runtime acceptance step before closeout.
+The exact runtime implementation head `bb218f8d9cff1c1c2ffc45e091a69c485190e97e` passed Windows FULL #475 with Build and 60/60 unfiltered CTest tests. FAST contained 59 tests; the native Workbench stress test remained FULL-only.

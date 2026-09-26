@@ -14,6 +14,7 @@ add_library(simplesolid2_sketch STATIC
     sketch/interaction_state.cpp
     sketch/sketch_id.cpp
     sketch/sketch_model.cpp
+    sketch/transform.cpp
 )
 
 target_include_directories(simplesolid2_sketch

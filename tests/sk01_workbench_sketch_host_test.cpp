@@ -6,6 +6,7 @@
 #include <QAction>
 #include <QApplication>
 #include <QLabel>
+#include <QLineEdit>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QWidget>
@@ -335,6 +336,15 @@ int main(int argc, char* argv[]) {
     auto* operations_label =
         workbench.findChild<QLabel*>(
             QStringLiteral("operationsPlaceholder"));
+    auto* move_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("moveSketchToolButton"));
+    auto* command_input =
+        workbench.findChild<QLineEdit*>(
+            QStringLiteral("sketchCommandInput"));
+    auto* command_prompt =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("sketchCommandPrompt"));
 
     CHECK(sketch_button != nullptr);
     CHECK(cancel_button != nullptr);
@@ -346,6 +356,9 @@ int main(int argc, char* argv[]) {
     CHECK(operations_content != nullptr);
     CHECK(editor_host != nullptr);
     CHECK(operations_label != nullptr);
+    CHECK(move_button != nullptr);
+    CHECK(command_input != nullptr);
+    CHECK(command_prompt != nullptr);
     CHECK(editor_host->isAncestorOf(sketch_button));
     CHECK(!operations_content->isAncestorOf(sketch_button));
     CHECK(sketch_button->isEnabled());
@@ -413,6 +426,64 @@ int main(int argc, char* argv[]) {
         viewport->lastStandardView() ==
         viewer::StandardView::front);
     CHECK(viewport->fitAllCount() > 0);
+
+    // SK-07A: toolbar and Command Line are adapters to the same
+    // command-first MOVE state when the Sketch selection is empty.
+    CHECK(!move_button->isHidden());
+    move_button->click();
+    QApplication::processEvents();
+    CHECK(move_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Move — Select objects; Enter/Space/RMB to continue"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral("Command: MOVE — Select objects"));
+
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!move_button->isChecked());
+
+    command_input->setText(
+        QStringLiteral("MOVE"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(move_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Move — Select objects; Enter/Space/RMB to continue"));
+
+    command_input->setText(
+        QStringLiteral("A"));
+    command_input->setFocus();
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Space);
+    QApplication::processEvents();
+    CHECK(
+        command_input->text() ==
+        QStringLiteral("A "));
+    CHECK(move_button->isChecked());
+
+    // Escape in text focus clears text/focus only; viewport Escape
+    // then cancels the active MOVE and returns to Select.
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(command_input->text().isEmpty());
+    CHECK(move_button->isChecked());
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!move_button->isChecked());
 
     auto* root =
         tree->topLevelItem(0);
