@@ -936,6 +936,8 @@ public:
             return false;
         }
 
+        clearSketchGripScene();
+        sketch_interaction_presentation_ = {};
         clearSketchScene();
 
         try {
@@ -1033,6 +1035,138 @@ public:
             clearSketchPreviewScene();
             throw;
         }
+    }
+
+    bool setSketchGripScene(
+        const viewer::SketchGripScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearSketchGripScene();
+
+        try {
+            for (const auto& grip : scene.grips) {
+                Handle(Geom_CartesianPoint) point =
+                    new Geom_CartesianPoint(
+                        toPoint(grip.position));
+                Handle(AIS_Point) object =
+                    new AIS_Point(point);
+
+                context_->Display(object, false);
+                context_->Deactivate(object);
+                sketch_grip_objects_.push_back(
+                    SketchGripObject{
+                        grip.key,
+                        object});
+            }
+
+            sketch_grip_scene_ = scene;
+            applySketchInteractionStyles();
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearSketchGripScene();
+            throw;
+        }
+    }
+
+    bool setSketchInteractionPresentation(
+        const viewer::SketchInteractionPresentation& presentation) {
+        if (!presentation.valid()) return false;
+
+        sketch_interaction_presentation_ =
+            presentation;
+        if (!context_.IsNull()) {
+            applySelectionStyles();
+            applySketchInteractionStyles();
+            context_->UpdateCurrentViewer();
+        }
+        if (!view_.IsNull()) {
+            view_->Redraw();
+        }
+        return true;
+    }
+
+    viewer::SketchGripQueryResult querySketchGrip(
+        viewer::ViewportPoint2 point) {
+        if (!point.valid()) {
+            return {};
+        }
+
+        ensureInitialized();
+        if (view_.IsNull()) {
+            return {};
+        }
+
+        const double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            return {};
+        }
+
+        const ScreenPoint query{
+            point.x * dpr,
+            point.y * dpr};
+        const double tolerance =
+            9.0 * dpr;
+        double best_distance_squared =
+            tolerance * tolerance;
+        std::optional<viewer::SketchGripKey>
+            best;
+
+        for (const auto& grip :
+             sketch_grip_scene_.grips) {
+            const auto projected =
+                projectToScreen(grip.position);
+            if (!projected) {
+                return {};
+            }
+
+            const double dx =
+                query.x - projected->x;
+            const double dy =
+                query.y - projected->y;
+            const double distance_squared =
+                dx * dx + dy * dy;
+            if (distance_squared >
+                best_distance_squared) {
+                continue;
+            }
+
+            const bool strictly_better =
+                !best ||
+                distance_squared <
+                    best_distance_squared;
+            const bool deterministic_tie =
+                best &&
+                distance_squared ==
+                    best_distance_squared &&
+                (grip.key.owner.value <
+                     best->owner.value ||
+                 (grip.key.owner.value ==
+                      best->owner.value &&
+                  static_cast<std::uint8_t>(
+                      grip.key.role) <
+                  static_cast<std::uint8_t>(
+                      best->role)));
+
+            if (strictly_better ||
+                deterministic_tie) {
+                best_distance_squared =
+                    distance_squared;
+                best = grip.key;
+            }
+        }
+
+        return viewer::SketchGripQueryResult{
+            true,
+            best};
     }
 
     bool setPresentationSelection(
@@ -1632,6 +1766,11 @@ public:
         Handle(AIS_InteractiveObject) object;
     };
 
+    struct SketchGripObject final {
+        viewer::SketchGripKey key;
+        Handle(AIS_InteractiveObject) object;
+    };
+
     [[nodiscard]] static gp_Pnt toPoint(
         const viewer::Point3& point) {
         return gp_Pnt{point.x, point.y, point.z};
@@ -1751,6 +1890,27 @@ public:
         sketch_origin_object_.Nullify();
         sketch_scene_.lines.clear();
         sketch_scene_.origin.reset();
+    }
+
+    void clearSketchGripScene() noexcept {
+        if (!context_.IsNull()) {
+            for (const auto& entry :
+                 sketch_grip_objects_) {
+                if (entry.object.IsNull()) continue;
+                const auto retained = entry.object;
+                guardedVoid(
+                    "removeSketchGripObject",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+
+        sketch_grip_objects_.clear();
+        sketch_grip_scene_.grips.clear();
+        sketch_interaction_presentation_ = {};
     }
 
     void clearSketchPreviewScene() noexcept {
@@ -1943,6 +2103,11 @@ public:
             const bool primary =
                 selection_.primary &&
                 *selection_.primary == entry.token;
+            const bool hovered =
+                sketch_interaction_presentation_.
+                    hovered_entity &&
+                *sketch_interaction_presentation_.
+                    hovered_entity == entry.token;
 
             context_->SetColor(
                 entry.object,
@@ -1954,15 +2119,60 @@ public:
                         ? Quantity_Color{
                               1.0, 0.63, 0.18,
                               Quantity_TOC_RGB}
-                        : Quantity_Color{
-                              0.92, 0.92, 0.94,
-                              Quantity_TOC_RGB},
+                        : hovered
+                            ? Quantity_Color{
+                                  0.22, 0.82, 0.96,
+                                  Quantity_TOC_RGB}
+                            : Quantity_Color{
+                                  0.92, 0.92, 0.94,
+                                  Quantity_TOC_RGB},
                 false);
             context_->SetWidth(
                 entry.object,
                 primary
                     ? 4.0
-                    : (selected ? 3.0 : 2.0),
+                    : (selected
+                           ? 3.0
+                           : (hovered ? 3.0 : 2.0)),
+                false);
+        }
+    }
+
+    void applySketchInteractionStyles() {
+        if (context_.IsNull()) return;
+
+        for (const auto& entry :
+             sketch_grip_objects_) {
+            if (entry.object.IsNull()) continue;
+
+            const bool active =
+                sketch_interaction_presentation_.
+                    active_grip &&
+                *sketch_interaction_presentation_.
+                    active_grip == entry.key;
+            const bool hovered =
+                sketch_interaction_presentation_.
+                    hovered_grip &&
+                *sketch_interaction_presentation_.
+                    hovered_grip == entry.key;
+
+            context_->SetColor(
+                entry.object,
+                active
+                    ? Quantity_Color{
+                          1.0, 0.90, 0.25,
+                          Quantity_TOC_RGB}
+                    : hovered
+                        ? Quantity_Color{
+                              0.22, 0.82, 0.96,
+                              Quantity_TOC_RGB}
+                        : Quantity_Color{
+                              1.0, 0.63, 0.18,
+                              Quantity_TOC_RGB},
+                false);
+            context_->SetWidth(
+                entry.object,
+                active ? 5.0 : (hovered ? 4.0 : 3.0),
                 false);
         }
     }
@@ -2044,6 +2254,9 @@ private:
     viewer::ReferenceScene reference_scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene sketch_preview_scene_;
+    viewer::SketchGripScene sketch_grip_scene_;
+    viewer::SketchInteractionPresentation
+        sketch_interaction_presentation_;
     viewer::PresentationSelection selection_;
     viewer::SelectionIntentHandler selection_intent_handler_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
@@ -2071,6 +2284,8 @@ private:
         navigation_controls_;
     std::vector<ReferenceObject> reference_objects_;
     std::vector<SketchObject> sketch_objects_;
+    std::vector<SketchGripObject>
+        sketch_grip_objects_;
     std::vector<Handle(AIS_InteractiveObject)>
         sketch_preview_objects_;
     Handle(AIS_InteractiveObject)
@@ -2184,6 +2399,36 @@ bool QtOcctViewerWidget::setSketchPreviewScene(
         "setSketchPreviewScene",
         [this, &scene] {
             return impl_->setSketchPreviewScene(scene);
+        });
+}
+
+bool QtOcctViewerWidget::setSketchGripScene(
+    const viewer::SketchGripScene& scene) {
+    return guardedBool(
+        "setSketchGripScene",
+        [this, &scene] {
+            return impl_->setSketchGripScene(scene);
+        });
+}
+
+bool QtOcctViewerWidget::setSketchInteractionPresentation(
+    const viewer::SketchInteractionPresentation& presentation) {
+    return guardedBool(
+        "setSketchInteractionPresentation",
+        [this, &presentation] {
+            return impl_->setSketchInteractionPresentation(
+                presentation);
+        });
+}
+
+viewer::SketchGripQueryResult
+QtOcctViewerWidget::querySketchGrip(
+    viewer::ViewportPoint2 point) {
+    return guardedResult<
+        viewer::SketchGripQueryResult>(
+        "querySketchGrip",
+        [this, point] {
+            return impl_->querySketchGrip(point);
         });
 }
 
