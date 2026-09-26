@@ -954,8 +954,14 @@ void SketchInteractionState::reconcileSelection(
 
 bool SketchInteractionState::setHoveredEntity(
     std::optional<EntityId> entity) noexcept {
-    if (tool_ != SketchTool::select ||
-        manipulation_) {
+    const bool hover_allowed =
+        tool_ == SketchTool::select ||
+        (tool_ == SketchTool::move &&
+         move_session_ &&
+         move_session_->stage ==
+             MoveStage::select_objects);
+
+    if (!hover_allowed || manipulation_) {
         return false;
     }
     if (entity && !entity->valid()) {
