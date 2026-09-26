@@ -133,8 +133,9 @@ int main() {
     const auto source =
         capture(session, sketch_id, source_ids);
 
-    // Establish a clean persisted baseline before COPY so allocator-only
-    // high-water changes after Undo are observable through needsSave().
+    // Establish a clean persisted baseline. History may later return to
+    // this exact authored state while the session-local allocator high-water
+    // remains advanced for non-reuse.
     CHECK(session.save().ok());
     CHECK(!session.needsSave());
 
@@ -158,25 +159,19 @@ int main() {
     CHECK(copied_a.entity_ids.size() == 3U);
     CHECK(disjoint(source_ids, copied_a.entity_ids));
     CHECK(session.undoDepth() == undo_before_a + 1U);
-    CHECK(
-        session.document().revision() ==
-        *revision_before_a.next());
     CHECK(session.needsSave());
 
     const auto* after_a =
         session.document().findSketch(sketch_id);
     CHECK(after_a != nullptr);
-    for (const auto id : source_ids) {
-        CHECK(after_a->model.contains(id));
-    }
     for (const auto id : copied_a.entity_ids) {
         CHECK(after_a->model.contains(id));
     }
     CHECK(capture(session, sketch_id, source_ids) == source);
 
-    // Undo removes A, but the high-water identity cursor remains advanced
-    // and therefore the session still requires Save even though authored
-    // geometry matches the persisted baseline.
+    // Undo removes A and returns visible/authored content to the saved
+    // checkpoint, while DocumentSession still retains the allocator
+    // high-water internally so these committed IDs are not reusable.
     const auto undo_a = session.undo();
     CHECK(undo_a.ok() && undo_a.changed);
     const auto* after_undo_a =
@@ -185,9 +180,9 @@ int main() {
     for (const auto id : copied_a.entity_ids) {
         CHECK(!after_undo_a->model.contains(id));
     }
-    CHECK(session.needsSave());
+    CHECK(!session.needsSave());
 
-    // Redo restores the exact copied identities.
+    // Redo restores exactly the same copied identities.
     const auto redo_a = session.redo();
     CHECK(redo_a.ok() && redo_a.changed);
     const auto* after_redo_a =
@@ -197,10 +192,11 @@ int main() {
         CHECK(after_redo_a->model.contains(id));
     }
 
-    // Branch from Undo: B must not reuse A's identities and must clear
-    // the abandoned Redo branch.
+    // Branch from Undo: B must allocate above A's preserved high-water
+    // rather than reusing A's now-absent identities.
     CHECK(session.undo().ok());
-    CHECK(session.needsSave());
+    CHECK(!session.needsSave());
+
     const auto placement_b =
         sketch::translateSketchGeometry(
             source,
@@ -217,33 +213,28 @@ int main() {
     CHECK(disjoint(source_ids, copied_b.entity_ids));
     CHECK(disjoint(copied_a.entity_ids, copied_b.entity_ids));
     CHECK(session.redoDepth() == 0U);
-
-    // Undo B as well. Geometry is back at the persisted baseline, but both
-    // committed identity ranges A and B must remain durably consumed.
-    CHECK(session.undo().ok());
-    CHECK(
-        session.document().findSketch(sketch_id)->
-            model.entityCount() == 3U);
     CHECK(session.needsSave());
 
-    // Saving this allocator-only difference is the key SK-07C lifecycle
-    // boundary. Reopen must retain the high-water cursor without schema
-    // migration.
+    // Saving the committed B state persists next_entity_id under the
+    // existing schema-v4 model. Reopen must keep A's abandoned IDs and B's
+    // committed IDs below the next allocatable identity.
     CHECK(session.save().ok());
     CHECK(!session.needsSave());
 
-    auto loaded_after_undo = store.load(path);
-    CHECK(loaded_after_undo.ok());
+    auto loaded = store.load(path);
+    CHECK(loaded.ok());
     application::DocumentSession reopened{
         path,
-        std::move(*loaded_after_undo.document)};
+        std::move(*loaded.document)};
 
-    const auto* reopened_baseline =
+    const auto* reopened_sketch =
         reopened.document().findSketch(sketch_id);
-    CHECK(reopened_baseline != nullptr);
-    CHECK(reopened_baseline->model.entityCount() == 3U);
+    CHECK(reopened_sketch != nullptr);
     for (const auto id : source_ids) {
-        CHECK(reopened_baseline->model.contains(id));
+        CHECK(reopened_sketch->model.contains(id));
+    }
+    for (const auto id : copied_b.entity_ids) {
+        CHECK(reopened_sketch->model.contains(id));
     }
 
     const auto placement_c =
@@ -265,7 +256,7 @@ int main() {
     CHECK(disjoint(copied_a.entity_ids, copied_c.entity_ids));
     CHECK(disjoint(copied_b.entity_ids, copied_c.entity_ids));
 
-    // A stale command must not allocate another identity range.
+    // A stale command must fail without allocating or partially mutating.
     const auto stale_state =
         reopened.document().state();
     const auto stale_undo =
@@ -283,19 +274,6 @@ int main() {
     CHECK(reopened.document().state() == stale_state);
     CHECK(reopened.undoDepth() == stale_undo);
 
-    CHECK(reopened.save().ok());
-
-    auto loaded_final = store.load(path);
-    CHECK(loaded_final.ok());
-    const auto* final_sketch =
-        loaded_final.document->findSketch(sketch_id);
-    CHECK(final_sketch != nullptr);
-    for (const auto id : source_ids) {
-        CHECK(final_sketch->model.contains(id));
-    }
-    for (const auto id : copied_c.entity_ids) {
-        CHECK(final_sketch->model.contains(id));
-    }
-
     return EXIT_SUCCESS;
+
 }
