@@ -1940,6 +1940,13 @@ public:
         Handle(AIS_InteractiveObject) object;
     };
 
+    enum class SketchGripVisualState
+        : std::uint8_t {
+        idle,
+        hovered,
+        active,
+    };
+
     struct SketchGripObject final {
         viewer::SketchGripKey key;
         Handle(AIS_Point) object;
@@ -2313,13 +2320,6 @@ public:
                 false);
         }
     }
-
-    enum class SketchGripVisualState
-        : std::uint8_t {
-        idle,
-        hovered,
-        active,
-    };
 
     [[nodiscard]] bool ensureSketchGripAspects() {
         double dpr =
