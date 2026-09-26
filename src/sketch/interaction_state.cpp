@@ -1,18 +1,65 @@
 #include <simplesolid2/sketch/interaction_state.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <numbers>
 #include <set>
 #include <utility>
 
 namespace simplesolid2::sketch {
-
 namespace {
+
+constexpr double full_turn =
+    2.0 * std::numbers::pi_v<double>;
+constexpr double half_turn =
+    std::numbers::pi_v<double>;
 
 [[nodiscard]] Point2 lineCenter(
     const Line& line) noexcept {
     return {
         (line.start().u + line.end().u) * 0.5,
         (line.start().v + line.end().v) * 0.5};
+}
+
+[[nodiscard]] double distance(
+    Point2 first,
+    Point2 second) noexcept {
+    return std::hypot(
+        second.u - first.u,
+        second.v - first.v);
+}
+
+[[nodiscard]] double direction(
+    Point2 center,
+    Point2 point) noexcept {
+    return std::atan2(
+        point.v - center.v,
+        point.u - center.u);
+}
+
+[[nodiscard]] double positiveTurn(
+    double angle) noexcept {
+    double normalized =
+        std::fmod(angle, full_turn);
+    if (normalized < 0.0) {
+        normalized += full_turn;
+    }
+    return normalized;
+}
+
+[[nodiscard]] double ccwDelta(
+    double from,
+    double to) noexcept {
+    return positiveTurn(to - from);
+}
+
+[[nodiscard]] Point2 pointOnCircle(
+    Point2 center,
+    double radius,
+    double angle) noexcept {
+    return {
+        center.u + radius * std::cos(angle),
+        center.v + radius * std::sin(angle)};
 }
 
 [[nodiscard]] bool validReplacement(
@@ -23,14 +70,213 @@ namespace {
            line.start != line.end;
 }
 
+[[nodiscard]] bool validReplacement(
+    const SketchCircleState& circle) noexcept {
+    return circle.id.valid() &&
+           circle.center.finite() &&
+           std::isfinite(circle.radius) &&
+           circle.radius > 0.0;
+}
+
+[[nodiscard]] bool validReplacement(
+    const SketchArcState& arc) noexcept {
+    return arc.id.valid() &&
+           arc.center.finite() &&
+           std::isfinite(arc.radius) &&
+           arc.radius > 0.0 &&
+           std::isfinite(arc.start_angle) &&
+           std::isfinite(arc.sweep_angle) &&
+           arc.sweep_angle != 0.0 &&
+           std::abs(arc.sweep_angle) < full_turn;
+}
+
+[[nodiscard]] std::optional<ArcIntent>
+arcThroughThreePoints(
+    Point2 start,
+    Point2 through,
+    Point2 end) noexcept {
+    if (!start.finite() ||
+        !through.finite() ||
+        !end.finite() ||
+        start == through ||
+        start == end ||
+        through == end) {
+        return std::nullopt;
+    }
+
+    const double determinant =
+        2.0 *
+        (start.u * (through.v - end.v) +
+         through.u * (end.v - start.v) +
+         end.u * (start.v - through.v));
+    if (!std::isfinite(determinant) ||
+        determinant == 0.0) {
+        return std::nullopt;
+    }
+
+    const double start_squared =
+        start.u * start.u +
+        start.v * start.v;
+    const double through_squared =
+        through.u * through.u +
+        through.v * through.v;
+    const double end_squared =
+        end.u * end.u +
+        end.v * end.v;
+
+    Point2 center{
+        (start_squared *
+             (through.v - end.v) +
+         through_squared *
+             (end.v - start.v) +
+         end_squared *
+             (start.v - through.v)) /
+            determinant,
+        (start_squared *
+             (end.u - through.u) +
+         through_squared *
+             (start.u - end.u) +
+         end_squared *
+             (through.u - start.u)) /
+            determinant};
+
+    const double radius =
+        distance(center, start);
+    if (!center.finite() ||
+        !std::isfinite(radius) ||
+        radius <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double start_angle =
+        direction(center, start);
+    const double through_angle =
+        direction(center, through);
+    const double end_angle =
+        direction(center, end);
+
+    const double to_through =
+        ccwDelta(start_angle, through_angle);
+    const double to_end =
+        ccwDelta(start_angle, end_angle);
+    if (to_through == 0.0 ||
+        to_end == 0.0) {
+        return std::nullopt;
+    }
+
+    const double sweep =
+        to_through < to_end
+            ? to_end
+            : to_end - full_turn;
+
+    ArcIntent result{
+        center,
+        radius,
+        start_angle,
+        sweep};
+    return result.valid()
+        ? std::optional<ArcIntent>{result}
+        : std::nullopt;
+}
+
+[[nodiscard]] bool appendEntityGeometry(
+    DirectManipulationGeometry& geometry,
+    const SketchModel& model,
+    EntityId id) {
+    if (const auto* line = model.findLine(id)) {
+        geometry.lines.push_back(
+            SketchLineState{
+                line->id(),
+                line->start(),
+                line->end()});
+        return true;
+    }
+
+    if (const auto* circle = model.findCircle(id)) {
+        geometry.circles.push_back(
+            SketchCircleState{
+                circle->id(),
+                circle->center(),
+                circle->radius()});
+        return true;
+    }
+
+    if (const auto* arc = model.findArc(id)) {
+        geometry.arcs.push_back(
+            SketchArcState{
+                arc->id(),
+                arc->center(),
+                arc->radius(),
+                arc->startAngle(),
+                arc->sweepAngle()});
+        return true;
+    }
+
+    return false;
+}
+
+[[nodiscard]] std::optional<double>
+sameDirectionSweep(
+    double start_angle,
+    double end_angle,
+    double previous_sweep) noexcept {
+    const double positive =
+        ccwDelta(start_angle, end_angle);
+    if (positive == 0.0) {
+        return std::nullopt;
+    }
+
+    const double candidate =
+        previous_sweep > 0.0
+            ? positive
+            : positive - full_turn;
+
+    if (candidate == 0.0 ||
+        std::abs(candidate) >= full_turn ||
+        std::abs(candidate) == half_turn) {
+        return std::nullopt;
+    }
+
+    return candidate;
+}
+
 } // namespace
+
+bool CircleIntent::valid() const noexcept {
+    return center.finite() &&
+           std::isfinite(radius) &&
+           radius > 0.0;
+}
+
+bool ArcIntent::valid() const noexcept {
+    return center.finite() &&
+           std::isfinite(radius) &&
+           radius > 0.0 &&
+           std::isfinite(start_angle) &&
+           std::isfinite(sweep_angle) &&
+           sweep_angle != 0.0 &&
+           std::abs(sweep_angle) < full_turn;
+}
 
 std::optional<LineStage>
 SketchInteractionState::lineStage() const noexcept {
-    if (tool_ != SketchTool::line) {
-        return std::nullopt;
-    }
-    return line_stage_;
+    return tool_ == SketchTool::line
+        ? std::optional<LineStage>{line_stage_}
+        : std::nullopt;
+}
+
+std::optional<CircleStage>
+SketchInteractionState::circleStage() const noexcept {
+    return tool_ == SketchTool::circle
+        ? std::optional<CircleStage>{circle_stage_}
+        : std::nullopt;
+}
+
+std::optional<ArcStage>
+SketchInteractionState::arcStage() const noexcept {
+    return tool_ == SketchTool::arc
+        ? std::optional<ArcStage>{arc_stage_}
+        : std::nullopt;
 }
 
 void SketchInteractionState::activateLine() noexcept {
@@ -38,6 +284,26 @@ void SketchInteractionState::activateLine() noexcept {
     clearHover();
     tool_ = SketchTool::line;
     resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+}
+
+void SketchInteractionState::activateCircle() noexcept {
+    manipulation_.reset();
+    clearHover();
+    tool_ = SketchTool::circle;
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+}
+
+void SketchInteractionState::activateArc() noexcept {
+    manipulation_.reset();
+    clearHover();
+    tool_ = SketchTool::arc;
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
 }
 
 LinePointResult
@@ -99,6 +365,121 @@ SketchInteractionState::acceptLinePoint(
         request};
 }
 
+CirclePointResult
+SketchInteractionState::acceptCirclePoint(
+    Point2 point) noexcept {
+    if (tool_ != SketchTool::circle) {
+        return {
+            CirclePointOutcome::inactive_tool,
+            std::nullopt};
+    }
+    if (!point.finite()) {
+        return {
+            CirclePointOutcome::invalid_point,
+            std::nullopt};
+    }
+
+    if (circle_stage_ ==
+        CircleStage::await_center) {
+        circle_center_ = point;
+        circle_stage_ =
+            CircleStage::await_radius;
+        return {
+            CirclePointOutcome::center_accepted,
+            std::nullopt};
+    }
+
+    if (pending_circle_request_) {
+        return {
+            CirclePointOutcome::request_pending,
+            std::nullopt};
+    }
+    if (!circle_center_) {
+        resetCircleStage();
+        return {
+            CirclePointOutcome::invalid_point,
+            std::nullopt};
+    }
+
+    CircleIntent request{
+        *circle_center_,
+        distance(*circle_center_, point)};
+    if (!request.valid()) {
+        return {
+            CirclePointOutcome::zero_radius_ignored,
+            std::nullopt};
+    }
+
+    pending_circle_request_ = request;
+    return {
+        CirclePointOutcome::circle_requested,
+        request};
+}
+
+ArcPointResult
+SketchInteractionState::acceptArcPoint(
+    Point2 point) noexcept {
+    if (tool_ != SketchTool::arc) {
+        return {
+            ArcPointOutcome::inactive_tool,
+            std::nullopt};
+    }
+    if (!point.finite()) {
+        return {
+            ArcPointOutcome::invalid_point,
+            std::nullopt};
+    }
+
+    if (arc_stage_ == ArcStage::await_start) {
+        arc_start_ = point;
+        arc_stage_ = ArcStage::await_through;
+        return {
+            ArcPointOutcome::start_accepted,
+            std::nullopt};
+    }
+
+    if (arc_stage_ == ArcStage::await_through) {
+        if (!arc_start_ || point == *arc_start_) {
+            return {
+                ArcPointOutcome::degenerate_ignored,
+                std::nullopt};
+        }
+        arc_through_ = point;
+        arc_stage_ = ArcStage::await_end;
+        return {
+            ArcPointOutcome::through_accepted,
+            std::nullopt};
+    }
+
+    if (pending_arc_request_) {
+        return {
+            ArcPointOutcome::request_pending,
+            std::nullopt};
+    }
+    if (!arc_start_ || !arc_through_) {
+        resetArcStage();
+        return {
+            ArcPointOutcome::invalid_point,
+            std::nullopt};
+    }
+
+    const auto request =
+        arcThroughThreePoints(
+            *arc_start_,
+            *arc_through_,
+            point);
+    if (!request) {
+        return {
+            ArcPointOutcome::degenerate_ignored,
+            std::nullopt};
+    }
+
+    pending_arc_request_ = *request;
+    return {
+        ArcPointOutcome::arc_requested,
+        request};
+}
+
 bool SketchInteractionState::resolveLineRequest(
     bool committed) noexcept {
     if (tool_ != SketchTool::line ||
@@ -116,6 +497,37 @@ bool SketchInteractionState::resolveLineRequest(
         line_anchor_ = resolved.end;
     }
 
+    return true;
+}
+
+bool SketchInteractionState::resolveCircleRequest(
+    bool committed) noexcept {
+    if (tool_ != SketchTool::circle ||
+        circle_stage_ !=
+            CircleStage::await_radius ||
+        !pending_circle_request_) {
+        return false;
+    }
+
+    pending_circle_request_.reset();
+    if (committed) {
+        resetCircleStage();
+    }
+    return true;
+}
+
+bool SketchInteractionState::resolveArcRequest(
+    bool committed) noexcept {
+    if (tool_ != SketchTool::arc ||
+        arc_stage_ != ArcStage::await_end ||
+        !pending_arc_request_) {
+        return false;
+    }
+
+    pending_arc_request_.reset();
+    if (committed) {
+        resetArcStage();
+    }
     return true;
 }
 
@@ -142,16 +554,54 @@ SketchInteractionState::previewLine(
         : std::nullopt;
 }
 
+std::optional<CircleIntent>
+SketchInteractionState::previewCircle(
+    Point2 current) const noexcept {
+    if (tool_ != SketchTool::circle ||
+        circle_stage_ !=
+            CircleStage::await_radius ||
+        !circle_center_ ||
+        pending_circle_request_ ||
+        !current.finite()) {
+        return std::nullopt;
+    }
+
+    CircleIntent preview{
+        *circle_center_,
+        distance(*circle_center_, current)};
+    return preview.valid()
+        ? std::optional<CircleIntent>{preview}
+        : std::nullopt;
+}
+
+std::optional<ArcIntent>
+SketchInteractionState::previewArc(
+    Point2 current) const noexcept {
+    if (tool_ != SketchTool::arc ||
+        arc_stage_ != ArcStage::await_end ||
+        !arc_start_ ||
+        !arc_through_ ||
+        pending_arc_request_ ||
+        !current.finite()) {
+        return std::nullopt;
+    }
+
+    return arcThroughThreePoints(
+        *arc_start_,
+        *arc_through_,
+        current);
+}
+
 void SketchInteractionState::finishTool() noexcept {
     manipulation_.reset();
     clearHover();
-    resetLineToSelect();
+    resetToSelect();
 }
 
 void SketchInteractionState::cancelTool() noexcept {
     manipulation_.reset();
     clearHover();
-    resetLineToSelect();
+    resetToSelect();
 }
 
 bool SketchInteractionState::escape() noexcept {
@@ -169,20 +619,42 @@ bool SketchInteractionState::escape() noexcept {
         return true;
     }
 
-    if (line_stage_ ==
-        LineStage::await_next_point) {
-        resetLineStage();
+    if (tool_ == SketchTool::line) {
+        if (line_stage_ ==
+            LineStage::await_next_point) {
+            resetLineStage();
+            return true;
+        }
+        resetToSelect();
         return true;
     }
 
-    resetLineToSelect();
-    return true;
+    if (tool_ == SketchTool::circle) {
+        if (circle_stage_ ==
+            CircleStage::await_radius) {
+            resetCircleStage();
+            return true;
+        }
+        resetToSelect();
+        return true;
+    }
+
+    if (tool_ == SketchTool::arc) {
+        if (arc_stage_ != ArcStage::await_start) {
+            resetArcStage();
+            return true;
+        }
+        resetToSelect();
+        return true;
+    }
+
+    return false;
 }
 
 void SketchInteractionState::cancelForHistory() noexcept {
     manipulation_.reset();
     clearHover();
-    resetLineToSelect();
+    resetToSelect();
 }
 
 bool SketchInteractionState::addSelection(
@@ -356,8 +828,7 @@ void SketchInteractionState::reconcileSelection(
             selected_.begin(),
             selected_.end(),
             [&model](EntityId id) {
-                return model.findLine(id) ==
-                    nullptr;
+                return !model.contains(id);
             }),
         selected_.end());
 
@@ -390,7 +861,7 @@ bool SketchInteractionState::setHoveredEntity(
 }
 
 bool SketchInteractionState::setHoveredGrip(
-    std::optional<LineGripRef> grip) noexcept {
+    std::optional<SketchGripRef> grip) noexcept {
     if (tool_ != SketchTool::select ||
         manipulation_) {
         return false;
@@ -412,7 +883,7 @@ void SketchInteractionState::clearHover() noexcept {
     hovered_grip_.reset();
 }
 
-std::optional<LineGripRef>
+std::optional<SketchGripRef>
 SketchInteractionState::activeGrip() const noexcept {
     if (!manipulation_) {
         return std::nullopt;
@@ -430,7 +901,7 @@ SketchInteractionState::directEditMode() const noexcept {
 
 bool SketchInteractionState::beginDirectManipulation(
     const SketchModel& model,
-    LineGripRef grip) {
+    SketchGripRef grip) {
     if (tool_ != SketchTool::select ||
         manipulation_ ||
         !grip.valid() ||
@@ -441,55 +912,128 @@ bool SketchInteractionState::beginDirectManipulation(
         return false;
     }
 
-    const auto* owner =
-        model.findLine(grip.entity_id);
-    if (owner == nullptr) {
-        return false;
-    }
-
     DirectManipulationSession session;
     session.active_grip = grip;
     session.selection_snapshot = selected_;
 
+    const auto capture_move =
+        [&]() {
+            session.mode = DirectEditMode::move;
+            for (const auto id :
+                 session.selection_snapshot) {
+                if (!appendEntityGeometry(
+                        session.initial_geometry,
+                        model,
+                        id)) {
+                    return false;
+                }
+            }
+            return !session.initial_geometry.empty();
+        };
+
     switch (grip.role) {
-    case LineHandleRole::start:
+    case SketchGripRole::line_start: {
+        const auto* owner =
+            model.findLine(grip.entity_id);
+        if (owner == nullptr) return false;
         session.mode = DirectEditMode::reshape;
         session.pivot = owner->start();
-        session.initial_geometry.push_back(
-            SketchLineState{
-                owner->id(),
-                owner->start(),
-                owner->end()});
+        session.initial_geometry.lines.push_back(
+            {owner->id(), owner->start(), owner->end()});
         break;
-
-    case LineHandleRole::end:
+    }
+    case SketchGripRole::line_end: {
+        const auto* owner =
+            model.findLine(grip.entity_id);
+        if (owner == nullptr) return false;
         session.mode = DirectEditMode::reshape;
         session.pivot = owner->end();
-        session.initial_geometry.push_back(
-            SketchLineState{
-                owner->id(),
-                owner->start(),
-                owner->end()});
+        session.initial_geometry.lines.push_back(
+            {owner->id(), owner->start(), owner->end()});
         break;
-
-    case LineHandleRole::center:
-        session.mode = DirectEditMode::move;
+    }
+    case SketchGripRole::line_center: {
+        const auto* owner =
+            model.findLine(grip.entity_id);
+        if (owner == nullptr) return false;
         session.pivot = lineCenter(*owner);
-        session.initial_geometry.reserve(
-            session.selection_snapshot.size());
-        for (const auto id :
-             session.selection_snapshot) {
-            const auto* line = model.findLine(id);
-            if (line == nullptr) {
-                return false;
-            }
-            session.initial_geometry.push_back(
-                SketchLineState{
-                    line->id(),
-                    line->start(),
-                    line->end()});
-        }
+        if (!capture_move()) return false;
         break;
+    }
+    case SketchGripRole::circle_center: {
+        const auto* owner =
+            model.findCircle(grip.entity_id);
+        if (owner == nullptr) return false;
+        session.pivot = owner->center();
+        if (!capture_move()) return false;
+        break;
+    }
+    case SketchGripRole::circle_quadrant_pos_u:
+    case SketchGripRole::circle_quadrant_pos_v:
+    case SketchGripRole::circle_quadrant_neg_u:
+    case SketchGripRole::circle_quadrant_neg_v: {
+        const auto* owner =
+            model.findCircle(grip.entity_id);
+        if (owner == nullptr) return false;
+        session.mode = DirectEditMode::reshape;
+        session.initial_geometry.circles.push_back(
+            {owner->id(), owner->center(), owner->radius()});
+
+        Point2 direction_vector{};
+        if (grip.role ==
+            SketchGripRole::circle_quadrant_pos_u) {
+            direction_vector = {owner->radius(), 0.0};
+        } else if (grip.role ==
+                   SketchGripRole::circle_quadrant_pos_v) {
+            direction_vector = {0.0, owner->radius()};
+        } else if (grip.role ==
+                   SketchGripRole::circle_quadrant_neg_u) {
+            direction_vector = {-owner->radius(), 0.0};
+        } else {
+            direction_vector = {0.0, -owner->radius()};
+        }
+        session.pivot = {
+            owner->center().u + direction_vector.u,
+            owner->center().v + direction_vector.v};
+        break;
+    }
+    case SketchGripRole::arc_center: {
+        const auto* owner =
+            model.findArc(grip.entity_id);
+        if (owner == nullptr) return false;
+        session.pivot = owner->center();
+        if (!capture_move()) return false;
+        break;
+    }
+    case SketchGripRole::arc_start:
+    case SketchGripRole::arc_end:
+    case SketchGripRole::arc_mid: {
+        const auto* owner =
+            model.findArc(grip.entity_id);
+        if (owner == nullptr) return false;
+        session.mode = DirectEditMode::reshape;
+        session.initial_geometry.arcs.push_back(
+            {
+                owner->id(),
+                owner->center(),
+                owner->radius(),
+                owner->startAngle(),
+                owner->sweepAngle()});
+
+        double angle = owner->startAngle();
+        if (grip.role == SketchGripRole::arc_end) {
+            angle += owner->sweepAngle();
+        } else if (grip.role ==
+                   SketchGripRole::arc_mid) {
+            angle += owner->sweepAngle() * 0.5;
+        }
+        session.pivot =
+            pointOnCircle(
+                owner->center(),
+                owner->radius(),
+                angle);
+        break;
+    }
     }
 
     session.current_input =
@@ -509,8 +1053,8 @@ bool SketchInteractionState::updateDirectManipulation(
     return true;
 }
 
-std::optional<std::vector<SketchLineState>>
-SketchInteractionState::directManipulationGeometry()
+std::optional<DirectManipulationGeometry>
+SketchInteractionState::directManipulationGeometryState()
     const {
     if (!manipulation_ ||
         !manipulation_->current_input.valid()) {
@@ -523,49 +1067,170 @@ SketchInteractionState::directManipulationGeometry()
         manipulation_->current_input.position;
 
     if (manipulation_->mode ==
-        DirectEditMode::reshape) {
-        if (result.size() != 1U) {
-            return std::nullopt;
-        }
+        DirectEditMode::move) {
+        const double du =
+            current.u - manipulation_->pivot.u;
+        const double dv =
+            current.v - manipulation_->pivot.v;
 
-        if (manipulation_->active_grip.role ==
-            LineHandleRole::start) {
-            result.front().start = current;
-        } else if (
-            manipulation_->active_grip.role ==
-            LineHandleRole::end) {
-            result.front().end = current;
-        } else {
-            return std::nullopt;
+        for (auto& line : result.lines) {
+            line.start.u += du;
+            line.start.v += dv;
+            line.end.u += du;
+            line.end.v += dv;
+            if (!validReplacement(line)) {
+                return std::nullopt;
+            }
         }
-
-        return validReplacement(result.front())
-            ? std::optional<std::vector<SketchLineState>>{
-                  std::move(result)}
-            : std::nullopt;
+        for (auto& circle : result.circles) {
+            circle.center.u += du;
+            circle.center.v += dv;
+            if (!validReplacement(circle)) {
+                return std::nullopt;
+            }
+        }
+        for (auto& arc : result.arcs) {
+            arc.center.u += du;
+            arc.center.v += dv;
+            if (!validReplacement(arc)) {
+                return std::nullopt;
+            }
+        }
+        return result.empty()
+            ? std::nullopt
+            : std::optional<DirectManipulationGeometry>{
+                  std::move(result)};
     }
 
-    if (manipulation_->active_grip.role !=
-        LineHandleRole::center) {
+    switch (manipulation_->active_grip.role) {
+    case SketchGripRole::line_start:
+    case SketchGripRole::line_end:
+        if (result.lines.size() != 1U ||
+            !result.circles.empty() ||
+            !result.arcs.empty()) {
+            return std::nullopt;
+        }
+        if (manipulation_->active_grip.role ==
+            SketchGripRole::line_start) {
+            result.lines.front().start = current;
+        } else {
+            result.lines.front().end = current;
+        }
+        return validReplacement(result.lines.front())
+            ? std::optional<DirectManipulationGeometry>{
+                  std::move(result)}
+            : std::nullopt;
+
+    case SketchGripRole::circle_quadrant_pos_u:
+    case SketchGripRole::circle_quadrant_pos_v:
+    case SketchGripRole::circle_quadrant_neg_u:
+    case SketchGripRole::circle_quadrant_neg_v:
+        if (result.circles.size() != 1U ||
+            !result.lines.empty() ||
+            !result.arcs.empty()) {
+            return std::nullopt;
+        }
+        result.circles.front().radius =
+            distance(
+                result.circles.front().center,
+                current);
+        return validReplacement(
+                   result.circles.front())
+            ? std::optional<DirectManipulationGeometry>{
+                  std::move(result)}
+            : std::nullopt;
+
+    case SketchGripRole::arc_mid:
+        if (result.arcs.size() != 1U ||
+            !result.lines.empty() ||
+            !result.circles.empty()) {
+            return std::nullopt;
+        }
+        result.arcs.front().radius =
+            distance(
+                result.arcs.front().center,
+                current);
+        return validReplacement(result.arcs.front())
+            ? std::optional<DirectManipulationGeometry>{
+                  std::move(result)}
+            : std::nullopt;
+
+    case SketchGripRole::arc_start:
+        if (result.arcs.size() != 1U ||
+            !result.lines.empty() ||
+            !result.circles.empty()) {
+            return std::nullopt;
+        } else {
+            auto& arc = result.arcs.front();
+            if (current == arc.center) {
+                return std::nullopt;
+            }
+            const double end_angle =
+                arc.start_angle +
+                arc.sweep_angle;
+            const double new_start =
+                direction(arc.center, current);
+            const auto sweep =
+                sameDirectionSweep(
+                    new_start,
+                    end_angle,
+                    arc.sweep_angle);
+            if (!sweep) return std::nullopt;
+            arc.start_angle = new_start;
+            arc.sweep_angle = *sweep;
+            return validReplacement(arc)
+                ? std::optional<
+                      DirectManipulationGeometry>{
+                      std::move(result)}
+                : std::nullopt;
+        }
+
+    case SketchGripRole::arc_end:
+        if (result.arcs.size() != 1U ||
+            !result.lines.empty() ||
+            !result.circles.empty()) {
+            return std::nullopt;
+        } else {
+            auto& arc = result.arcs.front();
+            if (current == arc.center) {
+                return std::nullopt;
+            }
+            const double end_angle =
+                direction(arc.center, current);
+            const auto sweep =
+                sameDirectionSweep(
+                    arc.start_angle,
+                    end_angle,
+                    arc.sweep_angle);
+            if (!sweep) return std::nullopt;
+            arc.sweep_angle = *sweep;
+            return validReplacement(arc)
+                ? std::optional<
+                      DirectManipulationGeometry>{
+                      std::move(result)}
+                : std::nullopt;
+        }
+
+    case SketchGripRole::line_center:
+    case SketchGripRole::circle_center:
+    case SketchGripRole::arc_center:
         return std::nullopt;
     }
 
-    const double du =
-        current.u - manipulation_->pivot.u;
-    const double dv =
-        current.v - manipulation_->pivot.v;
+    return std::nullopt;
+}
 
-    for (auto& line : result) {
-        line.start.u += du;
-        line.start.v += dv;
-        line.end.u += du;
-        line.end.v += dv;
-        if (!validReplacement(line)) {
-            return std::nullopt;
-        }
+std::optional<std::vector<SketchLineState>>
+SketchInteractionState::directManipulationGeometry()
+    const {
+    const auto geometry =
+        directManipulationGeometryState();
+    if (!geometry ||
+        !geometry->circles.empty() ||
+        !geometry->arcs.empty()) {
+        return std::nullopt;
     }
-
-    return result;
+    return geometry->lines;
 }
 
 void SketchInteractionState::finishDirectManipulation()
@@ -592,10 +1257,11 @@ SketchInteractionState::deterministicPrimary()
         selected_.end());
 }
 
-void SketchInteractionState::resetLineToSelect()
-    noexcept {
+void SketchInteractionState::resetToSelect() noexcept {
     tool_ = SketchTool::select;
     resetLineStage();
+    resetCircleStage();
+    resetArcStage();
 }
 
 void SketchInteractionState::resetLineStage()
@@ -604,6 +1270,23 @@ void SketchInteractionState::resetLineStage()
         LineStage::await_first_point;
     line_anchor_.reset();
     pending_line_request_.reset();
+}
+
+void SketchInteractionState::resetCircleStage()
+    noexcept {
+    circle_stage_ =
+        CircleStage::await_center;
+    circle_center_.reset();
+    pending_circle_request_.reset();
+}
+
+void SketchInteractionState::resetArcStage()
+    noexcept {
+    arc_stage_ =
+        ArcStage::await_start;
+    arc_start_.reset();
+    arc_through_.reset();
+    pending_arc_request_.reset();
 }
 
 } // namespace simplesolid2::sketch
