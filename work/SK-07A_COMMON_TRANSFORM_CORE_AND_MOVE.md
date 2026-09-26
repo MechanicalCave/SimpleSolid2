@@ -1,8 +1,11 @@
 # SK-07A — Common Transform Core and MOVE
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-26  
 **Owner acceptance:** 2026-09-26  
+**Owner manual Windows verification:** PASS — 2026-09-26  
+**Exact runtime Windows FULL:** #475 — `bb218f8d9cff1c1c2ffc45e091a69c485190e97e` — PASS  
+**Documentation gates:** #476 / #477 — PASS  
 **Decision class:** D2 interaction/transform architecture + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -386,3 +389,15 @@ Completion requires:
 - Owner manual Windows verification passes;
 - closeout CLOSURE passes;
 - remaining R7 work stays inactive until separately accepted.
+
+
+## 18. Completion evidence
+
+SK-07A completed its bounded first R7 slice on 2026-09-26.
+
+- Exact runtime head `bb218f8d9cff1c1c2ffc45e091a69c485190e97e` passed Windows FULL #475: Build succeeded and 60/60 unfiltered CTest tests passed.
+- Documentation-only head `afc442ffad2ad90b87d84bd7b55e9297018fe27e` passed DOCS #476 and ready-for-review DOCS #477, including generated Product Browser freshness and stable `windows-msvc`.
+- Owner manual Windows verification passed the accepted MOVE functionality.
+- The Owner noted one non-blocking UI organization improvement for the next R7 slice: organize Sketch tool buttons into explicit **Create** and **Modify** sections instead of continuing a flat row.
+- That toolbar grouping is intentionally deferred and does not reopen SK-07A.
+- Rotate/Scale/Mirror/Copy and the remaining R7 command grammar remain outside this completed contract.

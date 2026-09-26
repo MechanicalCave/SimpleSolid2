@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-07A_COMMON_TRANSFORM_CORE_AND_MOVE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,13 +16,11 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - implement accepted SK-07A within the bounded shared-transform + MOVE scope
-  - begin with provider-independent mixed Line/Circle/Arc translation semantics
-  - route existing Center-grip Move and normal toolbar/Command-Line MOVE through the same transform path
-  - implement selection-first and command-first MOVE with explicit Base Point
-  - use FAST/SUBSYSTEM Sketch/UI checkpoints during implementation
-  - require exact-head Windows FULL plus Owner manual verification before completion
-  - keep remaining R7 transforms/Copy/Repeat Last Command and R8+ inactive
+  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
+  - propose SK-07B for the next R7 slice: Rotate/Scale/Mirror/Copy on the shared transform core
+  - include Sketch toolbar organization into clear Create and Modify sections in that next UI slice
+  - preserve completed SK-07A MOVE semantics as the implementation baseline
+  - keep R8+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -92,3 +90,10 @@ notes:
   - Owner explicitly accepted SK-07A on 2026-09-26; this bounded R7A slice is active.
 
   - SK-07A activation does not authorize Rotate, Scale, Mirror, Copy, semantic Space CycleEditMode, ordinary-Select RMB context or Repeat Last Command.
+
+  - SK-07A runtime head bb218f8d9cff1c1c2ffc45e091a69c485190e97e passed Windows FULL #475 with Build and 60/60 CTest tests.
+  - SK-07A docs-only head afc442ffad2ad90b87d84bd7b55e9297018fe27e passed DOCS #476 and ready-for-review DOCS #477 with stable windows-msvc.
+  - Owner manual Windows verification passed on 2026-09-26 for normal MOVE functionality.
+  - Owner deferred one UI organization improvement to the next R7 slice: Sketch tool buttons should be grouped into explicit Create and Modify sections instead of extending one flat row.
+  - The toolbar grouping note is UX organization only; SK-07A behavior is accepted and must not be reopened for that deferred change.
+  - Remaining R7 transforms/Copy/Repeat Last Command require a separate explicit Owner-accepted Work Contract.
