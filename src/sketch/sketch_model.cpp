@@ -336,10 +336,6 @@ SketchModelState SketchModel::state() const {
 
 std::optional<SketchModel> SketchModel::restore(
     SketchModelState state) {
-    if (!state.next_entity_id.valid()) {
-        return std::nullopt;
-    }
-
     std::set<EntityId> ids;
 
     SketchModel model;
