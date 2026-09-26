@@ -897,6 +897,187 @@ void PartSketchInteractionController::handleArcPointer(
     }
 }
 
+void PartSketchInteractionController::handleMovePointer(
+    const SketchPointerInput& input) {
+    const auto stage = interaction_.moveStage();
+    if (!stage) return;
+
+    if (*stage == sketch::MoveStage::select_objects) {
+        switch (input.phase) {
+        case viewer::SpatialPointerPhase::primary_press:
+            interaction_.clearHover();
+            projectInteraction();
+            press_anchor_ = input.viewport_position;
+            rectangle_drag_active_ = false;
+            viewport_controller_->clearSketchSelectionBoxOverlay();
+            return;
+
+        case viewer::SpatialPointerPhase::move: {
+            if (!press_anchor_) {
+                updateHover(input.viewport_position);
+                return;
+            }
+
+            const auto dx =
+                input.viewport_position.x -
+                press_anchor_->x;
+            const auto dy =
+                input.viewport_position.y -
+                press_anchor_->y;
+
+            if (!rectangle_drag_active_) {
+                if (dx == 0.0 || dy == 0.0 ||
+                    std::hypot(dx, dy) <
+                        drag_threshold_pixels) {
+                    return;
+                }
+                rectangle_drag_active_ = true;
+                interaction_.clearHover();
+                projectInteraction();
+            }
+
+            updateRectangleOverlay(
+                input.viewport_position);
+            return;
+        }
+
+        case viewer::SpatialPointerPhase::primary_release:
+            break;
+        }
+
+        if (!press_anchor_) return;
+
+        const auto anchor = *press_anchor_;
+        press_anchor_.reset();
+
+        if (rectangle_drag_active_) {
+            rectangle_drag_active_ = false;
+            viewport_controller_->
+                clearSketchSelectionBoxOverlay();
+
+            const auto rectangle =
+                viewer::normalizedViewportRect(
+                    anchor,
+                    input.viewport_position);
+            if (!rectangle) return;
+
+            const auto rule =
+                input.viewport_position.x >= anchor.x
+                    ? viewer::SketchRectangleSelectionRule::
+                          window
+                    : viewer::SketchRectangleSelectionRule::
+                          crossing;
+
+            const auto queried =
+                viewport_controller_->
+                    querySketchEntities(
+                        *rectangle,
+                        rule);
+            if (!queried.completed) {
+                reportStatus(
+                    "MOVE rectangle query failed.");
+                return;
+            }
+
+            std::vector<sketch::EntityId> ids;
+            ids.reserve(queried.hits.size());
+            for (const auto& hit : queried.hits) {
+                if (hit.sketch_id != *sketch_id_) {
+                    reportStatus(
+                        "MOVE rectangle query returned stale context.");
+                    return;
+                }
+                ids.push_back(hit.entity_id);
+            }
+
+            const bool accepted =
+                input.control
+                    ? interaction_.toggleSelection(
+                          std::move(ids))
+                    : interaction_.addSelection(
+                          std::move(ids));
+            if (!accepted) {
+                reportStatus(
+                    "MOVE object selection was rejected.");
+                return;
+            }
+
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            return;
+        }
+
+        const auto queried =
+            viewport_controller_->querySketchEntityAt(
+                input.viewport_position);
+        if (!queried.completed) {
+            reportStatus(
+                "MOVE point query failed.");
+            return;
+        }
+
+        if (queried.hit) {
+            if (queried.hit->sketch_id !=
+                *sketch_id_) {
+                reportStatus(
+                    "MOVE point query returned stale context.");
+                return;
+            }
+
+            if (input.control) {
+                static_cast<void>(
+                    interaction_.toggleSelection(
+                        queried.hit->entity_id));
+            } else {
+                static_cast<void>(
+                    interaction_.addSelection(
+                        queried.hit->entity_id));
+            }
+
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+        }
+
+        // Blank LMB is intentionally a no-op while collecting MOVE objects.
+        return;
+    }
+
+    const auto resolved =
+        sketch::resolveSketchInput(input.position);
+
+    if (*stage == sketch::MoveStage::await_base_point) {
+        if (input.phase ==
+                viewer::SpatialPointerPhase::primary_press &&
+            resolved &&
+            interaction_.acceptMoveBasePoint(
+                *resolved)) {
+            viewport_controller_->clearSketchPreview();
+            configureForCurrentTool();
+            projectInteraction();
+            notifyStateChanged();
+        }
+        return;
+    }
+
+    if (*stage != sketch::MoveStage::await_destination) {
+        return;
+    }
+
+    if (input.phase ==
+        viewer::SpatialPointerPhase::move) {
+        updateMovePreview(input.position);
+        return;
+    }
+
+    if (input.phase ==
+        viewer::SpatialPointerPhase::primary_press) {
+        updateMovePreview(input.position);
+        static_cast<void>(commitMove());
+    }
+}
+
 void PartSketchInteractionController::updateRectangleOverlay(
     viewer::ViewportPoint2 current) {
     if (!press_anchor_) return;
@@ -916,13 +1097,22 @@ void PartSketchInteractionController::updateRectangleOverlay(
 
 void PartSketchInteractionController::updateHover(
     viewer::ViewportPoint2 point) {
-    if (interaction_.tool() !=
-            sketch::SketchTool::select ||
+    const bool select_mode =
+        interaction_.tool() ==
+        sketch::SketchTool::select;
+    const bool move_collect_mode =
+        interaction_.tool() ==
+            sketch::SketchTool::move &&
+        interaction_.moveStage() ==
+            sketch::MoveStage::select_objects;
+
+    if ((!select_mode && !move_collect_mode) ||
         interaction_.directManipulationActive()) {
         return;
     }
 
-    if (!interaction_.selectedEntities().empty()) {
+    if (select_mode &&
+        !interaction_.selectedEntities().empty()) {
         const auto grip =
             viewport_controller_->querySketchGripAt(
                 point);
@@ -1020,6 +1210,26 @@ updateDirectManipulationPreview(
     }
 }
 
+void PartSketchInteractionController::updateMovePreview(
+    sketch::Point2 raw_input) {
+    const auto resolved =
+        sketch::resolveSketchInput(raw_input);
+    if (!resolved ||
+        !interaction_.updateMoveDestination(
+            *resolved)) {
+        viewport_controller_->clearSketchPreview();
+        return;
+    }
+
+    const auto geometry =
+        interaction_.moveGeometryState();
+    if (!geometry ||
+        !viewport_controller_->setSketchGeometryPreview(
+            *geometry)) {
+        viewport_controller_->clearSketchPreview();
+    }
+}
+
 void PartSketchInteractionController::projectSelection() {
     if (!active()) return;
 
@@ -1050,10 +1260,17 @@ void PartSketchInteractionController::configureForCurrentTool() {
             viewer::PrimaryPointerRouting::
                 spatial_tool_input));
 
+    const bool pick_box =
+        interaction_.tool() ==
+            sketch::SketchTool::select ||
+        (interaction_.tool() ==
+             sketch::SketchTool::move &&
+         interaction_.moveStage() ==
+             sketch::MoveStage::select_objects);
+
     static_cast<void>(
         viewport_controller_->setSketchCursorMode(
-            interaction_.tool() ==
-                    sketch::SketchTool::select
+            pick_box
                 ? viewer::ViewportCursorMode::
                       select_pick_box
                 : viewer::ViewportCursorMode::
