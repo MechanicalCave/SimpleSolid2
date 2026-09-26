@@ -2,6 +2,7 @@
 
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/sketch/transform.hpp>
 
 #include <cstddef>
 #include <filesystem>
