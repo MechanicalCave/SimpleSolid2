@@ -1,460 +1,526 @@
-# SK-05A — Line Direct Manipulation and Primary Selection
+# SK-05A — Line Direct Manipulation and Selection Foundation
 
 **Status:** PROPOSED  
 **Decision class:** D2 Architecture + implementation  
-**Foundation:** 1.0 (`foundation-v1.0`)  
-**Architecture:** ADR-0003, ADR-0008, ADR-0009  
-**Program roadmap:** `work/SKETCH_ROADMAP.md` v1.1  
-**Roadmap milestone:** R5 — Sketch direct manipulation and selection refinement  
-**R5 delivery:** first bounded user-facing slice; R5 remains incomplete after SK-05A unless all R5 goals are later proven
+**Foundation:** 1.0 (foundation-v1.0)  
+**Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
+**Program roadmap:** proposed Sketcher roadmap v1.2 amendment  
+**Roadmap milestone:** R5 — Direct-manipulation and selection foundation on Line  
+**Implementation authorization:** none until explicit Owner acceptance of both roadmap v1.2 and this contract
 
 ## 1. Context
 
-R4 established one semantic Sketch interaction authority, transient semantic selection by `EntityId`, point and Window/Crossing selection, continuous Line creation, atomic Delete and predictable Undo/Redo.
+R4 proved the first complete authored Line workflow:
 
-R5 adds direct manipulation without changing the accepted identity model:
+- one SketchInteractionState authority;
+- continuous Line creation;
+- semantic selection by EntityId;
+- Window/Crossing queries;
+- atomic Delete;
+- Command/Transaction history;
+- provider-neutral pointer mapping;
+- transient preview;
+- Undo/Redo and persistence.
 
-- Line endpoints are authored coordinates, not separate durable Point entities;
-- grips are runtime interaction handles;
-- a center grip may translate a whole Line without creating midpoint identity;
-- provider presentation tokens never become durable CAD identity;
-- direct authored mutation must still pass through the ordinary command/transaction/document path.
+WB-01B then stabilized provider-surface overlay composition and froze provider-surface Navigation Cube ownership.
 
-SK-05A is deliberately limited to the existing Line primitive and existing Part-hosted active Sketch edit context.
+R5 now establishes the first reusable direct-manipulation architecture. The slice remains Line-only in authored geometry, but it must already obey the final selection and manipulation grammar required by later Circle/Arc and common transforms.
+
+The accepted v1.1 roadmap remains authoritative until the Owner accepts the proposed v1.2 amendment.
 
 ## 2. Goal
 
-Deliver the first complete direct-manipulation workflow for an authored Line:
+Deliver one coherent Line editing workflow:
 
-```text
-Select Line
-→ expose Start / End / Center runtime grips
-→ drag Start or End
-→ runtime preview follows pointer
-→ release commits one authored Line geometry update
-→ same EntityId is preserved
-→ one Undo step restores previous geometry
+1. Select one or more Lines using the revised additive/toggle grammar.
+2. Show Start, Center and End grips on every selected Line.
+3. Hover may prehighlight an entity or grip without changing selection.
+4. Click exactly one grip to start a DirectManipulationSession.
+5. Freeze the current selection set as the session snapshot.
+6. Endpoint grip defaults to Reshape of only its owning Line.
+7. Center grip defaults to Move of the entire frozen selection snapshot.
+8. Pointer movement creates transient preview only.
+9. LMB or Enter commits one validated semantic operation.
+10. Esc cancels only the active manipulation and preserves selection.
+11. A later Esc in Select clears selection.
+12. Existing EntityIds survive edit, Undo/Redo and Save → Close → Reopen.
 
-Select Line
-→ drag Center grip
-→ preview translates whole Line
-→ release commits one authored geometry update
-→ same EntityId is preserved
-→ one Undo step restores previous geometry
-```
+This contract intentionally does not ship Rotate, Scale, Mirror, Copy, Object Snap, numeric input, Circle or Arc.
 
-No constraints, snapping, numeric entry or new geometry primitive is introduced.
+## 3. Selection grammar change
 
-## 3. Selection refinement
+SK-05A deliberately replaces the R4 replace-on-click product grammar.
 
-SK-05A uses the existing semantic selection state.
+### 3.1 Point selection
+
+In ordinary Select:
+
+- LMB on an unselected Line adds it to the current selection set and makes it primary;
+- LMB on an already selected Line leaves membership unchanged and makes it primary;
+- Ctrl+LMB toggles Line membership;
+- if Ctrl removes the primary Line, primary is reconciled deterministically from semantic selection state and never from provider ordering;
+- LMB on blank space clears selection and primary;
+- Esc with non-empty selection clears selection and primary;
+- Esc with empty selection is a no-op.
+
+The internal replaceSelection capability may remain for bounded internal use. It is no longer the ordinary LMB product rule.
+
+### 3.2 Rectangle selection
+
+Window/Crossing keeps the accepted directional meaning:
+
+- left-to-right: Window, fully contained entities;
+- right-to-left: Crossing, contained or intersected entities.
+
+The membership grammar changes:
+
+- ordinary Window/Crossing adds returned EntityIds to the current selection;
+- Ctrl+Window/Crossing toggles returned EntityIds;
+- provider result order must not define primary;
+- rectangle selection does not implicitly erase earlier selection.
+
+### 3.3 Primary
+
+Primary is runtime semantic state used for contextual presentation where useful.
+
+Re-clicking an already selected Line may make it primary without changing selection membership.
+
+Primary is not durable and is not provider identity.
+
+## 4. Selection lifetime across tools
+
+Selection remains runtime state independent from the currently active creation/edit tool.
+
+When Line creation is activated:
+
+- existing selection is preserved;
+- grips become hidden/inactive while Line is active;
+- committed new Lines are not automatically added to selection;
+- Finish/Cancel Line returns to Select and restores grip presentation for the preserved selection.
+
+Switching to another tool cancels only uncommitted transient manipulation state. It must not silently clear selection unless that tool's accepted contract explicitly requires it.
+
+## 5. Hover / preselection
+
+Introduce runtime hover/preselection for Line entities and their visible grips.
 
 Rules:
 
-- ordinary Left click on a Line replaces selection with that Line and makes it primary;
-- Ctrl+Left click toggles Line membership;
-- when Ctrl adds a Line, the added Line becomes primary;
-- when Ctrl removes the primary Line, primary becomes empty rather than being inferred from provider/result ordering;
-- Window/Crossing rectangle selection continues to replace the selection and assigns no primary;
-- direct grips are shown only for a valid primary Line that is currently selected;
-- clicking ordinary blank space clears selection and primary under the existing R4 grammar.
+- hover may lightly highlight the entity or grip;
+- hover never changes semantic selection;
+- hover never creates authored mutation/history;
+- LMB performs the actual selection or grip activation;
+- if a visible grip and underlying geometry overlap, grip hit testing has priority.
 
-SK-05A does not add Shift selection, additive rectangle selection, selection cycling or filters.
+Exact visual styling, pixel size and provider-local hit-test implementation are D0/D1 details within this contract.
 
-## 4. Runtime grip semantics
+## 6. Runtime grips
 
-The runtime semantic grip roles are finite:
+Every selected Line exposes three runtime grips:
 
-```text
-LineStart
-LineEnd
-LineCenter
-```
+- LineStart;
+- LineCenter;
+- LineEnd.
 
-A grip reference conceptually contains:
+A semantic grip reference conceptually contains:
 
-```text
-SketchId
-EntityId
-GripRole
-```
+- SketchId;
+- EntityId;
+- HandleRole.
 
-It is runtime interaction identity only and must never be serialized or used as durable CAD identity.
+Grip identity is runtime only and must never be serialized.
 
-For a Line with authored/evaluated endpoints `A` and `B`:
+Locations derive from current evaluated Line geometry:
 
-- Start grip location = A;
-- End grip location = B;
-- Center grip location = (A + B) / 2.
+- Start = authored/evaluated start;
+- End = authored/evaluated end;
+- Center = midpoint of Start and End.
 
-The center position is derived. It does not create a midpoint entity, sub-entity or persistent reference.
+Center does not create a durable midpoint entity.
 
-## 5. Provider-neutral Viewer boundary
+Exactly one grip may be active at a time.
 
-The common Viewer boundary may be extended only with the smallest finite contract required to:
+Multiple simultaneously active grips are explicitly out of scope and are not a future requirement of the proposed roadmap.
 
-- present runtime Sketch grips at provider-neutral Sketch/spatial positions;
-- visually distinguish normal/hover/active grip state as runtime presentation;
-- hit-test grips;
-- emit neutral grip press/move/release/cancel interaction carrying semantic grip identity or an equivalent provider-neutral handle;
-- keep Qt and OCCT types out of public contracts.
+## 7. DirectManipulationSession
 
-The Qt/OCCT provider owns pixels, sizing, HiDPI behavior, hit testing and native presentation.
+Direct manipulation remains part of the single Sketch interaction authority; it must not become a second model/tool authority.
 
-The provider does not own selected EntityIds, authored Line geometry, command execution, Undo history or durable grip identity.
+A bounded session conceptually contains:
 
-If implementation requires a generic overlay framework or provider-native identity in the semantic boundary, stop and propose a new D2 decision rather than broadening this contract.
+- active SketchId;
+- active EntityId;
+- active HandleRole;
+- frozen selected EntityId snapshot;
+- current EditMode;
+- interaction-start authored/evaluated geometry needed for preview;
+- pivot/reference point implied by the active grip;
+- current resolved Sketch-local input;
+- transient preview.
 
-## 6. Direct-manipulation runtime state
+The session selection snapshot is frozen until commit or Esc.
 
-Direct manipulation is an adapter layered on the single active `SketchInteractionState`; it must not become a second authored interaction authority.
+Selection membership cannot be modified while a direct manipulation session is active.
 
-While one grip drag is active, runtime state may contain only what is needed to resolve that gesture, conceptually:
+## 8. Default Line grip semantics
 
-```text
-active SketchId
-Line EntityId
-GripRole
-authored geometry at drag start
-current preview geometry
-```
+### 8.1 Start and End
 
-This state is transient and cleared on commit, cancel, edit-context loss, Document switch/close or fail-closed invalidation.
+LineStart and LineEnd default to Reshape.
 
-Only one grip drag may be active at a time.
+For Line A→B:
 
-## 7. Pointer mapping
+- active Start with resolved point P previews P→B;
+- active End with resolved point P previews A→P.
 
-Grip drag uses the already accepted provider-neutral spatial pointer/ray → active Sketch plane/frame mapping.
+The affected set is only the owner Line of the active endpoint grip, even when other Lines are selected.
 
-The pointer must resolve to valid Sketch-local U/V.
+Coincident coordinates with another Line do not imply shared identity or propagated movement.
 
-Failure to resolve a current plane intersection:
+### 8.2 Center
 
-- does not guess from screen X/Y;
-- does not commit geometry;
-- keeps or cancels the runtime preview according to the bounded interaction implementation;
-- reports a runtime diagnostic when appropriate.
+LineCenter defaults to Move.
 
-No snap/inference tolerance is introduced.
+For one selected Line, the whole Line translates rigidly.
 
-## 8. Endpoint drag semantics
+For multiple selected Lines, clicking the Center grip of any selected Line immediately enters Move for the entire frozen selection snapshot.
 
-Dragging `LineStart`:
+The clicked Center grip is the pivot/reference point.
 
-```text
-original Line = A → B
-pointer = P
-preview = P → B
-```
+For each entity, the same translation delta is applied.
 
-Dragging `LineEnd`:
+This is one atomic multi-entity operation on commit.
 
-```text
-original Line = A → B
-pointer = P
-preview = A → P
-```
+## 9. Entry, preview, commit and cancel
 
-The opposite endpoint remains unchanged.
+### 9.1 Start
 
-Equal coordinates do not imply shared endpoint identity with any other Line. Moving one endpoint does not move geometrically coincident endpoints of other entities.
+A direct manipulation starts by clicking a visible grip.
 
-Constraints do not exist in SK-05A and therefore cannot propagate the edit.
+The user does not need to hold the mouse button through the entire operation.
 
-## 9. Center drag semantics
+The active grip becomes the session pivot/reference point.
 
-For a center-grip drag:
+There is no "change Base Point" option inside a grip-started session.
 
-```text
-drag start center = C0
-current pointer = P
-delta = P - C0
+### 9.2 Preview
 
-preview start = A + delta
-preview end   = B + delta
-```
+Pointer movement resolves through the existing Sketch plane mapping and the new shared resolved-input seam.
 
-The whole Line translates rigidly.
+For SK-05A the resolver may initially be identity:
 
-The operation does not create or persist a midpoint entity.
+raw valid Sketch-local U/V → resolved U/V
 
-## 10. Preview versus authored mutation
+Even in this identity stage, tools must consume resolved input rather than bind authored mutation directly to raw provider coordinates.
 
-Pointer movement during a grip drag is runtime preview only.
+Preview is runtime only and must not:
 
-It must not:
-
+- mutate SketchModel;
 - increment DocumentRevision;
-- set dirty/needsSave;
-- create Undo entries;
-- mutate the authoritative SketchModel;
-- change EntityId.
+- dirty the Document;
+- allocate EntityIds;
+- create Undo entries.
 
-On successful primary-button release, exactly one authored update command is executed if resulting geometry differs from the authored drag-start geometry.
+Preview for multi-Line Move must show the whole affected set coherently.
 
-No command is executed for an exact no-op release.
+### 9.3 Commit
 
-## 11. Semantic command and transaction path
+LMB or Enter commits the current valid preview.
 
-Authored direct manipulation must use a semantic command through the existing document transaction path.
+A commit must execute a semantic application command through the normal transaction path.
 
-Preferred bounded semantic shape:
+No exact no-op result creates a command/history entry.
 
-```text
-UpdateSketchLineGeometryCommand
-    SketchId
-    EntityId
-    replacement Line geometry
-```
+After a successful non-Copy commit:
 
-The command expresses resulting authored Line geometry, not a runtime grip operation.
+- authored geometry reflects the previewed result;
+- all edited existing EntityIds are preserved;
+- the DirectManipulationSession ends;
+- the same semantic selection remains selected;
+- grips regenerate from current geometry;
+- interaction returns to Select.
 
-The owning Part/Document layer validates:
+### 9.4 Esc hierarchy
 
-- Sketch exists;
-- EntityId exists in that Sketch;
-- entity is a Line;
-- replacement geometry is valid;
-- mutation preserves the existing EntityId.
+While direct manipulation is active:
 
-One successful drag release:
+- Esc discards only the uncommitted preview;
+- ends the DirectManipulationSession;
+- returns to Select;
+- preserves the selection set;
+- creates no authored mutation.
 
-```text
-neutral grip release
-→ validated resulting Line geometry
-→ semantic command
-→ PartDocumentTransaction
-→ owning PartDocument / embedded SketchModel
-→ presentation refresh
-```
+A subsequent Esc in ordinary Select clears selection and hides grips.
 
-No Viewer/provider object participates in persistence or authored identity.
+## 10. Semantic commands and transaction path
 
-## 12. Identity and history
+The authored command API must express resulting semantic geometry, not provider grip gestures.
 
-A direct edit preserves the Line `EntityId`.
+A bounded implementation may use one or more commands equivalent to:
 
-Undo restores the prior coordinates with the same EntityId.
+- UpdateSketchLineGeometryCommand for one-Line reshape;
+- TransformSketchEntitiesCommand or another bounded semantic batch command for multi-Line translation.
 
-Redo reapplies the edited coordinates with the same EntityId.
+Exact type names are D1 if ownership and public semantics remain consistent with this contract.
 
-Direct manipulation must not erase-and-recreate a Line merely to change its coordinates.
+Validation must fail closed if:
 
-A semantic future Copy operation remains responsible for fresh identity; SK-05A does not implement Copy.
+- SketchId no longer resolves;
+- any target EntityId is invalid or missing;
+- any target is not an editable Line in this contract;
+- replacement geometry is invalid;
+- the current document/history context is stale;
+- the target set differs from the frozen semantic intent in a way that makes commit ambiguous.
 
-## 13. Drag commit/cancel behavior
+No partial mutation is legal.
 
-Primary press on a visible grip begins a possible drag.
+## 11. Atomicity and history
 
-During drag:
+One accepted user commit means:
 
-- the grip becomes active visually;
-- authored Line presentation remains authoritative;
-- a separate runtime preview shows proposed geometry;
-- selection remains the same semantic EntityId set.
+- one semantic command;
+- one staged authored state;
+- one Part transaction;
+- one revision increment when changed;
+- one Undo entry.
 
-Primary release with changed valid geometry:
+For center-grip multi-Line Move, all selected Lines move atomically or none move.
 
-- executes one semantic update command;
-- clears preview/active-grip runtime state;
-- refreshes authored presentation;
-- preserves the edited Line selection and primary identity;
-- creates one Undo entry.
+Editing preserves EntityId.
 
-Primary release with unchanged geometry:
+Undo restores prior geometry with the same EntityIds.
 
-- clears runtime drag state;
-- creates no authored mutation/history.
+Redo reapplies geometry with the same EntityIds.
 
-Esc while dragging:
+Save → Close → Reopen preserves edited geometry and identity.
 
-- cancels the drag;
-- clears preview;
-- restores ordinary selected-Line presentation;
-- creates no authored mutation/history.
+## 12. Undo / Redo while manipulation is active
 
-## 14. Interaction with tools and navigation
+Existing R4 history policy remains the model:
 
-Direct manipulation is available only while Sketch `Select` is active.
+- cancel current transient interaction first;
+- clear preview;
+- return to Select while keeping/reconciling semantic selection;
+- execute ordinary global DocumentSession Undo/Redo;
+- refresh authored presentation;
+- reconcile selected EntityIds against current model;
+- regenerate grips from current evaluated geometry.
 
-Activating Line or leaving Select cancels any uncommitted grip drag first.
+SK-05A must not introduce a second session-local history stack.
 
-While no grip drag is active, existing R4 navigation remains unchanged:
+## 13. Tool switching
 
-- MMB Pan;
-- Shift+MMB Orbit;
-- wheel Zoom;
-- Navigation Cube.
+If another tool is explicitly activated while a direct manipulation preview is active:
 
-A primary-button grip drag owns that primary gesture and must not also trigger ordinary Line point selection.
+- cancel only the uncommitted direct-manipulation state;
+- preserve prior authored commits;
+- preserve semantic selection;
+- activate the requested tool.
 
-SK-05A does not add free-drag movement by clicking Line bodies. Movement is only through explicit grips.
+The user does not need to press Esc first.
 
-## 15. Presentation rules
+## 14. Provider-neutral Viewer boundary
 
-For the primary selected Line, present exactly three runtime grips:
+The common Viewer boundary may be extended with the smallest finite contract needed to:
 
-- Start;
-- End;
-- Center.
+- present grips for multiple selected Lines;
+- visually distinguish normal, hover and active grip states;
+- hit-test grips with grip-over-geometry priority;
+- expose provider-neutral hover and grip activation/input;
+- present transient direct-manipulation preview for the affected set.
 
-Grips must remain visibly and hit-testably anchored to current projected evaluated geometry after camera navigation and viewport resize.
+Qt/OCCT types, handles and provider identity must not cross into Shared 2D/Application semantics.
 
-Exact visual style is provider presentation detail, but must:
+The provider owns:
 
-- remain legible at supported Windows DPI scales;
-- distinguish endpoint grips from the center grip enough to avoid ambiguous hit testing;
-- avoid introducing QWidget-over-native-viewport composition;
-- render inside the provider/native graphics path or another already accepted stable provider presentation path.
+- pixels;
+- grip marker geometry/style;
+- HiDPI behavior;
+- provider-local hit testing;
+- native in-surface drawing;
+- redraw lifecycle.
 
-No grip styling becomes CAD semantics.
+The provider does not own:
 
-## 16. Selection/presentation coherence
+- selected EntityIds;
+- primary;
+- frozen selection snapshot;
+- EditMode;
+- authored Line coordinates;
+- semantic commands;
+- Undo history.
 
-Semantic `EntityId` selection remains authoritative.
+Runtime grip/hover/preview graphics must remain inside the stable provider/native CAD surface path rather than reintroduce QWidget-over-native-viewport composition.
 
-After direct edit, Undo/Redo, camera navigation or authored scene rebuild:
+## 15. Input/focus rules in this slice
 
-- the selected Line remains selected if the EntityId still exists;
-- primary remains the same EntityId if still selected;
-- grip positions are regenerated from current evaluated geometry;
-- provider-local presentation handles/tokens may change freely.
+Viewport CAD focus and text-entry focus remain distinct.
 
-If history removes the active Line or active Sketch, runtime selection/grips are reconciled or cleared fail-closed.
+For SK-05A:
 
-## 17. Persistence
+- LMB grip activation, pointer movement, LMB commit, Enter commit and Esc cancel are semantic interaction actions;
+- text-entry widgets must not accidentally trigger viewport actions;
+- future Space-based EditMode cycling is structurally reserved but not required to ship in SK-05A.
 
-SK-05A introduces no new persistence schema and no durable grip state.
+The resolved-input seam must allow later numeric, Object Snap, Ortho/Polar and Dynamic Input adapters without changing authored command semantics.
 
-Edited Line coordinates already belong to authored Sketch geometry and must therefore survive the existing:
+## 16. Architecture compatibility commitments for later R7+
 
-```text
-Save → Close → Reopen
-```
+SK-05A must not encode assumptions that prevent the proposed roadmap behavior:
 
-lifecycle with the same `SketchId` and `EntityId`.
+- HandleRole remains separate from EditMode;
+- common Move/Rotate/Scale/Mirror can later act on the frozen selection set;
+- entity-specific Reshape can remain owner-only;
+- grip-started transforms use the active grip as pivot;
+- command-started transforms may later use explicit Base Point/two-point mirror-axis input;
+- one shared transform core may later serve grip, toolbar and Command Line adapters;
+- Copy may later act as an orthogonal modifier with fresh EntityIds;
+- EditMode cycling may later use Space without provider/Qt enums becoming semantic state;
+- multiple active grips are not required.
 
-## 18. Properties and Operations
+This section constrains architecture shape only. It does not authorize those later features in R5.
 
-SK-05A does not introduce property-grid numeric geometry editing.
+## 17. Deliberately out of SK-05A
 
-Properties/Operations may reflect the current selected/primary Line and runtime grip-drag status, but they remain adapters and must not own another direct-edit state machine.
+Not implemented by this contract:
 
-Minimum Operations behavior may remain the existing Select context plus status text; new permanent controls are not required for grip dragging.
+- Circle;
+- Arc;
+- Rectangle;
+- Polyline;
+- Rotate;
+- Scale;
+- Mirror;
+- Copy;
+- repeated Copy;
+- explicit Base Point command workflow;
+- command-first MOVE/COPY/ROTATE/SCALE/MIRROR;
+- Repeat Last Command;
+- Object Snap;
+- Object Snap Tracking;
+- Temporary Snap Override;
+- Ortho;
+- Polar Tracking;
+- Grid/Grid Snap;
+- geometric inference;
+- Dynamic Input;
+- numeric coordinate/value parser;
+- unit suffix parsing;
+- Measure;
+- Show Dimensions;
+- construction geometry;
+- Auto-Constraint;
+- constraints/solver;
+- authored dimensions;
+- Trim/Extend/Offset/Fillet/Chamfer;
+- region/profile analysis;
+- projected/reference geometry;
+- planar-face Sketch support;
+- multi-active grips;
+- generic universal overlay framework.
 
-## 19. Deliberately out of scope
+These remain roadmap work and are not placeholders to be partially activated.
 
-```text
-snapping / Object Snap
-geometric inference
-constraints / solver
-dimensions
-numeric coordinate/value entry
-dynamic input
-dragging Line body without a grip
-multi-entity Move
-rotation / scale
-Circle / Arc grips
-Trim / Extend / Offset
-selection cycling
-Shift-selection grammar
-Ctrl-additive rectangle selection
-selection filters
-hover sub-element semantic selection outside grip hit testing
-durable midpoint entity
-new universal SubElement persistence API
-construction geometry
-profiles/regions
-projected/reference geometry
-planar-face Sketch support
-Body/Feature/Extrude architecture
-generic Viewer overlay framework
-```
-
-## 20. Expected implementation surface
+## 18. Expected implementation surface
 
 Expected production changes are bounded to:
 
-```text
-src/sketch/** for Line geometry replacement semantics if required
-src/part/** for semantic update command / transaction integration
-src/viewer/include/simplesolid2/viewer/** for finite neutral grip presentation/input
-src/viewer_qt_occt/** for native grip rendering/hit testing only
-src/ui/** for the existing Sketch interaction coordinator and selection projection
-tests/**
-docs/internal/SHARED_2D.md
-docs/internal/CAD_WORKBENCH_VIEWER.md
-docs/internal/PART_DOCUMENTS.md
-docs/internal/BUILD_AND_TEST.md as needed
-docs/product/en/PARTS.md
-docs/product/pl/PARTS.md
-work/**
-```
+- src/sketch/** for selection/direct-manipulation runtime semantics and Line replacement helpers if needed;
+- src/application/** and/or src/part/** for semantic geometry update/batch transform command integration;
+- src/viewer/include/simplesolid2/viewer/** for finite neutral grip/hover/preview transport;
+- src/viewer_qt_occt/** for provider-native presentation and hit testing only;
+- src/ui/** for the existing Sketch interaction coordinator and adapters;
+- tests/**;
+- docs/internal/SHARED_2D.md;
+- docs/internal/CAD_WORKBENCH_VIEWER.md;
+- docs/internal/PART_DOCUMENTS.md;
+- docs/internal/BUILD_AND_TEST.md as needed;
+- docs/product/pl/PARTS.md;
+- docs/product/en/PARTS.md;
+- work/**.
 
 No persistence schema migration is expected.
 
-If implementation requires a new durable reference model, constraints, snapping, generic overlay subsystem or provider-native identity in public contracts, stop.
+If implementation requires durable grip state, provider-native identity in semantic contracts, a generic overlay framework, constraints/snapping, or a new universal reference system, stop and return for D2 review.
 
-## 21. Verification
+## 19. Automated verification
 
-Automated coverage must prove at minimum:
+At minimum prove:
 
-1. ordinary Line selection produces a primary selected Line;
-2. Ctrl-add sets the added Line primary;
-3. Ctrl-removing primary leaves no inferred primary;
-4. rectangle selection keeps no primary;
-5. grips are exposed only for a valid selected primary Line;
-6. exactly Start/End/Center grip roles exist for a Line;
-7. grip positions derive from current Line geometry;
-8. provider hit testing returns semantic neutral grip interaction rather than OCCT identity;
-9. grip press does not also trigger ordinary primary selection input;
-10. endpoint preview moves only the dragged endpoint;
-11. center preview translates both endpoints by one delta;
-12. preview movement creates no revision/dirty/Undo mutation;
-13. Esc cancels drag with no authored mutation;
-14. exact no-op release creates no command/history;
-15. valid release executes exactly one semantic geometry-update command;
-16. direct edit preserves EntityId;
-17. Undo restores prior coordinates and preserves EntityId;
-18. Redo reapplies edited coordinates and preserves EntityId;
-19. selection/primary survive a successful edit by EntityId;
-20. grip positions refresh from current geometry after edit and Undo/Redo;
-21. active Sketch/Document loss clears drag preview and grips fail-closed;
-22. Save → Close → Reopen preserves edited coordinates and identity;
-23. Pan/Orbit/Zoom/Navigation Cube remain functional outside active LMB grip drag;
-24. provider/native stress covers repeated show/hit/drag-preview/clear lifecycle and resize;
-25. exact-head Windows FULL CI passes.
+1. ordinary LMB adds an unselected Line rather than replacing prior selection;
+2. ordinary LMB on an already selected Line preserves membership and updates primary;
+3. Ctrl+LMB toggles membership;
+4. blank LMB clears selection in ordinary Select;
+5. Esc clears non-empty selection in ordinary Select;
+6. ordinary Window/Crossing adds returned Lines;
+7. Ctrl+Window/Crossing toggles returned Lines;
+8. provider result ordering does not define primary;
+9. selection survives activation/cancel/finish of Line creation;
+10. newly created Line is not automatically selected;
+11. every selected Line exposes Start/Center/End grips;
+12. only one grip can be active;
+13. hover does not mutate semantic selection;
+14. grip hit wins over underlying geometry;
+15. clicking Start/End begins owner-only Reshape;
+16. clicking Center begins Move of the complete frozen selection snapshot;
+17. selection membership cannot change during an active session;
+18. pointer movement creates preview only;
+19. preview creates no revision/dirty/history mutation;
+20. LMB commit and Enter commit use the same semantic command path;
+21. Esc cancels active manipulation and preserves selection;
+22. a subsequent Esc in Select clears selection;
+23. endpoint reshape preserves EntityId;
+24. multi-Line Move preserves all existing EntityIds;
+25. multi-Line Move is one atomic transaction and one Undo entry;
+26. validation failure causes no partial update;
+27. Undo/Redo preserves EntityIds and uses ordinary global history;
+28. Undo/Redo requested during manipulation cancels transient preview first;
+29. tool switch cancels uncommitted preview and preserves selection;
+30. Save → Close → Reopen preserves edited coordinates and identity;
+31. camera Pan/Orbit/Zoom/Navigation Cube remain functional outside active primary manipulation;
+32. provider/native stress covers repeated hover/show/activate/preview/commit/cancel/clear and resize/DPI lifecycle;
+33. exact-head Windows FULL CI passes;
+34. documentation verification and generated Product Browser freshness pass.
 
-Manual Windows verification is required for the final exact-head candidate because grip usability and native presentation cannot be proven fully by semantic tests. Verify at least:
+## 20. Manual Windows verification
 
-- endpoint and center grips are visually distinct and clickable;
-- repeated endpoint/center drags do not produce stale pixels or viewport disappearance;
-- grips remain anchored after orbit, zoom, splitter resize and supported DPI scaling;
-- drag preview follows the intended Sketch-plane location;
-- release lands on the same geometry shown by preview;
-- Undo/Redo visibly restores/reapplies geometry;
-- Cube/Pan/Orbit/Zoom remain coherent after grip use.
+The exact final implementation candidate requires manual verification of:
 
-## 22. Documentation impact
+- multiple selected Lines visibly show their grips;
+- endpoint and center grips are distinguishable and reliably hit-testable;
+- hover is visible but does not change selection;
+- grip-over-geometry priority behaves consistently;
+- endpoint Reshape affects only the owning Line;
+- center-grip Move moves the whole selected set;
+- preview follows the resolved Sketch-plane location;
+- LMB and Enter land on the same geometry shown by preview;
+- Esc cancels preview while retaining selection;
+- second Esc clears selection;
+- selection survives Line creation activation/finish/cancel;
+- Undo/Redo visibly restores/reapplies the atomic edit;
+- no stale native pixels or viewport disappearance occur during repeated use, navigation, resize and supported DPI scaling.
+
+## 21. Documentation impact
 
 Internal docs: required  
 User/Product docs: required  
-Reason: SK-05A adds a new user-visible editing workflow and extends provider-neutral runtime Viewer/interaction contracts.
+Reason: SK-05A changes the user-visible Select grammar, adds hover/grips/direct manipulation, changes Esc behavior in Select, and extends provider-neutral runtime interaction contracts.
 
-## 23. Acceptance
+## 22. Acceptance boundary
 
-SK-05A is complete only when:
+SK-05A is accepted for implementation only when the Owner explicitly accepts:
 
-1. the Owner has explicitly accepted this D2 contract;
-2. implementation remains within the bounded Line-only direct-manipulation scope;
-3. direct edits use the semantic command/transaction path;
-4. no grip/provider token becomes durable identity;
-5. all required automated coverage passes;
-6. exact-head Windows FULL passes;
-7. required internal and PL/EN product documentation is current;
-8. generated Documentation Browser is current;
-9. explicit manual Windows verification passes on the exact final implementation candidate;
-10. closeout CLOSURE gate passes;
-11. R5 roadmap status is not marked completed unless the remaining R5 goals are separately proven;
-12. no R6+ capability is activated implicitly.
+1. the Sketcher roadmap v1.2 amendment; and
+2. this revised SK-05A contract.
+
+Completion later requires:
+
+- implementation remains inside this contract;
+- semantic commands/transactions own durable edits;
+- provider identity does not become CAD identity;
+- exact-head Windows FULL passes;
+- required documentation is current;
+- manual Windows verification passes;
+- closeout CLOSURE gate passes.
+
+R6+ remains inactive until separately contracted.
