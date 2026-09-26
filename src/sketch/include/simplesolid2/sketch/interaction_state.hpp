@@ -16,6 +16,7 @@ enum class SketchTool : std::uint8_t {
     line,
     circle,
     arc,
+    move,
 };
 
 enum class LineStage : std::uint8_t {
@@ -32,6 +33,12 @@ enum class ArcStage : std::uint8_t {
     await_start,
     await_through,
     await_end,
+};
+
+enum class MoveStage : std::uint8_t {
+    select_objects,
+    await_base_point,
+    await_destination,
 };
 
 struct LineSegmentIntent final {
@@ -199,6 +206,9 @@ public:
     [[nodiscard]] std::optional<ArcStage>
     arcStage() const noexcept;
 
+    [[nodiscard]] std::optional<MoveStage>
+    moveStage() const noexcept;
+
     [[nodiscard]] std::optional<Point2>
     lineAnchor() const noexcept {
         return line_anchor_;
@@ -216,6 +226,17 @@ public:
     void activateLine() noexcept;
     void activateCircle() noexcept;
     void activateArc() noexcept;
+    [[nodiscard]] bool activateMove(
+        const SketchModel& model);
+    [[nodiscard]] bool completeMoveSelection(
+        const SketchModel& model);
+    [[nodiscard]] bool acceptMoveBasePoint(
+        ResolvedSketchInput input) noexcept;
+    [[nodiscard]] bool updateMoveDestination(
+        ResolvedSketchInput input) noexcept;
+    [[nodiscard]] std::optional<SketchTransformGeometry>
+    moveGeometryState() const;
+    void finishMove() noexcept;
 
     [[nodiscard]] LinePointResult acceptLinePoint(
         Point2 point) noexcept;
@@ -334,6 +355,14 @@ public:
     void cancelDirectManipulation() noexcept;
 
 private:
+    struct MoveSession final {
+        MoveStage stage{MoveStage::select_objects};
+        std::vector<EntityId> selection_snapshot;
+        SketchTransformGeometry initial_geometry;
+        std::optional<Point2> base_point;
+        std::optional<ResolvedSketchInput> current_destination;
+    };
+
     struct DirectManipulationSession final {
         SketchGripRef active_grip;
         DirectEditMode mode{DirectEditMode::reshape};
@@ -347,13 +376,17 @@ private:
     deterministicPrimary() const noexcept;
 
     [[nodiscard]] bool selectionMutable() const noexcept {
-        return !manipulation_.has_value();
+        return !manipulation_.has_value() &&
+               (!move_session_ ||
+                move_session_->stage ==
+                    MoveStage::select_objects);
     }
 
     void resetToSelect() noexcept;
     void resetLineStage() noexcept;
     void resetCircleStage() noexcept;
     void resetArcStage() noexcept;
+    void resetMoveStage() noexcept;
 
     SketchTool tool_{SketchTool::select};
 
@@ -375,6 +408,8 @@ private:
     std::optional<Point2> arc_through_;
     std::optional<ArcIntent>
         pending_arc_request_;
+
+    std::optional<MoveSession> move_session_;
 
     std::vector<EntityId> selected_;
     std::optional<EntityId> primary_;
