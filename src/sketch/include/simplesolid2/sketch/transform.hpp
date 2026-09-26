@@ -32,6 +32,6 @@ captureSketchTransformGeometry(
 [[nodiscard]] std::optional<SketchTransformGeometry>
 translateSketchGeometry(
     const SketchTransformGeometry& geometry,
-    Point2 delta) noexcept;
+    Point2 delta);
 
 } // namespace simplesolid2::sketch
