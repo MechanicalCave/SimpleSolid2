@@ -190,7 +190,9 @@ public:
     [[nodiscard]] const std::filesystem::path& path() const noexcept { return path_; }
     [[nodiscard]] const part::PartDocument& document() const noexcept { return document_; }
 
-    [[nodiscard]] bool needsSave() const noexcept;
+    [[nodiscard]] bool needsSave() const noexcept {
+        return document_.state() != saved_state_;
+    }
     [[nodiscard]] bool canUndo() const noexcept { return cursor_ > 0U; }
     [[nodiscard]] bool canRedo() const noexcept { return cursor_ < history_.size(); }
     [[nodiscard]] std::size_t undoDepth() const noexcept { return cursor_; }
