@@ -598,7 +598,10 @@ void PartSketchInteractionController::onPointer(
         handleArcPointer(input);
         return;
     case sketch::SketchTool::move:
-        handleMovePointer(input);
+    case sketch::SketchTool::rotate:
+    case sketch::SketchTool::scale:
+    case sketch::SketchTool::mirror:
+        handleCommonTransformPointer(input);
         return;
     }
 }
@@ -1013,19 +1016,33 @@ void PartSketchInteractionController::handleArcPointer(
     }
 }
 
-void PartSketchInteractionController::handleMovePointer(
+void PartSketchInteractionController::
+handleCommonTransformPointer(
     const SketchPointerInput& input) {
-    const auto stage = interaction_.moveStage();
+    const auto stage =
+        interaction_.commonTransformStage();
     if (!stage) return;
 
-    if (*stage == sketch::MoveStage::select_objects) {
+    const auto tool = interaction_.tool();
+    const char* command_name =
+        tool == sketch::SketchTool::move
+            ? "MOVE"
+            : tool == sketch::SketchTool::rotate
+                ? "ROTATE"
+                : tool == sketch::SketchTool::scale
+                    ? "SCALE"
+                    : "MIRROR";
+
+    if (*stage ==
+        sketch::CommonTransformStage::select_objects) {
         switch (input.phase) {
         case viewer::SpatialPointerPhase::primary_press:
             interaction_.clearHover();
             projectInteraction();
             press_anchor_ = input.viewport_position;
             rectangle_drag_active_ = false;
-            viewport_controller_->clearSketchSelectionBoxOverlay();
+            viewport_controller_->
+                clearSketchSelectionBoxOverlay();
             return;
 
         case viewer::SpatialPointerPhase::move: {
@@ -1091,7 +1108,8 @@ void PartSketchInteractionController::handleMovePointer(
                         rule);
             if (!queried.completed) {
                 reportStatus(
-                    "MOVE rectangle query failed.");
+                    std::string{command_name} +
+                    " rectangle query failed.");
                 return;
             }
 
@@ -1100,7 +1118,8 @@ void PartSketchInteractionController::handleMovePointer(
             for (const auto& hit : queried.hits) {
                 if (hit.sketch_id != *sketch_id_) {
                     reportStatus(
-                        "MOVE rectangle query returned stale context.");
+                        std::string{command_name} +
+                        " rectangle query returned stale context.");
                     return;
                 }
                 ids.push_back(hit.entity_id);
@@ -1114,7 +1133,8 @@ void PartSketchInteractionController::handleMovePointer(
                           std::move(ids));
             if (!accepted) {
                 reportStatus(
-                    "MOVE object selection was rejected.");
+                    std::string{command_name} +
+                    " object selection was rejected.");
                 return;
             }
 
@@ -1129,7 +1149,8 @@ void PartSketchInteractionController::handleMovePointer(
                 input.viewport_position);
         if (!queried.completed) {
             reportStatus(
-                "MOVE point query failed.");
+                std::string{command_name} +
+                " point query failed.");
             return;
         }
 
@@ -1137,7 +1158,8 @@ void PartSketchInteractionController::handleMovePointer(
             if (queried.hit->sketch_id !=
                 *sketch_id_) {
                 reportStatus(
-                    "MOVE point query returned stale context.");
+                    std::string{command_name} +
+                    " point query returned stale context.");
                 return;
             }
 
@@ -1156,18 +1178,27 @@ void PartSketchInteractionController::handleMovePointer(
             notifyStateChanged();
         }
 
-        // Blank LMB is intentionally a no-op while collecting MOVE objects.
+        // Blank LMB is intentionally a no-op during
+        // command-first common-transform object collection.
         return;
     }
 
     const auto resolved =
         sketch::resolveSketchInput(input.position);
 
-    if (*stage == sketch::MoveStage::await_base_point) {
+    const bool reference_stage =
+        *stage ==
+            sketch::CommonTransformStage::await_base_point ||
+        *stage ==
+            sketch::CommonTransformStage::await_reference_point ||
+        *stage ==
+            sketch::CommonTransformStage::await_axis_start;
+
+    if (reference_stage) {
         if (input.phase ==
                 viewer::SpatialPointerPhase::primary_press &&
             resolved &&
-            interaction_.acceptMoveBasePoint(
+            interaction_.acceptTransformPoint(
                 *resolved)) {
             viewport_controller_->clearSketchPreview();
             configureForCurrentTool();
@@ -1177,20 +1208,27 @@ void PartSketchInteractionController::handleMovePointer(
         return;
     }
 
-    if (*stage != sketch::MoveStage::await_destination) {
+    const bool preview_stage =
+        *stage ==
+            sketch::CommonTransformStage::await_destination ||
+        *stage ==
+            sketch::CommonTransformStage::await_axis_end;
+    if (!preview_stage) {
         return;
     }
 
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
-        updateMovePreview(input.position);
+        updateCommonTransformPreview(
+            input.position);
         return;
     }
 
     if (input.phase ==
         viewer::SpatialPointerPhase::primary_press) {
-        updateMovePreview(input.position);
-        static_cast<void>(commitMove());
+        updateCommonTransformPreview(
+            input.position);
+        static_cast<void>(commitTransform());
     }
 }
 
