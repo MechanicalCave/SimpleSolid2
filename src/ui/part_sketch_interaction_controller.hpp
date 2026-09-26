@@ -38,6 +38,8 @@ public:
     [[nodiscard]] bool directManipulationActive()
         const noexcept;
 
+    // Line/Circle/Arc are adapters to the same semantic
+    // SketchInteractionState and resolved-input path.
     void activateSelect();
     void activateLine();
     void activateCircle();
