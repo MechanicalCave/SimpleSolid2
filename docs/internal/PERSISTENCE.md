@@ -30,7 +30,7 @@ Metadata initialization is fail-closed and uses staged publication. Metadata loa
 
 A native top-level Part is stored as `*.ss2part`.
 
-The physical representation is native Document container v1: one ZIP-compatible package with exactly two mandatory files and an optional derived namespace:
+The physical representation remains native Document container v1: one ZIP-compatible package with exactly two mandatory files and an optional derived namespace:
 
 ```text
 Part001.ss2part
@@ -41,44 +41,30 @@ Part001.ss2part
     └── ... optional disposable assets
 ```
 
-Container v1 uses UTF-8 JSON for `manifest.json` and `authored/document.json`.
+Container v1 uses UTF-8 JSON. The common manifest contains `format`, `container_version`, `document_kind`, `document_id` and `domain_schema_version`. Shared persistence owns package/container safety; Part owns engineering meaning in `authored/document.json`.
 
-The common manifest contains exactly:
+The current Part domain writer is schema **v4**. It persists document properties, built-in Origin visibility and the ordered collection of Part-hosted Sketch records. Each Sketch record persists stable SketchId, built-in Origin-plane support, explicit SketchPlacement, visibility and one embedded Shared 2D model.
+
+Schema-v4 Sketch models contain:
 
 ```text
-format
-container_version
-document_kind
-document_id
-domain_schema_version
+next_entity_id
+entities[]
 ```
 
-The current format identifier is `simplesolid.native-document`; container version is 1.
+`next_entity_id` is the canonical positive decimal shared EntityId high-water string. Each entity record has an explicit semantic `kind`:
 
-Shared persistence owns ZIP recognition, bounded parsing, common manifest recognition and container safety. It does not interpret Part engineering meaning.
+- `line`: `id`, `start`, `end`;
+- `circle`: `id`, `center`, `radius`;
+- `arc`: `id`, `center`, `radius`, `start_angle`, `sweep_angle`.
 
-The Part domain owns `authored/document.json`. Current Part domain schema version 3 persists:
+Only canonical authored parameters are serialized. Tessellation, presentation tokens, grips, hover/selection, preview and creation-method metadata are not persisted.
 
-- Number;
-- Title;
-- Description;
-- Engineering Revision;
-- built-in Origin visibility;
-- the ordered collection of Part-hosted Sketch records.
+Part schemas v1, v2 and v3 remain readable. V1 restores an empty Sketch collection. V2 restores host Sketch records with empty Shared 2D models and an initial cursor. V3 reads the previous `next_entity_id + lines[]` Line-only model. Opening an old schema does not rewrite the file; a later successful ordinary Save writes current schema v4.
 
-Each Sketch record persists stable SketchId, built-in Origin-plane support, explicit SketchPlacement (origin plus local U/V axes), visibility and its embedded Shared 2D model.
+DocumentId remains only in the common manifest. ProjectId is not embedded in the Document. `DocumentRevision` and Undo/Redo are runtime-only.
 
-The schema-v3 model contains `next_entity_id` as a canonical positive unsigned-decimal string and a `lines` array. Each Line stores its canonical model-local EntityId string plus finite two-component Start/End U/V arrays. EntityId strings are deliberately not JSON numbers.
-
-Part schemas v1 and v2 remain readable. V1 restores an empty Sketch collection. V2 restores the existing host Sketch records with empty Shared 2D models and an initial EntityId cursor. Opening old schemas does not rewrite the file. A later successful Save writes current schema v3.
-
-DocumentId is stored only in the common manifest. ProjectId is not embedded in the Document. Workspace membership remains physical/runtime context.
-
-`DocumentRevision` is an in-memory synchronization counter and is not serialized.
-
-The former line-based `SS2PART` bootstrap format is not a supported legacy product format. PERSIST-01 intentionally resets persistence before meaningful user data exists; old bootstrap files fail closed instead of being migrated.
-
-Future accepted domain-schema changes remain explicitly versioned and require their own compatibility/migration decision.
+The former line-based `SS2PART` bootstrap format remains unsupported legacy test data and fails closed rather than being migrated.
 
 <!-- section-id: internal.persistence.atomic-save -->
 ## Atomic Document publication and Save
@@ -131,17 +117,15 @@ Recent availability is also derived at runtime.
 
 Part discovery reads the common manifest, then Part authored state.
 
-A rename or move inside the Workspace does not change DocumentId.
+A rename or move inside the Workspace does not change DocumentId. Duplicate native Part files declaring one DocumentId remain a fail-closed identity conflict; no automatic ID rewrite is performed.
 
-If multiple native Part files declare one DocumentId, discovery records an identity conflict containing all relative paths and resolution/open by that DocumentId fails closed. No automatic ID rewrite is performed.
+Schema-v4 Sketch loading rejects malformed/non-canonical identity strings, duplicate EntityIds across any primitive kinds, EntityIds greater than or equal to `next_entity_id`, malformed/unknown `kind` values, non-finite geometry, exact-zero Lines, non-positive Circle/Arc radius, zero Arc sweep and Arc sweep whose magnitude reaches/exceeds a full turn. The same local EntityId value in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
 
-Schema-v3 Sketch model loading additionally rejects malformed/non-canonical identity strings, duplicate EntityIds within one SketchModel, EntityIds greater than or equal to `next_entity_id`, invalid finite coordinates and exact-zero Lines. The same local EntityId value in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
+Schema-v3 validation remains intact for backward read compatibility.
 
 Container v1 rejects unsafe or ambiguous input, including unsupported container versions, ZIP64, encrypted/unsupported entries, duplicate entry names, unsafe entry paths, missing mandatory entries, oversized content, invalid mandatory JSON and unsupported Part domain schemas.
 
-A `.ss2part` whose manifest declares another Document kind fails closed.
-
-`document_id` uses Core's canonical DocumentId serialization and is parsed by Core. Persistence does not define a second identity representation.
+A `.ss2part` whose manifest declares another Document kind fails closed. `document_id` uses Core's canonical DocumentId serialization; Persistence does not define a second identity representation.
 
 <!-- section-id: internal.persistence.non-goals -->
 ## Current non-goals

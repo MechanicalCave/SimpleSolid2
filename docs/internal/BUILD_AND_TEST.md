@@ -48,63 +48,32 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 56 tests.
+The compiled CTest suite contains **58 tests**.
 
-Project/Hub, PART-01 and WB-01 coverage remains active.
+All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. In particular, the native selection-query test still exercises real Qt/OCCT grip lifecycle/hit testing before and after camera orbit, while the long native Workbench stress test remains FULL-only.
 
-PERSIST-01 adds `persist01.native_document_container` coverage for the native ZIP+JSON package boundary, including round-trip read/write, mandatory entries, optional derived entries, unsupported container versions, malformed JSON, unsafe/duplicate ZIP entries, ZIP64 rejection and bounded physical file size.
+SK-06A adds:
 
-SK-01 adds `sk01.part_sketch_host` and `sk01.workbench_sketch_host` coverage for Origin-plane support validation, stable SketchId creation, one-entry Undo/Redo restoration, Part schema v2 round-trip plus schema-v1 read compatibility, Sketch Tree presentation, Sketch-plane grid/camera alignment for XY/XZ/YZ, free runtime navigation without authored mutation, Finish Sketch and Save/Close/Reopen identity preservation.
+- `sk06a.circle_arc_model_persistence` — mixed Line/Circle/Arc model identity, canonical validation, semantic add/update/delete/history, schema-v4 persistence, Save/load identity preservation and malformed unknown-kind rejection;
+- `sk06a.circle_arc_interaction_state` — Circle Center+Radius and Arc Start/Through/End state/preview semantics, CW/CCW and short/long Arc canonicalization, duplicate/collinear failure, mixed frozen-selection Move and owner-only Circle/Arc reshape invariants.
 
-SK-02A adds `sk02a.shared_2d_core` and `sk02a.shared_2d_boundaries` coverage for the host-neutral authored 2D core: finite Sketch-local U/V values, opaque stable model-local EntityId, exact-zero Line rejection without an epsilon policy, equal-coordinate-but-independent endpoints, add/find/erase semantics, identity non-reuse in a continuing model instance, independent value-copy state and dependency-boundary enforcement.
+SK-06A also generalizes existing provider/controller paths so the pre-existing native/query/direct-manipulation tests execute against semantic curve presentation and the DPI-aware state-based square grip implementation.
 
-SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part-owned Shared 2D value state, Add/Erase command history, live identity high-water, schema-v3 strict validation, v1/v2 backward readability and Save/Close/Reopen identity preservation.
+At exact head `518e8f3a5feb56a04d2c2067553d8697e02ceadf`, Windows FULL #440 passed Build and **58/58** unfiltered CTest tests. In that run `tier-fast` contained 57 tests; the long native Workbench stress test remained the sole `tier-full-only` test.
 
-SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for provider-neutral authored/preview scenes, Sketch-frame U/V↔3D conversion, ray→U/V failure behavior, active-Sketch presentation/token bindings, preview non-mutation, fail-closed runtime lifecycle, exclusive primary routing, cursor modes and real Qt/OCCT spatial input before/after camera orbit.
+Repository documentation validation runs outside CTest through `ss2 verify`. Tests must not be weakened to obtain a pass.
 
-SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage. These prove neutral Select/Line state transitions, exact-zero suppression, one outstanding Line request, commit-success/failure anchor behavior, hierarchical Esc/Finish/Cancel, EntityId selection/reconciliation, atomic batch Delete validation, one-command/one-transaction/one-Undo semantics and three continuous committed Line segments producing exactly three Undo entries.
-
-SK-04B adds `sk04b.viewer_selection_query_contracts`, `sk04b.part_viewport_selection_bridge` and `sk04b.viewer_native_selection_query` coverage. These prove finite logical query contracts and failure/no-hit distinction, active-Sketch token↔EntityId mapping, stale-token rejection, reverse highlight projection, independent routing/cursor configuration, runtime selection-box behavior, current-view Window/Crossing projected-Line classification, reference/origin/preview exclusion and real Qt/OCCT query behavior before/after orbit.
-
-SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the single active Sketch interaction coordinator, continuous Line command/Undo granularity, transient preview, point/Ctrl selection, Window/Crossing rectangle selection, atomic Delete, history reconciliation and hierarchical Esc. Legacy Workbench/Sketch-host tests also verify the contextual Part ↔ Sketch Operations state.
-
-SK-05A adds `sk05a.direct_manipulation_state`, `sk05a.line_geometry_command` and `sk05a.part_sketch_direct_manipulation`. Native grip/query coverage also extends `sk04b.viewer_native_selection_query`. Together they prove additive selection, semantic primary state, runtime hover/grips, owner-only endpoint Reshape, frozen-selection center Move, preview-only manipulation, atomic geometry commit/history and Save → Close → Reopen identity preservation.
-
-WB-01B strengthens the native Windows overlay path without changing CAD semantics: the real Qt/OCCT selection query test repeatedly exercises OCCT-native rubber-band show/update/clear, the responsive ViewCube test verifies native-child composition, and the real Workbench stress test verifies that ViewCube is hosted as a native child of the native viewport. These automated checks prove lifecycle/non-regression mechanics but not the absence of visual framebuffer artifacts. WB-01B therefore also requires explicit manual visual verification on the exact Windows implementation build before closeout.
-
-WB-01A adds or extends deterministic coverage for:
-
-- empty-space selection clear and right-click no-op semantics;
-- native provider detection/selection cleanup during scene replacement;
-- recoverable provider exception containment;
-- 100-iteration real Windows Workbench/Qt/OCCT stress behavior;
-- repeated Origin Show/Hide and Undo/Redo;
-- repeated Pan/Orbit/Zoom mixed with presentation refresh;
-- responsive ViewCube geometry in wide and narrow Editor Surface layouts;
-- Workspace folder browsing and explicit Create Folder;
-- fail-closed Workspace path validation;
-- neutral Open Document candidates and canonical DocumentSession reuse.
-
-`wb01.viewer_native_smoke` runs without the offscreen Qt platform and validates basic real Qt/OCCT initialization/navigation.
-
-`wb01a.workbench_native_stress` also runs natively. It exercises a real `CadWorkbench` with the real Qt/OCCT provider for 100 representative stress iterations.
-
-Repository documentation validation runs outside CTest through `ss2 verify`.
-
-Tests must not be weakened to obtain a pass.
-
-CI-02 classifies CTest execution separately from the CI-01 exact-head documentation/closure tiers:
+CI-02 execution tiers remain:
 
 ```text
 FAST
   explicit label: tier-fast
   → broad short-running regression for frequent iteration
-  → currently excludes the long native Workbench stress test
+  → excludes the long native Workbench stress test
 
 SUBSYSTEM
   explicit labels: subsystem-core/application/persistence/part/sketch/viewer/ui/project
   → one or more subsystem labels selected as a checkpoint
-  → tests may belong to multiple subsystems
 
 FULL
   no CTest label filter
@@ -112,18 +81,7 @@ FULL
   → mandatory runtime merge evidence
 ```
 
-The canonical test command defaults to FULL. FAST and SUBSYSTEM are explicit:
-
-```powershell
-.\ss2.ps1 test -Tier fast
-.\ss2.ps1 test -Tier subsystem -Subsystem sketch
-.\ss2.ps1 test -Tier subsystem -Subsystem sketch,viewer,ui
-.\ss2.ps1 test -Tier full
-```
-
-`-NoBuild` is a bounded CI optimization for a Test step that immediately follows a successful explicit Build. Normal local test commands still build incrementally before CTest. `-ListOnly` validates a selector without executing tests.
-
-Production UI translation units are compiled once into `simplesolid2_ui`. The application and UI-oriented tests link that production library instead of compiling independent copies of the same `src/ui/*.cpp` implementation files.
+The canonical test command defaults to FULL; `-NoBuild` remains a bounded CI optimization after an explicit successful Build. Production UI translation units compile once into `simplesolid2_ui`.
 
 <!-- section-id: internal.build-test.ci -->
 ## Windows PR gate
