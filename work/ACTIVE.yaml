@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/CI-02_TIERED_TEST_EXECUTION_AND_BUILD_EFFICIENCY.md"
+status: active
+active_work: "work/SK-06A_CIRCLE_ARC_CORE_BREADTH.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.2"
@@ -16,10 +16,12 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - review work/SK-06A_CIRCLE_ARC_CORE_BREADTH.md as the proposed R6 Work Contract
-  - require explicit Owner acceptance before any Circle/Arc production implementation
-  - record the already agreed square-grip visual language inside SK-06A
-  - keep current completed R5 + CI-02 main as the implementation baseline until acceptance
+  - implement accepted SK-06A within the bounded R6 Circle/Arc scope
+  - start with Shared 2D mixed primitive model and Part persistence v4
+  - then creation/presentation/selection and bounded direct manipulation
+  - use FAST/SUBSYSTEM Sketch checkpoints during implementation
+  - require exact-head Windows FULL for the final runtime candidate
+  - require explicit manual Windows verification before completion
   - keep R7+ inactive
 
 notes:
@@ -70,6 +72,8 @@ notes:
   - CI-02 merged to main as 0494fe0da1bc346ff5c062e73691ecc407e94c77 after FULL #417 and CLOSURE #419.
   - Repository is at a clean completed R5 + CI-02 checkpoint; R6+ remains inactive.
 
-  - SK-06A is proposed on 2026-09-26 for R6 Circle/Arc core breadth and is not active yet.
-  - The proposal records the Owner-agreed square grip language: filled reshape grips, hollow center/Move grips, cyan hover and yellow active emphasis.
+  - Owner explicitly accepted SK-06A on 2026-09-26; R6 is active only through this bounded contract.
+  - The accepted grip language is role-neutral: all grips are hollow when idle, hollow with cyan emphasis on hover, and filled yellow when active/captured.
   - The proposal treats Circle/Arc durable model plus Part persistence v4 as D2 and therefore requires explicit Owner acceptance before production mutation.
+
+  - R7+ remains inactive and requires a separate explicit Owner-accepted Work Contract.

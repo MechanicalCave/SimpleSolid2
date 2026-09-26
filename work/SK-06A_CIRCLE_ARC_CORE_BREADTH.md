@@ -1,7 +1,8 @@
 # SK-06A — Circle and Arc Core Breadth
 
-**Status:** PROPOSED — OWNER REVIEW  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-26  
+**Owner acceptance:** 2026-09-26  
 **Decision class:** D2 durable primitive/persistence extension + bounded D1 interaction implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program roadmap:** `work/SKETCH_ROADMAP.md` v1.2  
@@ -381,7 +382,7 @@ Not authorized by SK-06A:
 
 ## 18. Completion boundary
 
-SK-06A may become active only after explicit Owner acceptance of this contract.
+SK-06A is active after explicit Owner acceptance on 2026-09-26.
 
 Completion requires:
 
