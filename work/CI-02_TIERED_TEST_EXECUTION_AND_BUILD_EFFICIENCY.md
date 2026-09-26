@@ -147,7 +147,7 @@ At minimum prove:
 14. exact-head Windows FULL passes for the CI-02 implementation candidate;
 15. documentation verification and generated Product Browser freshness pass.
 
-## 9. Documentation impact
+## Documentation impact
 
 Internal docs: required  
 User/Product docs: not required  
