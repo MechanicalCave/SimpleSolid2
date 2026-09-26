@@ -1,7 +1,8 @@
 # SK-07C — COPY, Repeated Copy and Fresh Entity Identity
 
-**Status:** PROPOSED — OWNER REVIEW  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D2 fresh-identity lifecycle + transform/interaction semantics + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -433,11 +434,9 @@ These remain later separately accepted slices.
 
 ## 19. Activation and completion boundary
 
-SK-07C is a proposal only.
+SK-07C was explicitly Owner-accepted on 2026-09-27 and is active within this bounded scope.
 
-No production implementation is authorized until explicit Owner acceptance.
-
-If accepted as written, completion requires:
+Completion requires:
 
 - normal translation COPY and repeated placement use the existing common transform geometry path;
 - each placement creates fresh non-aliasing EntityIds;
