@@ -162,16 +162,22 @@ Window/Crossing membership is evaluated from current-view projected authored geo
 
 ## 8. Runtime grips
 
-### 8.1 Line visual language amendment
+### 8.1 Unified grip visual language amendment
 
-The Owner-approved visual convention from the R5 review is recorded here:
+The Owner-approved visual convention from the R5 review is recorded here.
 
-- Line Start/End grips: small **filled square**;
-- Line Center grip: small **hollow square**;
-- hovered grip: cyan emphasis;
-- active grip: yellow emphasis and may be slightly larger;
+All manipulable Sketch grips use the same square marker. The marker does **not** encode semantic role such as endpoint, midpoint, center, radius or arc midpoint; role is already visually clear from the grip's geometric location and may additionally be reflected by cursor/status text.
+
+State is encoded instead:
+
+- available / idle grip: small **hollow square**;
+- hovered grip: **hollow square** with cyan emphasis;
+- active / captured grip: **filled square** with yellow emphasis and may be slightly larger;
+- after commit or cancel, the grip returns to the non-active hollow state;
 - marker size is screen-space / DPI-aware, not world-space;
 - hit tolerance remains a separate interaction parameter and must not be inferred from visible marker pixels.
+
+"Active/captured" follows the R5 click-to-activate model and does not mean that the physical mouse button must remain held.
 
 This changes presentation only; existing Line grip semantics remain unchanged.
 
@@ -185,7 +191,7 @@ Circle exposes:
 - -U quadrant → radius Reshape;
 - -V quadrant → radius Reshape.
 
-Center uses the hollow-square Move convention. Radius grips use filled squares.
+Circle Center and radius grips use the same square marker; only hover/active state changes the marker styling.
 
 Radius Reshape:
 
@@ -210,9 +216,9 @@ Arc exposes:
 
 Visual convention:
 
-- Center = hollow square;
-- Start/End/Arc-Mid = filled squares;
-- hover/active colors follow the same provider-native grip language as Line/Circle.
+- Center, Start, End and Arc/Mid use the same square marker;
+- geometric location communicates the grip role;
+- idle/hover/active state follows the unified hollow/cyan/filled-yellow grip language used by Line and Circle.
 
 ### 9.1 Arc Start reshape
 
@@ -324,7 +330,7 @@ At minimum prove:
 
 Final exact-head candidate requires Owner verification of:
 
-- Line grips now read visually as filled endpoint squares plus hollow center square;
+- all Line grips use one square shape, with hollow idle/hover and filled-yellow active/captured state;
 - Circle creation feels continuous and preserves prior selection;
 - Arc 3-Point preview/commit follows Start → Through → End as expected;
 - Circle and Arc are visibly selectable with the existing additive/Ctrl grammar;
