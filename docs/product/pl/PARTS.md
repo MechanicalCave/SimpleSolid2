@@ -95,17 +95,34 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 
 Na pasku nad viewportem 3D użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin. Płaszczyznę możesz wybrać w Document Tree lub — gdy jest widoczna — w viewporcie 3D.
 
-Podczas Sketch Edit pasek narzędzi udostępnia `Select`, `Line`, `Circle`, `Arc` i `Move`. Kompaktowy Command Line obsługuje `SELECT`, `LINE`, `CIRCLE`, `ARC` i `MOVE`.
+Podczas Sketch Edit narzędzia są uporządkowane w grupy:
+
+```text
+Select
+
+Create
+  Line
+  Circle
+  Arc
+
+Modify
+  Move
+  Rotate
+  Scale
+  Mirror
+```
+
+Kompaktowy Command Line obsługuje słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `ROTATE`, `SCALE` i `MIRROR`.
 
 Tworzenie Line/Circle/Arc i zwykłe selection zachowują dotychczasową gramatykę. Zaznaczone edytowalne entities pokazują grips kodujące stan: pusty kwadrat w idle, pusty cyan na hover i pełny żółty dla aktywnego/captured gripa. Center grip przesuwa cały zamrożony mieszany selection; owner-only reshape zachowuje dotychczasową semantykę prymitywu.
 
-### Move
+### Wybór obiektów dla Modify
 
-`Move` działa na dowolnym mieszanym selection Line/Circle/Arc.
+Move, Rotate, Scale i Mirror działają na dowolnym mieszanym selection Line/Circle/Arc.
 
-Jeżeli obiekty są już zaznaczone, aktywuj `Move`, wskaż **Base Point**, a potem punkt docelowy. Cały zamrożony selection pokazuje preview jednego sztywnego przesunięcia `destination - base`.
+Jeżeli obiekty są już zaznaczone, uruchom wybrane narzędzie Modify; bieżący selection zostaje od razu zamrożony i komenda przechodzi do pierwszego punktu odniesienia.
 
-Jeżeli nic nie jest zaznaczone, uruchom `Move` najpierw. Komenda przechodzi do **Select objects**:
+Jeżeli nic nie jest zaznaczone, uruchom narzędzie najpierw. Komenda przechodzi do **Select objects**:
 
 - klik dodaje obiekt;
 - Ctrl+klik przełącza członkostwo;
@@ -115,15 +132,51 @@ Jeżeli nic nie jest zaznaczone, uruchom `Move` najpierw. Komenda przechodzi do 
 - blank LMB niczego nie czyści;
 - Enter, Space albo RMB kończy wybór, gdy zaznaczono co najmniej jeden obiekt.
 
-Następnie wskaż Base Point i destination. LMB albo Enter zatwierdza poprawny punkt docelowy. Esc anuluje bieżący MOVE i zachowuje objęty nim selection. Przesunięcie o zero jest czystym no-op: nie zmienia authored state i nie tworzy kroku Undo.
+### Move
 
-Preview MOVE jest wyłącznie runtime. Niezerowy commit jest jedną atomową operacją i jednym krokiem Undo, zachowuje EntityId i współpracuje ze zwykłym Undo/Redo. Save/Close/Reopen zachowuje przesuniętą geometrię w istniejącym formacie Part.
+Wskaż **Base Point**, a potem destination. Cały zamrożony selection pokazuje preview jednego sztywnego przesunięcia `destination - base`.
+
+LMB albo Enter zatwierdza poprawny destination. Przesunięcie o zero jest czystym no-op: nie zmienia authored state i nie tworzy kroku Undo.
+
+### Rotate
+
+Wskaż **Base Point**, potem **Reference Point**, a następnie destination definiujący kierunek końcowy.
+
+Reference Point musi różnić się od Base Point. Obrót jest liczony jako podpisany kąt od wektora Base→Reference do wektora Base→destination w płaszczyźnie Sketchu; dodatni kierunek jest przeciwny do ruchu wskazówek zegara.
+
+Obrót o zero jest poprawnym no-op i nie tworzy zmiany ani kroku Undo.
+
+### Scale
+
+Wskaż **Base Point**, potem **Reference Point**, a następnie destination.
+
+Skala jest liczona z odległości od Base Point:
+
+```text
+factor = |destination - base| / |reference - base|
+```
+
+Factor musi być skończony i większy od zera. Wartości pomiędzy `0` i `1` pomniejszają geometrię, `1` jest no-op, a wartości większe od `1` powiększają. Zero i wartości ujemne nie są prawidłowym Scale.
+
+### Mirror
+
+Wskaż pierwszy, a następnie drugi punkt osi. Dwa różne punkty definiują nieskończoną linię odbicia.
+
+Mirror odbija cały zamrożony selection. Line/Circle/Arc zachowują swoje EntityId, a kierunek Arc po odbiciu pozostaje geometrycznie zgodny z odbitym łukiem. Jeżeli geometria po odbiciu jest dokładnie taka sama, operacja kończy się jako no-op.
+
+### Zatwierdzanie i wpisywanie wartości
+
+Preview Move/Rotate/Scale/Mirror jest tylko runtime. Jeden rzeczywisty commit jest jedną atomową operacją i jednym krokiem Undo; zachowuje EntityId i współpracuje ze zwykłym Undo/Redo. Save/Close/Reopen zachowuje przekształconą geometrię w istniejącym formacie Part.
+
+Esc anuluje bieżącą transformację i zachowuje objęty nią selection. LMB na końcowym etapie albo Enter zatwierdza bieżący poprawny preview.
+
+Obecna wersja **nie obsługuje wpisywania numerycznych kątów, odległości ani współczynników skali**. Wpisanie np. `0.5`, `2` albo `90` przy focusie viewportu nie zastępuje wartości wynikającej z położenia kursora. Enter zatwierdza wtedy bieżący preview.
 
 Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uruchamia akcji CAD.
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję. Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin.
 
-Rotate, Scale, Mirror, Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
+Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
@@ -172,8 +225,9 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wp
 
 Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, ustabilizowany fundament Workbench/Viewer 3D oraz trwałe Sketches na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
 
-Bieżący Sketch UI zapewnia Select/Line/Circle/Arc, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, normalny mieszany MOVE w wariancie selection-first lub command-first z Base Point, Center-grip Move, ograniczony owner-only reshape, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
+Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, Center-grip Move, ograniczony owner-only reshape, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
 
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Nadal brakuje Rotate/Scale/Mirror/Copy, repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+Nadal brakuje Copy/repeated Copy, Repeat Last Command, numerycznego wpisywania kątów/odległości/skali i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+

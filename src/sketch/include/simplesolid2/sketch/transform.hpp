@@ -29,11 +29,29 @@ captureSketchTransformGeometry(
     const SketchModel& model,
     const std::vector<EntityId>& entity_ids);
 
-// Shared by normal MOVE and Center-grip Move; UI/provider adapters
-// must not duplicate translation geometry outside this semantic layer.
+// Provider-independent semantic transform core shared by Sketch Modify commands;
+// UI/provider adapters must not duplicate transform geometry outside this layer.
 [[nodiscard]] std::optional<SketchTransformGeometry>
 translateSketchGeometry(
     const SketchTransformGeometry& geometry,
     Point2 delta);
+
+[[nodiscard]] std::optional<SketchTransformGeometry>
+rotateSketchGeometry(
+    const SketchTransformGeometry& geometry,
+    Point2 base_point,
+    double angle_radians);
+
+[[nodiscard]] std::optional<SketchTransformGeometry>
+scaleSketchGeometry(
+    const SketchTransformGeometry& geometry,
+    Point2 base_point,
+    double factor);
+
+[[nodiscard]] std::optional<SketchTransformGeometry>
+mirrorSketchGeometry(
+    const SketchTransformGeometry& geometry,
+    Point2 axis_start,
+    Point2 axis_end);
 
 } // namespace simplesolid2::sketch

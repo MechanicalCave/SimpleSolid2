@@ -17,6 +17,9 @@ enum class SketchTool : std::uint8_t {
     circle,
     arc,
     move,
+    rotate,
+    scale,
+    mirror,
 };
 
 enum class LineStage : std::uint8_t {
@@ -39,6 +42,15 @@ enum class MoveStage : std::uint8_t {
     select_objects,
     await_base_point,
     await_destination,
+};
+
+enum class CommonTransformStage : std::uint8_t {
+    select_objects,
+    await_base_point,
+    await_reference_point,
+    await_destination,
+    await_axis_start,
+    await_axis_end,
 };
 
 struct LineSegmentIntent final {
@@ -209,6 +221,9 @@ public:
     [[nodiscard]] std::optional<MoveStage>
     moveStage() const noexcept;
 
+    [[nodiscard]] std::optional<CommonTransformStage>
+    commonTransformStage() const noexcept;
+
     [[nodiscard]] std::optional<Point2>
     lineAnchor() const noexcept {
         return line_anchor_;
@@ -228,6 +243,24 @@ public:
     void activateArc() noexcept;
     [[nodiscard]] bool activateMove(
         const SketchModel& model);
+    [[nodiscard]] bool activateRotate(
+        const SketchModel& model);
+    [[nodiscard]] bool activateScale(
+        const SketchModel& model);
+    [[nodiscard]] bool activateMirror(
+        const SketchModel& model);
+
+    [[nodiscard]] bool completeTransformSelection(
+        const SketchModel& model);
+    [[nodiscard]] bool acceptTransformPoint(
+        ResolvedSketchInput input) noexcept;
+    [[nodiscard]] bool updateTransformPreview(
+        ResolvedSketchInput input) noexcept;
+    [[nodiscard]] std::optional<SketchTransformGeometry>
+    transformGeometryState() const;
+    void finishTransform() noexcept;
+
+    // SK-07A source compatibility.
     [[nodiscard]] bool completeMoveSelection(
         const SketchModel& model);
     [[nodiscard]] bool acceptMoveBasePoint(
@@ -355,12 +388,14 @@ public:
     void cancelDirectManipulation() noexcept;
 
 private:
-    struct MoveSession final {
-        MoveStage stage{MoveStage::select_objects};
+    struct CommonTransformSession final {
+        CommonTransformStage stage{
+            CommonTransformStage::select_objects};
         std::vector<EntityId> selection_snapshot;
         SketchTransformGeometry initial_geometry;
         std::optional<Point2> base_point;
-        std::optional<ResolvedSketchInput> current_destination;
+        std::optional<Point2> reference_point;
+        std::optional<ResolvedSketchInput> current_preview;
     };
 
     struct DirectManipulationSession final {
@@ -377,17 +412,22 @@ private:
 
     [[nodiscard]] bool selectionMutable() const noexcept {
         return !manipulation_.has_value() &&
-               (tool_ != SketchTool::move ||
-                !move_session_ ||
-                move_session_->stage ==
-                    MoveStage::select_objects);
+               (!transform_session_ ||
+                transform_session_->stage ==
+                    CommonTransformStage::select_objects);
     }
+
+    [[nodiscard]] bool activateCommonTransform(
+        SketchTool tool,
+        const SketchModel& model);
+
+    [[nodiscard]] bool commonTransformTool() const noexcept;
 
     void resetToSelect() noexcept;
     void resetLineStage() noexcept;
     void resetCircleStage() noexcept;
     void resetArcStage() noexcept;
-    void resetMoveStage() noexcept;
+    void resetCommonTransform() noexcept;
 
     SketchTool tool_{SketchTool::select};
 
@@ -410,7 +450,8 @@ private:
     std::optional<ArcIntent>
         pending_arc_request_;
 
-    std::optional<MoveSession> move_session_;
+    std::optional<CommonTransformSession>
+        transform_session_;
 
     std::vector<EntityId> selected_;
     std::optional<EntityId> primary_;

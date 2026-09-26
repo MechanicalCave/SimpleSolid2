@@ -36,6 +36,8 @@ public:
     arcStage() const noexcept;
     [[nodiscard]] std::optional<sketch::MoveStage>
     moveStage() const noexcept;
+    [[nodiscard]] std::optional<sketch::CommonTransformStage>
+    commonTransformStage() const noexcept;
     [[nodiscard]] std::size_t selectedCount() const noexcept;
     [[nodiscard]] bool directManipulationActive()
         const noexcept;
@@ -47,6 +49,13 @@ public:
     void activateCircle();
     void activateArc();
     [[nodiscard]] bool activateMove();
+    [[nodiscard]] bool activateRotate();
+    [[nodiscard]] bool activateScale();
+    [[nodiscard]] bool activateMirror();
+    [[nodiscard]] bool completeTransformSelection();
+    [[nodiscard]] bool commitTransform();
+
+    // SK-07A source compatibility.
     [[nodiscard]] bool completeMoveSelection();
     [[nodiscard]] bool commitMove();
     void finishLine();
@@ -79,14 +88,15 @@ private:
     void handleLinePointer(const SketchPointerInput& input);
     void handleCirclePointer(const SketchPointerInput& input);
     void handleArcPointer(const SketchPointerInput& input);
-    void handleMovePointer(const SketchPointerInput& input);
+    void handleCommonTransformPointer(
+        const SketchPointerInput& input);
     void updateRectangleOverlay(viewer::ViewportPoint2 current);
     void updateHover(viewer::ViewportPoint2 point);
     [[nodiscard]] bool beginDirectManipulation(
         sketch::SketchGripRef grip);
     void updateDirectManipulationPreview(
         sketch::Point2 raw_input);
-    void updateMovePreview(
+    void updateCommonTransformPreview(
         sketch::Point2 raw_input);
     [[nodiscard]] application::DocumentSessionResult
     executeGeometryUpdate(
@@ -109,7 +119,7 @@ private:
     std::optional<core::DocumentRevision>
         manipulation_revision_;
     std::optional<core::DocumentRevision>
-        move_revision_;
+        transform_revision_;
 
     StateChangedHandler state_changed_handler_;
     StatusHandler status_handler_;

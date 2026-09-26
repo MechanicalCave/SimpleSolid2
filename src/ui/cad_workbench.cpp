@@ -261,6 +261,16 @@ void CadWorkbench::buildUi() {
         1,
         select_sketch_button_);
 
+    create_tools_label_ =
+        new QLabel(
+            QStringLiteral("Create:"),
+            shell_);
+    create_tools_label_->setObjectName(
+        QStringLiteral("sketchCreateToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        2,
+        create_tools_label_);
+
     line_sketch_button_ =
         new QPushButton(
             QStringLiteral("Line"),
@@ -269,7 +279,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("lineSketchToolButton"));
     line_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        2,
+        3,
         line_sketch_button_);
 
     circle_sketch_button_ =
@@ -280,7 +290,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("circleSketchToolButton"));
     circle_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        3,
+        4,
         circle_sketch_button_);
 
     arc_sketch_button_ =
@@ -291,8 +301,18 @@ void CadWorkbench::buildUi() {
         QStringLiteral("arcSketchToolButton"));
     arc_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        4,
+        5,
         arc_sketch_button_);
+
+    modify_tools_label_ =
+        new QLabel(
+            QStringLiteral("Modify:"),
+            shell_);
+    modify_tools_label_->setObjectName(
+        QStringLiteral("sketchModifyToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        6,
+        modify_tools_label_);
 
     move_sketch_button_ =
         new QPushButton(
@@ -302,8 +322,41 @@ void CadWorkbench::buildUi() {
         QStringLiteral("moveSketchToolButton"));
     move_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        5,
+        7,
         move_sketch_button_);
+
+    rotate_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Rotate"),
+            shell_);
+    rotate_sketch_button_->setObjectName(
+        QStringLiteral("rotateSketchToolButton"));
+    rotate_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        8,
+        rotate_sketch_button_);
+
+    scale_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Scale"),
+            shell_);
+    scale_sketch_button_->setObjectName(
+        QStringLiteral("scaleSketchToolButton"));
+    scale_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        9,
+        scale_sketch_button_);
+
+    mirror_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Mirror"),
+            shell_);
+    mirror_sketch_button_->setObjectName(
+        QStringLiteral("mirrorSketchToolButton"));
+    mirror_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        10,
+        mirror_sketch_button_);
 
     viewport_controller_ =
         new PartViewportController(
@@ -360,7 +413,8 @@ void CadWorkbench::buildUi() {
     command_input_->setObjectName(
         QStringLiteral("sketchCommandInput"));
     command_input_->setPlaceholderText(
-        QStringLiteral("SELECT, LINE, CIRCLE, ARC or MOVE"));
+        QStringLiteral(
+            "SELECT, LINE, CIRCLE, ARC, MOVE, ROTATE, SCALE or MIRROR"));
     command_line_layout->addWidget(command_input_, 1);
     shell_->setCommandLineContent(
         command_line_widget_);
@@ -614,6 +668,21 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchMove(); });
+    QObject::connect(
+        rotate_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchRotate(); });
+    QObject::connect(
+        scale_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchScale(); });
+    QObject::connect(
+        mirror_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchMirror(); });
     QObject::connect(
         cancel_sketch_button_,
         &QPushButton::clicked,
@@ -967,6 +1036,42 @@ void CadWorkbench::activateSketchMove() {
     }
 }
 
+void CadWorkbench::activateSketchRotate() {
+    if (sketch_interaction_controller_ &&
+        !sketch_interaction_controller_->activateRotate()) {
+        status_->setText(
+            QStringLiteral("ROTATE could not be activated."));
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::activateSketchScale() {
+    if (sketch_interaction_controller_ &&
+        !sketch_interaction_controller_->activateScale()) {
+        status_->setText(
+            QStringLiteral("SCALE could not be activated."));
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::activateSketchMirror() {
+    if (sketch_interaction_controller_ &&
+        !sketch_interaction_controller_->activateMirror()) {
+        status_->setText(
+            QStringLiteral("MIRROR could not be activated."));
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
 void CadWorkbench::finishSketchLine() {
     if (!sketch_interaction_controller_) {
         return;
@@ -992,6 +1097,18 @@ void CadWorkbench::finishSketchLine() {
     case sketch::SketchTool::move:
         status_->setText(
             QStringLiteral("Move finished — Select active."));
+        break;
+    case sketch::SketchTool::rotate:
+        status_->setText(
+            QStringLiteral("Rotate finished — Select active."));
+        break;
+    case sketch::SketchTool::scale:
+        status_->setText(
+            QStringLiteral("Scale finished — Select active."));
+        break;
+    case sketch::SketchTool::mirror:
+        status_->setText(
+            QStringLiteral("Mirror finished — Select active."));
         break;
     case sketch::SketchTool::select:
         break;
@@ -1026,6 +1143,18 @@ void CadWorkbench::cancelSketchLine() {
     case sketch::SketchTool::move:
         status_->setText(
             QStringLiteral("Move cancelled — selection preserved."));
+        break;
+    case sketch::SketchTool::rotate:
+        status_->setText(
+            QStringLiteral("Rotate cancelled — selection preserved."));
+        break;
+    case sketch::SketchTool::scale:
+        status_->setText(
+            QStringLiteral("Scale cancelled — selection preserved."));
+        break;
+    case sketch::SketchTool::mirror:
+        status_->setText(
+            QStringLiteral("Mirror cancelled — selection preserved."));
         break;
     case sketch::SketchTool::select:
         break;
@@ -1065,6 +1194,12 @@ void CadWorkbench::submitSketchCommandLine() {
         activateSketchArc();
     } else if (command == QStringLiteral("MOVE")) {
         activateSketchMove();
+    } else if (command == QStringLiteral("ROTATE")) {
+        activateSketchRotate();
+    } else if (command == QStringLiteral("SCALE")) {
+        activateSketchScale();
+    } else if (command == QStringLiteral("MIRROR")) {
+        activateSketchMirror();
     } else {
         status_->setText(
             QStringLiteral("Unknown Sketch command."));
@@ -1414,15 +1549,14 @@ bool CadWorkbench::eventFilter(
         auto* mouse_event =
             static_cast<QMouseEvent*>(event);
         if (mouse_event->button() == Qt::RightButton &&
-            sketch_interaction_controller_->tool() ==
-                sketch::SketchTool::move &&
-            sketch_interaction_controller_->moveStage() ==
-                sketch::MoveStage::select_objects) {
+            sketch_interaction_controller_->
+                commonTransformStage() ==
+                sketch::CommonTransformStage::select_objects) {
             if (sketch_interaction_controller_->
-                    completeMoveSelection()) {
+                    completeTransformSelection()) {
                 status_->setText(
                     QStringLiteral(
-                        "MOVE objects accepted — specify Base Point."));
+                        "Transform objects accepted."));
             }
             return true;
         }
@@ -1472,32 +1606,38 @@ bool CadWorkbench::eventFilter(
                 return true;
             }
 
-            if (sketch_interaction_controller_->tool() ==
-                    sketch::SketchTool::move) {
-                const auto stage =
-                    sketch_interaction_controller_->moveStage();
-
+            const auto transform_stage =
+                sketch_interaction_controller_->
+                    commonTransformStage();
+            if (transform_stage) {
                 if ((key_event->key() == Qt::Key_Return ||
                      key_event->key() == Qt::Key_Enter ||
                      key_event->key() == Qt::Key_Space) &&
-                    stage ==
-                        sketch::MoveStage::select_objects) {
+                    *transform_stage ==
+                        sketch::CommonTransformStage::
+                            select_objects) {
                     if (sketch_interaction_controller_->
-                            completeMoveSelection()) {
+                            completeTransformSelection()) {
                         status_->setText(
                             QStringLiteral(
-                                "MOVE objects accepted — specify Base Point."));
+                                "Transform objects accepted."));
                     }
                     return true;
                 }
 
+                const bool final_stage =
+                    *transform_stage ==
+                        sketch::CommonTransformStage::
+                            await_destination ||
+                    *transform_stage ==
+                        sketch::CommonTransformStage::
+                            await_axis_end;
                 if ((key_event->key() == Qt::Key_Return ||
                      key_event->key() == Qt::Key_Enter) &&
-                    stage ==
-                        sketch::MoveStage::await_destination) {
+                    final_stage) {
                     static_cast<void>(
                         sketch_interaction_controller_->
-                            commitMove());
+                            commitTransform());
                     return true;
                 }
             }
@@ -1522,6 +1662,13 @@ void CadWorkbench::syncSketchInteractionUi() {
             editing &&
             sketch_interaction_controller_->tool() ==
                 sketch::SketchTool::select);
+    }
+
+    if (create_tools_label_ != nullptr) {
+        create_tools_label_->setVisible(editing);
+    }
+    if (modify_tools_label_ != nullptr) {
+        modify_tools_label_->setVisible(editing);
     }
 
     if (line_sketch_button_ != nullptr) {
@@ -1554,6 +1701,30 @@ void CadWorkbench::syncSketchInteractionUi() {
             editing &&
             sketch_interaction_controller_->tool() ==
                 sketch::SketchTool::move);
+    }
+
+    if (rotate_sketch_button_ != nullptr) {
+        rotate_sketch_button_->setVisible(editing);
+        rotate_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::rotate);
+    }
+
+    if (scale_sketch_button_ != nullptr) {
+        scale_sketch_button_->setVisible(editing);
+        scale_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::scale);
+    }
+
+    if (mirror_sketch_button_ != nullptr) {
+        mirror_sketch_button_->setVisible(editing);
+        mirror_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::mirror);
     }
 
     if (command_line_widget_ != nullptr) {
@@ -1600,37 +1771,86 @@ void CadWorkbench::syncSketchInteractionUi() {
         return;
     }
 
-    if (tool == sketch::SketchTool::move) {
+    const bool common_transform =
+        tool == sketch::SketchTool::move ||
+        tool == sketch::SketchTool::rotate ||
+        tool == sketch::SketchTool::scale ||
+        tool == sketch::SketchTool::mirror;
+
+    if (common_transform) {
         delete_selection_button_->setVisible(false);
         finish_line_button_->setVisible(false);
         cancel_line_button_->setVisible(false);
 
-        const auto stage =
-            sketch_interaction_controller_->moveStage();
-        if (stage == sketch::MoveStage::select_objects) {
-            operations_placeholder_->setText(
-                QStringLiteral(
-                    "Move — Select objects; Enter/Space/RMB to continue"));
-            command_prompt_->setText(
-                QStringLiteral(
-                    "Command: MOVE — Select objects"));
-        } else if (
-            stage ==
-            sketch::MoveStage::await_destination) {
-            operations_placeholder_->setText(
-                QStringLiteral(
-                    "Move — Specify destination point"));
-            command_prompt_->setText(
-                QStringLiteral(
-                    "Command: MOVE — Specify destination point"));
-        } else {
-            operations_placeholder_->setText(
-                QStringLiteral(
-                    "Move — Specify Base Point"));
-            command_prompt_->setText(
-                QStringLiteral(
-                    "Command: MOVE — Specify Base Point"));
+        QString title;
+        QString keyword;
+        switch (tool) {
+        case sketch::SketchTool::move:
+            title = QStringLiteral("Move");
+            keyword = QStringLiteral("MOVE");
+            break;
+        case sketch::SketchTool::rotate:
+            title = QStringLiteral("Rotate");
+            keyword = QStringLiteral("ROTATE");
+            break;
+        case sketch::SketchTool::scale:
+            title = QStringLiteral("Scale");
+            keyword = QStringLiteral("SCALE");
+            break;
+        case sketch::SketchTool::mirror:
+            title = QStringLiteral("Mirror");
+            keyword = QStringLiteral("MIRROR");
+            break;
+        default:
+            break;
         }
+
+        QString instruction;
+        const auto stage =
+            sketch_interaction_controller_->
+                commonTransformStage();
+        if (!stage) {
+            instruction =
+                QStringLiteral("Transform unavailable");
+        } else {
+            switch (*stage) {
+            case sketch::CommonTransformStage::select_objects:
+                instruction =
+                    QStringLiteral(
+                        "Select objects; Enter/Space/RMB to continue");
+                break;
+            case sketch::CommonTransformStage::await_base_point:
+                instruction =
+                    QStringLiteral("Specify Base Point");
+                break;
+            case sketch::CommonTransformStage::await_reference_point:
+                instruction =
+                    QStringLiteral("Specify Reference Point");
+                break;
+            case sketch::CommonTransformStage::await_destination:
+                instruction =
+                    QStringLiteral("Specify destination point");
+                break;
+            case sketch::CommonTransformStage::await_axis_start:
+                instruction =
+                    QStringLiteral("Specify first axis point");
+                break;
+            case sketch::CommonTransformStage::await_axis_end:
+                instruction =
+                    QStringLiteral("Specify second axis point");
+                break;
+            }
+        }
+
+        operations_placeholder_->setText(
+            title +
+            QStringLiteral(" — ") +
+            instruction);
+        command_prompt_->setText(
+            QStringLiteral("Command: ") +
+            keyword +
+            QStringLiteral(" — ") +
+            instruction);
         return;
     }
 
@@ -1752,13 +1972,23 @@ void CadWorkbench::syncActionState() {
 
     select_sketch_button_->setVisible(
         editing_sketch);
+    create_tools_label_->setVisible(
+        editing_sketch);
     line_sketch_button_->setVisible(
         editing_sketch);
     circle_sketch_button_->setVisible(
         editing_sketch);
     arc_sketch_button_->setVisible(
         editing_sketch);
+    modify_tools_label_->setVisible(
+        editing_sketch);
     move_sketch_button_->setVisible(
+        editing_sketch);
+    rotate_sketch_button_->setVisible(
+        editing_sketch);
+    scale_sketch_button_->setVisible(
+        editing_sketch);
+    mirror_sketch_button_->setVisible(
         editing_sketch);
 
     cancel_sketch_button_->setVisible(

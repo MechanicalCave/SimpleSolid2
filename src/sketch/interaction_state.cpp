@@ -204,6 +204,38 @@ sameDirectionSweep(
     return candidate;
 }
 
+[[nodiscard]] std::optional<double>
+signedAngle(
+    Point2 base,
+    Point2 reference,
+    Point2 destination) noexcept {
+    if (!base.finite() ||
+        !reference.finite() ||
+        !destination.finite() ||
+        reference == base ||
+        destination == base) {
+        return std::nullopt;
+    }
+
+    const double ref_u = reference.u - base.u;
+    const double ref_v = reference.v - base.v;
+    const double dst_u = destination.u - base.u;
+    const double dst_v = destination.v - base.v;
+
+    const double cross =
+        ref_u * dst_v -
+        ref_v * dst_u;
+    const double dot =
+        ref_u * dst_u +
+        ref_v * dst_v;
+    const double angle =
+        std::atan2(cross, dot);
+
+    return std::isfinite(angle)
+        ? std::optional<double>{angle}
+        : std::nullopt;
+}
+
 } // namespace
 
 bool CircleIntent::valid() const noexcept {
@@ -245,16 +277,43 @@ SketchInteractionState::arcStage() const noexcept {
 
 std::optional<MoveStage>
 SketchInteractionState::moveStage() const noexcept {
-    return tool_ == SketchTool::move &&
-                   move_session_
-        ? std::optional<MoveStage>{
-              move_session_->stage}
+    if (tool_ != SketchTool::move ||
+        !transform_session_) {
+        return std::nullopt;
+    }
+
+    switch (transform_session_->stage) {
+    case CommonTransformStage::select_objects:
+        return MoveStage::select_objects;
+    case CommonTransformStage::await_base_point:
+        return MoveStage::await_base_point;
+    case CommonTransformStage::await_destination:
+        return MoveStage::await_destination;
+    default:
+        return std::nullopt;
+    }
+}
+
+std::optional<CommonTransformStage>
+SketchInteractionState::commonTransformStage() const noexcept {
+    return commonTransformTool() &&
+                   transform_session_
+        ? std::optional<CommonTransformStage>{
+              transform_session_->stage}
         : std::nullopt;
+}
+
+bool SketchInteractionState::commonTransformTool()
+    const noexcept {
+    return tool_ == SketchTool::move ||
+           tool_ == SketchTool::rotate ||
+           tool_ == SketchTool::scale ||
+           tool_ == SketchTool::mirror;
 }
 
 void SketchInteractionState::activateLine() noexcept {
     manipulation_.reset();
-    resetMoveStage();
+    resetCommonTransform();
     clearHover();
     tool_ = SketchTool::line;
     resetLineStage();
@@ -264,7 +323,7 @@ void SketchInteractionState::activateLine() noexcept {
 
 void SketchInteractionState::activateCircle() noexcept {
     manipulation_.reset();
-    resetMoveStage();
+    resetCommonTransform();
     clearHover();
     tool_ = SketchTool::circle;
     resetLineStage();
@@ -274,7 +333,7 @@ void SketchInteractionState::activateCircle() noexcept {
 
 void SketchInteractionState::activateArc() noexcept {
     manipulation_.reset();
-    resetMoveStage();
+    resetCommonTransform();
     clearHover();
     tool_ = SketchTool::arc;
     resetLineStage();
@@ -282,19 +341,29 @@ void SketchInteractionState::activateArc() noexcept {
     resetArcStage();
 }
 
-bool SketchInteractionState::activateMove(
+bool SketchInteractionState::activateCommonTransform(
+    SketchTool tool,
     const SketchModel& model) {
+    if (tool != SketchTool::move &&
+        tool != SketchTool::rotate &&
+        tool != SketchTool::scale &&
+        tool != SketchTool::mirror) {
+        return false;
+    }
+
     manipulation_.reset();
+    resetCommonTransform();
     clearHover();
     resetLineStage();
     resetCircleStage();
     resetArcStage();
 
-    MoveSession session;
+    CommonTransformSession session;
     if (selected_.empty()) {
-        session.stage = MoveStage::select_objects;
-        tool_ = SketchTool::move;
-        move_session_ = std::move(session);
+        session.stage =
+            CommonTransformStage::select_objects;
+        tool_ = tool;
+        transform_session_ = std::move(session);
         return true;
     }
 
@@ -307,20 +376,52 @@ bool SketchInteractionState::activateMove(
         return false;
     }
 
-    session.stage = MoveStage::await_base_point;
     session.selection_snapshot = selected_;
     session.initial_geometry = *geometry;
-    tool_ = SketchTool::move;
-    move_session_ = std::move(session);
+    session.stage =
+        tool == SketchTool::mirror
+            ? CommonTransformStage::await_axis_start
+            : CommonTransformStage::await_base_point;
+
+    tool_ = tool;
+    transform_session_ = std::move(session);
     return true;
 }
 
-bool SketchInteractionState::completeMoveSelection(
+bool SketchInteractionState::activateMove(
     const SketchModel& model) {
-    if (tool_ != SketchTool::move ||
-        !move_session_ ||
-        move_session_->stage !=
-            MoveStage::select_objects ||
+    return activateCommonTransform(
+        SketchTool::move,
+        model);
+}
+
+bool SketchInteractionState::activateRotate(
+    const SketchModel& model) {
+    return activateCommonTransform(
+        SketchTool::rotate,
+        model);
+}
+
+bool SketchInteractionState::activateScale(
+    const SketchModel& model) {
+    return activateCommonTransform(
+        SketchTool::scale,
+        model);
+}
+
+bool SketchInteractionState::activateMirror(
+    const SketchModel& model) {
+    return activateCommonTransform(
+        SketchTool::mirror,
+        model);
+}
+
+bool SketchInteractionState::completeTransformSelection(
+    const SketchModel& model) {
+    if (!commonTransformTool() ||
+        !transform_session_ ||
+        transform_session_->stage !=
+            CommonTransformStage::select_objects ||
         selected_.empty()) {
         return false;
     }
@@ -333,79 +434,228 @@ bool SketchInteractionState::completeMoveSelection(
         return false;
     }
 
-    move_session_->selection_snapshot = selected_;
-    move_session_->initial_geometry = *geometry;
-    move_session_->base_point.reset();
-    move_session_->current_destination.reset();
-    move_session_->stage =
-        MoveStage::await_base_point;
+    transform_session_->selection_snapshot = selected_;
+    transform_session_->initial_geometry = *geometry;
+    transform_session_->base_point.reset();
+    transform_session_->reference_point.reset();
+    transform_session_->current_preview.reset();
+    transform_session_->stage =
+        tool_ == SketchTool::mirror
+            ? CommonTransformStage::await_axis_start
+            : CommonTransformStage::await_base_point;
     clearHover();
     return true;
 }
 
-bool SketchInteractionState::acceptMoveBasePoint(
+bool SketchInteractionState::acceptTransformPoint(
     ResolvedSketchInput input) noexcept {
-    if (tool_ != SketchTool::move ||
-        !move_session_ ||
-        move_session_->stage !=
-            MoveStage::await_base_point ||
+    if (!commonTransformTool() ||
+        !transform_session_ ||
         !input.valid() ||
-        move_session_->selection_snapshot.empty() ||
-        move_session_->initial_geometry.empty()) {
+        transform_session_->selection_snapshot.empty() ||
+        transform_session_->initial_geometry.empty()) {
         return false;
     }
 
-    move_session_->base_point = input.position;
-    move_session_->current_destination = input;
-    move_session_->stage =
-        MoveStage::await_destination;
-    clearHover();
-    return true;
+    switch (transform_session_->stage) {
+    case CommonTransformStage::await_base_point:
+        if (tool_ != SketchTool::move &&
+            tool_ != SketchTool::rotate &&
+            tool_ != SketchTool::scale) {
+            return false;
+        }
+        transform_session_->base_point = input.position;
+        transform_session_->reference_point.reset();
+        transform_session_->current_preview.reset();
+        transform_session_->stage =
+            tool_ == SketchTool::move
+                ? CommonTransformStage::await_destination
+                : CommonTransformStage::await_reference_point;
+        if (tool_ == SketchTool::move) {
+            transform_session_->current_preview = input;
+        }
+        clearHover();
+        return true;
+
+    case CommonTransformStage::await_reference_point:
+        if ((tool_ != SketchTool::rotate &&
+             tool_ != SketchTool::scale) ||
+            !transform_session_->base_point ||
+            input.position ==
+                *transform_session_->base_point) {
+            return false;
+        }
+        transform_session_->reference_point =
+            input.position;
+        transform_session_->current_preview = input;
+        transform_session_->stage =
+            CommonTransformStage::await_destination;
+        clearHover();
+        return true;
+
+    case CommonTransformStage::await_axis_start:
+        if (tool_ != SketchTool::mirror) {
+            return false;
+        }
+        transform_session_->base_point = input.position;
+        transform_session_->reference_point.reset();
+        transform_session_->current_preview = input;
+        transform_session_->stage =
+            CommonTransformStage::await_axis_end;
+        clearHover();
+        return true;
+
+    default:
+        return false;
+    }
 }
 
-bool SketchInteractionState::updateMoveDestination(
+bool SketchInteractionState::updateTransformPreview(
     ResolvedSketchInput input) noexcept {
-    if (tool_ != SketchTool::move ||
-        !move_session_ ||
-        move_session_->stage !=
-            MoveStage::await_destination ||
-        !move_session_->base_point ||
+    if (!commonTransformTool() ||
+        !transform_session_ ||
         !input.valid()) {
         return false;
     }
 
-    move_session_->current_destination = input;
+    const bool destination =
+        transform_session_->stage ==
+            CommonTransformStage::await_destination &&
+        (tool_ == SketchTool::move ||
+         tool_ == SketchTool::rotate ||
+         tool_ == SketchTool::scale);
+    const bool axis_end =
+        transform_session_->stage ==
+            CommonTransformStage::await_axis_end &&
+        tool_ == SketchTool::mirror;
+
+    if (!destination && !axis_end) {
+        return false;
+    }
+
+    transform_session_->current_preview = input;
     return true;
 }
 
 std::optional<SketchTransformGeometry>
-SketchInteractionState::moveGeometryState() const {
-    if (tool_ != SketchTool::move ||
-        !move_session_ ||
-        move_session_->stage !=
-            MoveStage::await_destination ||
-        !move_session_->base_point ||
-        !move_session_->current_destination) {
+SketchInteractionState::transformGeometryState() const {
+    if (!commonTransformTool() ||
+        !transform_session_ ||
+        !transform_session_->base_point ||
+        !transform_session_->current_preview) {
         return std::nullopt;
     }
 
-    const Point2 delta{
-        move_session_->current_destination->position.u -
-            move_session_->base_point->u,
-        move_session_->current_destination->position.v -
-            move_session_->base_point->v};
+    const auto base =
+        *transform_session_->base_point;
+    const auto current =
+        transform_session_->current_preview->position;
 
-    return translateSketchGeometry(
-        move_session_->initial_geometry,
-        delta);
+    if (tool_ == SketchTool::move &&
+        transform_session_->stage ==
+            CommonTransformStage::await_destination) {
+        return translateSketchGeometry(
+            transform_session_->initial_geometry,
+            {
+                current.u - base.u,
+                current.v - base.v});
+    }
+
+    if ((tool_ == SketchTool::rotate ||
+         tool_ == SketchTool::scale) &&
+        transform_session_->stage ==
+            CommonTransformStage::await_destination &&
+        transform_session_->reference_point) {
+        const auto reference =
+            *transform_session_->reference_point;
+
+        if (tool_ == SketchTool::rotate) {
+            const auto angle =
+                signedAngle(
+                    base,
+                    reference,
+                    current);
+            return angle
+                ? rotateSketchGeometry(
+                      transform_session_->
+                          initial_geometry,
+                      base,
+                      *angle)
+                : std::nullopt;
+        }
+
+        const double reference_distance =
+            distance(base, reference);
+        const double current_distance =
+            distance(base, current);
+        if (!std::isfinite(reference_distance) ||
+            reference_distance <= 0.0 ||
+            !std::isfinite(current_distance) ||
+            current_distance <= 0.0) {
+            return std::nullopt;
+        }
+
+        const double factor =
+            current_distance /
+            reference_distance;
+        return scaleSketchGeometry(
+            transform_session_->initial_geometry,
+            base,
+            factor);
+    }
+
+    if (tool_ == SketchTool::mirror &&
+        transform_session_->stage ==
+            CommonTransformStage::await_axis_end) {
+        return mirrorSketchGeometry(
+            transform_session_->initial_geometry,
+            base,
+            current);
+    }
+
+    return std::nullopt;
 }
 
-void SketchInteractionState::finishMove() noexcept {
-    if (tool_ != SketchTool::move) {
+void SketchInteractionState::finishTransform() noexcept {
+    if (!commonTransformTool()) {
         return;
     }
     resetToSelect();
     clearHover();
+}
+
+bool SketchInteractionState::completeMoveSelection(
+    const SketchModel& model) {
+    return tool_ == SketchTool::move &&
+           completeTransformSelection(model);
+}
+
+bool SketchInteractionState::acceptMoveBasePoint(
+    ResolvedSketchInput input) noexcept {
+    return tool_ == SketchTool::move &&
+           transform_session_ &&
+           transform_session_->stage ==
+               CommonTransformStage::await_base_point &&
+           acceptTransformPoint(input);
+}
+
+bool SketchInteractionState::updateMoveDestination(
+    ResolvedSketchInput input) noexcept {
+    return tool_ == SketchTool::move &&
+           updateTransformPreview(input);
+}
+
+std::optional<SketchTransformGeometry>
+SketchInteractionState::moveGeometryState() const {
+    return tool_ == SketchTool::move
+        ? transformGeometryState()
+        : std::nullopt;
+}
+
+void SketchInteractionState::finishMove() noexcept {
+    if (tool_ == SketchTool::move) {
+        finishTransform();
+    }
 }
 
 LinePointResult
@@ -750,8 +1000,8 @@ bool SketchInteractionState::escape() noexcept {
         return true;
     }
 
-    if (tool_ == SketchTool::move) {
-        move_session_.reset();
+    if (commonTransformTool()) {
+        resetCommonTransform();
         resetToSelect();
         clearHover();
         return true;
@@ -762,7 +1012,7 @@ bool SketchInteractionState::escape() noexcept {
 
 void SketchInteractionState::cancelForHistory() noexcept {
     manipulation_.reset();
-    resetMoveStage();
+    resetCommonTransform();
     clearHover();
     resetToSelect();
 }
@@ -956,10 +1206,10 @@ bool SketchInteractionState::setHoveredEntity(
     std::optional<EntityId> entity) noexcept {
     const bool hover_allowed =
         tool_ == SketchTool::select ||
-        (tool_ == SketchTool::move &&
-         move_session_ &&
-         move_session_->stage ==
-             MoveStage::select_objects);
+        (commonTransformTool() &&
+         transform_session_ &&
+         transform_session_->stage ==
+             CommonTransformStage::select_objects);
 
     if (!hover_allowed || manipulation_) {
         return false;
@@ -1351,7 +1601,7 @@ void SketchInteractionState::resetToSelect() noexcept {
     resetLineStage();
     resetCircleStage();
     resetArcStage();
-    resetMoveStage();
+    resetCommonTransform();
 }
 
 void SketchInteractionState::resetLineStage()
@@ -1379,9 +1629,9 @@ void SketchInteractionState::resetArcStage()
     pending_arc_request_.reset();
 }
 
-void SketchInteractionState::resetMoveStage()
+void SketchInteractionState::resetCommonTransform()
     noexcept {
-    move_session_.reset();
+    transform_session_.reset();
 }
 
 } // namespace simplesolid2::sketch

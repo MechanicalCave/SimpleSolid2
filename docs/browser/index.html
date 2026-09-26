@@ -403,11 +403,11 @@ Shift + Middle drag          → Orbit
 Mouse wheel                  → Zoom
 ```
 
-Normal MOVE reuses that same semantic query/selection bridge. Selection-first MOVE freezes an existing non-empty selection immediately. Command-first MOVE starts with an empty selection in Select objects mode: click/Ctrl/Window/Crossing collect entities, blank LMB is a no-op, and Enter/Space/RMB completes collection only when non-empty. Grips are hidden/inactive during normal MOVE stages.
+Normal Move/Rotate/Scale/Mirror commands reuse that same semantic query/selection bridge. Selection-first activation freezes an existing non-empty selection immediately. Command-first activation starts in Select objects mode: click/Ctrl/Window/Crossing collect entities, blank LMB is a no-op, and Enter/Space/RMB completes collection only when non-empty. Grips are hidden/inactive during normal common-transform stages.
 
 Rectangle results are canonicalized as semantic EntityIds and provider result order never chooses primary. Sketch point/rectangle queries remain independent from mutable OCCT selection.
 
-Pointer routing and cursor mode remain independent runtime axes. Ordinary Select and MOVE object collection use the pick-box cursor; creation tools, MOVE Base Point/destination and direct edit use the crosshair path. Toolbar, Operations, Command Line, keyboard and bounded RMB handling are adapters to the same semantic interaction authority.
+Pointer routing and cursor mode remain independent runtime axes. Ordinary Select and transform object collection use the pick-box cursor; creation tools, transform reference/destination points and direct edit use the crosshair path. Toolbar, Operations, Command Line, keyboard and bounded RMB handling are adapters to the same semantic interaction authority.
 
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
@@ -423,26 +423,46 @@ The production executable creates the concrete Qt/OCCT provider only in the comp
 <!-- section-id: internal.cad-workbench-viewer.sketch-edit -->
 ## Part Sketch host and 3D edit context
 
-SK-01 through SK-06A established durable Sketch hosting, provider-neutral presentation/input, Line/Circle/Arc creation, selection and direct manipulation. SK-07A adds normal MOVE through the same semantic interaction and transaction path.
+The current Part Sketch editor presents and edits durable Line/Circle/Arc geometry through the same semantic interaction and transaction path.
 
-In Part modeling the editor toolbar provides `Sketch`. In Sketch edit it provides checkable `Select`, `Line`, `Circle`, `Arc` and `Move`. The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC` and `MOVE`.
+In Part modeling the editor toolbar provides `Sketch`. In Sketch edit the tool strip is visibly organized as:
 
-Creation behavior is unchanged. For MOVE:
+```text
+Select
 
-- selection-first: activate Move with a non-empty semantic selection and immediately enter Specify Base Point;
-- command-first: activate Move with empty selection, collect objects by point/Ctrl/Window/Crossing, then Enter/Space/RMB to continue;
-- Base Point: accept any finite resolved Sketch-local point without authored mutation;
-- destination: preview the frozen mixed Line/Circle/Arc set using one delta `destination - base`;
-- LMB or Enter commits a valid destination; Esc cancels and preserves the affected selection;
-- zero-delta completion returns to Select without revision, dirty-state or history change.
+Create
+  Line
+  Circle
+  Arc
 
-The provider-independent translation core is shared by normal MOVE and Center-grip Move. Center grips still move the complete frozen selection using the grip start as implicit base. Owner-only reshape semantics for Line/Circle/Arc are unchanged.
+Modify
+  Move
+  Rotate
+  Scale
+  Mirror
+```
 
-A non-zero accepted MOVE executes one semantic `UpdateSketchGeometryCommand`, validates the captured revision and all frozen EntityIds, stages one Part state, commits atomically, increments revision once and creates one Undo entry. EntityIds are preserved. Undo/Redo first cancels transient MOVE/direct manipulation, then runs ordinary DocumentSession history and reconciles surviving semantic selection.
+The compact Command Line accepts the command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `ROTATE`, `SCALE` and `MIRROR`. These keywords activate tools only; the current Command Line does not parse numeric transform values.
 
-Switching tools or Documents clears uncommitted MOVE state safely. Save/Close/Reopen uses unchanged Part schema v4; moved canonical geometry and EntityIds persist without a migration.
+Move/Rotate/Scale/Mirror share one frozen-selection common-transform pipeline. Selection-first activation skips object collection. Command-first activation collects objects with the ordinary semantic selection grammar and freezes the affected EntityIds before reference-point stages begin.
 
-Space inside text-entry focus remains text input. SK-07A does not activate Rotate/Scale/Mirror/Copy, semantic Space CycleEditMode, ordinary-Select RMB context or Repeat Last Command.
+Move uses Base Point → destination and previews one translation `destination - base`.
+
+Rotate uses Base Point → Reference Point → destination. The Reference Point must differ from Base. The preview uses the signed angle between the reference and destination vectors in the Sketch frame, with positive counter-clockwise rotation. A zero-angle completion is a clean no-op.
+
+Scale uses Base Point → Reference Point → destination. The factor is the ratio of destination distance to reference distance about Base. Only finite factors `> 0` are valid; values between 0 and 1 reduce geometry, factor 1 is a clean no-op, and zero/negative scale does not commit.
+
+Mirror uses first axis point → second axis point. The two points must be distinct and define an infinite mirror line. Reflection preserves EntityIds; reflected Arcs reverse signed sweep orientation so the authored directed arc matches the reflected geometry. Geometry that is exactly unchanged by the chosen axis completes as a no-op.
+
+Pointer movement updates runtime-only preview from the interaction-start geometry snapshot. LMB at the final point stage or Enter commits the current valid preview. Number keys are not a numeric-input path: typing values such as `0.5`, `2` or `90` while the viewport has focus does not replace the pointer-derived Scale factor or Rotate angle. Enter still means commit the current preview.
+
+A non-no-op accepted common transform executes one semantic `UpdateSketchGeometryCommand`, validates the captured revision and all frozen EntityIds, stages one Part state, commits atomically, increments revision once and creates one Undo entry. EntityIds are preserved. Exact semantic no-ops create no revision, dirty-state or history change.
+
+Center grips still move the complete frozen selection using the grip start as implicit base. Owner-only reshape semantics for Line/Circle/Arc are unchanged. Undo/Redo first cancels transient common-transform/direct-manipulation state, then runs ordinary DocumentSession history and reconciles surviving semantic selection.
+
+Switching tools or Documents clears uncommitted transform state safely. Save/Close/Reopen uses unchanged Part schema v4; transformed canonical geometry and EntityIds persist without a migration.
+
+Space inside text-entry focus remains text input. Copy/repeated Copy, Repeat Last Command, numeric transform input, snapping/inference, Dynamic Input and later Sketch breadth remain outside the current surface.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and provider-surface Navigation Cube
@@ -473,13 +493,13 @@ There is still no modeled Part B-Rep at this milestone; the OCCT provider remain
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, hover, active grip, direct-manipulation session, normal MOVE stage/frozen snapshot/Base Point/current destination, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/MOVE drag state and Command Line text/prompt state are runtime-only.
+Selection, primary selection, hover, active grip, direct-manipulation session, common-transform tool/stage, frozen selection snapshot, Base/Reference/axis points, current pointer-derived preview, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/transform drag state and Command Line text/prompt state are runtime-only.
 
 Persistent Origin visibility and authored Sketch geometry remain separate domain state.
 
 Closing/reopening the application recreates runtime view/interaction state while preserving saved authored geometry and visibility in the Part file.
 
-The native WB-01A stress regression continues to exercise the real Workbench and Qt/OCCT Viewer through repeated selection, navigation, resizing and lifecycle operations; SK-07A does not create a second provider-owned transform or selection state.
+The native Workbench/Qt-OCCT stress regression continues to exercise repeated selection, navigation, resizing and lifecycle operations. Common transforms do not introduce a second provider-owned transform state or semantic selection authority.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.overview" data-kind="internal" data-lang="en" data-path="docs/internal/OVERVIEW.md">
 # SimpleSolid 2.0 — Internal As-built Overview
@@ -937,8 +957,8 @@ The target currently contains:
 - canonical decimal identity transport for `EntityId` and `EntityIdCursor`;
 - canonical authored primitives `Line`, `Circle` and `Arc`;
 - the value-semantic mixed-primitive `SketchModel` plus validated state/restore transfer;
-- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips, bounded direct manipulation and normal MOVE command stages;
-- a provider-independent mixed-primitive translation core shared by Center-grip Move and normal MOVE.
+- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips, bounded direct manipulation and common Move/Rotate/Scale/Mirror command stages;
+- a provider-independent mixed-primitive transform core for translation, rotation, positive uniform scale and reflection.
 
 Each persistent Part-hosted Sketch embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
 
@@ -1038,9 +1058,23 @@ Line keeps the continuous Start/Next-point grammar. Circle uses Center → Radiu
 
 The same state owns transient selection as `EntityId` values plus optional primary identity. Point selection is additive, Ctrl toggles membership, Window/Crossing adds or toggles, and provider result order never chooses primary.
 
-SK-07A adds normal `MOVE` without introducing another selection owner. Selection-first MOVE immediately freezes the existing non-empty selection and asks for a Base Point. Command-first MOVE starts with Select objects; click/Ctrl/Window/Crossing reuse the existing semantic query bridge, blank LMB is a no-op, and Enter/Space/RMB completes object collection only when non-empty. After collection, the frozen semantic set cannot change until the command completes or is cancelled.
+Move, Rotate, Scale and Mirror reuse one common transform lifecycle. Selection-first activation immediately freezes an existing non-empty semantic selection. Command-first activation starts with Select objects; click/Ctrl/Window/Crossing reuse the existing semantic query bridge, blank LMB is a no-op, and Enter/Space/RMB completes object collection only when non-empty. After collection, the frozen semantic set cannot change until the transform completes or is cancelled.
 
-Normal MOVE stores a resolved Sketch-local Base Point and previews one translation delta `destination - base` from the interaction-start authored snapshot. Preview never compounds from a prior frame. Zero delta is a valid no-op completion.
+Move accepts a finite Base Point and previews one translation delta `destination - base`.
+
+Rotate accepts Base Point → Reference Point → destination. The reference vector must be non-zero. Rotation is the signed angle from `reference - base` to `destination - base` in the Sketch frame, with positive counter-clockwise rotation.
+
+Scale accepts Base Point → Reference Point → destination. The reference distance must be non-zero and the runtime factor is:
+
+```text
+factor = |destination - base| / |reference - base|
+```
+
+Only finite factors strictly greater than zero are valid. Factors between 0 and 1 reduce geometry, factor 1 is a no-op, and negative scale is not represented by Scale.
+
+Mirror accepts two distinct finite points defining an infinite axis and previews reflection of the complete frozen selection. Reflection preserves Line/Circle/Arc EntityIds and reverses Arc signed sweep orientation as required by the reflected directed arc.
+
+All common-transform preview is recomputed from the interaction-start authored geometry snapshot; preview never compounds from a previous frame. Preview is runtime-only and never mutates `SketchModel`, revision, dirty state, identity allocation or Undo history.
 
 Selected editable entities still expose semantic grips:
 
@@ -1048,22 +1082,24 @@ Selected editable entities still expose semantic grips:
 - Circle: Center plus four quadrant radius grips;
 - Arc: Center, Start, End and Arc/Mid.
 
-Center grips perform the same mixed Line/Circle/Arc semantic translation as normal MOVE, using the grip's interaction-start point as the implicit base. Line Start/End, Circle quadrant and Arc Start/End/Mid remain owner-only Reshape.
+Center grips perform the same mixed Line/Circle/Arc semantic translation as normal Move, using the grip's interaction-start point as the implicit base. Line Start/End, Circle quadrant and Arc Start/End/Mid remain owner-only Reshape.
 
-Pointer values flow through the shared `ResolvedSketchInput` seam. Preview is runtime-only: it never mutates `SketchModel`, revision, dirty state, identity allocation or Undo history. Accepted non-zero MOVE/reshape commits through the host semantic geometry-update command and Part transaction. Esc cancels transient state and preserves the affected selection. Undo/Redo cancels any active transient MOVE/direct manipulation before global history.
+Pointer values flow through the shared `ResolvedSketchInput` seam. Accepted non-no-op transforms/reshape commit through the host semantic geometry-update command and Part transaction. One accepted common transform is atomic, preserves existing EntityIds and creates at most one revision/history entry. Exact semantic no-ops create no revision, dirty-state or Undo change. Esc cancels transient state and preserves the affected selection. Undo/Redo cancels an active transient common transform/direct manipulation before global history.
+
+Numeric angles, distances and scale factors are not parsed by the current interaction state. Number keys do not override the pointer-derived preview; Enter at a final transform stage commits the current valid preview.
 
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
 The current Part integration presents and edits authored Line/Circle/Arc through runtime adapters outside the Shared 2D target. Active authored geometry is mapped from Sketch U/V to the Part support frame, while the intrinsic Sketch Origin remains a runtime overlay.
 
-R7 has started only through SK-07A. Normal MOVE and the shared translation core are implemented; the product still does not implement:
+The current common transform set is Move, Rotate, positive uniform Scale and Mirror. The product still does not implement:
 
-- Rotate, uniform Scale, Mirror or Copy/repeated Copy;
+- Copy or repeated Copy, including transform-created fresh EntityIds;
 - grip Copy modifier, semantic Space CycleEditMode, ordinary-Select RMB context or Repeat Last Command;
 - intrinsic Origin snapping;
 - snapping/Object Snap, tracking, Ortho/Polar/Grid Snap or geometric inference;
-- numeric coordinate/dynamic input;
+- numeric angle/distance/scale input, coordinate input or Dynamic Input;
 - authored dimensions, constraints or solver evaluation;
 - Rectangle/Polyline durable semantics;
 - intersections, profiles/regions or projected/reference geometry;
@@ -1074,13 +1110,11 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-Existing SK-02A through SK-06A tests continue to cover Shared 2D dependency boundaries, primitive semantics, Part hosting, persistence/history, provider-neutral presentation/input, selection, hover/grips and direct manipulation.
+Existing Sketch regressions continue to cover Shared 2D dependency boundaries, primitive semantics, Part hosting, persistence/history, provider-neutral presentation/input, selection, hover/grips and direct manipulation.
 
-SK-07A adds `sk07a.transform_core` and `sk07a.move_controller`. They cover mixed Line/Circle/Arc translation, finite validation, EntityId preservation, parity between Center-grip Move and normal MOVE, selection-first and command-first staging, frozen selection, Base Point/destination preview, atomic commit, zero-delta no-op, stale revision failure, history cancellation and schema-v4 Save/reload identity preservation.
+The common-transform regression set includes `sk07b.transform_core`, `sk07b.common_transform_state` and `sk07b.transform_controller`. Together they cover mixed Line/Circle/Arc Rotate/Scale/Mirror geometry, positive-only Scale validation, Arc mirror orientation, EntityId preservation, selection-first and command-first staging, frozen selection, reference-point and preview behavior, exact no-op handling, atomic commit, stale-revision failure, cancellation/history interaction and schema-v4 Save/reload identity preservation.
 
-The existing Workbench Sketch-host regression also verifies toolbar/Command-Line MOVE activation and that Space in text-entry focus remains text input.
-
-The exact runtime implementation head `bb218f8d9cff1c1c2ffc45e091a69c485190e97e` passed Windows FULL #475 with Build and 60/60 unfiltered CTest tests. FAST contained 59 tests; the native Workbench stress test remained FULL-only.
+The Workbench Sketch-host regression also verifies the grouped Select / Create / Modify surface, toolbar/Command-Line transform activation and text-focus Space behavior. Final work-item completion additionally requires the repository's exact-head Windows FULL gate and Owner manual Windows verification.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.ui-project-hub" data-kind="internal" data-lang="en" data-path="docs/internal/UI_PROJECT_HUB.md">
 # Project Hub and CAD Workbench UI — As-built
@@ -1352,17 +1386,34 @@ After `Save`, Origin visibility survives closing and restarting the application.
 
 Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when visible, in the 3D Viewport.
 
-While Sketch edit is active, the tool strip provides `Select`, `Line`, `Circle`, `Arc` and `Move`. The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC` and `MOVE`.
+During Sketch Edit the tools are grouped as:
 
-Line/Circle/Arc creation and selection retain the existing behavior. Selected editable entities show state-based square grips: hollow idle, cyan hollow hover and filled yellow active/captured. Center grips move the complete frozen mixed selection; owner-only reshape grips keep their existing primitive-specific behavior.
+```text
+Select
 
-### Move
+Create
+  Line
+  Circle
+  Arc
 
-`Move` works on any mixed selection of Line, Circle and Arc.
+Modify
+  Move
+  Rotate
+  Scale
+  Mirror
+```
 
-With objects already selected, activate `Move` and immediately specify a **Base Point**, then specify a destination point. The whole frozen selection previews one rigid translation equal to `destination - base`.
+The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `ROTATE`, `SCALE` and `MIRROR`.
 
-With nothing selected, activate `Move` first. The command enters **Select objects**:
+Line/Circle/Arc creation and ordinary selection retain the existing behavior. Selected editable entities show state-based square grips: hollow idle, cyan hollow hover and filled yellow active/captured. Center grips move the complete frozen mixed selection; owner-only reshape grips keep their existing primitive-specific behavior.
+
+### Selecting objects for Modify
+
+Move, Rotate, Scale and Mirror work on any mixed selection of Line, Circle and Arc.
+
+If objects are already selected, activate the Modify tool. The current selection is frozen immediately and the command advances to its first reference-point stage.
+
+If nothing is selected, activate the tool first. The command enters **Select objects**:
 
 - click objects to add them;
 - Ctrl+click toggles membership;
@@ -1372,15 +1423,51 @@ With nothing selected, activate `Move` first. The command enters **Select object
 - blank LMB does nothing;
 - Enter, Space or RMB finishes object collection when at least one object is selected.
 
-Then choose Base Point and destination. LMB or Enter accepts a valid destination. Esc cancels the current MOVE and preserves the affected selection. A zero-distance Move is a clean no-op: it creates no authored change and no Undo step.
+### Move
 
-MOVE preview is runtime-only. A non-zero commit is one atomic operation and one Undo step, preserves EntityIds, and works through normal Undo/Redo. Save/Close/Reopen preserves the moved geometry through the existing Part format.
+Specify a **Base Point**, then a destination. The complete frozen selection previews one rigid translation equal to `destination - base`.
+
+LMB or Enter accepts a valid destination. A zero-distance Move is a clean no-op: it creates no authored change and no Undo step.
+
+### Rotate
+
+Specify a **Base Point**, a **Reference Point**, then a destination that defines the final direction.
+
+Reference Point must differ from Base Point. Rotation is the signed angle from the Base→Reference vector to the Base→destination vector in the Sketch plane; positive rotation is counter-clockwise.
+
+A zero-angle Rotate is a valid no-op and creates no authored change or Undo step.
+
+### Scale
+
+Specify a **Base Point**, a **Reference Point**, then a destination.
+
+Scale is derived from distances to Base Point:
+
+```text
+factor = |destination - base| / |reference - base|
+```
+
+The factor must be finite and strictly greater than zero. Values between `0` and `1` reduce geometry, `1` is a no-op, and values greater than `1` enlarge it. Zero and negative values are not valid Scale factors.
+
+### Mirror
+
+Specify the first and second axis points. Two distinct points define an infinite reflection line.
+
+Mirror reflects the complete frozen selection. Line/Circle/Arc preserve their EntityIds, and Arc direction remains geometrically consistent with the reflected directed arc. If the complete geometry is exactly unchanged by the chosen axis, the operation completes as a no-op.
+
+### Commit and numeric entry
+
+Move/Rotate/Scale/Mirror preview is runtime-only. One real commit is one atomic operation and one Undo step, preserves EntityIds, and works through normal Undo/Redo. Save/Close/Reopen preserves transformed geometry through the existing Part format.
+
+Esc cancels the current transform and preserves the affected selection. LMB at the final point stage or Enter commits the current valid preview.
+
+The current version **does not support numeric entry of transform angles, distances or scale factors**. Typing values such as `0.5`, `2` or `90` while the viewport has focus does not replace the value derived from the pointer position. Enter still commits the current preview.
 
 Space typed while a text-entry field has focus remains text input; it does not trigger a CAD action.
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Rotate, Scale, Mirror, Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
+Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -1429,11 +1516,11 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 
 The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the stabilized 3D Workbench/Viewer foundation and durable Origin-plane Sketches with Line/Circle/Arc authored geometry.
 
-The current Sketch UI provides Select/Line/Circle/Arc creation, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, normal mixed-entity MOVE with selection-first or command-first Base Point workflow, Center-grip Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
+The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, Center-grip Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
 
-The product still lacks Rotate/Scale/Mirror/Copy, repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
+The product still lacks Copy/repeated Copy, Repeat Last Command, numeric angle/distance/scale entry and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -1703,17 +1790,34 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 
 Na pasku nad viewportem 3D użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin. Płaszczyznę możesz wybrać w Document Tree lub — gdy jest widoczna — w viewporcie 3D.
 
-Podczas Sketch Edit pasek narzędzi udostępnia `Select`, `Line`, `Circle`, `Arc` i `Move`. Kompaktowy Command Line obsługuje `SELECT`, `LINE`, `CIRCLE`, `ARC` i `MOVE`.
+Podczas Sketch Edit narzędzia są uporządkowane w grupy:
+
+```text
+Select
+
+Create
+  Line
+  Circle
+  Arc
+
+Modify
+  Move
+  Rotate
+  Scale
+  Mirror
+```
+
+Kompaktowy Command Line obsługuje słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `ROTATE`, `SCALE` i `MIRROR`.
 
 Tworzenie Line/Circle/Arc i zwykłe selection zachowują dotychczasową gramatykę. Zaznaczone edytowalne entities pokazują grips kodujące stan: pusty kwadrat w idle, pusty cyan na hover i pełny żółty dla aktywnego/captured gripa. Center grip przesuwa cały zamrożony mieszany selection; owner-only reshape zachowuje dotychczasową semantykę prymitywu.
 
-### Move
+### Wybór obiektów dla Modify
 
-`Move` działa na dowolnym mieszanym selection Line/Circle/Arc.
+Move, Rotate, Scale i Mirror działają na dowolnym mieszanym selection Line/Circle/Arc.
 
-Jeżeli obiekty są już zaznaczone, aktywuj `Move`, wskaż **Base Point**, a potem punkt docelowy. Cały zamrożony selection pokazuje preview jednego sztywnego przesunięcia `destination - base`.
+Jeżeli obiekty są już zaznaczone, uruchom wybrane narzędzie Modify; bieżący selection zostaje od razu zamrożony i komenda przechodzi do pierwszego punktu odniesienia.
 
-Jeżeli nic nie jest zaznaczone, uruchom `Move` najpierw. Komenda przechodzi do **Select objects**:
+Jeżeli nic nie jest zaznaczone, uruchom narzędzie najpierw. Komenda przechodzi do **Select objects**:
 
 - klik dodaje obiekt;
 - Ctrl+klik przełącza członkostwo;
@@ -1723,15 +1827,51 @@ Jeżeli nic nie jest zaznaczone, uruchom `Move` najpierw. Komenda przechodzi do 
 - blank LMB niczego nie czyści;
 - Enter, Space albo RMB kończy wybór, gdy zaznaczono co najmniej jeden obiekt.
 
-Następnie wskaż Base Point i destination. LMB albo Enter zatwierdza poprawny punkt docelowy. Esc anuluje bieżący MOVE i zachowuje objęty nim selection. Przesunięcie o zero jest czystym no-op: nie zmienia authored state i nie tworzy kroku Undo.
+### Move
 
-Preview MOVE jest wyłącznie runtime. Niezerowy commit jest jedną atomową operacją i jednym krokiem Undo, zachowuje EntityId i współpracuje ze zwykłym Undo/Redo. Save/Close/Reopen zachowuje przesuniętą geometrię w istniejącym formacie Part.
+Wskaż **Base Point**, a potem destination. Cały zamrożony selection pokazuje preview jednego sztywnego przesunięcia `destination - base`.
+
+LMB albo Enter zatwierdza poprawny destination. Przesunięcie o zero jest czystym no-op: nie zmienia authored state i nie tworzy kroku Undo.
+
+### Rotate
+
+Wskaż **Base Point**, potem **Reference Point**, a następnie destination definiujący kierunek końcowy.
+
+Reference Point musi różnić się od Base Point. Obrót jest liczony jako podpisany kąt od wektora Base→Reference do wektora Base→destination w płaszczyźnie Sketchu; dodatni kierunek jest przeciwny do ruchu wskazówek zegara.
+
+Obrót o zero jest poprawnym no-op i nie tworzy zmiany ani kroku Undo.
+
+### Scale
+
+Wskaż **Base Point**, potem **Reference Point**, a następnie destination.
+
+Skala jest liczona z odległości od Base Point:
+
+```text
+factor = |destination - base| / |reference - base|
+```
+
+Factor musi być skończony i większy od zera. Wartości pomiędzy `0` i `1` pomniejszają geometrię, `1` jest no-op, a wartości większe od `1` powiększają. Zero i wartości ujemne nie są prawidłowym Scale.
+
+### Mirror
+
+Wskaż pierwszy, a następnie drugi punkt osi. Dwa różne punkty definiują nieskończoną linię odbicia.
+
+Mirror odbija cały zamrożony selection. Line/Circle/Arc zachowują swoje EntityId, a kierunek Arc po odbiciu pozostaje geometrycznie zgodny z odbitym łukiem. Jeżeli geometria po odbiciu jest dokładnie taka sama, operacja kończy się jako no-op.
+
+### Zatwierdzanie i wpisywanie wartości
+
+Preview Move/Rotate/Scale/Mirror jest tylko runtime. Jeden rzeczywisty commit jest jedną atomową operacją i jednym krokiem Undo; zachowuje EntityId i współpracuje ze zwykłym Undo/Redo. Save/Close/Reopen zachowuje przekształconą geometrię w istniejącym formacie Part.
+
+Esc anuluje bieżącą transformację i zachowuje objęty nią selection. LMB na końcowym etapie albo Enter zatwierdza bieżący poprawny preview.
+
+Obecna wersja **nie obsługuje wpisywania numerycznych kątów, odległości ani współczynników skali**. Wpisanie np. `0.5`, `2` albo `90` przy focusie viewportu nie zastępuje wartości wynikającej z położenia kursora. Enter zatwierdza wtedy bieżący preview.
 
 Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uruchamia akcji CAD.
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję. Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin.
 
-Rotate, Scale, Mirror, Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
+Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
@@ -1780,11 +1920,11 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wp
 
 Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, ustabilizowany fundament Workbench/Viewer 3D oraz trwałe Sketches na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
 
-Bieżący Sketch UI zapewnia Select/Line/Circle/Arc, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, normalny mieszany MOVE w wariancie selection-first lub command-first z Base Point, Center-grip Move, ograniczony owner-only reshape, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
+Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, Center-grip Move, ograniczony owner-only reshape, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
 
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Nadal brakuje Rotate/Scale/Mirror/Copy, repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+Nadal brakuje Copy/repeated Copy, Repeat Last Command, numerycznego wpisywania kątów/odległości/skali i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty

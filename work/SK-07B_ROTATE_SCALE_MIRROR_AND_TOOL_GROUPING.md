@@ -1,7 +1,11 @@
 # SK-07B — Rotate, Scale, Mirror and Sketch Tool Grouping
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed and Owner-accepted:** 2026-09-26  
+**Owner manual Windows verification:** PASS — 2026-09-27  
+**Initial runtime Windows FULL:** #503 — `90ac09b8af6b7da2656fc8088415aebcec452ebc` — PASS  
+**Documentation gate:** #508 — `e4b8408fec7aa551132d28440303be60ab48ec67` — PASS  
+**Final exact-head Windows FULL:** #510 — `dc58b767e2e3effbff90ba62d90a7a5f70fda5c5` — PASS  
 **Decision class:** D2 transform/interaction semantics + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -441,3 +445,15 @@ Completion requires:
 - Owner manual Windows verification passes;
 - closeout CLOSURE passes;
 - remaining R7 work stays inactive until separately accepted.
+
+## 20. Completion evidence
+
+SK-07B completed its bounded second R7 slice on 2026-09-27.
+
+- Runtime head `90ac09b8af6b7da2656fc8088415aebcec452ebc` passed Windows FULL #503: Build succeeded and 63/63 unfiltered CTest tests passed.
+- Documentation head `e4b8408fec7aa551132d28440303be60ab48ec67` passed DOCS #508, including deterministic Product Browser regeneration/freshness and stable `windows-msvc`.
+- Owner manual Windows verification passed the accepted Rotate/Scale/Mirror and toolbar-grouping checklist on 2026-09-27.
+- Numeric angle/distance/scale entry was manually clarified as intentionally out of scope: number keys do not override pointer-derived preview, and Enter commits the current valid preview.
+- A non-functional common-transform authority comment established the final exact-head candidate `dc58b767e2e3effbff90ba62d90a7a5f70fda5c5` without changing runtime behavior.
+- Final exact-head Windows FULL #510 passed on that candidate: documentation freshness, Build, FAST/SUBSYSTEM selector checks, 63/63 unfiltered CTest tests and stable `windows-msvc` all succeeded.
+- Copy/repeated Copy, fresh transform-created EntityIds, Repeat Last Command, numeric/Dynamic Input, snapping/inference and R8+ remain outside this completed contract.

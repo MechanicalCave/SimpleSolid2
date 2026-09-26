@@ -95,17 +95,34 @@ After `Save`, Origin visibility survives closing and restarting the application.
 
 Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when visible, in the 3D Viewport.
 
-While Sketch edit is active, the tool strip provides `Select`, `Line`, `Circle`, `Arc` and `Move`. The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC` and `MOVE`.
+During Sketch Edit the tools are grouped as:
 
-Line/Circle/Arc creation and selection retain the existing behavior. Selected editable entities show state-based square grips: hollow idle, cyan hollow hover and filled yellow active/captured. Center grips move the complete frozen mixed selection; owner-only reshape grips keep their existing primitive-specific behavior.
+```text
+Select
 
-### Move
+Create
+  Line
+  Circle
+  Arc
 
-`Move` works on any mixed selection of Line, Circle and Arc.
+Modify
+  Move
+  Rotate
+  Scale
+  Mirror
+```
 
-With objects already selected, activate `Move` and immediately specify a **Base Point**, then specify a destination point. The whole frozen selection previews one rigid translation equal to `destination - base`.
+The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `ROTATE`, `SCALE` and `MIRROR`.
 
-With nothing selected, activate `Move` first. The command enters **Select objects**:
+Line/Circle/Arc creation and ordinary selection retain the existing behavior. Selected editable entities show state-based square grips: hollow idle, cyan hollow hover and filled yellow active/captured. Center grips move the complete frozen mixed selection; owner-only reshape grips keep their existing primitive-specific behavior.
+
+### Selecting objects for Modify
+
+Move, Rotate, Scale and Mirror work on any mixed selection of Line, Circle and Arc.
+
+If objects are already selected, activate the Modify tool. The current selection is frozen immediately and the command advances to its first reference-point stage.
+
+If nothing is selected, activate the tool first. The command enters **Select objects**:
 
 - click objects to add them;
 - Ctrl+click toggles membership;
@@ -115,15 +132,51 @@ With nothing selected, activate `Move` first. The command enters **Select object
 - blank LMB does nothing;
 - Enter, Space or RMB finishes object collection when at least one object is selected.
 
-Then choose Base Point and destination. LMB or Enter accepts a valid destination. Esc cancels the current MOVE and preserves the affected selection. A zero-distance Move is a clean no-op: it creates no authored change and no Undo step.
+### Move
 
-MOVE preview is runtime-only. A non-zero commit is one atomic operation and one Undo step, preserves EntityIds, and works through normal Undo/Redo. Save/Close/Reopen preserves the moved geometry through the existing Part format.
+Specify a **Base Point**, then a destination. The complete frozen selection previews one rigid translation equal to `destination - base`.
+
+LMB or Enter accepts a valid destination. A zero-distance Move is a clean no-op: it creates no authored change and no Undo step.
+
+### Rotate
+
+Specify a **Base Point**, a **Reference Point**, then a destination that defines the final direction.
+
+Reference Point must differ from Base Point. Rotation is the signed angle from the Base→Reference vector to the Base→destination vector in the Sketch plane; positive rotation is counter-clockwise.
+
+A zero-angle Rotate is a valid no-op and creates no authored change or Undo step.
+
+### Scale
+
+Specify a **Base Point**, a **Reference Point**, then a destination.
+
+Scale is derived from distances to Base Point:
+
+```text
+factor = |destination - base| / |reference - base|
+```
+
+The factor must be finite and strictly greater than zero. Values between `0` and `1` reduce geometry, `1` is a no-op, and values greater than `1` enlarge it. Zero and negative values are not valid Scale factors.
+
+### Mirror
+
+Specify the first and second axis points. Two distinct points define an infinite reflection line.
+
+Mirror reflects the complete frozen selection. Line/Circle/Arc preserve their EntityIds, and Arc direction remains geometrically consistent with the reflected directed arc. If the complete geometry is exactly unchanged by the chosen axis, the operation completes as a no-op.
+
+### Commit and numeric entry
+
+Move/Rotate/Scale/Mirror preview is runtime-only. One real commit is one atomic operation and one Undo step, preserves EntityIds, and works through normal Undo/Redo. Save/Close/Reopen preserves transformed geometry through the existing Part format.
+
+Esc cancels the current transform and preserves the affected selection. LMB at the final point stage or Enter commits the current valid preview.
+
+The current version **does not support numeric entry of transform angles, distances or scale factors**. Typing values such as `0.5`, `2` or `90` while the viewport has focus does not replace the value derived from the pointer position. Enter still commits the current preview.
 
 Space typed while a text-entry field has focus remains text input; it does not trigger a CAD action.
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Rotate, Scale, Mirror, Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
+Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -172,8 +225,9 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 
 The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the stabilized 3D Workbench/Viewer foundation and durable Origin-plane Sketches with Line/Circle/Arc authored geometry.
 
-The current Sketch UI provides Select/Line/Circle/Arc creation, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, normal mixed-entity MOVE with selection-first or command-first Base Point workflow, Center-grip Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
+The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, Center-grip Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
 
-The product still lacks Rotate/Scale/Mirror/Copy, repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
+The product still lacks Copy/repeated Copy, Repeat Last Command, numeric angle/distance/scale entry and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
+

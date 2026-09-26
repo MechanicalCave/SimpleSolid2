@@ -339,6 +339,21 @@ int main(int argc, char* argv[]) {
     auto* move_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("moveSketchToolButton"));
+    auto* create_tools_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("sketchCreateToolsLabel"));
+    auto* modify_tools_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("sketchModifyToolsLabel"));
+    auto* rotate_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("rotateSketchToolButton"));
+    auto* scale_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("scaleSketchToolButton"));
+    auto* mirror_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("mirrorSketchToolButton"));
     auto* command_input =
         workbench.findChild<QLineEdit*>(
             QStringLiteral("sketchCommandInput"));
@@ -357,6 +372,11 @@ int main(int argc, char* argv[]) {
     CHECK(editor_host != nullptr);
     CHECK(operations_label != nullptr);
     CHECK(move_button != nullptr);
+    CHECK(create_tools_label != nullptr);
+    CHECK(modify_tools_label != nullptr);
+    CHECK(rotate_button != nullptr);
+    CHECK(scale_button != nullptr);
+    CHECK(mirror_button != nullptr);
     CHECK(command_input != nullptr);
     CHECK(command_prompt != nullptr);
     CHECK(editor_host->isAncestorOf(sketch_button));
@@ -427,6 +447,65 @@ int main(int argc, char* argv[]) {
         viewer::StandardView::front);
     CHECK(viewport->fitAllCount() > 0);
 
+    // SK-07B: Sketch tools are visibly grouped and the new
+    // transform adapters enter the same command-first collection stage.
+    CHECK(!create_tools_label->isHidden());
+    CHECK(!modify_tools_label->isHidden());
+    CHECK(
+        create_tools_label->text() ==
+        QStringLiteral("Create:"));
+    CHECK(
+        modify_tools_label->text() ==
+        QStringLiteral("Modify:"));
+    CHECK(!rotate_button->isHidden());
+    CHECK(!scale_button->isHidden());
+    CHECK(!mirror_button->isHidden());
+
+    rotate_button->click();
+    QApplication::processEvents();
+    CHECK(rotate_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Rotate — Select objects; Enter/Space/RMB to continue"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: ROTATE — Select objects; Enter/Space/RMB to continue"));
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!rotate_button->isChecked());
+
+    command_input->setText(
+        QStringLiteral("SCALE"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(scale_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Scale — Select objects; Enter/Space/RMB to continue"));
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!scale_button->isChecked());
+
+    command_input->setText(
+        QStringLiteral("MIRROR"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(mirror_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Mirror — Select objects; Enter/Space/RMB to continue"));
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!mirror_button->isChecked());
+
     // SK-07A: toolbar and Command Line are adapters to the same
     // command-first MOVE state when the Sketch selection is empty.
     CHECK(!move_button->isHidden());
@@ -439,7 +518,8 @@ int main(int argc, char* argv[]) {
             "Move — Select objects; Enter/Space/RMB to continue"));
     CHECK(
         command_prompt->text() ==
-        QStringLiteral("Command: MOVE — Select objects"));
+        QStringLiteral(
+            "Command: MOVE — Select objects; Enter/Space/RMB to continue"));
 
     QTest::keyClick(
         viewport,

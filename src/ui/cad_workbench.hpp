@@ -95,6 +95,9 @@ private:
     void activateSketchCircle();
     void activateSketchArc();
     void activateSketchMove();
+    void activateSketchRotate();
+    void activateSketchScale();
+    void activateSketchMirror();
     void finishSketchLine();
     void cancelSketchLine();
     void deleteSketchSelection();
@@ -181,10 +184,15 @@ private:
     QLabel* operations_placeholder_{};
     QPushButton* sketch_button_{};
     QPushButton* select_sketch_button_{};
+    QLabel* create_tools_label_{};
     QPushButton* line_sketch_button_{};
     QPushButton* circle_sketch_button_{};
     QPushButton* arc_sketch_button_{};
+    QLabel* modify_tools_label_{};
     QPushButton* move_sketch_button_{};
+    QPushButton* rotate_sketch_button_{};
+    QPushButton* scale_sketch_button_{};
+    QPushButton* mirror_sketch_button_{};
     QPushButton* cancel_sketch_button_{};
     QPushButton* finish_sketch_button_{};
     QPushButton* finish_line_button_{};
