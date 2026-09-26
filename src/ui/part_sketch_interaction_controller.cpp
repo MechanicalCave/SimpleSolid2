@@ -495,6 +495,7 @@ bool PartSketchInteractionController::commitTransform() {
         ((*stage ==
               sketch::CommonTransformStage::await_destination &&
           (tool == sketch::SketchTool::move ||
+           tool == sketch::SketchTool::copy ||
            tool == sketch::SketchTool::rotate ||
            tool == sketch::SketchTool::scale)) ||
          (*stage ==
