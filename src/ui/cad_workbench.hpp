@@ -95,6 +95,7 @@ private:
     void activateSketchCircle();
     void activateSketchArc();
     void activateSketchMove();
+    void activateSketchCopy();
     void activateSketchRotate();
     void activateSketchScale();
     void activateSketchMirror();
@@ -190,6 +191,7 @@ private:
     QPushButton* arc_sketch_button_{};
     QLabel* modify_tools_label_{};
     QPushButton* move_sketch_button_{};
+    QPushButton* copy_sketch_button_{};
     QPushButton* rotate_sketch_button_{};
     QPushButton* scale_sketch_button_{};
     QPushButton* mirror_sketch_button_{};
