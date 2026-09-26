@@ -1000,8 +1000,8 @@ bool SketchInteractionState::escape() noexcept {
         return true;
     }
 
-    if (tool_ == SketchTool::move) {
-        move_session_.reset();
+    if (commonTransformTool()) {
+        resetCommonTransform();
         resetToSelect();
         clearHover();
         return true;
@@ -1012,7 +1012,7 @@ bool SketchInteractionState::escape() noexcept {
 
 void SketchInteractionState::cancelForHistory() noexcept {
     manipulation_.reset();
-    resetMoveStage();
+    resetCommonTransform();
     clearHover();
     resetToSelect();
 }
@@ -1206,10 +1206,10 @@ bool SketchInteractionState::setHoveredEntity(
     std::optional<EntityId> entity) noexcept {
     const bool hover_allowed =
         tool_ == SketchTool::select ||
-        (tool_ == SketchTool::move &&
-         move_session_ &&
-         move_session_->stage ==
-             MoveStage::select_objects);
+        (commonTransformTool() &&
+         transform_session_ &&
+         transform_session_->stage ==
+             CommonTransformStage::select_objects);
 
     if (!hover_allowed || manipulation_) {
         return false;
@@ -1601,7 +1601,7 @@ void SketchInteractionState::resetToSelect() noexcept {
     resetLineStage();
     resetCircleStage();
     resetArcStage();
-    resetMoveStage();
+    resetCommonTransform();
 }
 
 void SketchInteractionState::resetLineStage()
@@ -1629,9 +1629,9 @@ void SketchInteractionState::resetArcStage()
     pending_arc_request_.reset();
 }
 
-void SketchInteractionState::resetMoveStage()
+void SketchInteractionState::resetCommonTransform()
     noexcept {
-    move_session_.reset();
+    transform_session_.reset();
 }
 
 } // namespace simplesolid2::sketch
