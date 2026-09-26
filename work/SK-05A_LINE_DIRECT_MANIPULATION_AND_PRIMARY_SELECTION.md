@@ -1,6 +1,6 @@
 # SK-05A — Line Direct Manipulation and Selection Foundation
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** ACCEPTED — COMPLETED  
 **Owner acceptance:** 2026-09-26  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (foundation-v1.0)  
@@ -524,3 +524,22 @@ Completion requires:
 - manual Windows verification passes on the exact final implementation candidate;
 - closeout CLOSURE gate passes;
 - R6+ remains inactive until separately contracted.
+
+
+## 23. Final closeout evidence
+
+SK-05A completion evidence:
+
+- exact implementation head `4cb0c3013603ef2800f7cc5778f313e22107fe3d` passed Windows FULL gate #402;
+- FULL #402 passed exact checkout, documentation freshness, bootstrap verification, Build and full CTest;
+- CTest passed 56/56 tests, including the three SK-05A regressions and the native Qt/OCCT selection/grip query coverage;
+- the final implementation includes the bounded native-detection cleanup that prevents OCCT provider hover from leaking over semantic Sketch hover;
+- the Owner manually verified the exact implementation candidate on Windows and reported PASS for the accepted SK-05A Line grip/direct-manipulation workflow;
+- manual verification includes hover clearing back to normal presentation, visible selected-Line grips, endpoint Reshape, center-grip Move, commit/cancel hierarchy, retained selection semantics and navigation compatibility;
+- semantic edits remain owned by the application command/Part transaction path and preserve EntityId;
+- Viewer presentation tokens and OCCT identity remain runtime/provider-only;
+- required internal and PL/EN product documentation is current and the generated Product Browser passed freshness verification;
+- R5 is complete through this bounded Line slice;
+- R6+ remains inactive and unauthorized until separately contracted.
+
+All SK-05A acceptance conditions are satisfied. The work item is complete subject only to the repository CLOSURE gate on this closeout-only revision.

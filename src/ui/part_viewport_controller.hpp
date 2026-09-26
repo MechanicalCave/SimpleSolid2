@@ -2,6 +2,7 @@
 
 #include "part_document_tree_controller.hpp"
 
+#include <simplesolid2/sketch/interaction_state.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
@@ -38,6 +39,20 @@ struct SketchPointerInput final {
 struct SketchEntityPointQueryResult final {
     bool completed{};
     std::optional<SketchEntityAddress> hit;
+};
+
+struct SketchGripAddress final {
+    sketch::SketchId sketch_id;
+    sketch::LineGripRef grip;
+
+    friend bool operator==(
+        const SketchGripAddress&,
+        const SketchGripAddress&) = default;
+};
+
+struct SketchGripPointQueryResult final {
+    bool completed{};
+    std::optional<SketchGripAddress> hit;
 };
 
 struct SketchEntityRectangleQueryResult final {
@@ -94,6 +109,10 @@ public:
     querySketchEntityAt(
         viewer::ViewportPoint2 point);
 
+    [[nodiscard]] SketchGripPointQueryResult
+    querySketchGripAt(
+        viewer::ViewportPoint2 point);
+
     [[nodiscard]] SketchEntityRectangleQueryResult
     querySketchEntities(
         const viewer::ViewportRect2& rectangle,
@@ -121,6 +140,13 @@ public:
     [[nodiscard]] bool projectSketchEntitySelection(
         const std::vector<sketch::EntityId>& selected,
         std::optional<sketch::EntityId> primary);
+
+    [[nodiscard]] bool projectSketchInteraction(
+        const std::vector<sketch::EntityId>& selected,
+        std::optional<sketch::EntityId> hovered_entity,
+        std::optional<sketch::LineGripRef> hovered_grip,
+        std::optional<sketch::LineGripRef> active_grip,
+        bool grips_visible);
 
     void setSelectionChangedHandler(
         SelectionChangedHandler handler) {
@@ -193,6 +219,10 @@ private:
         sketch_entity_bindings_;
     std::uint64_t next_sketch_presentation_token_{
         0x10000U};
+    bool sketch_grip_projection_valid_{};
+    bool projected_grips_visible_{};
+    std::vector<sketch::EntityId>
+        projected_grip_selection_;
 
     SelectionChangedHandler selection_changed_handler_;
     SketchPointerHandler sketch_pointer_handler_;

@@ -577,7 +577,7 @@ Unchanged.
 Unchanged.
 
 ### R5 — Direct-manipulation and selection foundation on Line
-**Status:** active — SK-05A accepted 2026-09-26
+**Status:** completed — SK-05A Owner manual PASS and FULL #402 on 2026-09-26
 
 Goal:
 
@@ -722,7 +722,7 @@ R1 completed
 R2 completed  
 R3 completed  
 R4 completed  
-R5 active — SK-05A is the accepted active Work Contract  
+R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6+ not started
 
-Roadmap v1.2 is authoritative. Production implementation remains bounded by the active accepted Work Contract; R6+ is not authorized.
+Roadmap v1.2 remains authoritative. R6+ is not authorized until a separate explicit Owner-accepted Work Contract is activated.

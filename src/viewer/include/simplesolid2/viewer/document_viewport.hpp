@@ -59,6 +59,27 @@ public:
     virtual bool setSketchPreviewScene(
         const SketchPreviewScene& scene) = 0;
 
+    virtual bool setSketchGripScene(
+        const SketchGripScene& scene) {
+        return scene.valid() &&
+               scene.grips.empty();
+    }
+
+    virtual bool setSketchInteractionPresentation(
+        const SketchInteractionPresentation& presentation) {
+        return presentation.valid() &&
+               !presentation.hovered_entity &&
+               !presentation.hovered_grip &&
+               !presentation.active_grip;
+    }
+
+    [[nodiscard]] virtual SketchGripQueryResult
+    querySketchGrip(
+        ViewportPoint2 point) {
+        (void)point;
+        return {};
+    }
+
     virtual bool setPresentationSelection(
         const PresentationSelection& selection) = 0;
 

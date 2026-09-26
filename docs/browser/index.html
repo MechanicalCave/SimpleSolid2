@@ -383,19 +383,22 @@ The controller pushes one coherent selection to Tree and Viewer. Primary selecti
 Current mouse grammar depends on semantic context. Outside Sketch edit, built-in reference selection keeps the existing replace/toggle/blank-clear behavior. During Sketch Select, primary pointer input is routed through the Sketch coordinator:
 
 ```text
-Left click Line            → replace Sketch EntityId selection
-Ctrl + Left click Line     → toggle Sketch EntityId selection
+Left click unselected Line → add it and make it primary
+Left click selected Line   → keep membership; make it primary
+Ctrl + Left click Line     → toggle Sketch EntityId membership
 Left click blank           → clear Sketch EntityId selection
 Ctrl + Left click blank    → keep Sketch selection
-Left-to-right drag         → Window rectangle replacement
-Right-to-left drag         → Crossing rectangle replacement
+Left-to-right drag         → add Window hits
+Right-to-left drag         → add Crossing hits
+Ctrl + rectangle           → toggle returned EntityIds
+Esc in Select              → clear selection
 Middle drag                → Pan
 Shift + Middle drag        → Orbit
 Mouse wheel                → Zoom
 Right click                → reserved; controlled no-op
 ```
 
-Rectangle selection deliberately assigns no primary EntityId in R4 so provider query order cannot become semantic ordering.
+Rectangle results are canonicalized as semantic EntityIds and never use provider result order to choose primary. Existing selection is not implicitly erased.
 
 Transient OCCT detection/highlight is not semantic selection. SK-04B keeps Sketch hit testing independent from the mutable OCCT selection set: authored active-Sketch Lines are projected through the current view and queried in screen space. Point query returns the nearest eligible Line within provider pick tolerance. Rectangle query supports explicit `window` (projected segment fully contained) and `crossing` (projected segment intersects/touches or is contained) rules. Built-in references, grid, intrinsic Sketch Origin and transient preview Lines are outside these Sketch queries.
 
@@ -404,7 +407,9 @@ Pointer routing and cursor mode remain independent runtime axes. Entering Sketch
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-`IDocumentViewport` is provider-neutral. It exposes camera/navigation, the existing reference scene, an active-Sketch authored scene, a separate transient Sketch preview scene, presentation selection, neutral selection-intent transport, neutral spatial-pointer transport, primary-pointer routing, runtime cursor mode, active-Sketch point/rectangle presentation queries and a separate runtime selection-box overlay channel.
+`IDocumentViewport` is provider-neutral. It exposes camera/navigation, the existing reference scene, an active-Sketch authored scene, a separate transient Sketch preview scene, presentation selection, neutral selection-intent transport, neutral spatial-pointer transport, primary-pointer routing, runtime cursor mode, active-Sketch point/rectangle presentation queries, a finite Line-grip scene/query contract, runtime Sketch hover/active-grip presentation and the existing selection-box overlay channel.
+
+SK-05A deliberately extends that finite surface instead of introducing a generic overlay framework. A grip key is `PresentationToken + SketchGripRole` only inside the Viewer boundary. `PartViewportController` immediately maps the owner token back to `SketchId + EntityId` and then to the semantic `LineGripRef`; neither Qt/OCCT object identity nor presentation tokens enter authored CAD state.
 
 `QtOcctViewerWidget` implements that contract behind the `viewer_qt_occt` module. Provider-native Qt events and OCCT view objects do not cross the boundary: spatial input is exported as logical viewport coordinates plus a finite 3D `Ray3` and the smallest neutral modifier state required by the active interaction. SK-04C transports Control as provider-neutral runtime data; Qt modifier enums remain provider-local.
 
@@ -437,9 +442,13 @@ R3 also provides an independent transient Line-preview channel and maps provider
 
 SK-04C wires SK-04A and SK-04B through one bounded Part/UI coordinator. Line accepts points on primary press, renders rubber-band preview on move and executes exactly one `AddSketchLineCommand` for each committed segment. Successful commits refresh authored presentation and advance the continuous anchor; exact-zero candidates create no command/history entry. Select performs point queries on release and Window/Crossing rectangle queries after a logical-pixel drag threshold. Delete executes one atomic `EraseSketchEntitiesCommand` for the current semantic EntityId set.
 
-Undo/Redo first calls the interaction state's history cancellation, clears preview/box state and returns to Select, then runs ordinary DocumentSession history. If the Sketch survives, selection is reconciled against the current SketchModel and projected through newly rebuilt presentation tokens. If history removes the active Sketch, edit closes fail-closed.
+SK-05A extends that same coordinator with Line hover/grip projection and direct manipulation. All selected Lines expose Start/Center/End grips in Select; grips are hidden while Line creation is active without clearing selection. Grip hit testing has priority over underlying authored geometry. Clicking Start/End starts owner-only Reshape; clicking Center starts Move for the frozen selected EntityId set. The user may release the activating click, move the pointer freely, then commit with a later LMB or Enter. Esc discards only the transient edit and preserves selection; a subsequent Select-mode Esc clears it.
 
-Snapping/inference, coordinate/value entry, constraints, grips/direct manipulation, additional primitives and RMB command grammar remain later roadmap work. Sketch support remains limited to XY/XZ/YZ Origin planes; Datum/Construction Plane and planar model-face support remain later stages.
+The direct-manipulation start captures the current DocumentRevision. Preview uses the shared resolved-input seam and the existing transient Sketch preview channel; it never edits the live model. Commit emits one semantic `UpdateSketchLinesCommand` containing resulting geometry, validates the captured revision and complete EntityId target set, stages one authored state and commits once. Existing EntityIds are preserved. Exact no-op state creates no revision/history entry; any invalid/missing target or stale revision fails closed with no partial mutation.
+
+Undo/Redo first calls the interaction state's history cancellation, clears preview/box state and returns to Select, then runs ordinary DocumentSession history. If the Sketch survives, selection is reconciled against the current SketchModel and projected through newly rebuilt presentation tokens/grips. If history removes the active Sketch, edit closes fail-closed.
+
+Snapping/inference, coordinate/value entry, constraints, additional primitives, additional edit operations and RMB command grammar remain later roadmap work. Sketch support remains limited to XY/XZ/YZ Origin planes; Datum/Construction Plane and planar model-face support remain later stages.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and provider-surface Navigation Cube
@@ -457,7 +466,9 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
-The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid, active-Sketch authored Lines, the intrinsic active-Sketch Origin overlay, a separate transient Line-preview channel, a runtime Sketch selection-box overlay and selected/primary visual emphasis. The Sketch selection-box is rendered by OCCT `AIS_RubberBand` in the same native graphics surface rather than by a translucent QWidget above `WA_PaintOnScreen`. SK-04B Sketch point/rectangle queries still operate from the provider's current 3D→screen projection of authored Sketch Lines rather than creating an OCCT semantic selection set.
+The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid, active-Sketch authored Lines, the intrinsic active-Sketch Origin overlay, a separate transient Line/direct-edit preview channel, a runtime Sketch selection-box overlay, selected/primary emphasis, entity hover and finite Line grips with normal/hover/active styling. The Sketch selection-box is rendered by OCCT `AIS_RubberBand` in the same native graphics surface rather than by a translucent QWidget above `WA_PaintOnScreen`.
+
+SK-04B Sketch point/rectangle queries operate from the provider's current 3D→screen projection of authored Sketch Lines rather than creating an OCCT semantic selection set. SK-05A grip objects are likewise provider presentation only: they are deactivated from native OCCT selection and hit-tested in logical screen space with a bounded pixel tolerance. Grip query is evaluated before Line geometry query in Sketch Select so an overlapping visible grip wins without turning provider object identity into CAD identity.
 
 Principal reference planes use finite provider presentation geometry; no native OCCT presentation object is durable semantic identity.
 
@@ -466,7 +477,7 @@ There is no modeled Part B-Rep in WB-01/WB-01A. The OCCT provider is presentatio
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle query results, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select drag state and Command Line text/prompt state are runtime-only.
+Selection, primary selection, hover, active grip, direct-manipulation session, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select drag state and Command Line text/prompt state are runtime-only.
 
 Persistent Origin visibility is authored state and is intentionally separate.
 
@@ -994,11 +1005,12 @@ A Line whose Start and End are exactly equal is rejected. SK-02A deliberately ap
 <!-- section-id: internal.shared-2d.model -->
 ## SketchModel operations
 
-The current `SketchModel` provides the smallest authored-entity lifecycle required by SK-02A:
+The current `SketchModel` provides the authored-entity lifecycle required by the implemented Line workflow:
 
 ```text
 addLine(start, end)
 findLine(EntityId)
+updateLine(EntityId, start, end)
 erase(EntityId)
 entityCount()
 entityIdCursor()
@@ -1010,6 +1022,8 @@ restore(state)
 `addLine` validates finite coordinates and exact non-zero length before mutation. Invalid geometry is rejected with `std::invalid_argument`.
 
 `findLine` returns no entity for an invalid, erased or otherwise unknown ID.
+
+`updateLine` replaces the authored Start/End geometry of exactly one existing Line while preserving its `EntityId`. It fails closed for an invalid/missing ID, non-finite coordinates or exact zero length. Application-facing direct manipulation does not call this method directly on the live document: it stages semantic Line geometry updates through `DocumentSession`.
 
 `erase` removes exactly the addressed Line and returns false for an invalid or unknown ID. Storage compaction does not alter the identities of remaining Lines.
 
@@ -1033,19 +1047,24 @@ Only successful acknowledgement advances the continuous-Line anchor. Failure pre
 
 Preview intent is transient and exists only while Line has an anchor and no unresolved commit request. Finish/Cancel return to Select and discard only uncommitted runtime state. Esc is hierarchical: AwaitNextPoint → AwaitFirstPoint → Select.
 
-The same interaction state owns transient semantic Sketch selection as `EntityId` values plus optional primary identity. Replace/toggle/clear/replace-many never store Viewer tokens. Reconciliation can prune identities that no longer exist in the current `SketchModel` without authored mutation.
+The same interaction state owns transient semantic Sketch selection as `EntityId` values plus optional primary identity. Ordinary point selection is additive: an unselected Line is added and becomes primary, while re-clicking an already selected Line changes only primary. Ctrl toggles membership. Window/Crossing selection adds semantic IDs, or toggles them with Ctrl, without allowing provider result order to choose primary. Blank LMB and Select-mode Esc clear selection.
+
+SK-05A adds runtime Line hover and finite semantic grips without introducing a second interaction authority. Every selected editable Line exposes Start, Center and End grip roles. Grip references contain semantic `EntityId + HandleRole`; Viewer presentation tokens remain outside Shared 2D.
+
+A `DirectManipulationSession` freezes the current semantic selection and interaction-start geometry. Start/End perform owner-only Reshape. Center performs Move for the complete frozen selection using the clicked Line midpoint as pivot. Pointer values are consumed through the shared `ResolvedSketchInput` seam; in SK-05A that resolver is intentionally identity for finite Sketch-local U/V so later snapping/precision work can extend one seam instead of replacing tool logic.
+
+Direct-manipulation geometry is computed as transient preview data only. It never mutates `SketchModel`, revision, dirty state, identity allocation or Undo history. Esc cancels the session and preserves selection; a subsequent Esc in ordinary Select clears selection. Selection mutation is rejected while manipulation is active.
 
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
 The current Shared 2D / Part integration now has R3 runtime presentation/input adapters outside the Shared 2D target: active authored Lines can be presented, intrinsic Origin is a runtime overlay, and provider-neutral rays can be mapped to active Sketch U/V. Those runtime capabilities do not add authored state to `simplesolid2_sketch`.
 
-The current product now wires the Shared 2D interaction state end-to-end through the Part Sketch edit context. Select click/Ctrl-toggle, Window/Crossing rectangle replacement, continuous Line creation, transient rubber-band preview, atomic multi-entity Delete, hierarchical Esc and history cancellation are runtime/application adapters around the same host-neutral state.
+The current product now wires the Shared 2D interaction state end-to-end through the Part Sketch edit context. Additive point/Window/Crossing selection, Ctrl-toggle, semantic primary, Line hover, Start/Center/End grips, bounded Line direct manipulation, continuous Line creation, transient preview, atomic multi-entity Delete, hierarchical Esc and history cancellation are runtime/application adapters around the same host-neutral state.
 
 The current product still does not implement:
 
 - intrinsic Origin snapping;
-- grips/direct manipulation;
 - Circle, Arc or construction geometry;
 - snapping, inference, dimensions, constraints or solver evaluation;
 - intersections, profiles/regions or projected/reference geometry;
@@ -1066,7 +1085,9 @@ SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `s
 
 SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage for Select/Line runtime semantics, explicit request/acknowledgement, continuous anchor progression, exact-zero suppression, Finish/Cancel/Esc behavior, transient EntityId selection/reconciliation, atomic multi-entity Delete and one-segment-per-Undo integration with `DocumentSession`.
 
-SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the bounded host coordinator: default Select, spatial-tool routing/cursor projection, continuous Line commits, runtime preview, point selection, Ctrl-toggle sampled at release, Crossing rectangle replacement without primary identity, atomic Delete, history reconciliation, exact-zero suppression and hierarchical Esc.
+SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the bounded host coordinator: default Select, spatial-tool routing/cursor projection, continuous Line commits, runtime preview, point selection, Ctrl-toggle sampled at release, Crossing rectangle selection, atomic Delete, history reconciliation, exact-zero suppression and hierarchical Esc.
+
+SK-05A adds `sk05a.direct_manipulation_state`, `sk05a.line_geometry_command` and `sk05a.part_sketch_direct_manipulation` coverage for additive/primary selection semantics, frozen direct-manipulation state, Line Reshape/Move preview, identity-preserving atomic batch geometry commits, stale-revision failure, exact no-op history behavior, Undo/Redo and the provider-neutral grip bridge. Native provider coverage also exercises screen-space grip hit testing separately from authored Line selection.
 
 The repository Windows FULL gate builds the exact implementation head and runs the complete CTest suite.
 </script>
@@ -1352,11 +1373,15 @@ Use `Finish Sketch` to leave the current edit context. The Sketch remains an aut
 
 To edit an existing Sketch again, double-click it in Document Tree or use its `Edit Sketch` context-menu action. Entering edit by itself does not change authored state and does not require Save.
 
-In Sketch edit, `Select` is the default tool. Left-click a Line to replace the semantic selection, Ctrl+Left-click a Line to toggle it, and drag a rectangle for Window selection left-to-right or Crossing selection right-to-left. Rectangle selection replaces the current selection. `Delete Selection` in Operations, or Delete while the Viewport owns Sketch Select focus, removes the selected Lines as one Undoable operation.
+In Sketch edit, `Select` is the default tool. Ordinary Left-click on an unselected Line adds it to the current selection and makes it primary; re-clicking an already selected Line keeps membership and changes only primary. Ctrl+Left-click toggles membership. Drag left-to-right for Window selection and right-to-left for Crossing selection; an ordinary rectangle adds its hits, while Ctrl+rectangle toggles them. Viewer hit ordering never determines primary. Left-click blank space or press Esc in Select to clear selection. `Delete Selection` in Operations, or Delete while the Viewport owns Sketch Select focus, removes the complete selected Line set as one Undoable operation.
 
-Activate `Line`, click the first point, then click successive points to create continuous segments. The rubber-band preview is temporary; each committed segment is one Undo step. `Finish Line` or `Cancel Line` returns to Select without rolling back already committed segments. Esc cancels the pending Line stage first and then returns Line to Select; it does not finish the Sketch. Undo/Redo first abandons any pending Line stage, then applies normal document history.
+Every selected Line shows three runtime grips: Start, Center and End. Hover highlights a grip or Line without changing selection or authored state; a visible grip wins hit testing over underlying geometry. Clicking Start/End starts Reshape for the grip owner only. Clicking Center starts Move for the complete frozen selected Line set using the clicked Line center as the reference point. The activating mouse button does not need to stay held: move the pointer freely, then use another LMB or Enter to commit the current valid preview. Esc cancels only the preview and keeps selection; a subsequent Esc in ordinary Select clears selection.
 
-Support is currently limited to the three Origin planes. Arc/Circle, grips/direct manipulation, snapping/inference, constraints, dimensions, solver, coordinate entry, Construction/Datum planes and planar model faces remain separate later stages.
+Direct-manipulation preview is runtime-only: it does not dirty the Document, change revision, allocate EntityIds or create Undo history. A committed edit preserves existing Line EntityIds; multi-Line Move is one atomic operation and one Undo step. Undo/Redo first cancels any active manipulation, then applies normal Document history.
+
+When `Line` is activated, the existing selection is preserved while grips are hidden/inactive. Click the first point, then click successive points to create continuous segments. The rubber-band preview is temporary; each committed segment is one Undo step and newly authored Lines are not automatically selected. `Finish Line` or `Cancel Line` returns to Select and restores grips for the preserved selection without rolling back committed segments. Esc cancels the pending Line stage first and then returns Line to Select; it does not finish the Sketch.
+
+Support is currently limited to the three Origin planes. Arc/Circle, snapping/inference, constraints, dimensions, solver, coordinate entry, additional edit operations, Construction/Datum planes and planar model faces remain separate later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -1407,7 +1432,7 @@ The current Part provides Document identity/properties, built-in Origin, persist
 
 Very early test `.ss2part` files created before the current native format are not supported product data and are not migrated automatically.
 
-The current UI provides the first complete authored Sketch Line workflow: contextual Select/Line tools, continuous Line creation with preview, point and Window/Crossing selection, atomic Delete, Undo/Redo integration, Operations and a compact SELECT/LINE Command Line. It still lacks grips/direct manipulation, snapping/inference, coordinate entry, constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
+The current UI provides an authored Sketch Line workflow with contextual Select/Line tools, additive point/Window/Crossing selection, semantic primary and hover, Start/Center/End grips, direct Reshape/Move with transient preview, atomic Delete, Undo/Redo integration, Operations and a compact SELECT/LINE Command Line. It still lacks snapping/inference, coordinate entry, additional edit operations, constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -1689,11 +1714,15 @@ Użyj `Finish Sketch`, aby zakończyć bieżący tryb edycji. Sketch pozostaje a
 
 Aby ponownie edytować istniejący Sketch, kliknij go dwukrotnie w Document Tree albo użyj jego menu kontekstowego `Edit Sketch`. Samo wejście do edycji nie zmienia authored state i nie wymaga Save.
 
-W Sketch Edit domyślnym narzędziem jest `Select`. Lewy klik na Line zastępuje semantyczne zaznaczenie, Ctrl+lewy klik przełącza wskazaną Line, a przeciągnięcie prostokąta wykonuje Window selection z lewej do prawej albo Crossing selection z prawej do lewej. Rectangle selection zastępuje bieżące zaznaczenie. `Delete Selection` w Operations lub klawisz Delete, gdy viewport ma focus w Sketch Select, usuwa zaznaczone Lines jako jedną operację Undo.
+W Sketch Edit domyślnym narzędziem jest `Select`. Zwykły lewy klik na niezaznaczoną Line dodaje ją do bieżącego zaznaczenia i czyni primary; ponowny klik na już zaznaczoną Line zachowuje zestaw i zmienia tylko primary. Ctrl+lewy klik przełącza członkostwo. Przeciągnięcie z lewej do prawej wykonuje Window selection, a z prawej do lewej Crossing selection; zwykły prostokąt dodaje trafienia, a Ctrl+prostokąt je przełącza. Kolejność trafień Viewera nie ustala primary. Klik w puste tło lub Esc w Select czyści zaznaczenie. `Delete Selection` w Operations lub klawisz Delete usuwa cały zaznaczony zestaw Lines jako jedną operację Undo.
 
-Po aktywacji `Line` kliknij pierwszy punkt, a potem kolejne punkty, aby tworzyć ciągłe segmenty. Rubber-band preview jest tylko stanem runtime; każdy zatwierdzony segment jest osobnym krokiem Undo. `Finish Line` i `Cancel Line` wracają do Select bez wycofywania już zatwierdzonych segmentów. Esc najpierw anuluje bieżący etap Line, a następnie wraca z Line do Select; nie kończy całego Sketchu. Undo/Redo najpierw porzuca oczekujący etap Line, a potem wykonuje zwykłą historię Dokumentu.
+Każda zaznaczona Line pokazuje trzy runtime grips: Start, Center i End. Najazd podświetla grip lub Line bez zmiany zaznaczenia i bez modyfikacji Dokumentu; gdy grip nakłada się na geometrię, ma priorytet trafienia. Klik Start/End uruchamia Reshape tylko właściciela gripa. Klik Center uruchamia Move całego zamrożonego zestawu zaznaczonych Lines ze środkiem klikniętej Line jako punktem odniesienia. Nie trzeba trzymać przycisku myszy: po aktywacji możesz poruszać wskaźnikiem, a kolejny LMB lub Enter zatwierdza bieżący poprawny podgląd. Esc anuluje tylko podgląd i zachowuje zaznaczenie; kolejny Esc w Select czyści zaznaczenie.
 
-Support może być obecnie tylko jedną z trzech płaszczyzn Origin. Arc/Circle, grips/direct manipulation, snapping/inference, wprowadzanie współrzędnych, constraints, wymiary, solver, płaszczyzny Construction/Datum oraz płaskie ściany modelu pozostają późniejszymi etapami.
+Podgląd direct manipulation jest wyłącznie stanem runtime: nie dirty'uje Dokumentu, nie zmienia revision, nie przydziela EntityId i nie tworzy Undo. Zatwierdzona zmiana zachowuje EntityId edytowanych Lines; Move wielu Lines jest jedną atomową operacją i jednym krokiem Undo. Undo/Redo najpierw anuluje aktywną manipulację, potem wykonuje zwykłą historię Dokumentu.
+
+Po aktywacji `Line` istniejące zaznaczenie pozostaje zachowane, ale grips są ukryte i nieaktywne. Kliknij pierwszy punkt, a potem kolejne punkty, aby tworzyć ciągłe segmenty. Rubber-band preview jest tylko stanem runtime; każdy zatwierdzony segment jest osobnym krokiem Undo i nowa Line nie jest automatycznie dodawana do zaznaczenia. `Finish Line` i `Cancel Line` wracają do Select i ponownie pokazują grips zachowanego zaznaczenia bez wycofywania już zatwierdzonych segmentów. Esc najpierw anuluje bieżący etap Line, a następnie wraca z Line do Select; nie kończy całego Sketchu.
+
+Support może być obecnie tylko jedną z trzech płaszczyzn Origin. Arc/Circle, snapping/inference, wprowadzanie współrzędnych, constraints, wymiary, solver, dodatkowe operacje edycji, płaszczyzny Construction/Datum oraz płaskie ściany modelu pozostają późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
@@ -1744,7 +1773,7 @@ Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, tr
 
 Bardzo wczesne testowe pliki `.ss2part` utworzone przed wprowadzeniem obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Bieżący UI zapewnia pierwszy kompletny workflow authored Sketch Line: kontekstowe narzędzia Select/Line, ciągłe tworzenie Line z preview, point selection i Window/Crossing rectangle selection, atomowy Delete, integrację Undo/Redo, Operations oraz kompaktowy Command Line dla SELECT/LINE. Nadal brakuje grips/direct manipulation, snapping/inference, wprowadzania współrzędnych, constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+Bieżący UI zapewnia workflow authored Sketch Line z kontekstowymi narzędziami Select/Line, addytywnym point/Window/Crossing selection, semantycznym primary i hover, Start/Center/End grips, bezpośrednim Reshape/Move z transient preview, atomowym Delete, integracją Undo/Redo, Operations oraz kompaktowym Command Line dla SELECT/LINE. Nadal brakuje snapping/inference, wprowadzania współrzędnych, dodatkowych operacji edycji, constraintów/solvera, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty

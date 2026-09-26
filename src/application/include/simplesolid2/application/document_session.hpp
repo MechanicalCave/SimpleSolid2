@@ -43,6 +43,18 @@ struct EraseSketchEntitiesCommand final {
     std::vector<sketch::EntityId> entity_ids;
 };
 
+struct SketchLineGeometryUpdate final {
+    sketch::EntityId entity_id;
+    sketch::Point2 start;
+    sketch::Point2 end;
+};
+
+struct UpdateSketchLinesCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    std::vector<SketchLineGeometryUpdate> lines;
+};
+
 enum class DocumentSessionErrorCode {
     none,
     invalid_command,
@@ -127,6 +139,8 @@ public:
         const EraseSketchEntityCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const EraseSketchEntitiesCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const UpdateSketchLinesCommand& command);
     [[nodiscard]] DocumentSessionResult undo();
     [[nodiscard]] DocumentSessionResult redo();
     [[nodiscard]] DocumentSessionResult save();

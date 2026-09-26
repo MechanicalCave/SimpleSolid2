@@ -92,6 +92,35 @@ int main(int argc, char* argv[]) {
             viewer::Point3{0.0, 0.0, 0.0}};
     CHECK(widget.setSketchScene(scene));
 
+    const viewer::SketchGripKey center_grip{
+        short_token,
+        viewer::SketchGripRole::line_center};
+    viewer::SketchGripScene grips;
+    grips.grips = {
+        viewer::SketchGripPresentation{
+            {short_token, viewer::SketchGripRole::line_start},
+            viewer::Point3{-2.0, 0.0, 0.0}},
+        viewer::SketchGripPresentation{
+            center_grip,
+            viewer::Point3{0.0, 0.0, 0.0}},
+        viewer::SketchGripPresentation{
+            {short_token, viewer::SketchGripRole::line_end},
+            viewer::Point3{2.0, 0.0, 0.0}},
+    };
+    CHECK(widget.setSketchGripScene(grips));
+    CHECK(widget.setSketchInteractionPresentation(
+        viewer::SketchInteractionPresentation{
+            std::nullopt,
+            center_grip,
+            std::nullopt}));
+
+    viewer::SketchGripScene duplicate_grips = grips;
+    duplicate_grips.grips.push_back(
+        duplicate_grips.grips.front());
+    CHECK(!duplicate_grips.valid());
+    CHECK(!widget.setSketchGripScene(duplicate_grips));
+    CHECK(widget.setSketchGripScene(grips));
+
     viewer::SketchPreviewScene preview;
     preview.lines.push_back(
         viewer::SketchPreviewLine{
@@ -114,6 +143,26 @@ int main(int argc, char* argv[]) {
     const viewer::ViewportPoint2 center{
         static_cast<double>(widget.width()) / 2.0,
         static_cast<double>(widget.height()) / 2.0};
+
+    const auto grip_hit =
+        widget.querySketchGrip(center);
+    CHECK(grip_hit.valid());
+    CHECK(grip_hit.completed);
+    CHECK(grip_hit.grip.has_value());
+    CHECK(*grip_hit.grip == center_grip);
+
+    const auto grip_empty =
+        widget.querySketchGrip(
+            viewer::ViewportPoint2{5.0, 5.0});
+    CHECK(grip_empty.valid());
+    CHECK(grip_empty.completed);
+    CHECK(!grip_empty.grip.has_value());
+
+    CHECK(widget.setSketchInteractionPresentation(
+        viewer::SketchInteractionPresentation{
+            std::nullopt,
+            std::nullopt,
+            center_grip}));
 
     const auto point_hit =
         widget.querySketchPresentation(center);
@@ -248,6 +297,13 @@ int main(int argc, char* argv[]) {
 
     widget.orbitByRadians(0.35, -0.22);
     QApplication::processEvents();
+
+    const auto grip_after_orbit =
+        widget.querySketchGrip(center);
+    CHECK(grip_after_orbit.valid());
+    CHECK(grip_after_orbit.completed);
+    CHECK(grip_after_orbit.grip.has_value());
+    CHECK(*grip_after_orbit.grip == center_grip);
 
     const auto after_orbit =
         widget.querySketchPresentations(

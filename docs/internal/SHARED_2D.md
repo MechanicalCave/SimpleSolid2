@@ -66,11 +66,12 @@ A Line whose Start and End are exactly equal is rejected. SK-02A deliberately ap
 <!-- section-id: internal.shared-2d.model -->
 ## SketchModel operations
 
-The current `SketchModel` provides the smallest authored-entity lifecycle required by SK-02A:
+The current `SketchModel` provides the authored-entity lifecycle required by the implemented Line workflow:
 
 ```text
 addLine(start, end)
 findLine(EntityId)
+updateLine(EntityId, start, end)
 erase(EntityId)
 entityCount()
 entityIdCursor()
@@ -82,6 +83,8 @@ restore(state)
 `addLine` validates finite coordinates and exact non-zero length before mutation. Invalid geometry is rejected with `std::invalid_argument`.
 
 `findLine` returns no entity for an invalid, erased or otherwise unknown ID.
+
+`updateLine` replaces the authored Start/End geometry of exactly one existing Line while preserving its `EntityId`. It fails closed for an invalid/missing ID, non-finite coordinates or exact zero length. Application-facing direct manipulation does not call this method directly on the live document: it stages semantic Line geometry updates through `DocumentSession`.
 
 `erase` removes exactly the addressed Line and returns false for an invalid or unknown ID. Storage compaction does not alter the identities of remaining Lines.
 
@@ -105,19 +108,24 @@ Only successful acknowledgement advances the continuous-Line anchor. Failure pre
 
 Preview intent is transient and exists only while Line has an anchor and no unresolved commit request. Finish/Cancel return to Select and discard only uncommitted runtime state. Esc is hierarchical: AwaitNextPoint → AwaitFirstPoint → Select.
 
-The same interaction state owns transient semantic Sketch selection as `EntityId` values plus optional primary identity. Replace/toggle/clear/replace-many never store Viewer tokens. Reconciliation can prune identities that no longer exist in the current `SketchModel` without authored mutation.
+The same interaction state owns transient semantic Sketch selection as `EntityId` values plus optional primary identity. Ordinary point selection is additive: an unselected Line is added and becomes primary, while re-clicking an already selected Line changes only primary. Ctrl toggles membership. Window/Crossing selection adds semantic IDs, or toggles them with Ctrl, without allowing provider result order to choose primary. Blank LMB and Select-mode Esc clear selection.
+
+SK-05A adds runtime Line hover and finite semantic grips without introducing a second interaction authority. Every selected editable Line exposes Start, Center and End grip roles. Grip references contain semantic `EntityId + HandleRole`; Viewer presentation tokens remain outside Shared 2D.
+
+A `DirectManipulationSession` freezes the current semantic selection and interaction-start geometry. Start/End perform owner-only Reshape. Center performs Move for the complete frozen selection using the clicked Line midpoint as pivot. Pointer values are consumed through the shared `ResolvedSketchInput` seam; in SK-05A that resolver is intentionally identity for finite Sketch-local U/V so later snapping/precision work can extend one seam instead of replacing tool logic.
+
+Direct-manipulation geometry is computed as transient preview data only. It never mutates `SketchModel`, revision, dirty state, identity allocation or Undo history. Esc cancels the session and preserves selection; a subsequent Esc in ordinary Select clears selection. Selection mutation is rejected while manipulation is active.
 
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
 The current Shared 2D / Part integration now has R3 runtime presentation/input adapters outside the Shared 2D target: active authored Lines can be presented, intrinsic Origin is a runtime overlay, and provider-neutral rays can be mapped to active Sketch U/V. Those runtime capabilities do not add authored state to `simplesolid2_sketch`.
 
-The current product now wires the Shared 2D interaction state end-to-end through the Part Sketch edit context. Select click/Ctrl-toggle, Window/Crossing rectangle replacement, continuous Line creation, transient rubber-band preview, atomic multi-entity Delete, hierarchical Esc and history cancellation are runtime/application adapters around the same host-neutral state.
+The current product now wires the Shared 2D interaction state end-to-end through the Part Sketch edit context. Additive point/Window/Crossing selection, Ctrl-toggle, semantic primary, Line hover, Start/Center/End grips, bounded Line direct manipulation, continuous Line creation, transient preview, atomic multi-entity Delete, hierarchical Esc and history cancellation are runtime/application adapters around the same host-neutral state.
 
 The current product still does not implement:
 
 - intrinsic Origin snapping;
-- grips/direct manipulation;
 - Circle, Arc or construction geometry;
 - snapping, inference, dimensions, constraints or solver evaluation;
 - intersections, profiles/regions or projected/reference geometry;
@@ -138,6 +146,8 @@ SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `s
 
 SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage for Select/Line runtime semantics, explicit request/acknowledgement, continuous anchor progression, exact-zero suppression, Finish/Cancel/Esc behavior, transient EntityId selection/reconciliation, atomic multi-entity Delete and one-segment-per-Undo integration with `DocumentSession`.
 
-SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the bounded host coordinator: default Select, spatial-tool routing/cursor projection, continuous Line commits, runtime preview, point selection, Ctrl-toggle sampled at release, Crossing rectangle replacement without primary identity, atomic Delete, history reconciliation, exact-zero suppression and hierarchical Esc.
+SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the bounded host coordinator: default Select, spatial-tool routing/cursor projection, continuous Line commits, runtime preview, point selection, Ctrl-toggle sampled at release, Crossing rectangle selection, atomic Delete, history reconciliation, exact-zero suppression and hierarchical Esc.
+
+SK-05A adds `sk05a.direct_manipulation_state`, `sk05a.line_geometry_command` and `sk05a.part_sketch_direct_manipulation` coverage for additive/primary selection semantics, frozen direct-manipulation state, Line Reshape/Move preview, identity-preserving atomic batch geometry commits, stale-revision failure, exact no-op history behavior, Undo/Redo and the provider-neutral grip bridge. Native provider coverage also exercises screen-space grip hit testing separately from authored Line selection.
 
 The repository Windows FULL gate builds the exact implementation head and runs the complete CTest suite.

@@ -331,7 +331,7 @@ int main() {
         state.selectedEntities()[0] == id1);
     CHECK(
         state.selectedEntities()[1] == id3);
-    CHECK(state.primarySelection() == id3);
+    CHECK(state.primarySelection() == id1);
 
     CHECK(model.erase(id1));
     CHECK(model.erase(id3));

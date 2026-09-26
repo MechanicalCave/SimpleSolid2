@@ -58,6 +58,16 @@ public:
     [[nodiscard]] bool setSketchPreviewScene(
         const viewer::SketchPreviewScene& scene) override;
 
+    [[nodiscard]] bool setSketchGripScene(
+        const viewer::SketchGripScene& scene) override;
+
+    [[nodiscard]] bool setSketchInteractionPresentation(
+        const viewer::SketchInteractionPresentation& presentation) override;
+
+    [[nodiscard]] viewer::SketchGripQueryResult
+    querySketchGrip(
+        viewer::ViewportPoint2 point) override;
+
     [[nodiscard]] bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override;
 

@@ -92,6 +92,34 @@ viewer::ReferencePresentation makeReference(
     return reference;
 }
 
+[[nodiscard]] viewer::SketchGripRole
+viewerGripRole(
+    sketch::LineHandleRole role) noexcept {
+    switch (role) {
+    case sketch::LineHandleRole::start:
+        return viewer::SketchGripRole::line_start;
+    case sketch::LineHandleRole::center:
+        return viewer::SketchGripRole::line_center;
+    case sketch::LineHandleRole::end:
+        return viewer::SketchGripRole::line_end;
+    }
+    return viewer::SketchGripRole::line_center;
+}
+
+[[nodiscard]] sketch::LineHandleRole
+semanticGripRole(
+    viewer::SketchGripRole role) noexcept {
+    switch (role) {
+    case viewer::SketchGripRole::line_start:
+        return sketch::LineHandleRole::start;
+    case viewer::SketchGripRole::line_center:
+        return sketch::LineHandleRole::center;
+    case viewer::SketchGripRole::line_end:
+        return sketch::LineHandleRole::end;
+    }
+    return sketch::LineHandleRole::center;
+}
+
 } // namespace
 
 PartViewportController::PartViewportController(
@@ -192,6 +220,9 @@ void PartViewportController::resetRuntimeState() {
 
 void PartViewportController::refreshPresentation() {
     if (viewport_ == nullptr) return;
+
+    sketch_grip_projection_valid_ = false;
+    projected_grip_selection_.clear();
 
     if (session_ == nullptr) {
         sketch_entity_bindings_.clear();
@@ -385,6 +416,45 @@ PartViewportController::querySketchEntityAt(
     return {true, address};
 }
 
+SketchGripPointQueryResult
+PartViewportController::querySketchGripAt(
+    viewer::ViewportPoint2 point) {
+    if (viewport_ == nullptr ||
+        activeSketch() == nullptr ||
+        !point.valid()) {
+        return {};
+    }
+
+    const auto queried =
+        viewport_->querySketchGrip(point);
+    if (!queried.valid() ||
+        !queried.completed) {
+        return {};
+    }
+
+    if (!queried.grip) {
+        return {true, std::nullopt};
+    }
+
+    const auto owner =
+        sketchEntityFor(
+            queried.grip->owner);
+    if (!owner ||
+        !sketch_edit_id_ ||
+        owner->sketch_id != *sketch_edit_id_) {
+        return {};
+    }
+
+    return {
+        true,
+        SketchGripAddress{
+            owner->sketch_id,
+            sketch::LineGripRef{
+                owner->entity_id,
+                semanticGripRole(
+                    queried.grip->role)}}};
+}
+
 SketchEntityRectangleQueryResult
 PartViewportController::querySketchEntities(
     const viewer::ViewportRect2& rectangle,
@@ -564,6 +634,151 @@ bool PartViewportController::projectSketchEntitySelection(
 
     return viewport_->setPresentationSelection(
         presentation);
+}
+
+bool PartViewportController::projectSketchInteraction(
+    const std::vector<sketch::EntityId>& selected,
+    std::optional<sketch::EntityId> hovered_entity,
+    std::optional<sketch::LineGripRef> hovered_grip,
+    std::optional<sketch::LineGripRef> active_grip,
+    bool grips_visible) {
+    if (viewport_ == nullptr) {
+        return false;
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return false;
+    }
+
+    if (!sketch_grip_projection_valid_ ||
+        projected_grips_visible_ != grips_visible ||
+        projected_grip_selection_ != selected) {
+        viewer::SketchGripScene grip_scene;
+        if (grips_visible) {
+            grip_scene.grips.reserve(
+                selected.size() * 3U);
+
+            for (const auto id : selected) {
+                const auto* line =
+                    hosted->model.findLine(id);
+                const auto token =
+                    sketchPresentationFor(id);
+                if (line == nullptr || !token) {
+                    return false;
+                }
+
+                const sketch::Point2 center{
+                    (line->start().u + line->end().u) * 0.5,
+                    (line->start().v + line->end().v) * 0.5};
+
+                const auto start =
+                    detail::sketchPointToWorld(
+                        hosted->placement,
+                        line->start());
+                const auto middle =
+                    detail::sketchPointToWorld(
+                        hosted->placement,
+                        center);
+                const auto end =
+                    detail::sketchPointToWorld(
+                        hosted->placement,
+                        line->end());
+                if (!start || !middle || !end) {
+                    return false;
+                }
+
+                grip_scene.grips.push_back(
+                    viewer::SketchGripPresentation{
+                        {*token,
+                         viewer::SketchGripRole::
+                             line_start},
+                        *start});
+                grip_scene.grips.push_back(
+                    viewer::SketchGripPresentation{
+                        {*token,
+                         viewer::SketchGripRole::
+                             line_center},
+                        *middle});
+                grip_scene.grips.push_back(
+                    viewer::SketchGripPresentation{
+                        {*token,
+                         viewer::SketchGripRole::
+                             line_end},
+                        *end});
+            }
+        }
+
+        if (!viewport_->setSketchGripScene(
+                grip_scene)) {
+            sketch_grip_projection_valid_ = false;
+            return false;
+        }
+
+        projected_grips_visible_ =
+            grips_visible;
+        projected_grip_selection_ =
+            selected;
+        sketch_grip_projection_valid_ = true;
+    }
+
+    viewer::SketchInteractionPresentation
+        presentation;
+
+    if (hovered_entity) {
+        const auto token =
+            sketchPresentationFor(
+                *hovered_entity);
+        if (!token) {
+            return false;
+        }
+        presentation.hovered_entity =
+            *token;
+    }
+
+    const auto map_grip =
+        [this](
+            const sketch::LineGripRef& grip)
+            -> std::optional<
+                viewer::SketchGripKey> {
+            const auto token =
+                sketchPresentationFor(
+                    grip.entity_id);
+            if (!token) {
+                return std::nullopt;
+            }
+            return viewer::SketchGripKey{
+                *token,
+                viewerGripRole(grip.role)};
+        };
+
+    if (hovered_grip) {
+        const auto mapped =
+            map_grip(*hovered_grip);
+        if (!mapped) {
+            return false;
+        }
+        presentation.hovered_grip =
+            *mapped;
+    }
+
+    if (active_grip) {
+        const auto mapped =
+            map_grip(*active_grip);
+        if (!mapped) {
+            return false;
+        }
+        presentation.active_grip =
+            *mapped;
+    }
+
+    if (!presentation.valid()) {
+        return false;
+    }
+
+    return viewport_->
+        setSketchInteractionPresentation(
+            presentation);
 }
 
 std::optional<core::BuiltinReferenceRole>

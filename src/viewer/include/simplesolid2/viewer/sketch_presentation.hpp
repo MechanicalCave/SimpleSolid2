@@ -2,6 +2,8 @@
 
 #include <simplesolid2/viewer/reference_presentation.hpp>
 
+#include <cstddef>
+#include <cstdint>
 #include <optional>
 #include <vector>
 
@@ -81,6 +83,94 @@ struct SketchPreviewScene final {
             }
         }
         return true;
+    }
+};
+
+enum class SketchGripRole : std::uint8_t {
+    line_start,
+    line_center,
+    line_end,
+};
+
+struct SketchGripKey final {
+    PresentationToken owner;
+    SketchGripRole role{SketchGripRole::line_center};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return owner.valid();
+    }
+
+    friend bool operator==(
+        const SketchGripKey&,
+        const SketchGripKey&) = default;
+};
+
+struct SketchGripPresentation final {
+    SketchGripKey key;
+    Point3 position{};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return key.valid() &&
+               finite(position);
+    }
+};
+
+struct SketchGripScene final {
+    std::vector<SketchGripPresentation> grips;
+
+    [[nodiscard]] bool valid() const noexcept {
+        for (std::size_t left = 0U;
+             left < grips.size();
+             ++left) {
+            if (!grips[left].valid()) {
+                return false;
+            }
+            for (std::size_t right = left + 1U;
+                 right < grips.size();
+                 ++right) {
+                if (grips[left].key ==
+                    grips[right].key) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+};
+
+struct SketchInteractionPresentation final {
+    std::optional<PresentationToken> hovered_entity;
+    std::optional<SketchGripKey> hovered_grip;
+    std::optional<SketchGripKey> active_grip;
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (hovered_entity &&
+            !hovered_entity->valid()) {
+            return false;
+        }
+        if (hovered_grip &&
+            !hovered_grip->valid()) {
+            return false;
+        }
+        if (active_grip &&
+            !active_grip->valid()) {
+            return false;
+        }
+        return !(hovered_entity &&
+                 hovered_grip);
+    }
+};
+
+struct SketchGripQueryResult final {
+    bool completed{};
+    std::optional<SketchGripKey> grip;
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (!completed) {
+            return !grip.has_value();
+        }
+        return !grip ||
+               grip->valid();
     }
 };
 
