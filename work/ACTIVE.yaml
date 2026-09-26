@@ -16,7 +16,8 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - review the proposed SK-05A Line direct-manipulation contract
+  - review the proposed Sketcher roadmap v1.2 amendment before accepting SK-05A
+  - revise SK-05A to conform to the accepted roadmap amendment if v1.2 is accepted
   - do not implement SK-05A before explicit Owner acceptance
   - keep R5 implementation unauthorized until that acceptance
   - keep R6+ inactive
@@ -46,3 +47,5 @@ notes:
 
   - WB-01B merged to main as 5d75e561571c83ac50a241a0c4b5cf0e212c05f2 after FULL #381, Owner manual PASS and CLOSURE #382.
   - SK-05A is a proposal for the first bounded R5 slice; no R5 implementation is authorized yet.
+
+  - Sketcher roadmap v1.2 proposal records architecture readiness for edit-mode cycling, Polar/Ortho, Dynamic Input, Object Snap/Tracking, multi-grip/copy and earlier Circle/Arc breadth; accepted roadmap v1.1 remains authoritative until Owner acceptance.
