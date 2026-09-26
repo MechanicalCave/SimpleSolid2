@@ -309,6 +309,30 @@ int main(int argc, char* argv[]) {
         true,
         viewport.sketch_scene_.lines.front().token};
     click(interaction, sketch_id, 10.0, 10.0, 1.5, 0.0);
+    CHECK(interaction.selectedCount() == 1U);
+
+    // Mirroring a Line around its own axis is an exact semantic no-op.
+    const auto mirror_noop_state =
+        session.document().state();
+    const auto mirror_noop_revision =
+        session.document().revision();
+    const auto mirror_noop_undo =
+        session.undoDepth();
+    CHECK(interaction.activateMirror());
+    click(interaction, sketch_id, 30.0, 30.0, 0.0, 0.0);
+    movePointer(
+        interaction,
+        sketch_id,
+        40.0, 30.0,
+        1.0, 0.0);
+    CHECK(interaction.commitTransform());
+    CHECK(session.document().state() == mirror_noop_state);
+    CHECK(
+        session.document().revision() ==
+        mirror_noop_revision);
+    CHECK(session.undoDepth() == mirror_noop_undo);
+    CHECK(interaction.selectedCount() == 1U);
+
     viewport.point_query_ = {
         true,
         viewport.sketch_scene_.curves[0].token};
