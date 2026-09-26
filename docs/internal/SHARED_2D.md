@@ -18,8 +18,8 @@ The target currently contains:
 - canonical decimal identity transport for `EntityId` and `EntityIdCursor`;
 - canonical authored primitives `Line`, `Circle` and `Arc`;
 - the value-semantic mixed-primitive `SketchModel` plus validated state/restore transfer;
-- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips, bounded direct manipulation and normal MOVE command stages;
-- a provider-independent mixed-primitive translation core shared by Center-grip Move and normal MOVE.
+- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips, bounded direct manipulation and common Move/Rotate/Scale/Mirror command stages;
+- a provider-independent mixed-primitive transform core for translation, rotation, positive uniform scale and reflection.
 
 Each persistent Part-hosted Sketch embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
 
@@ -119,9 +119,23 @@ Line keeps the continuous Start/Next-point grammar. Circle uses Center → Radiu
 
 The same state owns transient selection as `EntityId` values plus optional primary identity. Point selection is additive, Ctrl toggles membership, Window/Crossing adds or toggles, and provider result order never chooses primary.
 
-SK-07A adds normal `MOVE` without introducing another selection owner. Selection-first MOVE immediately freezes the existing non-empty selection and asks for a Base Point. Command-first MOVE starts with Select objects; click/Ctrl/Window/Crossing reuse the existing semantic query bridge, blank LMB is a no-op, and Enter/Space/RMB completes object collection only when non-empty. After collection, the frozen semantic set cannot change until the command completes or is cancelled.
+Move, Rotate, Scale and Mirror reuse one common transform lifecycle. Selection-first activation immediately freezes an existing non-empty semantic selection. Command-first activation starts with Select objects; click/Ctrl/Window/Crossing reuse the existing semantic query bridge, blank LMB is a no-op, and Enter/Space/RMB completes object collection only when non-empty. After collection, the frozen semantic set cannot change until the transform completes or is cancelled.
 
-Normal MOVE stores a resolved Sketch-local Base Point and previews one translation delta `destination - base` from the interaction-start authored snapshot. Preview never compounds from a prior frame. Zero delta is a valid no-op completion.
+Move accepts a finite Base Point and previews one translation delta `destination - base`.
+
+Rotate accepts Base Point → Reference Point → destination. The reference vector must be non-zero. Rotation is the signed angle from `reference - base` to `destination - base` in the Sketch frame, with positive counter-clockwise rotation.
+
+Scale accepts Base Point → Reference Point → destination. The reference distance must be non-zero and the runtime factor is:
+
+```text
+factor = |destination - base| / |reference - base|
+```
+
+Only finite factors strictly greater than zero are valid. Factors between 0 and 1 reduce geometry, factor 1 is a no-op, and negative scale is not represented by Scale.
+
+Mirror accepts two distinct finite points defining an infinite axis and previews reflection of the complete frozen selection. Reflection preserves Line/Circle/Arc EntityIds and reverses Arc signed sweep orientation as required by the reflected directed arc.
+
+All common-transform preview is recomputed from the interaction-start authored geometry snapshot; preview never compounds from a previous frame. Preview is runtime-only and never mutates `SketchModel`, revision, dirty state, identity allocation or Undo history.
 
 Selected editable entities still expose semantic grips:
 
@@ -129,22 +143,24 @@ Selected editable entities still expose semantic grips:
 - Circle: Center plus four quadrant radius grips;
 - Arc: Center, Start, End and Arc/Mid.
 
-Center grips perform the same mixed Line/Circle/Arc semantic translation as normal MOVE, using the grip's interaction-start point as the implicit base. Line Start/End, Circle quadrant and Arc Start/End/Mid remain owner-only Reshape.
+Center grips perform the same mixed Line/Circle/Arc semantic translation as normal Move, using the grip's interaction-start point as the implicit base. Line Start/End, Circle quadrant and Arc Start/End/Mid remain owner-only Reshape.
 
-Pointer values flow through the shared `ResolvedSketchInput` seam. Preview is runtime-only: it never mutates `SketchModel`, revision, dirty state, identity allocation or Undo history. Accepted non-zero MOVE/reshape commits through the host semantic geometry-update command and Part transaction. Esc cancels transient state and preserves the affected selection. Undo/Redo cancels any active transient MOVE/direct manipulation before global history.
+Pointer values flow through the shared `ResolvedSketchInput` seam. Accepted non-no-op transforms/reshape commit through the host semantic geometry-update command and Part transaction. One accepted common transform is atomic, preserves existing EntityIds and creates at most one revision/history entry. Exact semantic no-ops create no revision, dirty-state or Undo change. Esc cancels transient state and preserves the affected selection. Undo/Redo cancels an active transient common transform/direct manipulation before global history.
+
+Numeric angles, distances and scale factors are not parsed by the current interaction state. Number keys do not override the pointer-derived preview; Enter at a final transform stage commits the current valid preview.
 
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
 The current Part integration presents and edits authored Line/Circle/Arc through runtime adapters outside the Shared 2D target. Active authored geometry is mapped from Sketch U/V to the Part support frame, while the intrinsic Sketch Origin remains a runtime overlay.
 
-R7 has started only through SK-07A. Normal MOVE and the shared translation core are implemented; the product still does not implement:
+The current common transform set is Move, Rotate, positive uniform Scale and Mirror. The product still does not implement:
 
-- Rotate, uniform Scale, Mirror or Copy/repeated Copy;
+- Copy or repeated Copy, including transform-created fresh EntityIds;
 - grip Copy modifier, semantic Space CycleEditMode, ordinary-Select RMB context or Repeat Last Command;
 - intrinsic Origin snapping;
 - snapping/Object Snap, tracking, Ortho/Polar/Grid Snap or geometric inference;
-- numeric coordinate/dynamic input;
+- numeric angle/distance/scale input, coordinate input or Dynamic Input;
 - authored dimensions, constraints or solver evaluation;
 - Rectangle/Polyline durable semantics;
 - intersections, profiles/regions or projected/reference geometry;
@@ -155,10 +171,9 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-Existing SK-02A through SK-06A tests continue to cover Shared 2D dependency boundaries, primitive semantics, Part hosting, persistence/history, provider-neutral presentation/input, selection, hover/grips and direct manipulation.
+Existing Sketch regressions continue to cover Shared 2D dependency boundaries, primitive semantics, Part hosting, persistence/history, provider-neutral presentation/input, selection, hover/grips and direct manipulation.
 
-SK-07A adds `sk07a.transform_core` and `sk07a.move_controller`. They cover mixed Line/Circle/Arc translation, finite validation, EntityId preservation, parity between Center-grip Move and normal MOVE, selection-first and command-first staging, frozen selection, Base Point/destination preview, atomic commit, zero-delta no-op, stale revision failure, history cancellation and schema-v4 Save/reload identity preservation.
+The common-transform regression set includes `sk07b.transform_core`, `sk07b.common_transform_state` and `sk07b.transform_controller`. Together they cover mixed Line/Circle/Arc Rotate/Scale/Mirror geometry, positive-only Scale validation, Arc mirror orientation, EntityId preservation, selection-first and command-first staging, frozen selection, reference-point and preview behavior, exact no-op handling, atomic commit, stale-revision failure, cancellation/history interaction and schema-v4 Save/reload identity preservation.
 
-The existing Workbench Sketch-host regression also verifies toolbar/Command-Line MOVE activation and that Space in text-entry focus remains text input.
+The Workbench Sketch-host regression also verifies the grouped Select / Create / Modify surface, toolbar/Command-Line transform activation and text-focus Space behavior. Final work-item completion additionally requires the repository's exact-head Windows FULL gate and Owner manual Windows verification.
 
-The exact runtime implementation head `bb218f8d9cff1c1c2ffc45e091a69c485190e97e` passed Windows FULL #475 with Build and 60/60 unfiltered CTest tests. FAST contained 59 tests; the native Workbench stress test remained FULL-only.
