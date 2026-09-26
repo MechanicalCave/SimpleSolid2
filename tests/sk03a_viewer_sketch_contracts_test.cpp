@@ -41,6 +41,26 @@ int main() {
             viewer::Point3{10.0, 5.0, 0.0}});
     CHECK(authored.valid());
 
+    authored.curves.push_back(
+        viewer::SketchCurvePresentation{
+            viewer::PresentationToken{3U},
+            {
+                viewer::Point3{0.0, 0.0, 0.0},
+                viewer::Point3{2.0, 2.0, 0.0},
+                viewer::Point3{4.0, 0.0, 0.0},
+            }});
+    CHECK(authored.valid());
+
+    auto duplicate_curve_token = authored;
+    duplicate_curve_token.curves[0].token =
+        duplicate_curve_token.lines[0].token;
+    CHECK(!duplicate_curve_token.valid());
+
+    auto invalid_curve = authored;
+    invalid_curve.curves[0].points[1] =
+        invalid_curve.curves[0].points[0];
+    CHECK(!invalid_curve.valid());
+
     auto duplicate_token = authored;
     duplicate_token.lines[1].token =
         duplicate_token.lines[0].token;
