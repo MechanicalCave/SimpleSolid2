@@ -997,3 +997,37 @@ add_test(
 set_tests_properties(wb01b.navigation_cube_native PROPERTIES
     TIMEOUT 30
 )
+
+
+add_executable(sk05a_direct_manipulation_state_test
+    sk05a_direct_manipulation_state_test.cpp
+)
+
+target_link_libraries(sk05a_direct_manipulation_state_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(sk05a_direct_manipulation_state_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk05a.direct_manipulation_state
+    COMMAND sk05a_direct_manipulation_state_test
+)
+
+
+add_executable(sk05a_line_geometry_command_test
+    sk05a_line_geometry_command_test.cpp
+)
+
+target_link_libraries(sk05a_line_geometry_command_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(sk05a_line_geometry_command_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk05a.line_geometry_command
+    COMMAND sk05a_line_geometry_command_test
+)
