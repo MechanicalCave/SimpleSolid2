@@ -1,309 +1,728 @@
 # Sketcher Program Roadmap
 
 **Status:** ACCEPTED  
-**Version:** 1.1  
-**Owner acceptance:** 2026-09-25  
-**Foundation:** 1.0 (`foundation-v1.0`)  
+**Version:** 1.2  
+**Owner acceptance:** 2026-09-26  
+**Foundation:** 1.0 (foundation-v1.0)  
 **Architecture:** ADR-0008, ADR-0009  
-**Current program:** Shared 2D Authoring / Part-hosted Sketcher
+**Current program:** Shared 2D Authoring / Part-hosted Sketcher  
+**UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
 
-## 1. Purpose
+## 1. Why v1.2 changed the program
 
-This roadmap is the durable program-level execution map for the Sketcher effort.
+Roadmap v1.1 correctly used Line as the first vertical slice through identity, persistence, Viewer input, Select, continuous creation and Delete.
 
-It exists to preserve implementation direction across many small Work Contracts and conversation/context boundaries.
+That remains valid for R1–R4.
 
-Authority is deliberately split:
+The next risk is different: if direct manipulation, precision input, snapping, measurement and future relations are all designed only against Line, the architecture can accidentally become endpoint/linear-geometry-specific.
 
-```text
-Foundation / accepted ADRs
-    define architecture and semantic invariants
+The revised order therefore:
 
-Sketcher Program Roadmap
-    defines staged goals and dependency order
+- keeps R0–R4 unchanged;
+- establishes direct-manipulation foundations on Line;
+- introduces Circle and Arc early;
+- validates one interaction model across unlike primitives;
+- only then expands precision input, Object Snap, tracking and later constraint-capable behavior.
 
-Active Work Contract
-    defines the bounded implementation change being performed now
+R5 implementation is authorized only by an accepted R5 Work Contract. SK-05A is the active accepted R5 contract.
 
-Code / tests / as-built docs
-    prove the current implementation state
-```
+## 2. Preserved accepted invariants
 
-The roadmap is not a second Foundation and must not override accepted architecture.
+ADR-0008 and ADR-0009 remain authoritative.
 
-## 2. Operating rules
+In particular:
 
-- Every Sketch-related Work Contract must name its roadmap milestone and roadmap version.
-- A milestone may be implemented by one or many Work Contracts.
-- Contract numbering is not frozen by this roadmap.
-- A contract may split a milestone into smaller reversible slices without changing milestone intent.
-- A contract must declare whether it changes this roadmap.
-- A frozen architectural agreement must not be changed implicitly to make implementation easier.
-- If evidence requires changing architecture or milestone dependency order, stop and obtain explicit Owner acceptance before revising the relevant ADR/roadmap.
-- Completed implementation evidence belongs in Work Contracts, Git and as-built docs; this roadmap remains concise current program state.
+- Shared 2D owns reusable authored 2D meaning and remains host-neutral;
+- authored primitive geometry is directly editable design intent;
+- equal coordinates do not imply shared authored identity;
+- optional future relations are distinct from geometry storage;
+- snap, inference, hover, preview, grips and dynamic input are runtime concepts unless an explicit semantic command authors durable state;
+- one active semantic interaction state has many UI/input adapters;
+- Viewer/provider identity never becomes durable CAD identity;
+- pointer input resolves through the active Sketch frame;
+- Sketch coordinates are local physical U/V coordinates;
+- Origin is an intrinsic semantic reference;
+- authored and evaluated geometry remain distinct layers;
+- durable references use semantic identity plus role rather than screen/provider identity;
+- selection is transient semantic runtime state;
+- diagnostics are read-only by default;
+- closed regions are derived rather than authored Sketch entities by default;
+- durable mutation remains Command → Validation → Transaction → owning Document → Evaluation.
 
-## 3. Frozen agreements
+## 3. Cross-cutting interaction doctrine
 
-The following are accepted architecture and must be read from ADR-0008 and ADR-0009 rather than re-decided by individual implementation contracts:
+### 3.1 Consistency rule
 
-1. Shared 2D / Sketch Core is host-neutral and does not depend on Part/Assembly/Drawing, Qt, OCCT or filesystem paths.
-2. Authored primitive geometry is directly editable design intent.
-3. Line endpoints are independent authored entity sub-elements; equal coordinates do not imply shared authored identity.
-4. Constraints are optional authored relations layered over geometry.
-5. Snap, inference, numeric input and grips are runtime interaction concepts unless an explicit command authors persistent intent.
-6. One active tool has one runtime semantic tool state; mouse, keyboard/Command Line, dynamic input and Operations are adapters to it.
-7. Measurement/inspection/diagnostics are read-only by default and never silently repair authored geometry.
-8. Screen/pixel, snap, geometry/intersection, region and future solver tolerances are distinct concerns.
-9. Closed planar regions are derived from evaluated geometry and are not authored Sketch entities by default.
-10. Shared 2D owns geometric region analysis; Part owns the modeling meaning of consuming a region.
-11. Viewer/input/presentation integration remains provider-neutral.
-12. Part-hosted Sketch editing remains in the common 3D Document Viewport.
-13. Sketch-local U/V are physical model-length coordinates hosted by a stable orthonormal frame; current Origin-plane Sketch (0,0) maps to Part Origin.
-14. Sketch Origin (0,0) is an intrinsic immutable reference, not ordinary user-authored Point geometry.
-15. Entity identity must not silently alias a different semantic entity after delete/reorder/storage compaction; state copies preserve identity while semantic duplication creates fresh identity.
-16. Authored and evaluated Sketch geometry are distinct architectural layers even while initial evaluation is identity.
-17. Durable future sub-element references use stable entity identity plus semantic element role, never coordinate/index/provider identity.
-18. Select is the default Sketch tool; cancelling/finishing other tools returns to Select rather than an undefined no-tool state.
-19. Sketch selection is transient semantic runtime state supporting point and rectangular selection; it is never persisted CAD intent.
-20. When a geometry primitive reaches a user-facing interactive milestone, create/present/select/delete is the minimum usable lifecycle.
-21. Select uses pick-box style cursor presentation in the Viewport; create/edit tools use crosshair-style presentation; UI controls use normal widget/system cursors.
-22. Pointer-to-Sketch input must remain correct after camera orbit and therefore maps spatial pointer/ray input onto the active Sketch plane/frame.
-23. Projected/reference geometry is semantically distinct from ordinary editable local geometry and follows host-domain projection policy.
+A semantic operation should behave the same for one entity and many entities, and the same whether entered through grips, toolbar actions or Command Line, unless the nature of the operation makes that impossible.
 
-## 4. Milestones
+Adapters may differ in how required inputs are obtained. The semantic operation, validation, preview meaning, commit meaning, identity rules and Undo granularity should remain shared.
+
+### 3.2 Selection grammar
+
+The Select grammar is:
+
+- ordinary LMB on an unselected entity adds it to the current selection set;
+- ordinary LMB on an already selected entity preserves membership and makes it primary;
+- Ctrl+LMB toggles membership;
+- ordinary Window/Crossing adds returned entities;
+- Ctrl+Window/Crossing toggles returned entities;
+- ordinary LMB on blank space clears selection in normal Select;
+- Esc in normal Select clears selection and hides grips;
+- selection is semantic runtime state keyed by EntityId;
+- all selected editable entities may expose their runtime grips;
+- exactly one grip is active at a time;
+- multiple simultaneously active grips are not planned;
+- when a manipulation starts, its selection set is frozen as a session snapshot until commit or Esc.
+
+Primary remains a runtime convenience for context/property presentation; provider ordering must never define it.
+
+### 3.3 Hover/preselection
+
+Hover is separate runtime state:
+
+- hovering an entity or grip may lightly highlight it;
+- hover does not change semantic selection;
+- LMB performs the actual selection or activates the grip;
+- visible grip hit testing has priority over underlying geometry.
+
+### 3.4 Edit handle role is not edit operation
+
+A runtime edit handle identifies where/what is active. EditMode identifies how the current interaction is interpreted.
+
+Conceptually a DirectManipulationSession contains:
+
+- active SketchId;
+- active EntityId and entity-specific HandleRole;
+- frozen selection snapshot;
+- current EditMode;
+- pivot/base/reference point implied by the entry path;
+- authored/evaluated geometry snapshot required for preview;
+- current resolved input;
+- transient preview state.
+
+HandleRole must not be encoded as a provider token or durable entity.
+
+### 3.5 Direct-manipulation entry and exit
+
+Grip-started interaction follows this grammar:
+
+- click a visible grip to begin the session;
+- the active grip is the pivot/reference point;
+- there is no separate user-changeable Base Point inside a grip-started session;
+- pointer movement and other resolved inputs produce preview only;
+- LMB or Enter may commit the current valid result;
+- Esc cancels only the current uncommitted preview/session and returns to Select with the selection preserved;
+- a subsequent Esc in Select clears selection;
+- switching to another tool cancels the current uncommitted preview, preserves prior committed results and activates the new tool;
+- Undo/Redo are boundaries of active manipulation: cancel current transient interaction first, then perform ordinary global history.
+
+A normal non-Copy commit ends the manipulation session and returns to Select with the edited selection preserved.
+
+### 3.6 Grip modes and common transform modes
+
+The intended grip mode family is:
+
+- Reshape/Stretch;
+- Move;
+- Rotate;
+- Scale;
+- Mirror.
+
+Space is a semantic CycleEditMode adapter while viewport CAD interaction has focus.
+
+For a reshape-capable grip the intended cycle is:
+
+Reshape → Move → Rotate → Scale → Mirror → Reshape
+
+For a grip whose default mode is already Move:
+
+Move → Rotate → Scale → Mirror → Move
+
+Exact implementation may introduce these modes incrementally by milestone, but the architecture must not require a redesign when later modes arrive.
+
+Space inside text-entry focus remains ordinary text input and does not invoke CAD actions.
+
+### 3.7 Affected-set rule
+
+The operation determines the affected set.
+
+- entity-specific Reshape/Stretch affects the owner of the active handle;
+- common Move/Rotate/Scale/Mirror affects the frozen selection snapshot;
+- if a handle's default mode is Move, multi-selection Move begins immediately and uses that handle as pivot;
+- Copy applies to the same affected set as the current operation rather than defining a separate inconsistent set.
+
+This rule applies equally to single- and multi-selection.
+
+### 3.8 Shared transform core
+
+Move, Copy, Rotate, Scale and Mirror must use one provider-independent semantic transform core regardless of entry adapter.
+
+Grip-started transforms obtain the pivot/base point from the active grip.
+
+Toolbar/Command-Line-started transforms use explicit command inputs:
+
+- MOVE/COPY/ROTATE/SCALE: explicit Base Point;
+- MIRROR: first and second points of the mirror axis.
+
+Selection-first and command-first entry are both supported.
+
+Selection-first:
+
+- the existing selection set is used immediately;
+- no extra "selection complete" confirmation exists;
+- grip activation is a direct transition from Select into manipulation.
+
+Command-first:
+
+- the command enters a Select objects stage;
+- successive picks/window/crossing build the command selection;
+- blank LMB is a no-op in this stage;
+- grips are hidden or inactive while command selection is being collected;
+- Enter, Space or RMB completes the Select objects stage;
+- Esc cancels the command but preserves the objects collected so far as the normal selection set.
+
+After a completed transform, the same semantic selection remains selected and the editor returns to Select.
+
+### 3.9 Copy modifier and repeated copy
+
+Copy is an orthogonal modifier to the current edit/transform mode, not a replacement EditMode.
+
+When Copy is ON:
+
+- the source/affected set remains unchanged;
+- each accepted placement creates fresh EntityIds;
+- original entities remain the selected/reference set;
+- created copies do not take over selection;
+- each accepted repeated placement is one atomic semantic command, one transaction and one Undo entry;
+- repeated placement remains active until Esc;
+- each placement is derived from the original source state and the same base/pivot, not from the previously created copy;
+- changing EditMode turns Copy OFF; the user must explicitly re-enable it for the new mode;
+- Undo during an active Copy interaction cancels the transient session first, then performs normal global Undo and returns to Select.
+
+For multi-selection, Copy duplicates the entire affected set for common transforms.
+
+For Reshape+Copy, only the owner entity of the active reshape handle is copied and reshaped.
+
+### 3.10 Transform details
+
+Uniform Scale:
+
+- factor must be greater than zero;
+- zero and negative factors are invalid and create no commit;
+- Mirror remains a separate semantic operation.
+
+Mirror:
+
+- command-started Mirror uses an explicit two-point axis;
+- grip-started Mirror uses the active grip as the first axis point and resolved input for axis direction/second point;
+- Mirror without Copy transforms existing entities;
+- Mirror+Copy preserves originals and creates mirrored duplicates with fresh EntityIds.
+
+Rotate uses the active/base pivot and the global Sketch angle convention.
+
+### 3.11 Identity and atomicity
+
+Editing existing geometry preserves EntityId.
+
+Semantic duplication/Copy always creates fresh EntityIds.
+
+For multi-object operations:
+
+- one accepted user commit is one semantic command;
+- one command is one staged transaction;
+- one transaction produces one Undo entry;
+- validation is all-or-nothing;
+- partial mutation is forbidden.
+
+This includes one accepted placement in repeated multi-copy.
+
+### 3.12 Selection survives other tools
+
+Starting another tool does not silently discard the existing selection.
+
+For creation tools such as Line/Circle/Arc:
+
+- existing selection is retained;
+- grips are hidden/inactive while the creation tool is active;
+- after finish/cancel and return to Select, the prior selection becomes fully interactive again;
+- newly created geometry is not automatically added to selection.
+
+### 3.13 Tool switching and Repeat Last Command
+
+Explicitly activating another tool cancels only the current uncommitted transient state and activates the requested tool.
+
+In ordinary Select with no active command:
+
+- Enter or Space repeats the last repeatable CAD command;
+- RMB opens the context menu;
+- Repeat Last Command remembers command identity, not prior transient points, pivot, selection snapshot or dynamic-input values;
+- current persistent user preferences continue to apply.
+
+## 4. Primitive semantics fixed for early breadth
+
+### 4.1 Line
+
+Line remains authored start and end coordinates.
+
+Runtime grips:
+
+- Start → default Reshape;
+- Center → default Move;
+- End → default Reshape.
+
+Center is a derived runtime location and does not create a durable midpoint entity.
+
+### 4.2 Circle
+
+Canonical authored Circle:
+
+- center;
+- radius.
+
+Initial creation adapter:
+
+- Center + Radius.
+
+Runtime grips:
+
+- Center → default Move;
+- four quadrant grips → default radius Reshape with center fixed.
+
+Different future creation methods normalize to the same canonical Circle and are not persisted as "creation method".
+
+### 4.3 Arc
+
+Canonical authored Arc:
+
+- center;
+- radius;
+- startAngle;
+- signedSweepAngle.
+
+Angle convention:
+
+- 0 degrees is +U of the Sketch;
+- positive is counter-clockwise;
+- convention is independent of camera orientation;
+- signed sweep preserves CW/CCW and short/long arc meaning;
+- a full 360-degree primitive remains Circle rather than Arc.
+
+Initial creation adapter:
+
+- 3 Point.
+
+Runtime grips:
+
+- Center → default Move;
+- Start → reshape start while preserving center/radius and updating start/sweep;
+- End → reshape end while preserving center/radius and updating sweep;
+- Arc/Mid → radius reshape with center and start/end directions retained.
+
+Different future Arc creation methods normalize to the same canonical representation and are not persisted as creation method.
+
+### 4.4 Rectangle
+
+Rectangle is planned as a creation tool, not a durable RectangleEntity.
+
+Initial semantic result:
+
+- four ordinary Line entities;
+- each Line receives its own EntityId;
+- later Auto-Constraint may optionally author relations, but Rectangle itself is not a required durable object.
+
+### 4.5 Polyline
+
+Polyline semantics remain deliberately open.
+
+Continuous Line continues to create independent Line entities.
+
+The architecture must not block a later real PolylineEntity if concrete workflows justify one.
+
+## 5. Shared Input Resolution architecture
+
+### 5.1 One resolver for creation and editing
+
+Geometry creation and direct manipulation use the same Input Resolution layer.
+
+Conceptual flow:
+
+raw pointer/ray
+→ raw Sketch-local U/V
+→ candidate generation / locks / numeric constraints
+→ deterministic resolution
+→ resolved input
+→ transient preview
+→ explicit semantic commit
+
+No geometry tool owns a private snap/precision pipeline.
+
+### 5.2 Resolution priority
+
+The priority is:
+
+1. explicit numeric input / locked numeric fields;
+2. Temporary Snap Override;
+3. Object Snap / Object Snap Tracking;
+4. Ortho / Polar / geometric inference;
+5. Grid Snap;
+6. raw pointer.
+
+A higher-priority explicit constraint is never violated to satisfy a lower-priority candidate.
+
+Example: if Distance=50 is explicitly locked, an Endpoint at distance 48 is rejected. Snap/inference may only resolve remaining free parameters compatible with the locked value.
+
+### 5.3 Ortho and Polar
+
+Ortho and Polar Tracking are mutually exclusive.
+
+Enabling one disables the other.
+
+Object Snap remains higher priority than either.
+
+Polar Tracking supports:
+
+- user-configurable primary angle increment;
+- additional user angles;
+- Absolute mode relative to +U;
+- Relative mode relative to the current operation's reference direction, such as the preceding segment;
+- Absolute/Relative choice as user preference.
+
+### 5.4 Object Snap and tracking
+
+Object Snap is a user-configurable set of enabled modes. Planned modes include as applicable:
+
+- Endpoint;
+- Midpoint;
+- Center;
+- Quadrant;
+- Intersection;
+- Perpendicular;
+- Tangent;
+- Nearest;
+- Origin;
+- Extension when justified.
+
+Temporary Snap Override may force one snap type for the next point even if that type is not normally enabled, then automatically returns to normal OSNAP configuration.
+
+There is no manual candidate cycling.
+
+When several candidates are valid, deterministic resolution uses:
+
+1. active Temporary Snap Override;
+2. smallest screen-space distance to the cursor;
+3. fixed semantic tie-break priority for practically equal candidates;
+4. stable final tie-break by semantic identity/role.
+
+Object Snap Tracking:
+
+- acquires tracking points through hover plus a short dwell, without a click;
+- may hold several acquired points for the current point request;
+- uses the same active Ortho/Polar/inference direction rules as the rest of Input Resolution;
+- may expose intersections of tracking guides;
+- acquired points are runtime-only;
+- the acquired set clears when the current point is accepted or Esc cancels that point/request.
+
+### 5.5 Inference
+
+Inference may provide transient guidance such as:
+
+- horizontal;
+- vertical;
+- parallel;
+- perpendicular;
+- tangent;
+- collinear.
+
+Inference remains runtime assistance.
+
+With Auto-Constraint OFF, inference never creates durable relations.
+
+A future optional Auto-Constraint setting may explicitly convert selected accepted relations into authored constraints. Exact constraint vocabulary and solver semantics remain future work.
+
+### 5.6 Grid and Grid Snap
+
+Grid is visual only.
+
+Grid Snap is a separate optional input aid.
+
+They can be enabled independently.
+
+Grid Snap is lower priority than Object Snap and Ortho/Polar/inference.
+
+### 5.7 Dynamic Input and Command Line
+
+Dynamic Input and Command Line are two adapters to one semantic input request.
+
+Dynamic Input may expose separate fields such as distance/angle or DeltaU/DeltaV.
+
+Tab cycles active fields. A user-entered field may lock one parameter while unresolved parameters continue to derive from pointer/snap/tracking.
+
+Supported future numeric forms include:
+
+- absolute Cartesian;
+- relative Cartesian;
+- relative polar;
+- direct distance when direction is already resolved;
+- operation-specific values such as radius, angle or scale factor.
+
+Relative input always uses the active semantic base/reference point of the current operation.
+
+Examples:
+
+- continuous Line: the last committed endpoint;
+- command-started Move: the chosen Base Point;
+- grip edit: the active grip's interaction-start location.
+
+### 5.8 Numeric syntax, units and locale
+
+The parser should support:
+
+- plain numbers in current document/display units;
+- explicit unit suffixes such as mm, cm or in;
+- both comma and dot as decimal separators;
+- semicolon as the unambiguous Cartesian component separator in Command Line.
+
+Examples of intended grammar direction:
+
+- 12,5;30,25
+- 12.5;30.25
+- @25;10
+- @50<45
+- 12,5mm;2in
+
+Exact prefix characters may be refined in the implementing precision-input contract, but the grammar must remain unambiguous.
+
+## 6. Diagnostics and construction geometry
+
+### 6.1 Measure
+
+Measure is read-only and uses the same selection/input grammar as other tools.
+
+Selection-first uses the existing selection.
+
+Command-first may gather required semantic entities/sub-elements/points.
+
+Single-primitive diagnostics should include at least:
+
+- Line: length, DeltaU, DeltaV, angle relative to +U;
+- Circle: radius, diameter, circumference, area;
+- Arc: radius, start angle, end angle, signed sweep angle, arc length.
+
+For multiple inputs, Measure chooses context-appropriate relations, for example:
+
+- point-to-point distance, DeltaU/DeltaV and direction;
+- angle between lines;
+- point-to-line perpendicular distance;
+- center distance and minimal geometric distance where applicable.
+
+Measure targets semantic geometry/sub-element references such as Line Start/End/Midpoint, Circle Center/Quadrants and Arc Center/Start/End/Midpoint, not provider tessellation points.
+
+### 6.2 Show Dimensions
+
+Read-only diagnostic dimension overlays may support both:
+
+- current selection only;
+- the whole active Sketch.
+
+These overlays are runtime-only:
+
+- not selectable;
+- not editable;
+- not snap targets;
+- no EntityId;
+- no persistence;
+- no Undo impact.
+
+This does not decide authored driving/reference dimension semantics.
+
+### 6.3 Construction geometry
+
+Construction is a durable semantic role of authored geometry, not merely a display color.
+
+Construction geometry remains available for:
+
+- selection;
+- snapping;
+- measurement;
+- inference;
+- future constraints.
+
+It is excluded from material region/profile construction by default.
+
+## 7. Revised milestone order
 
 ### R0 — Foundation freeze and durable roadmap
-
 **Status:** completed
 
-Goal:
-
-- accept ADR-0008;
-- establish this roadmap;
-- make roadmap reconstruction mandatory for later Sketch work.
-
-No product/CAD implementation belongs to R0.
+Unchanged.
 
 ### R1 — Minimal Shared 2D authored core
-
 **Status:** completed
 
-Goal:
-
-- establish the smallest reusable authored 2D model;
-- introduce stable model-local entity identity;
-- introduce finite 2D coordinate/value semantics;
-- implement the first Line primitive with independent authored start/end coordinates;
-- establish minimal entity add/lookup/erase/validation semantics;
-- prove stable identity does not derive from storage/index and is not immediately reused after erase in the continuing model instance;
-- preserve value-copy identity semantics needed by future host history;
-- prove behavior with semantic tests.
-
-Deliberately outside R1:
-
-- Part integration;
-- persistence;
-- Qt/Viewer/OCCT;
-- interactive tools;
-- selection/grips;
-- snapping/inference;
-- constraints/solver;
-- profiles.
+Unchanged.
 
 ### R2 — Part host integration and durable lifecycle
-
 **Status:** completed
 
-Goal:
+Unchanged.
 
-- embed the Shared 2D authored model inside the existing Part-hosted Sketch without transferring host semantics into Sketch Core;
-- create semantic mutation path through DocumentSession/Part transaction;
-- integrate Undo/Redo and dirty/save checkpoint behavior;
-- version Part persistence and preserve prior readable schemas;
-- prove Save → Close → Reopen identity/geometry lifecycle.
-
-Deliberately outside R2:
-
-- full interactive Line UX;
-- Viewer cursor/preview infrastructure;
-- snapping/inference;
-- constraints/solver.
-
-### R3 — Provider-neutral Sketch presentation and tool-input boundary
-
+### R3 — Provider-neutral Sketch presentation and input boundary
 **Status:** completed
 
-Goal:
-
-- extend the neutral Viewer/application boundary for authored Sketch presentation;
-- provide runtime preview presentation separate from authored geometry;
-- provide provider-neutral spatial pointer/cursor input suitable for mathematically mapping to active Sketch U/V even after orbit;
-- provide Sketch presentation for authored geometry plus intrinsic Origin/reference overlays without turning them into Viewer-owned CAD state;
-- establish runtime cursor-mode presentation (Select pick-box versus create/edit crosshair) separately from snap/pick/geometric tolerances;
-- preserve normal camera/navigation behavior;
-- establish the runtime tool-state boundary without implementing the whole Sketcher.
-
-This milestone is the gate that prevents Qt/OCCT event details or presentation tokens from defining Sketch semantics.
+Unchanged.
 
 ### R4 — First complete continuous Line workflow
-
 **Status:** completed
 
-Goal:
+Unchanged.
 
-- expose Sketch tools while in Sketch edit context;
-- make Select the default active Sketch tool;
-- implement one active Line tool state;
-- first-point and next-point workflow;
-- rubber-band preview;
-- continuous successive segment creation;
-- commit each accepted segment through the semantic command/transaction path;
-- predictable finish/cancel behavior;
-- define and test the commit/Undo granularity explicitly in the R4 Work Contract rather than inheriting it accidentally from UI implementation;
-- introduce the compact Command Line concept as an adapter to the same tool state;
-- Operations presents contextual Line state/actions rather than owning another Line implementation;
-- returning from Line activation/finish/cancel ends in Select;
-- make committed Line geometry point-selectable by semantic EntityId;
-- support rectangular selection for geometry that is impractical to point-pick;
-- support semantic Delete of selected Line geometry through the ordinary command/transaction/Undo path;
-- keep selection transient and provider-token-free.
-
-Advanced snapping, constraints, grips/direct manipulation and dynamic input are not prerequisites for proving this workflow.
-
-### R5 — Sketch direct manipulation and selection refinement
+### R5 — Direct-manipulation and selection foundation on Line
+**Status:** active — SK-05A accepted 2026-09-26
 
 Goal:
 
-- refine the R4 semantic selection foundation for multi-selection/primary-selection interactions as required;
-- keep selection coherent between Viewport/Properties/Tools as applicable;
-- expose runtime Line grips for start/end/center;
-- dragging an endpoint edits only that endpoint unless authored constraints later require otherwise;
-- center grip translates the whole Line without creating a midpoint entity;
-- no Viewer token becomes durable identity.
+- adopt the revised additive/toggle Select grammar;
+- add hover/preselection;
+- expose Start/Center/End grips for every selected Line;
+- enforce one active grip and grip-over-geometry hit priority;
+- establish frozen selection snapshot in DirectManipulationSession;
+- implement endpoint Reshape and center-grip Move using the final affected-set rules;
+- center-grip Move supports one or many selected Lines atomically;
+- click-to-activate, preview-only movement, LMB/Enter commit and hierarchical Esc;
+- preserve EntityId through edit/history/persistence;
+- make Undo/Redo cancel transient manipulation before global history;
+- preserve selection across creation-tool activation and after direct edits;
+- establish the resolved-input seam with identity resolution initially;
+- keep later EditModes and Copy structurally possible but inactive.
 
-### R6 — Inspect / Measure / geometry diagnostics
+R5 does not need to ship Rotate/Scale/Mirror/Copy, precision input, snaps or constraints.
 
+### R6 — Circle and Arc core breadth
 Goal:
 
-- read-only exact inspection of Sketch geometry;
-- line length and direction/angle;
-- point coordinates;
-- point-to-point distance/gap;
-- horizontal/vertical and related geometric deviation checks as introduced;
-- diagnostics must distinguish observed geometric facts from persistent constraints;
-- no measurement action creates authored dimensions or repairs geometry automatically.
+- implement canonical Circle center+radius;
+- implement canonical Arc center+radius+startAngle+signedSweepAngle;
+- initial Circle Center+Radius creation;
+- initial Arc 3-Point creation;
+- create → present → select → delete → Undo/Redo → persistence;
+- add the agreed primitive grips and minimal direct reshape/move paths;
+- prove the R5 interaction architecture is not Line-specific.
 
-### R7 — Precision input, Object Snap and inference
-
+### R7 — Common transforms, Copy and command grammar
 Goal:
 
-- precise keyboard/Command Line coordinate/value entry;
-- object snap foundation for semantic candidates such as Endpoint, Midpoint, Center, Intersection, Quadrant, Perpendicular, Tangent, Nearest and Origin as supported by available entity types;
-- geometric inference such as Horizontal/Vertical and later relation candidates;
-- optional dynamic input presentation;
-- all channels feed one tool state.
+- one shared transform core for grip, toolbar and Command Line entry;
+- Move, Rotate, positive uniform Scale and Mirror;
+- semantic Space CycleEditMode;
+- selection-first and command-first workflows;
+- explicit Base Point for normal Move/Copy/Rotate/Scale;
+- two-point mirror axis for normal Mirror;
+- repeated Copy with fresh EntityIds and per-placement Undo;
+- Copy modifier behavior during grip manipulation;
+- context RMB behavior;
+- Repeat Last Command;
+- common preview/commit/cancel pipeline.
 
-A snap/inference may guide exact geometry creation without automatically creating a persistent constraint.
+No multiple-active-grip feature is planned.
 
-### R8 — Optional geometric relations and local solver/evaluation
-
+### R8 — Inspect / Measure / diagnostic dimensions
 Goal:
 
-- introduce the first explicit authored relations such as Coincident/Horizontal only under a separately accepted contract;
-- preserve independent endpoint identity;
-- introduce a bounded local constraint/evaluation layer;
-- direct manipulation re-evaluates legal constrained geometry;
-- solver/evaluator reports structured diagnostics and does not silently rewrite unrelated authored intent.
+- implement read-only Measure across Line/Circle/Arc and semantic sub-elements;
+- context-dependent multi-entity measurements;
+- Selection and whole-Sketch Show Dimensions runtime overlays;
+- no authored dimensions or constraints.
 
-No global project-wide parametric graph is introduced.
-
-### R9 — Geometry breadth and editing operations
-
+### R9 — Precision input, Ortho, Polar and Dynamic Input
 Goal:
 
-- add further primitives only when required by concrete workflows, beginning with Circle/Arc as appropriate;
-- add editing operations such as Move/Trim/Extend/Offset in small contracts;
-- preserve stable entity identity and command/transaction semantics;
-- extend snapping, grips, measurement and constraints only as demonstrated by each primitive.
+- productionize the shared Input Resolution path;
+- absolute/relative Cartesian input;
+- relative polar input;
+- direct distance;
+- unit-aware and locale-safe numeric parser;
+- Dynamic Input fields and Tab locking;
+- Ortho/Polar mutual exclusion;
+- configurable polar increments/additional angles;
+- Absolute/Relative Polar preference;
+- Command Line and Dynamic Input feed one request.
 
-Exact ordering inside R9 is intentionally not frozen.
-
-### R10 — Planar region analysis and Sketch diagnostics
-
+### R10 — Object Snap, Object Snap Tracking and inference
 Goal:
 
-- derive intersections/planar arrangement from evaluated non-construction geometry;
-- detect bounded regions, open chains and relevant diagnostics;
-- support Sketch-level `Find Profiles`/region inspection without authored mutation;
-- keep region-analysis tolerances distinct from screen/snap/solver tolerance;
-- never close gaps or repair geometry merely because a region appears visually closed.
+- user-configurable OSNAP mode set;
+- Temporary Snap Override;
+- deterministic no-cycling candidate resolution;
+- Object Snap Tracking hover acquisition with multiple temporary acquired points;
+- shared tracking directions with Ortho/Polar/inference;
+- endpoint/midpoint/center/quadrant/intersection/perpendicular/tangent/nearest/origin and justified extension modes;
+- inference guides;
+- no silent authored constraints.
 
-Derived intersection/region topology must not force automatic authored entity splitting.
-
-### R11 — Part consumption of derived Sketch regions
-
+### R11 — Optional authored relations / local solver
 Goal:
 
-- allow future Part modeling tools to query and present derived Sketch regions as candidate inputs;
-- support selection of one or more non-overlapping/atomic usable regions as the Part operation contract requires;
-- preserve host ownership: Shared 2D supplies geometry/regions, Part owns modeling semantics.
+- introduce explicit durable relation semantics only under later accepted contracts;
+- keep snap/inference distinct from constraints;
+- optionally support an explicit Auto-Constraint user setting;
+- do not pre-decide driving/reference dimension architecture here.
 
-Before persistent Part feature implementation, explicitly decide associative versus snapshot input semantics, durable reference/rebinding policy and failure behavior. R11 does not pre-authorize a Body/Feature/Extrude architecture.
-
-
-### R12 — Planar-face Sketch support and projected reference geometry
-
+### R12 — Geometry breadth and editing operations
 Goal:
 
-- introduce a semantically stable Part planar-face support contract without persisting raw kernel/provider face identity;
-- derive a stable orthonormal Sketch frame whose orientation does not silently flip with provider topology order/orientation;
-- support provider-neutral exact projection/materialization of representable support/reference edges into Sketch-local U/V;
-- expose projected/reference curves as semantically read-only reference geometry that can be inspected/snapped according to later interaction contracts;
-- respect Foundation projection policy: explicit Part-local Project Edge remains snapshot/capture by default;
-- explicitly decide automatic support-face boundary snapshot-versus-support-associative behavior before implementation;
-- explicitly decide projected-reference participation in profile/region construction before implementation.
+- Rectangle as a tool creating four ordinary Lines;
+- construction role when concrete UI is delivered;
+- later Polyline decision remains explicit;
+- further primitives/edit operations only as justified;
+- Trim/Split/Join must define identity outcomes before implementation;
+- possible Offset, Fillet, Chamfer and further curve types.
 
-SS1 projection/reference code may be audited as donor mechanism/test material only after compatibility review.
+### R13 — Planar region analysis and Sketch diagnostics
+Goal:
 
+- derive intersections/arrangement from evaluated non-construction geometry;
+- detect bounded regions/open chains and diagnostics;
+- preserve distinct region-analysis tolerances;
+- never silently repair gaps.
 
-## 5. Deliberately open decisions
+### R14 — Part consumption of derived Sketch regions
+Goal:
 
-The roadmap does not decide ahead of evidence:
+- Part consumes derived regions under an explicit persistence/rebinding contract.
 
-- exact `EntityId` representation/serialization/allocation mechanism across persistence and history;
-- exact public Sketch model C++ API;
-- universal sub-element/reference API;
-- standalone Point entity semantics;
-- exact persistence JSON for entities;
-- exact cursor pixel sizes/colors/HiDPI rendering;
-- exact keyboard aliases/Enter/Esc/Space/RMB grammar beyond the accepted Esc-to-Select direction;
-- exact dynamic-input UX;
-- exact numerical tolerances;
-- exact constraint set and solver technology;
-- auto-constraint policy;
-- exact Arc/Circle authoring variants;
-- exact Trim/Extend/Split identity policy;
-- exact planar-face semantic reference and stable frame derivation;
-- automatic support-boundary projection snapshot-versus-associative policy;
-- projected/reference geometry participation in region/profile construction;
-- durable region identity;
-- future Part feature graph/history/body architecture;
-- associative versus snapshot consumption of Sketch regions by future Part operations.
+### R15 — Planar-face Sketch support and projected/reference geometry
+Goal:
 
-These topics require explicit later evidence and must not be silently frozen by convenience implementations.
+- stable semantic support identity and frame;
+- provider-neutral exact projected/reference curves;
+- explicit reference/profile participation and associativity policy.
 
-## 6. Program state
+## 8. Decisions deliberately still open
 
-Current:
+The following remain future contract decisions because current evidence does not require them:
 
-```text
-R0  completed
-R1  completed
-R2  completed
-R3  completed
-R4  completed
-R5  next — not active
+- exact C++ type hierarchy/enum representation for HandleRole, EditMode and Input Resolution;
+- exact visual styling/size of grips, snap glyphs, tracking guides and Dynamic Input;
+- exact application settings persistence implementation;
+- exact dwell timing for Object Snap Tracking acquisition;
+- exact numeric tolerances for snap/intersection/solver/region analysis;
+- exact Polyline durable semantics;
+- exact Trim/Split/Join identity rules;
+- exact future constraint vocabulary/solver technology;
+- authored dimension model;
+- exact later curve primitive ordering;
+- exact planar-face/projected-reference rebinding policy.
+
+These open details must not be guessed by an implementation contract outside its scope.
+
+## 9. Program state
+
+R0 completed  
+R1 completed  
+R2 completed  
+R3 completed  
+R4 completed  
+R5 active — SK-05A is the accepted active Work Contract  
 R6+ not started
-```
 
-R1 is completed by `work/SK-02A_MINIMAL_SHARED_2D_AUTHORED_CORE.md`. R2 is completed by `work/SK-02B_PART_HOST_DURABLE_LIFECYCLE.md`. R3 is completed by `work/SK-03A_PROVIDER_NEUTRAL_SKETCH_PRESENTATION_INPUT_BOUNDARY.md`. R4 is completed by the bounded SK-04A / SK-04B / SK-04C sequence. R5 is next but is not active; any R5 work requires a separate explicit Owner-accepted Work Contract.
+Roadmap v1.2 is authoritative. Production implementation remains bounded by the active accepted Work Contract; R6+ is not authorized.
