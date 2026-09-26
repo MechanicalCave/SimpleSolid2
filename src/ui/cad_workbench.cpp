@@ -261,6 +261,16 @@ void CadWorkbench::buildUi() {
         1,
         select_sketch_button_);
 
+    create_tools_label_ =
+        new QLabel(
+            QStringLiteral("Create:"),
+            shell_);
+    create_tools_label_->setObjectName(
+        QStringLiteral("sketchCreateToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        2,
+        create_tools_label_);
+
     line_sketch_button_ =
         new QPushButton(
             QStringLiteral("Line"),
@@ -269,7 +279,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("lineSketchToolButton"));
     line_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        2,
+        3,
         line_sketch_button_);
 
     circle_sketch_button_ =
@@ -280,7 +290,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("circleSketchToolButton"));
     circle_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        3,
+        4,
         circle_sketch_button_);
 
     arc_sketch_button_ =
@@ -291,8 +301,18 @@ void CadWorkbench::buildUi() {
         QStringLiteral("arcSketchToolButton"));
     arc_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        4,
+        5,
         arc_sketch_button_);
+
+    modify_tools_label_ =
+        new QLabel(
+            QStringLiteral("Modify:"),
+            shell_);
+    modify_tools_label_->setObjectName(
+        QStringLiteral("sketchModifyToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        6,
+        modify_tools_label_);
 
     move_sketch_button_ =
         new QPushButton(
@@ -302,8 +322,41 @@ void CadWorkbench::buildUi() {
         QStringLiteral("moveSketchToolButton"));
     move_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        5,
+        7,
         move_sketch_button_);
+
+    rotate_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Rotate"),
+            shell_);
+    rotate_sketch_button_->setObjectName(
+        QStringLiteral("rotateSketchToolButton"));
+    rotate_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        8,
+        rotate_sketch_button_);
+
+    scale_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Scale"),
+            shell_);
+    scale_sketch_button_->setObjectName(
+        QStringLiteral("scaleSketchToolButton"));
+    scale_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        9,
+        scale_sketch_button_);
+
+    mirror_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Mirror"),
+            shell_);
+    mirror_sketch_button_->setObjectName(
+        QStringLiteral("mirrorSketchToolButton"));
+    mirror_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        10,
+        mirror_sketch_button_);
 
     viewport_controller_ =
         new PartViewportController(
@@ -360,7 +413,8 @@ void CadWorkbench::buildUi() {
     command_input_->setObjectName(
         QStringLiteral("sketchCommandInput"));
     command_input_->setPlaceholderText(
-        QStringLiteral("SELECT, LINE, CIRCLE, ARC or MOVE"));
+        QStringLiteral(
+            "SELECT, LINE, CIRCLE, ARC, MOVE, ROTATE, SCALE or MIRROR"));
     command_line_layout->addWidget(command_input_, 1);
     shell_->setCommandLineContent(
         command_line_widget_);
