@@ -1,9 +1,9 @@
 version: 1
-status: completed
-active_work: "work/WB-01B_NATIVE_VIEWPORT_OVERLAY_COMPOSITION_STABILIZATION.md"
+status: active
+active_work: "work/SK-05A_LINE_DIRECT_MANIPULATION_AND_PRIMARY_SELECTION.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
-program_roadmap_version: "1.1"
+program_roadmap_version: "1.2"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -16,30 +16,35 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - merge WB-01B only after the exact closeout HEAD passes the selected CLOSURE CI tier
-  - stop at the stabilized post-R4 checkpoint
-  - prepare a separate R5 Work Contract only when the Owner chooses to continue
-  - R5 remains unauthorized until explicit Owner acceptance
+  - implement accepted SK-05A within the bounded R5 scope
+  - require exact-head Windows FULL for the final implementation candidate
+  - require explicit manual Windows verification of final grip/direct-manipulation behavior
+  - satisfy Documentation Impact and generated Product Browser freshness before completion
+  - run closeout CLOSURE before merge/completion
+  - keep R6+ inactive
 notes:
-  - Owner accepted SK-04C on 2026-09-25 after proposal CLOSURE gate #299 passed.
-  - implementation exact head 5a05ce393b0bf5ef7fc83e66244ef983504a7111 passed FULL gate #315 with Build and 52/52 CTest tests.
-  - documentation exact head 4c1a77e7f48392db2c7b17441f74af10dce2a6cd passed DOCS gate #320.
-  - one SketchInteractionState is the sole semantic interaction authority for active Sketch edit.
-  - Part context switches Editor Tools and Operations to Sketch context on edit entry and restores Part context on exit or fail-closed loss.
-  - Sketch Select/Line tools live above the Viewport; contextual Operations remain in the right panel; compact Command Line lives below the Viewport; global Status remains separate.
-  - rectangle selection replaces semantic selection and assigns no primary in R4.
-  - Command Line accepts SELECT and LINE only; coordinate input, snaps, constraints and grips remain outside R4.
-  - SK-04C completes R4; R5 is next but is not active.
-  - Manual post-R4 Windows validation reports visual composition defects for both Sketch selection-box overlay and ViewCube over the native Qt/OCCT viewport.
-  - WB-01B was explicitly Owner-accepted on 2026-09-25 after proposal CLOSURE gate #323 passed.
-  - WB-01B is the active bounded pre-R5 Viewer/UI stabilization; manual Windows visual verification is mandatory before completion.
-  - Manual verification of d923f24a01e3b7679bfd588db87dce59ce976b59 passed the corrected selection-box but failed the second native-sibling ViewCube composition experiment.
-  - Both D1 ViewCube native-window experiments were reverted.
-  - Owner accepted ADR-0010 on 2026-09-25; provider-surface 3D Navigation Cube implementation is now authorized inside WB-01B.
-
-  - Exact-head 53a291fbebf1ab2e1ee8205f2f851e8542dee677 passed FULL gate #370 and Owner manual Navigation Cube verification.
-  - Owner accepted the ADR-0010 independent ORTHO/PERSP amendment on 2026-09-25; orientation actions and Home must preserve projection and a separate provider-surface toggle changes projection only.
-
-  - Exact-head 6a762d90c97e1405c0c576dc3039dd02ff6069e6 passed FULL gate #381 and Owner manual verification of the independent ORTHO/PERSP amendment.
-  - WB-01B acceptance conditions are satisfied; status is completed pending closeout-only CLOSURE gate and merge.
-  - R5 remains inactive and requires a separate explicit Owner-accepted Work Contract.
+  - R0 through R4 are completed.
+  - WB-01B merged to main as 5d75e561571c83ac50a241a0c4b5cf0e212c05f2 after FULL #381, Owner manual PASS and CLOSURE #382.
+  - Owner accepted Sketcher roadmap v1.2 and revised SK-05A on 2026-09-26.
+  - R5 is active only through the bounded SK-05A contract; R6+ is not authorized.
+  - Selection grammar is additive ordinary LMB/Window/Crossing, Ctrl toggle, blank/Esc clear in Select, semantic primary, hover/preselection, grips on all selected editable entities and exactly one active grip.
+  - Direct manipulation freezes a selection snapshot; entity-specific Reshape affects the handle owner, while common transforms affect the selection snapshot.
+  - Grip-started manipulation uses the active grip as pivot/base and has no in-session Base Point replacement.
+  - LMB or Enter commits; Esc cancels transient manipulation while preserving selection; a subsequent Esc in Select clears selection.
+  - Edit preserves EntityId; semantic Copy creates fresh EntityIds.
+  - Multi-object commits are atomic all-or-nothing operations with one Undo entry per accepted commit.
+  - Undo/Redo remain global history boundaries and cancel active transient manipulation first.
+  - Creation tools preserve pre-existing selection while hiding/deactivating grips; newly created geometry is not automatically selected.
+  - Circle canonical geometry is center+radius; Arc canonical geometry is center+radius+startAngle+signedSweepAngle.
+  - Initial Circle creation is Center+Radius; initial Arc creation is 3-Point.
+  - Rectangle is a future creation tool producing four ordinary Lines; Polyline durable semantics remain deferred.
+  - Creation and editing share one Input Resolution layer.
+  - Numeric locks outrank Temporary Snap Override, Object Snap/Tracking, Ortho/Polar/inference, Grid Snap and raw pointer.
+  - Ortho and Polar are mutually exclusive user modes; Polar supports configurable increments/additional angles and absolute/relative preference.
+  - OSNAP is a configurable user mode set with one-shot temporary overrides; candidate resolution is deterministic with no manual candidate cycling.
+  - Object Snap Tracking acquires one or more temporary points by hover/dwell and clears them on point acceptance or Esc.
+  - Grid and Grid Snap are independent.
+  - Dynamic Input and Command Line feed one semantic request; Tab may lock/cycle fields.
+  - Numeric parsing is planned to accept explicit units, comma or dot decimals, and semicolon-separated Cartesian components.
+  - Construction is a durable semantic role excluded from material regions by default but available to selection/snap/measure/inference/future constraints.
+  - Measure and Show Dimensions are read-only runtime diagnostics; authored dimension/constraint architecture remains deliberately deferred.
