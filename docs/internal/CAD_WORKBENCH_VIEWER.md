@@ -50,19 +50,22 @@ The controller pushes one coherent selection to Tree and Viewer. Primary selecti
 Current mouse grammar depends on semantic context. Outside Sketch edit, built-in reference selection keeps the existing replace/toggle/blank-clear behavior. During Sketch Select, primary pointer input is routed through the Sketch coordinator:
 
 ```text
-Left click Line            → replace Sketch EntityId selection
-Ctrl + Left click Line     → toggle Sketch EntityId selection
+Left click unselected Line → add it and make it primary
+Left click selected Line   → keep membership; make it primary
+Ctrl + Left click Line     → toggle Sketch EntityId membership
 Left click blank           → clear Sketch EntityId selection
 Ctrl + Left click blank    → keep Sketch selection
-Left-to-right drag         → Window rectangle replacement
-Right-to-left drag         → Crossing rectangle replacement
+Left-to-right drag         → add Window hits
+Right-to-left drag         → add Crossing hits
+Ctrl + rectangle           → toggle returned EntityIds
+Esc in Select              → clear selection
 Middle drag                → Pan
 Shift + Middle drag        → Orbit
 Mouse wheel                → Zoom
 Right click                → reserved; controlled no-op
 ```
 
-Rectangle selection deliberately assigns no primary EntityId in R4 so provider query order cannot become semantic ordering.
+Rectangle results are canonicalized as semantic EntityIds and never use provider result order to choose primary. Existing selection is not implicitly erased.
 
 Transient OCCT detection/highlight is not semantic selection. SK-04B keeps Sketch hit testing independent from the mutable OCCT selection set: authored active-Sketch Lines are projected through the current view and queried in screen space. Point query returns the nearest eligible Line within provider pick tolerance. Rectangle query supports explicit `window` (projected segment fully contained) and `crossing` (projected segment intersects/touches or is contained) rules. Built-in references, grid, intrinsic Sketch Origin and transient preview Lines are outside these Sketch queries.
 
@@ -71,7 +74,9 @@ Pointer routing and cursor mode remain independent runtime axes. Entering Sketch
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-`IDocumentViewport` is provider-neutral. It exposes camera/navigation, the existing reference scene, an active-Sketch authored scene, a separate transient Sketch preview scene, presentation selection, neutral selection-intent transport, neutral spatial-pointer transport, primary-pointer routing, runtime cursor mode, active-Sketch point/rectangle presentation queries and a separate runtime selection-box overlay channel.
+`IDocumentViewport` is provider-neutral. It exposes camera/navigation, the existing reference scene, an active-Sketch authored scene, a separate transient Sketch preview scene, presentation selection, neutral selection-intent transport, neutral spatial-pointer transport, primary-pointer routing, runtime cursor mode, active-Sketch point/rectangle presentation queries, a finite Line-grip scene/query contract, runtime Sketch hover/active-grip presentation and the existing selection-box overlay channel.
+
+SK-05A deliberately extends that finite surface instead of introducing a generic overlay framework. A grip key is `PresentationToken + SketchGripRole` only inside the Viewer boundary. `PartViewportController` immediately maps the owner token back to `SketchId + EntityId` and then to the semantic `LineGripRef`; neither Qt/OCCT object identity nor presentation tokens enter authored CAD state.
 
 `QtOcctViewerWidget` implements that contract behind the `viewer_qt_occt` module. Provider-native Qt events and OCCT view objects do not cross the boundary: spatial input is exported as logical viewport coordinates plus a finite 3D `Ray3` and the smallest neutral modifier state required by the active interaction. SK-04C transports Control as provider-neutral runtime data; Qt modifier enums remain provider-local.
 
@@ -104,9 +109,13 @@ R3 also provides an independent transient Line-preview channel and maps provider
 
 SK-04C wires SK-04A and SK-04B through one bounded Part/UI coordinator. Line accepts points on primary press, renders rubber-band preview on move and executes exactly one `AddSketchLineCommand` for each committed segment. Successful commits refresh authored presentation and advance the continuous anchor; exact-zero candidates create no command/history entry. Select performs point queries on release and Window/Crossing rectangle queries after a logical-pixel drag threshold. Delete executes one atomic `EraseSketchEntitiesCommand` for the current semantic EntityId set.
 
-Undo/Redo first calls the interaction state's history cancellation, clears preview/box state and returns to Select, then runs ordinary DocumentSession history. If the Sketch survives, selection is reconciled against the current SketchModel and projected through newly rebuilt presentation tokens. If history removes the active Sketch, edit closes fail-closed.
+SK-05A extends that same coordinator with Line hover/grip projection and direct manipulation. All selected Lines expose Start/Center/End grips in Select; grips are hidden while Line creation is active without clearing selection. Grip hit testing has priority over underlying authored geometry. Clicking Start/End starts owner-only Reshape; clicking Center starts Move for the frozen selected EntityId set. The user may release the activating click, move the pointer freely, then commit with a later LMB or Enter. Esc discards only the transient edit and preserves selection; a subsequent Select-mode Esc clears it.
 
-Snapping/inference, coordinate/value entry, constraints, grips/direct manipulation, additional primitives and RMB command grammar remain later roadmap work. Sketch support remains limited to XY/XZ/YZ Origin planes; Datum/Construction Plane and planar model-face support remain later stages.
+The direct-manipulation start captures the current DocumentRevision. Preview uses the shared resolved-input seam and the existing transient Sketch preview channel; it never edits the live model. Commit emits one semantic `UpdateSketchLinesCommand` containing resulting geometry, validates the captured revision and complete EntityId target set, stages one authored state and commits once. Existing EntityIds are preserved. Exact no-op state creates no revision/history entry; any invalid/missing target or stale revision fails closed with no partial mutation.
+
+Undo/Redo first calls the interaction state's history cancellation, clears preview/box state and returns to Select, then runs ordinary DocumentSession history. If the Sketch survives, selection is reconciled against the current SketchModel and projected through newly rebuilt presentation tokens/grips. If history removes the active Sketch, edit closes fail-closed.
+
+Snapping/inference, coordinate/value entry, constraints, additional primitives, additional edit operations and RMB command grammar remain later roadmap work. Sketch support remains limited to XY/XZ/YZ Origin planes; Datum/Construction Plane and planar model-face support remain later stages.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and provider-surface Navigation Cube
@@ -124,7 +133,9 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
-The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid, active-Sketch authored Lines, the intrinsic active-Sketch Origin overlay, a separate transient Line-preview channel, a runtime Sketch selection-box overlay and selected/primary visual emphasis. The Sketch selection-box is rendered by OCCT `AIS_RubberBand` in the same native graphics surface rather than by a translucent QWidget above `WA_PaintOnScreen`. SK-04B Sketch point/rectangle queries still operate from the provider's current 3D→screen projection of authored Sketch Lines rather than creating an OCCT semantic selection set.
+The provider currently presents Origin point, X/Y/Z axes, principal Origin planes when visible, a non-selectable reference grid, active-Sketch authored Lines, the intrinsic active-Sketch Origin overlay, a separate transient Line/direct-edit preview channel, a runtime Sketch selection-box overlay, selected/primary emphasis, entity hover and finite Line grips with normal/hover/active styling. The Sketch selection-box is rendered by OCCT `AIS_RubberBand` in the same native graphics surface rather than by a translucent QWidget above `WA_PaintOnScreen`.
+
+SK-04B Sketch point/rectangle queries operate from the provider's current 3D→screen projection of authored Sketch Lines rather than creating an OCCT semantic selection set. SK-05A grip objects are likewise provider presentation only: they are deactivated from native OCCT selection and hit-tested in logical screen space with a bounded pixel tolerance. Grip query is evaluated before Line geometry query in Sketch Select so an overlapping visible grip wins without turning provider object identity into CAD identity.
 
 Principal reference planes use finite provider presentation geometry; no native OCCT presentation object is durable semantic identity.
 
@@ -133,7 +144,7 @@ There is no modeled Part B-Rep in WB-01/WB-01A. The OCCT provider is presentatio
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle query results, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select drag state and Command Line text/prompt state are runtime-only.
+Selection, primary selection, hover, active grip, direct-manipulation session, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select drag state and Command Line text/prompt state are runtime-only.
 
 Persistent Origin visibility is authored state and is intentionally separate.
 
