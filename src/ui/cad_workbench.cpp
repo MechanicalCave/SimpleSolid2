@@ -325,6 +325,17 @@ void CadWorkbench::buildUi() {
         7,
         move_sketch_button_);
 
+    copy_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Copy"),
+            shell_);
+    copy_sketch_button_->setObjectName(
+        QStringLiteral("copySketchToolButton"));
+    copy_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        8,
+        copy_sketch_button_);
+
     rotate_sketch_button_ =
         new QPushButton(
             QStringLiteral("Rotate"),
@@ -333,7 +344,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("rotateSketchToolButton"));
     rotate_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        8,
+        9,
         rotate_sketch_button_);
 
     scale_sketch_button_ =
@@ -344,7 +355,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("scaleSketchToolButton"));
     scale_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        9,
+        10,
         scale_sketch_button_);
 
     mirror_sketch_button_ =
@@ -355,7 +366,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("mirrorSketchToolButton"));
     mirror_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        10,
+        11,
         mirror_sketch_button_);
 
     viewport_controller_ =
@@ -414,7 +425,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("sketchCommandInput"));
     command_input_->setPlaceholderText(
         QStringLiteral(
-            "SELECT, LINE, CIRCLE, ARC, MOVE, ROTATE, SCALE or MIRROR"));
+            "SELECT, LINE, CIRCLE, ARC, MOVE, COPY, ROTATE, SCALE or MIRROR"));
     command_line_layout->addWidget(command_input_, 1);
     shell_->setCommandLineContent(
         command_line_widget_);
@@ -668,6 +679,11 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchMove(); });
+    QObject::connect(
+        copy_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchCopy(); });
     QObject::connect(
         rotate_sketch_button_,
         &QPushButton::clicked,
@@ -1036,6 +1052,18 @@ void CadWorkbench::activateSketchMove() {
     }
 }
 
+void CadWorkbench::activateSketchCopy() {
+    if (sketch_interaction_controller_ &&
+        !sketch_interaction_controller_->activateCopy()) {
+        status_->setText(
+            QStringLiteral("COPY could not be activated."));
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
 void CadWorkbench::activateSketchRotate() {
     if (sketch_interaction_controller_ &&
         !sketch_interaction_controller_->activateRotate()) {
@@ -1098,6 +1126,10 @@ void CadWorkbench::finishSketchLine() {
         status_->setText(
             QStringLiteral("Move finished — Select active."));
         break;
+    case sketch::SketchTool::copy:
+        status_->setText(
+            QStringLiteral("Copy finished — Select active."));
+        break;
     case sketch::SketchTool::rotate:
         status_->setText(
             QStringLiteral("Rotate finished — Select active."));
@@ -1143,6 +1175,10 @@ void CadWorkbench::cancelSketchLine() {
     case sketch::SketchTool::move:
         status_->setText(
             QStringLiteral("Move cancelled — selection preserved."));
+        break;
+    case sketch::SketchTool::copy:
+        status_->setText(
+            QStringLiteral("Copy cancelled — committed copies preserved; selection preserved."));
         break;
     case sketch::SketchTool::rotate:
         status_->setText(
@@ -1194,6 +1230,8 @@ void CadWorkbench::submitSketchCommandLine() {
         activateSketchArc();
     } else if (command == QStringLiteral("MOVE")) {
         activateSketchMove();
+    } else if (command == QStringLiteral("COPY")) {
+        activateSketchCopy();
     } else if (command == QStringLiteral("ROTATE")) {
         activateSketchRotate();
     } else if (command == QStringLiteral("SCALE")) {
@@ -1703,6 +1741,14 @@ void CadWorkbench::syncSketchInteractionUi() {
                 sketch::SketchTool::move);
     }
 
+    if (copy_sketch_button_ != nullptr) {
+        copy_sketch_button_->setVisible(editing);
+        copy_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::copy);
+    }
+
     if (rotate_sketch_button_ != nullptr) {
         rotate_sketch_button_->setVisible(editing);
         rotate_sketch_button_->setChecked(
@@ -1773,6 +1819,7 @@ void CadWorkbench::syncSketchInteractionUi() {
 
     const bool common_transform =
         tool == sketch::SketchTool::move ||
+        tool == sketch::SketchTool::copy ||
         tool == sketch::SketchTool::rotate ||
         tool == sketch::SketchTool::scale ||
         tool == sketch::SketchTool::mirror;
@@ -1788,6 +1835,10 @@ void CadWorkbench::syncSketchInteractionUi() {
         case sketch::SketchTool::move:
             title = QStringLiteral("Move");
             keyword = QStringLiteral("MOVE");
+            break;
+        case sketch::SketchTool::copy:
+            title = QStringLiteral("Copy");
+            keyword = QStringLiteral("COPY");
             break;
         case sketch::SketchTool::rotate:
             title = QStringLiteral("Rotate");
@@ -1829,7 +1880,9 @@ void CadWorkbench::syncSketchInteractionUi() {
                 break;
             case sketch::CommonTransformStage::await_destination:
                 instruction =
-                    QStringLiteral("Specify destination point");
+                    tool == sketch::SketchTool::copy
+                        ? QStringLiteral("Specify copy placement point")
+                        : QStringLiteral("Specify destination point");
                 break;
             case sketch::CommonTransformStage::await_axis_start:
                 instruction =
