@@ -179,42 +179,6 @@ arcThroughThreePoints(
         : std::nullopt;
 }
 
-[[nodiscard]] bool appendEntityGeometry(
-    DirectManipulationGeometry& geometry,
-    const SketchModel& model,
-    EntityId id) {
-    if (const auto* line = model.findLine(id)) {
-        geometry.lines.push_back(
-            SketchLineState{
-                line->id(),
-                line->start(),
-                line->end()});
-        return true;
-    }
-
-    if (const auto* circle = model.findCircle(id)) {
-        geometry.circles.push_back(
-            SketchCircleState{
-                circle->id(),
-                circle->center(),
-                circle->radius()});
-        return true;
-    }
-
-    if (const auto* arc = model.findArc(id)) {
-        geometry.arcs.push_back(
-            SketchArcState{
-                arc->id(),
-                arc->center(),
-                arc->radius(),
-                arc->startAngle(),
-                arc->sweepAngle()});
-        return true;
-    }
-
-    return false;
-}
-
 [[nodiscard]] std::optional<double>
 sameDirectionSweep(
     double start_angle,
@@ -918,17 +882,17 @@ bool SketchInteractionState::beginDirectManipulation(
 
     const auto capture_move =
         [&]() {
-            session.mode = DirectEditMode::move;
-            for (const auto id :
-                 session.selection_snapshot) {
-                if (!appendEntityGeometry(
-                        session.initial_geometry,
-                        model,
-                        id)) {
-                    return false;
-                }
+            const auto captured =
+                captureSketchTransformGeometry(
+                    model,
+                    session.selection_snapshot);
+            if (!captured) {
+                return false;
             }
-            return !session.initial_geometry.empty();
+
+            session.mode = DirectEditMode::move;
+            session.initial_geometry = *captured;
+            return true;
         };
 
     switch (grip.role) {
@@ -1068,38 +1032,11 @@ SketchInteractionState::directManipulationGeometryState()
 
     if (manipulation_->mode ==
         DirectEditMode::move) {
-        const double du =
-            current.u - manipulation_->pivot.u;
-        const double dv =
-            current.v - manipulation_->pivot.v;
-
-        for (auto& line : result.lines) {
-            line.start.u += du;
-            line.start.v += dv;
-            line.end.u += du;
-            line.end.v += dv;
-            if (!validReplacement(line)) {
-                return std::nullopt;
-            }
-        }
-        for (auto& circle : result.circles) {
-            circle.center.u += du;
-            circle.center.v += dv;
-            if (!validReplacement(circle)) {
-                return std::nullopt;
-            }
-        }
-        for (auto& arc : result.arcs) {
-            arc.center.u += du;
-            arc.center.v += dv;
-            if (!validReplacement(arc)) {
-                return std::nullopt;
-            }
-        }
-        return result.empty()
-            ? std::nullopt
-            : std::optional<DirectManipulationGeometry>{
-                  std::move(result)};
+        return translateSketchGeometry(
+            manipulation_->initial_geometry,
+            Point2{
+                current.u - manipulation_->pivot.u,
+                current.v - manipulation_->pivot.v});
     }
 
     switch (manipulation_->active_grip.role) {
