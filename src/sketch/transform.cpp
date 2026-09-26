@@ -221,6 +221,10 @@ rotateSketchGeometry(
         return std::nullopt;
     }
 
+    if (angle_radians == 0.0) {
+        return geometry;
+    }
+
     const double cosine = std::cos(angle_radians);
     const double sine = std::sin(angle_radians);
     if (!std::isfinite(cosine) ||
@@ -293,6 +297,10 @@ scaleSketchGeometry(
         !std::isfinite(factor) ||
         factor <= 0.0) {
         return std::nullopt;
+    }
+
+    if (factor == 1.0) {
+        return geometry;
     }
 
     auto result = geometry;
