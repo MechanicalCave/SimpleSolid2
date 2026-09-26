@@ -1,6 +1,8 @@
 #include <simplesolid2/application/document_session.hpp>
 
 #include <algorithm>
+#include <cmath>
+#include <numbers>
 #include <set>
 #include <stdexcept>
 #include <utility>
@@ -274,6 +276,127 @@ AddSketchLineResult DocumentSession::execute(
         DocumentSessionDiagnostic{}};
 }
 
+AddSketchCircleResult DocumentSession::execute(
+    const AddSketchCircleCommand& command) {
+    auto after = document_.state();
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Add Sketch Circle target SketchId does not exist",
+            path_);
+        return AddSketchCircleResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    std::optional<sketch::EntityId> entity_id;
+    try {
+        entity_id =
+            target->model.addCircle(
+                command.center,
+                command.radius);
+    } catch (const std::invalid_argument&) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Add Sketch Circle contains invalid authored geometry",
+            path_);
+        return AddSketchCircleResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    } catch (const std::overflow_error&) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Sketch EntityId allocation space is exhausted",
+            path_);
+        return AddSketchCircleResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while adding Sketch Circle");
+    if (!committed.ok() || !committed.changed) {
+        return AddSketchCircleResult{
+            committed.changed,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return AddSketchCircleResult{
+        true,
+        *entity_id,
+        DocumentSessionDiagnostic{}};
+}
+
+AddSketchArcResult DocumentSession::execute(
+    const AddSketchArcCommand& command) {
+    auto after = document_.state();
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Add Sketch Arc target SketchId does not exist",
+            path_);
+        return AddSketchArcResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    std::optional<sketch::EntityId> entity_id;
+    try {
+        entity_id =
+            target->model.addArc(
+                command.center,
+                command.radius,
+                command.start_angle,
+                command.sweep_angle);
+    } catch (const std::invalid_argument&) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Add Sketch Arc contains invalid authored geometry",
+            path_);
+        return AddSketchArcResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    } catch (const std::overflow_error&) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Sketch EntityId allocation space is exhausted",
+            path_);
+        return AddSketchArcResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while adding Sketch Arc");
+    if (!committed.ok() || !committed.changed) {
+        return AddSketchArcResult{
+            committed.changed,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return AddSketchArcResult{
+        true,
+        *entity_id,
+        DocumentSessionDiagnostic{}};
+}
+
+
 DocumentSessionResult DocumentSession::execute(
     const EraseSketchEntityCommand& command) {
     auto after = document_.state();
@@ -357,10 +480,23 @@ DocumentSessionResult DocumentSession::execute(
 
 DocumentSessionResult DocumentSession::execute(
     const UpdateSketchLinesCommand& command) {
-    if (command.lines.empty()) {
+    return execute(
+        UpdateSketchGeometryCommand{
+            command.sketch_id,
+            command.expected_revision,
+            command.lines,
+            {},
+            {}});
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const UpdateSketchGeometryCommand& command) {
+    if (command.lines.empty() &&
+        command.circles.empty() &&
+        command.arcs.empty()) {
         return failure(
             DocumentSessionErrorCode::invalid_command,
-            "Update Sketch Lines requires at least one Line",
+            "Update Sketch Geometry requires at least one entity",
             path_);
     }
 
@@ -368,7 +504,7 @@ DocumentSessionResult DocumentSession::execute(
         command.expected_revision) {
         return failure(
             DocumentSessionErrorCode::revision_diverged,
-            "Update Sketch Lines was started from a stale DocumentRevision",
+            "Update Sketch Geometry was started from a stale DocumentRevision",
             path_);
     }
 
@@ -378,34 +514,60 @@ DocumentSessionResult DocumentSession::execute(
     if (target == nullptr) {
         return failure(
             DocumentSessionErrorCode::invalid_command,
-            "Update Sketch Lines target SketchId does not exist",
+            "Update Sketch Geometry target SketchId does not exist",
             path_);
     }
 
     std::set<sketch::EntityId> unique;
+
     for (const auto& line : command.lines) {
         if (!line.entity_id.valid() ||
             !line.start.finite() ||
             !line.end.finite() ||
-            line.start == line.end) {
+            line.start == line.end ||
+            !unique.insert(line.entity_id).second ||
+            target->model.findLine(line.entity_id) ==
+                nullptr) {
             return failure(
                 DocumentSessionErrorCode::invalid_command,
-                "Update Sketch Lines contains invalid authored geometry",
+                "Update Sketch Geometry contains an invalid Line update",
                 path_);
         }
+    }
 
-        if (!unique.insert(line.entity_id).second) {
+    for (const auto& circle : command.circles) {
+        if (!circle.entity_id.valid() ||
+            !circle.center.finite() ||
+            !std::isfinite(circle.radius) ||
+            circle.radius <= 0.0 ||
+            !unique.insert(circle.entity_id).second ||
+            target->model.findCircle(circle.entity_id) ==
+                nullptr) {
             return failure(
                 DocumentSessionErrorCode::invalid_command,
-                "Update Sketch Lines contains duplicate EntityIds",
+                "Update Sketch Geometry contains an invalid Circle update",
                 path_);
         }
+    }
 
-        if (target->model.findLine(
-                line.entity_id) == nullptr) {
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    for (const auto& arc : command.arcs) {
+        if (!arc.entity_id.valid() ||
+            !arc.center.finite() ||
+            !std::isfinite(arc.radius) ||
+            arc.radius <= 0.0 ||
+            !std::isfinite(arc.start_angle) ||
+            !std::isfinite(arc.sweep_angle) ||
+            arc.sweep_angle == 0.0 ||
+            std::abs(arc.sweep_angle) >=
+                full_turn ||
+            !unique.insert(arc.entity_id).second ||
+            target->model.findArc(arc.entity_id) ==
+                nullptr) {
             return failure(
                 DocumentSessionErrorCode::invalid_command,
-                "Update Sketch Lines target EntityId does not exist",
+                "Update Sketch Geometry contains an invalid Arc update",
                 path_);
         }
     }
@@ -417,14 +579,38 @@ DocumentSessionResult DocumentSession::execute(
                 line.end)) {
             return failure(
                 DocumentSessionErrorCode::transaction_failure,
-                "Update Sketch Lines validation diverged before commit",
+                "Update Sketch Geometry Line validation diverged before commit",
+                path_);
+        }
+    }
+    for (const auto& circle : command.circles) {
+        if (!target->model.updateCircle(
+                circle.entity_id,
+                circle.center,
+                circle.radius)) {
+            return failure(
+                DocumentSessionErrorCode::transaction_failure,
+                "Update Sketch Geometry Circle validation diverged before commit",
+                path_);
+        }
+    }
+    for (const auto& arc : command.arcs) {
+        if (!target->model.updateArc(
+                arc.entity_id,
+                arc.center,
+                arc.radius,
+                arc.start_angle,
+                arc.sweep_angle)) {
+            return failure(
+                DocumentSessionErrorCode::transaction_failure,
+                "Update Sketch Geometry Arc validation diverged before commit",
                 path_);
         }
     }
 
     return commitCommandState(
         std::move(after),
-        "Part transaction failed while updating Sketch Lines");
+        "Part transaction failed while updating Sketch geometry");
 }
 
 DocumentSessionResult DocumentSession::applyHistoricalState(
