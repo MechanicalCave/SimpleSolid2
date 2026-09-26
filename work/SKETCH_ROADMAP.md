@@ -611,6 +611,8 @@ Goal:
 - prove the R5 interaction architecture is not Line-specific.
 
 ### R7 — Common transforms, Copy and command grammar
+**Status:** active — SK-07A accepted 2026-09-26 (first bounded slice: common transform core + MOVE)
+
 Goal:
 
 - one shared transform core for grip, toolbar and Command Line entry;
@@ -726,6 +728,7 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7+ not started
+R7 active — SK-07A accepted 2026-09-26; only the bounded common transform core + MOVE slice is authorized  
+R8+ not started
 
-Roadmap v1.2 remains authoritative. R7+ is not authorized until a separate explicit Owner-accepted Work Contract is activated.
+Roadmap v1.2 remains authoritative. Remaining R7 work and R8+ require separate explicit Owner-accepted Work Contracts.
