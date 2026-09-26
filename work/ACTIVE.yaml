@@ -1,10 +1,9 @@
 version: 1
-status: proposed
+status: active
 active_work: "work/SK-05A_LINE_DIRECT_MANIPULATION_AND_PRIMARY_SELECTION.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
-program_roadmap_version: "1.1"
-proposed_program_roadmap: "work/SKETCH_ROADMAP_V1_2_PROPOSAL.md"
+program_roadmap_version: "1.2"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -17,28 +16,28 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - request explicit Owner acceptance of Sketcher roadmap v1.2 amendment
-  - request explicit Owner acceptance of the revised SK-05A contract
-  - do not implement SK-05A before both acceptances
-  - after acceptance, replace the authoritative roadmap v1.1 with accepted v1.2 state before production implementation
+  - implement accepted SK-05A within the bounded R5 scope
+  - require exact-head Windows FULL for the final implementation candidate
+  - require explicit manual Windows verification of final grip/direct-manipulation behavior
+  - satisfy Documentation Impact and generated Product Browser freshness before completion
+  - run closeout CLOSURE before merge/completion
   - keep R6+ inactive
 notes:
   - R0 through R4 are completed.
   - WB-01B merged to main as 5d75e561571c83ac50a241a0c4b5cf0e212c05f2 after FULL #381, Owner manual PASS and CLOSURE #382.
-  - PR #60 is proposal-only; R5 production implementation is not authorized.
-  - The Owner interaction review on 2026-09-26 clarified the intended classical-CAD grammar and those decisions are incorporated into the roadmap v1.2 proposal and revised SK-05A.
-  - The proposed selection grammar is additive ordinary LMB/Window/Crossing, Ctrl toggle, blank/Esc clear in Select, semantic primary, hover/preselection, grips on all selected editable entities and exactly one active grip.
+  - Owner accepted Sketcher roadmap v1.2 and revised SK-05A on 2026-09-26.
+  - R5 is active only through the bounded SK-05A contract; R6+ is not authorized.
+  - Selection grammar is additive ordinary LMB/Window/Crossing, Ctrl toggle, blank/Esc clear in Select, semantic primary, hover/preselection, grips on all selected editable entities and exactly one active grip.
   - Direct manipulation freezes a selection snapshot; entity-specific Reshape affects the handle owner, while common transforms affect the selection snapshot.
   - Grip-started manipulation uses the active grip as pivot/base and has no in-session Base Point replacement.
   - LMB or Enter commits; Esc cancels transient manipulation while preserving selection; a subsequent Esc in Select clears selection.
   - Edit preserves EntityId; semantic Copy creates fresh EntityIds.
   - Multi-object commits are atomic all-or-nothing operations with one Undo entry per accepted commit.
-  - Future Copy is an orthogonal modifier, repeated placement uses the original source/base, each accepted placement is a separate Undo entry, and changing EditMode turns Copy off.
   - Undo/Redo remain global history boundaries and cancel active transient manipulation first.
   - Creation tools preserve pre-existing selection while hiding/deactivating grips; newly created geometry is not automatically selected.
   - Circle canonical geometry is center+radius; Arc canonical geometry is center+radius+startAngle+signedSweepAngle.
   - Initial Circle creation is Center+Radius; initial Arc creation is 3-Point.
-  - Rectangle is planned as a creation tool producing four ordinary Lines; Polyline durable semantics remain deferred.
+  - Rectangle is a future creation tool producing four ordinary Lines; Polyline durable semantics remain deferred.
   - Creation and editing share one Input Resolution layer.
   - Numeric locks outrank Temporary Snap Override, Object Snap/Tracking, Ortho/Polar/inference, Grid Snap and raw pointer.
   - Ortho and Polar are mutually exclusive user modes; Polar supports configurable increments/additional angles and absolute/relative preference.
