@@ -458,7 +458,7 @@ COPY also uses Base Point → placement point, but commit duplicates rather than
 
 Exact zero displacement is intentionally not a COPY commit. It allocates no EntityIds, changes no revision/dirty/history state and leaves COPY active at the placement stage.
 
-Each accepted repeated placement is a separate Part transaction and Undo entry. Undo/Redo is a boundary for an active transient COPY session: the transient preview is cancelled first, then ordinary global history runs. Redo restores the same copied identities. `DocumentSession` preserves the Sketch identity high-water through Undo and exposes an allocator-only cursor advance through `needsSave()`, so saving after COPY→Undo can persist the non-reuse state even when visible geometry matches the prior saved geometry.
+Each accepted repeated placement is a separate Part transaction and Undo entry. Undo/Redo is a boundary for an active transient COPY session: the transient preview is cancelled first, then ordinary global history runs. Redo restores the same copied identities. `DocumentSession` preserves the Sketch identity high-water through Undo so a new COPY in the same session cannot reuse the undone IDs. Undo back to the saved authored state remains clean; when a later committed copy is saved, its state persists the preserved high-water through the existing schema-v4 `next_entity_id` field.
 
 Rotate uses Base Point → Reference Point → destination. The Reference Point must differ from Base. The preview uses the signed angle between the reference and destination vectors in the Sketch frame, with positive counter-clockwise rotation. A zero-angle completion is a clean no-op.
 
@@ -998,7 +998,7 @@ Ordinary value-copy and Undo/Redo state replication preserve existing EntityIds.
 
 `DocumentSession` preserves the highest observed cursor for each Sketch across history movement. Undo of a COPY placement removes the copied entities but does not make their committed IDs allocatable again. Redo restores the same copied IDs. A new COPY after Undo allocates above the preserved high-water rather than aliasing the abandoned IDs.
 
-The high-water cursor is also durable state for Save/reopen. Semantic `SketchModel` equality still compares authored entity content rather than the technical cursor so history-state matching remains stable, but `DocumentSession::needsSave()` separately detects a cursor difference from the last saved state. Therefore COPY → Undo can require Save even when visible geometry has returned exactly to the prior saved geometry.
+The session-local high-water cursor survives Undo even when authored geometry returns exactly to the last saved state. Existing semantic dirty-state behavior is preserved: Undo back to the saved authored state remains clean. A new COPY in that continuing session still allocates above the preserved high-water, and saving the later committed authored state persists the resulting `next_entity_id` under schema v4.
 
 Schema-v4 persistence already stores `next_entity_id`; SK-07C uses that existing field and introduces no persistence migration.
 
@@ -1142,7 +1142,7 @@ The SK-07B common-transform set `sk07b.transform_core`, `sk07b.common_transform_
 SK-07C adds:
 
 - `sk07c.copy_interaction_state` — selection-first/command-first COPY, frozen source/Base Point, repeated placement from the original snapshot and history cancellation;
-- `sk07c.copy_command` — atomic mixed duplication, fresh identity, Undo/Redo identity restoration, non-reuse after Undo, allocator-only dirty state, schema-v4 high-water Save/reopen and stale-revision failure;
+- `sk07c.copy_command` — atomic mixed duplication, fresh identity, Undo/Redo identity restoration, non-reuse after Undo, schema-v4 high-water Save/reopen and stale-revision failure;
 - `sk07c.copy_controller` — zero-displacement rejection, repeated placements, source-selection retention, separate per-placement history and stale-revision controller behavior.
 
 The Workbench Sketch-host regression verifies Select/Create/Modify presentation plus toolbar/Command-Line activation including COPY. Final work-item completion additionally requires the repository's exact-head Windows FULL gate and Owner manual Windows verification.
@@ -1478,7 +1478,7 @@ A placement exactly at Base Point does not create an invisible coincident copy. 
 
 Esc ends the active COPY session while preserving the source selection. Copies already committed during that session remain in the Sketch. Undo/Redo acts on individual committed placements; Redo restores the same copied EntityIds, and a new COPY after Undo does not reuse IDs that belonged to a previously committed and undone copy.
 
-The identity high-water is stored in the existing Part format. Therefore COPY → Undo can still leave the Document requiring Save even when visible geometry has returned exactly to the last saved geometry.
+Undo does not rewind the session-local identity high-water, so a new COPY in the same session does not reuse IDs from the undone copy. If Undo restores exactly the last saved authored state, the Document remains clean as before. When a later committed copy is saved normally, the existing Part format also persists the current `next_entity_id`.
 
 ### Rotate
 
@@ -1902,7 +1902,7 @@ Placement dokładnie w Base Point nie tworzy niewidocznej nakładającej się ko
 
 Esc kończy bieżącą sesję COPY i zachowuje source selection. Kopie zatwierdzone wcześniej w tej samej sesji pozostają w Sketchu. Undo/Redo działa na poszczególnych zatwierdzonych placementach; Redo przywraca te same EntityId kopii, a nowe COPY po Undo nie wykorzystuje ponownie ID wcześniej zatwierdzonej i cofniętej kopii.
 
-Stan high-water identyfikatorów jest zapisywany w istniejącym formacie Part. Dlatego po COPY → Undo dokument może nadal wymagać Save nawet wtedy, gdy widoczna geometria wróciła dokładnie do ostatnio zapisanego stanu.
+Undo nie cofa session-local high-water identyfikatorów, więc nowy COPY w tej samej sesji nie wykorzystuje ponownie ID cofniętej kopii. Jeżeli Undo przywróci dokładnie ostatnio zapisany authored state, dokument pozostaje clean jak wcześniej. Gdy późniejsza zatwierdzona kopia zostanie normalnie zapisana, istniejący format Part utrwala także aktualny `next_entity_id`.
 
 ### Rotate
 
