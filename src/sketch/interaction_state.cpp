@@ -612,6 +612,13 @@ bool SketchInteractionState::escape() noexcept {
         return true;
     }
 
+    if (tool_ == SketchTool::move) {
+        move_session_.reset();
+        resetToSelect();
+        clearHover();
+        return true;
+    }
+
     return false;
 }
 
