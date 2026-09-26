@@ -1972,13 +1972,23 @@ void CadWorkbench::syncActionState() {
 
     select_sketch_button_->setVisible(
         editing_sketch);
+    create_tools_label_->setVisible(
+        editing_sketch);
     line_sketch_button_->setVisible(
         editing_sketch);
     circle_sketch_button_->setVisible(
         editing_sketch);
     arc_sketch_button_->setVisible(
         editing_sketch);
+    modify_tools_label_->setVisible(
+        editing_sketch);
     move_sketch_button_->setVisible(
+        editing_sketch);
+    rotate_sketch_button_->setVisible(
+        editing_sketch);
+    scale_sketch_button_->setVisible(
+        editing_sketch);
+    mirror_sketch_button_->setVisible(
         editing_sketch);
 
     cancel_sketch_button_->setVisible(
