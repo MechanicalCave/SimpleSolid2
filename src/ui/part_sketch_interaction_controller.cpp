@@ -194,6 +194,32 @@ bool PartSketchInteractionController::activateMove() {
     return true;
 }
 
+bool PartSketchInteractionController::activateCopy() {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr || session_ == nullptr ||
+        !interaction_.activateCopy(hosted->model)) {
+        return false;
+    }
+
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_ =
+        interaction_.commonTransformStage() ==
+                sketch::CommonTransformStage::select_objects
+            ? std::nullopt
+            : std::optional<core::DocumentRevision>{
+                  session_->document().revision()};
+
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    return true;
+}
+
 bool PartSketchInteractionController::activateRotate() {
     const auto* hosted = activeSketch();
     if (hosted == nullptr || session_ == nullptr ||
@@ -489,11 +515,107 @@ bool PartSketchInteractionController::commitTransform() {
     const char* command_name =
         tool == sketch::SketchTool::move
             ? "MOVE"
-            : tool == sketch::SketchTool::rotate
-                ? "ROTATE"
-                : tool == sketch::SketchTool::scale
-                    ? "SCALE"
-                    : "MIRROR";
+            : tool == sketch::SketchTool::copy
+                ? "COPY"
+                : tool == sketch::SketchTool::rotate
+                    ? "ROTATE"
+                    : tool == sketch::SketchTool::scale
+                        ? "SCALE"
+                        : "MIRROR";
+
+    if (tool == sketch::SketchTool::copy) {
+        if (session_ == nullptr || !sketch_id_ ||
+            session_->document().revision() !=
+                *transform_revision_) {
+            interaction_.finishTransform();
+            transform_revision_.reset();
+            viewport_controller_->clearSketchPreview();
+            configureForCurrentTool();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus(
+                "COPY was started from a stale DocumentRevision.");
+            return false;
+        }
+
+        const auto* hosted = activeSketch();
+        const auto source =
+            hosted != nullptr
+                ? sketch::captureSketchTransformGeometry(
+                      hosted->model,
+                      interaction_.selectedEntities())
+                : std::nullopt;
+        if (!source) {
+            interaction_.finishTransform();
+            transform_revision_.reset();
+            viewport_controller_->clearSketchPreview();
+            configureForCurrentTool();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus(
+                "COPY source selection is no longer valid.");
+            return false;
+        }
+
+        if (*geometry == *source) {
+            viewport_controller_->clearSketchPreview();
+            reportStatus(
+                "COPY requires a non-zero placement.");
+            notifyStateChanged();
+            return false;
+        }
+
+        const auto result =
+            session_->execute(
+                application::DuplicateSketchGeometryCommand{
+                    *sketch_id_,
+                    *transform_revision_,
+                    *geometry});
+
+        press_anchor_.reset();
+        rectangle_drag_active_ = false;
+        viewport_controller_->clearSketchPreview();
+        viewport_controller_->clearSketchSelectionBoxOverlay();
+
+        if (!result.ok() || !result.changed) {
+            interaction_.finishTransform();
+            transform_revision_.reset();
+            configureForCurrentTool();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus(
+                result.diagnostic.message.empty()
+                    ? std::string{"COPY commit failed."}
+                    : result.diagnostic.message);
+            return false;
+        }
+
+        viewport_controller_->refreshPresentation();
+
+        if (!interaction_.continueCopyPlacement()) {
+            interaction_.finishTransform();
+            transform_revision_.reset();
+            configureForCurrentTool();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus(
+                "COPY committed; repeated placement session ended unexpectedly.");
+            return true;
+        }
+
+        transform_revision_ =
+            session_->document().revision();
+        configureForCurrentTool();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        reportStatus("COPY placement committed.");
+        return true;
+    }
 
     const auto result =
         executeGeometryUpdate(
@@ -598,6 +720,7 @@ void PartSketchInteractionController::onPointer(
         handleArcPointer(input);
         return;
     case sketch::SketchTool::move:
+    case sketch::SketchTool::copy:
     case sketch::SketchTool::rotate:
     case sketch::SketchTool::scale:
     case sketch::SketchTool::mirror:
@@ -1027,11 +1150,13 @@ handleCommonTransformPointer(
     const char* command_name =
         tool == sketch::SketchTool::move
             ? "MOVE"
-            : tool == sketch::SketchTool::rotate
-                ? "ROTATE"
-                : tool == sketch::SketchTool::scale
-                    ? "SCALE"
-                    : "MIRROR";
+            : tool == sketch::SketchTool::copy
+                ? "COPY"
+                : tool == sketch::SketchTool::rotate
+                    ? "ROTATE"
+                    : tool == sketch::SketchTool::scale
+                        ? "SCALE"
+                        : "MIRROR";
 
     if (*stage ==
         sketch::CommonTransformStage::select_objects) {
