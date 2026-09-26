@@ -229,9 +229,12 @@ commitDirectManipulation() {
         return false;
     }
 
-    application::UpdateSketchGeometryCommand command;
-    command.sketch_id = *sketch_id_;
-    command.expected_revision = *manipulation_revision_;
+    application::UpdateSketchGeometryCommand command{
+        *sketch_id_,
+        *manipulation_revision_,
+        {},
+        {},
+        {}};
     command.lines.reserve(geometry->lines.size());
     command.circles.reserve(geometry->circles.size());
     command.arcs.reserve(geometry->arcs.size());
