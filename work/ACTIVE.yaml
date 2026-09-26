@@ -16,9 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - keep R7+ inactive until a separate Owner-accepted Work Contract exists
-  - review/propose R7 Common transforms, Copy and command grammar as the next roadmap slice
-  - preserve the completed R6 Line/Circle/Arc checkpoint as the implementation baseline
+  - review work/SK-07A_COMMON_TRANSFORM_CORE_AND_MOVE.md as the proposed first R7 Work Contract
+  - require explicit Owner acceptance before any R7 production implementation
+  - keep completed R6 as the implementation baseline
+  - keep Rotate/Scale/Mirror/Copy/Repeat Last Command and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -80,3 +81,9 @@ notes:
   - Final exact-head verification checkpoint bd42ac6954cfe36881cb187832f0f0ca745d22e0 differs from the manually verified candidate only by a non-functional source comment and passed Windows FULL #443 with Build and 58/58 CTest tests.
   - SK-06A acceptance conditions are satisfied; R6 is completed at this closeout candidate.
   - R7+ remains inactive and requires a separate explicit Owner-accepted Work Contract.
+
+  - SK-07A is proposed on 2026-09-26 as the first bounded R7 slice: shared semantic transform core plus normal MOVE.
+  - The proposal makes existing Center-grip Move and toolbar/Command-Line MOVE converge on one provider-independent translation path.
+  - Selection-first uses the existing non-empty selection immediately; command-first MOVE with empty selection collects semantic objects before Base Point.
+  - Rotate, Scale, Mirror, Copy, Space CycleEditMode, ordinary-Select RMB context and Repeat Last Command remain outside SK-07A.
+  - SK-07A is not active until explicit Owner acceptance.
