@@ -5,8 +5,10 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <limits>
+#include <numbers>
 #include <utility>
 
 namespace simplesolid2::ui {
@@ -94,30 +96,88 @@ viewer::ReferencePresentation makeReference(
 
 [[nodiscard]] viewer::SketchGripRole
 viewerGripRole(
-    sketch::LineHandleRole role) noexcept {
+    sketch::SketchGripRole role) noexcept {
     switch (role) {
-    case sketch::LineHandleRole::start:
-        return viewer::SketchGripRole::line_start;
-    case sketch::LineHandleRole::center:
-        return viewer::SketchGripRole::line_center;
-    case sketch::LineHandleRole::end:
-        return viewer::SketchGripRole::line_end;
+    case sketch::SketchGripRole::line_start: return viewer::SketchGripRole::line_start;
+    case sketch::SketchGripRole::line_center: return viewer::SketchGripRole::line_center;
+    case sketch::SketchGripRole::line_end: return viewer::SketchGripRole::line_end;
+    case sketch::SketchGripRole::circle_center: return viewer::SketchGripRole::circle_center;
+    case sketch::SketchGripRole::circle_quadrant_pos_u: return viewer::SketchGripRole::circle_quadrant_pos_u;
+    case sketch::SketchGripRole::circle_quadrant_pos_v: return viewer::SketchGripRole::circle_quadrant_pos_v;
+    case sketch::SketchGripRole::circle_quadrant_neg_u: return viewer::SketchGripRole::circle_quadrant_neg_u;
+    case sketch::SketchGripRole::circle_quadrant_neg_v: return viewer::SketchGripRole::circle_quadrant_neg_v;
+    case sketch::SketchGripRole::arc_center: return viewer::SketchGripRole::arc_center;
+    case sketch::SketchGripRole::arc_start: return viewer::SketchGripRole::arc_start;
+    case sketch::SketchGripRole::arc_end: return viewer::SketchGripRole::arc_end;
+    case sketch::SketchGripRole::arc_mid: return viewer::SketchGripRole::arc_mid;
     }
     return viewer::SketchGripRole::line_center;
 }
 
-[[nodiscard]] sketch::LineHandleRole
+[[nodiscard]] sketch::SketchGripRole
 semanticGripRole(
     viewer::SketchGripRole role) noexcept {
     switch (role) {
-    case viewer::SketchGripRole::line_start:
-        return sketch::LineHandleRole::start;
-    case viewer::SketchGripRole::line_center:
-        return sketch::LineHandleRole::center;
-    case viewer::SketchGripRole::line_end:
-        return sketch::LineHandleRole::end;
+    case viewer::SketchGripRole::line_start: return sketch::SketchGripRole::line_start;
+    case viewer::SketchGripRole::line_center: return sketch::SketchGripRole::line_center;
+    case viewer::SketchGripRole::line_end: return sketch::SketchGripRole::line_end;
+    case viewer::SketchGripRole::circle_center: return sketch::SketchGripRole::circle_center;
+    case viewer::SketchGripRole::circle_quadrant_pos_u: return sketch::SketchGripRole::circle_quadrant_pos_u;
+    case viewer::SketchGripRole::circle_quadrant_pos_v: return sketch::SketchGripRole::circle_quadrant_pos_v;
+    case viewer::SketchGripRole::circle_quadrant_neg_u: return sketch::SketchGripRole::circle_quadrant_neg_u;
+    case viewer::SketchGripRole::circle_quadrant_neg_v: return sketch::SketchGripRole::circle_quadrant_neg_v;
+    case viewer::SketchGripRole::arc_center: return sketch::SketchGripRole::arc_center;
+    case viewer::SketchGripRole::arc_start: return sketch::SketchGripRole::arc_start;
+    case viewer::SketchGripRole::arc_end: return sketch::SketchGripRole::arc_end;
+    case viewer::SketchGripRole::arc_mid: return sketch::SketchGripRole::arc_mid;
     }
-    return sketch::LineHandleRole::center;
+    return sketch::SketchGripRole::line_center;
+}
+
+struct CurveSegment2D final {
+    sketch::Point2 start;
+    sketch::Point2 end;
+};
+
+[[nodiscard]] std::vector<CurveSegment2D>
+curveSegments(
+    sketch::Point2 center,
+    double radius,
+    double start_angle,
+    double sweep_angle) {
+    constexpr std::size_t full_circle_segments = 96U;
+    constexpr std::size_t minimum_arc_segments = 8U;
+    constexpr double full_turn = 2.0 * std::numbers::pi_v<double>;
+
+    if (!center.finite() || !std::isfinite(radius) || radius <= 0.0 ||
+        !std::isfinite(start_angle) || !std::isfinite(sweep_angle) ||
+        sweep_angle == 0.0 || std::abs(sweep_angle) > full_turn) {
+        return {};
+    }
+
+    const auto proportional = static_cast<std::size_t>(
+        std::ceil(std::abs(sweep_angle) / full_turn *
+                  static_cast<double>(full_circle_segments)));
+    const auto count = std::max(minimum_arc_segments, proportional);
+
+    const auto point_at = [center, radius](double angle) {
+        return sketch::Point2{
+            center.u + radius * std::cos(angle),
+            center.v + radius * std::sin(angle)};
+    };
+
+    std::vector<CurveSegment2D> result;
+    result.reserve(count);
+    auto previous = point_at(start_angle);
+    for (std::size_t index = 1U; index <= count; ++index) {
+        const double fraction =
+            static_cast<double>(index) / static_cast<double>(count);
+        const auto current =
+            point_at(start_angle + sweep_angle * fraction);
+        result.push_back({previous, current});
+        previous = current;
+    }
+    return result;
 }
 
 } // namespace
@@ -353,6 +413,75 @@ bool PartViewportController::setSketchPreview(
 
     return viewport_->setSketchPreviewScene(
         scene);
+}
+
+bool PartViewportController::setSketchCirclePreview(
+    const sketch::CircleIntent& circle) {
+    if (!circle.valid()) return false;
+    const auto segments = curveSegments(
+        circle.center, circle.radius, 0.0,
+        2.0 * std::numbers::pi_v<double>);
+    std::vector<SketchPreviewLine2D> lines;
+    lines.reserve(segments.size());
+    for (const auto& segment : segments) {
+        lines.push_back({segment.start, segment.end});
+    }
+    return !lines.empty() && setSketchPreview(lines);
+}
+
+bool PartViewportController::setSketchArcPreview(
+    const sketch::ArcIntent& arc) {
+    if (!arc.valid()) return false;
+    const auto segments = curveSegments(
+        arc.center, arc.radius,
+        arc.start_angle, arc.sweep_angle);
+    std::vector<SketchPreviewLine2D> lines;
+    lines.reserve(segments.size());
+    for (const auto& segment : segments) {
+        lines.push_back({segment.start, segment.end});
+    }
+    return !lines.empty() && setSketchPreview(lines);
+}
+
+bool PartViewportController::setSketchGeometryPreview(
+    const sketch::DirectManipulationGeometry& geometry) {
+    if (geometry.empty()) return false;
+
+    std::vector<SketchPreviewLine2D> lines;
+    lines.reserve(
+        geometry.lines.size() +
+        geometry.circles.size() * 96U +
+        geometry.arcs.size() * 48U);
+
+    for (const auto& line : geometry.lines) {
+        lines.push_back({line.start, line.end});
+    }
+
+    for (const auto& circle : geometry.circles) {
+        const auto segments = curveSegments(
+            circle.center,
+            circle.radius,
+            0.0,
+            2.0 * std::numbers::pi_v<double>);
+        if (segments.empty()) return false;
+        for (const auto& segment : segments) {
+            lines.push_back({segment.start, segment.end});
+        }
+    }
+
+    for (const auto& arc : geometry.arcs) {
+        const auto segments = curveSegments(
+            arc.center,
+            arc.radius,
+            arc.start_angle,
+            arc.sweep_angle);
+        if (segments.empty()) return false;
+        for (const auto& segment : segments) {
+            lines.push_back({segment.start, segment.end});
+        }
+    }
+
+    return setSketchPreview(lines);
 }
 
 void PartViewportController::clearSketchPreview() {
@@ -656,69 +785,78 @@ bool PartViewportController::projectSketchInteraction(
         projected_grip_selection_ != selected) {
         viewer::SketchGripScene grip_scene;
         if (grips_visible) {
-            grip_scene.grips.reserve(
-                selected.size() * 3U);
+            grip_scene.grips.reserve(selected.size() * 5U);
+            const auto push_grip =
+                [&grip_scene, hosted](
+                    viewer::PresentationToken token,
+                    viewer::SketchGripRole role,
+                    sketch::Point2 point) {
+                    const auto world = detail::sketchPointToWorld(
+                        hosted->placement, point);
+                    if (!world) return false;
+                    grip_scene.grips.push_back(
+                        viewer::SketchGripPresentation{
+                            {token, role}, *world});
+                    return true;
+                };
 
             for (const auto id : selected) {
-                const auto* line =
-                    hosted->model.findLine(id);
-                const auto token =
-                    sketchPresentationFor(id);
-                if (line == nullptr || !token) {
-                    return false;
+                const auto token = sketchPresentationFor(id);
+                if (!token) return false;
+
+                if (const auto* line = hosted->model.findLine(id)) {
+                    const sketch::Point2 center{
+                        (line->start().u + line->end().u) * 0.5,
+                        (line->start().v + line->end().v) * 0.5};
+                    if (!push_grip(*token, viewer::SketchGripRole::line_start, line->start()) ||
+                        !push_grip(*token, viewer::SketchGripRole::line_center, center) ||
+                        !push_grip(*token, viewer::SketchGripRole::line_end, line->end())) {
+                        return false;
+                    }
+                    continue;
                 }
 
-                const sketch::Point2 center{
-                    (line->start().u + line->end().u) * 0.5,
-                    (line->start().v + line->end().v) * 0.5};
-
-                const auto start =
-                    detail::sketchPointToWorld(
-                        hosted->placement,
-                        line->start());
-                const auto middle =
-                    detail::sketchPointToWorld(
-                        hosted->placement,
-                        center);
-                const auto end =
-                    detail::sketchPointToWorld(
-                        hosted->placement,
-                        line->end());
-                if (!start || !middle || !end) {
-                    return false;
+                if (const auto* circle = hosted->model.findCircle(id)) {
+                    const auto c = circle->center();
+                    const auto r = circle->radius();
+                    if (!push_grip(*token, viewer::SketchGripRole::circle_center, c) ||
+                        !push_grip(*token, viewer::SketchGripRole::circle_quadrant_pos_u, {c.u + r, c.v}) ||
+                        !push_grip(*token, viewer::SketchGripRole::circle_quadrant_pos_v, {c.u, c.v + r}) ||
+                        !push_grip(*token, viewer::SketchGripRole::circle_quadrant_neg_u, {c.u - r, c.v}) ||
+                        !push_grip(*token, viewer::SketchGripRole::circle_quadrant_neg_v, {c.u, c.v - r})) {
+                        return false;
+                    }
+                    continue;
                 }
 
-                grip_scene.grips.push_back(
-                    viewer::SketchGripPresentation{
-                        {*token,
-                         viewer::SketchGripRole::
-                             line_start},
-                        *start});
-                grip_scene.grips.push_back(
-                    viewer::SketchGripPresentation{
-                        {*token,
-                         viewer::SketchGripRole::
-                             line_center},
-                        *middle});
-                grip_scene.grips.push_back(
-                    viewer::SketchGripPresentation{
-                        {*token,
-                         viewer::SketchGripRole::
-                             line_end},
-                        *end});
+                if (const auto* arc = hosted->model.findArc(id)) {
+                    const auto c = arc->center();
+                    const auto at = [arc, c](double angle) {
+                        return sketch::Point2{
+                            c.u + arc->radius() * std::cos(angle),
+                            c.v + arc->radius() * std::sin(angle)};
+                    };
+                    const auto start = arc->startAngle();
+                    const auto end = start + arc->sweepAngle();
+                    const auto mid = start + arc->sweepAngle() * 0.5;
+                    if (!push_grip(*token, viewer::SketchGripRole::arc_center, c) ||
+                        !push_grip(*token, viewer::SketchGripRole::arc_start, at(start)) ||
+                        !push_grip(*token, viewer::SketchGripRole::arc_end, at(end)) ||
+                        !push_grip(*token, viewer::SketchGripRole::arc_mid, at(mid))) {
+                        return false;
+                    }
+                    continue;
+                }
+                return false;
             }
         }
 
-        if (!viewport_->setSketchGripScene(
-                grip_scene)) {
+        if (!viewport_->setSketchGripScene(grip_scene)) {
             sketch_grip_projection_valid_ = false;
             return false;
         }
-
-        projected_grips_visible_ =
-            grips_visible;
-        projected_grip_selection_ =
-            selected;
+        projected_grips_visible_ = grips_visible;
+        projected_grip_selection_ = selected;
         sketch_grip_projection_valid_ = true;
     }
 
@@ -738,7 +876,7 @@ bool PartViewportController::projectSketchInteraction(
 
     const auto map_grip =
         [this](
-            const sketch::LineGripRef& grip)
+            const sketch::SketchGripRef& grip)
             -> std::optional<
                 viewer::SketchGripKey> {
             const auto token =
@@ -897,37 +1035,77 @@ PartViewportController::buildSketchScene() {
 
     const auto model_state =
         hosted->model.state();
-    scene.lines.reserve(
-        model_state.lines.size());
+
+    const auto bind = [this, hosted](
+        viewer::PresentationToken token,
+        sketch::EntityId id) {
+        return sketch_entity_bindings_.emplace(
+            token.value,
+            SketchEntityAddress{hosted->id, id}).second;
+    };
 
     for (const auto& line : model_state.lines) {
-        const auto start =
-            detail::sketchPointToWorld(
-                hosted->placement,
-                line.start);
-        const auto end =
-            detail::sketchPointToWorld(
-                hosted->placement,
-                line.end);
-        const auto token =
-            allocateSketchPresentationToken();
-
-        if (!start || !end || !token) {
+        const auto start = detail::sketchPointToWorld(hosted->placement, line.start);
+        const auto end = detail::sketchPointToWorld(hosted->placement, line.end);
+        const auto token = allocateSketchPresentationToken();
+        if (!start || !end || !token || !bind(*token, line.id)) {
             sketch_entity_bindings_.clear();
             return std::nullopt;
         }
+        scene.lines.push_back({*token, *start, *end});
+    }
 
-        scene.lines.push_back(
-            viewer::SketchLinePresentation{
-                *token,
-                *start,
-                *end});
+    const auto add_curve = [&](sketch::EntityId id,
+                               sketch::Point2 center,
+                               double radius,
+                               double start_angle,
+                               double sweep_angle) {
+        const auto token = allocateSketchPresentationToken();
+        const auto segments =
+            curveSegments(center, radius, start_angle, sweep_angle);
+        if (!token || segments.empty() || !bind(*token, id)) {
+            return false;
+        }
 
-        sketch_entity_bindings_.emplace(
-            token->value,
-            SketchEntityAddress{
-                hosted->id,
-                line.id});
+        viewer::SketchCurvePresentation curve;
+        curve.token = *token;
+        curve.points.reserve(segments.size() + 1U);
+
+        const auto first = detail::sketchPointToWorld(
+            hosted->placement,
+            segments.front().start);
+        if (!first) return false;
+        curve.points.push_back(*first);
+
+        for (const auto& segment : segments) {
+            const auto end = detail::sketchPointToWorld(
+                hosted->placement, segment.end);
+            if (!end) return false;
+            curve.points.push_back(*end);
+        }
+
+        if (!curve.valid()) {
+            return false;
+        }
+        scene.curves.push_back(std::move(curve));
+        return true;
+    };
+
+    for (const auto& circle : model_state.circles) {
+        if (!add_curve(
+                circle.id, circle.center, circle.radius, 0.0,
+                2.0 * std::numbers::pi_v<double>)) {
+            sketch_entity_bindings_.clear();
+            return std::nullopt;
+        }
+    }
+    for (const auto& arc : model_state.arcs) {
+        if (!add_curve(
+                arc.id, arc.center, arc.radius,
+                arc.start_angle, arc.sweep_angle)) {
+            sketch_entity_bindings_.clear();
+            return std::nullopt;
+        }
     }
 
     if (!scene.valid()) {

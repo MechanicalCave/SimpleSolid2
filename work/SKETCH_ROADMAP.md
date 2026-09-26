@@ -598,7 +598,7 @@ Goal:
 R5 does not need to ship Rotate/Scale/Mirror/Copy, precision input, snaps or constraints.
 
 ### R6 — Circle and Arc core breadth
-**Status:** active — SK-06A accepted 2026-09-26
+**Status:** completed — SK-06A FULL #443 + Owner manual PASS on 2026-09-26
 
 Goal:
 
@@ -725,6 +725,7 @@ R2 completed
 R3 completed  
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
-R6+ not started
+R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
+R7+ not started
 
-Roadmap v1.2 remains authoritative. R6+ is not authorized until a separate explicit Owner-accepted Work Contract is activated.
+Roadmap v1.2 remains authoritative. R7+ is not authorized until a separate explicit Owner-accepted Work Contract is activated.

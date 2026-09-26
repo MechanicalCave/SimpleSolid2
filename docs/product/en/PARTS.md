@@ -93,29 +93,35 @@ After `Save`, Origin visibility survives closing and restarting the application.
 <!-- section-id: product.parts.sketch-host -->
 ## Creating and viewing a Sketch
 
-Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when it is visible, in the 3D Viewport.
+Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when visible, in the 3D Viewport.
 
-Operations is not a permanent tool list. It shows controls for the current operation: Sketch support-pick context/Cancel while choosing the plane, then contextual Sketch actions while editing. Outside Sketch edit, the tool strip and Operations return to the Part-modeling context.
+After a valid selection, Part creates a durable Sketch in the same Workbench/Viewport. The initial camera aligns normal to the Sketch plane and the grid moves to the Sketch local frame, but Pan, Zoom, Orbit and ViewCube remain available and do not dirty the Document.
 
-After a valid selection, Part creates a durable Sketch and stays in the same Workbench and the same 3D Viewport. The camera automatically aligns normal to the Sketch plane and the grid moves to the Sketch local plane. While Sketch edit is active, the tool strip switches to `Select` and `Line`; Operations shows the current Sketch/tool state and actions; and a compact Command Line appears below the Viewport. The Command Line accepts `SELECT` and `LINE` in this stage.
+While Sketch edit is active, the tool strip provides `Select`, `Line`, `Circle` and `Arc`. Operations shows the current tool stage plus contextual actions, and the compact Command Line accepts `SELECT`, `LINE`, `CIRCLE` and `ARC`.
 
-Any authored Line geometry already stored in that Sketch is presented in the viewport together with an Origin marker for the Sketch's local `(0,0)`.
+Stored Line, Circle and Arc geometry is shown together with the Sketch-local `(0,0)` Origin marker. Use `Finish Sketch` to leave edit; the authored Sketch remains in the Part and survives Save/Close/Reopen with its SketchId, support, placement and authored entities. Double-click an existing Sketch in Document Tree or use `Edit Sketch` to re-enter edit without changing authored state.
 
-Automatic alignment does not lock the camera. While the Sketch is active you can still use Pan, Zoom, Orbit and ViewCube. Navigation does not change Sketch placement and does not dirty the Document by itself.
+`Select` is additive for all three primitive kinds. Ordinary Left-click adds an unselected entity and makes it primary; clicking an already selected entity keeps membership and makes it primary. Ctrl+Left-click toggles membership. Left-to-right drag is Window selection, right-to-left is Crossing; ordinary rectangles add and Ctrl+rectangle toggles. Blank Left-click or Esc in Select clears selection. `Delete Selection` or Delete removes a mixed selected Line/Circle/Arc set atomically as one Undoable operation.
 
-Use `Finish Sketch` to leave the current edit context. The Sketch remains an authored Part object, stays in Document Tree and after `Save` survives Close/Reopen with the same SketchId, support and placement.
+Every selected editable entity exposes square runtime grips. Idle grips are hollow, hover uses a cyan hollow emphasis, and the active/captured grip is filled yellow and may be slightly larger. Grip size stays screen-space/DPI aware while hit tolerance is independent from visible marker size. A grip wins hit testing over underlying geometry.
 
-To edit an existing Sketch again, double-click it in Document Tree or use its `Edit Sketch` context-menu action. Entering edit by itself does not change authored state and does not require Save.
+Grip behavior is:
 
-In Sketch edit, `Select` is the default tool. Ordinary Left-click on an unselected Line adds it to the current selection and makes it primary; re-clicking an already selected Line keeps membership and changes only primary. Ctrl+Left-click toggles membership. Drag left-to-right for Window selection and right-to-left for Crossing selection; an ordinary rectangle adds its hits, while Ctrl+rectangle toggles them. Viewer hit ordering never determines primary. Left-click blank space or press Esc in Select to clear selection. `Delete Selection` in Operations, or Delete while the Viewport owns Sketch Select focus, removes the complete selected Line set as one Undoable operation.
+- Line: Start/End reshape only that Line; Center moves the complete frozen selection.
+- Circle: Center moves the complete frozen selection; four quadrant grips change only the owning Circle radius with center fixed.
+- Arc: Center moves the complete frozen selection; Start/End reshape only that Arc while preserving its canonical center/radius and branch rules; Arc/Mid changes only radius while preserving center and start/end directions.
 
-Every selected Line shows three runtime grips: Start, Center and End. Hover highlights a grip or Line without changing selection or authored state; a visible grip wins hit testing over underlying geometry. Clicking Start/End starts Reshape for the grip owner only. Clicking Center starts Move for the complete frozen selected Line set using the clicked Line center as the reference point. The activating mouse button does not need to stay held: move the pointer freely, then use another LMB or Enter to commit the current valid preview. Esc cancels only the preview and keeps selection; a subsequent Esc in ordinary Select clears selection.
+Direct-manipulation preview is runtime-only: it does not dirty the Document, change revision, allocate EntityIds or create Undo history. After grip activation you may release the mouse button, move freely, then use another LMB or Enter to commit the current valid preview. Esc cancels only the preview and keeps selection. A committed mixed Move is one atomic operation and one Undo step; edited entities keep their EntityIds. Undo/Redo first cancels transient interaction, then runs normal Document history.
 
-Direct-manipulation preview is runtime-only: it does not dirty the Document, change revision, allocate EntityIds or create Undo history. A committed edit preserves existing Line EntityIds; multi-Line Move is one atomic operation and one Undo step. Undo/Redo first cancels any active manipulation, then applies normal Document history.
+Creation tools preserve the pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected.
 
-When `Line` is activated, the existing selection is preserved while grips are hidden/inactive. Click the first point, then click successive points to create continuous segments. The rubber-band preview is temporary; each committed segment is one Undo step and newly authored Lines are not automatically selected. `Finish Line` or `Cancel Line` returns to Select and restores grips for the preserved selection without rolling back committed segments. Esc cancels the pending Line stage first and then returns Line to Select; it does not finish the Sketch.
+- `Line`: click a first point and then successive points for continuous segments; each accepted segment is one Undo step.
+- `Circle`: click Center, then a Radius point. Zero radius is ignored. Circle remains active for another Circle after a successful commit.
+- `Arc`: click Start, Through, then End. The three points define the directed circular path, including CW/CCW and short/long choice. Duplicate/collinear/invalid triples do not commit. Arc remains active for another Arc after success.
 
-Support is currently limited to the three Origin planes. Arc/Circle, snapping/inference, constraints, dimensions, solver, coordinate entry, additional edit operations, Construction/Datum planes and planar model faces remain separate later stages.
+Operations exposes Finish/Cancel for the active creation tool. Esc cancels the current incomplete point stage before returning the tool to Select; it does not finish the whole Sketch.
+
+Sketch support is currently limited to the three Origin planes. Snapping/inference, coordinate/dynamic input, constraints/solver, authored dimensions, R7 common transforms/Copy, Construction/Datum planes and planar model faces remain later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -133,7 +139,7 @@ Navigation and camera changes are temporary view state. They do not dirty the Pa
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state, including Origin visibility and created Sketches with their durable identity/support/placement and embedded authored Line geometry, to its `.ss2part` file.
+`Save` writes the current authored Part state, including Origin visibility and created Sketches with their durable identity/support/placement plus embedded Line/Circle/Arc geometry and stable EntityIds, to its `.ss2part` file.
 
 When closing a Part with unsaved changes, the application requires `Save`, `Discard` or `Cancel`.
 
@@ -162,8 +168,10 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the shared stabilized 3D Workbench/Viewer foundation, durable Sketches with embedded authored Line data and active-Sketch Line/Origin presentation on Origin planes.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the stabilized 3D Workbench/Viewer foundation and durable Origin-plane Sketches with Line/Circle/Arc authored geometry.
 
-Very early test `.ss2part` files created before the current native format are not supported product data and are not migrated automatically.
+The current Sketch UI provides Select/Line/Circle/Arc creation, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, mixed-selection Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
 
-The current UI provides an authored Sketch Line workflow with contextual Select/Line tools, additive point/Window/Crossing selection, semantic primary and hover, Start/Center/End grips, direct Reshape/Move with transient preview, atomic Delete, Undo/Redo integration, Operations and a compact SELECT/LINE Command Line. It still lacks snapping/inference, coordinate entry, additional edit operations, constraints/solver, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly or Drawing tools.
+Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
+
+The product still lacks snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, R7 common transforms/Copy, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.

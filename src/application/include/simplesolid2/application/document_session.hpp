@@ -33,6 +33,20 @@ struct AddSketchLineCommand final {
     sketch::Point2 end;
 };
 
+struct AddSketchCircleCommand final {
+    sketch::SketchId sketch_id;
+    sketch::Point2 center;
+    double radius{};
+};
+
+struct AddSketchArcCommand final {
+    sketch::SketchId sketch_id;
+    sketch::Point2 center;
+    double radius{};
+    double start_angle{};
+    double sweep_angle{};
+};
+
 struct EraseSketchEntityCommand final {
     sketch::SketchId sketch_id;
     sketch::EntityId entity_id;
@@ -49,10 +63,32 @@ struct SketchLineGeometryUpdate final {
     sketch::Point2 end;
 };
 
+struct SketchCircleGeometryUpdate final {
+    sketch::EntityId entity_id;
+    sketch::Point2 center;
+    double radius{};
+};
+
+struct SketchArcGeometryUpdate final {
+    sketch::EntityId entity_id;
+    sketch::Point2 center;
+    double radius{};
+    double start_angle{};
+    double sweep_angle{};
+};
+
 struct UpdateSketchLinesCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
     std::vector<SketchLineGeometryUpdate> lines;
+};
+
+struct UpdateSketchGeometryCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    std::vector<SketchLineGeometryUpdate> lines;
+    std::vector<SketchCircleGeometryUpdate> circles;
+    std::vector<SketchArcGeometryUpdate> arcs;
 };
 
 enum class DocumentSessionErrorCode {
@@ -101,6 +137,26 @@ struct AddSketchLineResult final {
     }
 };
 
+struct AddSketchCircleResult final {
+    bool changed{false};
+    std::optional<sketch::EntityId> entity_id;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
+struct AddSketchArcResult final {
+    bool changed{false};
+    std::optional<sketch::EntityId> entity_id;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
 class DocumentSession final {
 public:
     DocumentSession(std::filesystem::path path, part::PartDocument document);
@@ -135,12 +191,18 @@ public:
         const CreatePartSketchCommand& command);
     [[nodiscard]] AddSketchLineResult execute(
         const AddSketchLineCommand& command);
+    [[nodiscard]] AddSketchCircleResult execute(
+        const AddSketchCircleCommand& command);
+    [[nodiscard]] AddSketchArcResult execute(
+        const AddSketchArcCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const EraseSketchEntityCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const EraseSketchEntitiesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const UpdateSketchLinesCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const UpdateSketchGeometryCommand& command);
     [[nodiscard]] DocumentSessionResult undo();
     [[nodiscard]] DocumentSessionResult redo();
     [[nodiscard]] DocumentSessionResult save();

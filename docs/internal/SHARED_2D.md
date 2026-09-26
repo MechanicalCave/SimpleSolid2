@@ -16,11 +16,11 @@ The target currently contains:
 - Sketch-local `Point2` coordinate values;
 - opaque model-local `EntityId`;
 - canonical decimal identity transport for `EntityId` and `EntityIdCursor`;
-- the first authored primitive, `Line`;
-- the value-semantic `SketchModel` plus validated state/restore transfer;
-- host-neutral runtime `SketchInteractionState` for Select/Line tool semantics and transient EntityId selection.
+- canonical authored primitives `Line`, `Circle` and `Arc`;
+- the value-semantic mixed-primitive `SketchModel` plus validated state/restore transfer;
+- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips and bounded direct manipulation.
 
-Each persistent Part-hosted Sketch now embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
+Each persistent Part-hosted Sketch embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
 
 <!-- section-id: internal.shared-2d.coordinates -->
 ## Sketch-local coordinates
@@ -47,7 +47,7 @@ Ordinary value-copy preserves EntityIds and cursor state while copying authored 
 Semantic `SketchModel` equality intentionally compares authored entity content rather than the technical cursor. This allows Undo to return to a saved authored state without becoming falsely dirty solely because the live identity lineage has advanced.
 
 <!-- section-id: internal.shared-2d.line -->
-## Authored Line
+## Authored primitives
 
 A `Line` owns:
 
@@ -57,22 +57,43 @@ Start(U,V)
 End(U,V)
 ```
 
-Start and End are authored values owned by that Line.
+Start and End are authored values owned by that Line. Exact equal Start/End is rejected; finite non-zero Lines remain valid without an epsilon-length policy.
 
-Two Lines may have endpoints with exactly equal coordinates. Equal coordinates do not create shared Point identity or a persistent relation.
+A `Circle` owns:
 
-A Line whose Start and End are exactly equal is rejected. SK-02A deliberately applies no epsilon or near-zero length rejection: a finite non-zero Line remains valid regardless of how small its length is.
+```text
+EntityId
+Center(U,V)
+Radius
+```
+
+The center must be finite and radius must be finite and strictly greater than zero. Creation-method metadata is not authored.
+
+An `Arc` owns:
+
+```text
+EntityId
+Center(U,V)
+Radius
+StartAngle
+SignedSweepAngle
+```
+
+Arc radius must be finite and strictly positive. Start angle and signed sweep must be finite, sweep must be non-zero and its magnitude must be strictly less than one full turn. Zero angle is +U and positive sweep is counter-clockwise in the Sketch frame; the sign and magnitude preserve CW/CCW plus short/long meaning.
+
+Equal coordinates or equal canonical parameters do not imply shared identity. All three primitive kinds draw from one model-local EntityId namespace.
 
 <!-- section-id: internal.shared-2d.model -->
 ## SketchModel operations
 
-The current `SketchModel` provides the authored-entity lifecycle required by the implemented Line workflow:
+The current `SketchModel` owns typed Line/Circle/Arc collections behind one semantic entity namespace. Its authored lifecycle includes:
 
 ```text
-addLine(start, end)
-findLine(EntityId)
-updateLine(EntityId, start, end)
+addLine / findLine / updateLine
+addCircle / findCircle / updateCircle
+addArc / findArc / updateArc
 erase(EntityId)
+contains(EntityId)
 entityCount()
 entityIdCursor()
 preserveEntityIdCursor(cursor)
@@ -80,74 +101,59 @@ state()
 restore(state)
 ```
 
-`addLine` validates finite coordinates and exact non-zero length before mutation. Invalid geometry is rejected with `std::invalid_argument`.
+Add/update operations validate canonical primitive geometry before mutation. Update preserves the addressed EntityId. `erase` removes whichever supported primitive owns the EntityId and returns false for an invalid or unknown ID.
 
-`findLine` returns no entity for an invalid, erased or otherwise unknown ID.
+`EntityIdCursor` is shared across primitive kinds. Allocation is monotonic, erase never lowers the high-water cursor, and strict restore rejects duplicate IDs across any primitive collections, invalid geometry, or stored IDs that are not below the cursor.
 
-`updateLine` replaces the authored Start/End geometry of exactly one existing Line while preserving its `EntityId`. It fails closed for an invalid/missing ID, non-finite coordinates or exact zero length. Application-facing direct manipulation does not call this method directly on the live document: it stages semantic Line geometry updates through `DocumentSession`.
-
-`erase` removes exactly the addressed Line and returns false for an invalid or unknown ID. Storage compaction does not alter the identities of remaining Lines.
+Application-facing creation, delete and direct manipulation do not mutate the live `SketchModel` directly. They stage semantic command results through `DocumentSession` and the owning Part transaction/history path.
 
 <!-- section-id: internal.shared-2d.interaction -->
 ## Sketch interaction state
 
-SK-04A adds one host-neutral runtime interaction authority inside Shared 2D. It is not authored Sketch state and is never persisted.
+One host-neutral `SketchInteractionState` remains the runtime interaction authority. It is not authored Sketch state and is never persisted.
 
-The default tool is `Select`. Activating `Line` enters `AwaitFirstPoint`; accepting the first finite point establishes a runtime anchor and enters `AwaitNextPoint`. A subsequent distinct finite point produces a `LineSegmentIntent`, but the state does not execute Part/Application commands itself.
+The default tool is Select. Creation tools preserve the existing semantic selection while grips are hidden/inactive, and newly created geometry is not auto-selected.
 
-The Line commit handoff is explicitly two-phase:
+Line keeps the continuous Start/Next-point grammar. Circle uses Center → Radius; exact zero radius produces no commit request. Arc uses Start → Through → End; duplicate accepted points, collinear triples or any invalid circumcircle/sweep fail closed. Circle and Arc remain active after a successful commit awaiting the next primitive until Esc, Select or another tool is chosen.
 
-```text
-runtime accepts candidate endpoint
-→ pending LineSegmentIntent
-→ host executes semantic AddSketchLineCommand
-→ host acknowledges success/failure
-```
+The same state owns transient selection as `EntityId` values plus optional primary identity. Point selection is additive, Ctrl toggles membership, Window/Crossing adds (or toggles with Ctrl), provider result order does not choose primary, and blank LMB / Select-mode Esc follow the established clear hierarchy across Line/Circle/Arc.
 
-Only successful acknowledgement advances the continuous-Line anchor. Failure preserves the previous anchor. Exact-zero candidate segments produce no request and introduce no epsilon policy.
+Selected editable entities expose semantic grips:
 
-Preview intent is transient and exists only while Line has an anchor and no unresolved commit request. Finish/Cancel return to Select and discard only uncommitted runtime state. Esc is hierarchical: AwaitNextPoint → AwaitFirstPoint → Select.
+- Line: Start, Center, End;
+- Circle: Center plus four quadrant radius grips;
+- Arc: Center, Start, End and Arc/Mid.
 
-The same interaction state owns transient semantic Sketch selection as `EntityId` values plus optional primary identity. Ordinary point selection is additive: an unselected Line is added and becomes primary, while re-clicking an already selected Line changes only primary. Ctrl toggles membership. Window/Crossing selection adds semantic IDs, or toggles them with Ctrl, without allowing provider result order to choose primary. Blank LMB and Select-mode Esc clear selection.
+Grip references contain semantic `EntityId + SketchGripRole`; Viewer presentation tokens remain outside Shared 2D.
 
-SK-05A adds runtime Line hover and finite semantic grips without introducing a second interaction authority. Every selected editable Line exposes Start, Center and End grip roles. Grip references contain semantic `EntityId + HandleRole`; Viewer presentation tokens remain outside Shared 2D.
+A `DirectManipulationSession` freezes the current selection and interaction-start geometry. Center grips perform a common Move of the complete frozen mixed selection. Line Start/End, Circle quadrant, and Arc Start/End/Mid perform owner-only Reshape. Circle radius reshape preserves center; Arc Mid changes radius only; Arc Start/End preserve center/radius and the required fixed endpoint/branch semantics, failing closed on ambiguous invalid boundaries.
 
-A `DirectManipulationSession` freezes the current semantic selection and interaction-start geometry. Start/End perform owner-only Reshape. Center performs Move for the complete frozen selection using the clicked Line midpoint as pivot. Pointer values are consumed through the shared `ResolvedSketchInput` seam; in SK-05A that resolver is intentionally identity for finite Sketch-local U/V so later snapping/precision work can extend one seam instead of replacing tool logic.
-
-Direct-manipulation geometry is computed as transient preview data only. It never mutates `SketchModel`, revision, dirty state, identity allocation or Undo history. Esc cancels the session and preserves selection; a subsequent Esc in ordinary Select clears selection. Selection mutation is rejected while manipulation is active.
+Pointer values flow through the shared `ResolvedSketchInput` seam. Preview geometry is transient only: it never mutates `SketchModel`, revision, dirty state, identity allocation or Undo history. LMB/Enter commit through the host semantic command; Esc cancels the manipulation and preserves selection. Selection mutation is rejected while manipulation is active.
 
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
 
-The current Shared 2D / Part integration now has R3 runtime presentation/input adapters outside the Shared 2D target: active authored Lines can be presented, intrinsic Origin is a runtime overlay, and provider-neutral rays can be mapped to active Sketch U/V. Those runtime capabilities do not add authored state to `simplesolid2_sketch`.
+The current Part integration presents and edits authored Line/Circle/Arc through runtime adapters outside the Shared 2D target. Active authored geometry is mapped from Sketch U/V to the Part support frame, while the intrinsic Sketch Origin remains a runtime overlay.
 
-The current product now wires the Shared 2D interaction state end-to-end through the Part Sketch edit context. Additive point/Window/Crossing selection, Ctrl-toggle, semantic primary, Line hover, Start/Center/End grips, bounded Line direct manipulation, continuous Line creation, transient preview, atomic multi-entity Delete, hierarchical Esc and history cancellation are runtime/application adapters around the same host-neutral state.
-
-The current product still does not implement:
+R6 intentionally stops at primitive breadth and bounded grips/direct manipulation. The product still does not implement:
 
 - intrinsic Origin snapping;
-- Circle, Arc or construction geometry;
-- snapping, inference, dimensions, constraints or solver evaluation;
+- snapping/Object Snap, tracking, Ortho/Polar/Grid Snap or geometric inference;
+- numeric coordinate/dynamic input;
+- authored dimensions, constraints or solver evaluation;
+- Rectangle/Polyline durable semantics or R7 common Move/Copy/Rotate/Scale/Mirror command grammar;
 - intersections, profiles/regions or projected/reference geometry;
 - planar-face Sketch support.
 
-Those capabilities are governed by the accepted Sketch roadmap and require later bounded Work Contracts.
+Those capabilities remain governed by later roadmap milestones and separate accepted Work Contracts.
 
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-`sk02a.shared_2d_core` proves authored Line validation, identity, lookup/erase, non-reuse, equal-coordinate endpoint independence and value-copy isolation.
+Existing SK-02A through SK-05A tests continue to cover Shared 2D dependency boundaries, Line semantics, Part hosting, persistence/history, provider-neutral presentation/input, selection, hover/grips and Line direct manipulation.
 
-`sk02a.shared_2d_boundaries` guards the Shared 2D source tree against accidental dependencies on Part, Application, Persistence, Viewer, Qt and OCCT/provider tokens.
+SK-06A adds `sk06a.circle_arc_model_persistence` and `sk06a.circle_arc_interaction_state`. They cover Circle/Arc canonical validation, a shared mixed-primitive EntityId cursor, strict state/restore, schema-v4 persistence and malformed-kind rejection, Circle Center+Radius creation state, Arc Start/Through/End short/long and CW/CCW canonicalization, duplicate/collinear failure, mixed frozen-selection Move, owner-only Circle/Arc reshape and transient/history cancellation semantics.
 
-SK-02B adds `sk02b.part_sketch_model`, `sk02b.sketch_entity_lifecycle` and `sk02b.part_sketch_persistence` coverage for Part ownership, value-copy isolation, semantic Add/Erase commands, live Undo/Redo identity high-water, schema-v3 persistence, v1/v2 backward readability and Save→Close→Reopen identity/geometry preservation.
+Existing controller/native tests exercise the generalized semantic token bridge, grip scene lifecycle/hit testing and camera navigation. The Qt/OCCT provider now executes those tests with semantic curve presentation plus DPI-aware square grip aspects.
 
-SK-03A adds `sk03a.viewer_sketch_contracts`, `sk03a.sketch_viewport_mapping`, `sk03a.part_viewport_controller` and `sk03a.viewer_native_input` coverage for neutral authored/preview presentation contracts, U/V↔3D and ray→U/V mapping, runtime token bindings, fail-closed active-Sketch lifecycle, routing/cursor state and real Qt/OCCT spatial input before/after orbit.
-
-SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.line_commit_protocol` coverage for Select/Line runtime semantics, explicit request/acknowledgement, continuous anchor progression, exact-zero suppression, Finish/Cancel/Esc behavior, transient EntityId selection/reconciliation, atomic multi-entity Delete and one-segment-per-Undo integration with `DocumentSession`.
-
-SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the bounded host coordinator: default Select, spatial-tool routing/cursor projection, continuous Line commits, runtime preview, point selection, Ctrl-toggle sampled at release, Crossing rectangle selection, atomic Delete, history reconciliation, exact-zero suppression and hierarchical Esc.
-
-SK-05A adds `sk05a.direct_manipulation_state`, `sk05a.line_geometry_command` and `sk05a.part_sketch_direct_manipulation` coverage for additive/primary selection semantics, frozen direct-manipulation state, Line Reshape/Move preview, identity-preserving atomic batch geometry commits, stale-revision failure, exact no-op history behavior, Undo/Redo and the provider-neutral grip bridge. Native provider coverage also exercises screen-space grip hit testing separately from authored Line selection.
-
-The repository Windows FULL gate builds the exact implementation head and runs the complete CTest suite.
+The exact implementation head `518e8f3a5feb56a04d2c2067553d8697e02ceadf` passed Windows FULL gate #440 with 58/58 CTest tests. Owner manual Windows verification remains the final runtime acceptance step before closeout.

@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-06A_CIRCLE_ARC_CORE_BREADTH.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,13 +16,9 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - implement accepted SK-06A within the bounded R6 Circle/Arc scope
-  - start with Shared 2D mixed primitive model and Part persistence v4
-  - then creation/presentation/selection and bounded direct manipulation
-  - use FAST/SUBSYSTEM Sketch checkpoints during implementation
-  - require exact-head Windows FULL for the final runtime candidate
-  - require explicit manual Windows verification before completion
-  - keep R7+ inactive
+  - keep R7+ inactive until a separate Owner-accepted Work Contract exists
+  - review/propose R7 Common transforms, Copy and command grammar as the next roadmap slice
+  - preserve the completed R6 Line/Circle/Arc checkpoint as the implementation baseline
 
 notes:
   - R0 through R4 are completed.
@@ -74,6 +70,13 @@ notes:
 
   - Owner explicitly accepted SK-06A on 2026-09-26; R6 is active only through this bounded contract.
   - The accepted grip language is role-neutral: all grips are hollow when idle, hollow with cyan emphasis on hover, and filled yellow when active/captured.
-  - The proposal treats Circle/Arc durable model plus Part persistence v4 as D2 and therefore requires explicit Owner acceptance before production mutation.
+  - SK-06A treated Circle/Arc durable model plus Part persistence v4 as D2 and was explicitly Owner-accepted before production mutation.
 
+  - R7+ remains inactive and requires a separate explicit Owner-accepted Work Contract.
+
+  - SK-06A runtime/docs candidate 518e8f3a5feb56a04d2c2067553d8697e02ceadf passed Windows FULL #440 with 58/58 CTest tests.
+  - Required internal and PL/EN product documentation plus Product Browser freshness passed DOCS #441/#442.
+  - Owner manual Windows verification passed on 2026-09-26 for the accepted SK-06A checklist.
+  - Final exact-head verification checkpoint bd42ac6954cfe36881cb187832f0f0ca745d22e0 differs from the manually verified candidate only by a non-functional source comment and passed Windows FULL #443 with Build and 58/58 CTest tests.
+  - SK-06A acceptance conditions are satisfied; R6 is completed at this closeout candidate.
   - R7+ remains inactive and requires a separate explicit Owner-accepted Work Contract.

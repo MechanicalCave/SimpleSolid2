@@ -30,12 +30,20 @@ public:
     [[nodiscard]] sketch::SketchTool tool() const noexcept;
     [[nodiscard]] std::optional<sketch::LineStage>
     lineStage() const noexcept;
+    [[nodiscard]] std::optional<sketch::CircleStage>
+    circleStage() const noexcept;
+    [[nodiscard]] std::optional<sketch::ArcStage>
+    arcStage() const noexcept;
     [[nodiscard]] std::size_t selectedCount() const noexcept;
     [[nodiscard]] bool directManipulationActive()
         const noexcept;
 
+    // Line/Circle/Arc are adapters to the same semantic
+    // SketchInteractionState and resolved-input path.
     void activateSelect();
     void activateLine();
+    void activateCircle();
+    void activateArc();
     void finishLine();
     void cancelLine();
     [[nodiscard]] bool escape();
@@ -64,10 +72,12 @@ private:
 
     void handleSelectPointer(const SketchPointerInput& input);
     void handleLinePointer(const SketchPointerInput& input);
+    void handleCirclePointer(const SketchPointerInput& input);
+    void handleArcPointer(const SketchPointerInput& input);
     void updateRectangleOverlay(viewer::ViewportPoint2 current);
     void updateHover(viewer::ViewportPoint2 point);
     [[nodiscard]] bool beginDirectManipulation(
-        sketch::LineGripRef grip);
+        sketch::SketchGripRef grip);
     void updateDirectManipulationPreview(
         sketch::Point2 raw_input);
 

@@ -271,6 +271,28 @@ void CadWorkbench::buildUi() {
         2,
         line_sketch_button_);
 
+    circle_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Circle"),
+            shell_);
+    circle_sketch_button_->setObjectName(
+        QStringLiteral("circleSketchToolButton"));
+    circle_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        3,
+        circle_sketch_button_);
+
+    arc_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Arc"),
+            shell_);
+    arc_sketch_button_->setObjectName(
+        QStringLiteral("arcSketchToolButton"));
+    arc_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        4,
+        arc_sketch_button_);
+
     viewport_controller_ =
         new PartViewportController(
             *tree_controller_,
@@ -326,7 +348,7 @@ void CadWorkbench::buildUi() {
     command_input_->setObjectName(
         QStringLiteral("sketchCommandInput"));
     command_input_->setPlaceholderText(
-        QStringLiteral("SELECT or LINE"));
+        QStringLiteral("SELECT, LINE, CIRCLE or ARC"));
     command_line_layout->addWidget(command_input_, 1);
     shell_->setCommandLineContent(
         command_line_widget_);
@@ -565,6 +587,16 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchLine(); });
+    QObject::connect(
+        circle_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchCircle(); });
+    QObject::connect(
+        arc_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchArc(); });
     QObject::connect(
         cancel_sketch_button_,
         &QPushButton::clicked,
@@ -888,20 +920,79 @@ void CadWorkbench::activateSketchLine() {
     }
 }
 
-void CadWorkbench::finishSketchLine() {
+void CadWorkbench::activateSketchCircle() {
     if (sketch_interaction_controller_) {
-        sketch_interaction_controller_->finishLine();
+        sketch_interaction_controller_->activateCircle();
     }
-    status_->setText(
-        QStringLiteral("Line finished — Select active."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::activateSketchArc() {
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->activateArc();
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::finishSketchLine() {
+    if (!sketch_interaction_controller_) {
+        return;
+    }
+
+    const auto tool =
+        sketch_interaction_controller_->tool();
+    sketch_interaction_controller_->activateSelect();
+
+    switch (tool) {
+    case sketch::SketchTool::line:
+        status_->setText(
+            QStringLiteral("Line finished — Select active."));
+        break;
+    case sketch::SketchTool::circle:
+        status_->setText(
+            QStringLiteral("Circle finished — Select active."));
+        break;
+    case sketch::SketchTool::arc:
+        status_->setText(
+            QStringLiteral("Arc finished — Select active."));
+        break;
+    case sketch::SketchTool::select:
+        break;
+    }
 }
 
 void CadWorkbench::cancelSketchLine() {
-    if (sketch_interaction_controller_) {
-        sketch_interaction_controller_->cancelLine();
+    if (!sketch_interaction_controller_) {
+        return;
     }
-    status_->setText(
-        QStringLiteral("Line cancelled — committed segments preserved."));
+
+    const auto tool =
+        sketch_interaction_controller_->tool();
+    sketch_interaction_controller_->activateSelect();
+
+    switch (tool) {
+    case sketch::SketchTool::line:
+        status_->setText(
+            QStringLiteral(
+                "Line cancelled — committed segments preserved."));
+        break;
+    case sketch::SketchTool::circle:
+        status_->setText(
+            QStringLiteral(
+                "Circle cancelled — committed circles preserved."));
+        break;
+    case sketch::SketchTool::arc:
+        status_->setText(
+            QStringLiteral(
+                "Arc cancelled — committed arcs preserved."));
+        break;
+    case sketch::SketchTool::select:
+        break;
+    }
 }
 
 void CadWorkbench::deleteSketchSelection() {
@@ -931,6 +1022,10 @@ void CadWorkbench::submitSketchCommandLine() {
         activateSketchSelect();
     } else if (command == QStringLiteral("LINE")) {
         activateSketchLine();
+    } else if (command == QStringLiteral("CIRCLE")) {
+        activateSketchCircle();
+    } else if (command == QStringLiteral("ARC")) {
+        activateSketchArc();
     } else {
         status_->setText(
             QStringLiteral("Unknown Sketch command."));
@@ -1346,6 +1441,22 @@ void CadWorkbench::syncSketchInteractionUi() {
                 sketch::SketchTool::line);
     }
 
+    if (circle_sketch_button_ != nullptr) {
+        circle_sketch_button_->setVisible(editing);
+        circle_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::circle);
+    }
+
+    if (arc_sketch_button_ != nullptr) {
+        arc_sketch_button_->setVisible(editing);
+        arc_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::arc);
+    }
+
     if (command_line_widget_ != nullptr) {
         command_line_widget_->setVisible(editing);
     }
@@ -1375,11 +1486,11 @@ void CadWorkbench::syncSketchInteractionUi() {
         const auto selected =
             sketch_interaction_controller_->selectedCount();
         operations_placeholder_->setText(
-            QStringLiteral("Select — %1 Line%2 selected")
+            QStringLiteral("Select — %1 entit%2 selected")
                 .arg(static_cast<qulonglong>(selected))
                 .arg(selected == 1U
-                         ? QString{}
-                         : QStringLiteral("s")));
+                         ? QStringLiteral("y")
+                         : QStringLiteral("ies")));
         delete_selection_button_->setVisible(true);
         delete_selection_button_->setEnabled(
             selected > 0U);
@@ -1394,23 +1505,87 @@ void CadWorkbench::syncSketchInteractionUi() {
     finish_line_button_->setVisible(true);
     cancel_line_button_->setVisible(true);
 
-    const auto stage =
-        sketch_interaction_controller_->lineStage();
-    const bool next =
-        stage &&
-        *stage ==
-            sketch::LineStage::await_next_point;
+    if (tool == sketch::SketchTool::line) {
+        finish_line_button_->setText(
+            QStringLiteral("Finish Line"));
+        cancel_line_button_->setText(
+            QStringLiteral("Cancel Line"));
 
-    operations_placeholder_->setText(
-        next
-            ? QStringLiteral("Line — Specify next point")
-            : QStringLiteral("Line — Specify first point"));
-    command_prompt_->setText(
-        next
-            ? QStringLiteral(
-                  "Command: LINE — Specify next point")
-            : QStringLiteral(
-                  "Command: LINE — Specify first point"));
+        const auto stage =
+            sketch_interaction_controller_->lineStage();
+        const bool next =
+            stage &&
+            *stage ==
+                sketch::LineStage::await_next_point;
+
+        operations_placeholder_->setText(
+            next
+                ? QStringLiteral("Line — Specify next point")
+                : QStringLiteral("Line — Specify first point"));
+        command_prompt_->setText(
+            next
+                ? QStringLiteral(
+                      "Command: LINE — Specify next point")
+                : QStringLiteral(
+                      "Command: LINE — Specify first point"));
+        return;
+    }
+
+    if (tool == sketch::SketchTool::circle) {
+        finish_line_button_->setText(
+            QStringLiteral("Finish Circle"));
+        cancel_line_button_->setText(
+            QStringLiteral("Cancel Circle"));
+
+        const auto stage =
+            sketch_interaction_controller_->circleStage();
+        const bool radius =
+            stage &&
+            *stage ==
+                sketch::CircleStage::await_radius;
+
+        operations_placeholder_->setText(
+            radius
+                ? QStringLiteral("Circle — Specify radius")
+                : QStringLiteral("Circle — Specify center"));
+        command_prompt_->setText(
+            radius
+                ? QStringLiteral(
+                      "Command: CIRCLE — Specify radius")
+                : QStringLiteral(
+                      "Command: CIRCLE — Specify center"));
+        return;
+    }
+
+    finish_line_button_->setText(
+        QStringLiteral("Finish Arc"));
+    cancel_line_button_->setText(
+        QStringLiteral("Cancel Arc"));
+
+    const auto stage =
+        sketch_interaction_controller_->arcStage();
+    if (stage &&
+        *stage == sketch::ArcStage::await_through) {
+        operations_placeholder_->setText(
+            QStringLiteral("Arc — Specify through point"));
+        command_prompt_->setText(
+            QStringLiteral(
+                "Command: ARC — Specify through point"));
+    } else if (
+        stage &&
+        *stage == sketch::ArcStage::await_end) {
+        operations_placeholder_->setText(
+            QStringLiteral("Arc — Specify end point"));
+        command_prompt_->setText(
+            QStringLiteral(
+                "Command: ARC — Specify end point"));
+    } else {
+        operations_placeholder_->setText(
+            QStringLiteral("Arc — Specify start point"));
+        command_prompt_->setText(
+            QStringLiteral(
+                "Command: ARC — Specify start point"));
+    }
 }
 
 void CadWorkbench::syncActionState() {
@@ -1445,6 +1620,10 @@ void CadWorkbench::syncActionState() {
     select_sketch_button_->setVisible(
         editing_sketch);
     line_sketch_button_->setVisible(
+        editing_sketch);
+    circle_sketch_button_->setVisible(
+        editing_sketch);
+    arc_sketch_button_->setVisible(
         editing_sketch);
 
     cancel_sketch_button_->setVisible(

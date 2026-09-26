@@ -71,6 +71,16 @@ PartSketchInteractionController::lineStage() const noexcept {
     return interaction_.lineStage();
 }
 
+std::optional<sketch::CircleStage>
+PartSketchInteractionController::circleStage() const noexcept {
+    return interaction_.circleStage();
+}
+
+std::optional<sketch::ArcStage>
+PartSketchInteractionController::arcStage() const noexcept {
+    return interaction_.arcStage();
+}
+
 std::size_t
 PartSketchInteractionController::selectedCount() const noexcept {
     return interaction_.selectedEntities().size();
@@ -100,6 +110,36 @@ void PartSketchInteractionController::activateLine() {
     if (!active()) return;
 
     interaction_.activateLine();
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+}
+
+void PartSketchInteractionController::activateCircle() {
+    if (!active()) return;
+
+    interaction_.activateCircle();
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+}
+
+void PartSketchInteractionController::activateArc() {
+    if (!active()) return;
+
+    interaction_.activateArc();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -182,31 +222,43 @@ commitDirectManipulation() {
     }
 
     const auto geometry =
-        interaction_.directManipulationGeometry();
+        interaction_.directManipulationGeometryState();
     if (!geometry) {
         reportStatus(
             "Direct manipulation has no valid commit geometry.");
         return false;
     }
 
-    std::vector<
-        application::SketchLineGeometryUpdate>
-        updates;
-    updates.reserve(geometry->size());
-    for (const auto& line : *geometry) {
-        updates.push_back(
-            application::SketchLineGeometryUpdate{
-                line.id,
-                line.start,
-                line.end});
+    application::UpdateSketchGeometryCommand command{
+        *sketch_id_,
+        *manipulation_revision_,
+        {},
+        {},
+        {}};
+    command.lines.reserve(geometry->lines.size());
+    command.circles.reserve(geometry->circles.size());
+    command.arcs.reserve(geometry->arcs.size());
+
+    for (const auto& line : geometry->lines) {
+        command.lines.push_back(
+            {line.id, line.start, line.end});
+    }
+    for (const auto& circle : geometry->circles) {
+        command.circles.push_back(
+            {circle.id, circle.center, circle.radius});
+    }
+    for (const auto& arc : geometry->arcs) {
+        command.arcs.push_back(
+            {
+                arc.id,
+                arc.center,
+                arc.radius,
+                arc.start_angle,
+                arc.sweep_angle});
     }
 
     const auto result =
-        session_->execute(
-            application::UpdateSketchLinesCommand{
-                *sketch_id_,
-                *manipulation_revision_,
-                std::move(updates)});
+        session_->execute(command);
 
     interaction_.finishDirectManipulation();
     manipulation_revision_.reset();
@@ -216,8 +268,7 @@ commitDirectManipulation() {
     if (!result.ok()) {
         const auto* hosted = activeSketch();
         if (hosted != nullptr) {
-            interaction_.reconcileSelection(
-                hosted->model);
+            interaction_.reconcileSelection(hosted->model);
         }
         projectSelection();
         projectInteraction();
@@ -232,8 +283,7 @@ commitDirectManipulation() {
 
     const auto* hosted = activeSketch();
     if (hosted != nullptr) {
-        interaction_.reconcileSelection(
-            hosted->model);
+        interaction_.reconcileSelection(hosted->model);
     }
     projectSelection();
     projectInteraction();
@@ -282,13 +332,20 @@ void PartSketchInteractionController::onPointer(
         return;
     }
 
-    if (interaction_.tool() ==
-        sketch::SketchTool::select) {
+    switch (interaction_.tool()) {
+    case sketch::SketchTool::select:
         handleSelectPointer(input);
         return;
+    case sketch::SketchTool::line:
+        handleLinePointer(input);
+        return;
+    case sketch::SketchTool::circle:
+        handleCirclePointer(input);
+        return;
+    case sketch::SketchTool::arc:
+        handleArcPointer(input);
+        return;
     }
-
-    handleLinePointer(input);
 }
 
 const part::PartSketch*
@@ -555,6 +612,152 @@ void PartSketchInteractionController::handleLinePointer(
     }
 }
 
+void PartSketchInteractionController::handleCirclePointer(
+    const SketchPointerInput& input) {
+    const auto resolved =
+        sketch::resolveSketchInput(input.position);
+
+    if (input.phase == viewer::SpatialPointerPhase::move) {
+        const auto preview =
+            resolved
+                ? interaction_.previewCircle(
+                      resolved->position)
+                : std::nullopt;
+        if (preview) {
+            static_cast<void>(
+                viewport_controller_->setSketchCirclePreview(
+                    *preview));
+        } else {
+            viewport_controller_->clearSketchPreview();
+        }
+        return;
+    }
+
+    if (input.phase !=
+            viewer::SpatialPointerPhase::primary_press ||
+        !resolved) {
+        return;
+    }
+
+    const auto accepted =
+        interaction_.acceptCirclePoint(
+            resolved->position);
+
+    if (accepted.outcome ==
+            sketch::CirclePointOutcome::circle_requested &&
+        accepted.request) {
+        const auto result =
+            session_->execute(
+                application::AddSketchCircleCommand{
+                    *sketch_id_,
+                    accepted.request->center,
+                    accepted.request->radius});
+        const bool committed =
+            result.ok() && result.changed;
+        static_cast<void>(
+            interaction_.resolveCircleRequest(committed));
+
+        viewport_controller_->clearSketchPreview();
+        if (!committed) {
+            reportStatus(
+                result.diagnostic.message.empty()
+                    ? std::string{"Circle commit failed."}
+                    : result.diagnostic.message);
+            notifyStateChanged();
+            return;
+        }
+
+        viewport_controller_->refreshPresentation();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        return;
+    }
+
+    if (accepted.outcome ==
+            sketch::CirclePointOutcome::center_accepted ||
+        accepted.outcome ==
+            sketch::CirclePointOutcome::zero_radius_ignored) {
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+    }
+}
+
+void PartSketchInteractionController::handleArcPointer(
+    const SketchPointerInput& input) {
+    const auto resolved =
+        sketch::resolveSketchInput(input.position);
+
+    if (input.phase == viewer::SpatialPointerPhase::move) {
+        const auto preview =
+            resolved
+                ? interaction_.previewArc(
+                      resolved->position)
+                : std::nullopt;
+        if (preview) {
+            static_cast<void>(
+                viewport_controller_->setSketchArcPreview(
+                    *preview));
+        } else {
+            viewport_controller_->clearSketchPreview();
+        }
+        return;
+    }
+
+    if (input.phase !=
+            viewer::SpatialPointerPhase::primary_press ||
+        !resolved) {
+        return;
+    }
+
+    const auto accepted =
+        interaction_.acceptArcPoint(
+            resolved->position);
+
+    if (accepted.outcome ==
+            sketch::ArcPointOutcome::arc_requested &&
+        accepted.request) {
+        const auto result =
+            session_->execute(
+                application::AddSketchArcCommand{
+                    *sketch_id_,
+                    accepted.request->center,
+                    accepted.request->radius,
+                    accepted.request->start_angle,
+                    accepted.request->sweep_angle});
+        const bool committed =
+            result.ok() && result.changed;
+        static_cast<void>(
+            interaction_.resolveArcRequest(committed));
+
+        viewport_controller_->clearSketchPreview();
+        if (!committed) {
+            reportStatus(
+                result.diagnostic.message.empty()
+                    ? std::string{"Arc commit failed."}
+                    : result.diagnostic.message);
+            notifyStateChanged();
+            return;
+        }
+
+        viewport_controller_->refreshPresentation();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        return;
+    }
+
+    if (accepted.outcome ==
+            sketch::ArcPointOutcome::start_accepted ||
+        accepted.outcome ==
+            sketch::ArcPointOutcome::through_accepted ||
+        accepted.outcome ==
+            sketch::ArcPointOutcome::degenerate_ignored) {
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+    }
+}
+
 void PartSketchInteractionController::updateRectangleOverlay(
     viewer::ViewportPoint2 current) {
     if (!press_anchor_) return;
@@ -633,7 +836,7 @@ void PartSketchInteractionController::updateHover(
 
 bool PartSketchInteractionController::
 beginDirectManipulation(
-    sketch::LineGripRef grip) {
+    sketch::SketchGripRef grip) {
     const auto* hosted = activeSketch();
     if (hosted == nullptr ||
         session_ == nullptr) {
@@ -662,34 +865,20 @@ void PartSketchInteractionController::
 updateDirectManipulationPreview(
     sketch::Point2 raw_input) {
     const auto resolved =
-        sketch::resolveSketchInput(
-            raw_input);
+        sketch::resolveSketchInput(raw_input);
     if (!resolved ||
-        !interaction_.updateDirectManipulation(
-            *resolved)) {
+        !interaction_.updateDirectManipulation(*resolved)) {
         viewport_controller_->clearSketchPreview();
         return;
     }
 
     const auto geometry =
-        interaction_.directManipulationGeometry();
-    if (!geometry) {
+        interaction_.directManipulationGeometryState();
+    if (!geometry ||
+        !viewport_controller_->setSketchGeometryPreview(
+            *geometry)) {
         viewport_controller_->clearSketchPreview();
-        return;
     }
-
-    std::vector<SketchPreviewLine2D> preview;
-    preview.reserve(geometry->size());
-    for (const auto& line : *geometry) {
-        preview.push_back(
-            SketchPreviewLine2D{
-                line.start,
-                line.end});
-    }
-
-    static_cast<void>(
-        viewport_controller_->setSketchPreview(
-            preview));
 }
 
 void PartSketchInteractionController::projectSelection() {
