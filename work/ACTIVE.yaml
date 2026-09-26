@@ -107,3 +107,13 @@ notes:
   - Owner explicitly accepted SK-07B scope on 2026-09-26.
   - SK-07B is the second bounded R7 slice: Rotate, positive uniform Scale, Mirror, and clear Sketch toolbar grouping into Select / Create / Modify.
   - Copy/repeated Copy, fresh transform-created EntityIds, Copy modifier, semantic Space CycleEditMode, ordinary-Select RMB context and Repeat Last Command remain outside SK-07B.
+
+
+  - SK-07B runtime head 90ac09b8af6b7da2656fc8088415aebcec452ebc passed Windows FULL #503 with Build and 63/63 unfiltered CTest tests.
+  - Required internal and PL/EN Product documentation plus Product Browser freshness passed DOCS #508 on e4b8408fec7aa551132d28440303be60ab48ec67.
+  - Owner manual Windows verification passed on 2026-09-27 for Rotate/Scale/Mirror, toolbar grouping and the accepted interaction checklist.
+  - Numeric angle/distance/scale entry remains intentionally outside SK-07B; number keys do not replace pointer-derived transform preview.
+  - Final exact-head candidate dc58b767e2e3effbff90ba62d90a7a5f70fda5c5 differs from the documented candidate only by a non-functional common-transform authority comment.
+  - Final exact-head Windows FULL #510 passed on dc58b767e2e3effbff90ba62d90a7a5f70fda5c5 with documentation freshness, Build, selector checks, 63/63 unfiltered CTest tests and stable windows-msvc.
+  - SK-07B acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
+  - Copy/repeated Copy, fresh transform-created EntityIds, Repeat Last Command, numeric/Dynamic Input, snapping/inference and R8+ remain inactive.
