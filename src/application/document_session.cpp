@@ -333,7 +333,7 @@ DocumentSessionResult DocumentSession::execute(
                 path_);
         }
 
-        if (target->model.findLine(id) == nullptr) {
+        if (!target->model.contains(id)) {
             return failure(
                 DocumentSessionErrorCode::invalid_command,
                 "Erase Sketch Entities target EntityId does not exist",

@@ -106,14 +106,35 @@ std::string serializeAuthored(
         const auto model_state =
             hosted.model.state();
 
-        nlohmann::json lines =
+        nlohmann::json entities =
             nlohmann::json::array();
         for (const auto& line : model_state.lines) {
-            lines.push_back(
+            entities.push_back(
                 {
+                    {"kind", "line"},
                     {"id", line.id.serialized()},
                     {"start", pointJson(line.start)},
                     {"end", pointJson(line.end)},
+                });
+        }
+        for (const auto& circle : model_state.circles) {
+            entities.push_back(
+                {
+                    {"kind", "circle"},
+                    {"id", circle.id.serialized()},
+                    {"center", pointJson(circle.center)},
+                    {"radius", circle.radius},
+                });
+        }
+        for (const auto& arc : model_state.arcs) {
+            entities.push_back(
+                {
+                    {"kind", "arc"},
+                    {"id", arc.id.serialized()},
+                    {"center", pointJson(arc.center)},
+                    {"radius", arc.radius},
+                    {"start_angle", arc.start_angle},
+                    {"sweep_angle", arc.sweep_angle},
                 });
         }
 
@@ -141,7 +162,7 @@ std::string serializeAuthored(
                  {
                      {"next_entity_id",
                       model_state.next_entity_id.serialized()},
-                     {"lines", std::move(lines)},
+                     {"entities", std::move(entities)},
                  }},
             });
     }
@@ -254,7 +275,7 @@ parsePoint2(const nlohmann::json& value) {
 }
 
 std::optional<sketch::SketchModel>
-parseSketchModel(
+parseSketchModelV3(
     const nlohmann::json& model_json,
     std::string& error) {
     if (!model_json.is_object() ||
@@ -264,7 +285,7 @@ parseSketchModel(
         !model_json["next_entity_id"].is_string() ||
         !model_json["lines"].is_array()) {
         error =
-            "Native Part contains malformed Sketch model";
+            "Native Part contains malformed schema-v3 Sketch model";
         return std::nullopt;
     }
 
@@ -281,8 +302,7 @@ parseSketchModel(
     sketch::SketchModelState state;
     state.next_entity_id = *cursor;
 
-    for (const auto& item :
-         model_json["lines"]) {
+    for (const auto& item : model_json["lines"]) {
         if (!item.is_object() ||
             item.size() != 3U ||
             !item.contains("id") ||
@@ -290,7 +310,7 @@ parseSketchModel(
             !item.contains("end") ||
             !item["id"].is_string()) {
             error =
-                "Native Part contains malformed Sketch Line record";
+                "Native Part contains malformed schema-v3 Sketch Line record";
             return std::nullopt;
         }
 
@@ -303,7 +323,7 @@ parseSketchModel(
             parsePoint2(item["end"]);
         if (!id || !start || !end) {
             error =
-                "Native Part contains invalid Sketch Line values";
+                "Native Part contains invalid schema-v3 Sketch Line values";
             return std::nullopt;
         }
 
@@ -319,7 +339,161 @@ parseSketchModel(
             std::move(state));
     if (!model) {
         error =
-            "Native Part contains inconsistent Sketch model identity or geometry";
+            "Native Part contains inconsistent schema-v3 Sketch model";
+        return std::nullopt;
+    }
+
+    return model;
+}
+
+std::optional<sketch::SketchModel>
+parseSketchModelV4(
+    const nlohmann::json& model_json,
+    std::string& error) {
+    if (!model_json.is_object() ||
+        model_json.size() != 2U ||
+        !model_json.contains("next_entity_id") ||
+        !model_json.contains("entities") ||
+        !model_json["next_entity_id"].is_string() ||
+        !model_json["entities"].is_array()) {
+        error =
+            "Native Part contains malformed schema-v4 Sketch model";
+        return std::nullopt;
+    }
+
+    const auto cursor =
+        sketch::EntityIdCursor::parse(
+            model_json[
+                "next_entity_id"].get<std::string>());
+    if (!cursor) {
+        error =
+            "Native Part contains invalid Sketch next_entity_id";
+        return std::nullopt;
+    }
+
+    sketch::SketchModelState state;
+    state.next_entity_id = *cursor;
+
+    for (const auto& item : model_json["entities"]) {
+        if (!item.is_object() ||
+            !item.contains("kind") ||
+            !item.contains("id") ||
+            !item["kind"].is_string() ||
+            !item["id"].is_string()) {
+            error =
+                "Native Part contains malformed schema-v4 Sketch entity record";
+            return std::nullopt;
+        }
+
+        const auto id =
+            sketch::EntityId::parse(
+                item["id"].get<std::string>());
+        if (!id) {
+            error =
+                "Native Part contains invalid schema-v4 Sketch EntityId";
+            return std::nullopt;
+        }
+
+        const auto kind =
+            item["kind"].get<std::string>();
+
+        if (kind == "line") {
+            if (item.size() != 4U ||
+                !item.contains("start") ||
+                !item.contains("end")) {
+                error =
+                    "Native Part contains malformed schema-v4 Sketch Line record";
+                return std::nullopt;
+            }
+            const auto start = parsePoint2(item["start"]);
+            const auto end = parsePoint2(item["end"]);
+            if (!start || !end) {
+                error =
+                    "Native Part contains invalid schema-v4 Sketch Line values";
+                return std::nullopt;
+            }
+            state.lines.push_back(
+                sketch::SketchLineState{
+                    *id,
+                    *start,
+                    *end});
+            continue;
+        }
+
+        if (kind == "circle") {
+            if (item.size() != 4U ||
+                !item.contains("center") ||
+                !item.contains("radius") ||
+                !item["radius"].is_number()) {
+                error =
+                    "Native Part contains malformed schema-v4 Sketch Circle record";
+                return std::nullopt;
+            }
+            const auto center = parsePoint2(item["center"]);
+            const double radius =
+                item["radius"].get<double>();
+            if (!center || !std::isfinite(radius)) {
+                error =
+                    "Native Part contains invalid schema-v4 Sketch Circle values";
+                return std::nullopt;
+            }
+            state.circles.push_back(
+                sketch::SketchCircleState{
+                    *id,
+                    *center,
+                    radius});
+            continue;
+        }
+
+        if (kind == "arc") {
+            if (item.size() != 6U ||
+                !item.contains("center") ||
+                !item.contains("radius") ||
+                !item.contains("start_angle") ||
+                !item.contains("sweep_angle") ||
+                !item["radius"].is_number() ||
+                !item["start_angle"].is_number() ||
+                !item["sweep_angle"].is_number()) {
+                error =
+                    "Native Part contains malformed schema-v4 Sketch Arc record";
+                return std::nullopt;
+            }
+            const auto center = parsePoint2(item["center"]);
+            const double radius =
+                item["radius"].get<double>();
+            const double start_angle =
+                item["start_angle"].get<double>();
+            const double sweep_angle =
+                item["sweep_angle"].get<double>();
+            if (!center ||
+                !std::isfinite(radius) ||
+                !std::isfinite(start_angle) ||
+                !std::isfinite(sweep_angle)) {
+                error =
+                    "Native Part contains invalid schema-v4 Sketch Arc values";
+                return std::nullopt;
+            }
+            state.arcs.push_back(
+                sketch::SketchArcState{
+                    *id,
+                    *center,
+                    radius,
+                    start_angle,
+                    sweep_angle});
+            continue;
+        }
+
+        error =
+            "Native Part contains unknown schema-v4 Sketch entity kind";
+        return std::nullopt;
+    }
+
+    auto model =
+        sketch::SketchModel::restore(
+            std::move(state));
+    if (!model) {
+        error =
+            "Native Part contains inconsistent schema-v4 Sketch model";
         return std::nullopt;
     }
 
@@ -336,10 +510,10 @@ bool parseSketches(
         return false;
     }
 
-    const bool schema_v3 =
-        schema_version == 3;
+    const bool schema_has_model =
+        schema_version >= 3;
     const std::size_t expected_fields =
-        schema_v3 ? 5U : 4U;
+        schema_has_model ? 5U : 4U;
 
     std::set<std::string> ids;
 
@@ -350,7 +524,7 @@ bool parseSketches(
             !item.contains("support") ||
             !item.contains("placement") ||
             !item.contains("visible") ||
-            (schema_v3 && !item.contains("model")) ||
+            (schema_has_model && !item.contains("model")) ||
             !item["id"].is_string() ||
             !item["visible"].is_boolean()) {
             error = "Native Part contains malformed Sketch record";
@@ -436,11 +610,15 @@ bool parseSketches(
         }
 
         sketch::SketchModel model;
-        if (schema_v3) {
+        if (schema_has_model) {
             auto parsed_model =
-                parseSketchModel(
-                    item["model"],
-                    error);
+                schema_version == 3
+                    ? parseSketchModelV3(
+                          item["model"],
+                          error)
+                    : parseSketchModelV4(
+                          item["model"],
+                          error);
             if (!parsed_model) {
                 return false;
             }
@@ -697,6 +875,7 @@ PartLoadResult PartDocumentStore::load(
 
     if (descriptor.domain_schema_version != 1 &&
         descriptor.domain_schema_version != 2 &&
+        descriptor.domain_schema_version != 3 &&
         descriptor.domain_schema_version !=
             current_schema_version) {
         return loadFailure(
