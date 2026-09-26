@@ -1031,3 +1031,34 @@ add_test(
     NAME sk05a.line_geometry_command
     COMMAND sk05a_line_geometry_command_test
 )
+
+
+add_executable(sk05a_part_sketch_direct_manipulation_test
+    sk05a_part_sketch_direct_manipulation_test.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_document_tree_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_sketch_interaction_controller.cpp
+    ${PROJECT_SOURCE_DIR}/src/ui/part_viewport_controller.cpp
+)
+
+target_include_directories(sk05a_part_sketch_direct_manipulation_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(sk05a_part_sketch_direct_manipulation_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(sk05a_part_sketch_direct_manipulation_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk05a.part_sketch_direct_manipulation
+    COMMAND sk05a_part_sketch_direct_manipulation_test
+)
+
+set_tests_properties(sk05a.part_sketch_direct_manipulation PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
