@@ -2,6 +2,7 @@
 
 #include "part_document_tree_controller.hpp"
 
+#include <simplesolid2/sketch/interaction_state.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
