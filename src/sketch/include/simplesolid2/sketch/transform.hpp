@@ -29,6 +29,8 @@ captureSketchTransformGeometry(
     const SketchModel& model,
     const std::vector<EntityId>& entity_ids);
 
+// Shared by normal MOVE and Center-grip Move; UI/provider adapters
+// must not duplicate translation geometry outside this semantic layer.
 [[nodiscard]] std::optional<SketchTransformGeometry>
 translateSketchGeometry(
     const SketchTransformGeometry& geometry,
