@@ -22,6 +22,31 @@ struct SketchLinePresentation final {
     }
 };
 
+struct SketchCurvePresentation final {
+    PresentationToken token;
+    std::vector<Point3> points;
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (!token.valid() || points.size() < 2U) {
+            return false;
+        }
+
+        for (std::size_t index = 0U;
+             index < points.size();
+             ++index) {
+            if (!finite(points[index])) {
+                return false;
+            }
+            if (index > 0U &&
+                points[index] == points[index - 1U]) {
+                return false;
+            }
+        }
+
+        return true;
+    }
+};
+
 struct SketchOriginPresentation final {
     Point3 position{};
 
@@ -32,6 +57,7 @@ struct SketchOriginPresentation final {
 
 struct SketchScene final {
     std::vector<SketchLinePresentation> lines;
+    std::vector<SketchCurvePresentation> curves;
     std::optional<SketchOriginPresentation> origin;
 
     [[nodiscard]] bool valid() const noexcept {
@@ -39,14 +65,35 @@ struct SketchScene final {
             return false;
         }
 
+        std::vector<PresentationToken> tokens;
+        tokens.reserve(lines.size() + curves.size());
+
         for (const auto& line : lines) {
             if (!line.valid()) {
                 return false;
             }
+            tokens.push_back(line.token);
         }
 
-        // Circle and Arc may be tessellated into multiple segments
-        // that share one semantic presentation token.
+        for (const auto& curve : curves) {
+            if (!curve.valid()) {
+                return false;
+            }
+            tokens.push_back(curve.token);
+        }
+
+        for (std::size_t left = 0U;
+             left < tokens.size();
+             ++left) {
+            for (std::size_t right = left + 1U;
+                 right < tokens.size();
+                 ++right) {
+                if (tokens[left] == tokens[right]) {
+                    return false;
+                }
+            }
+        }
+
         return true;
     }
 };
