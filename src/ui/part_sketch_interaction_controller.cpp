@@ -19,7 +19,7 @@ void PartSketchInteractionController::begin(
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
-    move_revision_.reset();
+    transform_revision_.reset();
 
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
@@ -34,7 +34,7 @@ void PartSketchInteractionController::end() {
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
-    move_revision_.reset();
+    transform_revision_.reset();
 
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clearSketchPreview();
@@ -88,6 +88,12 @@ PartSketchInteractionController::moveStage() const noexcept {
     return interaction_.moveStage();
 }
 
+std::optional<sketch::CommonTransformStage>
+PartSketchInteractionController::commonTransformStage()
+    const noexcept {
+    return interaction_.commonTransformStage();
+}
+
 std::size_t
 PartSketchInteractionController::selectedCount() const noexcept {
     return interaction_.selectedEntities().size();
@@ -105,7 +111,7 @@ void PartSketchInteractionController::activateSelect() {
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
-    move_revision_.reset();
+    transform_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     configureForCurrentTool();
@@ -121,7 +127,7 @@ void PartSketchInteractionController::activateLine() {
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
-    move_revision_.reset();
+    transform_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     projectSelection();
@@ -137,7 +143,7 @@ void PartSketchInteractionController::activateCircle() {
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
-    move_revision_.reset();
+    transform_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     projectSelection();
@@ -153,7 +159,7 @@ void PartSketchInteractionController::activateArc() {
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
-    move_revision_.reset();
+    transform_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     projectSelection();
@@ -164,23 +170,98 @@ void PartSketchInteractionController::activateArc() {
 
 bool PartSketchInteractionController::activateMove() {
     const auto* hosted = activeSketch();
-    if (hosted == nullptr || session_ == nullptr) {
-        return false;
-    }
-
-    if (!interaction_.activateMove(hosted->model)) {
+    if (hosted == nullptr || session_ == nullptr ||
+        !interaction_.activateMove(hosted->model)) {
         return false;
     }
 
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
-    move_revision_ =
-        interaction_.moveStage() ==
-                sketch::MoveStage::await_base_point
-            ? std::optional<core::DocumentRevision>{
-                  session_->document().revision()}
-            : std::nullopt;
+    transform_revision_ =
+        interaction_.commonTransformStage() ==
+                sketch::CommonTransformStage::select_objects
+            ? std::nullopt
+            : std::optional<core::DocumentRevision>{
+                  session_->document().revision()};
+
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::activateRotate() {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr || session_ == nullptr ||
+        !interaction_.activateRotate(hosted->model)) {
+        return false;
+    }
+
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_ =
+        interaction_.commonTransformStage() ==
+                sketch::CommonTransformStage::select_objects
+            ? std::nullopt
+            : std::optional<core::DocumentRevision>{
+                  session_->document().revision()};
+
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::activateScale() {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr || session_ == nullptr ||
+        !interaction_.activateScale(hosted->model)) {
+        return false;
+    }
+
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_ =
+        interaction_.commonTransformStage() ==
+                sketch::CommonTransformStage::select_objects
+            ? std::nullopt
+            : std::optional<core::DocumentRevision>{
+                  session_->document().revision()};
+
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::activateMirror() {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr || session_ == nullptr ||
+        !interaction_.activateMirror(hosted->model)) {
+        return false;
+    }
+
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_ =
+        interaction_.commonTransformStage() ==
+                sketch::CommonTransformStage::select_objects
+            ? std::nullopt
+            : std::optional<core::DocumentRevision>{
+                  session_->document().revision()};
 
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
@@ -192,18 +273,15 @@ bool PartSketchInteractionController::activateMove() {
 }
 
 bool PartSketchInteractionController::
-completeMoveSelection() {
+completeTransformSelection() {
     const auto* hosted = activeSketch();
-    if (hosted == nullptr || session_ == nullptr) {
-        return false;
-    }
-
-    if (!interaction_.completeMoveSelection(
+    if (hosted == nullptr || session_ == nullptr ||
+        !interaction_.completeTransformSelection(
             hosted->model)) {
         return false;
     }
 
-    move_revision_ =
+    transform_revision_ =
         session_->document().revision();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
@@ -214,6 +292,13 @@ completeMoveSelection() {
     configureForCurrentTool();
     notifyStateChanged();
     return true;
+}
+
+bool PartSketchInteractionController::
+completeMoveSelection() {
+    return interaction_.tool() ==
+               sketch::SketchTool::move &&
+           completeTransformSelection();
 }
 
 void PartSketchInteractionController::finishLine() {
@@ -238,7 +323,7 @@ bool PartSketchInteractionController::escape() {
         manipulation_revision_.reset();
     }
     if (was_moving) {
-        move_revision_.reset();
+        transform_revision_.reset();
     }
 
     press_anchor_.reset();
@@ -375,7 +460,7 @@ bool PartSketchInteractionController::commitMove() {
         interaction_.tool() != sketch::SketchTool::move ||
         interaction_.moveStage() !=
             sketch::MoveStage::await_destination ||
-        !move_revision_) {
+        !transform_revision_) {
         return false;
     }
 
@@ -390,10 +475,10 @@ bool PartSketchInteractionController::commitMove() {
     const auto result =
         executeGeometryUpdate(
             *geometry,
-            *move_revision_);
+            *transform_revision_);
 
     interaction_.finishMove();
-    move_revision_.reset();
+    transform_revision_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     viewport_controller_->clearSketchPreview();
@@ -430,7 +515,7 @@ void PartSketchInteractionController::cancelForHistory() {
 
     interaction_.cancelForHistory();
     manipulation_revision_.reset();
-    move_revision_.reset();
+    transform_revision_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     viewport_controller_->clearSketchPreview();
@@ -450,7 +535,7 @@ bool PartSketchInteractionController::reconcileAfterHistory() {
     interaction_.reconcileSelection(hosted->model);
     interaction_.clearHover();
     manipulation_revision_.reset();
-    move_revision_.reset();
+    transform_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->refreshPresentation();
     projectSelection();
