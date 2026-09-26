@@ -1072,6 +1072,22 @@ set_tests_properties(sk07a.move_controller PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+add_executable(sk07b_transform_core_test
+    sk07b_transform_core_test.cpp
+)
+
+target_link_libraries(sk07b_transform_core_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(sk07b_transform_core_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk07b.transform_core
+    COMMAND sk07b_transform_core_test
+)
+
 # CI-02 test metadata. FULL remains the unfiltered CTest suite.
 # New tests are intentionally not FAST by default; authors classify them explicitly.
 set(_ss2_fast_tests
@@ -1134,6 +1150,7 @@ set(_ss2_fast_tests
     sk06a.circle_arc_interaction_state
     sk07a.transform_core
     sk07a.move_controller
+    sk07b.transform_core
 )
 set_property(TEST ${_ss2_fast_tests} APPEND PROPERTY LABELS "tier-fast")
 set_property(TEST wb01a.workbench_native_stress APPEND PROPERTY LABELS
@@ -1166,6 +1183,7 @@ set(_ss2_sketch_tests
     sk06a.circle_arc_interaction_state
     sk07a.transform_core
     sk07a.move_controller
+    sk07b.transform_core
 )
 set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
 
