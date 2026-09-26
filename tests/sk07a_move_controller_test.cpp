@@ -181,10 +181,12 @@ struct TempDirectory final {
     std::filesystem::path path;
 
     TempDirectory() {
+        const auto id =
+            core::DocumentId::generate();
         path =
             std::filesystem::temp_directory_path() /
             ("ss2-sk07a-move-" +
-             core::DocumentId::generate().toString());
+             std::string{id.value()});
         std::filesystem::create_directories(path);
     }
 
