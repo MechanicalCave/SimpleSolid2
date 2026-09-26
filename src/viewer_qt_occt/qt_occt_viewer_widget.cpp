@@ -1575,7 +1575,16 @@ public:
         const auto cube_owner =
             Handle(AIS_ViewCubeOwner)::DownCast(
                 context_->DetectedOwner());
-        return !cube_owner.IsNull();
+        if (!cube_owner.IsNull()) {
+            return true;
+        }
+
+        // Navigation-cube probing must not leak OCCT's native detected
+        // highlight into Sketch hover presentation. Sketch hover is owned
+        // by the semantic spatial-input path and is restyled explicitly.
+        context_->ClearDetected(false);
+        context_->UpdateCurrentViewer();
+        return false;
     }
 
     bool activateNavigationCubeAt(
