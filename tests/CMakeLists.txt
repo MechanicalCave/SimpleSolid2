@@ -996,6 +996,22 @@ set_tests_properties(sk05a.part_sketch_direct_manipulation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+add_executable(sk06a_circle_arc_model_persistence_test
+    sk06a_circle_arc_model_persistence_test.cpp
+)
+
+target_link_libraries(sk06a_circle_arc_model_persistence_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(sk06a_circle_arc_model_persistence_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk06a.circle_arc_model_persistence
+    COMMAND sk06a_circle_arc_model_persistence_test
+)
+
 # CI-02 test metadata. FULL remains the unfiltered CTest suite.
 # New tests are intentionally not FAST by default; authors classify them explicitly.
 set(_ss2_fast_tests
@@ -1054,6 +1070,7 @@ set(_ss2_fast_tests
     sk05a.direct_manipulation_state
     sk05a.line_geometry_command
     sk05a.part_sketch_direct_manipulation
+    sk06a.circle_arc_model_persistence
 )
 set_property(TEST ${_ss2_fast_tests} APPEND PROPERTY LABELS "tier-fast")
 set_property(TEST wb01a.workbench_native_stress APPEND PROPERTY LABELS
@@ -1082,6 +1099,7 @@ set(_ss2_sketch_tests
     sk05a.direct_manipulation_state
     sk05a.line_geometry_command
     sk05a.part_sketch_direct_manipulation
+    sk06a.circle_arc_model_persistence
 )
 set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
 
@@ -1119,6 +1137,7 @@ set(_ss2_part_tests
     sk04a.batch_delete
     sk04a.line_commit_protocol
     sk05a.line_geometry_command
+    sk06a.circle_arc_model_persistence
 )
 set_property(TEST ${_ss2_part_tests} APPEND PROPERTY LABELS "subsystem-part")
 
@@ -1139,6 +1158,7 @@ set(_ss2_application_tests
     sk04a.batch_delete
     sk04a.line_commit_protocol
     sk05a.line_geometry_command
+    sk06a.circle_arc_model_persistence
 )
 set_property(TEST ${_ss2_application_tests} APPEND PROPERTY LABELS "subsystem-application")
 
@@ -1148,6 +1168,7 @@ set(_ss2_persistence_tests
     part01.project_document_lifecycle
     sk02b.part_sketch_persistence
     sk05a.line_geometry_command
+    sk06a.circle_arc_model_persistence
 )
 set_property(TEST ${_ss2_persistence_tests} APPEND PROPERTY LABELS "subsystem-persistence")
 

@@ -224,14 +224,14 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 3);
+            .domain_schema_version == 4);
     CHECK(
         package.package->authored_json.find(
             "\"next_entity_id\"") !=
         std::string::npos);
     CHECK(
         package.package->authored_json.find(
-            "\"lines\"") !=
+            "\"entities\"") !=
         std::string::npos);
 
     auto loaded = store.load(path);
@@ -358,7 +358,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 3);
+            .domain_schema_version == 4);
     CHECK(
         migrated.package->authored_json.find(
             "\"model\"") !=
