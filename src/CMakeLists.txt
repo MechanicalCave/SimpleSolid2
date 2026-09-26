@@ -185,7 +185,6 @@ add_library(simplesolid2_ui STATIC
 target_include_directories(simplesolid2_ui
     PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/ui
-    PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/application
 )
 
