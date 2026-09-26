@@ -3,7 +3,7 @@ param(
     [string]$Config = "Debug",
     [ValidateSet("fast","subsystem","full")]
     [string]$Tier = "full",
-    [string]$Subsystem = "",
+    [string[]]$Subsystem = @(),
     [switch]$NoBuild,
     [switch]$ListOnly,
     [switch]$SelfTest
@@ -23,10 +23,11 @@ $knownSubsystems = @(
 )
 
 function Get-SS2SubsystemLabelRegex {
-    param([Parameter(Mandatory=$true)][string]$Value)
+    param([Parameter(Mandatory=$true)][string[]]$Value)
 
     $requested = @(
-        $Value.Split(",") |
+        $Value |
+            ForEach-Object { $_.Split(",") } |
             ForEach-Object { $_.Trim().ToLowerInvariant() } |
             Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
             Select-Object -Unique
@@ -108,7 +109,8 @@ switch ($Tier) {
         $ctestArgs += @("-L", (Get-SS2SubsystemLabelRegex $Subsystem))
     }
     "full" {
-        if (-not [string]::IsNullOrWhiteSpace($Subsystem)) {
+        $nonEmptySubsystem = @($Subsystem | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+        if ($nonEmptySubsystem.Count -gt 0) {
             Write-Error "-Subsystem is valid only with -Tier subsystem."
             exit 2
         }
