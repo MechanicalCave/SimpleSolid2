@@ -16,9 +16,9 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - merge CI-02 only after the exact closeout HEAD passes the selected CLOSURE CI tier
-  - use FAST for draft runtime iterations, SUBSYSTEM for explicit checkpoints and FULL for final runtime certification
-  - keep R6+ inactive until separately contracted
+  - CI-02 is merged; keep FAST for draft runtime iterations, SUBSYSTEM for explicit checkpoints and FULL for final runtime certification
+  - stop at the completed R5 + CI-02 checkpoint
+  - keep R6+ inactive until a separate explicit Owner-accepted Work Contract is activated
 
 notes:
   - R0 through R4 are completed.
@@ -64,3 +64,6 @@ notes:
   - Production UI translation units compile once through simplesolid2_ui and UI-oriented tests link that production target.
   - CI-02 acceptance conditions are satisfied; status is completed pending closeout-only CLOSURE gate and merge.
   - R6+ remains inactive and requires a separate accepted Work Contract.
+
+  - CI-02 merged to main as 0494fe0da1bc346ff5c062e73691ecc407e94c77 after FULL #417 and CLOSURE #419.
+  - Repository is at a clean completed R5 + CI-02 checkpoint; R6+ remains inactive.
