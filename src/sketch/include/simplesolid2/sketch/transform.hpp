@@ -36,4 +36,22 @@ translateSketchGeometry(
     const SketchTransformGeometry& geometry,
     Point2 delta);
 
+[[nodiscard]] std::optional<SketchTransformGeometry>
+rotateSketchGeometry(
+    const SketchTransformGeometry& geometry,
+    Point2 base_point,
+    double angle_radians);
+
+[[nodiscard]] std::optional<SketchTransformGeometry>
+scaleSketchGeometry(
+    const SketchTransformGeometry& geometry,
+    Point2 base_point,
+    double factor);
+
+[[nodiscard]] std::optional<SketchTransformGeometry>
+mirrorSketchGeometry(
+    const SketchTransformGeometry& geometry,
+    Point2 axis_start,
+    Point2 axis_end);
+
 } // namespace simplesolid2::sketch
