@@ -1066,14 +1066,28 @@ PartViewportController::buildSketchScene() {
         if (!token || segments.empty() || !bind(*token, id)) {
             return false;
         }
+
+        viewer::SketchCurvePresentation curve;
+        curve.token = *token;
+        curve.points.reserve(segments.size() + 1U);
+
+        const auto first = detail::sketchPointToWorld(
+            hosted->placement,
+            segments.front().start);
+        if (!first) return false;
+        curve.points.push_back(*first);
+
         for (const auto& segment : segments) {
-            const auto start = detail::sketchPointToWorld(
-                hosted->placement, segment.start);
             const auto end = detail::sketchPointToWorld(
                 hosted->placement, segment.end);
-            if (!start || !end) return false;
-            scene.lines.push_back({*token, *start, *end});
+            if (!end) return false;
+            curve.points.push_back(*end);
         }
+
+        if (!curve.valid()) {
+            return false;
+        }
+        scene.curves.push_back(std::move(curve));
         return true;
     };
 
