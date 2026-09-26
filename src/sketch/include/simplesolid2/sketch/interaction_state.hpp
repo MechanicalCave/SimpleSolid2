@@ -3,6 +3,7 @@
 #include <simplesolid2/sketch/entity_id.hpp>
 #include <simplesolid2/sketch/point2.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
+#include <simplesolid2/sketch/transform.hpp>
 
 #include <cstdint>
 #include <optional>
@@ -160,21 +161,8 @@ struct SketchGripRef final {
 
 using LineGripRef = SketchGripRef;
 
-struct DirectManipulationGeometry final {
-    std::vector<SketchLineState> lines;
-    std::vector<SketchCircleState> circles;
-    std::vector<SketchArcState> arcs;
-
-    [[nodiscard]] bool empty() const noexcept {
-        return lines.empty() &&
-               circles.empty() &&
-               arcs.empty();
-    }
-
-    friend bool operator==(
-        const DirectManipulationGeometry&,
-        const DirectManipulationGeometry&) = default;
-};
+using DirectManipulationGeometry =
+    SketchTransformGeometry;
 
 struct ResolvedSketchInput final {
     Point2 position;
