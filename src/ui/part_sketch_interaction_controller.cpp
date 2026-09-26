@@ -1254,13 +1254,11 @@ void PartSketchInteractionController::updateHover(
     const bool select_mode =
         interaction_.tool() ==
         sketch::SketchTool::select;
-    const bool move_collect_mode =
-        interaction_.tool() ==
-            sketch::SketchTool::move &&
-        interaction_.moveStage() ==
-            sketch::MoveStage::select_objects;
+    const bool transform_collect_mode =
+        interaction_.commonTransformStage() ==
+            sketch::CommonTransformStage::select_objects;
 
-    if ((!select_mode && !move_collect_mode) ||
+    if ((!select_mode && !transform_collect_mode) ||
         interaction_.directManipulationActive()) {
         return;
     }
@@ -1364,19 +1362,20 @@ updateDirectManipulationPreview(
     }
 }
 
-void PartSketchInteractionController::updateMovePreview(
+void PartSketchInteractionController::
+updateCommonTransformPreview(
     sketch::Point2 raw_input) {
     const auto resolved =
         sketch::resolveSketchInput(raw_input);
     if (!resolved ||
-        !interaction_.updateMoveDestination(
+        !interaction_.updateTransformPreview(
             *resolved)) {
         viewport_controller_->clearSketchPreview();
         return;
     }
 
     const auto geometry =
-        interaction_.moveGeometryState();
+        interaction_.transformGeometryState();
     if (!geometry ||
         !viewport_controller_->setSketchGeometryPreview(
             *geometry)) {
@@ -1417,10 +1416,8 @@ void PartSketchInteractionController::configureForCurrentTool() {
     const bool pick_box =
         interaction_.tool() ==
             sketch::SketchTool::select ||
-        (interaction_.tool() ==
-             sketch::SketchTool::move &&
-         interaction_.moveStage() ==
-             sketch::MoveStage::select_objects);
+        interaction_.commonTransformStage() ==
+            sketch::CommonTransformStage::select_objects;
 
     static_cast<void>(
         viewport_controller_->setSketchCursorMode(
