@@ -613,6 +613,166 @@ DocumentSessionResult DocumentSession::execute(
         "Part transaction failed while updating Sketch geometry");
 }
 
+DuplicateSketchGeometryResult DocumentSession::execute(
+    const DuplicateSketchGeometryCommand& command) {
+    if (command.geometry.empty()) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Duplicate Sketch Geometry requires at least one entity",
+            path_);
+        return DuplicateSketchGeometryResult{
+            false,
+            {},
+            failed.diagnostic};
+    }
+
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Duplicate Sketch Geometry was started from a stale DocumentRevision",
+            path_);
+        return DuplicateSketchGeometryResult{
+            false,
+            {},
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applySketchEntityIdCursors(after);
+
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Duplicate Sketch Geometry target SketchId does not exist",
+            path_);
+        return DuplicateSketchGeometryResult{
+            false,
+            {},
+            failed.diagnostic};
+    }
+
+    std::set<sketch::EntityId> source_ids;
+    const auto require_source =
+        [&source_ids](
+            sketch::EntityId id,
+            bool present) {
+            return id.valid() &&
+                   present &&
+                   source_ids.insert(id).second;
+        };
+
+    for (const auto& line : command.geometry.lines) {
+        if (!require_source(
+                line.id,
+                target->model.findLine(line.id) != nullptr)) {
+            const auto failed = failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Duplicate Sketch Geometry contains an invalid, duplicate or mismatched Line source",
+                path_);
+            return DuplicateSketchGeometryResult{
+                false,
+                {},
+                failed.diagnostic};
+        }
+    }
+
+    for (const auto& circle : command.geometry.circles) {
+        if (!require_source(
+                circle.id,
+                target->model.findCircle(circle.id) != nullptr)) {
+            const auto failed = failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Duplicate Sketch Geometry contains an invalid, duplicate or mismatched Circle source",
+                path_);
+            return DuplicateSketchGeometryResult{
+                false,
+                {},
+                failed.diagnostic};
+        }
+    }
+
+    for (const auto& arc : command.geometry.arcs) {
+        if (!require_source(
+                arc.id,
+                target->model.findArc(arc.id) != nullptr)) {
+            const auto failed = failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Duplicate Sketch Geometry contains an invalid, duplicate or mismatched Arc source",
+                path_);
+            return DuplicateSketchGeometryResult{
+                false,
+                {},
+                failed.diagnostic};
+        }
+    }
+
+    std::vector<sketch::EntityId> created;
+    created.reserve(
+        command.geometry.lines.size() +
+        command.geometry.circles.size() +
+        command.geometry.arcs.size());
+
+    try {
+        for (const auto& line : command.geometry.lines) {
+            created.push_back(
+                target->model.addLine(
+                    line.start,
+                    line.end));
+        }
+        for (const auto& circle : command.geometry.circles) {
+            created.push_back(
+                target->model.addCircle(
+                    circle.center,
+                    circle.radius));
+        }
+        for (const auto& arc : command.geometry.arcs) {
+            created.push_back(
+                target->model.addArc(
+                    arc.center,
+                    arc.radius,
+                    arc.start_angle,
+                    arc.sweep_angle));
+        }
+    } catch (const std::invalid_argument&) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Duplicate Sketch Geometry contains invalid authored geometry",
+            path_);
+        return DuplicateSketchGeometryResult{
+            false,
+            {},
+            failed.diagnostic};
+    } catch (const std::overflow_error&) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Sketch EntityId allocation space is exhausted",
+            path_);
+        return DuplicateSketchGeometryResult{
+            false,
+            {},
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while duplicating Sketch geometry");
+    if (!committed.ok() || !committed.changed) {
+        return DuplicateSketchGeometryResult{
+            committed.changed,
+            {},
+            committed.diagnostic};
+    }
+
+    return DuplicateSketchGeometryResult{
+        true,
+        std::move(created),
+        DocumentSessionDiagnostic{}};
+}
+
 DocumentSessionResult DocumentSession::applyHistoricalState(
     const part::PartAuthoredState& expected_current,
     const part::PartAuthoredState& target) {
