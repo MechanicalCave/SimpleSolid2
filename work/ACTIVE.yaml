@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-07A_COMMON_TRANSFORM_CORE_AND_MOVE.md"
+status: active
+active_work: "work/SK-07B_ROTATE_SCALE_MIRROR_AND_TOOL_GROUPING.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.2"
@@ -16,11 +16,13 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
-  - propose SK-07B for the next R7 slice: Rotate/Scale/Mirror/Copy on the shared transform core
-  - include Sketch toolbar organization into clear Create and Modify sections in that next UI slice
-  - preserve completed SK-07A MOVE semantics as the implementation baseline
-  - keep R8+ inactive
+  - implement accepted SK-07B within the bounded Rotate/Scale/Mirror + toolbar-grouping scope
+  - extend the existing shared transform core before adding UI-specific command behavior
+  - reuse SK-07A selection-first/command-first object collection and frozen-selection semantics
+  - reorganize Sketch tools into Select / Create / Modify without introducing a new toolbar framework
+  - use FAST/SUBSYSTEM Sketch/UI checkpoints during implementation
+  - require exact-head Windows FULL plus Owner manual verification before completion
+  - keep Copy/repeated Copy/Repeat Last Command and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -101,3 +103,7 @@ notes:
   - After documentation and manual PASS, non-functional transform-authority comments established final exact-head runtime checkpoint 188e58f17e4c3964a858129d1af9170c2402f4fb.
   - Final exact-head Windows FULL #479 passed on 188e58f17e4c3964a858129d1af9170c2402f4fb with Build, unfiltered CTest and stable windows-msvc all successful.
   - SK-07A now awaits only the work-only CLOSURE gate and merge.
+
+  - Owner explicitly accepted SK-07B scope on 2026-09-26.
+  - SK-07B is the second bounded R7 slice: Rotate, positive uniform Scale, Mirror, and clear Sketch toolbar grouping into Select / Create / Modify.
+  - Copy/repeated Copy, fresh transform-created EntityIds, Copy modifier, semantic Space CycleEditMode, ordinary-Select RMB context and Repeat Last Command remain outside SK-07B.

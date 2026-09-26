@@ -611,7 +611,7 @@ Goal:
 - prove the R5 interaction architecture is not Line-specific.
 
 ### R7 — Common transforms, Copy and command grammar
-**Status:** active — SK-07A completed 2026-09-26; remaining R7 requires separate accepted slices
+**Status:** active — SK-07A completed; SK-07B accepted 2026-09-26 for Rotate/Scale/Mirror + tool grouping
 
 Goal:
 
@@ -729,7 +729,7 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7 active — SK-07A completed after FULL #475, DOCS #476/#477 and Owner manual PASS; remaining R7 is not yet authorized  
+R7 active — SK-07A completed; SK-07B accepted for Rotate/Scale/Mirror + Select/Create/Modify toolbar grouping; Copy and later grammar remain unauthorized  
 R8+ not started
 
 Roadmap v1.2 remains authoritative. The next R7 slice should include Create/Modify toolbar grouping together with the next transform UI work. Remaining R7 work and R8+ require separate explicit Owner-accepted Work Contracts.
