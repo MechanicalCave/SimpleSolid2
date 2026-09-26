@@ -9,6 +9,7 @@
 #include <numbers>
 #include <set>
 #include <string>
+#include <utility>
 #include <vector>
 
 using namespace simplesolid2;
