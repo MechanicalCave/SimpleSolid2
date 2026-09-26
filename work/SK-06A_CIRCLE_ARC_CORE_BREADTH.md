@@ -1,8 +1,10 @@
 # SK-06A — Circle and Arc Core Breadth
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-26  
 **Owner acceptance:** 2026-09-26  
+**Owner manual Windows verification:** PASS — 2026-09-26  
+**Final exact-head Windows FULL:** #443 — `bd42ac6954cfe36881cb187832f0f0ca745d22e0` — PASS  
 **Decision class:** D2 durable primitive/persistence extension + bounded D1 interaction implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program roadmap:** `work/SKETCH_ROADMAP.md` v1.2  
@@ -393,3 +395,15 @@ Completion requires:
 - Owner manual Windows verification passes;
 - closeout CLOSURE passes;
 - R7+ remains inactive.
+
+
+## 19. Completion evidence
+
+SK-06A completed its bounded R6 implementation and verification on 2026-09-26.
+
+- Windows FULL #440 passed the 58-test suite before the documentation-only suffix.
+- DOCS #441 and ready-for-review DOCS #442 passed documentation generation, freshness and validation.
+- Owner manual Windows verification passed the accepted checklist.
+- A non-functional source comment was then added to establish an exact-head FULL checkpoint over the complete documented candidate.
+- Final exact-head Windows FULL #443 passed on `bd42ac6954cfe36881cb187832f0f0ca745d22e0`: Build succeeded and 58/58 CTest tests passed.
+- R7+ remains outside this completed contract.
