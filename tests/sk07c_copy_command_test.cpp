@@ -133,6 +133,11 @@ int main() {
     const auto source =
         capture(session, sketch_id, source_ids);
 
+    // Establish a clean persisted baseline before COPY so allocator-only
+    // high-water changes after Undo are observable through needsSave().
+    CHECK(session.save().ok());
+    CHECK(!session.needsSave());
+
     const auto placement_a =
         sketch::translateSketchGeometry(
             source,
@@ -156,6 +161,7 @@ int main() {
     CHECK(
         session.document().revision() ==
         *revision_before_a.next());
+    CHECK(session.needsSave());
 
     const auto* after_a =
         session.document().findSketch(sketch_id);
@@ -168,7 +174,9 @@ int main() {
     }
     CHECK(capture(session, sketch_id, source_ids) == source);
 
-    // Undo removes the copy but preserves the allocator high-water mark.
+    // Undo removes A, but the high-water identity cursor remains advanced
+    // and therefore the session still requires Save even though authored
+    // geometry matches the persisted baseline.
     const auto undo_a = session.undo();
     CHECK(undo_a.ok() && undo_a.changed);
     const auto* after_undo_a =
@@ -177,8 +185,9 @@ int main() {
     for (const auto id : copied_a.entity_ids) {
         CHECK(!after_undo_a->model.contains(id));
     }
+    CHECK(session.needsSave());
 
-    // Redo restores the same copied identities, not newly allocated ones.
+    // Redo restores the exact copied identities.
     const auto redo_a = session.redo();
     CHECK(redo_a.ok() && redo_a.changed);
     const auto* after_redo_a =
@@ -188,8 +197,10 @@ int main() {
         CHECK(after_redo_a->model.contains(id));
     }
 
-    // Branch history after Undo: a new copy must not reuse undone IDs.
+    // Branch from Undo: B must not reuse A's identities and must clear
+    // the abandoned Redo branch.
     CHECK(session.undo().ok());
+    CHECK(session.needsSave());
     const auto placement_b =
         sketch::translateSketchGeometry(
             source,
@@ -207,59 +218,84 @@ int main() {
     CHECK(disjoint(copied_a.entity_ids, copied_b.entity_ids));
     CHECK(session.redoDepth() == 0U);
 
-    // Stale revision fails without authored or allocator mutation.
-    const auto stale_state =
-        session.document().state();
-    const auto stale_undo =
-        session.undoDepth();
-    const auto stale =
-        session.execute(
-            application::DuplicateSketchGeometryCommand{
-                sketch_id,
-                revision_before_a,
-                *placement_a});
-    CHECK(!stale.ok());
+    // Undo B as well. Geometry is back at the persisted baseline, but both
+    // committed identity ranges A and B must remain durably consumed.
+    CHECK(session.undo().ok());
     CHECK(
-        stale.diagnostic.code ==
-        application::DocumentSessionErrorCode::revision_diverged);
-    CHECK(session.document().state() == stale_state);
-    CHECK(session.undoDepth() == stale_undo);
+        session.document().findSketch(sketch_id)->
+            model.entityCount() == 3U);
+    CHECK(session.needsSave());
 
+    // Saving this allocator-only difference is the key SK-07C lifecycle
+    // boundary. Reopen must retain the high-water cursor without schema
+    // migration.
     CHECK(session.save().ok());
+    CHECK(!session.needsSave());
 
-    auto loaded = store.load(path);
-    CHECK(loaded.ok());
+    auto loaded_after_undo = store.load(path);
+    CHECK(loaded_after_undo.ok());
     application::DocumentSession reopened{
         path,
-        std::move(*loaded.document)};
+        std::move(*loaded_after_undo.document)};
 
-    const auto* reopened_sketch =
+    const auto* reopened_baseline =
         reopened.document().findSketch(sketch_id);
-    CHECK(reopened_sketch != nullptr);
+    CHECK(reopened_baseline != nullptr);
+    CHECK(reopened_baseline->model.entityCount() == 3U);
     for (const auto id : source_ids) {
-        CHECK(reopened_sketch->model.contains(id));
-    }
-    for (const auto id : copied_b.entity_ids) {
-        CHECK(reopened_sketch->model.contains(id));
+        CHECK(reopened_baseline->model.contains(id));
     }
 
-    // Persisted next_entity_id must keep future COPY above all prior
-    // committed/undone identities.
     const auto placement_c =
         sketch::translateSketchGeometry(
             source,
             {20.0, -4.0});
     CHECK(placement_c.has_value());
+    const auto revision_before_c =
+        reopened.document().revision();
     const auto copied_c =
         reopened.execute(
             application::DuplicateSketchGeometryCommand{
                 sketch_id,
-                reopened.document().revision(),
+                revision_before_c,
                 *placement_c});
     CHECK(copied_c.ok() && copied_c.changed);
+    CHECK(copied_c.entity_ids.size() == 3U);
     CHECK(disjoint(source_ids, copied_c.entity_ids));
     CHECK(disjoint(copied_a.entity_ids, copied_c.entity_ids));
     CHECK(disjoint(copied_b.entity_ids, copied_c.entity_ids));
+
+    // A stale command must not allocate another identity range.
+    const auto stale_state =
+        reopened.document().state();
+    const auto stale_undo =
+        reopened.undoDepth();
+    const auto stale =
+        reopened.execute(
+            application::DuplicateSketchGeometryCommand{
+                sketch_id,
+                revision_before_c,
+                *placement_a});
+    CHECK(!stale.ok());
+    CHECK(
+        stale.diagnostic.code ==
+        application::DocumentSessionErrorCode::revision_diverged);
+    CHECK(reopened.document().state() == stale_state);
+    CHECK(reopened.undoDepth() == stale_undo);
+
+    CHECK(reopened.save().ok());
+
+    auto loaded_final = store.load(path);
+    CHECK(loaded_final.ok());
+    const auto* final_sketch =
+        loaded_final.document->findSketch(sketch_id);
+    CHECK(final_sketch != nullptr);
+    for (const auto id : source_ids) {
+        CHECK(final_sketch->model.contains(id));
+    }
+    for (const auto id : copied_c.entity_ids) {
+        CHECK(final_sketch->model.contains(id));
+    }
 
     return EXIT_SUCCESS;
 }
