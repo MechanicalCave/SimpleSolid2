@@ -3,6 +3,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <string>
 #include <vector>
 
 using namespace simplesolid2;
@@ -28,13 +29,40 @@ application::SketchLineGeometryUpdate update(
     return {id, start, end};
 }
 
+struct TempDirectory final {
+    std::filesystem::path path;
+
+    TempDirectory() {
+        path =
+            std::filesystem::temp_directory_path() /
+            ("simplesolid2_sk05a_geometry_" +
+             std::to_string(
+                 std::filesystem::file_time_type::clock::now()
+                     .time_since_epoch()
+                     .count()));
+        std::filesystem::create_directories(path);
+    }
+
+    ~TempDirectory() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+};
+
 } // namespace
 
 int main() {
+    TempDirectory temp;
+    part::PartDocumentStore store;
+    const auto path =
+        temp.path / "sk05a-line-geometry.ss2part";
+
     auto document =
         part::PartDocument::create(core::DocumentId::generate());
+    CHECK(store.createNew(path, document).ok());
+
     application::DocumentSession session{
-        std::filesystem::path{"sk05a-line-geometry.ss2part"},
+        path,
         std::move(document)};
 
     const auto created =
@@ -196,6 +224,36 @@ int main() {
             ->model.findLine(id1)
             ->start() ==
         sketch::Point2{-5.0, 3.0});
+
+    CHECK(session.save().ok());
+    CHECK(!session.needsSave());
+
+    auto loaded = store.load(path);
+    CHECK(loaded.ok());
+    CHECK(loaded.document.has_value());
+
+    application::DocumentSession reopened{
+        path,
+        std::move(*loaded.document)};
+    const auto* reopened_sketch =
+        reopened.document().findSketch(sketch_id);
+    CHECK(reopened_sketch != nullptr);
+    CHECK(reopened_sketch->model.findLine(id1) != nullptr);
+    CHECK(reopened_sketch->model.findLine(id2) != nullptr);
+    CHECK(reopened_sketch->model.findLine(id1)->id() == id1);
+    CHECK(reopened_sketch->model.findLine(id2)->id() == id2);
+    CHECK(
+        reopened_sketch->model.findLine(id1)->start() ==
+        sketch::Point2{-5.0, 3.0});
+    CHECK(
+        reopened_sketch->model.findLine(id1)->end() ==
+        sketch::Point2{12.0, 3.0});
+    CHECK(
+        reopened_sketch->model.findLine(id2)->start() ==
+        sketch::Point2{2.0, 13.0});
+    CHECK(
+        reopened_sketch->model.findLine(id2)->end() ==
+        sketch::Point2{12.0, 13.0});
 
     return EXIT_SUCCESS;
 }
