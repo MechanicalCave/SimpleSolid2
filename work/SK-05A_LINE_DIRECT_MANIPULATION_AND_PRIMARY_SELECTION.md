@@ -501,7 +501,7 @@ The exact final implementation candidate requires manual verification of:
 - Undo/Redo visibly restores/reapplies the atomic edit;
 - no stale native pixels or viewport disappearance occur during repeated use, navigation, resize and supported DPI scaling.
 
-## 21. Documentation Impact
+## 21. Documentation impact
 
 Internal docs: required  
 User/Product docs: required  
