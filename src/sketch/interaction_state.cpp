@@ -245,6 +245,7 @@ SketchInteractionState::arcStage() const noexcept {
 
 void SketchInteractionState::activateLine() noexcept {
     manipulation_.reset();
+    resetMoveStage();
     clearHover();
     tool_ = SketchTool::line;
     resetLineStage();
@@ -254,6 +255,7 @@ void SketchInteractionState::activateLine() noexcept {
 
 void SketchInteractionState::activateCircle() noexcept {
     manipulation_.reset();
+    resetMoveStage();
     clearHover();
     tool_ = SketchTool::circle;
     resetLineStage();
@@ -263,6 +265,7 @@ void SketchInteractionState::activateCircle() noexcept {
 
 void SketchInteractionState::activateArc() noexcept {
     manipulation_.reset();
+    resetMoveStage();
     clearHover();
     tool_ = SketchTool::arc;
     resetLineStage();
@@ -1206,6 +1209,7 @@ void SketchInteractionState::resetToSelect() noexcept {
     resetLineStage();
     resetCircleStage();
     resetArcStage();
+    resetMoveStage();
 }
 
 void SketchInteractionState::resetLineStage()
