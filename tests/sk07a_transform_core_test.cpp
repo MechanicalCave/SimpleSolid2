@@ -154,5 +154,87 @@ int main() {
     interaction.cancelDirectManipulation();
     CHECK(!interaction.directManipulationActive());
 
+    // Selection-first normal MOVE freezes the existing selection and
+    // uses Base Point -> destination against the same transform core.
+    sketch::SketchInteractionState selection_first;
+    CHECK(selection_first.addSelection(line_id));
+    CHECK(selection_first.addSelection(circle_id));
+    CHECK(selection_first.addSelection(arc_id));
+    CHECK(selection_first.activateMove(model));
+    CHECK(
+        selection_first.tool() ==
+        sketch::SketchTool::move);
+    CHECK(
+        selection_first.moveStage() ==
+        sketch::MoveStage::await_base_point);
+    CHECK(!selection_first.toggleSelection(line_id));
+
+    CHECK(
+        selection_first.acceptMoveBasePoint(
+            sketch::ResolvedSketchInput{
+                {1.0, 2.0}}));
+    CHECK(
+        selection_first.moveStage() ==
+        sketch::MoveStage::await_destination);
+    CHECK(
+        selection_first.updateMoveDestination(
+            sketch::ResolvedSketchInput{
+                {9.0, -1.0}}));
+
+    const auto selection_first_geometry =
+        selection_first.moveGeometryState();
+    CHECK(selection_first_geometry.has_value());
+    CHECK(*selection_first_geometry == *translated);
+
+    CHECK(selection_first.escape());
+    CHECK(
+        selection_first.tool() ==
+        sketch::SketchTool::select);
+    CHECK(selection_first.selectedEntities().size() == 3U);
+
+    // Command-first MOVE starts in object collection and freezes only
+    // when collection is explicitly completed.
+    sketch::SketchInteractionState command_first;
+    CHECK(command_first.activateMove(model));
+    CHECK(
+        command_first.moveStage() ==
+        sketch::MoveStage::select_objects);
+    CHECK(!command_first.completeMoveSelection(model));
+
+    CHECK(command_first.addSelection(line_id));
+    CHECK(command_first.addSelection(circle_id));
+    CHECK(
+        command_first.completeMoveSelection(model));
+    CHECK(
+        command_first.moveStage() ==
+        sketch::MoveStage::await_base_point);
+    CHECK(!command_first.addSelection(arc_id));
+
+    CHECK(
+        command_first.acceptMoveBasePoint(
+            sketch::ResolvedSketchInput{
+                {-4.0, 3.0}}));
+    CHECK(
+        command_first.updateMoveDestination(
+            sketch::ResolvedSketchInput{
+                {-4.0, 3.0}}));
+
+    const auto zero_move =
+        command_first.moveGeometryState();
+    CHECK(zero_move.has_value());
+
+    const auto command_capture =
+        sketch::captureSketchTransformGeometry(
+            model,
+            {line_id, circle_id});
+    CHECK(command_capture.has_value());
+    CHECK(*zero_move == *command_capture);
+
+    command_first.finishMove();
+    CHECK(
+        command_first.tool() ==
+        sketch::SketchTool::select);
+    CHECK(command_first.selectedEntities().size() == 2U);
+
     return EXIT_SUCCESS;
 }
