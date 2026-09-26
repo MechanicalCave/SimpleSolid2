@@ -3,6 +3,7 @@
 #include "part_viewport_controller.hpp"
 
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/part/part_document_store.hpp>
 
 #include <QApplication>
 #include <QTreeWidget>
@@ -176,15 +177,39 @@ void click(
         sx, sy, u, v, control));
 }
 
+struct TempDirectory final {
+    std::filesystem::path path;
+
+    TempDirectory() {
+        path =
+            std::filesystem::temp_directory_path() /
+            ("ss2-sk07a-move-" +
+             core::DocumentId::generate().toString());
+        std::filesystem::create_directories(path);
+    }
+
+    ~TempDirectory() {
+        std::error_code ec;
+        std::filesystem::remove_all(path, ec);
+    }
+};
+
 } // namespace
 
 int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
 
+    TempDirectory temp;
+    part::PartDocumentStore store;
+    const auto path =
+        temp.path / "sk07a-move.ss2part";
+
     auto document =
         part::PartDocument::create(core::DocumentId::generate());
+    CHECK(store.createNew(path, document).ok());
+
     application::DocumentSession session{
-        std::filesystem::path{"sk07a-move.ss2part"},
+        path,
         std::move(document)};
 
     const auto created =
@@ -426,6 +451,72 @@ int main(int argc, char* argv[]) {
     CHECK(redo_result.ok() && redo_result.changed);
     CHECK(interaction.reconcileAfterHistory());
     CHECK(interaction.selectedCount() == 3U);
+
+    // A revision change after MOVE starts makes the later commit stale.
+    CHECK(interaction.activateMove());
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0));
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::move,
+        110.0, 110.0,
+        12.0, 6.0));
+    CHECK(
+        interaction.moveStage() ==
+        sketch::MoveStage::await_destination);
+
+    const auto external_change =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {100.0, 100.0},
+                {110.0, 100.0}});
+    CHECK(external_change.ok() && external_change.changed);
+    const auto state_after_external_change =
+        session.document().state();
+    const auto revision_after_external_change =
+        session.document().revision();
+    const auto undo_after_external_change =
+        session.undoDepth();
+
+    CHECK(!interaction.commitMove());
+    CHECK(
+        session.document().state() ==
+        state_after_external_change);
+    CHECK(
+        session.document().revision() ==
+        revision_after_external_change);
+    CHECK(
+        session.undoDepth() ==
+        undo_after_external_change);
+    CHECK(
+        interaction.tool() ==
+        sketch::SketchTool::select);
+    CHECK(interaction.selectedCount() == 3U);
+
+    // The moved mixed geometry and EntityIds survive the existing v4
+    // persistence path.
+    CHECK(session.save().ok());
+    auto loaded = store.load(path);
+    CHECK(loaded.ok());
+    const auto* reopened =
+        loaded.document->findSketch(sketch_id);
+    CHECK(reopened != nullptr);
+    CHECK(
+        reopened->model.findLine(line_id)->start() ==
+        sketch::Point2{5.0, -2.0});
+    CHECK(
+        reopened->model.findCircle(circle_id)->center() ==
+        sketch::Point2{25.0, 8.0});
+    CHECK(
+        reopened->model.findArc(arc_id)->center() ==
+        sketch::Point2{-5.0, 3.0});
+    CHECK(reopened->model.findLine(line_id)->id() == line_id);
+    CHECK(reopened->model.findCircle(circle_id)->id() == circle_id);
+    CHECK(reopened->model.findArc(arc_id)->id() == arc_id);
 
     return EXIT_SUCCESS;
 }
