@@ -5,6 +5,7 @@ param(
     [string]$EventName = "pull_request",
     [string]$HeadSha = "",
     [string]$BaseSha = "",
+    [string]$PullRequestDraft = "false",
     [string]$GitHubToken = "",
     [string]$OutputPath = ""
 )
@@ -16,8 +17,24 @@ function Normalize-RepoPath {
     return (($Path -replace '\\', '/').Trim())
 }
 
+function Test-SS2VerificationInfrastructurePath {
+    param([Parameter(Mandatory=$true)][string]$Path)
+
+    return (
+        $Path -match '^tests/' -or
+        $Path -match '^scripts/' -or
+        $Path -match '(^|/)CMakeLists\.txt$' -or
+        $Path -eq 'ss2.ps1' -or
+        $Path -eq 'ss2.cmd' -or
+        $Path -match '^\.github/workflows/'
+    )
+}
+
 function Get-SS2GateModeForPaths {
-    param([string[]]$Paths)
+    param(
+        [string[]]$Paths,
+        [bool]$Draft = $false
+    )
 
     $normalized = @(
         $Paths |
@@ -55,33 +72,77 @@ function Get-SS2GateModeForPaths {
     if ($allDocs) {
         return "docs"
     }
+
+    foreach ($path in $normalized) {
+        if (Test-SS2VerificationInfrastructurePath $path) {
+            return "full"
+        }
+    }
+
+    if (-not $Draft) {
+        return "full"
+    }
+
+    $hasRuntimeSource = $false
+    foreach ($path in $normalized) {
+        if (
+            $path -match '^work/' -or
+            $path -match '^docs/' -or
+            $path -match '^governance/' -or
+            $path -eq 'README.md' -or
+            $path -eq 'AGENTS.md'
+        ) {
+            continue
+        }
+
+        if ($path -match '^src/') {
+            $hasRuntimeSource = $true
+            continue
+        }
+
+        return "full"
+    }
+
+    if ($hasRuntimeSource) {
+        return "fast"
+    }
+
     return "full"
 }
 
 function Assert-GateMode {
     param(
         [string[]]$Paths,
-        [string]$Expected
+        [string]$Expected,
+        [bool]$Draft = $false
     )
 
-    $actual = Get-SS2GateModeForPaths $Paths
+    $actual = Get-SS2GateModeForPaths -Paths $Paths -Draft $Draft
     if ($actual -ne $Expected) {
-        throw "Gate classifier self-test failed: expected '$Expected', got '$actual' for [$($Paths -join ', ')]"
+        throw "Gate classifier self-test failed: expected '$Expected', got '$actual' for draft=$Draft paths=[$($Paths -join ', ')]"
     }
 }
 
 function Invoke-ClassifierSelfTest {
-    Assert-GateMode -Paths @('work/ACTIVE.yaml') -Expected 'closure'
-    Assert-GateMode -Paths @('work/ACTIVE.yaml', 'work/CI-01_TEST.md') -Expected 'closure'
-    Assert-GateMode -Paths @('docs/internal/BUILD_AND_TEST.md') -Expected 'docs'
-    Assert-GateMode -Paths @('governance/DOCUMENTATION.md', 'work/ACTIVE.yaml') -Expected 'docs'
-    Assert-GateMode -Paths @('README.md', 'AGENTS.md') -Expected 'docs'
-    Assert-GateMode -Paths @('src/part/part_document.cpp') -Expected 'full'
-    Assert-GateMode -Paths @('tests/example_test.cpp') -Expected 'full'
-    Assert-GateMode -Paths @('scripts/ss2-build.ps1') -Expected 'full'
-    Assert-GateMode -Paths @('.github/workflows/windows-pr-gate.yml') -Expected 'full'
-    Assert-GateMode -Paths @('docs/internal/BUILD_AND_TEST.md', 'src/core/document.cpp') -Expected 'full'
-    Assert-GateMode -Paths @() -Expected 'closure'
+    Assert-GateMode -Paths @('work/ACTIVE.yaml') -Expected 'closure' -Draft $true
+    Assert-GateMode -Paths @('work/ACTIVE.yaml', 'work/CI-02_TEST.md') -Expected 'closure' -Draft $false
+    Assert-GateMode -Paths @('docs/internal/BUILD_AND_TEST.md') -Expected 'docs' -Draft $true
+    Assert-GateMode -Paths @('governance/DOCUMENTATION.md', 'work/ACTIVE.yaml') -Expected 'docs' -Draft $false
+    Assert-GateMode -Paths @('README.md', 'AGENTS.md') -Expected 'docs' -Draft $true
+
+    Assert-GateMode -Paths @('src/part/part_document.cpp') -Expected 'fast' -Draft $true
+    Assert-GateMode -Paths @('src/sketch/sketch_model.cpp', 'docs/internal/SHARED_2D.md') -Expected 'fast' -Draft $true
+    Assert-GateMode -Paths @('src/part/part_document.cpp') -Expected 'full' -Draft $false
+
+    Assert-GateMode -Paths @('tests/example_test.cpp') -Expected 'full' -Draft $true
+    Assert-GateMode -Paths @('scripts/ss2-build.ps1') -Expected 'full' -Draft $true
+    Assert-GateMode -Paths @('src/CMakeLists.txt') -Expected 'full' -Draft $true
+    Assert-GateMode -Paths @('.github/workflows/windows-pr-gate.yml') -Expected 'full' -Draft $true
+    Assert-GateMode -Paths @('docs/internal/BUILD_AND_TEST.md', 'src/core/document.cpp') -Expected 'fast' -Draft $true
+    Assert-GateMode -Paths @('docs/internal/BUILD_AND_TEST.md', 'src/core/document.cpp') -Expected 'full' -Draft $false
+    Assert-GateMode -Paths @('unknown/runtime.file', 'work/ACTIVE.yaml') -Expected 'full' -Draft $true
+    Assert-GateMode -Paths @() -Expected 'closure' -Draft $true
+
     Write-Host '[gate] classifier self-test passed'
 }
 
@@ -154,7 +215,7 @@ function Test-SuccessfulFullGate {
             }
         }
     } catch {
-        Write-Warning "Unable to verify prior FULL evidence for ${Sha}: $($_.Exception.Message)"
+        Write-Warning "Unable to verify prior FULL evidence for SHA $Sha - $($_.Exception.Message)"
         return $false
     }
 
@@ -178,6 +239,10 @@ if ([string]::IsNullOrWhiteSpace($HeadSha) -or
     Write-GateOutputs -Mode 'full' -TrustedFullSha '' -DiffStartSha $BaseSha
     exit 0
 }
+
+$draft =
+    $PullRequestDraft.Trim().ToLowerInvariant() -eq 'true'
+Write-Host "[gate] pull request draft: $draft"
 
 $trustedFullSha = ''
 
@@ -212,7 +277,7 @@ try {
     foreach ($path in $paths) {
         Write-Host "  $path"
     }
-    $mode = Get-SS2GateModeForPaths $paths
+    $mode = Get-SS2GateModeForPaths -Paths $paths -Draft $draft
 } catch {
     Write-Warning "[gate] classification failed; failing closed to FULL: $($_.Exception.Message)"
     $mode = 'full'

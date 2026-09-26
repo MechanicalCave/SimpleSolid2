@@ -35,6 +35,10 @@ Relevant commands are:
 .\ss2.ps1 build
 .\ss2.ps1 run
 .\ss2.ps1 test
+.\ss2.ps1 test -Tier fast
+.\ss2.ps1 test -Tier subsystem -Subsystem sketch
+.\ss2.ps1 test -Tier subsystem -Subsystem sketch,viewer,ui
+.\ss2.ps1 test -Tier full
 .\ss2.ps1 docs
 .\ss2.ps1 status
 ```
@@ -44,7 +48,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains 52 tests.
+The compiled CTest suite contains 56 tests.
 
 Project/Hub, PART-01 and WB-01 coverage remains active.
 
@@ -62,7 +66,9 @@ SK-04A adds `sk04a.sketch_interaction_state`, `sk04a.batch_delete` and `sk04a.li
 
 SK-04B adds `sk04b.viewer_selection_query_contracts`, `sk04b.part_viewport_selection_bridge` and `sk04b.viewer_native_selection_query` coverage. These prove finite logical query contracts and failure/no-hit distinction, active-Sketch token↔EntityId mapping, stale-token rejection, reverse highlight projection, independent routing/cursor configuration, runtime selection-box behavior, current-view Window/Crossing projected-Line classification, reference/origin/preview exclusion and real Qt/OCCT query behavior before/after orbit.
 
-SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the single active Sketch interaction coordinator, continuous Line command/Undo granularity, transient preview, point/Ctrl selection, Window/Crossing rectangle replacement without primary identity, atomic Delete, history reconciliation and hierarchical Esc. Legacy Workbench/Sketch-host tests also verify the contextual Part ↔ Sketch Operations state.
+SK-04C adds `sk04c.part_sketch_interaction_controller` coverage for the single active Sketch interaction coordinator, continuous Line command/Undo granularity, transient preview, point/Ctrl selection, Window/Crossing rectangle selection, atomic Delete, history reconciliation and hierarchical Esc. Legacy Workbench/Sketch-host tests also verify the contextual Part ↔ Sketch Operations state.
+
+SK-05A adds `sk05a.direct_manipulation_state`, `sk05a.line_geometry_command` and `sk05a.part_sketch_direct_manipulation`. Native grip/query coverage also extends `sk04b.viewer_native_selection_query`. Together they prove additive selection, semantic primary state, runtime hover/grips, owner-only endpoint Reshape, frozen-selection center Move, preview-only manipulation, atomic geometry commit/history and Save → Close → Reopen identity preservation.
 
 WB-01B strengthens the native Windows overlay path without changing CAD semantics: the real Qt/OCCT selection query test repeatedly exercises OCCT-native rubber-band show/update/clear, the responsive ViewCube test verifies native-child composition, and the real Workbench stress test verifies that ViewCube is hosted as a native child of the native viewport. These automated checks prove lifecycle/non-regression mechanics but not the absence of visual framebuffer artifacts. WB-01B therefore also requires explicit manual visual verification on the exact Windows implementation build before closeout.
 
@@ -87,20 +93,61 @@ Repository documentation validation runs outside CTest through `ss2 verify`.
 
 Tests must not be weakened to obtain a pass.
 
+CI-02 classifies CTest execution separately from the CI-01 exact-head documentation/closure tiers:
+
+```text
+FAST
+  explicit label: tier-fast
+  → broad short-running regression for frequent iteration
+  → currently excludes the long native Workbench stress test
+
+SUBSYSTEM
+  explicit labels: subsystem-core/application/persistence/part/sketch/viewer/ui/project
+  → one or more subsystem labels selected as a checkpoint
+  → tests may belong to multiple subsystems
+
+FULL
+  no CTest label filter
+  → every registered test, including tier-full-only/native stress coverage
+  → mandatory runtime merge evidence
+```
+
+The canonical test command defaults to FULL. FAST and SUBSYSTEM are explicit:
+
+```powershell
+.\ss2.ps1 test -Tier fast
+.\ss2.ps1 test -Tier subsystem -Subsystem sketch
+.\ss2.ps1 test -Tier subsystem -Subsystem sketch,viewer,ui
+.\ss2.ps1 test -Tier full
+```
+
+`-NoBuild` is a bounded CI optimization for a Test step that immediately follows a successful explicit Build. Normal local test commands still build incrementally before CTest. `-ListOnly` validates a selector without executing tests.
+
+Production UI translation units are compiled once into `simplesolid2_ui`. The application and UI-oriented tests link that production library instead of compiling independent copies of the same `src/ui/*.cpp` implementation files.
+
 <!-- section-id: internal.build-test.ci -->
 ## Windows PR gate
 
-The GitHub workflow is `.github/workflows/windows-pr-gate.yml`. It preserves exact-head verification while classifying the unverified suffix into three tiers.
+The GitHub workflow is `.github/workflows/windows-pr-gate.yml`. CI-01 exact-head DOCS/CLOSURE behavior remains intact; CI-02 adds a bounded FAST runtime iteration tier.
 
 ```text
+FAST
+  draft PR with runtime source changes only
+  → exact checkout
+  → machine-local setup
+  → ss2 verify
+  → Build
+  → tier-fast CTest only
+
 FULL
-  source / tests / build scripts / workflow / other runtime-affecting change
+  ready-for-review runtime change
+  or any tests/CMake/scripts/workflow verification-infrastructure change
   → exact checkout
   → docs dispatcher/freshness
   → machine-local setup
   → ss2 verify
-  → build
-  → full CTest
+  → Build once
+  → full unfiltered CTest with -NoBuild
 
 DOCS
   docs/governance-only suffix
@@ -116,14 +163,17 @@ CLOSURE
   → no CAD build or CTest
 ```
 
-For a PR that already has a successful `windows-msvc-full` job on an exact ancestor SHA, the classifier examines only the commits after that trusted SHA. If no such evidence can be verified, classification falls back to the complete base-to-head PR diff; any runtime-affecting path then requires FULL.
+Draft status is an iteration signal only. FAST is never accepted as merge evidence. Marking a runtime PR ready for review triggers FULL; every later runtime change on a ready PR also requires FULL.
 
-The classifier is fail-closed: unknown/mixed paths, workflow/scripts, source, tests and CMake select FULL. A stable final `windows-msvc` summary check succeeds only when the selected tier succeeds.
+Changes to `tests/**`, `scripts/**`, any `CMakeLists.txt`, `ss2.ps1`, `ss2.cmd` or `.github/workflows/**` fail closed to FULL even while the PR is draft.
 
-PR title/body edits do not trigger or cancel verification. Only content-relevant PR events do.
+For a PR that already has a successful `windows-msvc-full` job on an exact ancestor SHA, the classifier may still examine only the suffix after that trusted FULL SHA for DOCS/CLOSURE. FAST results never become trusted FULL evidence.
 
-The explicit root `ss2.ps1 docs` step remains a dispatcher regression check in FULL and DOCS tiers.
+The classifier remains fail-closed. Unknown/mixed verification-sensitive paths select FULL. A stable final `windows-msvc` summary check succeeds only when the selected tier succeeds.
 
+PR title/body edits do not trigger or cancel verification. Content synchronization triggers verification, and `ready_for_review` explicitly triggers the merge-candidate FULL transition.
+
+The explicit root `ss2.ps1 docs` dispatcher/freshness regression remains part of FULL and DOCS. FULL builds once; its Test step uses `-NoBuild` to avoid invoking the same build a second time.
 <!-- section-id: internal.build-test.docs-validation -->
 ## Documentation validation
 

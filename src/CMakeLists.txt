@@ -169,8 +169,7 @@ target_link_libraries(simplesolid2_viewer_qt_occt
 
 target_compile_features(simplesolid2_viewer_qt_occt PUBLIC cxx_std_20)
 
-add_executable(simplesolid2
-    app/main.cpp
+add_library(simplesolid2_ui STATIC
     ui/cad_workbench.cpp
     ui/cad_workbench_shell.cpp
     ui/open_document_dialog.cpp
@@ -183,16 +182,33 @@ add_executable(simplesolid2
     ui/workspace_location_dialog.cpp
 )
 
+target_include_directories(simplesolid2_ui
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/ui
+        ${CMAKE_CURRENT_SOURCE_DIR}/application
+)
+
+target_link_libraries(simplesolid2_ui
+    PUBLIC
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(simplesolid2_ui PUBLIC cxx_std_20)
+
+add_executable(simplesolid2
+    app/main.cpp
+)
+
 target_include_directories(simplesolid2
     PRIVATE
         ${CMAKE_CURRENT_SOURCE_DIR}/application
-        ${CMAKE_CURRENT_SOURCE_DIR}/ui
 )
 
 target_link_libraries(simplesolid2
     PRIVATE
-        simplesolid2_application
-        simplesolid2_viewer
+        simplesolid2_ui
         simplesolid2_viewer_qt_occt
         Qt6::Widgets
 )
