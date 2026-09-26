@@ -377,7 +377,8 @@ private:
 
     [[nodiscard]] bool selectionMutable() const noexcept {
         return !manipulation_.has_value() &&
-               (!move_session_ ||
+               (tool_ != SketchTool::move ||
+                !move_session_ ||
                 move_session_->stage ==
                     MoveStage::select_objects);
     }
