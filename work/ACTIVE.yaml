@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-07B_ROTATE_SCALE_MIRROR_AND_TOOL_GROUPING.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,13 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - implement accepted SK-07B within the bounded Rotate/Scale/Mirror + toolbar-grouping scope
-  - extend the existing shared transform core before adding UI-specific command behavior
-  - reuse SK-07A selection-first/command-first object collection and frozen-selection semantics
-  - reorganize Sketch tools into Select / Create / Modify without introducing a new toolbar framework
-  - use FAST/SUBSYSTEM Sketch/UI checkpoints during implementation
-  - require exact-head Windows FULL plus Owner manual verification before completion
-  - keep Copy/repeated Copy/Repeat Last Command and R8+ inactive
+  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
+  - propose SK-07C or later for Copy/repeated Copy and fresh-identity transform semantics on the shared transform core
+  - preserve completed SK-07A/SK-07B Move/Rotate/Scale/Mirror and Select/Create/Modify behavior as the implementation baseline
+  - keep Repeat Last Command and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
