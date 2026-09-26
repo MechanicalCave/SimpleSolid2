@@ -1664,6 +1664,13 @@ void CadWorkbench::syncSketchInteractionUi() {
                 sketch::SketchTool::select);
     }
 
+    if (create_tools_label_ != nullptr) {
+        create_tools_label_->setVisible(editing);
+    }
+    if (modify_tools_label_ != nullptr) {
+        modify_tools_label_->setVisible(editing);
+    }
+
     if (line_sketch_button_ != nullptr) {
         line_sketch_button_->setVisible(editing);
         line_sketch_button_->setChecked(
@@ -1694,6 +1701,30 @@ void CadWorkbench::syncSketchInteractionUi() {
             editing &&
             sketch_interaction_controller_->tool() ==
                 sketch::SketchTool::move);
+    }
+
+    if (rotate_sketch_button_ != nullptr) {
+        rotate_sketch_button_->setVisible(editing);
+        rotate_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::rotate);
+    }
+
+    if (scale_sketch_button_ != nullptr) {
+        scale_sketch_button_->setVisible(editing);
+        scale_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::scale);
+    }
+
+    if (mirror_sketch_button_ != nullptr) {
+        mirror_sketch_button_->setVisible(editing);
+        mirror_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::mirror);
     }
 
     if (command_line_widget_ != nullptr) {
@@ -1740,8 +1771,90 @@ void CadWorkbench::syncSketchInteractionUi() {
         return;
     }
 
-    if (tool == sketch::SketchTool::move) {
+    const bool common_transform =
+        tool == sketch::SketchTool::move ||
+        tool == sketch::SketchTool::rotate ||
+        tool == sketch::SketchTool::scale ||
+        tool == sketch::SketchTool::mirror;
+
+    if (common_transform) {
         delete_selection_button_->setVisible(false);
+        finish_line_button_->setVisible(false);
+        cancel_line_button_->setVisible(false);
+
+        QString title;
+        QString keyword;
+        switch (tool) {
+        case sketch::SketchTool::move:
+            title = QStringLiteral("Move");
+            keyword = QStringLiteral("MOVE");
+            break;
+        case sketch::SketchTool::rotate:
+            title = QStringLiteral("Rotate");
+            keyword = QStringLiteral("ROTATE");
+            break;
+        case sketch::SketchTool::scale:
+            title = QStringLiteral("Scale");
+            keyword = QStringLiteral("SCALE");
+            break;
+        case sketch::SketchTool::mirror:
+            title = QStringLiteral("Mirror");
+            keyword = QStringLiteral("MIRROR");
+            break;
+        default:
+            break;
+        }
+
+        QString instruction;
+        const auto stage =
+            sketch_interaction_controller_->
+                commonTransformStage();
+        if (!stage) {
+            instruction =
+                QStringLiteral("Transform unavailable");
+        } else {
+            switch (*stage) {
+            case sketch::CommonTransformStage::select_objects:
+                instruction =
+                    QStringLiteral(
+                        "Select objects; Enter/Space/RMB to continue");
+                break;
+            case sketch::CommonTransformStage::await_base_point:
+                instruction =
+                    QStringLiteral("Specify Base Point");
+                break;
+            case sketch::CommonTransformStage::await_reference_point:
+                instruction =
+                    QStringLiteral("Specify Reference Point");
+                break;
+            case sketch::CommonTransformStage::await_destination:
+                instruction =
+                    QStringLiteral("Specify destination point");
+                break;
+            case sketch::CommonTransformStage::await_axis_start:
+                instruction =
+                    QStringLiteral("Specify first axis point");
+                break;
+            case sketch::CommonTransformStage::await_axis_end:
+                instruction =
+                    QStringLiteral("Specify second axis point");
+                break;
+            }
+        }
+
+        operations_placeholder_->setText(
+            title +
+            QStringLiteral(" — ") +
+            instruction);
+        command_prompt_->setText(
+            QStringLiteral("Command: ") +
+            keyword +
+            QStringLiteral(" — ") +
+            instruction);
+        return;
+    }
+
+    delete_selection_button_->setVisible(false);
         finish_line_button_->setVisible(false);
         cancel_line_button_->setVisible(false);
 
