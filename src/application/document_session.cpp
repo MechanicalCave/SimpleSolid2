@@ -59,29 +59,6 @@ DocumentSession::DocumentSession(
     absorbSketchEntityIdCursors(document_.state());
 }
 
-bool DocumentSession::needsSave() const noexcept {
-    const auto current = document_.state();
-    if (current != saved_state_) {
-        return true;
-    }
-
-    for (const auto& hosted : current.sketches) {
-        const auto saved = std::find_if(
-            saved_state_.sketches.begin(),
-            saved_state_.sketches.end(),
-            [&hosted](const part::PartSketch& item) {
-                return item.id == hosted.id;
-            });
-        if (saved == saved_state_.sketches.end() ||
-            hosted.model.entityIdCursor() !=
-                saved->model.entityIdCursor()) {
-            return true;
-        }
-    }
-
-    return false;
-}
-
 DocumentSessionResult DocumentSession::verifyRevision() const {
     if (document_.revision() != expected_revision_) {
         return failure(
