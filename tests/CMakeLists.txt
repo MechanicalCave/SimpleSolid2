@@ -1012,6 +1012,22 @@ add_test(
     COMMAND sk06a_circle_arc_model_persistence_test
 )
 
+add_executable(sk06a_circle_arc_interaction_state_test
+    sk06a_circle_arc_interaction_state_test.cpp
+)
+
+target_link_libraries(sk06a_circle_arc_interaction_state_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(sk06a_circle_arc_interaction_state_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk06a.circle_arc_interaction_state
+    COMMAND sk06a_circle_arc_interaction_state_test
+)
+
 # CI-02 test metadata. FULL remains the unfiltered CTest suite.
 # New tests are intentionally not FAST by default; authors classify them explicitly.
 set(_ss2_fast_tests
@@ -1071,6 +1087,7 @@ set(_ss2_fast_tests
     sk05a.line_geometry_command
     sk05a.part_sketch_direct_manipulation
     sk06a.circle_arc_model_persistence
+    sk06a.circle_arc_interaction_state
 )
 set_property(TEST ${_ss2_fast_tests} APPEND PROPERTY LABELS "tier-fast")
 set_property(TEST wb01a.workbench_native_stress APPEND PROPERTY LABELS
@@ -1100,6 +1117,7 @@ set(_ss2_sketch_tests
     sk05a.line_geometry_command
     sk05a.part_sketch_direct_manipulation
     sk06a.circle_arc_model_persistence
+    sk06a.circle_arc_interaction_state
 )
 set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
 
