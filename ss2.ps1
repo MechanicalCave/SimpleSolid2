@@ -7,7 +7,14 @@ param(
     [string]$QtRoot = "D:\Qt",
     [string]$OcctRoot = "D:\SimpleSolid2\.simplesolid-env",
     [switch]$CommitGenesis,
-    [switch]$All
+    [switch]$All,
+
+    [ValidateSet("fast","subsystem","full")]
+    [string]$Tier = "full",
+    [string]$Subsystem = "",
+    [switch]$NoBuild,
+    [switch]$ListOnly,
+    [switch]$SelfTest
 )
 
 $map = @{
@@ -38,6 +45,7 @@ switch ($Command) {
     "setup"    { & $script -QtRoot $QtRoot -OcctRoot $OcctRoot }
     "git-init" { & $script -RemoteUrl $RemoteUrl -CommitGenesis:$CommitGenesis }
     "clean"    { & $script -All:$All }
+    "test"     { & $script -Tier $Tier -Subsystem $Subsystem -NoBuild:$NoBuild -ListOnly:$ListOnly -SelfTest:$SelfTest }
     default    { & $script }
 }
 exit $LASTEXITCODE
