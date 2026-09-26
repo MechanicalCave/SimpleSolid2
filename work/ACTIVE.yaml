@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-05A_LINE_DIRECT_MANIPULATION_AND_PRIMARY_SELECTION.md"
+status: active
+active_work: "work/CI-02_TIERED_TEST_EXECUTION_AND_BUILD_EFFICIENCY.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.2"
@@ -16,10 +16,14 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - merge SK-05A only after the exact closeout HEAD passes the selected CLOSURE CI tier
-  - keep R6+ inactive until separately contracted
-  - after SK-05A merge, activate the separately accepted CI-02 test-tier/build-efficiency work item
-  - do not mix CI-02 repository workflow changes into the completed SK-05A branch
+  - implement accepted CI-02 FAST/SUBSYSTEM/FULL test tiers
+  - preserve CI-01 exact-head DOCS/CLOSURE trusted-FULL behavior
+  - remove redundant CI Test-step rebuild
+  - centralize duplicated production UI compilation where practical
+  - require exact-head Windows FULL for the final CI-02 implementation candidate
+  - update internal build/test documentation and Product Browser
+  - run closeout CLOSURE before merge
+  - keep R6+ inactive
 notes:
   - R0 through R4 are completed.
   - WB-01B merged to main as 5d75e561571c83ac50a241a0c4b5cf0e212c05f2 after FULL #381, Owner manual PASS and CLOSURE #382.
@@ -52,3 +56,7 @@ notes:
   - Required internal and PL/EN product documentation is current and Product Browser freshness passed in FULL #402.
   - SK-05A acceptance conditions are satisfied; status is completed pending closeout-only CLOSURE gate and merge.
   - R5 is completed by SK-05A; R6+ remains inactive and requires a separate accepted Work Contract.
+
+  - SK-05A merged to main as 8674d416639ab4c16e40a4cee6a84cdf7a78254c after FULL #402, Owner manual PASS and CLOSURE #403.
+  - Owner accepted CI-02 on 2026-09-26 after discussing repository scaling and preserving mandatory FULL merge evidence.
+  - CI-02 is repository/build workflow work only; it does not activate R6+ or change CAD semantics.
