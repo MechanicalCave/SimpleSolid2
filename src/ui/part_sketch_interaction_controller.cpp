@@ -314,15 +314,15 @@ bool PartSketchInteractionController::escape() {
 
     const bool was_manipulating =
         interaction_.directManipulationActive();
-    const bool was_moving =
-        interaction_.tool() == sketch::SketchTool::move;
+    const bool was_transform =
+        interaction_.commonTransformStage().has_value();
     const bool changed = interaction_.escape();
     if (!changed) return false;
 
     if (was_manipulating) {
         manipulation_revision_.reset();
     }
-    if (was_moving) {
+    if (was_transform) {
         transform_revision_.reset();
     }
 
@@ -455,29 +455,52 @@ commitDirectManipulation() {
     return true;
 }
 
-bool PartSketchInteractionController::commitMove() {
-    if (!active() ||
-        interaction_.tool() != sketch::SketchTool::move ||
-        interaction_.moveStage() !=
-            sketch::MoveStage::await_destination ||
-        !transform_revision_) {
+bool PartSketchInteractionController::commitTransform() {
+    if (!active() || !transform_revision_) {
+        return false;
+    }
+
+    const auto stage =
+        interaction_.commonTransformStage();
+    const auto tool =
+        interaction_.tool();
+    const bool final_stage =
+        stage &&
+        ((*stage ==
+              sketch::CommonTransformStage::await_destination &&
+          (tool == sketch::SketchTool::move ||
+           tool == sketch::SketchTool::rotate ||
+           tool == sketch::SketchTool::scale)) ||
+         (*stage ==
+              sketch::CommonTransformStage::await_axis_end &&
+          tool == sketch::SketchTool::mirror));
+    if (!final_stage) {
         return false;
     }
 
     const auto geometry =
-        interaction_.moveGeometryState();
+        interaction_.transformGeometryState();
     if (!geometry) {
         reportStatus(
-            "MOVE has no valid destination geometry.");
+            "Transform has no valid commit geometry.");
         return false;
     }
+
+    const char* command_name =
+        tool == sketch::SketchTool::move
+            ? "MOVE"
+            : tool == sketch::SketchTool::rotate
+                ? "ROTATE"
+                : tool == sketch::SketchTool::scale
+                    ? "SCALE"
+                    : "MIRROR";
 
     const auto result =
         executeGeometryUpdate(
             *geometry,
             *transform_revision_);
 
-    interaction_.finishMove();
+    interaction_.finishTransform();
     transform_revision_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
@@ -498,16 +521,24 @@ bool PartSketchInteractionController::commitMove() {
     if (!result.ok()) {
         reportStatus(
             result.diagnostic.message.empty()
-                ? std::string{"MOVE commit failed."}
+                ? std::string{command_name} +
+                      " commit failed."
                 : result.diagnostic.message);
         return false;
     }
 
     reportStatus(
         result.changed
-            ? std::string{"MOVE committed."}
-            : std::string{"MOVE completed with no authored change."});
+            ? std::string{command_name} + " committed."
+            : std::string{command_name} +
+                  " completed with no authored change.");
     return true;
+}
+
+bool PartSketchInteractionController::commitMove() {
+    return interaction_.tool() ==
+               sketch::SketchTool::move &&
+           commitTransform();
 }
 
 void PartSketchInteractionController::cancelForHistory() {
