@@ -201,6 +201,11 @@ add_executable(simplesolid2
     app/main.cpp
 )
 
+target_include_directories(simplesolid2
+    PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/application
+)
+
 target_link_libraries(simplesolid2
     PRIVATE
         simplesolid2_ui
