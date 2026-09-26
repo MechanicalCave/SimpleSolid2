@@ -1,7 +1,8 @@
 # SK-07A — Common Transform Core and MOVE
 
-**Status:** PROPOSED — OWNER REVIEW  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-26  
+**Owner acceptance:** 2026-09-26  
 **Decision class:** D2 interaction/transform architecture + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -373,7 +374,7 @@ Those remain later R7+ slices.
 
 ## 17. Completion boundary
 
-SK-07A becomes active only after explicit Owner acceptance.
+SK-07A is active after explicit Owner acceptance on 2026-09-26.
 
 Completion requires:
 
