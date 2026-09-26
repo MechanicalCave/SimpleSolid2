@@ -1,12 +1,13 @@
 # SK-05A — Line Direct Manipulation and Selection Foundation
 
-**Status:** PROPOSED  
+**Status:** ACCEPTED — ACTIVE  
+**Owner acceptance:** 2026-09-26  
 **Decision class:** D2 Architecture + implementation  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
-**Program roadmap:** proposed Sketcher roadmap v1.2 amendment  
+**Program roadmap:** `work/SKETCH_ROADMAP.md` v1.2  
 **Roadmap milestone:** R5 — Direct-manipulation and selection foundation on Line  
-**Implementation authorization:** none until explicit Owner acceptance of both roadmap v1.2 and this contract
+**Implementation authorization:** ACTIVE — Owner accepted roadmap v1.2 and SK-05A on 2026-09-26
 
 ## 1. Context
 
@@ -26,7 +27,7 @@ WB-01B then stabilized provider-surface overlay composition and froze provider-s
 
 R5 now establishes the first reusable direct-manipulation architecture. The slice remains Line-only in authored geometry, but it must already obey the final selection and manipulation grammar required by later Circle/Arc and common transforms.
 
-The accepted v1.1 roadmap remains authoritative until the Owner accepts the proposed v1.2 amendment.
+Sketcher roadmap v1.2 is authoritative for this contract.
 
 ## 2. Goal
 
@@ -140,7 +141,7 @@ Center does not create a durable midpoint entity.
 
 Exactly one grip may be active at a time.
 
-Multiple simultaneously active grips are explicitly out of scope and are not a future requirement of the proposed roadmap.
+Multiple simultaneously active grips are explicitly out of scope and are not a future requirement of the accepted roadmap.
 
 ## 7. DirectManipulationSession
 
@@ -366,7 +367,7 @@ The resolved-input seam must allow later numeric, Object Snap, Ortho/Polar and D
 
 ## 16. Architecture compatibility commitments for later R7+
 
-SK-05A must not encode assumptions that prevent the proposed roadmap behavior:
+SK-05A must not encode assumptions that prevent the accepted roadmap behavior:
 
 - HandleRole remains separate from EditMode;
 - common Move/Rotate/Scale/Mirror can later act on the frozen selection set;
@@ -500,27 +501,26 @@ The exact final implementation candidate requires manual verification of:
 - Undo/Redo visibly restores/reapplies the atomic edit;
 - no stale native pixels or viewport disappearance occur during repeated use, navigation, resize and supported DPI scaling.
 
-## 21. Documentation impact
+## 21. Documentation Impact
 
 Internal docs: required  
 User/Product docs: required  
 Reason: SK-05A changes the user-visible Select grammar, adds hover/grips/direct manipulation, changes Esc behavior in Select, and extends provider-neutral runtime interaction contracts.
 
-## 22. Acceptance boundary
+## 22. Completion boundary
 
-SK-05A is accepted for implementation only when the Owner explicitly accepts:
+**Owner acceptance:** 2026-09-26
 
-1. the Sketcher roadmap v1.2 amendment; and
-2. this revised SK-05A contract.
+SK-05A is authorized for implementation under this bounded contract.
 
-Completion later requires:
+Completion requires:
 
 - implementation remains inside this contract;
 - semantic commands/transactions own durable edits;
 - provider identity does not become CAD identity;
 - exact-head Windows FULL passes;
-- required documentation is current;
-- manual Windows verification passes;
-- closeout CLOSURE gate passes.
-
-R6+ remains inactive until separately contracted.
+- required internal and PL/EN product documentation is current;
+- generated Product Browser is current;
+- manual Windows verification passes on the exact final implementation candidate;
+- closeout CLOSURE gate passes;
+- R6+ remains inactive until separately contracted.
