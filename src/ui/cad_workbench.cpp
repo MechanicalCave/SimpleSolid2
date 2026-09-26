@@ -669,6 +669,21 @@ void CadWorkbench::buildUi() {
         this,
         [this] { activateSketchMove(); });
     QObject::connect(
+        rotate_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchRotate(); });
+    QObject::connect(
+        scale_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchScale(); });
+    QObject::connect(
+        mirror_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchMirror(); });
+    QObject::connect(
         cancel_sketch_button_,
         &QPushButton::clicked,
         this,
@@ -1021,6 +1036,42 @@ void CadWorkbench::activateSketchMove() {
     }
 }
 
+void CadWorkbench::activateSketchRotate() {
+    if (sketch_interaction_controller_ &&
+        !sketch_interaction_controller_->activateRotate()) {
+        status_->setText(
+            QStringLiteral("ROTATE could not be activated."));
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::activateSketchScale() {
+    if (sketch_interaction_controller_ &&
+        !sketch_interaction_controller_->activateScale()) {
+        status_->setText(
+            QStringLiteral("SCALE could not be activated."));
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::activateSketchMirror() {
+    if (sketch_interaction_controller_ &&
+        !sketch_interaction_controller_->activateMirror()) {
+        status_->setText(
+            QStringLiteral("MIRROR could not be activated."));
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
 void CadWorkbench::finishSketchLine() {
     if (!sketch_interaction_controller_) {
         return;
@@ -1119,6 +1170,12 @@ void CadWorkbench::submitSketchCommandLine() {
         activateSketchArc();
     } else if (command == QStringLiteral("MOVE")) {
         activateSketchMove();
+    } else if (command == QStringLiteral("ROTATE")) {
+        activateSketchRotate();
+    } else if (command == QStringLiteral("SCALE")) {
+        activateSketchScale();
+    } else if (command == QStringLiteral("MIRROR")) {
+        activateSketchMirror();
     } else {
         status_->setText(
             QStringLiteral("Unknown Sketch command."));
