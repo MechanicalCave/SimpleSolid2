@@ -1,8 +1,10 @@
 # SK-07D — Repeat Last Command
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-27  
-**Owner acceptance:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  **Owner manual Windows verification:** PASS — 2026-09-27  
+**Final exact-head Windows FULL:** #567 — `ef84954ddb22a4263d31c5a540fe7d96304e33e2` — PASS  
+
 **Decision class:** D2 Sketch command-grammar semantics + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -285,3 +287,20 @@ Completion requires:
 - Owner manual Windows verification passes;
 - closeout CLOSURE passes;
 - remaining R7 and R8+ work stays inactive until separately accepted.
+
+## 17. Completion evidence
+
+SK-07D completed its bounded fourth R7 slice on 2026-09-27.
+
+- One runtime-only last-repeatable-command identity is owned by the existing Part Sketch interaction controller for the active Sketch edit session.
+- The repeatable set is limited to Line/Circle/Arc/Move/Copy/Rotate/Scale/Mirror.
+- Viewport Enter/Space in ordinary Select repeats the remembered command through the existing activation paths.
+- Repeat starts a fresh command invocation and uses current selection; prior points, previews, selection snapshots and COPY placement state are not replayed.
+- Existing key precedence remains intact for active manipulation/transforms and text-entry focus.
+- Select, ordinary selection changes, Delete, grip manipulation, Undo/Redo and Esc do not replace the remembered command.
+- The remembered command is cleared when Sketch edit begins/ends and does not persist across Sketches, Documents or reopen.
+- Required internal and PL/EN Product documentation is current and deterministic Product Browser freshness passed on the final candidate.
+- Owner manual Windows verification passed the accepted SK-07D checklist on 2026-09-27.
+- Final exact-head Windows FULL #567 passed on `ef84954ddb22a4263d31c5a540fe7d96304e33e2`: documentation verification, Build, FAST/SUBSYSTEM selector checks, 67/67 unfiltered CTest tests and stable `windows-msvc` all succeeded.
+- Ordinary-Select RMB context, semantic Space CycleEditMode, grip Copy modifier, Rotate/Scale/Mirror+Copy, numeric/Dynamic Input, snapping/inference and R8+ remain outside this completed contract.
+
