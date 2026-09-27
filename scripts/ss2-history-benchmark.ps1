@@ -126,12 +126,13 @@ foreach ($entities in $entitiesValues) {
 
         Write-Host "[c2] run entities=$entities history=$depth safety=$effectiveMaxWorkingSetMB MB timeout=$CellTimeoutMinutes min"
         $process = Start-Process -FilePath $exe -ArgumentList $arguments -PassThru -NoNewWindow -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
+        try { $process.PriorityClass = "BelowNormal" } catch {}
 
         $watch = [Diagnostics.Stopwatch]::StartNew()
         $observedPeak = [int64]0
         $cutoffReason = $null
 
-        while (-not $process.WaitForExit(250)) {
+        while (-not $process.WaitForExit(100)) {
             try {
                 $process.Refresh()
                 $working = [int64]$process.WorkingSet64
