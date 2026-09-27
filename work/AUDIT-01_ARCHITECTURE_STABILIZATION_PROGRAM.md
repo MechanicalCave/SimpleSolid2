@@ -69,7 +69,7 @@ Default order is strict:
 | 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | **COMPLETED — 2026-09-27** |
 | 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | **COMPLETED — 2026-09-27** |
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **COMPLETED — 2026-09-27** |
-| 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | future bounded Work Contract |
+| 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **ACTIVE — measurement phase accepted 2026-09-27** |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | future bounded Work Contract |
 | 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | future bounded Work Contract |
 | 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | future bounded Work Contract |
@@ -402,6 +402,14 @@ If baseline cannot complete a case safely, record the cutoff rather than forcing
 Memory/depth limits are product decisions and must not be silently introduced.
 
 Event sourcing is not authorized merely because Undo exists.
+
+### C2 activation record
+
+**Owner acceptance:** 2026-09-27  
+**Work Contract:** `work/C2_MEASURED_HISTORY_REPRESENTATION_AND_BUDGET.md` — ACCEPTED / ACTIVE  
+**Proposal evidence:** Windows PR gate #672 PASS on `fed74065d123a14b99f6bd2141ba3aaa0336b8b7`
+
+The initial accepted authority is measurement-only Phase A. It authorizes a headless Release `DocumentSession` benchmark, the required 1,000/10,000 entity × 10/100/1,000 history-depth matrix where safely feasible, median/p95/max latency, peak process working-set evidence and explicit cutoffs. It does not authorize replacing the production history representation or introducing a product history budget. After the measurement report is complete, C2 must stop for a second explicit Owner decision.
 
 ## 10. Package D — semantic input ownership outside QWidget and core-only build
 

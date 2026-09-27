@@ -1,7 +1,8 @@
 # C2 — Measured History Representation and Budget Decision
 
-**Status:** PROPOSED — INACTIVE  
+**Status:** ACCEPTED — ACTIVE (PHASE A MEASUREMENT)  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D1 measurement infrastructure first; any deeper history architecture or product-visible history budget is a later explicit Owner decision  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package C2  

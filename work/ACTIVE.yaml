@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/C1_HISTORY_COPY_COST_REMOVAL.md"
+status: active
+active_work: "work/C2_MEASURED_HISTORY_REPRESENTATION_AND_BUDGET.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
 program_roadmap_version: "1.0"
@@ -19,10 +19,11 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - draft a separate bounded C2 measured history representation/budget Work Contract under AUDIT-01
-  - require explicit Owner acceptance of C2 before any deeper history representation or budget production mutation
+  - implement the C2 Phase A Release semantic-history benchmark harness and smoke/argument/statistics verification
+  - run the accepted 1k/10k × depth 10/100/1000 matrix with explicit safety cutoffs
+  - record raw machine-readable evidence plus the reviewed internal measurement report
+  - stop for the second explicit Owner C2 decision before any deeper production history mutation
   - keep D, E1, E2 and F queued by AUDIT-01 but inactive
-  - preserve completed C1 non-copying history commit preparation as the baseline
 
 notes:
   - R0 through R4 are completed.
@@ -219,3 +220,8 @@ notes:
   - C1 has no intended user-visible workflow change; Owner manual UI verification is not required by the accepted contract.
   - C1 acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge of PR #81.
   - C2 and later AUDIT-01 packages remain inactive and require a separate explicit Owner-accepted Work Contract.
+
+  - Owner explicitly accepted C2 measurement-first Work Contract on 2026-09-27.
+  - C2 proposal head fed74065d123a14b99f6bd2141ba3aaa0336b8b7 passed Windows proposal gate #672 before activation.
+  - Initial C2 authority is Phase A measurement only; it does not authorize production history redesign, eviction, persistent Undo or a user-visible depth/memory budget.
+  - After Phase A evidence, C2 must stop for a second explicit Owner decision before any deeper history production mutation.
