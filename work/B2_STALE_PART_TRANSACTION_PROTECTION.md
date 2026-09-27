@@ -1,11 +1,12 @@
 # B2 — Stale Part Transaction Protection
 
-**Status:** PROPOSED  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D2 domain transaction semantics + bounded D1 implementation  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package B2  
-**Architecture:** ADR-0012 (PROPOSED)  
+**Architecture:** ADR-0012 (ACCEPTED)  
 **Baseline:** `main` at `2982310b1bc18fc007763c31f33155f836afbba7` after completed WB-02 / AUDIT-01 Package A
 
 ## 1. Goal

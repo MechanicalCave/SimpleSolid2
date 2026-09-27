@@ -66,7 +66,7 @@ Default order is strict:
 | Order | Package | Required outcome | Activation |
 | --- | --- | --- | --- |
 | 1 | **A — WB-02 closeout hardening** | context lifetime, Delete precedence, input-capture ownership, real integration evidence | **COMPLETED — 2026-09-27** |
-| 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | future bounded Work Contract |
+| 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | **ACTIVE — accepted 2026-09-27** |
 | 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | future bounded Work Contract |
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | future bounded Work Contract |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | future bounded Work Contract |
@@ -231,6 +231,15 @@ Required outcomes:
 - preserve accepted no-op, revision increment and revision-exhaustion semantics.
 
 Tests must cover T1/T2 overlap, rollback, repeated commit, no-op, revision exhaustion and invalid state through public domain API.
+
+### B2 activation record
+
+**Owner acceptance:** 2026-09-27  
+**ADR:** ADR-0012 — ACCEPTED  
+**Work Contract:** `work/B2_STALE_PART_TRANSACTION_PROTECTION.md` — ACCEPTED / ACTIVE  
+**Proposal evidence:** Windows PR gate #628 PASS on `b722ee93ec4aac9e2593cc58b5f6c0b7fed4b784`
+
+The accepted B2 policy is optimistic base-revision binding, stale-before-no-op, one-shot transaction lifetime, owning Part-domain complete-state validation and validated reconstruction. B1 and later packages remain inactive.
 
 ## 7. Package B1 — file/save conflict protection
 

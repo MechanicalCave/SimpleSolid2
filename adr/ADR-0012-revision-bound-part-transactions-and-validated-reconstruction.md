@@ -1,7 +1,8 @@
 # ADR-0012 — Revision-bound Part transactions and validated authored-state reconstruction
 
-**Status:** PROPOSED  
+**Status:** ACCEPTED  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D2 domain transaction safety / shared Part mutation semantics  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package B2  
