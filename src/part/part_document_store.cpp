@@ -847,6 +847,20 @@ bool sameContent(
 
 } // namespace
 
+bool isSaveConflict(
+    PartStoreErrorCode code) noexcept {
+    switch (code) {
+    case PartStoreErrorCode::save_conflict_busy:
+    case PartStoreErrorCode::save_conflict_target_missing:
+    case PartStoreErrorCode::save_conflict_document_identity_changed:
+    case PartStoreErrorCode::save_conflict_file_replaced:
+    case PartStoreErrorCode::save_conflict_content_changed:
+        return true;
+    default:
+        return false;
+    }
+}
+
 bool PartDocumentStore::hasNativeExtension(
     const std::filesystem::path& path) noexcept {
     auto extension = path.extension().string();

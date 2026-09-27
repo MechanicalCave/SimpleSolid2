@@ -51,11 +51,18 @@ part::PartSketch* findSketch(
 
 DocumentSession::DocumentSession(
     std::filesystem::path path,
-    part::PartDocument document)
+    part::PartDocument document,
+    part::PartFileCheckpoint file_checkpoint)
     : path_{std::move(path)},
       document_{std::move(document)},
       saved_state_{document_.state()},
+      file_checkpoint_{std::move(file_checkpoint)},
       expected_revision_{document_.revision()} {
+    if (file_checkpoint_.document_id !=
+        document_.documentId()) {
+        throw std::invalid_argument{
+            "DocumentSession file checkpoint DocumentId mismatch"};
+    }
     absorbSketchEntityIdCursors(document_.state());
 }
 
@@ -869,16 +876,27 @@ DocumentSessionResult DocumentSession::save() {
         return verified;
     }
 
-    const auto saved = store_.save(path_, document_);
+    const auto saved =
+        store_.save(
+            path_,
+            document_,
+            file_checkpoint_);
     if (!saved.ok()) {
         return failure(
-            DocumentSessionErrorCode::persistence_failure,
+            part::isSaveConflict(
+                saved.diagnostic.code)
+                ? DocumentSessionErrorCode::
+                      save_conflict
+                : DocumentSessionErrorCode::
+                      persistence_failure,
             saved.diagnostic.message,
             saved.diagnostic.path,
             part::PartCommitErrorCode::none,
             saved.diagnostic.code);
     }
 
+    file_checkpoint_ =
+        *saved.checkpoint;
     saved_state_ = document_.state();
     return success(false);
 }

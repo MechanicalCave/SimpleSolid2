@@ -109,11 +109,13 @@ int main() {
     }
 
     part::PartDocumentStore store;
-    CHECK(
+    const auto created =
         store.createNew(
             path,
-            document)
-            .ok());
+            document);
+    CHECK(created.ok());
+    auto checkpoint =
+        *created.checkpoint;
     CHECK(
         !store.createNew(
             path,
@@ -190,7 +192,13 @@ int main() {
         CHECK(tx.commit().changed);
     }
 
-    CHECK(store.save(path, document).ok());
+    const auto saved =
+        store.save(
+            path,
+            document,
+            checkpoint);
+    CHECK(saved.ok());
+    checkpoint = *saved.checkpoint;
     auto reloaded = store.load(path);
     CHECK(reloaded.ok());
     CHECK(
@@ -303,7 +311,8 @@ int main() {
     CHECK(
         store.save(
             legacy_v1_path,
-            *legacy_v1.document)
+            *legacy_v1.document,
+            *legacy_v1.checkpoint)
             .ok());
 
     const auto legacy_after =

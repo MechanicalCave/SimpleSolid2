@@ -57,9 +57,14 @@ int main() {
     const auto path = temp.path / "Part001.ss2part";
     auto document = part::PartDocument::create(core::DocumentId::generate());
     part::PartDocumentStore store;
-    CHECK(store.createNew(path, document).ok());
+    const auto created =
+        store.createNew(path, document);
+    CHECK(created.ok());
 
-    application::DocumentSession session{path, std::move(document)};
+    application::DocumentSession session{
+        path,
+        std::move(document),
+        *created.checkpoint};
     CHECK(!session.needsSave());
     CHECK(!session.canUndo());
     CHECK(!session.canRedo());
