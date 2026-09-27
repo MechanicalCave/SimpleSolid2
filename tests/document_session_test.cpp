@@ -1,6 +1,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
