@@ -131,8 +131,7 @@ foreach ($entities in $entitiesValues) {
         $observedPeak = [int64]0
         $cutoffReason = $null
 
-        while (-not $process.HasExited) {
-            Start-Sleep -Milliseconds 250
+        while (-not $process.WaitForExit(250)) {
             try {
                 $process.Refresh()
                 $working = [int64]$process.WorkingSet64
@@ -172,10 +171,12 @@ foreach ($entities in $entitiesValues) {
         }
 
         $process.WaitForExit()
-        if ($process.ExitCode -ne 0) {
+        $process.Refresh()
+        $exitCode = $process.ExitCode
+        if ($exitCode -ne 0) {
             $stderr = if (Test-Path $stderrFile) { Get-Content -Raw -LiteralPath $stderrFile } else { "" }
             $stdout = if (Test-Path $stdoutFile) { Get-Content -Raw -LiteralPath $stdoutFile } else { "" }
-            throw "C2 benchmark correctness/process failure for entities=$entities history=$depth exit=$($process.ExitCode). STDOUT: $stdout STDERR: $stderr"
+            throw "C2 benchmark correctness/process failure for entities=$entities history=$depth exit=$exitCode. STDOUT: $stdout STDERR: $stderr"
         }
         if (-not (Test-Path -LiteralPath $cellFile -PathType Leaf)) { throw "C2 benchmark did not produce $cellFile." }
 
