@@ -8,6 +8,7 @@
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
+**Scheduling authority while stabilization is active:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0  
 
 ## 1. Why v1.4 changes the sequence
 
@@ -740,3 +741,12 @@ R7 paused after completed SK-07F — accepted WB-02 global CAD Input foundation 
 R8+ not started
 
 Roadmap v1.4 is authoritative. Active WB-02 does not activate Grip Copy, RMB, R8, R9 or R10 and does not authorize any new semantic request type beyond migrating the existing Sketch client.
+
+
+## AUDIT-01 program interlock
+
+Owner accepted `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 on 2026-09-27.
+
+This roadmap remains authoritative for Sketch/Shared-2D feature direction, but AUDIT-01 has scheduling precedence while architecture stabilization is active. Feature milestones are not deleted or silently superseded; they resume only according to the accepted audit-program gates and explicit Owner scheduling.
+
+AUDIT-01 does not by itself activate Grip Copy, RMB context, R8+, region/profile implementation or solid modeling.

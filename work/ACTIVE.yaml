@@ -2,8 +2,8 @@ version: 1
 status: active
 active_work: "work/WB-02_GLOBAL_CAD_INPUT_ROUTING_AND_KEYBOARD_FIRST_COMMAND_LINE.md"
 foundation_version: "1.0"
-program_roadmap: "work/SKETCH_ROADMAP.md"
-program_roadmap_version: "1.4"
+program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
+program_roadmap_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -17,10 +17,11 @@ accepted_adrs:
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
   - "adr/ADR-0011-workspace-global-cad-input-routing-and-semantic-requests.md"
 next:
-  - implement accepted WB-02 workspace-global CAD Input router/live buffer and focus arbitration within the bounded contract
-  - move visible Command Line ownership to Project Workspace Shell and migrate existing Part/Sketch submission as the first generic endpoint
-  - prove viewport keyboard-first command/direct-distance entry without focus transfer while preserving real text-editor and shortcut ownership
-  - preserve completed SK-07A through SK-07F semantics and keep Grip Copy, RMB, new request kinds, units/coordinates, Dynamic Input, Ortho/Polar and snapping inactive
+  - complete accepted AUDIT-01 Package A inside active WB-02: semantic context generation/invalidation (A1)
+  - implement non-empty-buffer Delete precedence without geometry mutation (A2)
+  - restrict global qApp keyboard capture to the active authorized Workspace/window/focus and popup/modal ownership rules (A3)
+  - add real Workbench integration evidence and re-run exact-head FULL + Owner manual Windows verification (A4)
+  - after WB-02 merge, activate a separate B2 stale-transaction-protection contract; B1, C, D, E and F remain queued by AUDIT-01 but inactive
 
 notes:
   - R0 through R4 are completed.
@@ -168,3 +169,8 @@ notes:
 
   - On 2026-09-27 the Owner reported the WB-02 candidate technically functional but requested external architecture audit before closeout; WB-02 must remain active until that audit and final re-verification are complete.
   - Owner accepted two bounded UI refinements on 2026-09-27: Enter consumes rejected input while preserving semantic context with a diagnostic, and the global Command Line must remain a fixed one-row geometry with permanently reserved single-line diagnostic space.
+
+  - Owner accepted AUDIT-01 Architecture Stabilization and Audit Implementation Program v1.0 on 2026-09-27 so the complete external-audit plan A-F remains durable across context/session changes.
+  - AUDIT-01 is the program roadmap for scheduling; work/SKETCH_ROADMAP.md v1.4 remains the subordinate accepted feature-direction roadmap and must still be read when Sketch/Shared-2D work is affected.
+  - AUDIT-01 default order is A -> B2 -> B1 -> C1 -> C2 -> D -> E1 -> E2 -> F. Only the active_work contract authorizes production mutation; queued packages are mandatory program work but not active implementation authority.
+  - Package A findings A1-A3 were statically confirmed against PR #78 at 519f9c54e26ec85be0d216585b59e8a7f158d2fa; A4 is the required evidence closure. WB-02 must remain ACTIVE until Package A, exact-head FULL and Owner manual verification pass.

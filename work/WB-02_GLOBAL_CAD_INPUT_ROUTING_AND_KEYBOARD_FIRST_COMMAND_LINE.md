@@ -424,3 +424,33 @@ Completion requires:
 - exact-head Windows FULL;
 - Owner manual Windows PASS;
 - closeout CLOSURE.
+
+
+## 21. External architecture-audit closeout amendment
+
+**Owner acceptance:** 2026-09-27  
+**Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0
+
+The external architecture audit was reviewed against PR #78 at `519f9c54e26ec85be0d216585b59e8a7f158d2fa`. WB-02 remains ACTIVE and must not close until Package A of AUDIT-01 is complete.
+
+This amendment adds the following bounded closeout scope and no more:
+
+- **A1 semantic context generation:** live buffer/diagnostic must be invalidated when the owning Document/editor/Sketch/request context is replaced, without clearing on ordinary prompt refresh or pointer movement inside the same request; stale context must fail before domain effect;
+- **A2 Delete precedence:** non-empty CAD input buffer with normal CAD focus consumes Delete instead of deleting selected geometry; empty-buffer Delete and real QLineEdit editing retain their existing semantics;
+- **A3 authorized capture boundary:** qApp-level capture must prove active Workspace/window/focus ownership and yield to foreign windows, menus/popups, modal/text-entry/composition ownership and ambiguous ownership;
+- **A4 real integration evidence:** tests using real Workbench interactions must prove A1-A3 and re-run accepted Line/grip/MOVE/COPY/repeat/cycle/history/document/save-reopen behavior.
+
+Accepted request-lifetime rule:
+
+- replacing the semantic request invalidates a partially entered token;
+- moving the pointer/direction inside the same PointRequest does not invalidate it.
+
+Previously accepted WB-02 refinements remain authoritative:
+
+- Enter/Return consumes submitted text even on rejection;
+- rejected input leaves the semantic tool/stage active and creates no authored mutation;
+- Command Line remains a fixed one-row surface with permanently reserved single-line diagnostic width.
+
+This amendment does **not** authorize packages B-F, new input grammar, new quantity request types, Grip Copy, Dynamic Input, Ortho/Polar, snapping, regions or solid modeling.
+
+Completion now requires all original WB-02 acceptance conditions plus Package-A evidence from AUDIT-01, exact-head Windows FULL and Owner manual Windows verification.
