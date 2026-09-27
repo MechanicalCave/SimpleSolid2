@@ -1,7 +1,8 @@
 # SK-07E — Space CycleEditMode
 
-**Status:** PROPOSED — OWNER REVIEW  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D2 direct-manipulation interaction semantics + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -379,11 +380,9 @@ SK-07E does not authorize:
 
 ## 18. Activation and completion boundary
 
-SK-07E is a proposal only.
+SK-07E was explicitly Owner-accepted on 2026-09-27 and is active within this bounded scope.
 
-No production implementation is authorized until explicit Owner acceptance.
-
-If accepted as written, completion requires:
+Completion requires:
 
 - Space cycles Reshape/Move only on grips supporting both modes;
 - center grips remain Move-only;
