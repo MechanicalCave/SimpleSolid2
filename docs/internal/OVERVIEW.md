@@ -89,7 +89,7 @@ Camera, projection, pan/orbit/zoom, active selection and primary selection are r
 
 User-authored visibility of built-in Origin references is different: it is persistent presentation semantics stored by PartDocument, changed through DocumentSession commands, Undo/Redo-able and saved in the native Part file.
 
-WB-01A hardened the native Viewer so scene replacement clears provider-native detection/selection state before presentation objects are removed and recoverable provider exceptions are contained at the concrete Viewer boundary.
+The native Viewer clears provider-native detection/selection state before presentation objects are removed, and recoverable provider exceptions are contained at the concrete Viewer boundary.
 
 <!-- section-id: internal.overview.documentation -->
 ## Documentation system

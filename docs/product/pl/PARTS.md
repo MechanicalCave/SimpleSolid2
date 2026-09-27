@@ -261,13 +261,17 @@ Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, n
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketches z ich trwałą tożsamością/supportem/placementem, geometrią Line/Circle/Arc i stabilnymi EntityId, do pliku `.ss2part`.
+`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketche z trwałą tożsamością/supportem/placementem, geometrią Line/Circle/Arc i stabilnymi EntityId, do pliku `.ss2part`.
+
+Zwykły Save jest warunkowy względem dokładnej wersji pliku natywnego, którą ta sesja otworzyła albo ostatnio poprawnie zapisała. Jeżeli target został usunięty, podmieniony, zmieniony na dysku, zawiera już inny DocumentId albo jest aktualnie chroniony przez inny współpracujący Save SS2, SimpleSolid zgłasza konflikt Save zamiast po cichu nadpisać plik. Part w pamięci pozostaje otwarty i zachowuje lokalne zmiany/historię Undo.
+
+Po poprawnym Save sesja przyjmuje nową opublikowaną wersję pliku, więc kolejny niezmieniony Save działa normalnie. Ścisła gwarancja braku lost-update dotyczy współpracujących instancji SS2; SimpleSolid nie deklaruje ogólnego atomowego compare-and-swap wobec każdego obcego programu zapisującego plik.
 
 Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Discard` albo `Cancel`.
 
 Przy zamykaniu całego Projektu lub aplikacji, gdy jakikolwiek Part jest dirty, dostępne są `Save All`, `Discard` i `Cancel`.
 
-Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty. Zamknięcie ostatniego otwartego Parta pozostawia Projekt otwarty i pokazuje Project Workspace Dashboard. Samo użycie `Workspace` nigdy nie zamyka Parta.
+Jeżeli zapis się nie powiedzie albo zgłosi konflikt, Dokument/Projekt pozostaje otwarty. Zamknięcie ostatniego otwartego Parta pozostawia Projekt otwarty i pokazuje Project Workspace Dashboard. Samo użycie `Workspace` nigdy nie zamyka Parta.
 
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
@@ -279,22 +283,22 @@ SimpleSolid ponownie skanuje Workspace. Zapisany Part zostaje odnaleziony z tym 
 Historia Undo/Redo, aktywne zaznaczenie, aktywny tryb edycji Sketchu i stan kamery nie są zapisywane do pliku i po ponownym otwarciu zaczynają się od nowa.
 
 <!-- section-id: product.parts.conflicts -->
-## Konflikt DocumentId i niepoprawne pliki
+## Konflikty Dokumentu i Save
 
-Jeżeli dwa pliki `.ss2part` w jednym Workspace zawierają ten sam DocumentId, `Open…` pokazuje wpis konfliktu tożsamości oraz informacje o wykrytych lokalizacjach.
-
-Takiego wpisu nie można otworzyć przez DocumentId, dopóki konflikt nie zostanie usunięty. SimpleSolid nie wybiera arbitralnie jednej kopii i nie nadaje automatycznie nowego ID.
+Jeżeli dwa pliki `.ss2part` w jednym Workspace zawierają ten sam DocumentId, `Open…` pokazuje wpis konfliktu tożsamości oraz informacje o wykrytych lokalizacjach. Takiego wpisu nie można otworzyć przez DocumentId, dopóki konflikt nie zostanie usunięty. SimpleSolid nie wybiera arbitralnie jednej kopii i nie nadaje automatycznie nowego ID.
 
 Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wpis zamiast być traktowany jako poprawny Dokument.
+
+Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, że otwarta sesja nie ma już uprawnienia do zastąpienia wersji pliku znajdującej się obecnie pod jej ścieżką. SimpleSolid pozostawia dokument w pamięci otwarty i nie wykonuje po cichu force-overwrite ani nie odtwarza usuniętego targetu. Save As / Force Overwrite nie są obecnie dostępne jako ścieżka recovery.
 
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, ustabilizowany fundament Workbench/Viewer 3D oraz trwałe Sketches na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
+Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, fundament Workbench/Viewer 3D oraz trwałe Sketche na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
 
-Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Copy/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
+Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Copy/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz keyboard-first Command Line.
+
+Direct Distance jest dostępny dla obsługiwanych etapów PointRequest opisanych wyżej. Nadal brakuje grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego kąta Rotate i współczynnika Scale, współrzędnych absolutnych/względnych/polarnych, unit expressions i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
-
-Nadal brakuje grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego wpisywania kątów/odległości/skali/współrzędnych i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 

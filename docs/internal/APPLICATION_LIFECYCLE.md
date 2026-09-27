@@ -77,9 +77,9 @@ The current discovery backend provides Part candidates only. The dialog is docum
 
 The Workspace location flow rejects targets outside the current Workspace, rejects existing target files, and keeps private `.simplesolid` metadata outside the normal Document location tree.
 
-The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description, Engineering Revision, persistent Origin visibility or creating a Part-hosted Sketch goes through semantic commands and PartDocument transactions.
+The active DocumentSession owns runtime Undo/Redo history, the saved-authored-state checkpoint used by `needsSave()`, and — for a persisted/opened native Part — the exact native-file checkpoint used by conditional Save. Editing Number, Title, Description, Engineering Revision, persistent Origin visibility or Part-hosted Sketch geometry goes through semantic commands and PartDocument transactions.
 
-SK-01A places the Part `Sketch` launcher in the editor toolbar above the 3D Viewport. Creation validates a selected XY/XZ/YZ built-in Origin plane, creates one durable empty Sketch and enters a runtime edit context in the same 3D Viewport. Operations is contextual: support-pick may show Cancel guidance and active Sketch edit shows `Finish Sketch`. An existing Sketch can re-enter the same edit context by Tree double-click or `Edit Sketch` context action without authored mutation.
+The Part `Sketch` launcher lives in the editor toolbar above the 3D Viewport. Creation validates a selected XY/XZ/YZ built-in Origin plane, creates one durable Sketch and enters its runtime edit context in the same 3D Viewport. Operations is contextual: support-pick may show Cancel guidance and active Sketch edit shows `Finish Sketch`. An existing Sketch can re-enter the same edit context by Tree double-click or `Edit Sketch` context action without authored mutation.
 
 Closing and reopening a Part destroys runtime Undo/Redo and Sketch edit context while preserving saved authored state, including SketchId/support/placement/visibility, and DocumentId on disk.
 
@@ -113,7 +113,7 @@ Closing a dirty Part prompts for `Save`, `Discard` or `Cancel`.
 
 Workbench Tree/Viewer controllers hold non-owning runtime pointers to the active DocumentSession. Project Workspace Shell coordinates lifecycle ordering: the Part Workbench is detached before ProjectSession erases an active DocumentSession, and is detached/reset before the ProjectSession itself is destroyed.
 
-Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure keeps the Project open.
+Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure — including a native-file conflict because the target changed, was replaced, disappeared or is guarded by another cooperating SS2 Save — keeps the Project open and preserves the in-memory authored state.
 
 After application restart, Recent Projects restores the Project location. Opening the Project creates a fresh ProjectSession, rebuilds document discovery and can reopen the same durable DocumentId with the same saved authored properties, Origin visibility and hosted Sketch records.
 

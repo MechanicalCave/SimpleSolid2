@@ -21,9 +21,9 @@ The Project toolbar remains visible in both Workspace and Document contexts. Wor
 
 Project Workspace navigation is runtime-only: `Workspace` or `Document(DocumentId)`. Open DocumentSessions may remain alive while Workspace Dashboard is visible.
 
-WB-02 makes the same Project Workspace Shell the owner of one visible Command Line surface and one runtime `CadInputSession`. The session carries a live text buffer and exactly one generic active endpoint; it owns no Part/Sketch/Assembly/Drawing meaning. Entering a Document attaches that Workbench endpoint, while navigating to Workspace, switching Documents or closing ownership detaches the old endpoint and clears partial input before the old runtime can disappear. Hidden Documents therefore cannot consume keyboard text.
+The Project Workspace Shell owns one visible Command Line surface and one runtime `CadInputSession`. The session carries a live text buffer and exactly one generic active endpoint; it owns no Part/Sketch/Assembly/Drawing meaning. Entering a Document attaches that Workbench endpoint, while navigating to Workspace, switching Documents or closing ownership detaches the old endpoint and clears partial input before the old runtime can disappear. Hidden Documents therefore cannot consume keyboard text.
 
-The Qt adapter captures printable unmodified keys from normal CAD surfaces without moving focus, mirrors them into Command Line and yields to real text editors, modal dialogs and application shortcuts. Accepted submission clears the buffer; rejected input stays available for correction. Buffer/prompt/diagnostic state is runtime-only and does not dirty a CAD Document or create Undo history.
+The Qt adapter captures printable unmodified keys from normal CAD surfaces without moving focus, mirrors them into Command Line and yields to real text editors, popup/menu ownership, modal dialogs, foreign windows and application shortcuts. Enter consumes a non-empty submitted token whether accepted or rejected; a rejected token creates no authored mutation, leaves the semantic context active, clears the editable buffer and publishes a bounded diagnostic. Buffer/prompt/diagnostic state is runtime-only and does not dirty a CAD Document or create Undo history.
 
 `CadWorkbenchShell` owns only fixed presentation regions for the active Part Document:
 

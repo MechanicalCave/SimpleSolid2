@@ -48,7 +48,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The repository currently registers **73 CTest tests**.
+The repository currently registers **74 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
@@ -64,9 +64,9 @@ The R7 transform/COPY regressions include:
 
 The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence, active-grip Space CycleEditMode precedence and text-focus keyboard behavior. It also contains the AUDIT-01 Package-A real-Workbench checks: pointer movement preserves a token inside one PointRequest, replacing the request or finishing Sketch clears stale input without authored mutation, and non-empty-buffer Delete cannot fall through to geometry deletion. The existing `sk05a.part_sketch_direct_manipulation` controller regression additionally verifies preview cardinality, no-mutation cycling and atomic commit after Reshape↔Move switching.
 
-WB-02 adds `wb02.cad_input_session`, `wb02.cad_input_boundaries` and `wb02.global_cad_input_ui`. Package-A coverage binds tokens to endpoint semantic generations and verifies fail-closed stale submission, foreign-window/popup ownership, two-visible-shell isolation, ordinary text-editor ownership, application-shortcut preservation and fixed Command Line geometry/diagnostic behavior.
+`wb02.cad_input_session`, `wb02.cad_input_boundaries` and `wb02.global_cad_input_ui` cover provider-neutral CAD-input transport, dependency boundaries, semantic-generation lifetime, foreign-window/popup ownership, two-visible-shell isolation, ordinary text-editor ownership, application-shortcut preservation and fixed Command Line geometry/diagnostic behavior.
 
-The completed SK-07D exact-head baseline is Windows FULL #567 on `ef84954ddb22a4263d31c5a540fe7d96304e33e2`, where Build and **67/67** unfiltered CTest tests passed. SK-07E adds one registered semantic state regression; its final exact-head Windows FULL result is recorded only at Work Contract closeout.
+`b1.save_conflict` covers exact native-file checkpoints, sequential two-session lost-update prevention, cooperative Save guard ownership, content-change/replacement/DocumentId/missing-target conflicts and repeated successful Save.
 
 Repository documentation validation runs outside CTest through `ss2 verify`. Tests must not be weakened to obtain a pass.
 

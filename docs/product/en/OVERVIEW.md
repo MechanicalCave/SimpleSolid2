@@ -30,15 +30,17 @@ The current product provides:
 - synchronized Tree/Viewport selection with empty-space clear and primary selection;
 - persistent Show/Hide for Origin references with Undo/Redo;
 - editing Number, Title, Description and Engineering Revision;
-- Save and safe closing with unsaved-change protection;
+- creating/editing Origin-plane Sketches with Line/Circle/Arc geometry, selection, grips and Move/Copy/Rotate/Scale/Mirror;
+- keyboard-first Command Line with Direct Distance at supported point inputs;
+- Save with stale-file conflict protection plus safe closing with unsaved-change protection;
 - rediscovering Parts after restart;
 - identity-conflict detection when two files in one Workspace carry the same DocumentId.
 
 The current `Open…` dialog is document-oriented, but the only implemented top-level CAD Document kind is still Part.
 
-The current Part is a durable CAD Document with a shared 3D working environment, but it does not yet contain modeled solid geometry.
+The current Part is a durable CAD Document with a shared 3D working environment and durable Origin-plane Sketches. It does not yet contain Body/Feature modeled solid geometry.
 
-Sketch, Bodies/Features, Assembly and Drawing are not yet available.
+Assembly and Drawing document/tool surfaces are not yet available.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
