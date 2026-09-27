@@ -13,12 +13,17 @@ The Workspace page contains a persistent Project Workspace Shell. It shows Proje
 ```text
 TOP       Project toolbar
 CONTENT   Workspace Dashboard or active Document Workbench
+BELOW     Workspace-global Command Line
 BOTTOM    Project-level Document Tabs
 ```
 
 The Project toolbar remains visible in both Workspace and Document contexts. Workspace Dashboard is a first-class Project surface, not only an empty-state placeholder; it remains reachable while Documents are open.
 
 Project Workspace navigation is runtime-only: `Workspace` or `Document(DocumentId)`. Open DocumentSessions may remain alive while Workspace Dashboard is visible.
+
+WB-02 makes the same Project Workspace Shell the owner of one visible Command Line surface and one runtime `CadInputSession`. The session carries a live text buffer and exactly one generic active endpoint; it owns no Part/Sketch/Assembly/Drawing meaning. Entering a Document attaches that Workbench endpoint, while navigating to Workspace, switching Documents or closing ownership detaches the old endpoint and clears partial input before the old runtime can disappear. Hidden Documents therefore cannot consume keyboard text.
+
+The Qt adapter captures printable unmodified keys from normal CAD surfaces without moving focus, mirrors them into Command Line and yields to real text editors, modal dialogs and application shortcuts. Accepted submission clears the buffer; rejected input stays available for correction. Buffer/prompt/diagnostic state is runtime-only and does not dirty a CAD Document or create Undo history.
 
 `CadWorkbenchShell` owns only fixed presentation regions for the active Part Document:
 

@@ -113,9 +113,11 @@ Modify
   Mirror
 ```
 
-The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`.
+Command Line is a shared Workspace surface and no longer requires a click before ordinary CAD entry. While the viewport or another normal CAD surface has focus, you can start typing immediately: the characters appear in Command Line while focus remains in the viewport. Enter submits the token to the active context. Clicking Command Line still works and edits the very same live buffer.
 
-Command Line is context-sensitive. When the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At stages that support Direct Distance, a bare numeric value is interpreted as a distance; an invalid token is rejected and the current point stage remains active.
+Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. An invalid token does not mutate the model, remains available for correction and does not silently fall through to another command.
+
+Real text-entry fields — for example property editors — keep keyboard ownership and do not feed Command Line. Application shortcuts using Ctrl/Alt/Meta are also not converted into CAD text. Switching Documents or navigating to Workspace clears any partial token so it can never leak into a hidden Document.
 
 ### Repeat Last Command
 

@@ -12,6 +12,8 @@ WS-01 moves Project-level Document Tabs out of `CadWorkbenchShell` and into Proj
 
 The shell owns layout only. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
 
+WB-02 moves Command Line ownership one level above the active Document Workbench. `ProjectWorkspaceShell` owns one visible global Command Line surface plus the Qt keyboard/focus adapter. A provider-neutral `CadInputSession` owns only the runtime text buffer, active generic endpoint and submission transport. The active Workbench/tool still owns semantic interpretation. `CadWorkbench` is currently the first endpoint and adapts the existing Sketch interaction state; Project Workspace does not know Sketch commands or `PointRequest`.
+
 WB-01A stabilized the existing shell/Viewer interaction without adding a new CAD domain.
 
 <!-- section-id: internal.cad-workbench-viewer.active-document -->
@@ -104,13 +106,15 @@ Modify
   Mirror
 ```
 
-The compact Command Line is context-sensitive. With no active semantic input request it accepts the command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. In the current SK-07F slice it may resolve a bare Direct Distance scalar; an invalid token is rejected and the active point stage remains active rather than falling through to a different command.
+The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit the existing command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar; an invalid token is rejected and remains available for correction while the active point stage stays authoritative.
+
+WB-02 makes that surface keyboard-first. With a normal CAD surface such as the viewport focused, printable unmodified text is appended to the same runtime buffer and mirrored immediately in Command Line without transferring Qt focus. Clicking Command Line remains an equivalent adapter to the same buffer. Real text editors, editable properties, modal dialogs and application shortcuts keep their own keyboard ownership.
 
 `PartSketchInteractionController` owns one runtime-only **last repeatable command** identity for the active Sketch edit session. Successful explicit activation of Line/Circle/Arc/Move/Copy/Rotate/Scale/Mirror through toolbar or Command Line updates that one value. Select, Delete, selection changes, grip/direct manipulation, Undo/Redo and Esc do not replace it.
 
 In ordinary Select with viewport CAD focus, Enter or Space repeats that remembered command through the same existing activation methods. Repeat starts a fresh command invocation: it uses the current semantic selection and does not replay prior Base/Reference/axis/placement points, prior selection snapshots, preview state or copied EntityIds. An empty remembered state is a no-op. The remembered identity is cleared by Sketch edit begin/end, so it does not leak across Sketches, Documents or reopen.
 
-Existing key precedence remains authoritative and now includes SK-07E. During active grip direct manipulation, viewport Space cycles semantic `DirectEditMode` on supported non-center grips and therefore has precedence over SK-07D Repeat Last Command. Enter still commits the active manipulation. Enter/Space in transform `Select objects` still completes collection when valid; Enter at final transform stages still commits the preview; Command Line Return submits the field; Space in text-entry focus remains text. Ordinary-Select RMB context remains outside the current surface.
+Existing key precedence remains authoritative and now sits below the global live-buffer rule. When the CAD input buffer is non-empty, Enter submits it, Backspace edits it and Esc clears it before any tool cancellation. When the buffer is empty, existing viewport semantics remain unchanged: active grip Space cycles semantic `DirectEditMode`, ordinary-Select Enter/Space may Repeat Last Command, transform Select objects Enter/Space completes collection, final-stage Enter commits, Delete edits selection and hierarchical Esc cancels the active interaction. Space in a real text editor remains text. Ordinary-Select RMB context remains outside the current surface.
 
 
 Move/Copy/Rotate/Scale/Mirror share one frozen-selection common-transform interaction pipeline. Selection-first activation skips object collection. Command-first activation collects objects with the ordinary semantic selection grammar and freezes the affected/source EntityIds before reference-point stages begin.
@@ -133,7 +137,7 @@ Pointer movement updates runtime-only preview from the interaction-start geometr
 
 SK-07F adds Direct Distance to point stages that have an established semantic base: Line next point, grip Reshape/Move, normal MOVE destination and normal COPY placement. The user establishes a free pointer direction, types a bare non-negative distance in Command Line and presses Return. The shared resolver computes `base + normalize(pointer - base) * distance`; the resulting point then enters the same operation path as a clicked point. `.` is always accepted as decimal separator and the current UI-locale decimal separator is accepted as well. Missing/zero pointer direction, malformed text or non-finite values fail closed.
 
-This does not add numeric Rotate angle, Scale factor, Cartesian/polar coordinate entry, unit expressions, Dynamic Input, Ortho/Polar or snapping. Ordinary viewport digit keys are not globally intercepted; numeric submission belongs to the text-entry adapter for the active request.
+This does not add numeric Rotate angle, Scale factor, Cartesian/polar coordinate entry, unit expressions, Dynamic Input, Ortho/Polar or snapping. WB-02 changes only transport and focus ownership: viewport printable text may now feed the workspace CAD input buffer, while the active semantic request/tool remains the only authority that can interpret or accept the submitted token.
 
 Non-COPY transforms preserve existing EntityIds. COPY allocates fresh identities only at accepted placement commit; preview and cancelled/zero placements consume none. Save/Close/Reopen uses unchanged Part schema v4 and persists `next_entity_id` together with authored Sketch geometry.
 
@@ -174,7 +178,7 @@ There is still no modeled Part B-Rep at this milestone; the OCCT provider remain
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, hover, active grip, current DirectEditMode, the direct-manipulation interaction-start owner geometry plus complete frozen-selection geometry, common-transform/COPY tool and stage, frozen source selection/geometry snapshot, Base/Reference/axis points, active PointRequest, shared pointer candidate, Direct Distance resolution, current pointer-derived preview, the last repeatable Sketch command identity, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/transform drag state and Command Line text/prompt state are runtime-only.
+Selection, primary selection, hover, active grip, current DirectEditMode, the direct-manipulation interaction-start owner geometry plus complete frozen-selection geometry, common-transform/COPY tool and stage, frozen source selection/geometry snapshot, Base/Reference/axis points, active PointRequest, shared pointer candidate, Direct Distance resolution, current pointer-derived preview, the last repeatable Sketch command identity, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/transform drag state and workspace CAD input buffer/prompt/diagnostic state are runtime-only.
 
 Persistent Origin visibility, authored Sketch geometry, committed copied entities and the model-local identity high-water are authored/durable state. COPY preview itself is never persisted.
 

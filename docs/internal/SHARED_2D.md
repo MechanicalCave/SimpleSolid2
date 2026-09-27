@@ -176,7 +176,9 @@ Direct Distance is currently enabled only for:
 - normal MOVE destination after Base Point;
 - normal COPY placement after Base Point.
 
-The Command Line is context-first. While a semantic PointRequest is active, submission is offered to that request before top-level command activation. The Qt adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only the parsed scalar and remains Qt/locale independent.
+Command submission remains context-first. While a semantic PointRequest is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. WB-02 adds a workspace-global text transport and live buffer, but that router does not know `PointRequest`, Line, Move or Copy. The current Part/Sketch adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only the parsed scalar and remains Qt/locale independent.
+
+Printable text typed while the normal CAD viewport has focus now reaches the same global buffer as directly editing Command Line; no focus transfer is required. Real text editors retain their keyboard ownership. This changes only the input adapter path, not Direct Distance semantics or mutation authority.
 
 After a Line segment or COPY placement completes, stale pointer direction is not reused silently. The continuous Line anchor becomes the new base with no non-zero direction, and repeated COPY clears its pointer candidate; the pointer must establish a new direction before another numeric Direct Distance can resolve.
 
@@ -226,6 +228,8 @@ SK-07D adds `sk07d.repeat_last_command_controller` plus Workbench key-routing co
 SK-07E adds `sk07e.space_cycle_edit_mode` for supported grip-role defaults/cycles, frozen selection/pivot/current-input semantics, owner-vs-selection geometry and no-compounding preview. Existing direct-manipulation controller coverage verifies preview/commit across Reshape↔Move cycling, while the Workbench Sketch-host regression verifies viewport Space precedence and text-focus behavior.
 
 SK-07F adds `sk07f.precision_input_state` for the shared PointRequest/Direct Distance resolver and `sk07f.precision_input_controller` for Line, Move, repeated Copy and grip Reshape/Move commit paths. The Workbench Sketch-host regression additionally verifies context-first Command Line routing plus dot/current-locale decimal forms.
+
+WB-02 adds provider-neutral `wb02.cad_input_session` and boundary scanning plus `wb02.global_cad_input_ui` for keyboard capture/focus arbitration. The Workbench Sketch-host regression verifies keyboard-first command activation and Direct Distance through Line, normal Move/Copy and grip Reshape/Move while preserving the existing semantic controllers.
 
 Final work-item completion additionally requires the repository's exact-head Windows FULL gate and Owner manual Windows verification.
 
