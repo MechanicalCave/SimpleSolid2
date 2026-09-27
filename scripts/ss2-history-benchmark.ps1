@@ -4,8 +4,8 @@ param(
     [string]$OutputDir = "artifacts\c2-history-benchmark",
     [int]$Samples = 20,
     [int]$Warmup = 3,
-    [int]$MaxWorkingSetMB = 6144,
-    [int]$CellTimeoutMinutes = 15
+    [int]$MaxWorkingSetMB = 4096,
+    [int]$CellTimeoutMinutes = 5
 )
 
 $ErrorActionPreference = "Stop"
