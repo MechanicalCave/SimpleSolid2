@@ -369,7 +369,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload C2 benchmark evidence
-        if: steps.request.outputs.run == 'true'
+        if: always() && steps.request.outputs.run == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: c2-history-${{ github.event.pull_request.head.sha }}
