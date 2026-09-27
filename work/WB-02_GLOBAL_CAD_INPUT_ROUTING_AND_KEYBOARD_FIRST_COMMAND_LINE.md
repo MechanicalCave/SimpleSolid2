@@ -398,7 +398,7 @@ Stop for Owner review if implementation appears to require:
 ## Documentation impact
 
 Internal docs: required  
-User/Product docs: required in PL and EN  
+User/Product docs: required  
 Reason: WB-02 changes the global keyboard workflow and Command Line ownership across the common workspace.
 
 ## 20. Activation and completion boundary
