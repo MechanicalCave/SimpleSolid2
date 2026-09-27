@@ -33,6 +33,9 @@ Testing/
 Thumbs.db
 Desktop.ini
 
+# Benchmark / local evidence output
+/artifacts/
+
 # Logs / scratch
 *.log
 *.tmp
