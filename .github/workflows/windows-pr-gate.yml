@@ -365,7 +365,7 @@ jobs:
         if: steps.request.outputs.run == 'true'
         run: |
           $ErrorActionPreference = "Stop"
-          .\scripts\ss2-history-benchmark.ps1 -BuildDir "build\c2-history-benchmark" -Config Release -OutputDir "artifacts\c2-history-benchmark" -Samples 20 -Warmup 3 -MaxWorkingSetMB 6144 -CellTimeoutMinutes 15
+          .\scripts\ss2-history-benchmark.ps1 -BuildDir "build\c2-history-benchmark" -Config Release -OutputDir "artifacts\c2-history-benchmark" -Samples 20 -Warmup 3 -MaxWorkingSetMB 4096 -CellTimeoutMinutes 5
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Upload C2 benchmark evidence
