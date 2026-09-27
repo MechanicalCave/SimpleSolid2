@@ -35,6 +35,8 @@ CadInputSession::endpoint() const noexcept {
     return endpoint_;
 }
 
+// AUDIT-01 A1 authority boundary: semantic-context generation, not
+// QWidget/endpoint object identity, owns the lifetime of a live token.
 bool CadInputSession::synchronizeContext() {
     if (endpoint_ == nullptr) {
         return false;
