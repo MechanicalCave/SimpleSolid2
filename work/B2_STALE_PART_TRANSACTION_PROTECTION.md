@@ -322,7 +322,7 @@ Stop for Owner review if implementation requires:
 - broad new Part authored invariants unrelated to current stored state;
 - user-visible overwrite/conflict UX.
 
-## 14. Documentation impact
+## Documentation impact
 
 Internal docs: required  
 User/Product docs: not required  
