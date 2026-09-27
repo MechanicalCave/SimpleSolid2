@@ -373,6 +373,7 @@ int main(int argc, char* argv[]) {
     CHECK(workbench.activeDocumentId().has_value());
     CHECK(*workbench.activeDocumentId() == first_id);
     CHECK(title->text() == QStringLiteral("Drive Shaft"));
+    CHECK(save->isEnabled());
 
     viewer::CameraState first_camera;
     first_camera.eye = {20.0, -10.0, 15.0};
@@ -653,6 +654,7 @@ int main(int argc, char* argv[]) {
           "Drive Shaft");
     CHECK(!first_session->needsSave());
     CHECK(redo->isEnabled());
+    CHECK(save->isEnabled());
 
     redo->click();
     CHECK(first_session->document().properties().title ==
@@ -661,6 +663,7 @@ int main(int argc, char* argv[]) {
 
     save->click();
     CHECK(!first_session->needsSave());
+    CHECK(save->isEnabled());
 
     CHECK(workbench.activateDocument(
         opened.session->documentSession(second_id),
