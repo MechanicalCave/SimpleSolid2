@@ -51,6 +51,16 @@ part::PartSketch* findSketch(
 
 DocumentSession::DocumentSession(
     std::filesystem::path path,
+    part::PartDocument document)
+    : path_{std::move(path)},
+      document_{std::move(document)},
+      saved_state_{document_.state()},
+      expected_revision_{document_.revision()} {
+    absorbSketchEntityIdCursors(document_.state());
+}
+
+DocumentSession::DocumentSession(
+    std::filesystem::path path,
     part::PartDocument document,
     part::PartFileCheckpoint file_checkpoint)
     : path_{std::move(path)},
@@ -58,7 +68,7 @@ DocumentSession::DocumentSession(
       saved_state_{document_.state()},
       file_checkpoint_{std::move(file_checkpoint)},
       expected_revision_{document_.revision()} {
-    if (file_checkpoint_.document_id !=
+    if (file_checkpoint_->document_id !=
         document_.documentId()) {
         throw std::invalid_argument{
             "DocumentSession file checkpoint DocumentId mismatch"};
@@ -876,11 +886,22 @@ DocumentSessionResult DocumentSession::save() {
         return verified;
     }
 
+    if (!file_checkpoint_) {
+        return failure(
+            DocumentSessionErrorCode::
+                persistence_failure,
+            "Document session has no native file checkpoint",
+            path_,
+            part::PartCommitErrorCode::none,
+            part::PartStoreErrorCode::
+                io_failure);
+    }
+
     const auto saved =
         store_.save(
             path_,
             document_,
-            file_checkpoint_);
+            *file_checkpoint_);
     if (!saved.ok()) {
         return failure(
             part::isSaveConflict(

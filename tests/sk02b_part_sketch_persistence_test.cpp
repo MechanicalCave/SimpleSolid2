@@ -349,7 +349,8 @@ int main() {
     CHECK(
         store.save(
             legacy_v2_path,
-            *legacy_v2.document)
+            *legacy_v2.document,
+            *legacy_v2.checkpoint)
             .ok());
 
     const auto migrated =

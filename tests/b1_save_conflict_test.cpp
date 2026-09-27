@@ -144,6 +144,7 @@ int main() {
         second.redoDepth();
     const auto second_checkpoint =
         second.fileCheckpoint();
+    CHECK(second_checkpoint.has_value());
 
     const auto stale_save = second.save();
     CHECK(!stale_save.ok());
@@ -338,6 +339,7 @@ int main() {
         openSession(normal_path);
     const auto old_checkpoint =
         normal_session.fileCheckpoint();
+    CHECK(old_checkpoint.has_value());
     setTitle(normal_session, "Normal Save");
     CHECK(normal_session.save().ok());
     CHECK(!normal_session.needsSave());

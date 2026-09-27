@@ -179,6 +179,9 @@ class DocumentSession final {
 public:
     DocumentSession(
         std::filesystem::path path,
+        part::PartDocument document);
+    DocumentSession(
+        std::filesystem::path path,
         part::PartDocument document,
         part::PartFileCheckpoint file_checkpoint);
 
@@ -193,7 +196,8 @@ public:
     }
     [[nodiscard]] const std::filesystem::path& path() const noexcept { return path_; }
     [[nodiscard]] const part::PartDocument& document() const noexcept { return document_; }
-    [[nodiscard]] const part::PartFileCheckpoint&
+    [[nodiscard]] const std::optional<
+        part::PartFileCheckpoint>&
     fileCheckpoint() const noexcept {
         return file_checkpoint_;
     }
@@ -256,7 +260,8 @@ private:
     std::filesystem::path path_;
     part::PartDocument document_;
     part::PartAuthoredState saved_state_;
-    part::PartFileCheckpoint file_checkpoint_;
+    std::optional<part::PartFileCheckpoint>
+        file_checkpoint_;
     core::DocumentRevision expected_revision_;
     std::vector<HistoryEntry> history_;
     std::size_t cursor_{0};
