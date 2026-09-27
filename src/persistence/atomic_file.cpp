@@ -1,5 +1,7 @@
 #include <simplesolid2/persistence/atomic_file.hpp>
 
+#include <algorithm>
+#include <cerrno>
 #include <chrono>
 #include <random>
 #include <sstream>
