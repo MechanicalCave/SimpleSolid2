@@ -331,6 +331,70 @@ int main(int argc, char* argv[]) {
     CHECK(reshaped->model.findLine(id2)->start() ==
           sketch::Point2{3.0, 14.0});
 
+    // SK-07E: the same endpoint session can cycle owner-only Reshape
+    // to Move of the complete frozen selection without authored mutation.
+    const auto cycle_token1 =
+        viewport.sketch_scene_.lines[0].token;
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            cycle_token1,
+            viewer::SketchGripRole::line_start}};
+    click(interaction, sketch_id, 25.0, 25.0, -2.0, 1.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::reshape);
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::move,
+        35.0, 35.0,
+        1.0, 3.0));
+    CHECK(viewport.preview_scene_.lines.size() == 1U);
+
+    const auto before_cycle_state =
+        session.document().state();
+    const auto before_cycle_revision =
+        session.document().revision();
+    const auto before_cycle_undo =
+        session.undoDepth();
+
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::move);
+    CHECK(viewport.preview_scene_.lines.size() == 2U);
+    CHECK(session.document().state() == before_cycle_state);
+    CHECK(session.document().revision() == before_cycle_revision);
+    CHECK(session.undoDepth() == before_cycle_undo);
+
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::reshape);
+    CHECK(viewport.preview_scene_.lines.size() == 1U);
+    CHECK(session.document().state() == before_cycle_state);
+    CHECK(session.document().revision() == before_cycle_revision);
+    CHECK(session.undoDepth() == before_cycle_undo);
+
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::move);
+    CHECK(interaction.commitDirectManipulation());
+    CHECK(session.undoDepth() == before_cycle_undo + 1U);
+
+    const auto* cycled_move =
+        session.document().findSketch(sketch_id);
+    CHECK(cycled_move != nullptr);
+    CHECK(cycled_move->model.findLine(id1)->start() ==
+          sketch::Point2{1.0, 3.0});
+    CHECK(cycled_move->model.findLine(id2)->start() ==
+          sketch::Point2{6.0, 16.0});
+    CHECK(cycled_move->model.findLine(id1)->id() == id1);
+    CHECK(cycled_move->model.findLine(id2)->id() == id2);
+
     // Line creation preserves the semantic selection, hides grips,
     // and does not auto-select the newly authored Line.
     interaction.activateLine();
