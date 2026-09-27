@@ -122,3 +122,10 @@ notes:
   - The proposal keeps source entities selected, creates fresh identities per placement and requires non-reuse across Undo/Redo/save-reopen.
   - Grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, numeric/Dynamic Input and R8+ remain inactive.
   - Owner explicitly accepted SK-07C on 2026-09-27; this bounded R7C slice is active.
+
+  - SK-07C final exact-head candidate 03baaf6d82c5f7ba73d3701791dc8af8f356ce5f passed Windows FULL #549 with documentation verification, Build, FAST/SUBSYSTEM selector checks, 66/66 unfiltered CTest tests and stable windows-msvc.
+  - Owner manual Windows verification passed on 2026-09-27 for normal COPY/repeated placement, zero-displacement no-op, Undo/Redo, Save/Close/Reopen and regression checks.
+  - Required internal and PL/EN Product documentation plus deterministic Product Browser freshness passed on the final candidate.
+  - SK-07C acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
+  - Grip Copy modifier, Rotate/Scale/Mirror+Copy, semantic Space CycleEditMode, ordinary-Select RMB context, Repeat Last Command, numeric/Dynamic Input, snapping/inference and R8+ remain inactive.
+
