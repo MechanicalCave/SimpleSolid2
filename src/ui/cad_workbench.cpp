@@ -1631,6 +1631,15 @@ bool CadWorkbench::eventFilter(
                 return true;
             }
 
+            if (key_event->key() == Qt::Key_Space &&
+                sketch_interaction_controller_->
+                    directManipulationActive()) {
+                static_cast<void>(
+                    sketch_interaction_controller_->
+                        cycleDirectEditMode());
+                return true;
+            }
+
             if ((key_event->key() == Qt::Key_Return ||
                  key_event->key() == Qt::Key_Enter) &&
                 sketch_interaction_controller_->
@@ -1827,6 +1836,29 @@ void CadWorkbench::syncSketchInteractionUi() {
     if (tool == sketch::SketchTool::select) {
         const auto selected =
             sketch_interaction_controller_->selectedCount();
+
+        if (sketch_interaction_controller_->
+                directManipulationActive()) {
+            const auto mode =
+                sketch_interaction_controller_->
+                    directEditMode();
+            const auto mode_text =
+                mode == sketch::DirectEditMode::move
+                    ? QStringLiteral("Move")
+                    : QStringLiteral("Reshape");
+            operations_placeholder_->setText(
+                QStringLiteral(
+                    "Grip — %1; Space cycles mode; Enter/LMB commits; Esc cancels")
+                    .arg(mode_text));
+            delete_selection_button_->setVisible(false);
+            finish_line_button_->setVisible(false);
+            cancel_line_button_->setVisible(false);
+            command_prompt_->setText(
+                QStringLiteral("Command: SELECT — Grip %1")
+                    .arg(mode_text));
+            return;
+        }
+
         operations_placeholder_->setText(
             QStringLiteral("Select — %1 entit%2 selected")
                 .arg(static_cast<qulonglong>(selected))
