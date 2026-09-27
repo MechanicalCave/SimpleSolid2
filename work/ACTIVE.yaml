@@ -135,3 +135,9 @@ notes:
   - Ordinary-Select RMB context, semantic Space CycleEditMode, grip Copy modifier and later R7/R8+ work remain inactive.
   - Owner explicitly accepted SK-07D on 2026-09-27; this bounded fourth R7 slice is active.
 
+  - SK-07D final exact-head candidate ef84954ddb22a4263d31c5a540fe7d96304e33e2 passed Windows FULL #567 with documentation verification, Build, FAST/SUBSYSTEM selector checks, 67/67 unfiltered CTest tests and stable windows-msvc.
+  - Owner manual Windows verification passed on 2026-09-27 for Repeat Last Command, viewport Enter/Space routing, current-selection reuse, text-focus precedence and session reset behavior.
+  - Required internal and PL/EN Product documentation plus deterministic Product Browser freshness passed on the final candidate.
+  - SK-07D acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
+  - Ordinary-Select RMB context, semantic Space CycleEditMode, grip Copy modifier, Rotate/Scale/Mirror+Copy, numeric/Dynamic Input, snapping/inference and R8+ remain inactive.
+
