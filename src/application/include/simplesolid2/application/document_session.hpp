@@ -9,6 +9,7 @@
 #include <map>
 #include <optional>
 #include <string>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -239,10 +240,45 @@ public:
     [[nodiscard]] DocumentSessionResult save();
 
 private:
+    using SketchEntityIdCursorMap =
+        std::map<sketch::SketchId, sketch::EntityIdCursor>;
+
     struct HistoryEntry final {
         part::PartAuthoredState before;
         part::PartAuthoredState after;
+
+        HistoryEntry(
+            const part::PartAuthoredState& before_state,
+            part::PartAuthoredState after_state)
+            : before{before_state},
+              after{std::move(after_state)} {}
+
+        HistoryEntry(const HistoryEntry&) = delete;
+        HistoryEntry& operator=(const HistoryEntry&) = delete;
+        HistoryEntry(HistoryEntry&&) noexcept = default;
+        HistoryEntry& operator=(HistoryEntry&&) noexcept = default;
     };
+
+    static_assert(
+        !std::is_copy_constructible_v<HistoryEntry>);
+    static_assert(
+        !std::is_copy_assignable_v<HistoryEntry>);
+    static_assert(
+        std::is_nothrow_move_constructible_v<
+            part::PartAuthoredState>);
+    static_assert(
+        std::is_nothrow_move_assignable_v<
+            part::PartAuthoredState>);
+    static_assert(
+        std::is_nothrow_move_constructible_v<
+            HistoryEntry>);
+    static_assert(
+        std::is_nothrow_move_assignable_v<
+            HistoryEntry>);
+    static_assert(
+        noexcept(
+            std::declval<SketchEntityIdCursorMap&>().swap(
+                std::declval<SketchEntityIdCursorMap&>())));
 
     [[nodiscard]] DocumentSessionResult verifyRevision() const;
     [[nodiscard]] DocumentSessionResult commitCommandState(
@@ -252,6 +288,9 @@ private:
         const part::PartAuthoredState& expected_current,
         const part::PartAuthoredState& target);
 
+    static void absorbSketchEntityIdCursors(
+        SketchEntityIdCursorMap& cursors,
+        const part::PartAuthoredState& state);
     void absorbSketchEntityIdCursors(
         const part::PartAuthoredState& state);
     void applySketchEntityIdCursors(
@@ -265,8 +304,7 @@ private:
     core::DocumentRevision expected_revision_;
     std::vector<HistoryEntry> history_;
     std::size_t cursor_{0};
-    std::map<sketch::SketchId, sketch::EntityIdCursor>
-        sketch_entity_id_cursors_;
+    SketchEntityIdCursorMap sketch_entity_id_cursors_;
     part::PartDocumentStore store_;
 };
 

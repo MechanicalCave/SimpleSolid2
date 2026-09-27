@@ -99,12 +99,24 @@ DocumentSessionResult DocumentSession::commitCommandState(
         return success(false);
     }
 
-    std::vector<HistoryEntry> prepared = history_;
-    prepared.resize(cursor_);
-    prepared.push_back(HistoryEntry{document_.state(), after});
+    // C1 strong-consistency preparation: create only the one pending
+    // history entry and all potentially allocating bookkeeping before
+    // the Part transaction mutates the live document. Existing history
+    // entries are never deep-copied.
+    HistoryEntry pending{
+        document_.state(),
+        std::move(after)};
+
+    history_.reserve(cursor_ + 1U);
+
+    auto prepared_entity_id_cursors =
+        sketch_entity_id_cursors_;
+    absorbSketchEntityIdCursors(
+        prepared_entity_id_cursors,
+        pending.after);
 
     part::PartDocumentTransaction transaction{document_};
-    transaction.replaceState(std::move(after));
+    transaction.replaceState(pending.after);
     const auto committed = transaction.commit();
     if (!committed.ok()) {
         return failure(
@@ -117,10 +129,18 @@ DocumentSessionResult DocumentSession::commitCommandState(
         return success(false);
     }
 
-    history_.swap(prepared);
+    // The suffix erase destroys Redo only after successful mutation.
+    // reserve() above plus noexcept HistoryEntry move makes the append
+    // non-allocating and non-throwing after the durable commit.
+    history_.erase(
+        history_.begin() +
+            static_cast<std::ptrdiff_t>(cursor_),
+        history_.end());
+    history_.push_back(std::move(pending));
     cursor_ = history_.size();
+    sketch_entity_id_cursors_.swap(
+        prepared_entity_id_cursors);
     expected_revision_ = document_.revision();
-    absorbSketchEntityIdCursors(document_.state());
     return success(true);
 }
 
@@ -823,17 +843,16 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 }
 
 void DocumentSession::absorbSketchEntityIdCursors(
+    SketchEntityIdCursorMap& cursors,
     const part::PartAuthoredState& state) {
     for (const auto& hosted : state.sketches) {
         const auto observed =
             hosted.model.entityIdCursor();
 
         const auto found =
-            sketch_entity_id_cursors_.find(
-                hosted.id);
-        if (found ==
-            sketch_entity_id_cursors_.end()) {
-            sketch_entity_id_cursors_.emplace(
+            cursors.find(hosted.id);
+        if (found == cursors.end()) {
+            cursors.emplace(
                 hosted.id,
                 observed);
             continue;
@@ -843,6 +862,13 @@ void DocumentSession::absorbSketchEntityIdCursors(
             found->second = observed;
         }
     }
+}
+
+void DocumentSession::absorbSketchEntityIdCursors(
+    const part::PartAuthoredState& state) {
+    absorbSketchEntityIdCursors(
+        sketch_entity_id_cursors_,
+        state);
 }
 
 void DocumentSession::applySketchEntityIdCursors(
