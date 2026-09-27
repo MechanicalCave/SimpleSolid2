@@ -1679,6 +1679,32 @@ bool CadWorkbench::eventFilter(
                     return true;
                 }
             }
+
+            if ((key_event->key() == Qt::Key_Return ||
+                 key_event->key() == Qt::Key_Enter ||
+                 key_event->key() == Qt::Key_Space) &&
+                sketch_interaction_controller_->tool() ==
+                    sketch::SketchTool::select &&
+                !sketch_interaction_controller_->
+                    directManipulationActive()) {
+                const auto remembered =
+                    sketch_interaction_controller_->
+                        lastRepeatableCommand();
+                if (!sketch_interaction_controller_->
+                        repeatLastCommand()) {
+                    status_->setText(
+                        remembered
+                            ? QStringLiteral(
+                                  "Last Sketch command could not be repeated.")
+                            : QStringLiteral(
+                                  "No repeatable Sketch command."));
+                } else {
+                    status_->setText(
+                        QStringLiteral(
+                            "Last Sketch command repeated."));
+                }
+                return true;
+            }
         }
     }
 
