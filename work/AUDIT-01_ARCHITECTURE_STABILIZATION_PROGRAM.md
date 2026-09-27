@@ -68,7 +68,7 @@ Default order is strict:
 | 1 | **A — WB-02 closeout hardening** | context lifetime, Delete precedence, input-capture ownership, real integration evidence | **COMPLETED — 2026-09-27** |
 | 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | **COMPLETED — 2026-09-27** |
 | 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | **COMPLETED — 2026-09-27** |
-| 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | future bounded Work Contract |
+| 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **ACTIVE — accepted 2026-09-27** |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | future bounded Work Contract |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | future bounded Work Contract |
 | 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | future bounded Work Contract |
@@ -338,6 +338,14 @@ Required consistency:
 - validation/allocation/commit failure cannot leave mutated document without matching history;
 - one accepted commit -> one Undo entry;
 - preserve authored identity and technical cursor rules.
+
+### C1 activation record
+
+**Owner acceptance:** 2026-09-27  
+**Work Contract:** `work/C1_HISTORY_COPY_COST_REMOVAL.md` — ACCEPTED / ACTIVE  
+**Proposal evidence:** Windows PR gate #665 PASS on `fda0971a7812da435878e9616dd884522ad73e1a`
+
+The accepted bounded policy keeps the current two-snapshot `HistoryEntry{before, after}` representation and `std::vector` history. C1 removes the history-depth-dependent copy of all prior entries, prepares one pending entry and all potentially allocating post-commit resources before Part mutation, keeps Redo intact until successful changed commit, and enforces non-copyable/noexcept-movable history relocation. C2 and later packages remain inactive.
 
 ## 9. Package C2 — choose history representation and budget from measurements
 

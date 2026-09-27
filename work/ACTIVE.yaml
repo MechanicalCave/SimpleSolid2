@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/B1_NATIVE_PART_SAVE_CONFLICT_PROTECTION.md"
+status: active
+active_work: "work/C1_HISTORY_COPY_COST_REMOVAL.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
 program_roadmap_version: "1.0"
@@ -19,10 +19,11 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - draft a separate bounded C1 history-copy cost removal Work Contract under AUDIT-01
-  - require explicit Owner acceptance of C1 before any history production mutation
+  - remove DocumentSession full-history copy while preserving the current two-snapshot Undo/Redo model
+  - enforce non-copyable/noexcept-movable HistoryEntry relocation and pre-commit capacity preparation
+  - preserve Redo until changed commit succeeds and pre-prepare EntityId cursor bookkeeping
+  - add focused history branching/failure/identity regression evidence and current internal docs
   - keep C2, D, E1, E2 and F queued by AUDIT-01 but inactive
-  - preserve completed B1 guarded ordinary-Save behavior as the persistence baseline
 
 notes:
   - R0 through R4 are completed.
@@ -204,3 +205,8 @@ notes:
   - Manual verification also confirmed explicit Save remains available on a clean open Part so file-checkpoint revalidation is reachable without a local authored change.
   - B1 acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge of PR #80.
   - C1 and later AUDIT-01 packages remain inactive and require a separate explicit Owner-accepted Work Contract.
+
+  - Owner explicitly accepted C1 History Copy Cost Removal on 2026-09-27.
+  - C1 proposal head fda0971a7812da435878e9616dd884522ad73e1a passed Windows PR gate #665 before activation.
+  - C1 is D1 local DocumentSession history commit preparation: keep the current HistoryEntry before/after snapshot model while removing the history-depth-dependent copy of all prior entries.
+  - C2 deeper history representation, memory/depth policy and benchmark-driven redesign remain inactive.
