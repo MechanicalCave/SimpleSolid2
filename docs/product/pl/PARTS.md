@@ -113,9 +113,17 @@ Modify
   Mirror
 ```
 
-Kompaktowy Command Line obsługuje słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`.
+Command Line jest wspólną powierzchnią Workspace i nie wymaga kliknięcia przed normalnym wprowadzaniem CAD. Gdy focus ma viewport lub inna zwykła powierzchnia CAD, możesz od razu pisać — znaki pojawią się w Command Line, ale focus pozostanie w viewport. Enter wysyła wpisany token do aktywnego kontekstu. Kliknięcie Command Line nadal działa i edytuje dokładnie ten sam bufor.
 
-Command Line jest kontekstowy. Jeżeli aktywny etap oczekuje punktu, bieżący semantic PointRequest ma pierwszeństwo przed uruchomieniem nowej komendy. W etapach obsługujących Direct Distance samodzielna wartość liczbowa jest interpretowana jako odległość; błędny token zostaje odrzucony i bieżący etap pozostaje aktywny.
+W aktywnym Sketchu obsługiwane są słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`. Command Line jest kontekstowy: jeżeli aktywny etap oczekuje punktu, bieżący semantic PointRequest ma pierwszeństwo przed uruchomieniem nowej komendy. W etapach obsługujących Direct Distance samodzielna wartość liczbowa jest interpretowana jako odległość. Enter konsumuje wpisany token także wtedy, gdy jest błędny: model oraz aktywne narzędzie/etap pozostają bez zmian, edytowane pole jest czyszczone, a diagnostic informuje o błędzie bez zmuszania użytkownika do ręcznego kasowania odrzuconego tekstu.
+
+Prawdziwe pola tekstowe — np. edycja właściwości — zachowują własny focus i wpisywanie do nich nie zasila Command Line. Skróty aplikacji z Ctrl/Alt/Meta również nie są zamieniane na tekst CAD. Menu, popup, okno modalne, inne okno aplikacji oraz drugi widoczny Workspace SS2 zachowują własność klawiatury i nie zasilają Command Line działającego w tle.
+
+Częściowo wpisany token CAD należy do semantycznego requestu, w którym rozpoczęto wpisywanie. Zmiana requestu/narzędzia/Sketcha/Dokumentu czyści taki token, zanim mógłby wykonać się w nowym kontekście. Zwykły ruch kursora zmieniający kierunek w ramach tego samego PointRequest nie czyści wpisu. Zmiana Dokumentu lub przejście do Workspace również usuwa częściowy input, więc nie może on trafić do ukrytego Dokumentu.
+
+Przy focusie viewportu i niepustym buforze Command Line klawisz Delete należy do aktywnego inputu i nie usuwa zaznaczonej geometrii. Ostatni znak usuwa Backspace. Gdy bufor jest pusty, zwykłe Delete Selection działa jak wcześniej. Jeżeli focus ma sam Command Line albo inne prawdziwe pole tekstowe, Delete pozostaje normalną edycją tekstu.
+
+Dolny Command Line pozostaje zawsze jednym wierszem. Obszar diagnostyczny po prawej stronie ma stale zarezerwowane miejsce, więc pojawienie się błędu nie zmienia szerokości pola wejściowego i nie powoduje przeskoku Viewera. Długi komunikat jest wizualnie skracany w tym wierszu, a pełna treść jest dostępna jako tooltip.
 
 ### Powtórzenie ostatniej komendy
 
@@ -229,7 +237,7 @@ Obecna wersja obsługuje **Direct Distance** w pięciu wejściach punktowych: dr
 
 Po numerycznym placement COPY pozostaje aktywne dla następnej kopii, ale poprzedni kierunek nie jest używany ponownie po cichu — przesuń kursor, aby ustalić kierunek kolejnego Direct Distance. W LINE kolejny segment analogicznie wymaga nowego kierunku od nowego endpointu. Wartość `0` przechodzi przez resolver, po czym zwykła semantyka narzędzia decyduje o no-op/rejection: LINE nie tworzy odcinka zerowego, MOVE jest no-op, a COPY nie tworzy nakładającej się kopii.
 
-Nie są jeszcze obsługiwane: numeryczny kąt Rotate, współczynnik Scale, współrzędne absolutne/względne, zapis polarny, sufiksy/jednostki, Dynamic Input, Ortho/Polar ani snapping/tracking. Liczby wpisywane bezpośrednio przy focusie viewportu nie są globalnie przechwytywane; Direct Distance jest składane przez Command Line dla aktywnego PointRequest.
+Nie są jeszcze obsługiwane: numeryczny kąt Rotate, współczynnik Scale, współrzędne absolutne/względne, zapis polarny, sufiksy/jednostki, Dynamic Input, Ortho/Polar ani snapping/tracking. Drukowalny tekst wpisywany przy normalnym focusie viewportu CAD trafia do globalnego bufora Command Line; znaczenie liczby nadal należy do aktywnego PointRequest/narzędzia i nie jest zgadywane przez globalny router.
 
 Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uruchamia akcji CAD.
 

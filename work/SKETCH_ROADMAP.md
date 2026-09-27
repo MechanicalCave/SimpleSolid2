@@ -1,32 +1,34 @@
 # Sketcher Program Roadmap
 
 **Status:** ACCEPTED  
-**Version:** 1.3  
+**Version:** 1.4  
 **Owner acceptance:** 2026-09-27  
-**Previous accepted version:** 1.2 — 2026-09-26  
+**Previous accepted version:** 1.3 — 2026-09-27  
 **Foundation:** 1.0 (foundation-v1.0)  
-**Architecture:** ADR-0008, ADR-0009  
-**Current program:** Shared 2D Authoring / Part-hosted Sketcher  
+**Architecture:** ADR-0008, ADR-0009, ADR-0011  
+**Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
+**Scheduling authority while stabilization is active:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0  
 
-## 1. Why v1.3 changes the sequence
+## 1. Why v1.4 changes the sequence
 
-Roadmap v1.2 correctly established direct manipulation on Line, introduced Circle/Arc early and validated one semantic interaction model before precision-input work.
+Roadmap v1.3 correctly pulled the minimal PointRequest / context-first Command Line / Direct Distance seam into R7 as SK-07F. SK-07F is now completed after exact-head FULL #603, Owner manual PASS and CLOSURE #604.
 
-SK-07A through SK-07E then exposed a sequencing dependency that v1.2 intentionally deferred: remaining grip/Copy command grammar needs one shared precision-input seam before Copy-specific interaction is safe to implement.
+Manual use confirmed the semantic model but exposed the next architectural boundary: the user must not click a Sketch-local text field before every precise keyboard input. The same keyboard/text channel will later be needed by Part modeling, Assembly and Drawing.
 
-In classical CAD interaction, a numeric value such as `50` is not owned by MOVE or COPY. It satisfies the active semantic input request. The same direct-distance resolution is useful for Line construction, grip Reshape, grip Move, normal MOVE and normal COPY.
+This is not a reason to move CAD meaning into a global shell. It is a reason to separate global keyboard/text transport from the active tool's semantic InputRequest.
 
-Roadmap v1.3 therefore:
+Roadmap v1.4 therefore proposes:
 
-- preserves completed R0–R6 and SK-07A through SK-07E;
-- pulls only the minimal shared PointRequest / context-first Command Line / Direct Distance foundation forward into R7 as SK-07F;
-- requires remaining Grip Copy grammar to consume that shared input path rather than introduce a local parser;
-- leaves Ortho/Polar expansion, coordinate syntaxes, Dynamic Input and unit-expression work in R9;
-- leaves Object Snap, Object Snap Tracking and inference in R10;
-- keeps R8 Measure sequencing unchanged.
+- preserve completed R0–R6 and SK-07A through SK-07F unchanged;
+- add WB-02 as a cross-cutting prerequisite before remaining R7 Grip Copy/RMB work and before later precision-input expansion;
+- establish one workspace-global keyboard-first CAD input router and one global Command Line presentation;
+- keep semantic InputRequest ownership in the active tool/domain, with existing Sketch PointRequest as the first production client;
+- prevent Part/Sketch semantics from leaking into Project Workspace Shell;
+- leave new quantity request types, coordinates/units, Dynamic Input, Ortho/Polar and snapping for their later concrete contracts;
+- leave Grip Copy and RMB context unauthorized until separately accepted.
 
-This is a sequencing correction, not authorization to implement all later precision features.
+Roadmap v1.4 is authoritative. ADR-0011 and WB-02 were explicitly Owner-accepted on 2026-09-27.
 
 ## 2. Preserved accepted invariants
 
@@ -613,7 +615,7 @@ Goal:
 - prove the R5 interaction architecture is not Line-specific.
 
 ### R7 — Common transforms, shared precision foundation, Copy and command grammar
-**Status:** active — SK-07A through SK-07F completed; remaining R7 requires separate accepted slices
+**Status:** paused at completed SK-07F while accepted cross-cutting WB-02 is active; remaining R7 still requires separate accepted slices
 
 Goal:
 
@@ -627,7 +629,8 @@ Goal:
 - one shared semantic point-input request and context-first Command Line routing;
 - Direct Distance resolved from base + current pointer direction + numeric scalar;
 - first Direct Distance clients: Line second point, grip Reshape, grip Move, normal MOVE destination and normal COPY placement;
-- Grip Copy command grammar only after the shared precision foundation exists;
+- workspace-global keyboard-first CAD Input routing through proposed WB-02 before further command-grammar expansion;
+- Grip Copy command grammar only after the shared precision and global input foundations exist;
 - context RMB behavior;
 - Repeat Last Command;
 - common preview/commit/cancel pipeline;
@@ -646,7 +649,8 @@ Goal:
 ### R9 — Precision input expansion, Ortho, Polar and Dynamic Input
 Goal:
 
-- extend the shared Input Resolution path established by SK-07F rather than replace it;
+- extend the workspace-global CAD input transport established by accepted/completed WB-02 when available;
+- extend the shared semantic Input Resolution path established by SK-07F rather than replace it;
 - absolute/relative Cartesian input;
 - relative polar input;
 - unit-aware expression grammar beyond the bare scalar foundation;
@@ -733,7 +737,16 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7 active — SK-07A through SK-07F completed; Grip Copy and RMB context remain unauthorized  
+R7 paused after completed SK-07F — accepted WB-02 global CAD Input foundation is active as the next cross-cutting prerequisite; Grip Copy and RMB context remain unauthorized  
 R8+ not started
 
-Roadmap v1.3 remains authoritative for completed SK-07F semantics. All remaining R7/R8+/R9/R10 work requires separate explicit Owner-accepted Work Contracts; the newly identified global keyboard-first CAD Input requirement is a separate D2 architecture proposal and does not silently activate later precision-input scope.
+Roadmap v1.4 is authoritative. Active WB-02 does not activate Grip Copy, RMB, R8, R9 or R10 and does not authorize any new semantic request type beyond migrating the existing Sketch client.
+
+
+## AUDIT-01 program interlock
+
+Owner accepted `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 on 2026-09-27.
+
+This roadmap remains authoritative for Sketch/Shared-2D feature direction, but AUDIT-01 has scheduling precedence while architecture stabilization is active. Feature milestones are not deleted or silently superseded; they resume only according to the accepted audit-program gates and explicit Owner scheduling.
+
+AUDIT-01 does not by itself activate Grip Copy, RMB context, R8+, region/profile implementation or solid modeling.

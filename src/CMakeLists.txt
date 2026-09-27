@@ -92,6 +92,17 @@ target_include_directories(simplesolid2_part
 
 target_compile_features(simplesolid2_part PUBLIC cxx_std_20)
 
+add_library(simplesolid2_cad_input STATIC
+    application/cad_input.cpp
+)
+
+target_include_directories(simplesolid2_cad_input
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/application/include
+)
+
+target_compile_features(simplesolid2_cad_input PUBLIC cxx_std_20)
+
 add_library(simplesolid2_application STATIC
     application/document_session.cpp
     application/document_workspace.cpp
@@ -192,6 +203,7 @@ target_include_directories(simplesolid2_ui
 target_link_libraries(simplesolid2_ui
     PUBLIC
         simplesolid2_application
+        simplesolid2_cad_input
         simplesolid2_viewer
         Qt6::Widgets
 )

@@ -1,14 +1,53 @@
 #include "project_workspace_shell.hpp"
 
+#include <QAbstractSpinBox>
+#include <QApplication>
+#include <QComboBox>
+#include <QEvent>
 #include <QFrame>
+#include <QFontMetrics>
 #include <QHBoxLayout>
+#include <QKeyEvent>
 #include <QLabel>
+#include <QLineEdit>
+#include <QPlainTextEdit>
 #include <QPushButton>
 #include <QStackedWidget>
 #include <QTabBar>
+#include <QTextEdit>
 #include <QVBoxLayout>
 
+#include <algorithm>
+#include <string>
+#include <string_view>
+
 namespace simplesolid2::ui {
+namespace {
+
+std::string toUtf8(const QString& value) {
+    const auto bytes = value.toUtf8();
+    return std::string{
+        bytes.constData(),
+        static_cast<std::size_t>(bytes.size())};
+}
+
+QString fromUtf8(std::string_view value) {
+    return QString::fromUtf8(
+        value.data(),
+        static_cast<qsizetype>(value.size()));
+}
+
+bool isPrintableText(const QString& text) {
+    return !text.isEmpty() &&
+           std::all_of(
+               text.cbegin(),
+               text.cend(),
+               [](QChar ch) {
+                   return ch.isPrint();
+               });
+}
+
+} // namespace
 
 ProjectWorkspaceShell::ProjectWorkspaceShell(
     QWidget* parent)
@@ -142,6 +181,51 @@ ProjectWorkspaceShell::ProjectWorkspaceShell(
     content_->setCurrentWidget(dashboard_);
     root->addWidget(content_, 1);
 
+    command_line_widget_ = new QFrame(this);
+    command_line_widget_->setObjectName(
+        QStringLiteral("cadCommandLine"));
+    auto* command_layout =
+        new QHBoxLayout(command_line_widget_);
+    command_layout->setContentsMargins(6, 3, 6, 3);
+
+    command_prompt_ =
+        new QLabel(
+            QStringLiteral("Command:"),
+            command_line_widget_);
+    command_prompt_->setObjectName(
+        QStringLiteral("cadCommandPrompt"));
+    command_layout->addWidget(command_prompt_);
+
+    command_input_ =
+        new QLineEdit(command_line_widget_);
+    command_input_->setObjectName(
+        QStringLiteral("cadCommandInput"));
+    command_input_->setPlaceholderText(
+        QStringLiteral("Type a CAD command or value"));
+    command_layout->addWidget(command_input_, 1);
+
+    command_diagnostic_ =
+        new QLabel(command_line_widget_);
+    command_diagnostic_->setObjectName(
+        QStringLiteral("cadCommandDiagnostic"));
+    command_diagnostic_->setWordWrap(false);
+    command_diagnostic_->setTextFormat(Qt::PlainText);
+    command_diagnostic_->setAlignment(
+        Qt::AlignLeft | Qt::AlignVCenter);
+    // Reserve diagnostic space permanently so a rejected token cannot
+    // resize the input field or reflow the Workbench vertically.
+    command_diagnostic_->setFixedWidth(320);
+    command_diagnostic_->setVisible(true);
+    command_layout->addWidget(command_diagnostic_);
+
+    // The Command Line is a stable one-row Workspace surface. Long
+    // diagnostics are elided inside their reserved region instead of
+    // increasing the shell height and shrinking the Viewer.
+    command_line_widget_->setFixedHeight(
+        command_input_->sizeHint().height() + 6);
+
+    root->addWidget(command_line_widget_);
+
     document_tabs_ = new QTabBar(this);
     document_tabs_->setObjectName(
         QStringLiteral("documentTabs"));
@@ -152,6 +236,36 @@ ProjectWorkspaceShell::ProjectWorkspaceShell(
     document_tabs_->setUsesScrollButtons(true);
     document_tabs_->setVisible(false);
     root->addWidget(document_tabs_);
+
+    QObject::connect(
+        command_input_,
+        &QLineEdit::textChanged,
+        this,
+        [this](const QString& text) {
+            if (syncing_command_input_) {
+                return;
+            }
+            cad_input_.setBuffer(toUtf8(text));
+            refreshCadInputPresentation();
+        });
+    QObject::connect(
+        command_input_,
+        &QLineEdit::returnPressed,
+        this,
+        [this] {
+            submitCadInputFromLineEdit();
+        });
+
+    if (qApp != nullptr) {
+        qApp->installEventFilter(this);
+    }
+    refreshCadInputPresentation();
+}
+
+ProjectWorkspaceShell::~ProjectWorkspaceShell() {
+    if (qApp != nullptr) {
+        qApp->removeEventFilter(this);
+    }
 }
 
 void ProjectWorkspaceShell::setProjectInfo(
@@ -210,6 +324,9 @@ void ProjectWorkspaceShell::setDocumentWorkbench(
         return;
     }
 
+    cad_input_.detachEndpoint();
+    refreshCadInputPresentation();
+
     if (document_workbench_ != nullptr) {
         content_->removeWidget(
             document_workbench_);
@@ -229,6 +346,9 @@ void ProjectWorkspaceShell::setDocumentWorkbench(
 }
 
 void ProjectWorkspaceShell::showWorkspace() {
+    cad_input_.detachEndpoint();
+    refreshCadInputPresentation();
+
     content_->setCurrentWidget(
         dashboard_);
     workspace_button_->setEnabled(true);
@@ -245,11 +365,254 @@ void ProjectWorkspaceShell::showDocumentWorkbench() {
         document_workbench_);
     workspace_button_->setEnabled(true);
     workspace_button_->setChecked(false);
+    refreshCadInputPresentation();
+}
+
+void ProjectWorkspaceShell::setCadInputEndpoint(
+    application::ICadInputEndpoint* endpoint) {
+    if (endpoint == nullptr) {
+        cad_input_.detachEndpoint();
+    } else {
+        cad_input_.attachEndpoint(endpoint);
+    }
+    refreshCadInputPresentation();
+}
+
+void ProjectWorkspaceShell::refreshCadInputPresentation() {
+    static_cast<void>(
+        cad_input_.synchronizeContext());
+
+    if (command_prompt_ != nullptr) {
+        command_prompt_->setText(
+            fromUtf8(cad_input_.prompt()));
+    }
+
+    syncCadInputLineEdit();
+
+    if (command_diagnostic_ != nullptr) {
+        const auto full_diagnostic =
+            fromUtf8(cad_input_.diagnostic());
+        command_diagnostic_->setToolTip(
+            full_diagnostic);
+
+        const int available_width =
+            std::max(
+                0,
+                command_diagnostic_->width() - 4);
+        command_diagnostic_->setText(
+            command_diagnostic_->fontMetrics().
+                elidedText(
+                    full_diagnostic,
+                    Qt::ElideRight,
+                    available_width));
+    }
+}
+
+const std::string&
+ProjectWorkspaceShell::cadInputBuffer() const noexcept {
+    return cad_input_.buffer();
 }
 
 bool ProjectWorkspaceShell::showingWorkspace() const noexcept {
     return content_->currentWidget() ==
            dashboard_;
+}
+
+bool ProjectWorkspaceShell::focusBelongsToActiveCadSurface(
+    QWidget* focus) const noexcept {
+    if (focus == nullptr ||
+        document_workbench_ == nullptr ||
+        content_->currentWidget() !=
+            document_workbench_) {
+        return false;
+    }
+
+    return focus == document_workbench_ ||
+           document_workbench_->isAncestorOf(focus);
+}
+
+bool ProjectWorkspaceShell::focusOwnsTextInput(
+    QWidget* focus) const noexcept {
+    if (focus == nullptr ||
+        focus == command_input_) {
+        return false;
+    }
+
+    if (qobject_cast<QLineEdit*>(focus) != nullptr ||
+        qobject_cast<QPlainTextEdit*>(focus) != nullptr ||
+        qobject_cast<QTextEdit*>(focus) != nullptr ||
+        qobject_cast<QAbstractSpinBox*>(focus) != nullptr) {
+        return true;
+    }
+
+    auto* combo = qobject_cast<QComboBox*>(focus);
+    return combo != nullptr && combo->isEditable();
+}
+
+void ProjectWorkspaceShell::syncCadInputLineEdit() {
+    if (command_input_ == nullptr) {
+        return;
+    }
+
+    const auto current =
+        fromUtf8(cad_input_.buffer());
+    if (command_input_->text() == current) {
+        return;
+    }
+
+    syncing_command_input_ = true;
+    command_input_->setText(current);
+    syncing_command_input_ = false;
+}
+
+void ProjectWorkspaceShell::submitCadInputFromLineEdit() {
+    const auto result = cad_input_.submit();
+    refreshCadInputPresentation();
+
+    if (result.accepted &&
+        document_workbench_ != nullptr) {
+        document_workbench_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+bool ProjectWorkspaceShell::eventFilter(
+    QObject* watched,
+    QEvent* event) {
+    if (event == nullptr ||
+        event->type() != QEvent::KeyPress ||
+        !isVisible()) {
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
+
+    // A popup/menu or modal surface owns keyboard routing while active.
+    // Never feed background CAD in those states.
+    if (QApplication::activePopupWidget() != nullptr ||
+        QApplication::activeModalWidget() != nullptr) {
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
+
+    auto* key_event =
+        static_cast<QKeyEvent*>(event);
+    auto* focus = QApplication::focusWidget();
+
+    // A different top-level window is authoritative. This prevents a
+    // visible background Workspace from consuming another window's keys.
+    if (auto* active_window =
+            QApplication::activeWindow();
+        active_window != nullptr &&
+        active_window != window()) {
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
+
+    if (focus == command_input_) {
+        if (key_event->key() == Qt::Key_Escape) {
+            cad_input_.clearBuffer();
+            refreshCadInputPresentation();
+            if (document_workbench_ != nullptr) {
+                document_workbench_->setFocus(
+                    Qt::OtherFocusReason);
+            }
+            return true;
+        }
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
+
+    auto* watched_widget =
+        qobject_cast<QWidget*>(watched);
+    if (!focusBelongsToActiveCadSurface(focus) ||
+        watched_widget == nullptr ||
+        (watched_widget != document_workbench_ &&
+         !document_workbench_->isAncestorOf(
+             watched_widget)) ||
+        focusOwnsTextInput(focus) ||
+        !cad_input_.hasEndpoint()) {
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
+
+    if (cad_input_.synchronizeContext()) {
+        refreshCadInputPresentation();
+    }
+
+    const auto modifiers = key_event->modifiers();
+    if ((modifiers & Qt::ControlModifier) ||
+        (modifiers & Qt::AltModifier) ||
+        (modifiers & Qt::MetaModifier)) {
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
+
+    // A2: while a viewport-entered CAD token is live, Delete belongs
+    // to input editing precedence and must never fall through to
+    // semantic Delete Selection. Append-only viewport input has no
+    // caret, so Delete intentionally leaves the token unchanged.
+    if (key_event->key() == Qt::Key_Delete &&
+        !cad_input_.buffer().empty()) {
+        return true;
+    }
+
+    if (key_event->key() == Qt::Key_Backspace) {
+        if (cad_input_.backspace()) {
+            refreshCadInputPresentation();
+            return true;
+        }
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
+
+    if (key_event->key() == Qt::Key_Escape) {
+        if (!cad_input_.buffer().empty()) {
+            cad_input_.clearBuffer();
+            refreshCadInputPresentation();
+            return true;
+        }
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
+
+    if (key_event->key() == Qt::Key_Return ||
+        key_event->key() == Qt::Key_Enter) {
+        if (!cad_input_.buffer().empty()) {
+            static_cast<void>(
+                cad_input_.submit());
+            refreshCadInputPresentation();
+            return true;
+        }
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
+
+    if (key_event->key() == Qt::Key_Space &&
+        cad_input_.buffer().empty()) {
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
+
+    const auto text = key_event->text();
+    if (isPrintableText(text)) {
+        cad_input_.appendText(toUtf8(text));
+        refreshCadInputPresentation();
+        return true;
+    }
+
+    return QWidget::eventFilter(
+        watched,
+        event);
 }
 
 } // namespace simplesolid2::ui

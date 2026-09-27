@@ -1,5 +1,6 @@
 #pragma once
 
+#include <simplesolid2/application/cad_input.hpp>
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/sketch/sketch_id.hpp>
 #include <simplesolid2/viewer/camera_state.hpp>
@@ -21,6 +22,7 @@ class QLineEdit;
 class QPlainTextEdit;
 class QPushButton;
 class QStackedWidget;
+class QString;
 class QTreeWidget;
 class QWidget;
 
@@ -32,7 +34,8 @@ class PartSketchInteractionController;
 class PartViewportController;
 class ViewCubeWidget;
 
-class CadWorkbench final : public QWidget {
+class CadWorkbench final : public QWidget,
+                           public application::ICadInputEndpoint {
 public:
     explicit CadWorkbench(QWidget* parent = nullptr);
     ~CadWorkbench() override;
@@ -74,6 +77,23 @@ public:
             std::move(handler);
     }
 
+    using CadInputContextChangedHandler =
+        std::function<void()>;
+    void setCadInputContextChangedHandler(
+        CadInputContextChangedHandler handler) {
+        cad_input_context_changed_handler_ =
+            std::move(handler);
+    }
+
+    [[nodiscard]] std::string cadInputPrompt() const override;
+    [[nodiscard]] application::CadInputContextGeneration
+    cadInputContextGeneration() const noexcept override;
+    [[nodiscard]] application::CadInputSubmitResult
+    submitCadInput(
+        std::string_view text,
+        application::CadInputContextGeneration
+            expected_context_generation) override;
+
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;
 
@@ -102,7 +122,6 @@ private:
     void finishSketchLine();
     void cancelSketchLine();
     void deleteSketchSelection();
-    void submitSketchCommandLine();
     void syncSketchInteractionUi();
     void clearSketchRuntimeContext();
     void reconcileSketchRuntimeContext();
@@ -119,6 +138,8 @@ private:
         std::optional<core::BuiltinReferenceRole> primary);
     void syncActionState();
     void notifyDocumentStateChanged();
+    void notifyCadInputContextChanged();
+    [[nodiscard]] QString cadInputPromptText() const;
 
     [[nodiscard]] application::DocumentSession*
     activeDocumentSession() noexcept {
@@ -151,6 +172,8 @@ private:
         close_document_handler_;
     DocumentStateChangedHandler
         document_state_changed_handler_;
+    CadInputContextChangedHandler
+        cad_input_context_changed_handler_;
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
@@ -200,10 +223,6 @@ private:
     QPushButton* finish_line_button_{};
     QPushButton* cancel_line_button_{};
     QPushButton* delete_selection_button_{};
-
-    QWidget* command_line_widget_{};
-    QLabel* command_prompt_{};
-    QLineEdit* command_input_{};
 
     QLabel* status_{};
 };

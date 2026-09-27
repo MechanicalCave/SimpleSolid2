@@ -1,13 +1,18 @@
 #pragma once
 
+#include <simplesolid2/application/cad_input.hpp>
+
 #include <QWidget>
 
+#include <string>
+
+class QEvent;
 class QLabel;
+class QLineEdit;
 class QString;
 class QPushButton;
 class QStackedWidget;
 class QTabBar;
-class QVBoxLayout;
 class QWidget;
 
 namespace simplesolid2::ui {
@@ -15,6 +20,7 @@ namespace simplesolid2::ui {
 class ProjectWorkspaceShell final : public QWidget {
 public:
     explicit ProjectWorkspaceShell(QWidget* parent = nullptr);
+    ~ProjectWorkspaceShell() override;
 
     void setProjectInfo(
         const QString& display_name,
@@ -33,9 +39,26 @@ public:
     void showWorkspace();
     void showDocumentWorkbench();
 
+    void setCadInputEndpoint(
+        application::ICadInputEndpoint* endpoint);
+    void refreshCadInputPresentation();
+
+    [[nodiscard]] const std::string&
+    cadInputBuffer() const noexcept;
+
     [[nodiscard]] bool showingWorkspace() const noexcept;
 
+protected:
+    bool eventFilter(QObject* watched, QEvent* event) override;
+
 private:
+    [[nodiscard]] bool focusOwnsTextInput(
+        QWidget* focus) const noexcept;
+    [[nodiscard]] bool focusBelongsToActiveCadSurface(
+        QWidget* focus) const noexcept;
+    void syncCadInputLineEdit();
+    void submitCadInputFromLineEdit();
+
     QLabel* project_name_{};
     QLabel* project_id_{};
     QLabel* workspace_path_{};
@@ -50,6 +73,13 @@ private:
     QWidget* dashboard_{};
     QWidget* document_workbench_{};
     QTabBar* document_tabs_{};
+
+    application::CadInputSession cad_input_;
+    QWidget* command_line_widget_{};
+    QLabel* command_prompt_{};
+    QLineEdit* command_input_{};
+    QLabel* command_diagnostic_{};
+    bool syncing_command_input_{};
 };
 
 } // namespace simplesolid2::ui

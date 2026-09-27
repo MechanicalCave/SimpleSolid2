@@ -1,4 +1,5 @@
 #include "cad_workbench.hpp"
+#include "project_workspace_shell.hpp"
 
 #include <simplesolid2/application/project_session.hpp>
 #include <simplesolid2/application/project_workspace_metadata.hpp>
@@ -359,6 +360,7 @@ int main(int argc, char* argv[]) {
         created_part.session->documentId();
 
     TestViewportWidget* viewport = nullptr;
+    ui::ProjectWorkspaceShell workspace_shell;
     ui::CadWorkbench workbench{
         [&viewport](QWidget* parent) {
             viewport =
@@ -366,14 +368,24 @@ int main(int argc, char* argv[]) {
             return ui::ViewportSurface{
                 viewport,
                 viewport};
-        }};
+        },
+        &workspace_shell};
+    workspace_shell.setDocumentWorkbench(
+        &workbench);
+    workbench.setCadInputContextChangedHandler(
+        [&workspace_shell] {
+            workspace_shell.refreshCadInputPresentation();
+        });
 
     CHECK(
         workbench.activateDocument(
             opened.session->documentSession(
                 document_id),
             workspace));
-    workbench.show();
+    workspace_shell.setCadInputEndpoint(
+        &workbench);
+    workspace_shell.showDocumentWorkbench();
+    workspace_shell.show();
     QApplication::processEvents();
     CHECK(viewport != nullptr);
 
@@ -441,11 +453,11 @@ int main(int argc, char* argv[]) {
         workbench.findChild<QPushButton*>(
             QStringLiteral("mirrorSketchToolButton"));
     auto* command_input =
-        workbench.findChild<QLineEdit*>(
-            QStringLiteral("sketchCommandInput"));
+        workspace_shell.findChild<QLineEdit*>(
+            QStringLiteral("cadCommandInput"));
     auto* command_prompt =
-        workbench.findChild<QLabel*>(
-            QStringLiteral("sketchCommandPrompt"));
+        workspace_shell.findChild<QLabel*>(
+            QStringLiteral("cadCommandPrompt"));
 
     CHECK(sketch_button != nullptr);
     CHECK(cancel_button != nullptr);
@@ -664,13 +676,22 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(!move_button->isChecked());
 
-    command_input->setText(
+    command_input->clear();
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
         QStringLiteral("MOVE"));
+    QApplication::processEvents();
+    CHECK(
+        command_input->text() ==
+        QStringLiteral("MOVE"));
+    CHECK(QApplication::focusWidget() == viewport);
     QTest::keyClick(
-        command_input,
+        viewport,
         Qt::Key_Return);
     QApplication::processEvents();
     CHECK(move_button->isChecked());
+    CHECK(command_input->text().isEmpty());
     CHECK(
         operations_label->text() ==
         QStringLiteral(
@@ -796,8 +817,9 @@ int main(int argc, char* argv[]) {
         140.0, 100.0,
         1.0, 0.0);
 
-    // SK-07F: an active semantic PointRequest owns Command Line
-    // submission before top-level command activation.
+    // SK-07F/WB-02: an active semantic PointRequest owns Command
+    // Line submission before top-level command activation. Rejection
+    // keeps LINE authoritative but Enter consumes the submitted token.
     command_input->setText(QStringLiteral("MOVE"));
     QTest::keyClick(command_input, Qt::Key_Return);
     QApplication::processEvents();
@@ -807,15 +829,65 @@ int main(int argc, char* argv[]) {
         session->document()
             .findSketch(sketch_id)
             ->model.entityCount() == 0U);
-    CHECK(command_input->text() == QStringLiteral("MOVE"));
+    CHECK(command_input->text().isEmpty());
+
+    // AUDIT-01 A1: a token is bound to the semantic request, not
+    // merely the CadWorkbench object. Pointer movement within the same
+    // PointRequest preserves it; replacing the request clears it.
+    command_input->clear();
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("12"));
+    CHECK(command_input->text() == QStringLiteral("12"));
+    const auto request_guard_revision =
+        session->document().revision();
+    const auto request_guard_undo =
+        session->undoDepth();
+
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        160.0, 100.0,
+        2.0, 0.0);
+    QApplication::processEvents();
+    CHECK(command_input->text() == QStringLiteral("12"));
+
+    finish_line_button->click();
+    QApplication::processEvents();
+    CHECK(command_input->text().isEmpty());
+    CHECK(!line_button->isChecked());
+    CHECK(
+        session->document().revision() ==
+        request_guard_revision);
+    CHECK(session->undoDepth() == request_guard_undo);
+
+    // Return to LINE for the existing Direct Distance scenarios.
+    line_button->click();
+    QApplication::processEvents();
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        140.0, 100.0,
+        1.0, 0.0);
 
     // Current-locale decimal separator and '.' both feed the same
     // Direct Distance path. Keep two segments temporarily so both
     // forms are exercised without changing the later Sketch workflow.
     const QLocale previous_locale = QLocale{};
     QLocale::setDefault(QLocale{QStringLiteral("pl_PL")});
-    command_input->setText(QStringLiteral("10,5"));
-    QTest::keyClick(command_input, Qt::Key_Return);
+    command_input->clear();
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("10,5"));
+    CHECK(
+        command_input->text() ==
+        QStringLiteral("10,5"));
+    CHECK(QApplication::focusWidget() == viewport);
+    QTest::keyClick(viewport, Qt::Key_Return);
     QApplication::processEvents();
     QLocale::setDefault(previous_locale);
     CHECK(
@@ -840,7 +912,7 @@ int main(int argc, char* argv[]) {
     CHECK(!line_button->isChecked());
     CHECK(!viewport->sketchScene().lines.empty());
 
-    const auto line_token =
+    auto line_token =
         viewport->sketchScene().lines.front().token;
     viewport->setSketchPointHit(line_token);
     viewport->emitSketchPointerXZ(
@@ -856,6 +928,269 @@ int main(int argc, char* argv[]) {
         operations_label->text() ==
         QStringLiteral("Select — 1 entity selected"));
 
+    // AUDIT-01 A2: Delete has CAD-input precedence while a live
+    // token exists and must not fall through to semantic geometry
+    // deletion. The append-only viewport token itself is unchanged.
+    const auto delete_guard_state =
+        session->document().state();
+    const auto delete_guard_revision =
+        session->document().revision();
+    const auto delete_guard_undo =
+        session->undoDepth();
+    const auto delete_guard_redo =
+        session->redoDepth();
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("TE"));
+    CHECK(command_input->text() == QStringLiteral("TE"));
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Delete);
+    QApplication::processEvents();
+    CHECK(command_input->text() == QStringLiteral("TE"));
+    CHECK(session->document().state() == delete_guard_state);
+    CHECK(
+        session->document().revision() ==
+        delete_guard_revision);
+    CHECK(session->undoDepth() == delete_guard_undo);
+    CHECK(session->redoDepth() == delete_guard_redo);
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(command_input->text().isEmpty());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    // WB-02: normal MOVE consumes the same global keyboard-first
+    // buffer. Restore the authored fixture after the commit so later
+    // grip/history assertions keep their original baseline.
+    const auto keyboard_baseline =
+        session->document().state();
+    const auto keyboard_undo =
+        session->undoDepth();
+
+    move_button->click();
+    QApplication::processEvents();
+    CHECK(move_button->isChecked());
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        120.0, 100.0,
+        1.0, 0.0);
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("5"));
+    CHECK(
+        command_input->text() ==
+        QStringLiteral("5"));
+    CHECK(QApplication::focusWidget() == viewport);
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(!move_button->isChecked());
+    CHECK(command_input->text().isEmpty());
+    CHECK(session->undoDepth() == keyboard_undo + 1U);
+
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().state() == keyboard_baseline);
+    CHECK(session->undoDepth() == keyboard_undo);
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    // WB-02: repeated COPY placement is also keyboard-first. COPY
+    // remains active after accepted placement; Esc ends the transient
+    // session and Undo removes only that placement.
+    copy_button->click();
+    QApplication::processEvents();
+    CHECK(copy_button->isChecked());
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        100.0, 120.0,
+        0.0, 1.0);
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("5"));
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(copy_button->isChecked());
+    CHECK(command_input->text().isEmpty());
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 3U);
+    CHECK(session->undoDepth() == keyboard_undo + 1U);
+
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!copy_button->isChecked());
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().state() == keyboard_baseline);
+    CHECK(session->undoDepth() == keyboard_undo);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 2U);
+    CHECK(!viewport->sketchScene().lines.empty());
+    line_token =
+        viewport->sketchScene().lines.front().token;
+
+    // History restoration is authored-state authority, not selection
+    // presentation authority. Re-establish the semantic selection
+    // explicitly before testing grip input.
+    viewport->setSketchGripHit(std::nullopt);
+    viewport->setSketchPointHit(line_token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        120.0, 100.0,
+        5.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        120.0, 100.0,
+        5.0, 0.0);
+    QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    // WB-02: grip Reshape uses the global keyboard buffer and the
+    // existing SK-07F semantic Direct Distance resolver.
+    viewport->setSketchGripHit(
+        viewer::SketchGripKey{
+            line_token,
+            viewer::SketchGripRole::line_start});
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        110.0, 100.0,
+        1.0, 0.0);
+    QApplication::processEvents();
+    CHECK(
+        viewport->interactionPresentation().
+            active_grip.has_value());
+
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("5"));
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        !viewport->interactionPresentation().
+            active_grip.has_value());
+    CHECK(command_input->text().isEmpty());
+    CHECK(session->undoDepth() == keyboard_undo + 1U);
+
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().state() == keyboard_baseline);
+    CHECK(session->undoDepth() == keyboard_undo);
+    CHECK(!viewport->sketchScene().lines.empty());
+    line_token =
+        viewport->sketchScene().lines.front().token;
+
+    viewport->setSketchGripHit(std::nullopt);
+    viewport->setSketchPointHit(line_token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        120.0, 100.0,
+        5.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        120.0, 100.0,
+        5.0, 0.0);
+    QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    // Establish the direction in Reshape, then Space-switch to Move.
+    // The same pointer candidate must survive the mode cycle and the
+    // numeric value must still arrive through the global buffer.
+    viewport->setSketchGripHit(
+        viewer::SketchGripKey{
+            line_token,
+            viewer::SketchGripRole::line_start});
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        110.0, 100.0,
+        1.0, 0.0);
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Space);
+    QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Grip — Move; Space cycles mode; Enter/LMB commits; Esc cancels"));
+
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("5"));
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        !viewport->interactionPresentation().
+            active_grip.has_value());
+    CHECK(command_input->text().isEmpty());
+    CHECK(session->undoDepth() == keyboard_undo + 1U);
+
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().state() == keyboard_baseline);
+    CHECK(session->undoDepth() == keyboard_undo);
+    CHECK(!viewport->sketchScene().lines.empty());
+    line_token =
+        viewport->sketchScene().lines.front().token;
+
+    // Re-enter an uncommitted grip session for the existing SK-07E
+    // cycle/no-mutation regression below.
     viewport->setSketchGripHit(
         viewer::SketchGripKey{
             line_token,
@@ -981,8 +1316,29 @@ int main(int argc, char* argv[]) {
         revision_after_create);
     CHECK(session->needsSave());
 
+    // AUDIT-01 A1: Finish Sketch replaces the semantic editing
+    // context even though the same CadWorkbench endpoint object remains.
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("STALE"));
+    CHECK(command_input->text() == QStringLiteral("STALE"));
+    const auto finish_guard_state =
+        session->document().state();
+    const auto finish_guard_revision =
+        session->document().revision();
+    const auto finish_guard_undo =
+        session->undoDepth();
+
     finish_button->click();
     QApplication::processEvents();
+
+    CHECK(command_input->text().isEmpty());
+    CHECK(session->document().state() == finish_guard_state);
+    CHECK(
+        session->document().revision() ==
+        finish_guard_revision);
+    CHECK(session->undoDepth() == finish_guard_undo);
 
     CHECK(finish_button->isHidden());
     CHECK(cancel_button->isHidden());
