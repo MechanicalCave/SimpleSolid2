@@ -6,6 +6,7 @@
 #include <simplesolid2/sketch/interaction_state.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <functional>
 #include <optional>
 #include <string>
@@ -40,6 +41,10 @@ public:
     commonTransformStage() const noexcept;
     [[nodiscard]] std::optional<sketch::PointRequest>
     activePointRequest() const noexcept;
+    [[nodiscard]] application::CadInputContextGeneration
+    cadInputContextGeneration() const noexcept {
+        return cad_input_context_generation_;
+    }
     [[nodiscard]] bool submitDirectDistance(double distance);
     [[nodiscard]] std::size_t selectedCount() const noexcept;
     [[nodiscard]] bool directManipulationActive()
@@ -120,6 +125,31 @@ private:
     void projectSelection();
     void projectInteraction();
     void configureForCurrentTool();
+    struct CadInputContextFingerprint final {
+        bool active{};
+        std::optional<sketch::SketchId> sketch_id;
+        sketch::SketchTool tool{sketch::SketchTool::select};
+        std::optional<sketch::LineStage> line_stage;
+        std::optional<sketch::CircleStage> circle_stage;
+        std::optional<sketch::ArcStage> arc_stage;
+        std::optional<sketch::CommonTransformStage>
+            transform_stage;
+        bool direct_manipulation_active{};
+        std::optional<sketch::DirectEditMode>
+            direct_edit_mode;
+        std::optional<sketch::Point2> point_base;
+        bool direct_distance_enabled{};
+        std::optional<core::DocumentRevision>
+            document_revision;
+
+        friend bool operator==(
+            const CadInputContextFingerprint&,
+            const CadInputContextFingerprint&) = default;
+    };
+
+    [[nodiscard]] CadInputContextFingerprint
+    currentCadInputContextFingerprint() const noexcept;
+    void refreshCadInputContextGeneration();
     void notifyStateChanged();
     void reportStatus(std::string message);
 
@@ -136,6 +166,11 @@ private:
         transform_revision_;
     std::optional<sketch::SketchTool>
         last_repeatable_command_;
+
+    application::CadInputContextGeneration
+        cad_input_context_generation_{};
+    std::optional<CadInputContextFingerprint>
+        cad_input_context_fingerprint_;
 
     StateChangedHandler state_changed_handler_;
     StatusHandler status_handler_;

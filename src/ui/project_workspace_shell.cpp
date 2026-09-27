@@ -379,6 +379,9 @@ void ProjectWorkspaceShell::setCadInputEndpoint(
 }
 
 void ProjectWorkspaceShell::refreshCadInputPresentation() {
+    static_cast<void>(
+        cad_input_.synchronizeContext());
+
     if (command_prompt_ != nullptr) {
         command_prompt_->setText(
             fromUtf8(cad_input_.prompt()));
@@ -413,6 +416,19 @@ ProjectWorkspaceShell::cadInputBuffer() const noexcept {
 bool ProjectWorkspaceShell::showingWorkspace() const noexcept {
     return content_->currentWidget() ==
            dashboard_;
+}
+
+bool ProjectWorkspaceShell::focusBelongsToActiveCadSurface(
+    QWidget* focus) const noexcept {
+    if (focus == nullptr ||
+        document_workbench_ == nullptr ||
+        content_->currentWidget() !=
+            document_workbench_) {
+        return false;
+    }
+
+    return focus == document_workbench_ ||
+           document_workbench_->isAncestorOf(focus);
 }
 
 bool ProjectWorkspaceShell::focusOwnsTextInput(
@@ -471,7 +487,10 @@ bool ProjectWorkspaceShell::eventFilter(
             event);
     }
 
-    if (QApplication::activeModalWidget() != nullptr) {
+    // A popup/menu or modal surface owns keyboard routing while active.
+    // Never feed background CAD in those states.
+    if (QApplication::activePopupWidget() != nullptr ||
+        QApplication::activeModalWidget() != nullptr) {
         return QWidget::eventFilter(
             watched,
             event);
@@ -480,6 +499,17 @@ bool ProjectWorkspaceShell::eventFilter(
     auto* key_event =
         static_cast<QKeyEvent*>(event);
     auto* focus = QApplication::focusWidget();
+
+    // A different top-level window is authoritative. This prevents a
+    // visible background Workspace from consuming another window's keys.
+    if (auto* active_window =
+            QApplication::activeWindow();
+        active_window != nullptr &&
+        active_window != window()) {
+        return QWidget::eventFilter(
+            watched,
+            event);
+    }
 
     if (focus == command_input_) {
         if (key_event->key() == Qt::Key_Escape) {
@@ -496,11 +526,22 @@ bool ProjectWorkspaceShell::eventFilter(
             event);
     }
 
-    if (focusOwnsTextInput(focus) ||
+    auto* watched_widget =
+        qobject_cast<QWidget*>(watched);
+    if (!focusBelongsToActiveCadSurface(focus) ||
+        watched_widget == nullptr ||
+        (watched_widget != document_workbench_ &&
+         !document_workbench_->isAncestorOf(
+             watched_widget)) ||
+        focusOwnsTextInput(focus) ||
         !cad_input_.hasEndpoint()) {
         return QWidget::eventFilter(
             watched,
             event);
+    }
+
+    if (cad_input_.synchronizeContext()) {
+        refreshCadInputPresentation();
     }
 
     const auto modifiers = key_event->modifiers();
@@ -510,6 +551,15 @@ bool ProjectWorkspaceShell::eventFilter(
         return QWidget::eventFilter(
             watched,
             event);
+    }
+
+    // A2: while a viewport-entered CAD token is live, Delete belongs
+    // to input editing precedence and must never fall through to
+    // semantic Delete Selection. Append-only viewport input has no
+    // caret, so Delete intentionally leaves the token unchanged.
+    if (key_event->key() == Qt::Key_Delete &&
+        !cad_input_.buffer().empty()) {
+        return true;
     }
 
     if (key_event->key() == Qt::Key_Backspace) {

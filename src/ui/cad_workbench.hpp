@@ -86,8 +86,13 @@ public:
     }
 
     [[nodiscard]] std::string cadInputPrompt() const override;
+    [[nodiscard]] application::CadInputContextGeneration
+    cadInputContextGeneration() const noexcept override;
     [[nodiscard]] application::CadInputSubmitResult
-    submitCadInput(std::string_view text) override;
+    submitCadInput(
+        std::string_view text,
+        application::CadInputContextGeneration
+            expected_context_generation) override;
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

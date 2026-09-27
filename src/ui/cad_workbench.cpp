@@ -1231,9 +1231,25 @@ std::string CadWorkbench::cadInputPrompt() const {
     return toUtf8(cadInputPromptText());
 }
 
+application::CadInputContextGeneration
+CadWorkbench::cadInputContextGeneration() const noexcept {
+    return sketch_interaction_controller_
+               ? sketch_interaction_controller_->
+                     cadInputContextGeneration()
+               : application::CadInputContextGeneration{};
+}
+
 application::CadInputSubmitResult
 CadWorkbench::submitCadInput(
-    std::string_view text) {
+    std::string_view text,
+    application::CadInputContextGeneration
+        expected_context_generation) {
+    if (expected_context_generation !=
+        cadInputContextGeneration()) {
+        return {
+            false,
+            "CAD input semantic context is stale."};
+    }
     if (!sketch_interaction_controller_ ||
         !sketch_interaction_controller_->active()) {
         return {

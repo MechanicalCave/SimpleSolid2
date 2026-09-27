@@ -1,10 +1,14 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
+#include <optional>
 #include <string>
 #include <string_view>
 
 namespace simplesolid2::application {
+
+using CadInputContextGeneration = std::uint64_t;
 
 struct CadInputSubmitResult final {
     bool accepted{};
@@ -18,8 +22,13 @@ public:
     [[nodiscard]] virtual std::string
     cadInputPrompt() const = 0;
 
+    [[nodiscard]] virtual CadInputContextGeneration
+    cadInputContextGeneration() const noexcept = 0;
+
     [[nodiscard]] virtual CadInputSubmitResult
-    submitCadInput(std::string_view text) = 0;
+    submitCadInput(
+        std::string_view text,
+        CadInputContextGeneration expected_context_generation) = 0;
 };
 
 class CadInputSession final {
@@ -29,6 +38,8 @@ public:
 
     [[nodiscard]] bool hasEndpoint() const noexcept;
     [[nodiscard]] ICadInputEndpoint* endpoint() const noexcept;
+
+    [[nodiscard]] bool synchronizeContext();
 
     void setBuffer(std::string text);
     void appendText(std::string_view text);
@@ -45,7 +56,10 @@ private:
     ICadInputEndpoint* endpoint_{};
     std::string buffer_;
     std::string diagnostic_;
-    std::size_t generation_{};
+    std::size_t endpoint_generation_{};
+    CadInputContextGeneration observed_context_generation_{};
+    std::optional<CadInputContextGeneration>
+        buffer_context_generation_;
 };
 
 } // namespace simplesolid2::application

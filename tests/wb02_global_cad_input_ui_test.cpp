@@ -5,6 +5,7 @@
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
+#include <QMenu>
 #include <QTest>
 #include <QVBoxLayout>
 #include <QWidget>
@@ -32,6 +33,14 @@ public:
     std::string rejection{
         "Rejected by fake endpoint."};
     bool accept{true};
+    simplesolid2::application::CadInputContextGeneration
+        generation{1U};
+
+    [[nodiscard]]
+    simplesolid2::application::CadInputContextGeneration
+    cadInputContextGeneration() const noexcept override {
+        return generation;
+    }
 
     [[nodiscard]] std::string
     cadInputPrompt() const override {
@@ -40,7 +49,13 @@ public:
 
     [[nodiscard]]
     simplesolid2::application::CadInputSubmitResult
-    submitCadInput(std::string_view text) override {
+    submitCadInput(
+        std::string_view text,
+        simplesolid2::application::CadInputContextGeneration
+            expected_context_generation) override {
+        if (expected_context_generation != generation) {
+            return {false, "Stale fake context."};
+        }
         last.assign(text);
         return {
             accept,
@@ -79,6 +94,7 @@ int main(int argc, char* argv[]) {
     shell.setCadInputEndpoint(&first);
     shell.showDocumentWorkbench();
     shell.show();
+    shell.activateWindow();
     QApplication::processEvents();
 
     auto* input =
@@ -204,6 +220,52 @@ int main(int argc, char* argv[]) {
         cad_surface,
         QStringLiteral("STALE"));
     CHECK(!input->text().isEmpty());
+
+    // Same endpoint object, new semantic generation: live input is
+    // invalidated without attach/detach.
+    ++first.generation;
+    shell.refreshCadInputPresentation();
+    CHECK(input->text().isEmpty());
+
+    QTest::keyClicks(
+        cad_surface,
+        QStringLiteral("BOUND"));
+    CHECK(input->text() == QStringLiteral("BOUND"));
+
+    // A foreign non-modal top-level window must own its key events.
+    QWidget foreign_window;
+    auto* foreign_surface =
+        new QWidget(&foreign_window);
+    foreign_surface->setFocusPolicy(Qt::StrongFocus);
+    foreign_window.show();
+    foreign_window.activateWindow();
+    foreign_surface->setFocus(Qt::OtherFocusReason);
+    QApplication::processEvents();
+    QTest::keyClicks(
+        foreign_surface,
+        QStringLiteral("FOREIGN"));
+    QApplication::processEvents();
+    CHECK(input->text() == QStringLiteral("BOUND"));
+
+    foreign_window.hide();
+    shell.activateWindow();
+    cad_surface->setFocus(Qt::OtherFocusReason);
+    QApplication::processEvents();
+
+    // Popup/menu ownership also blocks background CAD capture.
+    QMenu popup(&shell);
+    popup.addAction(QStringLiteral("Menu Action"));
+    popup.popup(shell.mapToGlobal(QPoint{10, 10}));
+    QApplication::processEvents();
+    CHECK(QApplication::activePopupWidget() != nullptr);
+    QTest::keyClick(
+        QApplication::activePopupWidget(),
+        Qt::Key_X);
+    QApplication::processEvents();
+    CHECK(input->text() == QStringLiteral("BOUND"));
+    popup.close();
+    QApplication::processEvents();
+
     shell.setCadInputEndpoint(&second);
     CHECK(input->text().isEmpty());
 
@@ -215,6 +277,42 @@ int main(int argc, char* argv[]) {
         Qt::Key_Return);
     CHECK(second.last == "NEXT");
     CHECK(first.last == "BAD");
+
+    // Two visible shells are isolated by active-window/focus ownership.
+    simplesolid2::ui::ProjectWorkspaceShell other_shell;
+    QWidget other_workbench;
+    other_workbench.setFocusPolicy(Qt::StrongFocus);
+    auto* other_layout =
+        new QVBoxLayout(&other_workbench);
+    auto* other_surface =
+        new QWidget(&other_workbench);
+    other_surface->setFocusPolicy(Qt::StrongFocus);
+    other_layout->addWidget(other_surface);
+    other_workbench.setFocusProxy(other_surface);
+    FakeEndpoint other_endpoint;
+    other_shell.setDocumentWorkbench(&other_workbench);
+    other_shell.setCadInputEndpoint(&other_endpoint);
+    other_shell.showDocumentWorkbench();
+    other_shell.show();
+    other_shell.activateWindow();
+    other_surface->setFocus(Qt::OtherFocusReason);
+    QApplication::processEvents();
+
+    auto* other_input =
+        other_shell.findChild<QLineEdit*>(
+            QStringLiteral("cadCommandInput"));
+    CHECK(other_input != nullptr);
+    QTest::keyClicks(
+        other_surface,
+        QStringLiteral("TWO"));
+    QApplication::processEvents();
+    CHECK(other_input->text() == QStringLiteral("TWO"));
+    CHECK(input->text().isEmpty());
+
+    other_shell.hide();
+    shell.activateWindow();
+    cad_surface->setFocus(Qt::OtherFocusReason);
+    QApplication::processEvents();
 
     shell.showWorkspace();
     CHECK(input->text().isEmpty());

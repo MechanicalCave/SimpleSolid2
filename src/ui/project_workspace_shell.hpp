@@ -54,6 +54,8 @@ protected:
 private:
     [[nodiscard]] bool focusOwnsTextInput(
         QWidget* focus) const noexcept;
+    [[nodiscard]] bool focusBelongsToActiveCadSurface(
+        QWidget* focus) const noexcept;
     void syncCadInputLineEdit();
     void submitCadInputFromLineEdit();
 

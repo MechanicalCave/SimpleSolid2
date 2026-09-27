@@ -1709,7 +1709,58 @@ void PartSketchInteractionController::configureForCurrentTool() {
                       create_edit_crosshair));
 }
 
+PartSketchInteractionController::CadInputContextFingerprint
+PartSketchInteractionController::
+currentCadInputContextFingerprint() const noexcept {
+    CadInputContextFingerprint fingerprint;
+    fingerprint.active = active();
+    fingerprint.sketch_id = sketch_id_;
+
+    if (session_ != nullptr) {
+        fingerprint.document_revision =
+            session_->document().revision();
+    }
+
+    if (!fingerprint.active) {
+        return fingerprint;
+    }
+
+    fingerprint.tool = interaction_.tool();
+    fingerprint.line_stage = interaction_.lineStage();
+    fingerprint.circle_stage = interaction_.circleStage();
+    fingerprint.arc_stage = interaction_.arcStage();
+    fingerprint.transform_stage =
+        interaction_.commonTransformStage();
+    fingerprint.direct_manipulation_active =
+        interaction_.directManipulationActive();
+    fingerprint.direct_edit_mode =
+        interaction_.directEditMode();
+
+    if (const auto request =
+            interaction_.activePointRequest()) {
+        fingerprint.point_base = request->base;
+        fingerprint.direct_distance_enabled =
+            request->direct_distance_enabled;
+    }
+
+    return fingerprint;
+}
+
+void PartSketchInteractionController::
+refreshCadInputContextGeneration() {
+    const auto current =
+        currentCadInputContextFingerprint();
+    if (cad_input_context_fingerprint_ &&
+        *cad_input_context_fingerprint_ == current) {
+        return;
+    }
+
+    cad_input_context_fingerprint_ = current;
+    ++cad_input_context_generation_;
+}
+
 void PartSketchInteractionController::notifyStateChanged() {
+    refreshCadInputContextGeneration();
     if (state_changed_handler_) {
         state_changed_handler_();
     }

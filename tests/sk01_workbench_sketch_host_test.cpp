@@ -831,6 +831,48 @@ int main(int argc, char* argv[]) {
             ->model.entityCount() == 0U);
     CHECK(command_input->text().isEmpty());
 
+    // AUDIT-01 A1: a token is bound to the semantic request, not
+    // merely the CadWorkbench object. Pointer movement within the same
+    // PointRequest preserves it; replacing the request clears it.
+    command_input->clear();
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("12"));
+    CHECK(command_input->text() == QStringLiteral("12"));
+    const auto request_guard_revision =
+        session->document().revision();
+    const auto request_guard_undo =
+        session->undoDepth();
+
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        160.0, 100.0,
+        2.0, 0.0);
+    QApplication::processEvents();
+    CHECK(command_input->text() == QStringLiteral("12"));
+
+    finish_line_button->click();
+    QApplication::processEvents();
+    CHECK(command_input->text().isEmpty());
+    CHECK(!line_button->isChecked());
+    CHECK(
+        session->document().revision() ==
+        request_guard_revision);
+    CHECK(session->undoDepth() == request_guard_undo);
+
+    // Return to LINE for the existing Direct Distance scenarios.
+    line_button->click();
+    QApplication::processEvents();
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        140.0, 100.0,
+        1.0, 0.0);
+
     // Current-locale decimal separator and '.' both feed the same
     // Direct Distance path. Keep two segments temporarily so both
     // forms are exercised without changing the later Sketch workflow.
@@ -882,6 +924,42 @@ int main(int argc, char* argv[]) {
         120.0, 100.0,
         5.0, 0.0);
     QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    // AUDIT-01 A2: Delete has CAD-input precedence while a live
+    // token exists and must not fall through to semantic geometry
+    // deletion. The append-only viewport token itself is unchanged.
+    const auto delete_guard_state =
+        session->document().state();
+    const auto delete_guard_revision =
+        session->document().revision();
+    const auto delete_guard_undo =
+        session->undoDepth();
+    const auto delete_guard_redo =
+        session->redoDepth();
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("TE"));
+    CHECK(command_input->text() == QStringLiteral("TE"));
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Delete);
+    QApplication::processEvents();
+    CHECK(command_input->text() == QStringLiteral("TE"));
+    CHECK(session->document().state() == delete_guard_state);
+    CHECK(
+        session->document().revision() ==
+        delete_guard_revision);
+    CHECK(session->undoDepth() == delete_guard_undo);
+    CHECK(session->redoDepth() == delete_guard_redo);
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(command_input->text().isEmpty());
     CHECK(
         operations_label->text() ==
         QStringLiteral("Select — 1 entity selected"));
@@ -1238,8 +1316,29 @@ int main(int argc, char* argv[]) {
         revision_after_create);
     CHECK(session->needsSave());
 
+    // AUDIT-01 A1: Finish Sketch replaces the semantic editing
+    // context even though the same CadWorkbench endpoint object remains.
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("STALE"));
+    CHECK(command_input->text() == QStringLiteral("STALE"));
+    const auto finish_guard_state =
+        session->document().state();
+    const auto finish_guard_revision =
+        session->document().revision();
+    const auto finish_guard_undo =
+        session->undoDepth();
+
     finish_button->click();
     QApplication::processEvents();
+
+    CHECK(command_input->text().isEmpty());
+    CHECK(session->document().state() == finish_guard_state);
+    CHECK(
+        session->document().revision() ==
+        finish_guard_revision);
+    CHECK(session->undoDepth() == finish_guard_undo);
 
     CHECK(finish_button->isHidden());
     CHECK(cancel_button->isHidden());
