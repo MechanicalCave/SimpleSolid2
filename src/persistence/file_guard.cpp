@@ -7,6 +7,7 @@
 #include <cwctype>
 #include <string>
 #include <system_error>
+#include <utility>
 
 #if defined(_WIN32)
 #define NOMINMAX
