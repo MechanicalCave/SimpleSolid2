@@ -210,3 +210,7 @@ notes:
   - C1 proposal head fda0971a7812da435878e9616dd884522ad73e1a passed Windows PR gate #665 before activation.
   - C1 is D1 local DocumentSession history commit preparation: keep the current HistoryEntry before/after snapshot model while removing the history-depth-dependent copy of all prior entries.
   - C2 deeper history representation, memory/depth policy and benchmark-driven redesign remain inactive.
+
+  - C1 runtime candidate e88e7559493707252323f758dba3d8325f894a1d passed Windows FULL #667 with Build, selectors and full regression tests.
+  - The runtime candidate removes the full-history copy, enforces non-copyable/noexcept-movable HistoryEntry relocation, prepares history capacity and EntityId cursor bookkeeping before Part commit, and preserves Redo until accepted changed commit.
+  - C1 remains active for internal documentation, final exact-head FULL and closeout; C2 remains inactive.

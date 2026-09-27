@@ -380,3 +380,25 @@ C1 completes only after:
 - merge to main.
 
 After C1 completion, AUDIT-01 requires C2 as the next separately contracted package. C2 is not activated by C1.
+
+## 16. Implementation checkpoint
+
+**Runtime candidate:** `e88e7559493707252323f758dba3d8325f894a1d`  
+**Windows FULL:** #667 — PASS
+
+Implemented within the accepted C1 boundary:
+
+- removed the `std::vector<HistoryEntry> prepared = history_` full-history copy;
+- private `HistoryEntry` copy construction/assignment are deleted;
+- compile-time assertions require no-throw move construction/assignment for `PartAuthoredState` and `HistoryEntry`;
+- history capacity for the accepted branch is reserved before Part mutation;
+- one pending `HistoryEntry` is fully prepared before the Part transaction;
+- Sketch EntityId high-water bookkeeping is copied/prepared before the transaction and published after success by no-throw map swap;
+- Redo suffix destruction happens only after successful changed commit;
+- the pending entry is appended after commit without capacity growth;
+- no-op, rejected command and failed Part transaction leave logical history/cursor unchanged;
+- current two-snapshot history representation, save/dirty semantics, B2 transaction rules and B1 persistence behavior remain unchanged.
+
+Focused DocumentSession evidence added for linear relocation/branching, no-op and rejected command while Redo exists, branch replacement traversal and revision-exhaustion transaction failure. Existing COPY EntityId high-water and full repository regressions remained green in #667.
+
+This checkpoint is not completion. Required internal documentation and a final exact-head Windows FULL still precede closeout.

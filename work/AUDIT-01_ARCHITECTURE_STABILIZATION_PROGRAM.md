@@ -347,6 +347,15 @@ Required consistency:
 
 The accepted bounded policy keeps the current two-snapshot `HistoryEntry{before, after}` representation and `std::vector` history. C1 removes the history-depth-dependent copy of all prior entries, prepares one pending entry and all potentially allocating post-commit resources before Part mutation, keeps Redo intact until successful changed commit, and enforces non-copyable/noexcept-movable history relocation. C2 and later packages remain inactive.
 
+### C1 implementation checkpoint
+
+**Runtime candidate:** `e88e7559493707252323f758dba3d8325f894a1d`  
+**Windows FULL:** #667 — PASS
+
+The runtime candidate removes the full `history_` copy, makes `HistoryEntry` non-copyable/noexcept-movable, reserves append capacity before Part mutation, preserves Redo until successful changed commit and pre-prepares EntityId high-water bookkeeping. Focused tests cover linear/branch history, no-op/rejected command with Redo and revision-exhaustion transaction failure. Existing full regressions passed #667.
+
+C1 remains ACTIVE until required internal docs are current, exact-head final FULL passes, governance closeout/CLOSURE completes and PR #81 is merged.
+
 ## 9. Package C2 — choose history representation and budget from measurements
 
 Only after C1 and Release measurements may a deeper history representation be selected.
