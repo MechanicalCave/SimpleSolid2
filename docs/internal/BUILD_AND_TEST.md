@@ -48,7 +48,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The repository currently registers **66 CTest tests**.
+The repository currently registers **67 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
@@ -59,10 +59,11 @@ The R7 transform/COPY regressions include:
 - `sk07c.copy_interaction_state` — normal COPY state, frozen source/Base Point and repeated placement;
 - `sk07c.copy_command` — atomic mixed duplication, fresh/non-reused EntityIds, Undo/Redo and schema-v4 high-water persistence;
 - `sk07c.copy_controller` — zero-placement rejection, repeated independent placements, source-selection retention and stale-revision failure.
+- `sk07d.repeat_last_command_controller` — one runtime repeat target, repeatable command recording, current-selection reuse, fresh COPY restart, non-overwrite by Select/grip/history/Delete and reset across Sketch edit sessions.
 
-The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, and text-focus keyboard behavior.
+The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence and text-focus keyboard behavior.
 
-The last completed pre-SK-07C exact-head baseline was Windows FULL #510 on `dc58b767e2e3effbff90ba62d90a7a5f70fda5c5`, where Build and **63/63** unfiltered CTest tests passed. SK-07C adds three registered tests; its final exact-head Windows FULL result is recorded only at Work Contract closeout.
+The completed SK-07C exact-head baseline is Windows FULL #549 on `03baaf6d82c5f7ba73d3701791dc8af8f356ce5f`, where Build and **66/66** unfiltered CTest tests passed. SK-07D adds one registered controller regression; its final exact-head Windows FULL result is recorded only at Work Contract closeout.
 
 Repository documentation validation runs outside CTest through `ss2 verify`. Tests must not be weakened to obtain a pass.
 
