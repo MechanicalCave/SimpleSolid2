@@ -6,7 +6,7 @@
 **Decision class:** D2 interaction/input architecture + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
-**Program roadmap:** proposed `work/SKETCH_ROADMAP.md` v1.3  
+**Program roadmap:** `work/SKETCH_ROADMAP.md` v1.3  
 **Milestone:** R7 — Common transforms, Copy and command grammar — sixth bounded slice
 
 ## 1. Goal

@@ -157,11 +157,34 @@ Center grips perform the same mixed Line/Circle/Arc semantic translation as norm
 
 Line Start/End, Circle quadrant and Arc Start/End/Mid default to owner-only Reshape. During an active direct-manipulation session, viewport Space cycles those non-center grips between `Reshape` and `Move`. The active grip, interaction-start pivot, frozen semantic selection and current resolved pointer are preserved across the cycle. Reshape derives preview from the interaction-start owner geometry; Move derives translation from the interaction-start complete selection geometry. Switching mode therefore recomputes preview from frozen authored inputs rather than compounding a previous preview. Mode cycling is runtime-only and creates no authored mutation, revision, dirty state or history entry.
 
-Pointer values flow through the shared `ResolvedSketchInput` seam. Accepted non-no-op edit transforms/reshape commit through the host semantic geometry-update command and Part transaction and preserve EntityIds. Each accepted COPY placement instead executes one atomic semantic duplication command, allocates a fresh ID for each copied entity and creates one revision/Undo entry. Multiple repeated placements are independent Undo steps.
+Pointer and text-derived point values flow through the shared `ResolvedSketchInput` seam. SK-07F adds one semantic `PointRequest` view derived from the existing interaction stage rather than a second tool state machine. The request exposes an optional semantic base, one shared runtime pointer candidate and whether Direct Distance is legal at that stage.
 
-Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation before global history.
+The current Direct Distance resolver is deliberately minimal:
 
-Numeric angles, distances, coordinates and scale factors are not parsed by the current interaction state. Number keys do not override pointer-derived preview; Enter at a final point stage commits the current valid preview/placement.
+```text
+direction = normalize(pointer_candidate - base)
+resolved_point = base + direction * distance
+```
+
+The scalar must be finite and non-negative and the pointer candidate must define a non-zero direction. The resolver does not know Line, Move, Copy or primitive-specific reshape geometry; it only returns one resolved Sketch-local point. The active operation then consumes that point through the same preview/accept/commit path as pointer input.
+
+Direct Distance is currently enabled only for:
+
+- the second/next Line point after an accepted Line anchor;
+- active grip Reshape;
+- active grip Move, including a non-center grip after Space switches Reshape → Move;
+- normal MOVE destination after Base Point;
+- normal COPY placement after Base Point.
+
+The Command Line is context-first. While a semantic PointRequest is active, submission is offered to that request before top-level command activation. The Qt adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only the parsed scalar and remains Qt/locale independent.
+
+After a Line segment or COPY placement completes, stale pointer direction is not reused silently. The continuous Line anchor becomes the new base with no non-zero direction, and repeated COPY clears its pointer candidate; the pointer must establish a new direction before another numeric Direct Distance can resolve.
+
+Accepted non-no-op edit transforms/reshape commit through the host semantic geometry-update command and Part transaction and preserve EntityIds. Each accepted COPY placement instead executes one atomic semantic duplication command, allocates a fresh ID for each copied entity and creates one revision/Undo entry. Multiple repeated placements are independent Undo steps.
+
+Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/session.
+
+Numeric angles, scale factors, absolute/relative coordinates, polar coordinates, unit expressions and Dynamic Input are still not implemented. Direct Distance is the only numeric precision-input capability in the current interaction state.
 
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
@@ -177,7 +200,7 @@ The product still does not implement:
 - clipboard Copy/Paste or cross-Sketch/cross-Document duplication;
 - intrinsic Origin snapping;
 - snapping/Object Snap, tracking, Ortho/Polar/Grid Snap or geometric inference;
-- numeric angle/distance/scale/coordinate input or Dynamic Input;
+- numeric Rotate/Scale values, absolute/relative coordinate entry, polar syntax, unit expressions or Dynamic Input;
 - authored dimensions, constraints or solver evaluation;
 - Rectangle/Polyline durable semantics;
 - intersections, profiles/regions or projected/reference geometry;
@@ -201,6 +224,8 @@ SK-07C adds:
 SK-07D adds `sk07d.repeat_last_command_controller` plus Workbench key-routing coverage for runtime Repeat Last Command.
 
 SK-07E adds `sk07e.space_cycle_edit_mode` for supported grip-role defaults/cycles, frozen selection/pivot/current-input semantics, owner-vs-selection geometry and no-compounding preview. Existing direct-manipulation controller coverage verifies preview/commit across Reshape↔Move cycling, while the Workbench Sketch-host regression verifies viewport Space precedence and text-focus behavior.
+
+SK-07F adds `sk07f.precision_input_state` for the shared PointRequest/Direct Distance resolver and `sk07f.precision_input_controller` for Line, Move, repeated Copy and grip Reshape/Move commit paths. The Workbench Sketch-host regression additionally verifies context-first Command Line routing plus dot/current-locale decimal forms.
 
 Final work-item completion additionally requires the repository's exact-head Windows FULL gate and Owner manual Windows verification.
 
