@@ -66,6 +66,7 @@ struct ScenarioResult final {
     std::vector<double> latency_us;
     std::vector<double> setup_ms;
     Statistics latency_statistics;
+    bool percentile_limited{false};
     std::uint64_t max_post_setup_working_set_bytes{0U};
     std::uint64_t max_post_setup_private_usage_bytes{0U};
 };
@@ -115,7 +116,8 @@ bool validScenario(std::string_view scenario) {
            scenario == "transform" ||
            scenario == "undo" ||
            scenario == "redo" ||
-           scenario == "branch";
+           scenario == "branch" ||
+           scenario == "branch_half";
 }
 
 Options parseOptions(int argc, char** argv) {
@@ -728,11 +730,14 @@ SampleMeasurement runSample(
             post_setup};
     }
 
-    if (scenario == "branch") {
+    if (scenario == "branch" ||
+        scenario == "branch_half") {
         const auto undo_count =
-            std::max<std::size_t>(
-                1U,
-                options.depth / 2U);
+            scenario == "branch"
+                ? 1U
+                : std::max<std::size_t>(
+                      1U,
+                      options.depth / 2U);
 
         for (std::size_t index = 0U;
              index < undo_count;
@@ -750,7 +755,7 @@ SampleMeasurement runSample(
         require(
             fixture.session.redoDepth() ==
                 undo_count,
-            "Branch preparation did not create midpoint Redo suffix");
+            "Branch preparation did not create expected Redo suffix");
 
         auto properties =
             fixture.session.document()
@@ -868,7 +873,7 @@ runScenarios(
 
     if (options.scenario == "all") {
         results.reserve(
-            std::size(scenarios));
+            std::size(scenarios) + 1U);
         for (const auto scenario :
              scenarios) {
             results.push_back(
@@ -876,6 +881,18 @@ runScenarios(
                     options,
                     std::string{scenario}));
         }
+
+        auto supplemental_options =
+            options;
+        supplemental_options.samples = 1U;
+        supplemental_options.warmup = 0U;
+        auto supplemental =
+            runRepeated(
+                supplemental_options,
+                "branch_half");
+        supplemental.percentile_limited = true;
+        results.push_back(
+            std::move(supplemental));
     } else {
         results.push_back(
             runRepeated(
@@ -1005,6 +1022,11 @@ void writeJson(
         out << "      \"samples_completed\": "
             << result.latency_us.size()
             << ",\n";
+        out << "      \"percentile_limited\": "
+            << (result.percentile_limited
+                    ? "true"
+                    : "false")
+            << ",\n";
         out << "      \"median_us\": "
             << result
                    .latency_statistics
@@ -1103,7 +1125,7 @@ int selfTest() {
 
     require(
         validScenario("branch") &&
-            !validScenario("branch_half"),
+            validScenario("branch_half"),
         "Scenario contract self-test failed");
 
     std::cout
