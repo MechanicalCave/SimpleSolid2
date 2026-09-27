@@ -48,7 +48,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The repository currently registers **67 CTest tests**.
+The repository currently registers **68 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
@@ -60,10 +60,11 @@ The R7 transform/COPY regressions include:
 - `sk07c.copy_command` — atomic mixed duplication, fresh/non-reused EntityIds, Undo/Redo and schema-v4 high-water persistence;
 - `sk07c.copy_controller` — zero-placement rejection, repeated independent placements, source-selection retention and stale-revision failure.
 - `sk07d.repeat_last_command_controller` — one runtime repeat target, repeatable command recording, current-selection reuse, fresh COPY restart, non-overwrite by Select/grip/history/Delete and reset across Sketch edit sessions.
+- `sk07e.space_cycle_edit_mode` — supported grip-role defaults/cycles, frozen selection/primary preservation, owner-vs-selection interaction-start geometry and non-compounding Reshape↔Move preview.
 
-The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence and text-focus keyboard behavior.
+The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence, active-grip Space CycleEditMode precedence and text-focus keyboard behavior. The existing `sk05a.part_sketch_direct_manipulation` controller regression additionally verifies preview cardinality, no-mutation cycling and atomic commit after Reshape↔Move switching.
 
-The completed SK-07C exact-head baseline is Windows FULL #549 on `03baaf6d82c5f7ba73d3701791dc8af8f356ce5f`, where Build and **66/66** unfiltered CTest tests passed. SK-07D adds one registered controller regression; its final exact-head Windows FULL result is recorded only at Work Contract closeout.
+The completed SK-07D exact-head baseline is Windows FULL #567 on `ef84954ddb22a4263d31c5a540fe7d96304e33e2`, where Build and **67/67** unfiltered CTest tests passed. SK-07E adds one registered semantic state regression; its final exact-head Windows FULL result is recorded only at Work Contract closeout.
 
 Repository documentation validation runs outside CTest through `ss2 verify`. Tests must not be weakened to obtain a pass.
 
