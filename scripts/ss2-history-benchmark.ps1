@@ -171,18 +171,25 @@ foreach ($entities in $entitiesValues) {
         }
 
         $process.WaitForExit()
-        $process.Refresh()
-        $exitCode = $process.ExitCode
-        if ($exitCode -ne 0) {
+        if (-not (Test-Path -LiteralPath $cellFile -PathType Leaf)) {
             $stderr = if (Test-Path $stderrFile) { Get-Content -Raw -LiteralPath $stderrFile } else { "" }
             $stdout = if (Test-Path $stdoutFile) { Get-Content -Raw -LiteralPath $stdoutFile } else { "" }
-            throw "C2 benchmark correctness/process failure for entities=$entities history=$depth exit=$exitCode. STDOUT: $stdout STDERR: $stderr"
+            throw "C2 benchmark process ended without completed cell output for entities=$entities history=$depth. STDOUT: $stdout STDERR: $stderr"
         }
-        if (-not (Test-Path -LiteralPath $cellFile -PathType Leaf)) { throw "C2 benchmark did not produce $cellFile." }
 
-        $cell = Get-Content -Raw -LiteralPath $cellFile | ConvertFrom-Json
+        try {
+            $cell = Get-Content -Raw -LiteralPath $cellFile | ConvertFrom-Json
+        } catch {
+            throw "C2 benchmark produced invalid cell JSON for entities=$entities history=$depth: $($_.Exception.Message)"
+        }
         if ($cell.status -ne "completed") { throw "C2 benchmark returned unexpected status '$($cell.status)' for entities=$entities history=$depth." }
         if ($cell.git_sha -ne $sha) { throw "C2 benchmark SHA mismatch for entities=$entities history=$depth." }
+        if ([int]$cell.entities -ne $entities -or [int]$cell.history_depth -ne $depth) {
+            throw "C2 benchmark cell coordinates do not match request for entities=$entities history=$depth."
+        }
+        if ([int]$cell.samples_requested -ne $Samples) {
+            throw "C2 benchmark sample-count mismatch for entities=$entities history=$depth."
+        }
         $cells += $cell
 
         Write-Host "[c2] completed entities=$entities history=$depth peak=$([Math]::Round([double]$cell.peak_working_set_bytes / 1MB, 1)) MB"
