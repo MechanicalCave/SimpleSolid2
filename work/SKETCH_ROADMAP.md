@@ -613,7 +613,7 @@ Goal:
 - prove the R5 interaction architecture is not Line-specific.
 
 ### R7 — Common transforms, shared precision foundation, Copy and command grammar
-**Status:** active — SK-07A, SK-07B, SK-07C, SK-07D and SK-07E completed; SK-07F active for shared Precision Input / Direct Distance foundation
+**Status:** active — SK-07A through SK-07F completed; remaining R7 requires separate accepted slices
 
 Goal:
 
@@ -733,7 +733,7 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7 active — SK-07A, SK-07B, SK-07C, SK-07D and SK-07E completed; SK-07F active for shared Precision Input / Direct Distance; Grip Copy and RMB context remain unauthorized  
+R7 active — SK-07A through SK-07F completed; Grip Copy and RMB context remain unauthorized  
 R8+ not started
 
-Roadmap v1.3 is authoritative. SK-07F is the active bounded R7 contract; all remaining R7/R8+/R9/R10 work still requires separate explicit Owner-accepted Work Contracts.
+Roadmap v1.3 remains authoritative for completed SK-07F semantics. All remaining R7/R8+/R9/R10 work requires separate explicit Owner-accepted Work Contracts; the newly identified global keyboard-first CAD Input requirement is a separate D2 architecture proposal and does not silently activate later precision-input scope.

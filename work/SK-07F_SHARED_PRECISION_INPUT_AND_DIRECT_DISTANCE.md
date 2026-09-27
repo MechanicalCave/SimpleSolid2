@@ -1,8 +1,10 @@
 # SK-07F — Shared Precision Input and Direct Distance Foundation
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-27  
 **Owner acceptance:** 2026-09-27  
+**Owner manual Windows verification:** PASS — 2026-09-27  
+**Final exact-head Windows FULL:** #603 — `44860ec17425cf59717b6b50e21ea7ec727e8948` — PASS  
 **Decision class:** D2 interaction/input architecture + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -96,7 +98,7 @@ When the request has:
 - a valid current pointer candidate distinct enough from base to define direction;
 - direct-distance enabled;
 
-a positive numeric scalar `d` resolves:
+a non-negative numeric scalar `d` resolves:
 
 ```text
 direction = normalize(current_pointer - base)
@@ -462,3 +464,22 @@ Completion requires:
 - Owner manual Windows verification passes;
 - closeout CLOSURE passes;
 - later Grip Copy and remaining R7/R9/R10 work stays inactive until separately accepted.
+
+## 24. Completion record
+
+SK-07F is complete on the verified runtime candidate `44860ec17425cf59717b6b50e21ea7ec727e8948`.
+
+Completion evidence:
+
+- Windows FULL #603 checked out that exact SHA and passed documentation freshness/verification, Build, selector checks and **70/70** unfiltered CTest tests;
+- `sk07f.precision_input_state` and `sk07f.precision_input_controller` pass on the final runtime candidate;
+- the Workbench regression covers context-first Command Line submission and dot/current-locale decimal forms;
+- Line next point, grip Reshape/Move, normal MOVE destination and repeated normal COPY placement consume the shared PointRequest/Direct Distance path;
+- pointer/click input remains on the same semantic acceptance paths;
+- precision-input state remains runtime-only and stale/missing direction fails closed;
+- required internal and PL/EN Product documentation is current and Product Browser freshness passed;
+- Owner manual Windows verification passed on 2026-09-27.
+
+Manual verification also identified the next cross-cutting UX requirement: when normal CAD surfaces have focus, printable keyboard input should be able to feed Command Line without requiring the user to click its text widget. SK-07F deliberately did **not** authorize global viewport digit/key interception, so this observation is not a SK-07F defect or scope expansion. It requires a separate D2 decision for workspace-level CAD input ownership, focus arbitration and general semantic InputRequest routing before further implementation.
+
+Grip Copy, RMB context, Ortho/Polar, Dynamic Input, coordinate/unit expression grammar, Object Snap/tracking/inference and all other later work remain inactive until separately accepted.

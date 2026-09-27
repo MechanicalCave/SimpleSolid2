@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-07F_SHARED_PRECISION_INPUT_AND_DIRECT_DISTANCE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,9 +16,9 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - implement accepted SK-07F shared PointRequest / Direct Distance foundation within the bounded contract
-  - integrate Line second point, grip Reshape/Move, normal MOVE destination and normal COPY placement as clients of the same semantic input-resolution path
-  - preserve completed SK-07A/SK-07B/SK-07C/SK-07D/SK-07E behavior as the implementation baseline
+  - propose a separate D2 global CAD Input routing / semantic InputRequest foundation before further Grip Copy or later precision-input expansion
+  - require explicit Owner acceptance of the new ADR and bounded Work Contract before any runtime implementation
+  - preserve completed SK-07A through SK-07F behavior as the implementation baseline
   - keep Grip Copy grammar, Reshape+Copy, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, Ortho/Polar, Dynamic Input, snapping/inference and R8+ inactive
 
 notes:
@@ -156,3 +156,8 @@ notes:
   - Proposed roadmap v1.3 pulls only this minimal precision foundation forward into R7; full coordinate/polar/Dynamic Input remains later R9 and OSNAP/tracking/inference remains R10.
   - Owner explicitly accepted Sketcher roadmap v1.3 and replacement SK-07F on 2026-09-27; this bounded shared Precision Input / Direct Distance slice is active.
 
+
+  - SK-07F final exact-head runtime candidate 44860ec17425cf59717b6b50e21ea7ec727e8948 passed Windows FULL #603 with documentation verification, Build, selector checks, 70/70 unfiltered CTest tests and stable windows-msvc.
+  - Owner manual Windows verification passed on 2026-09-27 for the accepted SK-07F Direct Distance workflows and regressions.
+  - Manual use identified a separate UX/architecture requirement: keyboard-first Command Line availability without clicking the text field; this was explicitly outside SK-07F global-key interception scope and is deferred to a new D2 global CAD Input foundation.
+  - SK-07F acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
