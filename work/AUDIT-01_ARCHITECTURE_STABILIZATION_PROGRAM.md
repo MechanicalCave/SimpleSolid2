@@ -69,7 +69,7 @@ Default order is strict:
 | 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | **COMPLETED — 2026-09-27** |
 | 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | **COMPLETED — 2026-09-27** |
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **COMPLETED — 2026-09-27** |
-| 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **ACTIVE — measurement phase accepted 2026-09-27** |
+| 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **ACTIVE — Phase A measured; Owner decision pending** |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | future bounded Work Contract |
 | 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | future bounded Work Contract |
 | 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | future bounded Work Contract |
@@ -411,6 +411,16 @@ Event sourcing is not authorized merely because Undo exists.
 
 The initial accepted authority is measurement-only Phase A. It authorizes a headless Release `DocumentSession` benchmark, the required 1,000/10,000 entity × 10/100/1,000 history-depth matrix where safely feasible, median/p95/max latency, peak process working-set evidence and explicit cutoffs. It does not authorize replacing the production history representation or introducing a product history budget. After the measurement report is complete, C2 must stop for a second explicit Owner decision.
 
+### C2 Phase A evidence record
+
+**Measured SHA:** `54605075e8ad7ac3d168dfd820cf84004c3a1023`  
+**Windows FULL:** #686 — PASS  
+**Dedicated C2 Release benchmark:** #686 — PASS  
+**Durable report:** `work/C2_HISTORY_BENCHMARK_RESULTS.md`
+
+All six primary 1,000/10,000 entity × depth 10/100/1,000 cells completed with 20 samples per primary semantic operation and no benchmark safety cutoff. Peak working set reached 787.4 MiB for 10,000 entities/depth 1,000. Primary operation latency remained below 0.5 ms maximum in this matrix; the supplemental single-sample half-depth branch reached 7.9412 ms at the largest cell.
+
+This evidence does not select a new representation or Product history budget. C2 is stopped at its second explicit Owner decision gate. Package D and later packages remain inactive.
 ## 10. Package D — semantic input ownership outside QWidget and core-only build
 
 Preserve neutral `CadInputSession`.

@@ -19,10 +19,10 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - implement the C2 Phase A Release semantic-history benchmark harness and smoke/argument/statistics verification
-  - run the accepted 1k/10k × depth 10/100/1000 matrix with explicit safety cutoffs
-  - record raw machine-readable evidence plus the reviewed internal measurement report
-  - stop for the second explicit Owner C2 decision before any deeper production history mutation
+  - present the completed C2 Phase A Release evidence and bounded alternatives to the Owner
+  - require the second explicit Owner C2 decision before any production history representation/budget mutation
+  - if no deeper change is accepted, record that decision and close C2 without a production redesign
+  - if a change is accepted, amend C2 precisely and require explicit Owner acceptance before implementation
   - keep D, E1, E2 and F queued by AUDIT-01 but inactive
 
 notes:
@@ -225,3 +225,10 @@ notes:
   - C2 proposal head fed74065d123a14b99f6bd2141ba3aaa0336b8b7 passed Windows proposal gate #672 before activation.
   - Initial C2 authority is Phase A measurement only; it does not authorize production history redesign, eviction, persistent Undo or a user-visible depth/memory budget.
   - After Phase A evidence, C2 must stop for a second explicit Owner decision before any deeper history production mutation.
+  - C2 Phase A exact measured SHA 54605075e8ad7ac3d168dfd820cf84004c3a1023: Windows FULL #686 PASS and dedicated Release history benchmark #686 PASS.
+  - All six primary 1k/10k x depth 10/100/1000 cells completed with 20 samples per primary operation and no safety cutoff.
+  - Largest measured primary median/p95/max were 421.45/457.20/479.40 us; semantic command latency stayed sub-millisecond across the primary matrix on the measured runner.
+  - Peak semantic benchmark working set reached 787.4 MiB at 10,000 entities/depth 1,000; retained-history memory is the material C2 scaling signal.
+  - Supplemental half-depth branch at 10,000 entities/depth 1,000 measured 7.9412 ms as one limited sample.
+  - Durable evidence: work/C2_HISTORY_BENCHMARK_RESULTS.md and docs/internal/HISTORY_PERFORMANCE.md.
+  - C2 Phase A is complete; production history redesign/budget remains unauthorized until the second explicit Owner decision.

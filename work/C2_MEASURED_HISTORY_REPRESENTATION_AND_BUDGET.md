@@ -1,6 +1,6 @@
 # C2 — Measured History Representation and Budget Decision
 
-**Status:** ACCEPTED — ACTIVE (PHASE A MEASUREMENT)  
+**Status:** ACCEPTED — ACTIVE (PHASE A COMPLETE / SECOND OWNER DECISION PENDING)  
 **Proposed:** 2026-09-27  
 **Owner acceptance:** 2026-09-27  
 **Decision class:** D1 measurement infrastructure first; any deeper history architecture or product-visible history budget is a later explicit Owner decision  
@@ -385,3 +385,25 @@ C2 completes only after:
 9. merge to main.
 
 After C2 completion, AUDIT-01 schedules Package D next. C2 does not activate D automatically.
+
+## 19. Phase A evidence record
+
+**Measured SHA:** `54605075e8ad7ac3d168dfd820cf84004c3a1023`  
+**Windows FULL:** #686 — PASS  
+**Dedicated C2 Release benchmark:** #686 — PASS  
+**Artifact:** `c2-history-54605075e8ad7ac3d168dfd820cf84004c3a1023`, id `10943125647`, digest `sha256:f23291717d21a35bb7e585290aa94d4a813eee8459284e46ef5b27388c23f827`  
+**Durable report:** `work/C2_HISTORY_BENCHMARK_RESULTS.md`
+
+Phase A completion facts:
+
+- all six primary 1,000/10,000 entity × history depth 10/100/1,000 cells completed;
+- each primary operation has 20 measured samples after three warm-ups;
+- no working-set or timeout cutoff occurred under the 4 GiB / 5 minute benchmark safety envelope;
+- largest primary median/p95/max were 421.45/457.20/479.40 µs;
+- largest process peak working set was 787.4 MiB at 10,000 entities/depth 1,000;
+- the supplemental half-depth branch sample at that largest cell was 7.9412 ms and is explicitly limited single-sample evidence;
+- internal as-built history performance documentation records the measurement boundary.
+
+No production history representation, eviction policy, persistent history or Product history budget is authorized by these measurements alone.
+
+C2 is now stopped at the second Owner decision gate in section 13. The next production mutation, if any, requires the Owner to explicitly accept the evidence-driven C2 direction and any necessary contract amendment.

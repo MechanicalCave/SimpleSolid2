@@ -139,6 +139,27 @@ The classifier remains fail-closed. Unknown/mixed verification-sensitive paths s
 PR title/body edits do not trigger or cancel verification. Content synchronization triggers verification, and `ready_for_review` explicitly triggers the merge-candidate FULL transition.
 
 The explicit root `ss2.ps1 docs` dispatcher/freshness regression remains part of FULL and DOCS. FULL builds once; its Test step uses `-NoBuild` to avoid invoking the same build a second time.
+<!-- section-id: internal.build-test.c2-history-benchmark -->
+## C2 semantic history benchmark
+
+The semantic history benchmark is maintainer evidence tooling and is opt-in. `SS2_ENABLE_C2_HISTORY_BENCHMARK` defaults to `OFF`, so ordinary product and CTest builds do not include the benchmark target.
+
+Canonical Release evidence is run with:
+
+```powershell
+.\scripts\ss2-history-benchmark.ps1 `
+  -BuildDir build\c2-history-benchmark `
+  -Config Release `
+  -OutputDir artifacts\c2-history-benchmark `
+  -Samples 20 `
+  -Warmup 3 `
+  -MaxWorkingSetMB 4096 `
+  -CellTimeoutMinutes 5
+```
+
+The runner executes semantic `DocumentSession` operations without Qt/Viewer/OCCT rendering in the timed path. It uses a working-set ceiling of the minimum of 25% physical RAM and 4 GiB, a five-minute per-cell timeout and BelowNormal child-process priority. These are benchmark-machine safety controls, not Product history limits.
+
+Current C2 evidence is summarized in [History Performance](HISTORY_PERFORMANCE.md) and in the [C2 benchmark decision record](../../work/C2_HISTORY_BENCHMARK_RESULTS.md).
 <!-- section-id: internal.build-test.docs-validation -->
 ## Documentation validation
 
