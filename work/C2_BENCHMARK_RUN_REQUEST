@@ -1,0 +1,5 @@
+C2 Phase A Release benchmark request.
+
+This marker requests one evidence run on the exact PR head.
+The runner safety ceiling protects the measurement machine only.
+It is not a SimpleSolid 2.0 product history depth or memory limit.

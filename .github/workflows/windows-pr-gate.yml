@@ -12,6 +12,7 @@ on:
       - ready_for_review
     paths:
       - "src/**"
+      - "benchmarks/**"
       - "docs/**"
       - "work/**"
       - "governance/**"
@@ -313,6 +314,68 @@ jobs:
           $ErrorActionPreference = "Stop"
           .\scripts\ss2-docs.ps1 -Check -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+  c2_history_benchmark:
+    name: c2-history-benchmark
+    needs: classify
+    if: >
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref == 'proposal-c2-measured-history-representation-budget'
+    runs-on:
+      - self-hosted
+      - windows
+      - x64
+      - simplesolid2-native
+    timeout-minutes: 120
+    defaults:
+      run:
+        shell: >-
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+          -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -Command "& ([scriptblock]::Create((Get-Content -Raw -LiteralPath '{0}')))"
+    steps:
+      - name: Checkout exact C2 revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Resolve benchmark request
+        id: request
+        run: |
+          $ErrorActionPreference = "Stop"
+          $expected = "${{ github.event.pull_request.head.sha }}"
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $expected) { throw "C2 benchmark checkout SHA mismatch: expected $expected, got $actual" }
+          $requested = Test-Path -LiteralPath "work/C2_BENCHMARK_RUN_REQUEST" -PathType Leaf
+          "run=$($requested.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "[c2] benchmark request=$requested"
+
+      - name: Configure SS2 machine-local environment
+        if: steps.request.outputs.run == 'true'
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\ss2.ps1 setup -QtRoot "D:\Qt" -OcctRoot "D:\SimpleSolid2\.simplesolid-env"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Run C2 Release history matrix
+        if: steps.request.outputs.run == 'true'
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\scripts\ss2-history-benchmark.ps1 -BuildDir "build\c2-history-benchmark" -Config Release -OutputDir "artifacts\c2-history-benchmark" -Samples 20 -Warmup 3 -MaxWorkingSetMB 6144 -CellTimeoutMinutes 15
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Upload C2 benchmark evidence
+        if: steps.request.outputs.run == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: c2-history-${{ github.event.pull_request.head.sha }}
+          path: artifacts/c2-history-benchmark/
+          if-no-files-found: error
+          retention-days: 30
 
   gate:
     name: windows-msvc

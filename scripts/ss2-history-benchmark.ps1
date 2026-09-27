@@ -50,17 +50,30 @@ try { $os = Get-CimInstance Win32_OperatingSystem } catch {}
 try { $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 } catch {}
 try { $computer = Get-CimInstance Win32_ComputerSystem } catch {}
 
+$requestedMaxBytes = [int64]$MaxWorkingSetMB * 1MB
+$physicalMemoryBytes = if ($computer) { [uint64]$computer.TotalPhysicalMemory } else { 0 }
+$halfPhysicalBytes =
+    if ($physicalMemoryBytes -gt 0) {
+        [int64]([double]$physicalMemoryBytes * 0.5)
+    } else {
+        $requestedMaxBytes
+    }
+$maxBytes = [Math]::Min($requestedMaxBytes, $halfPhysicalBytes)
+$effectiveMaxWorkingSetMB = [Math]::Max(512, [Math]::Floor([double]$maxBytes / 1MB))
+$maxBytes = [int64]$effectiveMaxWorkingSetMB * 1MB
+
 $metadata = [ordered]@{
     git_sha = $sha
     configuration = $Config
-    machine = $env:COMPUTERNAME
+    runner_class = "self-hosted-windows-x64-simplesolid2-native"
     os = if ($os) { "$($os.Caption) $($os.Version) build $($os.BuildNumber)" } else { "unknown" }
     cpu = if ($cpu) { $cpu.Name.Trim() } else { "unknown" }
     logical_processors = if ($computer) { [int]$computer.NumberOfLogicalProcessors } else { 0 }
-    physical_memory_bytes = if ($computer) { [uint64]$computer.TotalPhysicalMemory } else { 0 }
+    physical_memory_bytes = $physicalMemoryBytes
     samples = $Samples
     warmup = $Warmup
-    max_working_set_mb = $MaxWorkingSetMB
+    requested_max_working_set_mb = $MaxWorkingSetMB
+    effective_max_working_set_mb = $effectiveMaxWorkingSetMB
     cell_timeout_minutes = $CellTimeoutMinutes
     generated_utc = [DateTime]::UtcNow.ToString("o")
 }
@@ -68,7 +81,6 @@ $metadata = [ordered]@{
 $entitiesValues = @(1000, 10000)
 $depthValues = @(10, 100, 1000)
 $cells = @()
-$maxBytes = [int64]$MaxWorkingSetMB * 1MB
 
 foreach ($entities in $entitiesValues) {
     foreach ($depth in $depthValues) {
@@ -89,7 +101,7 @@ foreach ($entities in $entitiesValues) {
             "--git-sha", $sha
         )
 
-        Write-Host "[c2] run entities=$entities history=$depth safety=$MaxWorkingSetMB MB timeout=$CellTimeoutMinutes min"
+        Write-Host "[c2] run entities=$entities history=$depth safety=$effectiveMaxWorkingSetMB MB timeout=$CellTimeoutMinutes min"
         $process = Start-Process -FilePath $exe -ArgumentList $arguments -PassThru -NoNewWindow -RedirectStandardOutput $stdoutFile -RedirectStandardError $stderrFile
 
         $watch = [Diagnostics.Stopwatch]::StartNew()
