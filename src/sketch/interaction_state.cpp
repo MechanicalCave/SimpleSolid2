@@ -1295,6 +1295,36 @@ SketchInteractionState::directEditMode() const noexcept {
     return manipulation_->mode;
 }
 
+bool SketchInteractionState::cycleDirectEditMode() noexcept {
+    if (!manipulation_) {
+        return false;
+    }
+
+    switch (manipulation_->active_grip.role) {
+    case SketchGripRole::line_center:
+    case SketchGripRole::circle_center:
+    case SketchGripRole::arc_center:
+        return false;
+
+    case SketchGripRole::line_start:
+    case SketchGripRole::line_end:
+    case SketchGripRole::circle_quadrant_pos_u:
+    case SketchGripRole::circle_quadrant_pos_v:
+    case SketchGripRole::circle_quadrant_neg_u:
+    case SketchGripRole::circle_quadrant_neg_v:
+    case SketchGripRole::arc_start:
+    case SketchGripRole::arc_end:
+    case SketchGripRole::arc_mid:
+        manipulation_->mode =
+            manipulation_->mode == DirectEditMode::reshape
+                ? DirectEditMode::move
+                : DirectEditMode::reshape;
+        return true;
+    }
+
+    return false;
+}
+
 bool SketchInteractionState::beginDirectManipulation(
     const SketchModel& model,
     SketchGripRef grip) {
@@ -1312,20 +1342,14 @@ bool SketchInteractionState::beginDirectManipulation(
     session.active_grip = grip;
     session.selection_snapshot = selected_;
 
-    const auto capture_move =
-        [&]() {
-            const auto captured =
-                captureSketchTransformGeometry(
-                    model,
-                    session.selection_snapshot);
-            if (!captured) {
-                return false;
-            }
-
-            session.mode = DirectEditMode::move;
-            session.initial_geometry = *captured;
-            return true;
-        };
+    const auto captured_selection =
+        captureSketchTransformGeometry(
+            model,
+            session.selection_snapshot);
+    if (!captured_selection) {
+        return false;
+    }
+    session.selection_geometry = *captured_selection;
 
     switch (grip.role) {
     case SketchGripRole::line_start: {
@@ -1334,7 +1358,7 @@ bool SketchInteractionState::beginDirectManipulation(
         if (owner == nullptr) return false;
         session.mode = DirectEditMode::reshape;
         session.pivot = owner->start();
-        session.initial_geometry.lines.push_back(
+        session.owner_geometry.lines.push_back(
             {owner->id(), owner->start(), owner->end()});
         break;
     }
@@ -1344,7 +1368,7 @@ bool SketchInteractionState::beginDirectManipulation(
         if (owner == nullptr) return false;
         session.mode = DirectEditMode::reshape;
         session.pivot = owner->end();
-        session.initial_geometry.lines.push_back(
+        session.owner_geometry.lines.push_back(
             {owner->id(), owner->start(), owner->end()});
         break;
     }
@@ -1352,16 +1376,16 @@ bool SketchInteractionState::beginDirectManipulation(
         const auto* owner =
             model.findLine(grip.entity_id);
         if (owner == nullptr) return false;
+        session.mode = DirectEditMode::move;
         session.pivot = lineCenter(*owner);
-        if (!capture_move()) return false;
         break;
     }
     case SketchGripRole::circle_center: {
         const auto* owner =
             model.findCircle(grip.entity_id);
         if (owner == nullptr) return false;
+        session.mode = DirectEditMode::move;
         session.pivot = owner->center();
-        if (!capture_move()) return false;
         break;
     }
     case SketchGripRole::circle_quadrant_pos_u:
@@ -1372,7 +1396,7 @@ bool SketchInteractionState::beginDirectManipulation(
             model.findCircle(grip.entity_id);
         if (owner == nullptr) return false;
         session.mode = DirectEditMode::reshape;
-        session.initial_geometry.circles.push_back(
+        session.owner_geometry.circles.push_back(
             {owner->id(), owner->center(), owner->radius()});
 
         Point2 direction_vector{};
@@ -1397,8 +1421,8 @@ bool SketchInteractionState::beginDirectManipulation(
         const auto* owner =
             model.findArc(grip.entity_id);
         if (owner == nullptr) return false;
+        session.mode = DirectEditMode::move;
         session.pivot = owner->center();
-        if (!capture_move()) return false;
         break;
     }
     case SketchGripRole::arc_start:
@@ -1408,7 +1432,7 @@ bool SketchInteractionState::beginDirectManipulation(
             model.findArc(grip.entity_id);
         if (owner == nullptr) return false;
         session.mode = DirectEditMode::reshape;
-        session.initial_geometry.arcs.push_back(
+        session.owner_geometry.arcs.push_back(
             {
                 owner->id(),
                 owner->center(),
@@ -1457,19 +1481,20 @@ SketchInteractionState::directManipulationGeometryState()
         return std::nullopt;
     }
 
-    auto result =
-        manipulation_->initial_geometry;
     const auto current =
         manipulation_->current_input.position;
 
     if (manipulation_->mode ==
         DirectEditMode::move) {
         return translateSketchGeometry(
-            manipulation_->initial_geometry,
+            manipulation_->selection_geometry,
             Point2{
                 current.u - manipulation_->pivot.u,
                 current.v - manipulation_->pivot.v});
     }
+
+    auto result =
+        manipulation_->owner_geometry;
 
     switch (manipulation_->active_grip.role) {
     case SketchGripRole::line_start:

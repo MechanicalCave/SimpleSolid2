@@ -1,8 +1,10 @@
 # SK-07E — Space CycleEditMode
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-27  
-**Owner acceptance:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  **Owner manual Windows verification:** PASS — 2026-09-27  
+**Final exact-head Windows FULL:** #587 — `af8734bffd5e31c49844c63a718881fd21f44cf1` — PASS  
+
 **Decision class:** D2 direct-manipulation interaction semantics + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -397,3 +399,20 @@ Completion requires:
 - Owner manual Windows verification passes;
 - closeout CLOSURE passes;
 - remaining R7 and R8+ work stays inactive until separately accepted.
+
+## 19. Completion evidence
+
+SK-07E completed its bounded fifth R7 slice on 2026-09-27.
+
+- Space cycles the existing semantic `DirectEditMode` values Reshape/Move during active grip manipulation on supported non-center grips.
+- Line Start/End, Circle quadrant and Arc Start/End/Mid default to Reshape and cycle `Reshape ↔ Move`; Line/Circle/Arc center grips remain Move-only.
+- Mode cycling preserves the same active grip, interaction-start pivot, frozen semantic selection and current resolved pointer.
+- Reshape preview derives from interaction-start owner geometry; Move preview derives from interaction-start complete frozen-selection geometry, so repeated cycling never compounds preview.
+- Mode cycling itself creates no authored mutation, revision, dirty-state change or history entry.
+- LMB/Enter commit the currently active mode through the existing direct-manipulation command/Part transaction path; Esc cancels the transient session and preserves selection.
+- Active-manipulation Space has precedence over SK-07D Repeat Last Command, while common-transform and text-entry Space semantics remain unchanged.
+- Required internal and PL/EN Product documentation is current and deterministic Product Browser freshness passed on the final candidate.
+- Owner manual Windows verification passed the accepted SK-07E checklist on 2026-09-27.
+- Final exact-head Windows FULL #587 passed on `af8734bffd5e31c49844c63a718881fd21f44cf1`: documentation verification, Build, FAST/SUBSYSTEM selector checks, 68/68 unfiltered CTest tests and stable `windows-msvc` all succeeded.
+- Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, numeric/Dynamic Input, snapping/inference and R8+ remain outside this completed contract.
+

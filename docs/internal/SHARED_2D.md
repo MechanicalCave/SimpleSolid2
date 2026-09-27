@@ -153,7 +153,9 @@ Selected editable entities still expose semantic grips:
 - Circle: Center plus four quadrant radius grips;
 - Arc: Center, Start, End and Arc/Mid.
 
-Center grips perform the same mixed Line/Circle/Arc semantic translation as normal Move, using the grip's interaction-start point as the implicit base. Line Start/End, Circle quadrant and Arc Start/End/Mid remain owner-only Reshape.
+Center grips perform the same mixed Line/Circle/Arc semantic translation as normal Move, using the grip's interaction-start point as the implicit base, and remain Move-only.
+
+Line Start/End, Circle quadrant and Arc Start/End/Mid default to owner-only Reshape. During an active direct-manipulation session, viewport Space cycles those non-center grips between `Reshape` and `Move`. The active grip, interaction-start pivot, frozen semantic selection and current resolved pointer are preserved across the cycle. Reshape derives preview from the interaction-start owner geometry; Move derives translation from the interaction-start complete selection geometry. Switching mode therefore recomputes preview from frozen authored inputs rather than compounding a previous preview. Mode cycling is runtime-only and creates no authored mutation, revision, dirty state or history entry.
 
 Pointer values flow through the shared `ResolvedSketchInput` seam. Accepted non-no-op edit transforms/reshape commit through the host semantic geometry-update command and Part transaction and preserve EntityIds. Each accepted COPY placement instead executes one atomic semantic duplication command, allocates a fresh ID for each copied entity and creates one revision/Undo entry. Multiple repeated placements are independent Undo steps.
 
@@ -171,7 +173,7 @@ The current normal Modify command set is Move, Copy, Rotate, positive uniform Sc
 The product still does not implement:
 
 - Copy modifier for grip-started manipulation, owner-only Reshape or Rotate/Scale/Mirror;
-- semantic Space CycleEditMode, ordinary-Select RMB context or Repeat Last Command;
+- ordinary-Select RMB context;
 - clipboard Copy/Paste or cross-Sketch/cross-Document duplication;
 - intrinsic Origin snapping;
 - snapping/Object Snap, tracking, Ortho/Polar/Grid Snap or geometric inference;
@@ -196,5 +198,9 @@ SK-07C adds:
 - `sk07c.copy_command` — atomic mixed duplication, fresh identity, Undo/Redo identity restoration, non-reuse after Undo, schema-v4 high-water Save/reopen and stale-revision failure;
 - `sk07c.copy_controller` — zero-displacement rejection, repeated placements, source-selection retention, separate per-placement history and stale-revision controller behavior.
 
-The Workbench Sketch-host regression verifies Select/Create/Modify presentation plus toolbar/Command-Line activation including COPY. Final work-item completion additionally requires the repository's exact-head Windows FULL gate and Owner manual Windows verification.
+SK-07D adds `sk07d.repeat_last_command_controller` plus Workbench key-routing coverage for runtime Repeat Last Command.
+
+SK-07E adds `sk07e.space_cycle_edit_mode` for supported grip-role defaults/cycles, frozen selection/pivot/current-input semantics, owner-vs-selection geometry and no-compounding preview. Existing direct-manipulation controller coverage verifies preview/commit across Reshape↔Move cycling, while the Workbench Sketch-host regression verifies viewport Space precedence and text-focus behavior.
+
+Final work-item completion additionally requires the repository's exact-head Windows FULL gate and Owner manual Windows verification.
 

@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-07E_SPACE_CYCLE_EDIT_MODE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,13 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - implement accepted SK-07E within the bounded Space CycleEditMode scope
-  - cycle only existing DirectEditMode values Reshape/Move on supported non-center grips
-  - keep center grips Move-only and preserve active grip, pivot, frozen selection and current resolved pointer across cycling
-  - recompute preview from interaction-start authored geometry and preserve existing commit/cancel/history semantics
-  - use FAST/SUBSYSTEM checkpoints during implementation
-  - require exact-head Windows FULL plus Owner manual verification before completion
-  - keep ordinary-Select RMB context, grip Copy modifier, Rotate/Scale/Mirror+Copy, numeric/Dynamic Input, snapping/inference and R8+ inactive
+  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
+  - propose the next bounded R7 slice for grip Copy modifier behavior before any implementation
+  - preserve completed SK-07A/SK-07B/SK-07C/SK-07D/SK-07E transform, COPY, Repeat Last Command and Space CycleEditMode behavior as the implementation baseline
+  - keep Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, numeric/Dynamic Input, snapping/inference and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -146,4 +143,10 @@ notes:
   - Cycling preserves active grip, pivot, frozen selection and current pointer and recomputes preview from interaction-start authored geometry.
   - Ordinary-Select RMB context, grip Copy modifier and later R7/R8+ work remain inactive.
   - Owner explicitly accepted SK-07E on 2026-09-27; this bounded fifth R7 slice is active.
+
+  - SK-07E final exact-head candidate af8734bffd5e31c49844c63a718881fd21f44cf1 passed Windows FULL #587 with documentation verification, Build, FAST/SUBSYSTEM selector checks, 68/68 unfiltered CTest tests and stable windows-msvc.
+  - Owner manual Windows verification passed on 2026-09-27 for Reshape↔Move cycling, center-grip Move-only behavior, preview non-compounding, commit/cancel, Space precedence and regressions.
+  - Required internal and PL/EN Product documentation plus deterministic Product Browser freshness passed on the final candidate.
+  - SK-07E acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
+  - Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, numeric/Dynamic Input, snapping/inference and R8+ remain inactive.
 

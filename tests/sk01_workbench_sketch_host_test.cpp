@@ -125,6 +125,26 @@ public:
         return true;
     }
 
+    bool setSketchGripScene(
+        const viewer::SketchGripScene& scene) override {
+        if (!scene.valid()) return false;
+        grip_scene_ = scene;
+        return true;
+    }
+
+    bool setSketchInteractionPresentation(
+        const viewer::SketchInteractionPresentation& presentation) override {
+        if (!presentation.valid()) return false;
+        interaction_presentation_ = presentation;
+        return true;
+    }
+
+    viewer::SketchGripQueryResult querySketchGrip(
+        viewer::ViewportPoint2 point) override {
+        if (!point.valid()) return {};
+        return grip_query_;
+    }
+
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override {
         if (!selection.valid()) return false;
@@ -135,9 +155,8 @@ public:
     viewer::SketchPointQueryResult
     querySketchPresentation(
         viewer::ViewportPoint2 point) override {
-        return viewer::SketchPointQueryResult{
-            point.valid(),
-            std::nullopt};
+        if (!point.valid()) return {};
+        return point_query_;
     }
 
     viewer::SketchRectangleQueryResult
@@ -190,6 +209,48 @@ public:
                 mode});
     }
 
+    void setSketchPointHit(
+        std::optional<viewer::PresentationToken> token) {
+        point_query_ = {true, token};
+    }
+
+    void setSketchGripHit(
+        std::optional<viewer::SketchGripKey> grip) {
+        grip_query_ = {true, grip};
+    }
+
+    void emitSketchPointerXZ(
+        viewer::SpatialPointerPhase phase,
+        double sx,
+        double sy,
+        double u,
+        double v,
+        bool control = false) {
+        CHECK(static_cast<bool>(
+            spatial_pointer_handler_));
+        spatial_pointer_handler_(
+            viewer::SpatialPointerEvent{
+                phase,
+                {sx, sy},
+                {{u, 1.0, v}, {0.0, -1.0, 0.0}},
+                {control}});
+    }
+
+    [[nodiscard]] const viewer::SketchScene&
+    sketchScene() const noexcept {
+        return sketch_scene_;
+    }
+
+    [[nodiscard]] const viewer::SketchPreviewScene&
+    sketchPreviewScene() const noexcept {
+        return sketch_preview_scene_;
+    }
+
+    [[nodiscard]] const viewer::SketchInteractionPresentation&
+    interactionPresentation() const noexcept {
+        return interaction_presentation_;
+    }
+
     [[nodiscard]] const viewer::ReferenceScene&
     scene() const noexcept {
         return scene_;
@@ -209,6 +270,15 @@ private:
     viewer::ReferenceScene scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene sketch_preview_scene_;
+    viewer::SketchGripScene grip_scene_;
+    viewer::SketchInteractionPresentation
+        interaction_presentation_;
+    viewer::SketchPointQueryResult point_query_{
+        true,
+        std::nullopt};
+    viewer::SketchGripQueryResult grip_query_{
+        true,
+        std::nullopt};
     viewer::PresentationSelection selection_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
     viewer::PrimaryPointerRouting routing_{
@@ -315,6 +385,9 @@ int main(int argc, char* argv[]) {
     auto* finish_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("finishSketchButton"));
+    auto* finish_line_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("finishSketchLineButton"));
     auto* undo_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("undoDocumentButton"));
@@ -376,6 +449,7 @@ int main(int argc, char* argv[]) {
     CHECK(sketch_button != nullptr);
     CHECK(cancel_button != nullptr);
     CHECK(finish_button != nullptr);
+    CHECK(finish_line_button != nullptr);
     CHECK(undo_button != nullptr);
     CHECK(redo_button != nullptr);
     CHECK(tree != nullptr);
@@ -704,6 +778,134 @@ int main(int argc, char* argv[]) {
     if (viewport != nullptr) {
         viewport->setFocus(Qt::OtherFocusReason);
     }
+
+    // SK-07E: viewport Space cycles the active grip EditMode and has
+    // precedence over SK-07D Repeat Last Command. Build one temporary
+    // Line through the normal UI so the Workbench key route is exercised.
+    line_button->click();
+    QApplication::processEvents();
+    CHECK(line_button->isChecked());
+
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        140.0, 100.0,
+        10.0, 0.0);
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 1U);
+
+    finish_line_button->click();
+    QApplication::processEvents();
+    CHECK(!line_button->isChecked());
+    CHECK(!viewport->sketchScene().lines.empty());
+
+    const auto line_token =
+        viewport->sketchScene().lines.front().token;
+    viewport->setSketchPointHit(line_token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        120.0, 100.0,
+        5.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        120.0, 100.0,
+        5.0, 0.0);
+    QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    viewport->setSketchGripHit(
+        viewer::SketchGripKey{
+            line_token,
+            viewer::SketchGripRole::line_start});
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        100.0, 100.0,
+        0.0, 0.0);
+    QApplication::processEvents();
+    CHECK(
+        viewport->interactionPresentation().
+            active_grip.has_value());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Grip — Reshape; Space cycles mode; Enter/LMB commits; Esc cancels"));
+
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        110.0, 110.0,
+        2.0, 3.0);
+    QApplication::processEvents();
+
+    const auto cycle_state =
+        session->document().state();
+    const auto cycle_revision =
+        session->document().revision();
+    const auto cycle_undo =
+        session->undoDepth();
+
+    QTest::keyClick(viewport, Qt::Key_Space);
+    QApplication::processEvents();
+    CHECK(!line_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Grip — Move; Space cycles mode; Enter/LMB commits; Esc cancels"));
+    CHECK(session->document().state() == cycle_state);
+    CHECK(session->document().revision() == cycle_revision);
+    CHECK(session->undoDepth() == cycle_undo);
+
+    QTest::keyClick(viewport, Qt::Key_Space);
+    QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Grip — Reshape; Space cycles mode; Enter/LMB commits; Esc cancels"));
+
+    command_input->clear();
+    command_input->setFocus();
+    QTest::keyClick(command_input, Qt::Key_Space);
+    QApplication::processEvents();
+    CHECK(
+        command_input->text() ==
+        QStringLiteral(" "));
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Grip — Reshape; Space cycles mode; Enter/LMB commits; Esc cancels"));
+
+    QTest::keyClick(command_input, Qt::Key_Escape);
+    QApplication::processEvents();
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+    CHECK(session->document().state() == cycle_state);
+    CHECK(session->document().revision() == cycle_revision);
+    CHECK(session->undoDepth() == cycle_undo);
+
+    // Remove the temporary Line so later history assertions retain their
+    // original pre-SK-07E shape.
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 0U);
+    viewport->setSketchPointHit(std::nullopt);
+    viewport->setSketchGripHit(std::nullopt);
 
     auto* root =
         tree->topLevelItem(0);

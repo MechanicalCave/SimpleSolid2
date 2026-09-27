@@ -372,6 +372,8 @@ public:
     [[nodiscard]] std::optional<DirectEditMode>
     directEditMode() const noexcept;
 
+    [[nodiscard]] bool cycleDirectEditMode() noexcept;
+
     [[nodiscard]] bool beginDirectManipulation(
         const SketchModel& model,
         SketchGripRef grip);
@@ -406,7 +408,8 @@ private:
         SketchGripRef active_grip;
         DirectEditMode mode{DirectEditMode::reshape};
         std::vector<EntityId> selection_snapshot;
-        DirectManipulationGeometry initial_geometry;
+        DirectManipulationGeometry owner_geometry;
+        DirectManipulationGeometry selection_geometry;
         Point2 pivot;
         ResolvedSketchInput current_input;
     };
