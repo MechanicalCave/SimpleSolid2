@@ -1,6 +1,6 @@
 version: 1
 status: completed
-active_work: "work/WB-02_GLOBAL_CAD_INPUT_ROUTING_AND_KEYBOARD_FIRST_COMMAND_LINE.md"
+active_work: "work/B2_STALE_PART_TRANSACTION_PROTECTION.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
 program_roadmap_version: "1.0"
@@ -16,11 +16,12 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
   - "adr/ADR-0011-workspace-global-cad-input-routing-and-semantic-requests.md"
+  - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
 next:
-  - draft a separate bounded B2 stale-transaction-protection Work Contract under AUDIT-01
-  - require explicit Owner acceptance of that B2 contract before any B2 production mutation
-  - keep B1, C1, C2, D, E1, E2 and F queued by AUDIT-01 but inactive
-  - preserve completed WB-02 / Package-A behavior as the implementation baseline
+  - draft a separate bounded B1 file/save conflict protection Work Contract under AUDIT-01
+  - require explicit Owner acceptance of B1 before any file-conflict production mutation
+  - keep C1, C2, D, E1, E2 and F queued by AUDIT-01 but inactive
+  - preserve completed B2 transaction freshness and validated reconstruction as the domain baseline
 
 notes:
   - R0 through R4 are completed.
@@ -181,3 +182,15 @@ notes:
   - AUDIT-01 Package A / WB-02 final runtime candidate c66d550280485430ab6ddeb92d998919260e9b00 passed exact-head Windows FULL #626 with documentation verification, Build, selector checks, 73/73 CTest tests and stable windows-msvc.
   - Owner manual Windows verification for Package A / WB-02 passed on 2026-09-27 on c66d550280485430ab6ddeb92d998919260e9b00, including semantic-context invalidation, Delete precedence, capture ownership, keyboard-first workflows and prior Command Line refinements.
   - Package A and WB-02 acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge of PR #78.
+
+  - Owner explicitly accepted ADR-0012 and B2 Stale Part Transaction Protection on 2026-09-27 after proposal gate #628 PASS on b722ee93ec4aac9e2593cc58b5f6c0b7fed4b784.
+  - B2 is now the only active AUDIT-01 production scope. Accepted policy: optimistic base revision, stale-before-no-op, one-shot transaction lifecycle, Part-domain full-state validation and validated reconstruction.
+
+  - B2 runtime implementation checkpoint e39569c440ca41e24eb9330e3258b259bc7f0dfa passed Windows FULL #631 with Build, selector checks, stable windows-msvc and 73/73 CTest; part01.part_document_transaction, part01.part_document_store and part01.document_session passed.
+  - B2 internal as-built docs and generated Browser were added on cd0b68250d32598aa3c930c457aacd354e30d61a; docs gate #632 passed regeneration/freshness verification.
+  - Final B2 completion still requires a shared exact-head Windows FULL on the documented candidate, then governance closeout/CLOSURE and merge. No Owner manual UI test is required unless new user-visible behavior appears.
+
+  - B2 final exact-head candidate e23114341973fa857ae4471d2abdd4107b9f79e6 passed Windows FULL #635 with exact checkout, documentation verification, Build, selector checks, stable windows-msvc and 73/73 CTest.
+  - part01.part_document_transaction, part01.part_document_store and part01.document_session all passed on the final B2 candidate.
+  - B2 has no intended UI/product workflow change; per accepted contract no Owner manual UI test was required.
+  - B2 acceptance conditions are satisfied; the closeout candidate now awaits only the work-only CLOSURE gate and merge of PR #79.

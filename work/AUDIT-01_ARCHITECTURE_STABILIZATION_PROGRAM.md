@@ -66,7 +66,7 @@ Default order is strict:
 | Order | Package | Required outcome | Activation |
 | --- | --- | --- | --- |
 | 1 | **A — WB-02 closeout hardening** | context lifetime, Delete precedence, input-capture ownership, real integration evidence | **COMPLETED — 2026-09-27** |
-| 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | future bounded Work Contract |
+| 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | **COMPLETED — 2026-09-27** |
 | 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | future bounded Work Contract |
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | future bounded Work Contract |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | future bounded Work Contract |
@@ -231,6 +231,41 @@ Required outcomes:
 - preserve accepted no-op, revision increment and revision-exhaustion semantics.
 
 Tests must cover T1/T2 overlap, rollback, repeated commit, no-op, revision exhaustion and invalid state through public domain API.
+
+### B2 activation record
+
+**Owner acceptance:** 2026-09-27  
+**ADR:** ADR-0012 — ACCEPTED  
+**Work Contract:** `work/B2_STALE_PART_TRANSACTION_PROTECTION.md` — ACCEPTED / ACTIVE  
+**Proposal evidence:** Windows PR gate #628 PASS on `b722ee93ec4aac9e2593cc58b5f6c0b7fed4b784`
+
+The accepted B2 policy is optimistic base-revision binding, stale-before-no-op, one-shot transaction lifetime, owning Part-domain complete-state validation and validated reconstruction. B1 and later packages remain inactive.
+
+### B2 implementation checkpoint
+
+Runtime implementation is present and verified by Windows FULL #631 on `e39569c440ca41e24eb9330e3258b259bc7f0dfa` with 73/73 tests. Internal docs and generated Browser passed docs gate #632 on `cd0b68250d32598aa3c930c457aacd354e30d61a`.
+
+B2 remains ACTIVE until a final exact-head FULL is green on the documented candidate and closeout/CLOSURE completes. B1 remains inactive.
+
+### B2 final completion evidence
+
+**Completed:** 2026-09-27  
+**Final candidate:** `e23114341973fa857ae4471d2abdd4107b9f79e6`  
+**Windows FULL:** #635 — PASS — 73/73  
+**Manual UI verification:** not required by accepted B2 contract
+
+B2 is closed as **CONFIRMED / FIXED / VERIFIED**:
+
+- transactions bind to immutable base technical revision;
+- stale mismatch rejects before validation/no-op/mutation;
+- every commit attempt is terminal and repeated commit is inactive;
+- complete Part authored state is validated at the owning domain boundary;
+- invalid state and max-revision failures do not mutate authored state or revision;
+- reconstruction uses the same Part invariant boundary and returns structured failure;
+- DocumentSession and persistence regressions remain green;
+- B2 makes no file-level concurrency, stale-state merge or multi-thread mutation claim.
+
+B2 completion does not activate B1 automatically. B1 remains the next mandatory AUDIT-01 package and requires a separate bounded Owner-accepted Work Contract.
 
 ## 7. Package B1 — file/save conflict protection
 
