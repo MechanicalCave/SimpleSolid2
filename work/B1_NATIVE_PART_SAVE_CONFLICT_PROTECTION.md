@@ -1,8 +1,10 @@
 # B1 — Native Part Save Conflict Protection
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-27  
 **Owner acceptance:** 2026-09-27  
+**Final exact-head Windows FULL:** #662 — `79ef8ed2c59f9209d0695867d4b6fa43979159d3` — PASS  
+**Owner manual Windows:** PASS — 2026-09-27  
 **Decision class:** D2 persistence/save semantics + bounded D1 implementation  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package B1  
@@ -354,3 +356,27 @@ B1 completes only after:
 - merge to main.
 
 After B1 completion, AUDIT-01 requires C1 as the next separately contracted package.
+
+
+## 19. Final completion record
+
+B1 is complete on exact-head candidate `79ef8ed2c59f9209d0695867d4b6fa43979159d3`.
+
+Final evidence:
+
+- Windows PR gate #662 checked out that exact SHA and passed documentation verification, Build, selector checks, full unfiltered CTest and stable `windows-msvc`;
+- sequential and controlled concurrent writer tests prove one stale checkpoint cannot silently overwrite a newer cooperating SS2 save;
+- content hash, platform file identity and durable DocumentId checks distinguish changed content, replaced file objects and document-identity changes;
+- missing targets fail closed and ordinary Save does not recreate the path;
+- conflict/publication-failure tests preserve authored state, revision, Undo/Redo, saved-state checkpoint and file checkpoint;
+- successful Save returns the exact published checkpoint and immediate repeated Save plus reopen remain valid;
+- create-new and temporary publication reservations use exclusive creation and cleanup is verified;
+- explicit Save remains reachable on a clean open Part so an external conflict can be detected without a local authored change;
+- internal as-built docs, PL/EN Product docs and generated Product Browser are current;
+- Owner manual Windows verification passed on 2026-09-27 for external modification/replacement, external removal and normal repeated Save/reopen.
+
+The B1 guarantee is deliberately limited to cooperating SS2 writers for strict no-lost-update behavior. An unrelated writer that races after checkpoint validation is not covered by an atomic filesystem CAS claim. Force Overwrite, Save As, automatic merge and live reload remain outside this contract.
+
+B1 acceptance conditions are satisfied. This closeout commit now requires only the work-only CLOSURE gate and merge of PR #80.
+
+After merge, AUDIT-01 requires a separate Owner-accepted C1 history-copy cost removal Work Contract before further production mutation.
