@@ -18,7 +18,7 @@ namespace simplesolid2::persistence {
 namespace {
 
 constexpr std::uintmax_t maximum_container_bytes =
-    64U * 1024U * 1024U;
+    maximum_native_document_container_bytes;
 constexpr std::uint64_t maximum_total_uncompressed_bytes =
     64U * 1024U * 1024U;
 constexpr std::uint64_t maximum_manifest_bytes =
@@ -377,24 +377,15 @@ std::optional<NativeDocumentDescriptor> parseManifest(
 
 } // namespace
 
-NativeContainerReadResult readNativeDocumentContainer(
+NativeContainerReadResult parseNativeDocumentContainer(
+    std::string_view bytes,
     const std::filesystem::path& path) {
-    NativeContainerDiagnostic diagnostic;
-    const auto bytes =
-        readFileBounded(path, diagnostic);
-    if (!bytes) {
-        return NativeContainerReadResult{
-            std::nullopt,
-            std::move(diagnostic),
-        };
-    }
-
     mz_zip_archive zip{};
     mz_zip_zero_struct(&zip);
     if (!mz_zip_reader_init_mem(
             &zip,
-            bytes->data(),
-            bytes->size(),
+            bytes.data(),
+            bytes.size(),
             0U)) {
         return readFailure(
             NativeContainerErrorCode::malformed_container,
@@ -581,6 +572,22 @@ NativeContainerReadResult readNativeDocumentContainer(
         },
         NativeContainerDiagnostic{},
     };
+}
+
+NativeContainerReadResult readNativeDocumentContainer(
+    const std::filesystem::path& path) {
+    NativeContainerDiagnostic diagnostic;
+    const auto bytes =
+        readFileBounded(path, diagnostic);
+    if (!bytes) {
+        return NativeContainerReadResult{
+            std::nullopt,
+            std::move(diagnostic),
+        };
+    }
+    return parseNativeDocumentContainer(
+        *bytes,
+        path);
 }
 
 NativeContainerBuildResult buildNativeDocumentContainer(

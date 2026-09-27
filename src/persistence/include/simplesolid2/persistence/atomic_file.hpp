@@ -1,6 +1,9 @@
 #pragma once
 
+#include <simplesolid2/persistence/file_snapshot.hpp>
+
 #include <filesystem>
+#include <optional>
 #include <string>
 #include <string_view>
 
@@ -20,16 +23,21 @@ enum class AtomicWriteErrorCode {
 };
 
 struct AtomicWriteDiagnostic final {
-    AtomicWriteErrorCode code{AtomicWriteErrorCode::none};
+    AtomicWriteErrorCode code{
+        AtomicWriteErrorCode::none};
     std::string message;
     std::filesystem::path path;
 };
 
 struct AtomicWriteResult final {
+    std::optional<FileIdentity>
+        published_identity;
     AtomicWriteDiagnostic diagnostic;
 
     [[nodiscard]] bool ok() const noexcept {
-        return diagnostic.code == AtomicWriteErrorCode::none;
+        return published_identity.has_value() &&
+               diagnostic.code ==
+                   AtomicWriteErrorCode::none;
     }
 };
 

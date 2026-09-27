@@ -2,8 +2,12 @@
 
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/persistence/atomic_file.hpp>
+#include <simplesolid2/persistence/file_guard.hpp>
+#include <simplesolid2/persistence/file_snapshot.hpp>
 #include <simplesolid2/persistence/native_document_container.hpp>
 
+#include <array>
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -23,6 +27,11 @@ enum class PartStoreErrorCode {
     wrong_document_kind,
     invalid_document_id,
     container_failure,
+    save_conflict_busy,
+    save_conflict_target_missing,
+    save_conflict_document_identity_changed,
+    save_conflict_file_replaced,
+    save_conflict_content_changed,
 };
 
 struct PartStoreDiagnostic final {
@@ -35,18 +44,38 @@ struct PartStoreDiagnostic final {
     std::filesystem::path path;
 };
 
-struct PartLoadResult final {
-    std::optional<PartDocument> document;
-    PartStoreDiagnostic diagnostic;
+struct PartFileCheckpoint final {
+    core::DocumentId document_id;
+    std::uint64_t byte_length{};
+    persistence::Sha256Digest digest{};
+    persistence::FileIdentity file_identity;
 
-    [[nodiscard]] bool ok() const noexcept { return document.has_value(); }
+    friend bool operator==(
+        const PartFileCheckpoint&,
+        const PartFileCheckpoint&) = default;
 };
 
-struct PartSaveResult final {
+struct PartLoadResult final {
+    std::optional<PartDocument> document;
+    std::optional<PartFileCheckpoint> checkpoint;
     PartStoreDiagnostic diagnostic;
 
     [[nodiscard]] bool ok() const noexcept {
-        return diagnostic.code == PartStoreErrorCode::none;
+        return document.has_value() &&
+               checkpoint.has_value() &&
+               diagnostic.code ==
+                   PartStoreErrorCode::none;
+    }
+};
+
+struct PartSaveResult final {
+    std::optional<PartFileCheckpoint> checkpoint;
+    PartStoreDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return checkpoint.has_value() &&
+               diagnostic.code ==
+                   PartStoreErrorCode::none;
     }
 };
 
@@ -66,7 +95,8 @@ public:
 
     [[nodiscard]] PartSaveResult save(
         const std::filesystem::path& path,
-        const PartDocument& document) const;
+        const PartDocument& document,
+        const PartFileCheckpoint& expected_checkpoint) const;
 };
 
 } // namespace simplesolid2::part

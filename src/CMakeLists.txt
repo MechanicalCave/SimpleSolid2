@@ -49,6 +49,8 @@ set_target_properties(simplesolid2_miniz PROPERTIES
 
 add_library(simplesolid2_persistence STATIC
     persistence/atomic_file.cpp
+    persistence/file_guard.cpp
+    persistence/file_snapshot.cpp
     persistence/native_document_container.cpp
 )
 
