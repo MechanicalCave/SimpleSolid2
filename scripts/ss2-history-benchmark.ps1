@@ -52,13 +52,16 @@ try { $computer = Get-CimInstance Win32_ComputerSystem } catch {}
 
 $requestedMaxBytes = [int64]$MaxWorkingSetMB * 1MB
 $physicalMemoryBytes = if ($computer) { [uint64]$computer.TotalPhysicalMemory } else { 0 }
-$halfPhysicalBytes =
+$quarterPhysicalBytes =
     if ($physicalMemoryBytes -gt 0) {
-        [int64]([double]$physicalMemoryBytes * 0.5)
+        [int64]([double]$physicalMemoryBytes * 0.25)
     } else {
         $requestedMaxBytes
     }
-$maxBytes = [Math]::Min($requestedMaxBytes, $halfPhysicalBytes)
+$fourGiBBytes = [int64]4096 * 1MB
+$maxBytes = [Math]::Min(
+    $requestedMaxBytes,
+    [Math]::Min($quarterPhysicalBytes, $fourGiBBytes))
 $effectiveMaxWorkingSetMB = [Math]::Max(512, [Math]::Floor([double]$maxBytes / 1MB))
 $maxBytes = [int64]$effectiveMaxWorkingSetMB * 1MB
 
