@@ -53,26 +53,28 @@ std::optional<double> parseBareSketchDistance(
         return std::nullopt;
     }
 
-    const QChar locale_decimal = locale.decimalPoint();
+    const QString locale_decimal = locale.decimalPoint();
+    QString normalized = trimmed;
+    if (locale_decimal != QStringLiteral(".")) {
+        if (normalized.contains(QLatin1Char('.')) &&
+            normalized.contains(locale_decimal)) {
+            return std::nullopt;
+        }
+        normalized.replace(
+            locale_decimal,
+            QStringLiteral("."));
+    }
+
     bool saw_digit = false;
     bool saw_decimal = false;
-    QString normalized;
-    normalized.reserve(trimmed.size());
-
-    for (const QChar ch : trimmed) {
+    for (const QChar ch : normalized) {
         if (ch.isDigit()) {
             saw_digit = true;
-            normalized.append(ch);
             continue;
         }
 
-        const bool decimal =
-            ch == QLatin1Char('.') ||
-            (locale_decimal != QLatin1Char('.') &&
-             ch == locale_decimal);
-        if (decimal && !saw_decimal) {
+        if (ch == QLatin1Char('.') && !saw_decimal) {
             saw_decimal = true;
-            normalized.append(QLatin1Char('.'));
             continue;
         }
 
