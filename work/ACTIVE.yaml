@@ -3,7 +3,7 @@ status: completed
 active_work: "work/SK-07E_SPACE_CYCLE_EDIT_MODE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
-program_roadmap_version: "1.2"
+program_roadmap_version: "1.3"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -16,10 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
-  - propose the next bounded R7 slice for grip Copy modifier behavior before any implementation
+  - review proposed work/SK-07F_SHARED_PRECISION_INPUT_AND_DIRECT_DISTANCE.md together with proposed Sketcher roadmap v1.3
+  - require explicit Owner acceptance of both proposal artifacts before any SK-07F production implementation
   - preserve completed SK-07A/SK-07B/SK-07C/SK-07D/SK-07E transform, COPY, Repeat Last Command and Space CycleEditMode behavior as the implementation baseline
-  - keep Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, numeric/Dynamic Input, snapping/inference and R8+ inactive
+  - keep Grip Copy grammar, Reshape+Copy, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, Ortho/Polar, Dynamic Input, snapping/inference and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -149,4 +149,10 @@ notes:
   - Required internal and PL/EN Product documentation plus deterministic Product Browser freshness passed on the final candidate.
   - SK-07E acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
   - Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, numeric/Dynamic Input, snapping/inference and R8+ remain inactive.
+
+  - The first SK-07F Grip Copy Modifier proposal was superseded before implementation and PR #76 was closed unmerged on 2026-09-27.
+  - Owner direction is to establish one shared precision-input/direct-distance path before implementing Grip Copy command grammar.
+  - Replacement SK-07F proposes one provider-neutral PointRequest plus context-first Command Line numeric routing, with Line, grip Reshape/Move, normal MOVE and normal COPY as first clients.
+  - Proposed roadmap v1.3 pulls only this minimal precision foundation forward into R7; full coordinate/polar/Dynamic Input remains later R9 and OSNAP/tracking/inference remains R10.
+  - Replacement SK-07F and roadmap v1.3 remain proposal-only until explicit Owner acceptance.
 
