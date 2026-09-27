@@ -1,4 +1,5 @@
 #include "cad_workbench.hpp"
+#include "project_workspace_shell.hpp"
 
 #include <simplesolid2/application/project_session.hpp>
 #include <simplesolid2/application/project_workspace_metadata.hpp>
@@ -359,6 +360,7 @@ int main(int argc, char* argv[]) {
         created_part.session->documentId();
 
     TestViewportWidget* viewport = nullptr;
+    ui::ProjectWorkspaceShell workspace_shell;
     ui::CadWorkbench workbench{
         [&viewport](QWidget* parent) {
             viewport =
@@ -366,14 +368,24 @@ int main(int argc, char* argv[]) {
             return ui::ViewportSurface{
                 viewport,
                 viewport};
-        }};
+        },
+        &workspace_shell};
+    workspace_shell.setDocumentWorkbench(
+        &workbench);
+    workbench.setCadInputContextChangedHandler(
+        [&workspace_shell] {
+            workspace_shell.refreshCadInputPresentation();
+        });
 
     CHECK(
         workbench.activateDocument(
             opened.session->documentSession(
                 document_id),
             workspace));
-    workbench.show();
+    workspace_shell.setCadInputEndpoint(
+        &workbench);
+    workspace_shell.showDocumentWorkbench();
+    workspace_shell.show();
     QApplication::processEvents();
     CHECK(viewport != nullptr);
 
@@ -441,11 +453,11 @@ int main(int argc, char* argv[]) {
         workbench.findChild<QPushButton*>(
             QStringLiteral("mirrorSketchToolButton"));
     auto* command_input =
-        workbench.findChild<QLineEdit*>(
-            QStringLiteral("sketchCommandInput"));
+        workspace_shell.findChild<QLineEdit*>(
+            QStringLiteral("cadCommandInput"));
     auto* command_prompt =
-        workbench.findChild<QLabel*>(
-            QStringLiteral("sketchCommandPrompt"));
+        workspace_shell.findChild<QLabel*>(
+            QStringLiteral("cadCommandPrompt"));
 
     CHECK(sketch_button != nullptr);
     CHECK(cancel_button != nullptr);
@@ -664,13 +676,22 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(!move_button->isChecked());
 
-    command_input->setText(
+    command_input->clear();
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
         QStringLiteral("MOVE"));
+    QApplication::processEvents();
+    CHECK(
+        command_input->text() ==
+        QStringLiteral("MOVE"));
+    CHECK(QApplication::focusWidget() == viewport);
     QTest::keyClick(
-        command_input,
+        viewport,
         Qt::Key_Return);
     QApplication::processEvents();
     CHECK(move_button->isChecked());
+    CHECK(command_input->text().isEmpty());
     CHECK(
         operations_label->text() ==
         QStringLiteral(
@@ -814,8 +835,16 @@ int main(int argc, char* argv[]) {
     // forms are exercised without changing the later Sketch workflow.
     const QLocale previous_locale = QLocale{};
     QLocale::setDefault(QLocale{QStringLiteral("pl_PL")});
-    command_input->setText(QStringLiteral("10,5"));
-    QTest::keyClick(command_input, Qt::Key_Return);
+    command_input->clear();
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("10,5"));
+    CHECK(
+        command_input->text() ==
+        QStringLiteral("10,5"));
+    CHECK(QApplication::focusWidget() == viewport);
+    QTest::keyClick(viewport, Qt::Key_Return);
     QApplication::processEvents();
     QLocale::setDefault(previous_locale);
     CHECK(

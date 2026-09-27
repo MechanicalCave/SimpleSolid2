@@ -456,37 +456,10 @@ void CadWorkbench::buildUi() {
             }
         });
 
-    command_line_widget_ = new QWidget(shell_);
-    command_line_widget_->setObjectName(
-        QStringLiteral("sketchCommandLine"));
-    command_line_widget_->setMaximumHeight(58);
-    auto* command_line_layout =
-        new QHBoxLayout(command_line_widget_);
-    command_line_layout->setContentsMargins(4, 2, 4, 2);
-
-    command_prompt_ =
-        new QLabel(
-            QStringLiteral("Command: SELECT"),
-            command_line_widget_);
-    command_prompt_->setObjectName(
-        QStringLiteral("sketchCommandPrompt"));
-    command_line_layout->addWidget(command_prompt_);
-
-    command_input_ =
-        new QLineEdit(command_line_widget_);
-    command_input_->setObjectName(
-        QStringLiteral("sketchCommandInput"));
-    command_input_->setPlaceholderText(
-        QStringLiteral(
-            "SELECT, LINE, CIRCLE, ARC, MOVE, COPY, ROTATE, SCALE or MIRROR"));
-    command_line_layout->addWidget(command_input_, 1);
-    shell_->setCommandLineContent(
-        command_line_widget_);
-
     if (viewport_widget_ != nullptr) {
         viewport_widget_->installEventFilter(this);
+        setFocusProxy(viewport_widget_);
     }
-    command_input_->installEventFilter(this);
 
     auto* properties_content = new QWidget(shell_);
     properties_content->setObjectName(
@@ -777,12 +750,6 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { deleteSketchSelection(); });
-    QObject::connect(
-        command_input_,
-        &QLineEdit::returnPressed,
-        this,
-        [this] { submitSketchCommandLine(); });
-
     syncSketchInteractionUi();
 }
 
@@ -1260,79 +1227,256 @@ void CadWorkbench::deleteSketchSelection() {
         QStringLiteral("Sketch selection deleted."));
 }
 
-void CadWorkbench::submitSketchCommandLine() {
-    if (command_input_ == nullptr ||
-        !sketch_interaction_controller_ ||
+std::string CadWorkbench::cadInputPrompt() const {
+    return toUtf8(cadInputPromptText());
+}
+
+application::CadInputSubmitResult
+CadWorkbench::submitCadInput(
+    std::string_view text) {
+    if (!sketch_interaction_controller_ ||
         !sketch_interaction_controller_->active()) {
-        return;
+        return {
+            false,
+            "No active CAD command context."};
     }
 
     const auto submitted =
-        command_input_->text().trimmed();
+        fromUtf8(text).trimmed();
     if (submitted.isEmpty()) {
-        return;
+        return {
+            false,
+            "CAD input is empty."};
     }
 
-    // Context-first grammar: an active semantic PointRequest owns
-    // submission before command-local/top-level command activation.
+    const auto reject =
+        [this](QString message) {
+            if (status_ != nullptr) {
+                status_->setText(message);
+            }
+            return application::CadInputSubmitResult{
+                false,
+                toUtf8(message)};
+        };
+
     if (const auto request =
-            sketch_interaction_controller_->activePointRequest()) {
+            sketch_interaction_controller_->
+                activePointRequest()) {
         const auto distance =
             parseBareSketchDistance(submitted);
         if (!distance) {
-            status_->setText(
+            return reject(
                 QStringLiteral(
                     "Active point input expects a bare finite distance."));
-            return;
         }
         if (!request->direct_distance_enabled) {
-            status_->setText(
+            return reject(
                 QStringLiteral(
                     "Direct Distance is not available at this point stage."));
-            return;
         }
         if (!sketch_interaction_controller_->
                 submitDirectDistance(*distance)) {
-            return;
+            return reject(
+                QStringLiteral(
+                    "Direct Distance could not be resolved."));
         }
 
-        command_input_->clear();
-        if (viewport_widget_ != nullptr) {
-            viewport_widget_->setFocus(Qt::OtherFocusReason);
-        }
-        return;
+        return {true, {}};
     }
 
     const auto command = submitted.toUpper();
+    std::optional<sketch::SketchTool>
+        expected_tool;
 
     if (command == QStringLiteral("SELECT")) {
         activateSketchSelect();
+        expected_tool = sketch::SketchTool::select;
     } else if (command == QStringLiteral("LINE")) {
         activateSketchLine();
+        expected_tool = sketch::SketchTool::line;
     } else if (command == QStringLiteral("CIRCLE")) {
         activateSketchCircle();
+        expected_tool = sketch::SketchTool::circle;
     } else if (command == QStringLiteral("ARC")) {
         activateSketchArc();
+        expected_tool = sketch::SketchTool::arc;
     } else if (command == QStringLiteral("MOVE")) {
         activateSketchMove();
+        expected_tool = sketch::SketchTool::move;
     } else if (command == QStringLiteral("COPY")) {
         activateSketchCopy();
+        expected_tool = sketch::SketchTool::copy;
     } else if (command == QStringLiteral("ROTATE")) {
         activateSketchRotate();
+        expected_tool = sketch::SketchTool::rotate;
     } else if (command == QStringLiteral("SCALE")) {
         activateSketchScale();
+        expected_tool = sketch::SketchTool::scale;
     } else if (command == QStringLiteral("MIRROR")) {
         activateSketchMirror();
+        expected_tool = sketch::SketchTool::mirror;
     } else {
-        status_->setText(
+        return reject(
             QStringLiteral("Unknown Sketch command."));
-        return;
     }
 
-    command_input_->clear();
-    if (viewport_widget_ != nullptr) {
-        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    if (!expected_tool ||
+        sketch_interaction_controller_->tool() !=
+            *expected_tool) {
+        return reject(
+            QStringLiteral(
+                "CAD command could not be activated."));
     }
+
+    return {true, {}};
+}
+
+QString CadWorkbench::cadInputPromptText() const {
+    if (!sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->active()) {
+        return QStringLiteral("Command:");
+    }
+
+    const auto tool =
+        sketch_interaction_controller_->tool();
+
+    if (tool == sketch::SketchTool::select) {
+        if (sketch_interaction_controller_->
+                directManipulationActive()) {
+            const auto mode =
+                sketch_interaction_controller_->
+                    directEditMode();
+            const auto mode_text =
+                mode == sketch::DirectEditMode::move
+                    ? QStringLiteral("Move")
+                    : QStringLiteral("Reshape");
+            return QStringLiteral(
+                       "Command: SELECT — Grip %1")
+                .arg(mode_text);
+        }
+        return QStringLiteral("Command: SELECT");
+    }
+
+    const bool common_transform =
+        tool == sketch::SketchTool::move ||
+        tool == sketch::SketchTool::copy ||
+        tool == sketch::SketchTool::rotate ||
+        tool == sketch::SketchTool::scale ||
+        tool == sketch::SketchTool::mirror;
+
+    if (common_transform) {
+        QString keyword;
+        switch (tool) {
+        case sketch::SketchTool::move:
+            keyword = QStringLiteral("MOVE");
+            break;
+        case sketch::SketchTool::copy:
+            keyword = QStringLiteral("COPY");
+            break;
+        case sketch::SketchTool::rotate:
+            keyword = QStringLiteral("ROTATE");
+            break;
+        case sketch::SketchTool::scale:
+            keyword = QStringLiteral("SCALE");
+            break;
+        case sketch::SketchTool::mirror:
+            keyword = QStringLiteral("MIRROR");
+            break;
+        default:
+            break;
+        }
+
+        QString instruction;
+        const auto stage =
+            sketch_interaction_controller_->
+                commonTransformStage();
+        if (!stage) {
+            instruction =
+                QStringLiteral("Transform unavailable");
+        } else {
+            switch (*stage) {
+            case sketch::CommonTransformStage::select_objects:
+                instruction =
+                    QStringLiteral(
+                        "Select objects; Enter/Space/RMB to continue");
+                break;
+            case sketch::CommonTransformStage::await_base_point:
+                instruction =
+                    QStringLiteral("Specify Base Point");
+                break;
+            case sketch::CommonTransformStage::await_reference_point:
+                instruction =
+                    QStringLiteral("Specify Reference Point");
+                break;
+            case sketch::CommonTransformStage::await_destination:
+                instruction =
+                    tool == sketch::SketchTool::copy
+                        ? QStringLiteral(
+                              "Specify copy placement point")
+                        : QStringLiteral(
+                              "Specify destination point");
+                break;
+            case sketch::CommonTransformStage::await_axis_start:
+                instruction =
+                    QStringLiteral(
+                        "Specify first axis point");
+                break;
+            case sketch::CommonTransformStage::await_axis_end:
+                instruction =
+                    QStringLiteral(
+                        "Specify second axis point");
+                break;
+            }
+        }
+
+        return QStringLiteral("Command: ") +
+               keyword +
+               QStringLiteral(" — ") +
+               instruction;
+    }
+
+    if (tool == sketch::SketchTool::line) {
+        const auto stage =
+            sketch_interaction_controller_->
+                lineStage();
+        return stage &&
+                       *stage ==
+                           sketch::LineStage::
+                               await_next_point
+                   ? QStringLiteral(
+                         "Command: LINE — Specify next point")
+                   : QStringLiteral(
+                         "Command: LINE — Specify first point");
+    }
+
+    if (tool == sketch::SketchTool::circle) {
+        const auto stage =
+            sketch_interaction_controller_->
+                circleStage();
+        return stage &&
+                       *stage ==
+                           sketch::CircleStage::
+                               await_radius
+                   ? QStringLiteral(
+                         "Command: CIRCLE — Specify radius")
+                   : QStringLiteral(
+                         "Command: CIRCLE — Specify center");
+    }
+
+    const auto stage =
+        sketch_interaction_controller_->arcStage();
+    if (stage &&
+        *stage == sketch::ArcStage::await_through) {
+        return QStringLiteral(
+            "Command: ARC — Specify through point");
+    }
+    if (stage &&
+        *stage == sketch::ArcStage::await_end) {
+        return QStringLiteral(
+            "Command: ARC — Specify end point");
+    }
+    return QStringLiteral(
+        "Command: ARC — Specify start point");
 }
 
 void CadWorkbench::finishSketch() {
@@ -1690,18 +1834,9 @@ bool CadWorkbench::eventFilter(
         auto* key_event =
             static_cast<QKeyEvent*>(event);
 
-        if (watched == command_input_) {
-            if (key_event->key() == Qt::Key_Escape) {
-                command_input_->clear();
-                if (viewport_widget_ != nullptr) {
-                    viewport_widget_->setFocus(
-                        Qt::OtherFocusReason);
-                }
-                return true;
-            }
-        } else if (watched == viewport_widget_ &&
-                   sketch_interaction_controller_ &&
-                   sketch_interaction_controller_->active()) {
+        if (watched == viewport_widget_ &&
+            sketch_interaction_controller_ &&
+            sketch_interaction_controller_->active()) {
             if (key_event->key() == Qt::Key_Delete) {
                 deleteSketchSelection();
                 return true;
@@ -1806,6 +1941,8 @@ bool CadWorkbench::eventFilter(
 }
 
 void CadWorkbench::syncSketchInteractionUi() {
+    notifyCadInputContextChanged();
+
     const bool editing =
         sketch_interaction_controller_ &&
         sketch_interaction_controller_->active();
@@ -1893,10 +2030,6 @@ void CadWorkbench::syncSketchInteractionUi() {
                 sketch::SketchTool::mirror);
     }
 
-    if (command_line_widget_ != nullptr) {
-        command_line_widget_->setVisible(editing);
-    }
-
     if (!editing) {
         if (operations_placeholder_ != nullptr &&
             !sketch_support_pick_active_) {
@@ -1938,10 +2071,7 @@ void CadWorkbench::syncSketchInteractionUi() {
             delete_selection_button_->setVisible(false);
             finish_line_button_->setVisible(false);
             cancel_line_button_->setVisible(false);
-            command_prompt_->setText(
-                QStringLiteral("Command: SELECT — Grip %1")
-                    .arg(mode_text));
-            return;
+                        return;
         }
 
         operations_placeholder_->setText(
@@ -1955,9 +2085,7 @@ void CadWorkbench::syncSketchInteractionUi() {
             selected > 0U);
         finish_line_button_->setVisible(false);
         cancel_line_button_->setVisible(false);
-        command_prompt_->setText(
-            QStringLiteral("Command: SELECT"));
-        return;
+                return;
     }
 
     const bool common_transform =
@@ -2042,12 +2170,7 @@ void CadWorkbench::syncSketchInteractionUi() {
             title +
             QStringLiteral(" — ") +
             instruction);
-        command_prompt_->setText(
-            QStringLiteral("Command: ") +
-            keyword +
-            QStringLiteral(" — ") +
-            instruction);
-        return;
+                return;
     }
 
     delete_selection_button_->setVisible(false);
@@ -2071,13 +2194,7 @@ void CadWorkbench::syncSketchInteractionUi() {
             next
                 ? QStringLiteral("Line — Specify next point")
                 : QStringLiteral("Line — Specify first point"));
-        command_prompt_->setText(
-            next
-                ? QStringLiteral(
-                      "Command: LINE — Specify next point")
-                : QStringLiteral(
-                      "Command: LINE — Specify first point"));
-        return;
+                return;
     }
 
     if (tool == sketch::SketchTool::circle) {
@@ -2097,13 +2214,7 @@ void CadWorkbench::syncSketchInteractionUi() {
             radius
                 ? QStringLiteral("Circle — Specify radius")
                 : QStringLiteral("Circle — Specify center"));
-        command_prompt_->setText(
-            radius
-                ? QStringLiteral(
-                      "Command: CIRCLE — Specify radius")
-                : QStringLiteral(
-                      "Command: CIRCLE — Specify center"));
-        return;
+                return;
     }
 
     finish_line_button_->setText(
@@ -2117,24 +2228,15 @@ void CadWorkbench::syncSketchInteractionUi() {
         *stage == sketch::ArcStage::await_through) {
         operations_placeholder_->setText(
             QStringLiteral("Arc — Specify through point"));
-        command_prompt_->setText(
-            QStringLiteral(
-                "Command: ARC — Specify through point"));
-    } else if (
+            } else if (
         stage &&
         *stage == sketch::ArcStage::await_end) {
         operations_placeholder_->setText(
             QStringLiteral("Arc — Specify end point"));
-        command_prompt_->setText(
-            QStringLiteral(
-                "Command: ARC — Specify end point"));
-    } else {
+            } else {
         operations_placeholder_->setText(
             QStringLiteral("Arc — Specify start point"));
-        command_prompt_->setText(
-            QStringLiteral(
-                "Command: ARC — Specify start point"));
-    }
+            }
 }
 
 void CadWorkbench::syncActionState() {
@@ -2197,12 +2299,13 @@ void CadWorkbench::syncActionState() {
     finish_sketch_button_->setEnabled(
         editing_sketch);
 
-    if (command_line_widget_ != nullptr) {
-        command_line_widget_->setVisible(
-            editing_sketch);
-    }
-
     syncSketchInteractionUi();
+}
+
+void CadWorkbench::notifyCadInputContextChanged() {
+    if (cad_input_context_changed_handler_) {
+        cad_input_context_changed_handler_();
+    }
 }
 
 void CadWorkbench::notifyDocumentStateChanged() {

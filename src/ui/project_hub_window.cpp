@@ -470,6 +470,12 @@ void ProjectHubWindow::buildWorkspacePage() {
                 updateDocumentTab(
                     document_id);
             });
+    cad_workbench_->
+        setCadInputContextChangedHandler(
+            [this] {
+                workspace_shell_->
+                    refreshCadInputPresentation();
+            });
 
     QObject::connect(
         &workspace_shell_->
@@ -858,6 +864,7 @@ navigateToWorkspace() {
         return;
     }
 
+    workspace_shell_->setCadInputEndpoint(nullptr);
     cad_workbench_->deactivateDocument();
 
     navigation_.kind =
@@ -887,12 +894,15 @@ navigateToDocument(
     auto* document_session =
         session->documentSession(
             document_id);
+    workspace_shell_->setCadInputEndpoint(nullptr);
     if (document_session == nullptr ||
         !cad_workbench_->activateDocument(
             document_session,
             session->workspaceRoot())) {
         return false;
     }
+    workspace_shell_->setCadInputEndpoint(
+        cad_workbench_);
 
     navigation_.kind =
         ProjectNavigationKind::document;
@@ -1243,9 +1253,11 @@ void ProjectHubWindow::closeDocument(
     const int closing_index =
         tabIndexFor(document_id);
 
-    // The Workbench holds non-owning pointers into the
-    // DocumentSession. Drop those runtime bindings before
-    // ProjectSession erases the session.
+    // The Workbench/input endpoint hold non-owning runtime bindings.
+    // Detach global input before the owning DocumentSession can go away.
+    if (closing_active) {
+        workspace_shell_->setCadInputEndpoint(nullptr);
+    }
     cad_workbench_->
         forgetDocumentRuntimeState(
             document_id);
@@ -1483,8 +1495,9 @@ requestCloseProject() {
     const auto previous_navigation =
         navigation_;
 
-    // Detach the active Workbench before ProjectHubController
-    // destroys the owning ProjectSession.
+    // Detach global input and the active Workbench before
+    // ProjectHubController destroys the owning ProjectSession.
+    workspace_shell_->setCadInputEndpoint(nullptr);
     cad_workbench_->
         deactivateDocument();
 

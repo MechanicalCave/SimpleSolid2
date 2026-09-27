@@ -1434,7 +1434,51 @@ set(_ss2_part_tests
 )
 set_property(TEST ${_ss2_part_tests} APPEND PROPERTY LABELS "subsystem-part")
 
+add_executable(wb02_cad_input_session_test
+    wb02_cad_input_session_test.cpp
+)
+target_link_libraries(wb02_cad_input_session_test
+    PRIVATE
+        simplesolid2_cad_input
+)
+target_compile_features(wb02_cad_input_session_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb02.cad_input_session
+    COMMAND wb02_cad_input_session_test
+)
+
+add_test(
+    NAME wb02.cad_input_boundaries
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_cad_input_boundaries.cmake
+)
+
+add_executable(wb02_global_cad_input_ui_test
+    wb02_global_cad_input_ui_test.cpp
+)
+target_include_directories(wb02_global_cad_input_ui_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+target_link_libraries(wb02_global_cad_input_ui_test
+    PRIVATE
+        Qt6::Widgets
+        Qt6::Test
+)
+target_compile_features(wb02_global_cad_input_ui_test PRIVATE cxx_std_20)
+add_test(
+    NAME wb02.global_cad_input_ui
+    COMMAND wb02_global_cad_input_ui_test
+)
+set_tests_properties(wb02.global_cad_input_ui PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    TIMEOUT 30
+)
+
+
 set(_ss2_application_tests
+    wb02.cad_input_session
     ph01.project_workspace_metadata
     ph01.project_session
     ph01.recent_project_store
@@ -1473,6 +1517,7 @@ set(_ss2_persistence_tests
 set_property(TEST ${_ss2_persistence_tests} APPEND PROPERTY LABELS "subsystem-persistence")
 
 set(_ss2_core_tests
+    wb02.cad_input_boundaries
     part01.document_primitives
     wb01.builtin_reference
     wb01.viewer_boundaries
@@ -1510,6 +1555,7 @@ set(_ss2_viewer_tests
 set_property(TEST ${_ss2_viewer_tests} APPEND PROPERTY LABELS "subsystem-viewer")
 
 set(_ss2_ui_tests
+    wb02.global_cad_input_ui
     ph02a.project_hub_selection_ux
     ph02b.project_hub_availability_ux
     ph02c.project_creation_dialog
@@ -1541,6 +1587,7 @@ set_property(TEST ${_ss2_native_tests} APPEND PROPERTY LABELS "native")
 
 # Production UI implementation is compiled once in src/simplesolid2_ui and linked here.
 set(_ss2_ui_test_targets
+    wb02_global_cad_input_ui_test
     ph02a_project_hub_selection_ux_test
     ph02b_project_hub_availability_ux_test
     ph02c_project_creation_dialog_test
