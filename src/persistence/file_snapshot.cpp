@@ -80,22 +80,27 @@ private:
 
 std::optional<FileIdentity> fileIdentity(
     HANDLE handle) {
-    FILE_ID_INFO info{};
-    if (!::GetFileInformationByHandleEx(
+    BY_HANDLE_FILE_INFORMATION info{};
+    if (!::GetFileInformationByHandle(
             handle,
-            FileIdInfo,
-            &info,
-            sizeof(info))) {
+            &info)) {
         return std::nullopt;
     }
+
     FileIdentity result;
     result.volume =
         static_cast<std::uint64_t>(
-            info.VolumeSerialNumber);
-    std::memcpy(
-        result.object.data(),
-        info.FileId.Identifier,
-        result.object.size());
+            info.dwVolumeSerialNumber);
+    const std::uint64_t file_index =
+        (static_cast<std::uint64_t>(
+             info.nFileIndexHigh) << 32U) |
+        static_cast<std::uint64_t>(
+            info.nFileIndexLow);
+    for (std::size_t i = 0U; i < 8U; ++i) {
+        result.object[i] =
+            static_cast<std::uint8_t>(
+                file_index >> (i * 8U));
+    }
     return result;
 }
 #endif
