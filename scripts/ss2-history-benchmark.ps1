@@ -30,7 +30,15 @@ $sha = (git -C $root rev-parse HEAD).Trim()
 if ([string]::IsNullOrWhiteSpace($sha)) { throw "Unable to resolve benchmark Git SHA." }
 
 Write-Host "[c2] configure Release benchmark: $sha"
-& (Join-Path $PSScriptRoot "ss2-configure.ps1") -BuildDir $BuildDir
+$configureArgs = @(
+    "-S", $root,
+    "-B", $build,
+    "-DSS2_ENABLE_C2_HISTORY_BENCHMARK=ON"
+)
+if ($env:CMAKE_PREFIX_PATH) {
+    $configureArgs += "-DCMAKE_PREFIX_PATH=$env:CMAKE_PREFIX_PATH"
+}
+& $cmake @configureArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
 & $cmake --build $build --config $Config --target c2_history_benchmark
@@ -42,6 +50,18 @@ $candidates = @(
 )
 $exe = $candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -First 1
 if (-not $exe) { throw "Unable to locate c2_history_benchmark.exe under $build." }
+
+Write-Host "[c2] benchmark self-test"
+& $exe --self-test
+if ($LASTEXITCODE -ne 0) { throw "C2 benchmark self-test failed." }
+
+Write-Host "[c2] benchmark smoke"
+& $exe --entities 100 --depth 5 --scenario all --samples 2 --warmup 1 --git-sha $sha
+if ($LASTEXITCODE -ne 0) { throw "C2 benchmark smoke failed." }
+
+Write-Host "[c2] benchmark invalid-argument rejection"
+& $exe --entities 0 --depth 5 --scenario add --samples 1 --warmup 0 --git-sha $sha
+if ($LASTEXITCODE -eq 0) { throw "C2 benchmark accepted invalid --entities 0." }
 
 $os = $null
 $cpu = $null

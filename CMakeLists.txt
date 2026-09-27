@@ -11,6 +11,14 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 
 enable_testing()
 
+option(
+    SS2_ENABLE_C2_HISTORY_BENCHMARK
+    "Build the C2 semantic history benchmark evidence target"
+    OFF
+)
+
 add_subdirectory(src)
-add_subdirectory(benchmarks)
+if(SS2_ENABLE_C2_HISTORY_BENCHMARK)
+    add_subdirectory(benchmarks)
+endif()
 add_subdirectory(tests)
