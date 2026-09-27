@@ -180,7 +180,7 @@ foreach ($entities in $entitiesValues) {
         try {
             $cell = Get-Content -Raw -LiteralPath $cellFile | ConvertFrom-Json
         } catch {
-            throw "C2 benchmark produced invalid cell JSON for entities=$entities history=$depth: $($_.Exception.Message)"
+            throw "C2 benchmark produced invalid cell JSON for entities=$entities history=${depth}: $($_.Exception.Message)"
         }
         if ($cell.status -ne "completed") { throw "C2 benchmark returned unexpected status '$($cell.status)' for entities=$entities history=$depth." }
         if ($cell.git_sha -ne $sha) { throw "C2 benchmark SHA mismatch for entities=$entities history=$depth." }
