@@ -1,7 +1,8 @@
 # ADR-0013 — Guarded native-file Save with durable file checkpoints
 
-**Status:** PROPOSED  
+**Status:** ACCEPTED  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D2 persistence consistency / ordinary Save conflict semantics  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package B1  

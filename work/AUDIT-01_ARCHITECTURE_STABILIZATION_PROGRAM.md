@@ -67,7 +67,7 @@ Default order is strict:
 | --- | --- | --- | --- |
 | 1 | **A — WB-02 closeout hardening** | context lifetime, Delete precedence, input-capture ownership, real integration evidence | **COMPLETED — 2026-09-27** |
 | 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | **COMPLETED — 2026-09-27** |
-| 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | future bounded Work Contract |
+| 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | **ACTIVE — accepted 2026-09-27** |
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | future bounded Work Contract |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | future bounded Work Contract |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | future bounded Work Contract |
@@ -291,6 +291,15 @@ Future B1 contract must explicitly define:
 Do not claim mtime/size alone proves unchanged content. Do not claim a pre-rename hash is an atomic compare-and-swap against arbitrary external writers.
 
 Tests include two sessions, replaced DocumentId, changed content with similar metadata, missing file, publication failure, normal repeated save/reopen and controlled competing writes.
+
+### B1 activation record
+
+**Owner acceptance:** 2026-09-27  
+**ADR:** ADR-0013 — ACCEPTED  
+**Work Contract:** `work/B1_NATIVE_PART_SAVE_CONFLICT_PROTECTION.md` — ACCEPTED / ACTIVE  
+**Proposal evidence:** Windows PR gate #637 PASS on `ec254ce4510ba5649bf3db80026eeb261dba5b18` with 73/73 tests
+
+The accepted B1 policy is exact native-file checkpoint (DocumentId + byte length + SHA-256 + platform file identity), cooperative per-target guard across check/publish/new-checkpoint, typed missing/replaced/content/busy conflicts, no implicit recreation and no Force Overwrite. Strict cross-process no-lost-update guarantee applies to cooperating SS2 writers only. C1 and later packages remain inactive.
 
 ## 8. Package C1 — remove deep copy of previous history
 

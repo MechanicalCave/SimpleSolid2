@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/B2_STALE_PART_TRANSACTION_PROTECTION.md"
+status: active
+active_work: "work/B1_NATIVE_PART_SAVE_CONFLICT_PROTECTION.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
 program_roadmap_version: "1.0"
@@ -17,11 +17,14 @@ accepted_adrs:
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
   - "adr/ADR-0011-workspace-global-cad-input-routing-and-semantic-requests.md"
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
+  - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - draft a separate bounded B1 file/save conflict protection Work Contract under AUDIT-01
-  - require explicit Owner acceptance of B1 before any file-conflict production mutation
+  - implement native Part file checkpoints carrying DocumentId, exact byte length, SHA-256 and platform file identity
+  - implement cooperating per-target save guard and typed ordinary-Save conflicts
+  - harden Windows temporary publication reservation to exclusive creation
+  - propagate exact load/create/save checkpoint through ProjectSession and DocumentSession
+  - add sequential/concurrent conflict tests, internal + PL/EN Product docs and generated Browser
   - keep C1, C2, D, E1, E2 and F queued by AUDIT-01 but inactive
-  - preserve completed B2 transaction freshness and validated reconstruction as the domain baseline
 
 notes:
   - R0 through R4 are completed.
@@ -194,3 +197,6 @@ notes:
   - part01.part_document_transaction, part01.part_document_store and part01.document_session all passed on the final B2 candidate.
   - B2 has no intended UI/product workflow change; per accepted contract no Owner manual UI test was required.
   - B2 acceptance conditions are satisfied; the closeout candidate now awaits only the work-only CLOSURE gate and merge of PR #79.
+
+  - Owner explicitly accepted ADR-0013 and B1 Native Part Save Conflict Protection on 2026-09-27 after proposal gate #637 PASS on ec254ce4510ba5649bf3db80026eeb261dba5b18 with 73/73 CTest and stable windows-msvc.
+  - B1 is now the only active AUDIT-01 production scope. Accepted guarantee is strict no-lost-update only among cooperating SS2 writers; arbitrary external writers remain outside atomic CAS claims.

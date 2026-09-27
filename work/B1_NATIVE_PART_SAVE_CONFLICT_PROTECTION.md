@@ -1,11 +1,12 @@
 # B1 — Native Part Save Conflict Protection
 
-**Status:** PROPOSED  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D2 persistence/save semantics + bounded D1 implementation  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package B1  
-**Architecture:** ADR-0013 (PROPOSED)  
+**Architecture:** ADR-0013 (ACCEPTED)  
 **Baseline:** `main` at `069f913383a0c813f9a8e9a664aef8863360dc44` after completed B2
 
 ## 1. Goal
