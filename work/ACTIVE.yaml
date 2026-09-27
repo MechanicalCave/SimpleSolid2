@@ -186,3 +186,7 @@ notes:
 
   - Owner explicitly accepted ADR-0012 and B2 Stale Part Transaction Protection on 2026-09-27 after proposal gate #628 PASS on b722ee93ec4aac9e2593cc58b5f6c0b7fed4b784.
   - B2 is now the only active AUDIT-01 production scope. Accepted policy: optimistic base revision, stale-before-no-op, one-shot transaction lifecycle, Part-domain full-state validation and validated reconstruction.
+
+  - B2 runtime implementation checkpoint e39569c440ca41e24eb9330e3258b259bc7f0dfa passed Windows FULL #631 with Build, selector checks, stable windows-msvc and 73/73 CTest; part01.part_document_transaction, part01.part_document_store and part01.document_session passed.
+  - B2 internal as-built docs and generated Browser were added on cd0b68250d32598aa3c930c457aacd354e30d61a; docs gate #632 passed regeneration/freshness verification.
+  - Final B2 completion still requires a shared exact-head Windows FULL on the documented candidate, then governance closeout/CLOSURE and merge. No Owner manual UI test is required unless new user-visible behavior appears.

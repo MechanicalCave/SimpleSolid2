@@ -241,6 +241,12 @@ Tests must cover T1/T2 overlap, rollback, repeated commit, no-op, revision exhau
 
 The accepted B2 policy is optimistic base-revision binding, stale-before-no-op, one-shot transaction lifetime, owning Part-domain complete-state validation and validated reconstruction. B1 and later packages remain inactive.
 
+### B2 implementation checkpoint
+
+Runtime implementation is present and verified by Windows FULL #631 on `e39569c440ca41e24eb9330e3258b259bc7f0dfa` with 73/73 tests. Internal docs and generated Browser passed docs gate #632 on `cd0b68250d32598aa3c930c457aacd354e30d61a`.
+
+B2 remains ACTIVE until a final exact-head FULL is green on the documented candidate and closeout/CLOSURE completes. B1 remains inactive.
+
 ## 7. Package B1 — file/save conflict protection
 
 This package follows B2.

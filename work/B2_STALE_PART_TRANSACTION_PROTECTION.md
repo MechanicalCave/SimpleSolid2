@@ -358,3 +358,28 @@ B2 completes only after:
 - merge to main.
 
 After B2 completion, AUDIT-01 requires B1 as the next separately contracted package.
+
+
+## 17. Implementation checkpoint
+
+**Runtime checkpoint:** `e39569c440ca41e24eb9330e3258b259bc7f0dfa`  
+**Windows FULL:** #631 — PASS — 73/73  
+**Documentation checkpoint:** `cd0b68250d32598aa3c930c457aacd354e30d61a`  
+**Windows docs:** #632 — PASS
+
+Implemented B2 behavior:
+
+- `PartDocumentTransaction` captures immutable base `DocumentRevision`;
+- stale base revision returns typed `stale_transaction` before validation/no-op/mutation;
+- every commit attempt is terminal and later commit returns `inactive_transaction`;
+- complete Part authored state is validated at the owning domain boundary;
+- invalid complete state returns typed `invalid_state` with no mutation/revision change;
+- `PartDocument::restore` now returns validated structured reconstruction and cannot publish invalid Part state;
+- `PartDocumentStore::load` maps reconstruction rejection to existing `malformed_document`;
+- current no-op, revision increment, max-revision, Undo/Redo and DocumentSession behavior remain green.
+
+Automated evidence in #631 includes overlap T1/T2, stale-before-no-op, one-shot success/no-op/stale/invalid/exhausted cases, rollback, max revision and validated reconstruction through `part01.part_document_transaction`, plus full persistence and DocumentSession regressions.
+
+Internal docs and the generated Browser are current and passed #632.
+
+This checkpoint is not completion. The final documented candidate still requires exact-head Windows FULL before B2 may move to COMPLETED.
