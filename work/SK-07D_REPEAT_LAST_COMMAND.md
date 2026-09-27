@@ -1,7 +1,8 @@
 # SK-07D — Repeat Last Command
 
-**Status:** PROPOSED — OWNER REVIEW  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D2 Sketch command-grammar semantics + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -269,11 +270,9 @@ SK-07D does not authorize:
 
 ## 16. Activation and completion boundary
 
-SK-07D is a proposal only.
+SK-07D was explicitly Owner-accepted on 2026-09-27 and is active within this bounded scope.
 
-No production implementation is authorized until explicit Owner acceptance.
-
-If accepted as written, completion requires:
+Completion requires:
 
 - one remembered repeatable command identity for the active Sketch edit session;
 - repeatable set limited to Line/Circle/Arc/Move/Copy/Rotate/Scale/Mirror;
