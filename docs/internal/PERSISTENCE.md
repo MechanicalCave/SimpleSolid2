@@ -71,13 +71,27 @@ The former line-based `SS2PART` bootstrap format remains unsupported legacy test
 
 The complete native package is built before publication.
 
-New Part creation writes staged bytes and publishes only if the target path does not already exist.
+New Part creation reserves/publishes through create-new semantics and fails if the target already exists. Temporary publication files are reserved with exclusive-create semantics rather than exists-check + truncating open.
 
-Save writes a temporary sibling file and replaces the target only after the complete package has been produced. On Windows, replacement uses an OS replace operation rather than delete-then-rename.
+A native Part load reads one bounded file snapshot and derives both the parsed document and `PartFileCheckpoint` from that same snapshot. The checkpoint contains expected DocumentId, exact byte length, SHA-256 digest and platform file identity.
 
-The DocumentSession advances its save checkpoint only after successful persistence. If package construction or replacement fails, the in-memory authored state remains dirty and the previous durable Part remains authoritative.
+Ordinary Save is conditional. A deterministic per-target cooperative guard is held across:
 
-The initial implementation uses whole-file replacement; it does not update ZIP entries in place.
+```text
+inspect current target
+→ compare with session checkpoint
+→ build/write temporary replacement
+→ atomically publish replacement
+→ capture checkpoint for the newly published target
+```
+
+Save fails closed when another cooperating SS2 Save owns the guard, the target is missing, the durable DocumentId changed, the underlying file object was replaced, or exact file bytes changed. Conflict leaves the target untouched by that Save attempt, leaves authored state/revision/history unchanged and leaves both session checkpoints unchanged.
+
+Successful Save returns the checkpoint of the newly published file; only then does `DocumentSession` advance its saved authored-state checkpoint and native-file checkpoint.
+
+Whole-file replacement remains the publication model; ZIP entries are not updated in place. Atomic replacement, stale-file conflict detection and crash/power-loss durability are separate guarantees.
+
+The strict cross-process no-lost-update guarantee applies to cooperating SS2 writers that honor the guard. Changes by unrelated external writers that are visible before validation are detected, but the system does not claim OS-level compare-and-swap against an arbitrary process racing after validation.
 
 <!-- section-id: internal.persistence.recent -->
 ## Recent Projects catalog
@@ -108,7 +122,7 @@ The following state is not serialized as Part authored state:
 
 Persistent user visibility of built-in Origin references is intentionally **not** in this runtime-only list; it is authored Part state.
 
-The native package reserves `derived/*` for optional disposable assets. Unknown safe derived entries may be ignored. Deleting derived content must not destroy authored design intent. PERSIST-01 does not generate thumbnails or another derived asset.
+The native package reserves `derived/*` for optional disposable assets. Unknown safe derived entries may be ignored. Deleting derived content must not destroy authored design intent. The current implementation does not generate thumbnails or another derived asset.
 
 Recent availability is also derived at runtime.
 
@@ -123,7 +137,7 @@ Schema-v4 Sketch loading rejects malformed/non-canonical identity strings, dupli
 
 Schema-v3 validation remains intact for backward read compatibility.
 
-After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid Sketch support/placement relationships or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family. B2 adds no serialized field and does not change the native schema version.
+After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid Sketch support/placement relationships or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family. This validation adds no serialized field and does not change the native schema version.
 
 Container v1 rejects unsafe or ambiguous input, including unsupported container versions, ZIP64, encrypted/unsupported entries, duplicate entry names, unsafe entry paths, missing mandatory entries, oversized content, invalid mandatory JSON and unsupported Part domain schemas.
 
@@ -134,6 +148,6 @@ A `.ss2part` whose manifest declares another Document kind fails closed. `docume
 
 The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch constraints/dimensions/solver state, modeled solid geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
 
-The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented by PERSIST-01.
+The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented.
 
 Implementation dependencies are vendored and pinned: miniz 3.1.2 for ZIP mechanics and nlohmann/json 3.12.0 for JSON. Normal builds do not download them, and their types do not cross CAD-domain public semantic APIs.

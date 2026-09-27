@@ -26,6 +26,7 @@ PartLoadResult loadFailure(
         persistence::AtomicWriteErrorCode::none) {
     return PartLoadResult{
         std::nullopt,
+        std::nullopt,
         PartStoreDiagnostic{
             code,
             atomic_code,
@@ -45,6 +46,7 @@ PartSaveResult saveFailure(
     persistence::AtomicWriteErrorCode atomic_code =
         persistence::AtomicWriteErrorCode::none) {
     return PartSaveResult{
+        std::nullopt,
         PartStoreDiagnostic{
             code,
             atomic_code,
@@ -776,17 +778,10 @@ PartStoreErrorCode atomicErrorToStore(
     return PartStoreErrorCode::io_failure;
 }
 
-PartSaveResult write(
+std::optional<std::string> buildPartBytes(
     const std::filesystem::path& path,
     const PartDocument& document,
-    persistence::AtomicWriteMode mode) {
-    if (!PartDocumentStore::hasNativeExtension(path)) {
-        return saveFailure(
-            PartStoreErrorCode::wrong_extension,
-            "Native Part path must use the .ss2part extension",
-            path);
-    }
-
+    PartSaveResult& failure_result) {
     const auto authored =
         serializeAuthored(document);
     const auto built =
@@ -799,34 +794,72 @@ PartSaveResult write(
                     current_schema_version,
             },
             authored);
-
     if (!built.ok()) {
-        return saveFailure(
-            PartStoreErrorCode::container_failure,
-            built.diagnostic.message,
-            path,
-            built.diagnostic.code);
+        failure_result =
+            saveFailure(
+                PartStoreErrorCode::container_failure,
+                built.diagnostic.message,
+                path,
+                built.diagnostic.code);
+        return std::nullopt;
     }
-
-    const auto written =
-        persistence::writeFileAtomically(
-            path,
-            *built.bytes,
-            mode);
-    if (!written.ok()) {
-        return saveFailure(
-            atomicErrorToStore(
-                written.diagnostic.code),
-            written.diagnostic.message,
-            written.diagnostic.path,
-            persistence::NativeContainerErrorCode::none,
-            written.diagnostic.code);
-    }
-
-    return PartSaveResult{};
+    return std::move(*built.bytes);
 }
 
+PartFileCheckpoint makeCheckpoint(
+    const core::DocumentId& id,
+    std::string_view bytes,
+    const persistence::FileIdentity& identity) {
+    return PartFileCheckpoint{
+        id,
+        static_cast<std::uint64_t>(
+            bytes.size()),
+        persistence::sha256(bytes),
+        identity,
+    };
+}
+
+PartStoreErrorCode snapshotErrorToStore(
+    persistence::FileSnapshotErrorCode code) noexcept {
+    using persistence::FileSnapshotErrorCode;
+    if (code == FileSnapshotErrorCode::not_found) {
+        return PartStoreErrorCode::
+            save_conflict_target_missing;
+    }
+    if (code == FileSnapshotErrorCode::not_regular) {
+        return PartStoreErrorCode::io_failure;
+    }
+    if (code == FileSnapshotErrorCode::too_large) {
+        return PartStoreErrorCode::io_failure;
+    }
+    return PartStoreErrorCode::io_failure;
+}
+
+bool sameContent(
+    const persistence::FileSnapshot& snapshot,
+    const PartFileCheckpoint& checkpoint) noexcept {
+    return snapshot.bytes.size() ==
+               checkpoint.byte_length &&
+           snapshot.digest ==
+               checkpoint.digest;
+}
+
+
 } // namespace
+
+bool isSaveConflict(
+    PartStoreErrorCode code) noexcept {
+    switch (code) {
+    case PartStoreErrorCode::save_conflict_busy:
+    case PartStoreErrorCode::save_conflict_target_missing:
+    case PartStoreErrorCode::save_conflict_document_identity_changed:
+    case PartStoreErrorCode::save_conflict_file_replaced:
+    case PartStoreErrorCode::save_conflict_content_changed:
+        return true;
+    default:
+        return false;
+    }
+}
 
 bool PartDocumentStore::hasNativeExtension(
     const std::filesystem::path& path) noexcept {
@@ -851,8 +884,25 @@ PartLoadResult PartDocumentStore::load(
             path);
     }
 
+    const auto snapshot =
+        persistence::readFileSnapshot(
+            path,
+            persistence::
+                maximum_native_document_container_bytes);
+    if (!snapshot.ok()) {
+        return loadFailure(
+            snapshot.diagnostic.code ==
+                    persistence::
+                        FileSnapshotErrorCode::not_found
+                ? PartStoreErrorCode::not_found
+                : PartStoreErrorCode::io_failure,
+            snapshot.diagnostic.message,
+            snapshot.diagnostic.path);
+    }
+
     auto container =
-        persistence::readNativeDocumentContainer(
+        persistence::parseNativeDocumentContainer(
+            snapshot.snapshot->bytes,
             path);
     if (!container.ok()) {
         return loadFailure(
@@ -918,8 +968,15 @@ PartLoadResult PartDocumentStore::load(
             path);
     }
 
+    const auto checkpoint =
+        makeCheckpoint(
+            restored.document->documentId(),
+            snapshot.snapshot->bytes,
+            snapshot.snapshot->identity);
+
     return PartLoadResult{
         std::move(restored.document),
+        checkpoint,
         PartStoreDiagnostic{},
     };
 }
@@ -927,19 +984,169 @@ PartLoadResult PartDocumentStore::load(
 PartSaveResult PartDocumentStore::createNew(
     const std::filesystem::path& path,
     const PartDocument& document) const {
-    return write(
-        path,
-        document,
-        persistence::AtomicWriteMode::create_new);
+    if (!hasNativeExtension(path)) {
+        return saveFailure(
+            PartStoreErrorCode::wrong_extension,
+            "Native Part path must use the .ss2part extension",
+            path);
+    }
+
+    PartSaveResult build_failure;
+    const auto bytes =
+        buildPartBytes(
+            path,
+            document,
+            build_failure);
+    if (!bytes) return build_failure;
+
+    const auto written =
+        persistence::writeFileAtomically(
+            path,
+            *bytes,
+            persistence::AtomicWriteMode::
+                create_new);
+    if (!written.ok()) {
+        return saveFailure(
+            atomicErrorToStore(
+                written.diagnostic.code),
+            written.diagnostic.message,
+            written.diagnostic.path,
+            persistence::NativeContainerErrorCode::none,
+            written.diagnostic.code);
+    }
+
+    return PartSaveResult{
+        makeCheckpoint(
+            document.documentId(),
+            *bytes,
+            *written.published_identity),
+        PartStoreDiagnostic{},
+    };
 }
 
 PartSaveResult PartDocumentStore::save(
     const std::filesystem::path& path,
-    const PartDocument& document) const {
-    return write(
-        path,
-        document,
-        persistence::AtomicWriteMode::replace);
+    const PartDocument& document,
+    const PartFileCheckpoint& expected_checkpoint) const {
+    if (!hasNativeExtension(path)) {
+        return saveFailure(
+            PartStoreErrorCode::wrong_extension,
+            "Native Part path must use the .ss2part extension",
+            path);
+    }
+
+    const auto guard =
+        persistence::acquireCooperativeSaveGuard(
+            path);
+    if (!guard.ok()) {
+        return saveFailure(
+            guard.diagnostic.code ==
+                    persistence::
+                        SaveGuardErrorCode::busy
+                ? PartStoreErrorCode::
+                      save_conflict_busy
+                : PartStoreErrorCode::
+                      io_failure,
+            guard.diagnostic.message,
+            guard.diagnostic.path);
+    }
+
+    const auto current =
+        persistence::readFileSnapshot(
+            path,
+            persistence::
+                maximum_native_document_container_bytes);
+    if (!current.ok()) {
+        return saveFailure(
+            snapshotErrorToStore(
+                current.diagnostic.code),
+            current.diagnostic.message,
+            current.diagnostic.path);
+    }
+
+    const bool content_matches =
+        sameContent(
+            *current.snapshot,
+            expected_checkpoint);
+    if (!content_matches) {
+        const auto parsed =
+            persistence::
+                parseNativeDocumentContainer(
+                    current.snapshot->bytes,
+                    path);
+        if (parsed.ok()) {
+            const auto current_id =
+                core::DocumentId::parse(
+                    parsed.package->
+                        descriptor.document_id);
+            if (current_id &&
+                *current_id !=
+                    expected_checkpoint.document_id) {
+                return saveFailure(
+                    PartStoreErrorCode::
+                        save_conflict_document_identity_changed,
+                    "Native Part DocumentId changed since load/save checkpoint",
+                    path);
+            }
+        }
+    }
+
+    if (current.snapshot->identity !=
+        expected_checkpoint.file_identity) {
+        return saveFailure(
+            PartStoreErrorCode::
+                save_conflict_file_replaced,
+            "Native Part file object was replaced since load/save checkpoint",
+            path);
+    }
+
+    if (!content_matches) {
+        return saveFailure(
+            PartStoreErrorCode::
+                save_conflict_content_changed,
+            "Native Part file content changed since load/save checkpoint",
+            path);
+    }
+
+    if (document.documentId() !=
+        expected_checkpoint.document_id) {
+        return saveFailure(
+            PartStoreErrorCode::
+                save_conflict_document_identity_changed,
+            "In-memory Part identity does not match Save checkpoint",
+            path);
+    }
+
+    PartSaveResult build_failure;
+    const auto bytes =
+        buildPartBytes(
+            path,
+            document,
+            build_failure);
+    if (!bytes) return build_failure;
+
+    const auto written =
+        persistence::writeFileAtomically(
+            path,
+            *bytes,
+            persistence::AtomicWriteMode::replace);
+    if (!written.ok()) {
+        return saveFailure(
+            atomicErrorToStore(
+                written.diagnostic.code),
+            written.diagnostic.message,
+            written.diagnostic.path,
+            persistence::NativeContainerErrorCode::none,
+            written.diagnostic.code);
+    }
+
+    return PartSaveResult{
+        makeCheckpoint(
+            document.documentId(),
+            *bytes,
+            *written.published_identity),
+        PartStoreDiagnostic{},
+    };
 }
 
 } // namespace simplesolid2::part

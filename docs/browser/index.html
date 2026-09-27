@@ -120,9 +120,9 @@ The current discovery backend provides Part candidates only. The dialog is docum
 
 The Workspace location flow rejects targets outside the current Workspace, rejects existing target files, and keeps private `.simplesolid` metadata outside the normal Document location tree.
 
-The active DocumentSession owns runtime Undo/Redo history and the save checkpoint. Editing Number, Title, Description, Engineering Revision, persistent Origin visibility or creating a Part-hosted Sketch goes through semantic commands and PartDocument transactions.
+The active DocumentSession owns runtime Undo/Redo history, the saved-authored-state checkpoint used by `needsSave()`, and — for a persisted/opened native Part — the exact native-file checkpoint used by conditional Save. Editing Number, Title, Description, Engineering Revision, persistent Origin visibility or Part-hosted Sketch geometry goes through semantic commands and PartDocument transactions.
 
-SK-01A places the Part `Sketch` launcher in the editor toolbar above the 3D Viewport. Creation validates a selected XY/XZ/YZ built-in Origin plane, creates one durable empty Sketch and enters a runtime edit context in the same 3D Viewport. Operations is contextual: support-pick may show Cancel guidance and active Sketch edit shows `Finish Sketch`. An existing Sketch can re-enter the same edit context by Tree double-click or `Edit Sketch` context action without authored mutation.
+The Part `Sketch` launcher lives in the editor toolbar above the 3D Viewport. Creation validates a selected XY/XZ/YZ built-in Origin plane, creates one durable Sketch and enters its runtime edit context in the same 3D Viewport. Operations is contextual: support-pick may show Cancel guidance and active Sketch edit shows `Finish Sketch`. An existing Sketch can re-enter the same edit context by Tree double-click or `Edit Sketch` context action without authored mutation.
 
 Closing and reopening a Part destroys runtime Undo/Redo and Sketch edit context while preserving saved authored state, including SketchId/support/placement/visibility, and DocumentId on disk.
 
@@ -156,7 +156,7 @@ Closing a dirty Part prompts for `Save`, `Discard` or `Cancel`.
 
 Workbench Tree/Viewer controllers hold non-owning runtime pointers to the active DocumentSession. Project Workspace Shell coordinates lifecycle ordering: the Part Workbench is detached before ProjectSession erases an active DocumentSession, and is detached/reset before the ProjectSession itself is destroyed.
 
-Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure keeps the Project open.
+Closing the Project or application with any dirty Part prompts for `Save All`, `Discard` or `Cancel`. Save failure — including a native-file conflict because the target changed, was replaced, disappeared or is guarded by another cooperating SS2 Save — keeps the Project open and preserves the in-memory authored state.
 
 After application restart, Recent Projects restores the Project location. Opening the Project creates a fresh ProjectSession, rebuilds document discovery and can reopen the same durable DocumentId with the same saved authored properties, Origin visibility and hosted Sketch records.
 
@@ -247,11 +247,11 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The repository currently registers **73 CTest tests**.
+The repository currently registers **74 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
-The R7 transform/COPY regressions include:
+The current transform/COPY regressions include:
 
 - `sk07a.transform_core` and `sk07a.move_controller` — provider-independent mixed translation plus selection-first/command-first MOVE;
 - `sk07b.transform_core`, `sk07b.common_transform_state` and `sk07b.transform_controller` — Rotate/positive uniform Scale/Mirror core, interaction and controller semantics;
@@ -261,11 +261,11 @@ The R7 transform/COPY regressions include:
 - `sk07d.repeat_last_command_controller` — one runtime repeat target, repeatable command recording, current-selection reuse, fresh COPY restart, non-overwrite by Select/grip/history/Delete and reset across Sketch edit sessions.
 - `sk07e.space_cycle_edit_mode` — supported grip-role defaults/cycles, frozen selection/primary preservation, owner-vs-selection interaction-start geometry and non-compounding Reshape↔Move preview.
 
-The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence, active-grip Space CycleEditMode precedence and text-focus keyboard behavior. It also contains the AUDIT-01 Package-A real-Workbench checks: pointer movement preserves a token inside one PointRequest, replacing the request or finishing Sketch clears stale input without authored mutation, and non-empty-buffer Delete cannot fall through to geometry deletion. The existing `sk05a.part_sketch_direct_manipulation` controller regression additionally verifies preview cardinality, no-mutation cycling and atomic commit after Reshape↔Move switching.
+The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence, active-grip Space CycleEditMode precedence and text-focus keyboard behavior. It also checks that pointer movement preserves a token inside one PointRequest, replacing the request or finishing Sketch clears stale input without authored mutation, and non-empty-buffer Delete cannot fall through to geometry deletion. The existing `sk05a.part_sketch_direct_manipulation` controller regression additionally verifies preview cardinality, no-mutation cycling and atomic commit after Reshape↔Move switching.
 
-WB-02 adds `wb02.cad_input_session`, `wb02.cad_input_boundaries` and `wb02.global_cad_input_ui`. Package-A coverage binds tokens to endpoint semantic generations and verifies fail-closed stale submission, foreign-window/popup ownership, two-visible-shell isolation, ordinary text-editor ownership, application-shortcut preservation and fixed Command Line geometry/diagnostic behavior.
+`wb02.cad_input_session`, `wb02.cad_input_boundaries` and `wb02.global_cad_input_ui` cover provider-neutral CAD-input transport, dependency boundaries, semantic-generation lifetime, foreign-window/popup ownership, two-visible-shell isolation, ordinary text-editor ownership, application-shortcut preservation and fixed Command Line geometry/diagnostic behavior.
 
-The completed SK-07D exact-head baseline is Windows FULL #567 on `ef84954ddb22a4263d31c5a540fe7d96304e33e2`, where Build and **67/67** unfiltered CTest tests passed. SK-07E adds one registered semantic state regression; its final exact-head Windows FULL result is recorded only at Work Contract closeout.
+`b1.save_conflict` covers exact native-file checkpoints, sequential two-session lost-update prevention, cooperative Save guard ownership, content-change/replacement/DocumentId/missing-target conflicts and repeated successful Save.
 
 Repository documentation validation runs outside CTest through `ss2 verify`. Tests must not be weakened to obtain a pass.
 
@@ -356,15 +356,11 @@ The Product Browser must be regenerated with `.\ss2.ps1 docs` whenever canonical
 <!-- section-id: internal.cad-workbench-viewer.shell -->
 ## Shared Workbench shell
 
-WB-01 implements one reusable `CadWorkbenchShell` containing Document Tree, an editor tool-launch strip above the Editor Surface, Properties, contextual Operations and Status/Diagnostics.
-
-WS-01 moves Project-level Document Tabs out of `CadWorkbenchShell` and into Project Workspace Shell. The Workbench shell therefore represents only one active CAD Document editor.
+`CadWorkbenchShell` is the reusable one-document editor layout containing Document Tree, an editor tool-launch strip above the Editor Surface, Properties, contextual Operations and Status/Diagnostics. Project-level Document Tabs live outside it in `ProjectWorkspaceShell`, so the Workbench shell represents only one active CAD Document editor.
 
 The shell owns layout only. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
 
-WB-02 moves Command Line ownership one level above the active Document Workbench. `ProjectWorkspaceShell` owns one visible global Command Line surface plus the Qt keyboard/focus adapter. A provider-neutral `CadInputSession` owns only the runtime text buffer, active generic endpoint and submission transport. The active Workbench/tool still owns semantic interpretation. `CadWorkbench` is currently the first endpoint and adapts the existing Sketch interaction state; Project Workspace does not know Sketch commands or `PointRequest`.
-
-WB-01A stabilized the existing shell/Viewer interaction without adding a new CAD domain.
+`ProjectWorkspaceShell` owns one visible global Command Line surface plus the Qt keyboard/focus adapter. A provider-neutral `CadInputSession` owns only the runtime text buffer, active generic endpoint and submission transport. The active Workbench/tool owns semantic interpretation. `CadWorkbench` is currently the Part endpoint and adapts the Sketch interaction state; Project Workspace does not know Sketch commands or `PointRequest`.
 
 <!-- section-id: internal.cad-workbench-viewer.active-document -->
 ## Active document context
@@ -377,7 +373,7 @@ Project-level tab changes ask the host to bind a different open DocumentSession.
 
 Camera state is stored in Workbench runtime state keyed by DocumentId so Document → Workspace → Document and inter-Document switching can restore the view while the Project remains open. Project close resets that runtime state.
 
-SK-01A/WS-01 require detach-before-destroy ordering: Tree/Viewport controllers are disconnected from the active DocumentSession before ProjectSession erases it. This prevents runtime cleanup from dereferencing a destroyed session during Document or Project close.
+Detach-before-destroy ordering is mandatory: Tree/Viewport controllers are disconnected from the active DocumentSession before ProjectSession erases it. This prevents runtime cleanup from dereferencing a destroyed session during Document or Project close.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
 ## Origin and reference scene
@@ -388,7 +384,7 @@ The reference grid is a Viewer presentation primitive. It is not a Part semantic
 
 Persistent Origin visibility comes from PartDocument authored presentation state. Hidden references still exist semantically and remain present in the Tree.
 
-WB-01A scene replacement clears native detected/selected state before removing provider presentation objects. A failed native replacement is contained at the provider boundary and leaves provider presentation state coherent instead of propagating a process-level failure.
+Scene replacement clears native detected/selected state before removing provider presentation objects. A failed native replacement is contained at the provider boundary and leaves provider presentation state coherent instead of propagating a process-level failure.
 
 <!-- section-id: internal.cad-workbench-viewer.selection -->
 ## Selection authority and input grammar
@@ -458,9 +454,9 @@ Modify
 
 The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit the existing command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
 
-WB-02 makes that surface keyboard-first. With a normal CAD surface such as the viewport focused, printable unmodified text is appended to the same runtime buffer and mirrored immediately in Command Line without transferring Qt focus. Clicking Command Line remains an equivalent adapter to the same buffer. Real text editors, editable properties, modal dialogs and application shortcuts keep their own keyboard ownership.
+The Command Line is keyboard-first. With a normal CAD surface such as the viewport focused, printable unmodified text is appended to the same runtime buffer and mirrored immediately in Command Line without transferring Qt focus. Clicking Command Line remains an equivalent adapter to the same buffer. Real text editors, editable properties, modal dialogs and application shortcuts keep their own keyboard ownership.
 
-AUDIT-01 Package A hardens that routing boundary. Each live token is bound to an opaque `CadInputContextGeneration` supplied by the active semantic endpoint. The Sketch adapter advances that generation when the owning semantic context/request is replaced — for example tool/stage/base-request replacement, active-grip edit-mode replacement, authored revision change, entering/leaving a Sketch or switching the active endpoint. The live buffer and diagnostic are cleared when the observed generation changes. Pointer-direction movement inside the same PointRequest does not advance the semantic context and therefore does not clear a partially entered value. On submit, the generation that owned the token is passed back to the endpoint and is validated before token interpretation or any domain effect.
+Each live token is bound to an opaque `CadInputContextGeneration` supplied by the active semantic endpoint. The Sketch adapter advances that generation when the owning semantic context/request is replaced — for example tool/stage/base-request replacement, active-grip edit-mode replacement, authored revision change, entering/leaving a Sketch or switching the active endpoint. The live buffer and diagnostic are cleared when the observed generation changes. Pointer-direction movement inside the same PointRequest does not advance the semantic context and therefore does not clear a partially entered value. On submit, the generation that owned the token is passed back to the endpoint and is validated before token interpretation or any domain effect.
 
 The QApplication-level event filter is global only as a transport hook; capture authority is Workspace-local. Printable CAD input is accepted only when the active top-level window is the owning Workspace, the focus and key target belong to its active Document Workbench, no popup/menu or modal surface owns the keyboard, the focus is not a real text editor, and an active CAD endpoint exists. A foreign non-modal window or another visible Workspace therefore cannot feed the background buffer.
 
@@ -493,9 +489,9 @@ Mirror uses first axis point → second axis point. The two points must be disti
 
 Pointer movement updates runtime-only preview from the interaction-start geometry snapshot. LMB at the final point stage or Enter commits the current valid transform/placement.
 
-SK-07F adds Direct Distance to point stages that have an established semantic base: Line next point, grip Reshape/Move, normal MOVE destination and normal COPY placement. The user establishes a free pointer direction, types a bare non-negative distance in Command Line and presses Return. The shared resolver computes `base + normalize(pointer - base) * distance`; the resulting point then enters the same operation path as a clicked point. `.` is always accepted as decimal separator and the current UI-locale decimal separator is accepted as well. Missing/zero pointer direction, malformed text or non-finite values fail closed.
+Direct Distance is available at point stages that have an established semantic base: Line next point, grip Reshape/Move, normal MOVE destination and normal COPY placement. The user establishes a free pointer direction, types a bare non-negative distance in Command Line and presses Return. The shared resolver computes `base + normalize(pointer - base) * distance`; the resulting point then enters the same operation path as a clicked point. `.` is always accepted as decimal separator and the current UI-locale decimal separator is accepted as well. Missing/zero pointer direction, malformed text or non-finite values fail closed.
 
-This does not add numeric Rotate angle, Scale factor, Cartesian/polar coordinate entry, unit expressions, Dynamic Input, Ortho/Polar or snapping. WB-02 changes only transport and focus ownership: viewport printable text may now feed the workspace CAD input buffer, while the active semantic request/tool remains the only authority that can interpret or accept the submitted token.
+Numeric Rotate angle, Scale factor, Cartesian/polar coordinate entry, unit expressions, Dynamic Input, Ortho/Polar and snapping are not implemented. Viewport printable text may feed the workspace CAD input buffer, while the active semantic request/tool remains the only authority that can interpret or accept the submitted token.
 
 Non-COPY transforms preserve existing EntityIds. COPY allocates fresh identities only at accepted placement commit; preview and cancelled/zero placements consume none. Save/Close/Reopen uses unchanged Part schema v4 and persists `next_entity_id` together with authored Sketch geometry.
 
@@ -636,7 +632,7 @@ Camera, projection, pan/orbit/zoom, active selection and primary selection are r
 
 User-authored visibility of built-in Origin references is different: it is persistent presentation semantics stored by PartDocument, changed through DocumentSession commands, Undo/Redo-able and saved in the native Part file.
 
-WB-01A hardened the native Viewer so scene replacement clears provider-native detection/selection state before presentation objects are removed and recoverable provider exceptions are contained at the concrete Viewer boundary.
+The native Viewer clears provider-native detection/selection state before presentation objects are removed, and recoverable provider exceptions are contained at the concrete Viewer boundary.
 
 <!-- section-id: internal.overview.documentation -->
 ## Documentation system
@@ -692,32 +688,26 @@ Qt / caller
 → atomic domain commit
 ```
 
-Current commands include common Document Properties, batch built-in reference visibility, `CreatePartSketchCommand`, `AddSketchLineCommand`, `EraseSketchEntityCommand` and atomic `EraseSketchEntitiesCommand`.
+Current commands cover common Document Properties, built-in reference visibility, Sketch creation, mixed Line/Circle/Arc creation and update, mixed deletion, common transforms and duplication. Durable mutation remains semantic-command driven; UI/Viewer presentation identity is never mutation authority.
 
-Sketch creation revalidates that support is XY/XZ/YZ Origin plane, derives its initial placement, allocates a stable SketchId and commits the new hosted Sketch as one transaction/Undo entry. Add Line targets `SketchId` plus Start/End and returns the allocated model-local `EntityId`. Single Erase targets `SketchId + EntityId`. Batch Erase targets one SketchId plus a non-empty EntityId set and validates the entire set before mutation; invalid, duplicate, stale or unknown identities reject the whole command with no partial erase.
+Each `PartDocumentTransaction` captures the technical `DocumentRevision` from which its staged full-state snapshot was created. Commit is authorized only when that base revision still equals the owning `PartDocument` revision. A mismatch returns typed `stale_transaction` before validation, no-op comparison or authored mutation, so an older full-state transaction cannot overwrite a newer accepted mutation.
 
-Each successful Add or single Erase is one Part transaction, one history entry and one revision increment. `EraseSketchEntitiesCommand` validates the complete non-empty EntityId set before mutation; invalid, duplicate, stale or unknown targets fail without partial erase. A successful batch, whether one entity or many, is one Part transaction, one history entry and one revision increment. Undo restores every deleted entity with its original EntityId and geometry; Redo removes the same authored set again. A session-local cursor table keyed by SketchId preserves the maximum observed EntityId allocation cursor even when history temporarily rewinds geometry or removes/recreates the Sketch through Undo/Redo.
+Part transactions are one-shot. The first commit attempt is terminal whether it succeeds, is a no-op, or fails as stale, invalid-state or revision-exhausted; a later commit returns `inactive_transaction`. Rollback is terminal and idempotent. A fresh no-op creates neither a revision increment nor a history entry.
 
-A multi-selection Show/Hide is one semantic command, one successful revision increment and one Undo entry.
+The Part domain validates the complete staged `PartAuthoredState` at commit: hosted Sketch support and placement must be valid and match, and hosted SketchId values must be unique. Invalid full-state replacement returns typed `invalid_state` without changing authored state or revision. The same validator protects `PartDocument::restore`, which returns a structured validated reconstruction result rather than constructing an invalid live document.
 
-A no-op creates neither a revision increment nor an Undo entry. A rejected/failed transaction leaves authored state and existing history unchanged.
+`DocumentSession::verifyRevision()` remains a second command/history consistency guard; the owning Part transaction is the domain authority for stale-state rejection.
 
-AUDIT-01 B2 binds each `PartDocumentTransaction` to the technical `DocumentRevision` from which its staged full-state snapshot was created. Commit is authorized only when that base revision still equals the owning `PartDocument` revision. A mismatch returns typed `stale_transaction` before validation, no-op comparison or authored mutation, so an older full-state transaction cannot silently overwrite a newer accepted mutation.
-
-Part transactions are one-shot. The first commit attempt is terminal whether it succeeds, is a no-op, or fails as stale, invalid-state or revision-exhausted; a later commit returns `inactive_transaction`. Rollback is terminal and idempotent. Fresh current-revision no-op semantics remain unchanged.
-
-The Part domain validates the complete staged `PartAuthoredState` at commit: hosted Sketch support and placement must be valid and match, and hosted SketchId values must be unique. Invalid full-state replacement returns typed `invalid_state` without changing authored state or revision. The same validator protects `PartDocument::restore`, which now returns a structured validated reconstruction result rather than constructing an invalid live document.
-
-`DocumentSession::verifyRevision()` remains a second command/history consistency guard; it is not the authority that makes Part transactions safe. B2 makes no multi-threading, file-conflict or stale-state-merge guarantee.
-
-Undo and Redo reapply authored states through PartDocumentTransaction and therefore count as new semantic mutations with increasing technical DocumentRevision.
+Undo and Redo reapply authored states through `PartDocumentTransaction` and therefore count as new semantic mutations with increasing technical `DocumentRevision`. Undo/Redo preserve accepted EntityId lineage/high-water rules and restore authored identity rather than Viewer/presentation identity.
 
 <!-- section-id: internal.part-documents.session -->
 ## DocumentSession
 
-`DocumentSession` is runtime-only and contains current physical path, loaded PartDocument, expected technical revision, Undo/Redo history and the save checkpoint.
+`DocumentSession` is runtime-only and contains the current physical path, loaded `PartDocument`, expected technical revision, Undo/Redo history, the saved authored-state checkpoint and — for a native file opened/created through the Project runtime — a `PartFileCheckpoint`.
 
-`needsSave()` compares authored state with the saved authored checkpoint. It is not defined by numeric DocumentRevision equality, which allows Undo back to the saved semantic state to become clean even though DocumentRevision increased.
+`needsSave()` compares authored state with the saved authored-state checkpoint. It is not defined by numeric `DocumentRevision` equality, which allows Undo back to the saved semantic state to become clean even though `DocumentRevision` increased.
+
+The native-file checkpoint represents the exact file version established by load/create or the last successful Save. It contains the expected DocumentId, exact byte length, SHA-256 digest and platform file identity. Detached/test sessions may exist without a file checkpoint, but ordinary Save then fails closed rather than performing an unconditional overwrite.
 
 Closing and reopening creates fresh runtime history.
 
@@ -726,15 +716,17 @@ Closing and reopening creates fresh runtime history.
 
 The native extension is `.ss2part`.
 
-Current Part domain schema version 3 stores authored identity/properties, a compact built-in Origin visibility mask and the hosted Sketch collection. Each Sketch record stores SketchId, Origin-plane support, explicit placement, visibility and an embedded Shared 2D model.
+The current Part domain writer uses schema **v4**. It stores document properties, built-in Origin visibility and the ordered hosted Sketch collection. Each Sketch record stores stable SketchId, Origin-plane support, explicit placement, visibility and one embedded Shared 2D model.
 
-The schema-v3 model stores canonical decimal `next_entity_id` plus ordered Line records containing canonical model-local EntityId and finite Start/End U/V coordinates. Duplicate IDs, non-canonical IDs, IDs outside the cursor range and invalid Line geometry fail closed.
+Schema v4 stores canonical decimal `next_entity_id` plus mixed `entities[]` records. Supported authored kinds are Line, Circle and Arc. EntityId is model-local and shared across primitive kinds; malformed/non-canonical or duplicate IDs, IDs outside the cursor range and invalid primitive geometry fail closed.
 
-It does not serialize ProjectId, DocumentSession, Undo/Redo, active Sketch edit context, camera, active selection, Qt objects, Viewer objects or OCCT handles.
+Part schema versions v1, v2 and v3 remain readable. V1 restores no Sketches, v2 restores hosted Sketch records with empty Shared 2D models, and v3 reads the former Line-only `next_entity_id + lines[]` model. Opening an older schema does not rewrite the file; a later successful ordinary Save publishes current schema v4.
 
-Part schema versions 1 and 2 remain readable. Schema v1 restores no Sketches; v2 restores its hosted Sketches with empty Shared 2D models. Opening either does not rewrite the file. A later successful Save publishes current schema v3.
+ProjectId, DocumentSession, Undo/Redo, active Sketch edit context, camera, active selection, Qt objects, Viewer objects and OCCT handles are not serialized as Part authored state.
 
-Save uses shared staged atomic-file persistence. The save checkpoint changes only after a successful write/replace.
+Ordinary Save is conditional on the session's native-file checkpoint. A cooperative per-target Save guard serializes cooperating SS2 writers across inspect → compare → publish → new-checkpoint capture. Missing target, changed DocumentId, replaced file object, changed exact content or an already-owned Save guard fail closed with typed Save-conflict diagnostics. A failed/conflicted Save does not advance the saved authored-state checkpoint or file checkpoint.
+
+Successful publication uses whole-file atomic replacement and returns the checkpoint of the newly published target. The strict no-lost-update guarantee is for cooperating SS2 writers that use this guard; the implementation does not claim an atomic filesystem compare-and-swap against arbitrary unrelated writers.
 
 <!-- section-id: internal.part-documents.discovery -->
 ## Discovery and canonical sessions
@@ -748,22 +740,22 @@ When a resolved Part is already open, a second Open request returns the existing
 <!-- section-id: internal.part-documents.sketch-presentation -->
 ## Active Sketch presentation and spatial input
 
-R3 does not change Part persistence or authored commands. It adds a runtime adapter around the current authoritative Part state.
+While a Part Sketch is actively edited, `PartViewportController` rebuilds a neutral authored Sketch scene from the current embedded `SketchModel`, maps Line/Circle/Arc geometry from Sketch U/V through `SketchPlacement` into 3D, presents the intrinsic Sketch Origin as a non-authored overlay and keeps runtime presentation-token bindings back to `SketchId + EntityId`.
 
-While a Part Sketch is actively edited, `PartViewportController` rebuilds a neutral authored Sketch scene from the current embedded `SketchModel`, transforms Line endpoints from U/V to 3D through `SketchPlacement`, presents the intrinsic Origin as a non-authored overlay and keeps runtime presentation-token bindings back to `SketchId + EntityId`.
+A separate preview scene is transient and independently replaceable/clearable. Neutral provider rays are intersected with the active Sketch frame to produce Sketch-local U/V. Selection, hover, grips, preview, pointer candidates and Command Line input state remain runtime-only and do not change Part revision, dirty state, history or persistence until a semantic command commits.
 
-A separate preview scene is transient and independently replaceable/clearable. Neutral provider rays are intersected with the active Sketch frame above the provider to produce Sketch-local U/V. These operations do not change Part revision, dirty state, history or persistence.
+Presentation tokens are ephemeral. Scene rebuild/history may allocate different tokens for the same authored EntityId; tests and runtime logic must therefore reacquire presentation bindings after a rebuild rather than treating Viewer tokens as durable identity.
 
-If the active Sketch disappears through Undo/history, presentation fails closed and the runtime edit/input state is cleared.
+If the active Sketch disappears through Undo/history or the editing context is replaced, presentation/input state fails closed and is cleared.
 
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The Part model durably owns Shared 2D Line entities, and R3 presents the active Sketch's authored Lines plus intrinsic Origin in the shared 3D Viewport. Presentation tokens, preview and pointer input remain runtime-only and are not Part identity.
+The Part model durably owns Shared 2D Line/Circle/Arc entities. The active Sketch editor supports semantic point/Window/Crossing selection, mixed Delete, Line/Circle/Arc creation, Move/Copy/Rotate/Scale/Mirror, state-based grips, owner-only Reshape, grip Move, Space CycleEditMode, Repeat Last Command and Direct Distance at the currently supported point requests.
 
-The current Part Sketch edit UI now wires the neutral interaction state to the existing semantic commands: continuous Line creates one authored segment per `AddSketchLineCommand`/Undo entry, point and Window/Crossing rectangle selection remain transient EntityId state, and Delete executes one atomic `EraseSketchEntitiesCommand` for the selected set. Undo/Redo cancels pending Line runtime state before ordinary history and then reconciles surviving EntityIds against the current SketchModel.
+Presentation tokens, preview, pointer input, Command Line buffer, hover/grip state and camera remain runtime-only and are not Part/Sketch identity.
 
-Constraints, dimensions, solver, grips/direct manipulation, snapping/inference, Datum/Construction Plane support, planar model-face support, Body, Feature, modeled solid geometry, persistent topology naming and Material model remain unavailable.
+The product still does not implement authored constraints/dimensions/solver, snapping/inference, Ortho/Polar/Grid Snap, Dynamic Input, numeric Rotate angle or Scale factor, absolute/relative/polar coordinate entry, unit expressions, grip Copy modifier, ordinary-Select RMB context, Datum/Construction Plane support, planar model-face Sketch support, Body/Feature modeled solid geometry, persistent topology naming or Material.
 
 The Viewer is not a second model: no OCCT object or Viewer token is durable Part/Sketch identity, support or authored state.
 </script>
@@ -841,13 +833,27 @@ The former line-based `SS2PART` bootstrap format remains unsupported legacy test
 
 The complete native package is built before publication.
 
-New Part creation writes staged bytes and publishes only if the target path does not already exist.
+New Part creation reserves/publishes through create-new semantics and fails if the target already exists. Temporary publication files are reserved with exclusive-create semantics rather than exists-check + truncating open.
 
-Save writes a temporary sibling file and replaces the target only after the complete package has been produced. On Windows, replacement uses an OS replace operation rather than delete-then-rename.
+A native Part load reads one bounded file snapshot and derives both the parsed document and `PartFileCheckpoint` from that same snapshot. The checkpoint contains expected DocumentId, exact byte length, SHA-256 digest and platform file identity.
 
-The DocumentSession advances its save checkpoint only after successful persistence. If package construction or replacement fails, the in-memory authored state remains dirty and the previous durable Part remains authoritative.
+Ordinary Save is conditional. A deterministic per-target cooperative guard is held across:
 
-The initial implementation uses whole-file replacement; it does not update ZIP entries in place.
+```text
+inspect current target
+→ compare with session checkpoint
+→ build/write temporary replacement
+→ atomically publish replacement
+→ capture checkpoint for the newly published target
+```
+
+Save fails closed when another cooperating SS2 Save owns the guard, the target is missing, the durable DocumentId changed, the underlying file object was replaced, or exact file bytes changed. Conflict leaves the target untouched by that Save attempt, leaves authored state/revision/history unchanged and leaves both session checkpoints unchanged.
+
+Successful Save returns the checkpoint of the newly published file; only then does `DocumentSession` advance its saved authored-state checkpoint and native-file checkpoint.
+
+Whole-file replacement remains the publication model; ZIP entries are not updated in place. Atomic replacement, stale-file conflict detection and crash/power-loss durability are separate guarantees.
+
+The strict cross-process no-lost-update guarantee applies to cooperating SS2 writers that honor the guard. Changes by unrelated external writers that are visible before validation are detected, but the system does not claim OS-level compare-and-swap against an arbitrary process racing after validation.
 
 <!-- section-id: internal.persistence.recent -->
 ## Recent Projects catalog
@@ -878,7 +884,7 @@ The following state is not serialized as Part authored state:
 
 Persistent user visibility of built-in Origin references is intentionally **not** in this runtime-only list; it is authored Part state.
 
-The native package reserves `derived/*` for optional disposable assets. Unknown safe derived entries may be ignored. Deleting derived content must not destroy authored design intent. PERSIST-01 does not generate thumbnails or another derived asset.
+The native package reserves `derived/*` for optional disposable assets. Unknown safe derived entries may be ignored. Deleting derived content must not destroy authored design intent. The current implementation does not generate thumbnails or another derived asset.
 
 Recent availability is also derived at runtime.
 
@@ -893,7 +899,7 @@ Schema-v4 Sketch loading rejects malformed/non-canonical identity strings, dupli
 
 Schema-v3 validation remains intact for backward read compatibility.
 
-After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid Sketch support/placement relationships or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family. B2 adds no serialized field and does not change the native schema version.
+After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid Sketch support/placement relationships or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family. This validation adds no serialized field and does not change the native schema version.
 
 Container v1 rejects unsafe or ambiguous input, including unsupported container versions, ZIP64, encrypted/unsupported entries, duplicate entry names, unsafe entry paths, missing mandatory entries, oversized content, invalid mandatory JSON and unsupported Part domain schemas.
 
@@ -904,7 +910,7 @@ A `.ss2part` whose manifest declares another Document kind fails closed. `docume
 
 The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch constraints/dimensions/solver state, modeled solid geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
 
-The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented by PERSIST-01.
+The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented.
 
 Implementation dependencies are vendored and pinned: miniz 3.1.2 for ZIP mechanics and nlohmann/json 3.12.0 for JSON. Normal builds do not download them, and their types do not cross CAD-domain public semantic APIs.
 </script>
@@ -1024,7 +1030,7 @@ Normal COPY is implemented above this neutral transform layer: its preview reuse
 
 These values represent physical model-length coordinates in the host Sketch frame. Shared 2D does not store the Part/3D placement, camera transform, screen coordinates, snap tolerance or display units.
 
-The host-specific mapping from local U/V into 3D remains outside Shared 2D. SK-03A implements that mapping in the Part/UI adapter using `SketchPlacement`; the neutral Shared 2D model remains unaware of Viewer, camera and provider state.
+The host-specific mapping from local U/V into 3D remains outside Shared 2D. The Part/UI adapter performs that mapping through `SketchPlacement`; the neutral Shared 2D model remains unaware of Viewer, camera and provider state.
 
 <!-- section-id: internal.shared-2d.identity -->
 ## Entity identity
@@ -1043,7 +1049,7 @@ Ordinary value-copy and Undo/Redo state replication preserve existing EntityIds.
 
 The session-local high-water cursor survives Undo even when authored geometry returns exactly to the last saved state. Existing semantic dirty-state behavior is preserved: Undo back to the saved authored state remains clean. A new COPY in that continuing session still allocates above the preserved high-water, and saving the later committed authored state persists the resulting `next_entity_id` under schema v4.
 
-Schema-v4 persistence already stores `next_entity_id`; SK-07C uses that existing field and introduces no persistence migration.
+Schema-v4 persistence stores `next_entity_id`, preserving the model-local EntityId high-water across Save/reopen without an additional persistence concept for Copy.
 
 <!-- section-id: internal.shared-2d.line -->
 ## Authored primitives
@@ -1149,7 +1155,7 @@ Center grips perform the same mixed Line/Circle/Arc semantic translation as norm
 
 Line Start/End, Circle quadrant and Arc Start/End/Mid default to owner-only Reshape. During an active direct-manipulation session, viewport Space cycles those non-center grips between `Reshape` and `Move`. The active grip, interaction-start pivot, frozen semantic selection and current resolved pointer are preserved across the cycle. Reshape derives preview from the interaction-start owner geometry; Move derives translation from the interaction-start complete selection geometry. Switching mode therefore recomputes preview from frozen authored inputs rather than compounding a previous preview. Mode cycling is runtime-only and creates no authored mutation, revision, dirty state or history entry.
 
-Pointer and text-derived point values flow through the shared `ResolvedSketchInput` seam. SK-07F adds one semantic `PointRequest` view derived from the existing interaction stage rather than a second tool state machine. The request exposes an optional semantic base, one shared runtime pointer candidate and whether Direct Distance is legal at that stage.
+Pointer and text-derived point values flow through the shared `ResolvedSketchInput` seam. A semantic `PointRequest` view is derived from the existing interaction stage rather than creating a second tool state machine. The request exposes an optional semantic base, one shared runtime pointer candidate and whether Direct Distance is legal at that stage.
 
 The current Direct Distance resolver is deliberately minimal:
 
@@ -1168,7 +1174,7 @@ Direct Distance is currently enabled only for:
 - normal MOVE destination after Base Point;
 - normal COPY placement after Base Point.
 
-Command submission remains context-first. While a semantic PointRequest is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. WB-02 adds a workspace-global text transport and live buffer, but that router does not know `PointRequest`, Line, Move or Copy. The current Part/Sketch adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only the parsed scalar and remains Qt/locale independent.
+Command submission is context-first. While a semantic PointRequest is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. The workspace-global text transport and live buffer do not know `PointRequest`, Line, Move or Copy. The current Part/Sketch adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only the parsed scalar and remains Qt/locale independent.
 
 Printable text typed while the normal CAD viewport has focus now reaches the same global buffer as directly editing Command Line; no focus transfer is required. Real text editors retain their keyboard ownership. This changes only the input adapter path, not Direct Distance semantics or mutation authority.
 
@@ -1205,25 +1211,19 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-Existing Sketch regressions continue to cover Shared 2D dependency boundaries, primitive semantics, Part hosting, persistence/history, provider-neutral presentation/input, selection, hover/grips and direct manipulation.
+The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Part hosting, schema-v4 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, Copy identity, Repeat Last Command, Space CycleEditMode and precision input.
 
-The SK-07B common-transform set `sk07b.transform_core`, `sk07b.common_transform_state` and `sk07b.transform_controller` covers mixed Line/Circle/Arc Rotate/Scale/Mirror geometry, no-op handling, atomic commit, stale revision failure and schema-v4 persistence.
+Key registered tests include:
 
-SK-07C adds:
+- `sk02a.shared_2d_core` / `sk02a.shared_2d_boundaries` — neutral model and dependency boundaries;
+- `sk06a.circle_arc_model_persistence` / `sk06a.circle_arc_interaction_state` — mixed Line/Circle/Arc authored and interaction semantics;
+- `sk07a.transform_core`, `sk07b.transform_core`, `sk07b.common_transform_state`, `sk07b.transform_controller` — mixed transforms and atomic controller behavior;
+- `sk07c.copy_command`, `sk07c.copy_interaction_state`, `sk07c.copy_controller` — fresh identity, repeated placement, Undo/Redo identity restoration and high-water persistence;
+- `sk07d.repeat_last_command_controller` and `sk07e.space_cycle_edit_mode` — runtime command/grip grammar;
+- `sk07f.precision_input_state` / `sk07f.precision_input_controller` — PointRequest and Direct Distance across Line, Move, Copy and grip paths;
+- `wb02.cad_input_session`, `wb02.cad_input_boundaries`, `wb02.global_cad_input_ui` plus the Workbench Sketch-host regression — keyboard-first transport, focus arbitration, stale-context rejection and real Workbench integration.
 
-- `sk07c.copy_interaction_state` — selection-first/command-first COPY, frozen source/Base Point, repeated placement from the original snapshot and history cancellation;
-- `sk07c.copy_command` — atomic mixed duplication, fresh identity, Undo/Redo identity restoration, non-reuse after Undo, schema-v4 high-water Save/reopen and stale-revision failure;
-- `sk07c.copy_controller` — zero-displacement rejection, repeated placements, source-selection retention, separate per-placement history and stale-revision controller behavior.
-
-SK-07D adds `sk07d.repeat_last_command_controller` plus Workbench key-routing coverage for runtime Repeat Last Command.
-
-SK-07E adds `sk07e.space_cycle_edit_mode` for supported grip-role defaults/cycles, frozen selection/pivot/current-input semantics, owner-vs-selection geometry and no-compounding preview. Existing direct-manipulation controller coverage verifies preview/commit across Reshape↔Move cycling, while the Workbench Sketch-host regression verifies viewport Space precedence and text-focus behavior.
-
-SK-07F adds `sk07f.precision_input_state` for the shared PointRequest/Direct Distance resolver and `sk07f.precision_input_controller` for Line, Move, repeated Copy and grip Reshape/Move commit paths. The Workbench Sketch-host regression additionally verifies context-first Command Line routing plus dot/current-locale decimal forms.
-
-WB-02 adds provider-neutral `wb02.cad_input_session` and boundary scanning plus `wb02.global_cad_input_ui` for keyboard capture/focus arbitration. The Workbench Sketch-host regression verifies keyboard-first command activation and Direct Distance through Line, normal Move/Copy and grip Reshape/Move while preserving the existing semantic controllers.
-
-Final work-item completion additionally requires the repository's exact-head Windows FULL gate and Owner manual Windows verification.
+Work-item completion uses the repository's exact-head Windows gate; current-state documentation does not preserve obsolete milestone gate counts.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.ui-project-hub" data-kind="internal" data-lang="en" data-path="docs/internal/UI_PROJECT_HUB.md">
 # Project Hub and CAD Workbench UI — As-built
@@ -1249,9 +1249,9 @@ The Project toolbar remains visible in both Workspace and Document contexts. Wor
 
 Project Workspace navigation is runtime-only: `Workspace` or `Document(DocumentId)`. Open DocumentSessions may remain alive while Workspace Dashboard is visible.
 
-WB-02 makes the same Project Workspace Shell the owner of one visible Command Line surface and one runtime `CadInputSession`. The session carries a live text buffer and exactly one generic active endpoint; it owns no Part/Sketch/Assembly/Drawing meaning. Entering a Document attaches that Workbench endpoint, while navigating to Workspace, switching Documents or closing ownership detaches the old endpoint and clears partial input before the old runtime can disappear. Hidden Documents therefore cannot consume keyboard text.
+The Project Workspace Shell owns one visible Command Line surface and one runtime `CadInputSession`. The session carries a live text buffer and exactly one generic active endpoint; it owns no Part/Sketch/Assembly/Drawing meaning. Entering a Document attaches that Workbench endpoint, while navigating to Workspace, switching Documents or closing ownership detaches the old endpoint and clears partial input before the old runtime can disappear. Hidden Documents therefore cannot consume keyboard text.
 
-The Qt adapter captures printable unmodified keys from normal CAD surfaces without moving focus, mirrors them into Command Line and yields to real text editors, modal dialogs and application shortcuts. Accepted submission clears the buffer; rejected input stays available for correction. Buffer/prompt/diagnostic state is runtime-only and does not dirty a CAD Document or create Undo history.
+The Qt adapter captures printable unmodified keys from normal CAD surfaces without moving focus, mirrors them into Command Line and yields to real text editors, popup/menu ownership, modal dialogs, foreign windows and application shortcuts. Enter consumes a non-empty submitted token whether accepted or rejected; a rejected token creates no authored mutation, leaves the semantic context active, clears the editable buffer and publishes a bounded diagnostic. Buffer/prompt/diagnostic state is runtime-only and does not dirty a CAD Document or create Undo history.
 
 `CadWorkbenchShell` owns only fixed presentation regions for the active Part Document:
 
@@ -1385,15 +1385,17 @@ The current product provides:
 - synchronized Tree/Viewport selection with empty-space clear and primary selection;
 - persistent Show/Hide for Origin references with Undo/Redo;
 - editing Number, Title, Description and Engineering Revision;
-- Save and safe closing with unsaved-change protection;
+- creating/editing Origin-plane Sketches with Line/Circle/Arc geometry, selection, grips and Move/Copy/Rotate/Scale/Mirror;
+- keyboard-first Command Line with Direct Distance at supported point inputs;
+- Save with stale-file conflict protection plus safe closing with unsaved-change protection;
 - rediscovering Parts after restart;
 - identity-conflict detection when two files in one Workspace carry the same DocumentId.
 
 The current `Open…` dialog is document-oriented, but the only implemented top-level CAD Document kind is still Part.
 
-The current Part is a durable CAD Document with a shared 3D working environment, but it does not yet contain modeled solid geometry.
+The current Part is a durable CAD Document with a shared 3D working environment and durable Origin-plane Sketches. It does not yet contain Body/Feature modeled solid geometry.
 
-Sketch, Bodies/Features, Assembly and Drawing are not yet available.
+Assembly and Drawing document/tool surfaces are not yet available.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
@@ -1666,13 +1668,17 @@ Navigation and camera changes are temporary view state. They do not dirty the Pa
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state, including Origin visibility and created Sketches with their durable identity/support/placement plus embedded Line/Circle/Arc geometry and stable EntityIds, to its `.ss2part` file.
+`Save` writes the current authored Part state, including Origin visibility and created Sketches with durable identity/support/placement, Line/Circle/Arc geometry and stable EntityIds, to its `.ss2part` file.
+
+Ordinary Save is conditional on the exact native file version that this session loaded or last saved. If that target was removed, replaced, changed on disk, changed to another DocumentId or is currently guarded by another cooperating SS2 Save, SimpleSolid reports a Save conflict instead of silently overwriting the target. The in-memory Part remains open and keeps its local changes/Undo history.
+
+After a successful Save the session adopts the newly published file version, so a later unchanged Save works normally. The strict no-lost-update guarantee is for cooperating SS2 instances; SimpleSolid does not claim a general atomic compare-and-swap against every unrelated external writer.
 
 When closing a Part with unsaved changes, the application requires `Save`, `Discard` or `Cancel`.
 
 When closing the complete Project or application while any Part is dirty, the choices are `Save All`, `Discard` and `Cancel`.
 
-If saving fails, the Document/Project remains open. Closing the last open Part keeps the Project open and returns to the Project Workspace Dashboard. Using `Workspace` by itself never closes the Part.
+If saving fails or reports a conflict, the Document/Project remains open. Closing the last open Part keeps the Project open and returns to the Project Workspace Dashboard. Using `Workspace` by itself never closes the Part.
 
 <!-- section-id: product.parts.restart -->
 ## Restart and reopen
@@ -1684,24 +1690,24 @@ SimpleSolid scans the Workspace again. The saved Part is rediscovered with the s
 Undo/Redo history, active selection, active Sketch edit context and camera state are not stored in the file and start fresh after reopening.
 
 <!-- section-id: product.parts.conflicts -->
-## DocumentId conflicts and invalid files
+## Document and Save conflicts
 
-If two `.ss2part` files in one Workspace contain the same DocumentId, `Open…` shows an identity-conflict entry and the discovered location information.
-
-That entry cannot be opened by DocumentId until the conflict is removed. SimpleSolid does not arbitrarily choose one copy and does not automatically assign a new ID.
+If two `.ss2part` files in one Workspace contain the same DocumentId, `Open…` shows an identity-conflict entry and the discovered location information. That entry cannot be opened by DocumentId until the conflict is removed. SimpleSolid does not arbitrarily choose one copy and does not automatically assign a new ID.
 
 A damaged or unsupported native Part is shown as an invalid entry instead of being treated as a valid Document.
+
+A Save conflict is different from a Workspace discovery conflict: it means the already-open session no longer has authority to replace the file version currently at its path. SimpleSolid keeps the in-memory document open and does not silently force-overwrite or recreate a missing target. Save As / Force Overwrite recovery is not part of the current product.
 
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the stabilized 3D Workbench/Viewer foundation and durable Origin-plane Sketches with Line/Circle/Arc authored geometry.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation and durable Origin-plane Sketches with Line/Circle/Arc authored geometry.
 
-The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
+The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
+
+Direct Distance is available for the supported PointRequest stages documented above. The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
-
-The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric angle/distance/scale/coordinate entry and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -1819,9 +1825,9 @@ The Project can later be opened again using `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Current limits
 
-The Workspace Shell now contains the first persistent CAD Document type: a native `.ss2part` Part with Document Properties, Undo/Redo and Save.
+The Workspace Shell contains the persistent native `.ss2part` Part document type with Document Properties, Undo/Redo, conditional Save and several simultaneously open Part sessions.
 
-The shared CAD Workbench and 3D Viewer are available for Part Origin/reference work and navigation. Part geometric modeling, Sketch, Bodies/Features, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.
+The shared CAD Workbench and 3D Viewer support Part Origin/reference work, durable Origin-plane Sketches and the current Sketch editing workflow. Body/Feature solid modeling, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.overview" data-kind="product" data-lang="pl" data-path="docs/product/pl/OVERVIEW.md">
 # Dokumentacja produktu SimpleSolid 2.0
@@ -1856,15 +1862,17 @@ Obecny produkt udostępnia:
 - zsynchronizowane zaznaczenie Tree/Viewport z czyszczeniem zaznaczenia na pustym tle i primary selection;
 - trwałe Show/Hide referencji Origin z Undo/Redo;
 - edycję Number, Title, Description i Engineering Revision;
-- Save i bezpieczne zamykanie z ochroną niezapisanych zmian;
+- tworzenie i edycję Sketchy na płaszczyznach Origin z geometrią Line/Circle/Arc, zaznaczeniem, gripami oraz Move/Copy/Rotate/Scale/Mirror;
+- keyboard-first Command Line z Direct Distance w obsługiwanych wejściach punktowych;
+- Save z ochroną przed konfliktem zmienionego pliku oraz bezpieczne zamykanie z ochroną niezapisanych zmian;
 - ponowne odnajdywanie Partów po restarcie;
 - wykrywanie konfliktu, gdy dwa pliki w jednym Workspace mają ten sam DocumentId.
 
 Dialog `Open…` jest już dokumentowo-neutralny, ale jedynym zaimplementowanym typem głównego Dokumentu CAD pozostaje obecnie Part.
 
-Obecny Part jest trwałym dokumentem CAD ze wspólnym środowiskiem pracy 3D, ale nie zawiera jeszcze modelowanej geometrii bryłowej.
+Obecny Part jest trwałym dokumentem CAD ze wspólnym środowiskiem pracy 3D oraz trwałymi Sketchami na płaszczyznach Origin. Nie zawiera jeszcze modelowanej geometrii bryłowej Body/Feature.
 
-Sketch, Bodies/Features, Assembly i Drawing nie są jeszcze dostępne.
+Powierzchnie dokumentów/narzędzi Assembly i Drawing nie są jeszcze dostępne.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
@@ -2137,13 +2145,17 @@ Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, n
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketches z ich trwałą tożsamością/supportem/placementem, geometrią Line/Circle/Arc i stabilnymi EntityId, do pliku `.ss2part`.
+`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketche z trwałą tożsamością/supportem/placementem, geometrią Line/Circle/Arc i stabilnymi EntityId, do pliku `.ss2part`.
+
+Zwykły Save jest warunkowy względem dokładnej wersji pliku natywnego, którą ta sesja otworzyła albo ostatnio poprawnie zapisała. Jeżeli target został usunięty, podmieniony, zmieniony na dysku, zawiera już inny DocumentId albo jest aktualnie chroniony przez inny współpracujący Save SS2, SimpleSolid zgłasza konflikt Save zamiast po cichu nadpisać plik. Part w pamięci pozostaje otwarty i zachowuje lokalne zmiany/historię Undo.
+
+Po poprawnym Save sesja przyjmuje nową opublikowaną wersję pliku, więc kolejny niezmieniony Save działa normalnie. Ścisła gwarancja braku lost-update dotyczy współpracujących instancji SS2; SimpleSolid nie deklaruje ogólnego atomowego compare-and-swap wobec każdego obcego programu zapisującego plik.
 
 Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Discard` albo `Cancel`.
 
 Przy zamykaniu całego Projektu lub aplikacji, gdy jakikolwiek Part jest dirty, dostępne są `Save All`, `Discard` i `Cancel`.
 
-Jeżeli zapis się nie powiedzie, Dokument/Projekt pozostaje otwarty. Zamknięcie ostatniego otwartego Parta pozostawia Projekt otwarty i pokazuje Project Workspace Dashboard. Samo użycie `Workspace` nigdy nie zamyka Parta.
+Jeżeli zapis się nie powiedzie albo zgłosi konflikt, Dokument/Projekt pozostaje otwarty. Zamknięcie ostatniego otwartego Parta pozostawia Projekt otwarty i pokazuje Project Workspace Dashboard. Samo użycie `Workspace` nigdy nie zamyka Parta.
 
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
@@ -2155,24 +2167,24 @@ SimpleSolid ponownie skanuje Workspace. Zapisany Part zostaje odnaleziony z tym 
 Historia Undo/Redo, aktywne zaznaczenie, aktywny tryb edycji Sketchu i stan kamery nie są zapisywane do pliku i po ponownym otwarciu zaczynają się od nowa.
 
 <!-- section-id: product.parts.conflicts -->
-## Konflikt DocumentId i niepoprawne pliki
+## Konflikty Dokumentu i Save
 
-Jeżeli dwa pliki `.ss2part` w jednym Workspace zawierają ten sam DocumentId, `Open…` pokazuje wpis konfliktu tożsamości oraz informacje o wykrytych lokalizacjach.
-
-Takiego wpisu nie można otworzyć przez DocumentId, dopóki konflikt nie zostanie usunięty. SimpleSolid nie wybiera arbitralnie jednej kopii i nie nadaje automatycznie nowego ID.
+Jeżeli dwa pliki `.ss2part` w jednym Workspace zawierają ten sam DocumentId, `Open…` pokazuje wpis konfliktu tożsamości oraz informacje o wykrytych lokalizacjach. Takiego wpisu nie można otworzyć przez DocumentId, dopóki konflikt nie zostanie usunięty. SimpleSolid nie wybiera arbitralnie jednej kopii i nie nadaje automatycznie nowego ID.
 
 Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wpis zamiast być traktowany jako poprawny Dokument.
+
+Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, że otwarta sesja nie ma już uprawnienia do zastąpienia wersji pliku znajdującej się obecnie pod jej ścieżką. SimpleSolid pozostawia dokument w pamięci otwarty i nie wykonuje po cichu force-overwrite ani nie odtwarza usuniętego targetu. Save As / Force Overwrite nie są obecnie dostępne jako ścieżka recovery.
 
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, ustabilizowany fundament Workbench/Viewer 3D oraz trwałe Sketches na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
+Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, fundament Workbench/Viewer 3D oraz trwałe Sketche na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
 
-Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Copy/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
+Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Copy/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz keyboard-first Command Line.
+
+Direct Distance jest dostępny dla obsługiwanych etapów PointRequest opisanych wyżej. Nadal brakuje grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego kąta Rotate i współczynnika Scale, współrzędnych absolutnych/względnych/polarnych, unit expressions i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
-
-Nadal brakuje grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego wpisywania kątów/odległości/skali/współrzędnych i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty
@@ -2290,9 +2302,9 @@ Projekt można później ponownie otworzyć przez `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Aktualne ograniczenia
 
-Workspace Shell zawiera obecnie pierwszy trwały typ dokumentu CAD: Part `.ss2part` z właściwościami Dokumentu, Undo/Redo i Save.
+Workspace Shell zawiera trwały typ dokumentu Part `.ss2part` z właściwościami Dokumentu, Undo/Redo, warunkowym Save i możliwością utrzymywania kilku otwartych Partów jednocześnie.
 
-Wspólny CAD Workbench i Viewer 3D są dostępne dla Origin/referencji Parta i nawigacji. Modelowanie geometryczne Parta, Sketch, Bodies/Features, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Dokumenty Part`.
+Wspólny CAD Workbench i Viewer 3D obsługują Origin/referencje Parta, trwałe Sketche na płaszczyznach Origin oraz bieżący workflow edycji Sketchu. Modelowanie bryłowe Body/Feature, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Dokumenty Part`.
 </script>
 
 <script>

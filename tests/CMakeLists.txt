@@ -276,6 +276,22 @@ add_test(
 )
 
 
+add_executable(b1_save_conflict_test
+    b1_save_conflict_test.cpp
+)
+
+target_link_libraries(b1_save_conflict_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_part
+        simplesolid2_persistence
+)
+
+add_test(
+    NAME b1.save_conflict
+    COMMAND b1_save_conflict_test
+)
+
 add_executable(part01_document_session_test
     document_session_test.cpp
 )

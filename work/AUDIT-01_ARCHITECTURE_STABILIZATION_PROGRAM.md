@@ -67,7 +67,7 @@ Default order is strict:
 | --- | --- | --- | --- |
 | 1 | **A — WB-02 closeout hardening** | context lifetime, Delete precedence, input-capture ownership, real integration evidence | **COMPLETED — 2026-09-27** |
 | 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | **COMPLETED — 2026-09-27** |
-| 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | future bounded Work Contract |
+| 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | **COMPLETED — 2026-09-27** |
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | future bounded Work Contract |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | future bounded Work Contract |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | future bounded Work Contract |
@@ -291,6 +291,38 @@ Future B1 contract must explicitly define:
 Do not claim mtime/size alone proves unchanged content. Do not claim a pre-rename hash is an atomic compare-and-swap against arbitrary external writers.
 
 Tests include two sessions, replaced DocumentId, changed content with similar metadata, missing file, publication failure, normal repeated save/reopen and controlled competing writes.
+
+### B1 activation record
+
+**Owner acceptance:** 2026-09-27  
+**ADR:** ADR-0013 — ACCEPTED  
+**Work Contract:** `work/B1_NATIVE_PART_SAVE_CONFLICT_PROTECTION.md` — ACCEPTED / ACTIVE  
+**Proposal evidence:** Windows PR gate #637 PASS on `ec254ce4510ba5649bf3db80026eeb261dba5b18` with 73/73 tests
+
+The accepted B1 policy is exact native-file checkpoint (DocumentId + byte length + SHA-256 + platform file identity), cooperative per-target guard across check/publish/new-checkpoint, typed missing/replaced/content/busy conflicts, no implicit recreation and no Force Overwrite. Strict cross-process no-lost-update guarantee applies to cooperating SS2 writers only. C1 and later packages remain inactive.
+
+### B1 final completion evidence
+
+**Completed:** 2026-09-27  
+**Final candidate:** `79ef8ed2c59f9209d0695867d4b6fa43979159d3`  
+**Windows FULL:** #662 — PASS  
+**Owner manual Windows:** PASS — 2026-09-27
+
+B1 is closed as **CONFIRMED / FIXED / VERIFIED**:
+
+- every open native Part session carries an exact runtime checkpoint with DocumentId, byte length, SHA-256 and platform file identity;
+- ordinary Save is conditional and detects missing, replaced, identity-changed or content-changed targets before publication;
+- cooperating SS2 writers share a deterministic per-target guard so two saves from one checkpoint cannot both publish;
+- conflict/failure preserves authored state, technical revision, Undo/Redo, saved-state checkpoint and session file checkpoint;
+- successful publication returns and installs the checkpoint of the actually published file, so immediate repeated Save succeeds;
+- create-new/temp reservation uses exclusive creation and cleanup leaves no durable temporary artifact;
+- required internal and PL/EN Product documentation plus generated Product Browser are current;
+- Windows FULL #662 passed on the exact final runtime/docs candidate;
+- Owner manual Windows verification passed for external modification/replacement, external removal and repeated Save/reopen, including clean explicit-Save reachability.
+
+The guarantee remains intentionally bounded: unrelated external writers racing after validation are not covered by an atomic filesystem compare-and-swap claim. Force Overwrite, Save As, automatic merge and live reload remain outside B1.
+
+B1 completion does not activate C1 automatically. C1 remains the next mandatory AUDIT-01 package and requires a separate bounded Owner-accepted Work Contract.
 
 ## 8. Package C1 — remove deep copy of previous history
 

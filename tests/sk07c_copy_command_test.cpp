@@ -89,11 +89,14 @@ int main() {
     auto document =
         part::PartDocument::create(
             core::DocumentId::generate());
-    CHECK(store.createNew(path, document).ok());
+    const auto published =
+        store.createNew(path, document);
+    CHECK(published.ok());
 
     application::DocumentSession session{
         path,
-        std::move(document)};
+        std::move(document),
+        *published.checkpoint};
 
     const auto created =
         session.execute(
@@ -225,7 +228,8 @@ int main() {
     CHECK(loaded.ok());
     application::DocumentSession reopened{
         path,
-        std::move(*loaded.document)};
+        std::move(*loaded.document),
+        *loaded.checkpoint};
 
     const auto* reopened_sketch =
         reopened.document().findSketch(sketch_id);

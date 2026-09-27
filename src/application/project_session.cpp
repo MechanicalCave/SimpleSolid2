@@ -169,7 +169,10 @@ ProjectDocumentResult ProjectSession::createPart(
     }
 
     auto session =
-        std::make_unique<DocumentSession>(target, std::move(document));
+        std::make_unique<DocumentSession>(
+            target,
+            std::move(document),
+            *created.checkpoint);
     auto* session_ptr = session.get();
     open_documents_.emplace(key, std::move(session));
     return ProjectDocumentResult{session_ptr, false, ProjectDocumentDiagnostic{}};
@@ -221,7 +224,8 @@ ProjectDocumentResult ProjectSession::openDocument(
 
     auto session = std::make_unique<DocumentSession>(
         resolution.absolute_path,
-        std::move(*loaded.document));
+        std::move(*loaded.document),
+        *loaded.checkpoint);
     auto* session_ptr = session.get();
     open_documents_.emplace(key, std::move(session));
     return ProjectDocumentResult{session_ptr, false, ProjectDocumentDiagnostic{}};

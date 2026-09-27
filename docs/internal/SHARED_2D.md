@@ -32,7 +32,7 @@ Normal COPY is implemented above this neutral transform layer: its preview reuse
 
 These values represent physical model-length coordinates in the host Sketch frame. Shared 2D does not store the Part/3D placement, camera transform, screen coordinates, snap tolerance or display units.
 
-The host-specific mapping from local U/V into 3D remains outside Shared 2D. SK-03A implements that mapping in the Part/UI adapter using `SketchPlacement`; the neutral Shared 2D model remains unaware of Viewer, camera and provider state.
+The host-specific mapping from local U/V into 3D remains outside Shared 2D. The Part/UI adapter performs that mapping through `SketchPlacement`; the neutral Shared 2D model remains unaware of Viewer, camera and provider state.
 
 <!-- section-id: internal.shared-2d.identity -->
 ## Entity identity
@@ -51,7 +51,7 @@ Ordinary value-copy and Undo/Redo state replication preserve existing EntityIds.
 
 The session-local high-water cursor survives Undo even when authored geometry returns exactly to the last saved state. Existing semantic dirty-state behavior is preserved: Undo back to the saved authored state remains clean. A new COPY in that continuing session still allocates above the preserved high-water, and saving the later committed authored state persists the resulting `next_entity_id` under schema v4.
 
-Schema-v4 persistence already stores `next_entity_id`; SK-07C uses that existing field and introduces no persistence migration.
+Schema-v4 persistence stores `next_entity_id`, preserving the model-local EntityId high-water across Save/reopen without an additional persistence concept for Copy.
 
 <!-- section-id: internal.shared-2d.line -->
 ## Authored primitives
@@ -157,7 +157,7 @@ Center grips perform the same mixed Line/Circle/Arc semantic translation as norm
 
 Line Start/End, Circle quadrant and Arc Start/End/Mid default to owner-only Reshape. During an active direct-manipulation session, viewport Space cycles those non-center grips between `Reshape` and `Move`. The active grip, interaction-start pivot, frozen semantic selection and current resolved pointer are preserved across the cycle. Reshape derives preview from the interaction-start owner geometry; Move derives translation from the interaction-start complete selection geometry. Switching mode therefore recomputes preview from frozen authored inputs rather than compounding a previous preview. Mode cycling is runtime-only and creates no authored mutation, revision, dirty state or history entry.
 
-Pointer and text-derived point values flow through the shared `ResolvedSketchInput` seam. SK-07F adds one semantic `PointRequest` view derived from the existing interaction stage rather than a second tool state machine. The request exposes an optional semantic base, one shared runtime pointer candidate and whether Direct Distance is legal at that stage.
+Pointer and text-derived point values flow through the shared `ResolvedSketchInput` seam. A semantic `PointRequest` view is derived from the existing interaction stage rather than creating a second tool state machine. The request exposes an optional semantic base, one shared runtime pointer candidate and whether Direct Distance is legal at that stage.
 
 The current Direct Distance resolver is deliberately minimal:
 
@@ -176,7 +176,7 @@ Direct Distance is currently enabled only for:
 - normal MOVE destination after Base Point;
 - normal COPY placement after Base Point.
 
-Command submission remains context-first. While a semantic PointRequest is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. WB-02 adds a workspace-global text transport and live buffer, but that router does not know `PointRequest`, Line, Move or Copy. The current Part/Sketch adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only the parsed scalar and remains Qt/locale independent.
+Command submission is context-first. While a semantic PointRequest is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. The workspace-global text transport and live buffer do not know `PointRequest`, Line, Move or Copy. The current Part/Sketch adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only the parsed scalar and remains Qt/locale independent.
 
 Printable text typed while the normal CAD viewport has focus now reaches the same global buffer as directly editing Command Line; no focus transfer is required. Real text editors retain their keyboard ownership. This changes only the input adapter path, not Direct Distance semantics or mutation authority.
 
@@ -213,23 +213,17 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-Existing Sketch regressions continue to cover Shared 2D dependency boundaries, primitive semantics, Part hosting, persistence/history, provider-neutral presentation/input, selection, hover/grips and direct manipulation.
+The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Part hosting, schema-v4 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, Copy identity, Repeat Last Command, Space CycleEditMode and precision input.
 
-The SK-07B common-transform set `sk07b.transform_core`, `sk07b.common_transform_state` and `sk07b.transform_controller` covers mixed Line/Circle/Arc Rotate/Scale/Mirror geometry, no-op handling, atomic commit, stale revision failure and schema-v4 persistence.
+Key registered tests include:
 
-SK-07C adds:
+- `sk02a.shared_2d_core` / `sk02a.shared_2d_boundaries` — neutral model and dependency boundaries;
+- `sk06a.circle_arc_model_persistence` / `sk06a.circle_arc_interaction_state` — mixed Line/Circle/Arc authored and interaction semantics;
+- `sk07a.transform_core`, `sk07b.transform_core`, `sk07b.common_transform_state`, `sk07b.transform_controller` — mixed transforms and atomic controller behavior;
+- `sk07c.copy_command`, `sk07c.copy_interaction_state`, `sk07c.copy_controller` — fresh identity, repeated placement, Undo/Redo identity restoration and high-water persistence;
+- `sk07d.repeat_last_command_controller` and `sk07e.space_cycle_edit_mode` — runtime command/grip grammar;
+- `sk07f.precision_input_state` / `sk07f.precision_input_controller` — PointRequest and Direct Distance across Line, Move, Copy and grip paths;
+- `wb02.cad_input_session`, `wb02.cad_input_boundaries`, `wb02.global_cad_input_ui` plus the Workbench Sketch-host regression — keyboard-first transport, focus arbitration, stale-context rejection and real Workbench integration.
 
-- `sk07c.copy_interaction_state` — selection-first/command-first COPY, frozen source/Base Point, repeated placement from the original snapshot and history cancellation;
-- `sk07c.copy_command` — atomic mixed duplication, fresh identity, Undo/Redo identity restoration, non-reuse after Undo, schema-v4 high-water Save/reopen and stale-revision failure;
-- `sk07c.copy_controller` — zero-displacement rejection, repeated placements, source-selection retention, separate per-placement history and stale-revision controller behavior.
-
-SK-07D adds `sk07d.repeat_last_command_controller` plus Workbench key-routing coverage for runtime Repeat Last Command.
-
-SK-07E adds `sk07e.space_cycle_edit_mode` for supported grip-role defaults/cycles, frozen selection/pivot/current-input semantics, owner-vs-selection geometry and no-compounding preview. Existing direct-manipulation controller coverage verifies preview/commit across Reshape↔Move cycling, while the Workbench Sketch-host regression verifies viewport Space precedence and text-focus behavior.
-
-SK-07F adds `sk07f.precision_input_state` for the shared PointRequest/Direct Distance resolver and `sk07f.precision_input_controller` for Line, Move, repeated Copy and grip Reshape/Move commit paths. The Workbench Sketch-host regression additionally verifies context-first Command Line routing plus dot/current-locale decimal forms.
-
-WB-02 adds provider-neutral `wb02.cad_input_session` and boundary scanning plus `wb02.global_cad_input_ui` for keyboard capture/focus arbitration. The Workbench Sketch-host regression verifies keyboard-first command activation and Direct Distance through Line, normal Move/Copy and grip Reshape/Move while preserving the existing semantic controllers.
-
-Final work-item completion additionally requires the repository's exact-head Windows FULL gate and Owner manual Windows verification.
+Work-item completion uses the repository's exact-head Windows gate; current-state documentation does not preserve obsolete milestone gate counts.
 

@@ -57,9 +57,14 @@ int main() {
     const auto path = temp.path / "Part001.ss2part";
     auto document = part::PartDocument::create(core::DocumentId::generate());
     part::PartDocumentStore store;
-    CHECK(store.createNew(path, document).ok());
+    const auto created =
+        store.createNew(path, document);
+    CHECK(created.ok());
 
-    application::DocumentSession session{path, std::move(document)};
+    application::DocumentSession session{
+        path,
+        std::move(document),
+        *created.checkpoint};
     CHECK(!session.needsSave());
     CHECK(!session.canUndo());
     CHECK(!session.canRedo());
@@ -176,6 +181,17 @@ int main() {
               application::SetDocumentPropertiesCommand{properties})
               .changed);
     CHECK(session.needsSave());
+    const auto failed_save_state =
+        session.document().state();
+    const auto failed_save_revision =
+        session.document().revision();
+    const auto failed_save_undo =
+        session.undoDepth();
+    const auto failed_save_redo =
+        session.redoDepth();
+    const auto failed_save_checkpoint =
+        session.fileCheckpoint();
+    CHECK(failed_save_checkpoint.has_value());
 
     HANDLE locked = ::CreateFileW(
         path.c_str(),
@@ -192,6 +208,21 @@ int main() {
     CHECK(failed_save.diagnostic.code ==
           application::DocumentSessionErrorCode::persistence_failure);
     CHECK(session.needsSave());
+    CHECK(
+        session.document().state() ==
+        failed_save_state);
+    CHECK(
+        session.document().revision() ==
+        failed_save_revision);
+    CHECK(
+        session.undoDepth() ==
+        failed_save_undo);
+    CHECK(
+        session.redoDepth() ==
+        failed_save_redo);
+    CHECK(
+        session.fileCheckpoint() ==
+        failed_save_checkpoint);
 
     CHECK(::CloseHandle(locked) != 0);
     CHECK(readText(path) == durable_before_failed_save);

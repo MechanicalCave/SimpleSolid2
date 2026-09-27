@@ -113,6 +113,7 @@ Projekt można później ponownie otworzyć przez `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Aktualne ograniczenia
 
-Workspace Shell zawiera obecnie pierwszy trwały typ dokumentu CAD: Part `.ss2part` z właściwościami Dokumentu, Undo/Redo i Save.
+Workspace Shell zawiera trwały typ dokumentu Part `.ss2part` z właściwościami Dokumentu, Undo/Redo, warunkowym Save i możliwością utrzymywania kilku otwartych Partów jednocześnie.
 
-Wspólny CAD Workbench i Viewer 3D są dostępne dla Origin/referencji Parta i nawigacji. Modelowanie geometryczne Parta, Sketch, Bodies/Features, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Dokumenty Part`.
+Wspólny CAD Workbench i Viewer 3D obsługują Origin/referencje Parta, trwałe Sketche na płaszczyznach Origin oraz bieżący workflow edycji Sketchu. Modelowanie bryłowe Body/Feature, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Dokumenty Part`.
+

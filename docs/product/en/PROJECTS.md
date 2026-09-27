@@ -113,6 +113,7 @@ The Project can later be opened again using `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Current limits
 
-The Workspace Shell now contains the first persistent CAD Document type: a native `.ss2part` Part with Document Properties, Undo/Redo and Save.
+The Workspace Shell contains the persistent native `.ss2part` Part document type with Document Properties, Undo/Redo, conditional Save and several simultaneously open Part sessions.
 
-The shared CAD Workbench and 3D Viewer are available for Part Origin/reference work and navigation. Part geometric modeling, Sketch, Bodies/Features, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.
+The shared CAD Workbench and 3D Viewer support Part Origin/reference work, durable Origin-plane Sketches and the current Sketch editing workflow. Body/Feature solid modeling, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.
+

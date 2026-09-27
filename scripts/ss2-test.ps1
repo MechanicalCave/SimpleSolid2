@@ -98,7 +98,8 @@ if ($NoBuild) {
 $ctestArgs = @(
     "--test-dir", $build,
     "-C", $Config,
-    "--output-on-failure"
+    "--output-on-failure",
+    "--interactive-debug-mode", "0"
 )
 
 switch ($Tier) {

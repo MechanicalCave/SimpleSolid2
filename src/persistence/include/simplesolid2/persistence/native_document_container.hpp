@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -8,6 +9,8 @@
 namespace simplesolid2::persistence {
 
 inline constexpr int native_document_container_version = 1;
+inline constexpr std::uintmax_t maximum_native_document_container_bytes =
+    64U * 1024U * 1024U;
 inline constexpr std::string_view native_document_format =
     "simplesolid.native-document";
 
@@ -61,6 +64,10 @@ struct NativeContainerBuildResult final {
         return bytes.has_value();
     }
 };
+
+[[nodiscard]] NativeContainerReadResult parseNativeDocumentContainer(
+    std::string_view bytes,
+    const std::filesystem::path& path = {});
 
 [[nodiscard]] NativeContainerReadResult readNativeDocumentContainer(
     const std::filesystem::path& path);

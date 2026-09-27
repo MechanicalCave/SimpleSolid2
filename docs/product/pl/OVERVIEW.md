@@ -30,15 +30,17 @@ Obecny produkt udostępnia:
 - zsynchronizowane zaznaczenie Tree/Viewport z czyszczeniem zaznaczenia na pustym tle i primary selection;
 - trwałe Show/Hide referencji Origin z Undo/Redo;
 - edycję Number, Title, Description i Engineering Revision;
-- Save i bezpieczne zamykanie z ochroną niezapisanych zmian;
+- tworzenie i edycję Sketchy na płaszczyznach Origin z geometrią Line/Circle/Arc, zaznaczeniem, gripami oraz Move/Copy/Rotate/Scale/Mirror;
+- keyboard-first Command Line z Direct Distance w obsługiwanych wejściach punktowych;
+- Save z ochroną przed konfliktem zmienionego pliku oraz bezpieczne zamykanie z ochroną niezapisanych zmian;
 - ponowne odnajdywanie Partów po restarcie;
 - wykrywanie konfliktu, gdy dwa pliki w jednym Workspace mają ten sam DocumentId.
 
 Dialog `Open…` jest już dokumentowo-neutralny, ale jedynym zaimplementowanym typem głównego Dokumentu CAD pozostaje obecnie Part.
 
-Obecny Part jest trwałym dokumentem CAD ze wspólnym środowiskiem pracy 3D, ale nie zawiera jeszcze modelowanej geometrii bryłowej.
+Obecny Part jest trwałym dokumentem CAD ze wspólnym środowiskiem pracy 3D oraz trwałymi Sketchami na płaszczyznach Origin. Nie zawiera jeszcze modelowanej geometrii bryłowej Body/Feature.
 
-Sketch, Bodies/Features, Assembly i Drawing nie są jeszcze dostępne.
+Powierzchnie dokumentów/narzędzi Assembly i Drawing nie są jeszcze dostępne.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
