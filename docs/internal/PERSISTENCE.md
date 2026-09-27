@@ -122,7 +122,7 @@ The following state is not serialized as Part authored state:
 
 Persistent user visibility of built-in Origin references is intentionally **not** in this runtime-only list; it is authored Part state.
 
-The native package reserves `derived/*` for optional disposable assets. Unknown safe derived entries may be ignored. Deleting derived content must not destroy authored design intent. PERSIST-01 does not generate thumbnails or another derived asset.
+The native package reserves `derived/*` for optional disposable assets. Unknown safe derived entries may be ignored. Deleting derived content must not destroy authored design intent. The current implementation does not generate thumbnails or another derived asset.
 
 Recent availability is also derived at runtime.
 
@@ -148,6 +148,6 @@ A `.ss2part` whose manifest declares another Document kind fails closed. `docume
 
 The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch constraints/dimensions/solver state, modeled solid geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
 
-The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented by PERSIST-01.
+The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented.
 
 Implementation dependencies are vendored and pinned: miniz 3.1.2 for ZIP mechanics and nlohmann/json 3.12.0 for JSON. Normal builds do not download them, and their types do not cross CAD-domain public semantic APIs.
