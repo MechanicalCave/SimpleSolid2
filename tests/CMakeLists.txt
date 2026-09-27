@@ -1557,6 +1557,7 @@ set(_ss2_ui_test_targets
     sk07b_transform_controller_test
     sk07c_copy_controller_test
     sk07d_repeat_last_command_controller_test
+    sk07f_precision_input_controller_test
 )
 foreach(_target IN LISTS _ss2_ui_test_targets)
     target_link_libraries(${_target} PRIVATE simplesolid2_ui)
