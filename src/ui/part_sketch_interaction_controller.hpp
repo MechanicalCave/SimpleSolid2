@@ -2,6 +2,7 @@
 
 #include "part_viewport_controller.hpp"
 
+#include <simplesolid2/application/cad_input.hpp>
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 
