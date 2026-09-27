@@ -96,6 +96,60 @@ PartSketchInteractionController::commonTransformStage()
     return interaction_.commonTransformStage();
 }
 
+std::optional<sketch::PointRequest>
+PartSketchInteractionController::activePointRequest()
+    const noexcept {
+    return interaction_.activePointRequest();
+}
+
+bool PartSketchInteractionController::submitDirectDistance(
+    double distance) {
+    if (!active()) {
+        return false;
+    }
+
+    const auto request = interaction_.activePointRequest();
+    if (!request || !request->direct_distance_enabled) {
+        reportStatus(
+            "Direct Distance is not available for the active input request.");
+        return false;
+    }
+
+    const auto resolved =
+        interaction_.resolveDirectDistance(distance);
+    if (!resolved) {
+        reportStatus(
+            "Direct Distance requires a finite value and a usable pointer direction.");
+        return false;
+    }
+
+    if (interaction_.directManipulationActive()) {
+        if (!interaction_.updateDirectManipulation(*resolved)) {
+            return false;
+        }
+        return commitDirectManipulation();
+    }
+
+    if (interaction_.tool() == sketch::SketchTool::line) {
+        return acceptLineResolvedPoint(*resolved);
+    }
+
+    const auto stage = interaction_.commonTransformStage();
+    if (stage &&
+        *stage == sketch::CommonTransformStage::await_destination &&
+        (interaction_.tool() == sketch::SketchTool::move ||
+         interaction_.tool() == sketch::SketchTool::copy)) {
+        if (!interaction_.updateTransformPreview(*resolved)) {
+            return false;
+        }
+        return commitTransform();
+    }
+
+    reportStatus(
+        "Direct Distance is not valid for the active input stage.");
+    return false;
+}
+
 std::size_t
 PartSketchInteractionController::selectedCount() const noexcept {
     return interaction_.selectedEntities().size();
@@ -1013,7 +1067,7 @@ void PartSketchInteractionController::handleSelectPointer(
 void PartSketchInteractionController::handleLinePointer(
     const SketchPointerInput& input) {
     const auto resolved =
-        sketch::resolveSketchInput(
+        interaction_.resolvePointerInput(
             input.position);
 
     if (input.phase ==
@@ -1041,9 +1095,14 @@ void PartSketchInteractionController::handleLinePointer(
         return;
     }
 
+    static_cast<void>(
+        acceptLineResolvedPoint(*resolved));
+}
+
+bool PartSketchInteractionController::acceptLineResolvedPoint(
+    sketch::ResolvedSketchInput input) {
     const auto accepted =
-        interaction_.acceptLinePoint(
-            resolved->position);
+        interaction_.acceptLinePoint(input.position);
 
     if (accepted.outcome ==
         sketch::LinePointOutcome::segment_requested &&
@@ -1068,14 +1127,14 @@ void PartSketchInteractionController::handleLinePointer(
                     ? std::string{"Line segment commit failed."}
                     : result.diagnostic.message);
             notifyStateChanged();
-            return;
+            return false;
         }
 
         viewport_controller_->refreshPresentation();
         projectSelection();
         projectInteraction();
         notifyStateChanged();
-        return;
+        return true;
     }
 
     if (accepted.outcome ==
@@ -1084,7 +1143,10 @@ void PartSketchInteractionController::handleLinePointer(
             sketch::LinePointOutcome::zero_length_ignored) {
         viewport_controller_->clearSketchPreview();
         notifyStateChanged();
+        return true;
     }
+
+    return false;
 }
 
 void PartSketchInteractionController::handleCirclePointer(
@@ -1403,7 +1465,7 @@ handleCommonTransformPointer(
     }
 
     const auto resolved =
-        sketch::resolveSketchInput(input.position);
+        interaction_.resolvePointerInput(input.position);
 
     const bool reference_stage =
         *stage ==
@@ -1565,7 +1627,7 @@ void PartSketchInteractionController::
 updateDirectManipulationPreview(
     sketch::Point2 raw_input) {
     const auto resolved =
-        sketch::resolveSketchInput(raw_input);
+        interaction_.resolvePointerInput(raw_input);
     if (!resolved ||
         !interaction_.updateDirectManipulation(*resolved)) {
         viewport_controller_->clearSketchPreview();
@@ -1585,7 +1647,7 @@ void PartSketchInteractionController::
 updateCommonTransformPreview(
     sketch::Point2 raw_input) {
     const auto resolved =
-        sketch::resolveSketchInput(raw_input);
+        interaction_.resolvePointerInput(raw_input);
     if (!resolved ||
         !interaction_.updateTransformPreview(
             *resolved)) {

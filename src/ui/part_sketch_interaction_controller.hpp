@@ -38,6 +38,9 @@ public:
     moveStage() const noexcept;
     [[nodiscard]] std::optional<sketch::CommonTransformStage>
     commonTransformStage() const noexcept;
+    [[nodiscard]] std::optional<sketch::PointRequest>
+    activePointRequest() const noexcept;
+    [[nodiscard]] bool submitDirectDistance(double distance);
     [[nodiscard]] std::size_t selectedCount() const noexcept;
     [[nodiscard]] bool directManipulationActive()
         const noexcept;
@@ -99,6 +102,8 @@ private:
     void handleArcPointer(const SketchPointerInput& input);
     void handleCommonTransformPointer(
         const SketchPointerInput& input);
+    [[nodiscard]] bool acceptLineResolvedPoint(
+        sketch::ResolvedSketchInput input);
     void updateRectangleOverlay(viewer::ViewportPoint2 current);
     void updateHover(viewer::ViewportPoint2 point);
     [[nodiscard]] bool beginDirectManipulation(

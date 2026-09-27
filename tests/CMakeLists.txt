@@ -1236,6 +1236,22 @@ add_test(
     COMMAND sk07e_space_cycle_edit_mode_test
 )
 
+add_executable(sk07f_precision_input_state_test
+    sk07f_precision_input_state_test.cpp
+)
+
+target_link_libraries(sk07f_precision_input_state_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(sk07f_precision_input_state_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk07f.precision_input_state
+    COMMAND sk07f_precision_input_state_test
+)
+
 # CI-02 test metadata. FULL remains the unfiltered CTest suite.
 # New tests are intentionally not FAST by default; authors classify them explicitly.
 set(_ss2_fast_tests
@@ -1341,6 +1357,7 @@ set(_ss2_sketch_tests
     sk07c.copy_controller
     sk07d.repeat_last_command_controller
     sk07e.space_cycle_edit_mode
+    sk07f.precision_input_state
 )
 set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
 
