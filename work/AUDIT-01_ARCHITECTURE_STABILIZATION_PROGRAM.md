@@ -68,7 +68,7 @@ Default order is strict:
 | 1 | **A — WB-02 closeout hardening** | context lifetime, Delete precedence, input-capture ownership, real integration evidence | **COMPLETED — 2026-09-27** |
 | 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | **COMPLETED — 2026-09-27** |
 | 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | **COMPLETED — 2026-09-27** |
-| 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **ACTIVE — accepted 2026-09-27** |
+| 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **COMPLETED — 2026-09-27** |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | future bounded Work Contract |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | future bounded Work Contract |
 | 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | future bounded Work Contract |
@@ -355,6 +355,31 @@ The accepted bounded policy keeps the current two-snapshot `HistoryEntry{before,
 The runtime candidate removes the full `history_` copy, makes `HistoryEntry` non-copyable/noexcept-movable, reserves append capacity before Part mutation, preserves Redo until successful changed commit and pre-prepares EntityId high-water bookkeeping. Focused tests cover linear/branch history, no-op/rejected command with Redo and revision-exhaustion transaction failure. Existing full regressions passed #667.
 
 C1 remains ACTIVE until required internal docs are current, exact-head final FULL passes, governance closeout/CLOSURE completes and PR #81 is merged.
+
+### C1 final completion evidence
+
+**Completed:** 2026-09-27  
+**Final candidate:** `848fd01295bd9a93b882cca1d2df6cc362e8a265`  
+**Windows FULL:** #669 — PASS  
+**Documentation:** DOCS #668 — PASS  
+**Manual UI verification:** not required by the accepted C1 contract
+
+C1 is closed as **CONFIRMED / FIXED / VERIFIED**:
+
+- the command path no longer copies the full existing `history_` vector;
+- one pending `HistoryEntry` is prepared per accepted candidate command;
+- `HistoryEntry` is mechanically non-copyable and compile-time constrained to no-throw move relocation;
+- vector append capacity and EntityId high-water bookkeeping are prepared before Part mutation;
+- successful changed commit destroys only the obsolete Redo suffix and appends inside reserved capacity;
+- rejected, failed and no-op commands preserve logical history/cursor and Redo;
+- revision-exhaustion failure leaves authored state and history unchanged;
+- existing COPY EntityId high-water, B2 transaction, B1 persistence and full repository regressions remain green;
+- internal as-built documentation and Product Browser are current;
+- final exact-head Windows FULL #669 passed on the documented candidate.
+
+C1 deliberately does not change the two-snapshot history representation, introduce history depth/memory policy or claim a final performance solution. Those decisions remain C2 work based on measurements.
+
+C1 completion does not activate C2 automatically. C2 is the next mandatory AUDIT-01 package and requires a separate bounded Owner-accepted Work Contract.
 
 ## 9. Package C2 — choose history representation and budget from measurements
 

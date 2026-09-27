@@ -1,8 +1,10 @@
 # C1 — History Copy Cost Removal
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-27  
 **Owner acceptance:** 2026-09-27  
+**Final exact-head Windows FULL:** #669 — `848fd01295bd9a93b882cca1d2df6cc362e8a265` — PASS  
+**Manual UI verification:** not required  
 **Decision class:** D1 local DocumentSession history commit preparation  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package C1  
@@ -402,3 +404,28 @@ Implemented within the accepted C1 boundary:
 Focused DocumentSession evidence added for linear relocation/branching, no-op and rejected command while Redo exists, branch replacement traversal and revision-exhaustion transaction failure. Existing COPY EntityId high-water and full repository regressions remained green in #667.
 
 This checkpoint is not completion. Required internal documentation and a final exact-head Windows FULL still precede closeout.
+
+## 17. Final completion record
+
+C1 is complete on exact-head candidate `848fd01295bd9a93b882cca1d2df6cc362e8a265`.
+
+Final evidence:
+
+- Windows FULL #669 checked out that exact SHA and passed documentation freshness, Build, selector checks and the full regression suite;
+- DOCS #668 independently regenerated and verified the Product Browser after the internal as-built update;
+- the former full `history_` vector copy is removed from `commitCommandState()`;
+- `HistoryEntry` is non-copyable and no-throw movable, making deep-copy relocation of prior history mechanically unavailable;
+- one pending entry, vector capacity and EntityId high-water bookkeeping are prepared before the Part transaction;
+- after successful mutation the Redo suffix is erased, the prepared entry is moved into reserved capacity and cursor bookkeeping is swapped without allocation;
+- no-op and rejected commands preserve Redo;
+- changed branching after Undo replaces only the abandoned Redo suffix and traverses correctly through Undo/Redo;
+- revision-exhaustion transaction failure preserves authored state, revision and history depths;
+- existing COPY identity/high-water, Part transaction, persistence/save and UI regressions remain green.
+
+C1 makes no claim that the current two-snapshot history representation is optimal. It removes the confirmed history-depth-dependent copy while intentionally leaving deeper representation, benchmark and history-budget decisions to C2.
+
+Owner manual UI verification is not required because C1 has no intended user-visible behavior change.
+
+C1 acceptance conditions are satisfied. This closeout commit now requires only CLOSURE and merge of PR #81.
+
+After merge, AUDIT-01 requires a separate Owner-accepted C2 Work Contract before deeper history production mutation.
