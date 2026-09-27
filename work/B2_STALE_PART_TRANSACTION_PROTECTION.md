@@ -1,8 +1,9 @@
 # B2 — Stale Part Transaction Protection
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-27  
 **Owner acceptance:** 2026-09-27  
+**Final exact-head Windows FULL:** #635 — `e23114341973fa857ae4471d2abdd4107b9f79e6` — PASS — 73/73  
 **Decision class:** D2 domain transaction semantics + bounded D1 implementation  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package B2  
@@ -383,3 +384,28 @@ Automated evidence in #631 includes overlap T1/T2, stale-before-no-op, one-shot 
 Internal docs and the generated Browser are current and passed #632.
 
 This checkpoint is not completion. The final documented candidate still requires exact-head Windows FULL before B2 may move to COMPLETED.
+
+
+## 18. Final completion record
+
+B2 is complete on exact-head candidate `e23114341973fa857ae4471d2abdd4107b9f79e6`.
+
+Final evidence:
+
+- Windows PR gate #635 checked out that exact SHA and passed documentation verification, Build, selector checks, **73/73** unfiltered CTest and stable `windows-msvc`;
+- `part01.part_document_transaction` proves optimistic base-revision binding, stale-before-no-op, one-shot commit lifecycle, rollback, invalid-state rejection, revision exhaustion and validated reconstruction;
+- `part01.part_document_store` proves existing persistence/load/reopen behavior and fail-closed reconstruction remain green;
+- `part01.document_session` proves command/history/Undo/Redo integration remains green;
+- stale full-state commit cannot overwrite a newer accepted Part mutation;
+- rejected stale/invalid/exhausted/inactive commits leave authored state and technical revision unchanged;
+- current no-op and revision increment semantics are preserved;
+- complete Part authored state is validated by the owning domain boundary;
+- `PartDocument::restore` returns a structured validated reconstruction result and no invalid live document;
+- no persistent schema change, UI workflow change, B1 save-conflict behavior or C history redesign was introduced;
+- internal docs and generated Browser are current.
+
+Owner manual UI verification is not required for B2 because the accepted implementation has no intended user-visible workflow change.
+
+B2 closeout now requires only CLOSURE and merge of PR #79.
+
+After merge, AUDIT-01 requires a separate Owner-accepted B1 file/save conflict protection contract before further production mutation.

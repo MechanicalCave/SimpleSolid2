@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/B2_STALE_PART_TRANSACTION_PROTECTION.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
@@ -18,11 +18,10 @@ accepted_adrs:
   - "adr/ADR-0011-workspace-global-cad-input-routing-and-semantic-requests.md"
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
 next:
-  - implement accepted B2 base-revision freshness and typed stale_transaction at the Part domain commit boundary
-  - implement one-shot transaction lifecycle and current Part authored-state validation
-  - replace unchecked PartDocument reconstruction with validated reconstruction and adapt persistence
-  - add the full B2 domain/application/persistence regression matrix and current internal docs
-  - keep B1, C1, C2, D, E1, E2 and F queued by AUDIT-01 but inactive
+  - draft a separate bounded B1 file/save conflict protection Work Contract under AUDIT-01
+  - require explicit Owner acceptance of B1 before any file-conflict production mutation
+  - keep C1, C2, D, E1, E2 and F queued by AUDIT-01 but inactive
+  - preserve completed B2 transaction freshness and validated reconstruction as the domain baseline
 
 notes:
   - R0 through R4 are completed.
@@ -190,3 +189,8 @@ notes:
   - B2 runtime implementation checkpoint e39569c440ca41e24eb9330e3258b259bc7f0dfa passed Windows FULL #631 with Build, selector checks, stable windows-msvc and 73/73 CTest; part01.part_document_transaction, part01.part_document_store and part01.document_session passed.
   - B2 internal as-built docs and generated Browser were added on cd0b68250d32598aa3c930c457aacd354e30d61a; docs gate #632 passed regeneration/freshness verification.
   - Final B2 completion still requires a shared exact-head Windows FULL on the documented candidate, then governance closeout/CLOSURE and merge. No Owner manual UI test is required unless new user-visible behavior appears.
+
+  - B2 final exact-head candidate e23114341973fa857ae4471d2abdd4107b9f79e6 passed Windows FULL #635 with exact checkout, documentation verification, Build, selector checks, stable windows-msvc and 73/73 CTest.
+  - part01.part_document_transaction, part01.part_document_store and part01.document_session all passed on the final B2 candidate.
+  - B2 has no intended UI/product workflow change; per accepted contract no Owner manual UI test was required.
+  - B2 acceptance conditions are satisfied; the closeout candidate now awaits only the work-only CLOSURE gate and merge of PR #79.
