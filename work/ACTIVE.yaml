@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-07D_REPEAT_LAST_COMMAND.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,12 +16,9 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - implement accepted SK-07D within the bounded Repeat Last Command scope
-  - remember only one repeatable command identity for the active Sketch edit runtime session
-  - preserve existing Enter/Space precedence for active transforms/manipulation and text-entry focus
-  - use current selection on repeat; never replay prior points, previews, Copy placement data or prior selection snapshots
-  - use FAST/SUBSYSTEM checkpoints during implementation
-  - require exact-head Windows FULL plus Owner manual verification before completion
+  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
+  - propose the next bounded R7 slice for remaining command-grammar or Copy-modifier work before any implementation
+  - preserve completed SK-07A/SK-07B/SK-07C/SK-07D transform, COPY and Repeat Last Command behavior as the implementation baseline
   - keep ordinary-Select RMB context, semantic Space CycleEditMode, grip Copy modifier, Rotate/Scale/Mirror+Copy, numeric/Dynamic Input, snapping/inference and R8+ inactive
 
 notes:
