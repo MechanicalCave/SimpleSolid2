@@ -174,3 +174,7 @@ notes:
   - AUDIT-01 is the program roadmap for scheduling; work/SKETCH_ROADMAP.md v1.4 remains the subordinate accepted feature-direction roadmap and must still be read when Sketch/Shared-2D work is affected.
   - AUDIT-01 default order is A -> B2 -> B1 -> C1 -> C2 -> D -> E1 -> E2 -> F. Only the active_work contract authorizes production mutation; queued packages are mandatory program work but not active implementation authority.
   - Package A findings A1-A3 were statically confirmed against PR #78 at 519f9c54e26ec85be0d216585b59e8a7f158d2fa; A4 is the required evidence closure. WB-02 must remain ACTIVE until Package A, exact-head FULL and Owner manual verification pass.
+
+  - AUDIT-01 Package-A runtime hardening A1-A3 is implemented on 91877f6297a7af13cd874fbfe6a012ac5be4985f: opaque semantic context generation binds live tokens, non-empty-buffer Delete is captured before geometry deletion, and qApp capture is constrained to the active owning Workspace/window/focus with popup/modal isolation.
+  - Windows FULL #622 passed exact checkout of 91877f6297a7af13cd874fbfe6a012ac5be4985f with documentation verification, Build, selector checks and 73/73 CTest tests; sk01.workbench_sketch_host, wb02.cad_input_session and wb02.global_cad_input_ui all passed.
+  - Package A still requires current as-built/Product docs, regenerated Product Browser, a final exact-head FULL on the documented candidate and Owner manual Windows verification before WB-02 closeout.

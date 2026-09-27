@@ -102,6 +102,8 @@ Project Workspace Shell owns Project-level Document Tabs. Selecting a tab naviga
 
 Changing the Project-level tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. Closing the last open Document navigates to Workspace without closing the Project.
 
+Workspace CAD input is bound to the active semantic editing-context generation. Replacing the active Document/Sketch/request or leaving Sketch edit invalidates the old live token and diagnostic before the new context may consume keyboard input; detach-before-destroy remains mandatory. Pointer movement inside one unchanged PointRequest does not replace that context.
+
 Camera and selection are runtime-only. Camera state is retained per DocumentId while navigating between open Documents/Workspace and is cleared at the Project runtime boundary; it is never persisted.
 
 <!-- section-id: internal.application-lifecycle.close -->

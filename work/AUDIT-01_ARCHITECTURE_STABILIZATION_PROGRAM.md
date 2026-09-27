@@ -184,6 +184,17 @@ Before WB-02 completion, real Workbench integration must re-prove:
 
 The final Package-A candidate requires exact-head Windows FULL and Owner manual Windows verification.
 
+### Package A implementation checkpoint — 2026-09-27
+
+Current classification after implementation and Windows FULL #622 on `91877f6297a7af13cd874fbfe6a012ac5be4985f`:
+
+- **A1 — CONFIRMED / IMPLEMENTED / automated evidence PASS:** live input is bound to an opaque semantic context generation; same-request pointer movement preserves it; request/Sketch context replacement invalidates it; endpoint validates the expected generation before semantic interpretation/effect.
+- **A2 — CONFIRMED / IMPLEMENTED / automated evidence PASS:** non-empty viewport CAD buffer consumes Delete without model/revision/dirty/Undo/Redo mutation; empty-buffer and real text-editor Delete semantics remain separate.
+- **A3 — CONFIRMED / IMPLEMENTED / automated evidence PASS:** capture is constrained by active owning window, active Workbench focus/target, popup/modal ownership, text-editor ownership and endpoint presence; foreign windows and a second visible shell are isolated.
+- **A4 — PARTIAL PASS:** the real Workbench regression and provider-neutral/session/UI tests pass in the 73-test FULL suite. Final status remains pending current documentation, regenerated Browser, final exact-head FULL and Owner manual Windows verification.
+
+Package A is not complete until those remaining evidence gates pass.
+
 ## 6. Package B2 — stale transaction protection
 
 This package is next after WB-02 merge.

@@ -454,3 +454,18 @@ Previously accepted WB-02 refinements remain authoritative:
 This amendment does **not** authorize packages B-F, new input grammar, new quantity request types, Grip Copy, Dynamic Input, Ortho/Polar, snapping, regions or solid modeling.
 
 Completion now requires all original WB-02 acceptance conditions plus Package-A evidence from AUDIT-01, exact-head Windows FULL and Owner manual Windows verification.
+
+
+## 22. Package-A automated evidence checkpoint
+
+**Runtime candidate:** `91877f6297a7af13cd874fbfe6a012ac5be4985f`  
+**Windows FULL:** #622 — PASS — 73/73 CTest
+
+Automated Package-A evidence on that runtime candidate:
+
+- A1: `CadInputSession` binds the live token to the endpoint's opaque semantic context generation; stale-generation submit is rejected before endpoint interpretation/effect; real Workbench tests prove pointer movement inside one PointRequest preserves text while request replacement and Finish Sketch clear it without authored mutation.
+- A2: real Workbench test proves non-empty-buffer Delete leaves the token, authored state, DocumentRevision and Undo/Redo depths unchanged instead of deleting selected geometry.
+- A3: the Qt integration test proves real text-editor ownership, shortcut preservation, foreign non-modal window isolation, popup ownership and isolation between two visible Workspace shells.
+- Existing Line, grip Reshape/Move, MOVE, repeated COPY, Repeat Last Command, CycleEditMode, history and document lifecycle regressions remain in the unfiltered FULL suite.
+
+This checkpoint is not final WB-02 completion evidence. Current documentation/Product Browser, a final exact-head FULL on the documented candidate and Owner manual Windows verification are still required.
