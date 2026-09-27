@@ -2264,8 +2264,10 @@ void CadWorkbench::syncActionState() {
         active && document_session->canUndo());
     redo_button_->setEnabled(
         active && document_session->canRedo());
-    save_button_->setEnabled(
-        active && document_session->needsSave());
+    // Save remains available for a clean active Document so an explicit
+    // Save can revalidate the native-file checkpoint and report an external
+    // file conflict as required by ADR-0013.
+    save_button_->setEnabled(active);
     close_document_button_->setEnabled(active);
 
     const bool editing_sketch =
