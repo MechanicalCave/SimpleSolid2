@@ -162,9 +162,11 @@ When that buffer is non-empty:
 - Esc clears the live buffer before delegating any later Esc to tool cancellation;
 - semantic CAD actions such as grip Space cycling must not accidentally fire because text is currently being edited.
 
-On successful submission, the buffer clears.
+Every non-empty Enter/Return submission consumes the live buffer. Correction of the current token happens before submission through ordinary editing/Backspace.
 
-On rejected submission, authored state does not change. The active semantic context remains authoritative, and the implementation should keep the rejected text available for correction unless the semantic context explicitly ends or changes.
+On successful submission, the buffer is empty and the prior diagnostic clears.
+
+On rejected submission, authored state does not change and the active semantic context remains authoritative. The rejected token is not left in the editable buffer; instead the semantic endpoint publishes a bounded runtime diagnostic while the next token starts from an empty buffer.
 
 When the buffer is empty, existing CAD key semantics remain authoritative, including SK-07D Repeat Last Command, SK-07E Space CycleEditMode, transform-selection completion, Delete and hierarchical Esc.
 
@@ -227,6 +229,8 @@ No adapter may become an authored model authority.
 Prompt and diagnostic presentation are runtime projections of the active semantic context.
 
 Structured failure should originate from the subsystem that understands the input; the global UI presents that result.
+
+The visible Command Line is a geometry-stable one-row Workspace surface. Diagnostic presentation has permanently reserved bounded space and must not resize the input field or reflow/shrink the Viewer when an error appears. Long diagnostics are visually elided in that row; their complete text may be exposed through a tooltip or future history surface.
 
 A future Command Line history may be retained for the opened Project/application session as runtime presentation state. This ADR does not authorize persistence of command history into Project or CAD Document files.
 
@@ -315,7 +319,8 @@ An implementing Work Contract must prove at minimum:
 - active semantic requests outrank lower command activation;
 - current Sketch Direct Distance works keyboard-first;
 - ordinary Sketch command activation works keyboard-first when no request owns the token;
-- rejected tokens create no authored mutation;
+- rejected tokens create no authored mutation, consume the submitted live token and publish a diagnostic;
+- a long diagnostic does not change Command Line height or the reserved input/diagnostic widths;
 - non-empty-buffer Enter/Esc/Backspace behavior is deterministic;
 - existing empty-buffer Enter/Space/Esc/Delete semantics do not regress;
 - switching Documents/Workspace clears live input and prevents hidden-document consumption;

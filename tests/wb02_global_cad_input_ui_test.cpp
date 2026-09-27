@@ -3,6 +3,7 @@
 #include <simplesolid2/application/cad_input.hpp>
 
 #include <QApplication>
+#include <QLabel>
 #include <QLineEdit>
 #include <QTest>
 #include <QVBoxLayout>
@@ -28,6 +29,8 @@ class FakeEndpoint final
     : public simplesolid2::application::ICadInputEndpoint {
 public:
     std::string last;
+    std::string rejection{
+        "Rejected by fake endpoint."};
     bool accept{true};
 
     [[nodiscard]] std::string
@@ -42,7 +45,7 @@ public:
         return {
             accept,
             accept ? std::string{} :
-                     std::string{"Rejected by fake endpoint."}};
+                     rejection};
     }
 };
 
@@ -81,7 +84,29 @@ int main(int argc, char* argv[]) {
     auto* input =
         shell.findChild<QLineEdit*>(
             QStringLiteral("cadCommandInput"));
+    auto* command_line =
+        shell.findChild<QWidget*>(
+            QStringLiteral("cadCommandLine"));
+    auto* diagnostic =
+        shell.findChild<QLabel*>(
+            QStringLiteral("cadCommandDiagnostic"));
     CHECK(input != nullptr);
+    CHECK(command_line != nullptr);
+    CHECK(diagnostic != nullptr);
+    CHECK(!diagnostic->wordWrap());
+    CHECK(
+        command_line->minimumHeight() ==
+        command_line->maximumHeight());
+    CHECK(
+        diagnostic->minimumWidth() ==
+        diagnostic->maximumWidth());
+
+    const int command_height =
+        command_line->height();
+    const int input_width =
+        input->width();
+    const int diagnostic_width =
+        diagnostic->width();
 
     cad_surface->setFocus(Qt::OtherFocusReason);
     CHECK(QApplication::focusWidget() == cad_surface);
@@ -140,6 +165,10 @@ int main(int argc, char* argv[]) {
     CHECK(input->text().isEmpty());
 
     first.accept = false;
+    first.rejection =
+        "This is an intentionally very long rejected CAD input diagnostic "
+        "that must stay inside one reserved line without resizing the "
+        "Workspace Command Line or the Viewer above it.";
     QTest::keyClicks(
         cad_surface,
         QStringLiteral("BAD"));
@@ -148,8 +177,22 @@ int main(int argc, char* argv[]) {
         Qt::Key_Return);
     QApplication::processEvents();
     CHECK(first.last == "BAD");
-    CHECK(input->text() == QStringLiteral("BAD"));
+    CHECK(input->text().isEmpty());
+    CHECK(!diagnostic->text().isEmpty());
+    CHECK(
+        diagnostic->toolTip() ==
+        QString::fromStdString(first.rejection));
+    CHECK(command_line->height() == command_height);
+    CHECK(input->width() == input_width);
+    CHECK(diagnostic->width() == diagnostic_width);
+    CHECK(QApplication::focusWidget() == cad_surface);
 
+    // Editing before Enter remains possible; Esc clears a live token
+    // without cancelling the underlying fake CAD context.
+    QTest::keyClicks(
+        cad_surface,
+        QStringLiteral("TEMP"));
+    CHECK(input->text() == QStringLiteral("TEMP"));
     QTest::keyClick(
         cad_surface,
         Qt::Key_Escape);

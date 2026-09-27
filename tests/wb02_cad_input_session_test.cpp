@@ -74,7 +74,7 @@ int main() {
     auto rejected = session.submit();
     CHECK(!rejected.accepted);
     CHECK(first.last == "BAD");
-    CHECK(session.buffer() == "BAD");
+    CHECK(session.buffer().empty());
     CHECK(session.diagnostic() == "Rejected.");
 
     session.attachEndpoint(&second);
@@ -91,7 +91,7 @@ int main() {
     session.setBuffer("ORPHAN");
     auto no_context = session.submit();
     CHECK(!no_context.accepted);
-    CHECK(session.buffer() == "ORPHAN");
+    CHECK(session.buffer().empty());
     CHECK(!session.diagnostic().empty());
 
     return EXIT_SUCCESS;

@@ -172,8 +172,10 @@ WB-02 supports the minimum global buffer grammar:
 - Backspace edits current buffer;
 - Enter/Return submits non-empty buffer;
 - Esc clears a non-empty buffer first;
-- accepted submission clears buffer;
-- rejected submission creates no mutation and leaves the active context valid; text remains available for correction unless the context ended;
+- every non-empty Enter/Return submission consumes the live buffer;
+- accepted submission clears any prior diagnostic;
+- rejected submission creates no mutation, leaves the active semantic context valid, keeps the submitted text out of the editable buffer and publishes a bounded diagnostic;
+- correction of the current token happens before Enter through ordinary editing/Backspace;
 - click/focus editing of Command Line and keyboard-first viewport editing share one buffer.
 
 When the buffer is empty, existing accepted CAD key behavior remains unchanged.
@@ -329,22 +331,24 @@ At minimum verify:
 5. independent text editor typing does not change CAD input buffer;
 6. Ctrl+S / Ctrl+Z style shortcuts are not captured as text;
 7. Backspace edits buffer;
-8. Enter submits non-empty buffer;
-9. Esc clears non-empty buffer without prematurely cancelling the underlying CAD tool;
-10. after buffer clear, another Esc reaches normal tool cancellation;
-11. empty-buffer Enter/Space regressions remain correct;
-12. Line Direct Distance works without clicking Command Line;
-13. grip Reshape/Move Direct Distance works without clicking Command Line;
-14. normal MOVE/COPY Direct Distance works without clicking Command Line;
-15. ordinary MOVE command text can be launched keyboard-first from Select;
-16. active PointRequest still outranks top-level MOVE text;
-17. invalid token creates no revision/dirty/history change;
-18. switching Document clears buffer and old endpoint receives nothing further;
-19. switching to Workspace dashboard clears/detaches Document input;
-20. switching back never restores stale partial token;
-21. all completed SK-07A through SK-07F tests remain green;
-22. exact-head Windows FULL passes;
-23. documentation freshness/verification passes.
+8. Enter submits and consumes a non-empty buffer whether accepted or rejected;
+9. rejected input leaves the semantic tool/stage active, creates no mutation and presents a diagnostic with an empty editable buffer;
+10. a long diagnostic remains single-line in permanently reserved width and does not change Command Line height or input width;
+11. Esc clears non-empty buffer without prematurely cancelling the underlying CAD tool;
+12. after buffer clear, another Esc reaches normal tool cancellation;
+13. empty-buffer Enter/Space regressions remain correct;
+14. Line Direct Distance works without clicking Command Line;
+15. grip Reshape/Move Direct Distance works without clicking Command Line;
+16. normal MOVE/COPY Direct Distance works without clicking Command Line;
+17. ordinary MOVE command text can be launched keyboard-first from Select;
+18. active PointRequest still outranks top-level MOVE text;
+19. invalid token creates no revision/dirty/history change;
+20. switching Document clears buffer and old endpoint receives nothing further;
+21. switching to Workspace dashboard clears/detaches Document input;
+22. switching back never restores stale partial token;
+23. all completed SK-07A through SK-07F tests remain green;
+24. exact-head Windows FULL passes;
+25. documentation freshness/verification passes.
 
 ## 17. Manual Windows verification
 
@@ -357,8 +361,10 @@ Final candidate requires Owner verification of:
 - normal MOVE/COPY destination accepts 50 keyboard-first;
 - clicking Command Line and typing still produces identical semantic behavior;
 - a separate editable UI field receives ordinary typing without feeding Command Line;
-- Backspace and Esc edit/clear the Command Line buffer intuitively;
-- Esc after an empty buffer still cancels the active CAD interaction;
+- Backspace edits the live token before submission;
+- unsupported text followed by Enter clears the editable token, keeps the active CAD context alive and shows a diagnostic;
+- a deliberately long diagnostic does not make the Command Line taller, narrow/expand the input field or move the Viewer above it;
+- Esc clears a non-empty live buffer, and Esc after an empty buffer still cancels the active CAD interaction;
 - Space CycleEditMode and Repeat Last Command do not regress;
 - Ctrl+S/Ctrl+Z and ordinary application shortcuts do not become Command Line text;
 - changing active Document or navigating to Workspace cannot leak partial input to the old Document;

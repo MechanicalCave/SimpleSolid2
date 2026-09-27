@@ -452,9 +452,11 @@ Modify
   Mirror
 ```
 
-The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit the existing command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar; an invalid token is rejected and remains available for correction while the active point stage stays authoritative.
+The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit the existing command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
 
 WB-02 makes that surface keyboard-first. With a normal CAD surface such as the viewport focused, printable unmodified text is appended to the same runtime buffer and mirrored immediately in Command Line without transferring Qt focus. Clicking Command Line remains an equivalent adapter to the same buffer. Real text editors, editable properties, modal dialogs and application shortcuts keep their own keyboard ownership.
+
+The Command Line presentation is a geometry-stable single row. Its diagnostic region is permanently reserved and single-line; a long message is elided in place (with the full message available as tooltip) instead of wrapping, changing the input width or shrinking/moving the Viewer above it.
 
 `PartSketchInteractionController` owns one runtime-only **last repeatable command** identity for the active Sketch edit session. Successful explicit activation of Line/Circle/Arc/Move/Copy/Rotate/Scale/Mirror through toolbar or Command Line updates that one value. Select, Delete, selection changes, grip/direct manipulation, Undo/Redo and Esc do not replace it.
 
@@ -531,6 +533,8 @@ Persistent Origin visibility, authored Sketch geometry, committed copied entitie
 Closing/reopening the application recreates runtime view/interaction state while preserving saved authored geometry, copied EntityIds, the persisted next-identity cursor and visibility in the Part file.
 
 The native Workbench/Qt-OCCT stress regression continues to exercise repeated selection, navigation, resizing and lifecycle operations. COPY does not introduce a provider-owned duplication state or second semantic selection authority.
+
+
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.overview" data-kind="internal" data-lang="en" data-path="docs/internal/OVERVIEW.md">
 # SimpleSolid 2.0 — Internal As-built Overview
@@ -1498,9 +1502,11 @@ Modify
 
 Command Line is a shared Workspace surface and no longer requires a click before ordinary CAD entry. While the viewport or another normal CAD surface has focus, you can start typing immediately: the characters appear in Command Line while focus remains in the viewport. Enter submits the token to the active context. Clicking Command Line still works and edits the very same live buffer.
 
-Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. An invalid token does not mutate the model, remains available for correction and does not silently fall through to another command.
+Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. Enter consumes the submitted token even when it is invalid: the model and active tool/stage stay unchanged, the editable field is cleared and a diagnostic reports the error instead of forcing you to delete the rejected text manually.
 
 Real text-entry fields — for example property editors — keep keyboard ownership and do not feed Command Line. Application shortcuts using Ctrl/Alt/Meta are also not converted into CAD text. Switching Documents or navigating to Workspace clears any partial token so it can never leak into a hidden Document.
+
+The bottom Command Line stays one row high. Its right-side diagnostic area is permanently reserved, so showing an error does not resize the input field or make the Viewer jump. Long diagnostics are shortened visually in that row; the complete text is available as a tooltip.
 
 ### Repeat Last Command
 
@@ -1614,7 +1620,7 @@ The current version supports **Direct Distance** at five point-input locations: 
 
 After a numeric COPY placement, COPY remains active for another placement, but the previous direction is not silently reused — move the pointer to establish the direction for the next Direct Distance. Continuous LINE behaves the same way from its new endpoint. A value of `0` can be resolved, after which normal tool semantics decide the no-op/rejection: LINE creates no zero-length segment, MOVE is a no-op, and COPY creates no coincident copy.
 
-Numeric Rotate angle, Scale factor, absolute/relative Cartesian coordinates, polar syntax, unit suffixes/expressions, Dynamic Input, Ortho/Polar and snapping/tracking are not implemented yet. Digits typed while the viewport itself has focus are not globally intercepted; Direct Distance is submitted through Command Line to the active PointRequest.
+Numeric Rotate angle, Scale factor, absolute/relative Cartesian coordinates, polar syntax, unit suffixes/expressions, Dynamic Input, Ortho/Polar and snapping/tracking are not implemented yet. Printable text typed with normal CAD viewport focus is routed into the workspace-global Command Line buffer; numeric meaning is still owned by the active PointRequest/tool and is not guessed by the global router.
 
 Space typed while a text-entry field has focus remains text input; it does not trigger a CAD action.
 
@@ -1674,6 +1680,8 @@ The current Sketch UI provides Select plus Create and Modify groups with Line/Ci
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
 
 The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric angle/distance/scale/coordinate entry and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
+
+
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -1963,9 +1971,11 @@ Modify
 
 Command Line jest wspólną powierzchnią Workspace i nie wymaga kliknięcia przed normalnym wprowadzaniem CAD. Gdy focus ma viewport lub inna zwykła powierzchnia CAD, możesz od razu pisać — znaki pojawią się w Command Line, ale focus pozostanie w viewport. Enter wysyła wpisany token do aktywnego kontekstu. Kliknięcie Command Line nadal działa i edytuje dokładnie ten sam bufor.
 
-W aktywnym Sketchu obsługiwane są słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`. Command Line jest kontekstowy: jeżeli aktywny etap oczekuje punktu, bieżący semantic PointRequest ma pierwszeństwo przed uruchomieniem nowej komendy. W etapach obsługujących Direct Distance samodzielna wartość liczbowa jest interpretowana jako odległość. Błędny token nie zmienia modelu, pozostaje do poprawy i nie uruchamia po cichu innej komendy.
+W aktywnym Sketchu obsługiwane są słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`. Command Line jest kontekstowy: jeżeli aktywny etap oczekuje punktu, bieżący semantic PointRequest ma pierwszeństwo przed uruchomieniem nowej komendy. W etapach obsługujących Direct Distance samodzielna wartość liczbowa jest interpretowana jako odległość. Enter konsumuje wpisany token także wtedy, gdy jest błędny: model oraz aktywne narzędzie/etap pozostają bez zmian, edytowane pole jest czyszczone, a diagnostic informuje o błędzie bez zmuszania użytkownika do ręcznego kasowania odrzuconego tekstu.
 
 Prawdziwe pola tekstowe — np. edycja właściwości — zachowują własny focus i wpisywanie do nich nie zasila Command Line. Skróty aplikacji z Ctrl/Alt/Meta również nie są zamieniane na tekst CAD. Przy zmianie Dokumentu lub przejściu do Workspace częściowo wpisany token jest czyszczony i nie może trafić do ukrytego Dokumentu.
+
+Dolny Command Line pozostaje zawsze jednym wierszem. Obszar diagnostyczny po prawej stronie ma stale zarezerwowane miejsce, więc pojawienie się błędu nie zmienia szerokości pola wejściowego i nie powoduje przeskoku Viewera. Długi komunikat jest wizualnie skracany w tym wierszu, a pełna treść jest dostępna jako tooltip.
 
 ### Powtórzenie ostatniej komendy
 
@@ -2079,7 +2089,7 @@ Obecna wersja obsługuje **Direct Distance** w pięciu wejściach punktowych: dr
 
 Po numerycznym placement COPY pozostaje aktywne dla następnej kopii, ale poprzedni kierunek nie jest używany ponownie po cichu — przesuń kursor, aby ustalić kierunek kolejnego Direct Distance. W LINE kolejny segment analogicznie wymaga nowego kierunku od nowego endpointu. Wartość `0` przechodzi przez resolver, po czym zwykła semantyka narzędzia decyduje o no-op/rejection: LINE nie tworzy odcinka zerowego, MOVE jest no-op, a COPY nie tworzy nakładającej się kopii.
 
-Nie są jeszcze obsługiwane: numeryczny kąt Rotate, współczynnik Scale, współrzędne absolutne/względne, zapis polarny, sufiksy/jednostki, Dynamic Input, Ortho/Polar ani snapping/tracking. Liczby wpisywane bezpośrednio przy focusie viewportu nie są globalnie przechwytywane; Direct Distance jest składane przez Command Line dla aktywnego PointRequest.
+Nie są jeszcze obsługiwane: numeryczny kąt Rotate, współczynnik Scale, współrzędne absolutne/względne, zapis polarny, sufiksy/jednostki, Dynamic Input, Ortho/Polar ani snapping/tracking. Drukowalny tekst wpisywany przy normalnym focusie viewportu CAD trafia do globalnego bufora Command Line; znaczenie liczby nadal należy do aktywnego PointRequest/narzędzia i nie jest zgadywane przez globalny router.
 
 Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uruchamia akcji CAD.
 
@@ -2139,6 +2149,8 @@ Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
 Nadal brakuje grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego wpisywania kątów/odległości/skali/współrzędnych i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+
+
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty

@@ -165,3 +165,6 @@ notes:
 
   - Owner explicitly accepted ADR-0011, WB-02 and Sketcher roadmap v1.4 on 2026-09-27; WB-02 is the active bounded cross-cutting input slice.
   - Proposal head e09ef375ac438532187c7a91d7d99ac713d63d42 passed Windows PR gate #605 before activation.
+
+  - On 2026-09-27 the Owner reported the WB-02 candidate technically functional but requested external architecture audit before closeout; WB-02 must remain active until that audit and final re-verification are complete.
+  - Owner accepted two bounded UI refinements on 2026-09-27: Enter consumes rejected input while preserving semantic context with a diagnostic, and the global Command Line must remain a fixed one-row geometry with permanently reserved single-line diagnostic space.

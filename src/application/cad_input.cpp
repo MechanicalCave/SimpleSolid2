@@ -91,6 +91,13 @@ CadInputSubmitResult CadInputSession::submit() {
         return result;
     }
 
+    // Enter/Return consumes one submitted token regardless of whether
+    // the active semantic context accepts or rejects it. Correction is
+    // performed before submission; a rejected token reports a
+    // diagnostic while the next input starts from an empty live buffer.
+    const std::string submitted = buffer_;
+    buffer_.clear();
+
     auto* const target = endpoint_;
     const auto generation = generation_;
     if (target == nullptr) {
@@ -101,7 +108,6 @@ CadInputSubmitResult CadInputSession::submit() {
         return result;
     }
 
-    const std::string submitted = buffer_;
     auto result = target->submitCadInput(submitted);
 
     if (endpoint_ != target ||
@@ -115,7 +121,6 @@ CadInputSubmitResult CadInputSession::submit() {
 
     diagnostic_ = result.diagnostic;
     if (result.accepted) {
-        buffer_.clear();
         diagnostic_.clear();
     }
     return result;

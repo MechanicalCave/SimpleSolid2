@@ -115,9 +115,11 @@ Modify
 
 Command Line is a shared Workspace surface and no longer requires a click before ordinary CAD entry. While the viewport or another normal CAD surface has focus, you can start typing immediately: the characters appear in Command Line while focus remains in the viewport. Enter submits the token to the active context. Clicking Command Line still works and edits the very same live buffer.
 
-Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. An invalid token does not mutate the model, remains available for correction and does not silently fall through to another command.
+Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. Enter consumes the submitted token even when it is invalid: the model and active tool/stage stay unchanged, the editable field is cleared and a diagnostic reports the error instead of forcing you to delete the rejected text manually.
 
 Real text-entry fields — for example property editors — keep keyboard ownership and do not feed Command Line. Application shortcuts using Ctrl/Alt/Meta are also not converted into CAD text. Switching Documents or navigating to Workspace clears any partial token so it can never leak into a hidden Document.
+
+The bottom Command Line stays one row high. Its right-side diagnostic area is permanently reserved, so showing an error does not resize the input field or make the Viewer jump. Long diagnostics are shortened visually in that row; the complete text is available as a tooltip.
 
 ### Repeat Last Command
 
@@ -231,7 +233,7 @@ The current version supports **Direct Distance** at five point-input locations: 
 
 After a numeric COPY placement, COPY remains active for another placement, but the previous direction is not silently reused — move the pointer to establish the direction for the next Direct Distance. Continuous LINE behaves the same way from its new endpoint. A value of `0` can be resolved, after which normal tool semantics decide the no-op/rejection: LINE creates no zero-length segment, MOVE is a no-op, and COPY creates no coincident copy.
 
-Numeric Rotate angle, Scale factor, absolute/relative Cartesian coordinates, polar syntax, unit suffixes/expressions, Dynamic Input, Ortho/Polar and snapping/tracking are not implemented yet. Digits typed while the viewport itself has focus are not globally intercepted; Direct Distance is submitted through Command Line to the active PointRequest.
+Numeric Rotate angle, Scale factor, absolute/relative Cartesian coordinates, polar syntax, unit suffixes/expressions, Dynamic Input, Ortho/Polar and snapping/tracking are not implemented yet. Printable text typed with normal CAD viewport focus is routed into the workspace-global Command Line buffer; numeric meaning is still owned by the active PointRequest/tool and is not guessed by the global router.
 
 Space typed while a text-entry field has focus remains text input; it does not trigger a CAD action.
 

@@ -5,6 +5,7 @@
 #include <QComboBox>
 #include <QEvent>
 #include <QFrame>
+#include <QFontMetrics>
 #include <QHBoxLayout>
 #include <QKeyEvent>
 #include <QLabel>
@@ -207,9 +208,21 @@ ProjectWorkspaceShell::ProjectWorkspaceShell(
         new QLabel(command_line_widget_);
     command_diagnostic_->setObjectName(
         QStringLiteral("cadCommandDiagnostic"));
-    command_diagnostic_->setWordWrap(true);
-    command_diagnostic_->setVisible(false);
+    command_diagnostic_->setWordWrap(false);
+    command_diagnostic_->setTextFormat(Qt::PlainText);
+    command_diagnostic_->setAlignment(
+        Qt::AlignLeft | Qt::AlignVCenter);
+    // Reserve diagnostic space permanently so a rejected token cannot
+    // resize the input field or reflow the Workbench vertically.
+    command_diagnostic_->setFixedWidth(320);
+    command_diagnostic_->setVisible(true);
     command_layout->addWidget(command_diagnostic_);
+
+    // The Command Line is a stable one-row Workspace surface. Long
+    // diagnostics are elided inside their reserved region instead of
+    // increasing the shell height and shrinking the Viewer.
+    command_line_widget_->setFixedHeight(
+        command_input_->sizeHint().height() + 6);
 
     root->addWidget(command_line_widget_);
 
@@ -374,12 +387,21 @@ void ProjectWorkspaceShell::refreshCadInputPresentation() {
     syncCadInputLineEdit();
 
     if (command_diagnostic_ != nullptr) {
-        const auto& diagnostic =
-            cad_input_.diagnostic();
+        const auto full_diagnostic =
+            fromUtf8(cad_input_.diagnostic());
+        command_diagnostic_->setToolTip(
+            full_diagnostic);
+
+        const int available_width =
+            std::max(
+                0,
+                command_diagnostic_->width() - 4);
         command_diagnostic_->setText(
-            fromUtf8(diagnostic));
-        command_diagnostic_->setVisible(
-            !diagnostic.empty());
+            command_diagnostic_->fontMetrics().
+                elidedText(
+                    full_diagnostic,
+                    Qt::ElideRight,
+                    available_width));
     }
 }
 
