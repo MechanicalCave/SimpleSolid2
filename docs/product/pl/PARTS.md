@@ -107,18 +107,19 @@ Create
 
 Modify
   Move
+  Copy
   Rotate
   Scale
   Mirror
 ```
 
-Kompaktowy Command Line obsługuje słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `ROTATE`, `SCALE` i `MIRROR`.
+Kompaktowy Command Line obsługuje słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`.
 
 Tworzenie Line/Circle/Arc i zwykłe selection zachowują dotychczasową gramatykę. Zaznaczone edytowalne entities pokazują grips kodujące stan: pusty kwadrat w idle, pusty cyan na hover i pełny żółty dla aktywnego/captured gripa. Center grip przesuwa cały zamrożony mieszany selection; owner-only reshape zachowuje dotychczasową semantykę prymitywu.
 
 ### Wybór obiektów dla Modify
 
-Move, Rotate, Scale i Mirror działają na dowolnym mieszanym selection Line/Circle/Arc.
+Move, Copy, Rotate, Scale i Mirror działają na dowolnym mieszanym selection Line/Circle/Arc.
 
 Jeżeli obiekty są już zaznaczone, uruchom wybrane narzędzie Modify; bieżący selection zostaje od razu zamrożony i komenda przechodzi do pierwszego punktu odniesienia.
 
@@ -137,6 +138,25 @@ Jeżeli nic nie jest zaznaczone, uruchom narzędzie najpierw. Komenda przechodzi
 Wskaż **Base Point**, a potem destination. Cały zamrożony selection pokazuje preview jednego sztywnego przesunięcia `destination - base`.
 
 LMB albo Enter zatwierdza poprawny destination. Przesunięcie o zero jest czystym no-op: nie zmienia authored state i nie tworzy kroku Undo.
+
+### Copy
+
+COPY używa tego samego modelu wyboru obiektów co pozostałe narzędzia Modify. Po zamrożeniu source selection wskaż **Base Point**, a następnie placement point.
+
+Preview pokazuje translację oryginalnego source selection o `placement - base`. Przy poprawnym niezerowym placement:
+
+- oryginalne Line/Circle/Arc pozostają bez zmian i pozostają zaznaczone;
+- każda nowa kopia dostaje świeże, niealiasujące EntityId;
+- jeden placement jest jedną atomową zmianą i jednym krokiem Undo;
+- COPY pozostaje aktywne, więc możesz wskazać kolejne placement points bez ponownego wyboru obiektów i Base Point.
+
+Każdy kolejny placement jest liczony od tego samego oryginalnego source snapshotu i Base Point, a nie od poprzednio utworzonej kopii.
+
+Placement dokładnie w Base Point nie tworzy niewidocznej nakładającej się kopii. To czysty no-op: nie powstają entities, nie są zużywane EntityId i nie powstaje krok Undo.
+
+Esc kończy bieżącą sesję COPY i zachowuje source selection. Kopie zatwierdzone wcześniej w tej samej sesji pozostają w Sketchu. Undo/Redo działa na poszczególnych zatwierdzonych placementach; Redo przywraca te same EntityId kopii, a nowe COPY po Undo nie wykorzystuje ponownie ID wcześniej zatwierdzonej i cofniętej kopii.
+
+Undo nie cofa session-local high-water identyfikatorów, więc nowy COPY w tej samej sesji nie wykorzystuje ponownie ID cofniętej kopii. Jeżeli Undo przywróci dokładnie ostatnio zapisany authored state, dokument pozostaje clean jak wcześniej. Gdy późniejsza zatwierdzona kopia zostanie normalnie zapisana, istniejący format Part utrwala także aktualny `next_entity_id`.
 
 ### Rotate
 
@@ -166,17 +186,17 @@ Mirror odbija cały zamrożony selection. Line/Circle/Arc zachowują swoje Entit
 
 ### Zatwierdzanie i wpisywanie wartości
 
-Preview Move/Rotate/Scale/Mirror jest tylko runtime. Jeden rzeczywisty commit jest jedną atomową operacją i jednym krokiem Undo; zachowuje EntityId i współpracuje ze zwykłym Undo/Redo. Save/Close/Reopen zachowuje przekształconą geometrię w istniejącym formacie Part.
+Preview Move/Copy/Rotate/Scale/Mirror jest tylko runtime. Move/Rotate/Scale/Mirror edytują istniejące entities i zachowują ich EntityId. COPY tworzy nowe entities ze świeżymi EntityId wyłącznie przy zatwierdzonym placement.
 
-Esc anuluje bieżącą transformację i zachowuje objęty nią selection. LMB na końcowym etapie albo Enter zatwierdza bieżący poprawny preview.
+LMB na końcowym etapie albo Enter zatwierdza bieżący poprawny preview/placement. Esc anuluje niezatwierdzony stan i zachowuje właściwy selection.
 
-Obecna wersja **nie obsługuje wpisywania numerycznych kątów, odległości ani współczynników skali**. Wpisanie np. `0.5`, `2` albo `90` przy focusie viewportu nie zastępuje wartości wynikającej z położenia kursora. Enter zatwierdza wtedy bieżący preview.
+Obecna wersja **nie obsługuje wpisywania numerycznych kątów, odległości, współczynników skali ani współrzędnych COPY**. Wpisanie np. `0.5`, `2` albo `90` przy focusie viewportu nie zastępuje wartości wynikającej z położenia kursora. Enter zatwierdza wtedy bieżący preview.
 
 Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uruchamia akcji CAD.
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję. Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin.
 
-Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
+Grip Copy modifier, Copy połączone z Rotate/Scale/Mirror, Repeat Last Command, clipboard/cross-Sketch Copy, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
@@ -225,9 +245,9 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wp
 
 Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, ustabilizowany fundament Workbench/Viewer 3D oraz trwałe Sketches na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
 
-Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, Center-grip Move, ograniczony owner-only reshape, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
+Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Copy/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Center-grip Move, ograniczony owner-only reshape, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
 
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Nadal brakuje Copy/repeated Copy, Repeat Last Command, numerycznego wpisywania kątów/odległości/skali i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+Nadal brakuje grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, clipboard/cross-Sketch Copy, numerycznego wpisywania kątów/odległości/skali/współrzędnych i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 

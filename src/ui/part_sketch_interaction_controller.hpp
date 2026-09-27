@@ -49,6 +49,7 @@ public:
     void activateCircle();
     void activateArc();
     [[nodiscard]] bool activateMove();
+    [[nodiscard]] bool activateCopy();
     [[nodiscard]] bool activateRotate();
     [[nodiscard]] bool activateScale();
     [[nodiscard]] bool activateMirror();

@@ -48,18 +48,21 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The compiled CTest suite contains **60 tests**.
+The repository currently registers **66 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
-SK-07A adds:
+The R7 transform/COPY regressions include:
 
-- `sk07a.transform_core` — provider-independent mixed Line/Circle/Arc translation, finite validation, identity/parameter preservation, frozen capture and parity with Center-grip Move;
-- `sk07a.move_controller` — selection-first and command-first MOVE lifecycle, Base Point/destination preview, atomic transaction/history semantics, zero-delta no-op, stale revision failure, selection preservation and schema-v4 Save/reload identity preservation.
+- `sk07a.transform_core` and `sk07a.move_controller` — provider-independent mixed translation plus selection-first/command-first MOVE;
+- `sk07b.transform_core`, `sk07b.common_transform_state` and `sk07b.transform_controller` — Rotate/positive uniform Scale/Mirror core, interaction and controller semantics;
+- `sk07c.copy_interaction_state` — normal COPY state, frozen source/Base Point and repeated placement;
+- `sk07c.copy_command` — atomic mixed duplication, fresh/non-reused EntityIds, Undo/Redo and schema-v4 high-water persistence;
+- `sk07c.copy_controller` — zero-placement rejection, repeated independent placements, source-selection retention and stale-revision failure.
 
-The existing `sk01.workbench_sketch_host` regression also covers toolbar and Command-Line MOVE adapters plus text-focus Space behavior.
+The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, and text-focus keyboard behavior.
 
-At exact runtime head `bb218f8d9cff1c1c2ffc45e091a69c485190e97e`, Windows FULL #475 passed Build and **60/60** unfiltered CTest tests. `tier-fast` contained 59 tests; `wb01a.workbench_native_stress` remained the sole long FULL-only test.
+The last completed pre-SK-07C exact-head baseline was Windows FULL #510 on `dc58b767e2e3effbff90ba62d90a7a5f70fda5c5`, where Build and **63/63** unfiltered CTest tests passed. SK-07C adds three registered tests; its final exact-head Windows FULL result is recorded only at Work Contract closeout.
 
 Repository documentation validation runs outside CTest through `ss2 verify`. Tests must not be weakened to obtain a pass.
 

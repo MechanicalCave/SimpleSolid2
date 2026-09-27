@@ -339,6 +339,9 @@ int main(int argc, char* argv[]) {
     auto* move_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("moveSketchToolButton"));
+    auto* copy_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("copySketchToolButton"));
     auto* create_tools_label =
         workbench.findChild<QLabel*>(
             QStringLiteral("sketchCreateToolsLabel"));
@@ -372,6 +375,7 @@ int main(int argc, char* argv[]) {
     CHECK(editor_host != nullptr);
     CHECK(operations_label != nullptr);
     CHECK(move_button != nullptr);
+    CHECK(copy_button != nullptr);
     CHECK(create_tools_label != nullptr);
     CHECK(modify_tools_label != nullptr);
     CHECK(rotate_button != nullptr);
@@ -460,6 +464,43 @@ int main(int argc, char* argv[]) {
     CHECK(!rotate_button->isHidden());
     CHECK(!scale_button->isHidden());
     CHECK(!mirror_button->isHidden());
+
+    // SK-07C: toolbar and Command Line COPY are adapters to the
+    // same command-first semantic COPY state.
+    CHECK(!copy_button->isHidden());
+    copy_button->click();
+    QApplication::processEvents();
+    CHECK(copy_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Copy — Select objects; Enter/Space/RMB to continue"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: COPY — Select objects; Enter/Space/RMB to continue"));
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!copy_button->isChecked());
+
+    command_input->setText(
+        QStringLiteral("COPY"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(copy_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Copy — Select objects; Enter/Space/RMB to continue"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: COPY — Select objects; Enter/Space/RMB to continue"));
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!copy_button->isChecked());
 
     rotate_button->click();
     QApplication::processEvents();

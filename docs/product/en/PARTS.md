@@ -107,18 +107,19 @@ Create
 
 Modify
   Move
+  Copy
   Rotate
   Scale
   Mirror
 ```
 
-The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `ROTATE`, `SCALE` and `MIRROR`.
+The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`.
 
 Line/Circle/Arc creation and ordinary selection retain the existing behavior. Selected editable entities show state-based square grips: hollow idle, cyan hollow hover and filled yellow active/captured. Center grips move the complete frozen mixed selection; owner-only reshape grips keep their existing primitive-specific behavior.
 
 ### Selecting objects for Modify
 
-Move, Rotate, Scale and Mirror work on any mixed selection of Line, Circle and Arc.
+Move, Copy, Rotate, Scale and Mirror work on any mixed selection of Line, Circle and Arc.
 
 If objects are already selected, activate the Modify tool. The current selection is frozen immediately and the command advances to its first reference-point stage.
 
@@ -137,6 +138,25 @@ If nothing is selected, activate the tool first. The command enters **Select obj
 Specify a **Base Point**, then a destination. The complete frozen selection previews one rigid translation equal to `destination - base`.
 
 LMB or Enter accepts a valid destination. A zero-distance Move is a clean no-op: it creates no authored change and no Undo step.
+
+### Copy
+
+COPY uses the same object-selection grammar as the other Modify tools. After the source selection is frozen, specify a **Base Point**, then a placement point.
+
+Preview shows the original source selection translated by `placement - base`. On each valid non-zero placement:
+
+- the original Line/Circle/Arc entities remain unchanged and remain selected;
+- every new copied entity receives a fresh non-aliasing EntityId;
+- one placement is one atomic authored change and one Undo step;
+- COPY remains active so additional placement points can be accepted without reselecting objects or redefining Base Point.
+
+Every repeated placement is derived from the same original source snapshot and Base Point, never from the previously created copy.
+
+A placement exactly at Base Point does not create an invisible coincident copy. It is a clean no-op: no entities are created, no EntityIds are consumed and no Undo step is added.
+
+Esc ends the active COPY session while preserving the source selection. Copies already committed during that session remain in the Sketch. Undo/Redo acts on individual committed placements; Redo restores the same copied EntityIds, and a new COPY after Undo does not reuse IDs that belonged to a previously committed and undone copy.
+
+Undo does not rewind the session-local identity high-water, so a new COPY in the same session does not reuse IDs from the undone copy. If Undo restores exactly the last saved authored state, the Document remains clean as before. When a later committed copy is saved normally, the existing Part format also persists the current `next_entity_id`.
 
 ### Rotate
 
@@ -166,17 +186,17 @@ Mirror reflects the complete frozen selection. Line/Circle/Arc preserve their En
 
 ### Commit and numeric entry
 
-Move/Rotate/Scale/Mirror preview is runtime-only. One real commit is one atomic operation and one Undo step, preserves EntityIds, and works through normal Undo/Redo. Save/Close/Reopen preserves transformed geometry through the existing Part format.
+Move/Copy/Rotate/Scale/Mirror preview is runtime-only. Move/Rotate/Scale/Mirror edit existing entities and preserve their EntityIds. COPY creates new entities with fresh EntityIds only for accepted placements.
 
-Esc cancels the current transform and preserves the affected selection. LMB at the final point stage or Enter commits the current valid preview.
+LMB at the final point stage or Enter commits the current valid preview/placement. Esc cancels uncommitted transient state and preserves the relevant selection.
 
-The current version **does not support numeric entry of transform angles, distances or scale factors**. Typing values such as `0.5`, `2` or `90` while the viewport has focus does not replace the value derived from the pointer position. Enter still commits the current preview.
+The current version **does not support numeric entry of transform angles, distances, scale factors or COPY coordinates**. Typing values such as `0.5`, `2` or `90` while the viewport has focus does not replace the value derived from pointer position. Enter still commits the current preview.
 
 Space typed while a text-entry field has focus remains text input; it does not trigger a CAD action.
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Copy/repeated Copy, Repeat Last Command, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
+Grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, clipboard/cross-Sketch Copy, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -225,9 +245,9 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 
 The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the stabilized 3D Workbench/Viewer foundation and durable Origin-plane Sketches with Line/Circle/Arc authored geometry.
 
-The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, Center-grip Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
+The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Center-grip Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
 
-The product still lacks Copy/repeated Copy, Repeat Last Command, numeric angle/distance/scale entry and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
+The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, clipboard/cross-Sketch Copy, numeric angle/distance/scale/coordinate entry and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
 

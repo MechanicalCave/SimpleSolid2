@@ -62,11 +62,13 @@ Shift + Middle drag          → Orbit
 Mouse wheel                  → Zoom
 ```
 
-Normal Move/Rotate/Scale/Mirror commands reuse that same semantic query/selection bridge. Selection-first activation freezes an existing non-empty selection immediately. Command-first activation starts in Select objects mode: click/Ctrl/Window/Crossing collect entities, blank LMB is a no-op, and Enter/Space/RMB completes collection only when non-empty. Grips are hidden/inactive during normal common-transform stages.
+Normal Move/Copy/Rotate/Scale/Mirror commands reuse that same semantic query/selection bridge. Selection-first activation freezes an existing non-empty selection immediately. Command-first activation starts in Select objects mode: click/Ctrl/Window/Crossing collect entities, blank LMB is a no-op, and Enter/Space/RMB completes collection only when non-empty. Grips are hidden/inactive during normal common-transform/COPY stages.
+
+COPY retains the frozen original source selection across repeated placements. New copied entities do not take over selection, so later placements continue to refer to the original source set.
 
 Rectangle results are canonicalized as semantic EntityIds and provider result order never chooses primary. Sketch point/rectangle queries remain independent from mutable OCCT selection.
 
-Pointer routing and cursor mode remain independent runtime axes. Ordinary Select and transform object collection use the pick-box cursor; creation tools, transform reference/destination points and direct edit use the crosshair path. Toolbar, Operations, Command Line, keyboard and bounded RMB handling are adapters to the same semantic interaction authority.
+Pointer routing and cursor mode remain independent runtime axes. Ordinary Select and transform/COPY object collection use the pick-box cursor; creation tools, transform reference/destination points, COPY placement and direct edit use the crosshair path. Toolbar, Operations, Command Line, keyboard and bounded RMB handling are adapters to the same semantic interaction authority.
 
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
@@ -96,16 +98,23 @@ Create
 
 Modify
   Move
+  Copy
   Rotate
   Scale
   Mirror
 ```
 
-The compact Command Line accepts the command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `ROTATE`, `SCALE` and `MIRROR`. These keywords activate tools only; the current Command Line does not parse numeric transform values.
+The compact Command Line accepts the command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. These keywords activate tools only; the current Command Line does not parse numeric transform/COPY values.
 
-Move/Rotate/Scale/Mirror share one frozen-selection common-transform pipeline. Selection-first activation skips object collection. Command-first activation collects objects with the ordinary semantic selection grammar and freezes the affected EntityIds before reference-point stages begin.
+Move/Copy/Rotate/Scale/Mirror share one frozen-selection common-transform interaction pipeline. Selection-first activation skips object collection. Command-first activation collects objects with the ordinary semantic selection grammar and freezes the affected/source EntityIds before reference-point stages begin.
 
 Move uses Base Point → destination and previews one translation `destination - base`.
+
+COPY also uses Base Point → placement point, but commit duplicates rather than edits. Preview is computed from the original frozen mixed Line/Circle/Arc source. An accepted non-zero placement executes one `DuplicateSketchGeometryCommand`, leaves the originals unchanged and selected, creates fresh EntityIds for every duplicate, refreshes the authored scene and remains in COPY for another placement. Each later placement uses the same source snapshot and Base Point, not the previously created copy.
+
+Exact zero displacement is intentionally not a COPY commit. It allocates no EntityIds, changes no revision/dirty/history state and leaves COPY active at the placement stage.
+
+Each accepted repeated placement is a separate Part transaction and Undo entry. Undo/Redo is a boundary for an active transient COPY session: the transient preview is cancelled first, then ordinary global history runs. Redo restores the same copied identities. `DocumentSession` preserves the Sketch identity high-water through Undo so a new COPY in the same session cannot reuse the undone IDs. Undo back to the saved authored state remains clean; when a later committed copy is saved, its state persists the preserved high-water through the existing schema-v4 `next_entity_id` field.
 
 Rotate uses Base Point → Reference Point → destination. The Reference Point must differ from Base. The preview uses the signed angle between the reference and destination vectors in the Sketch frame, with positive counter-clockwise rotation. A zero-angle completion is a clean no-op.
 
@@ -113,15 +122,13 @@ Scale uses Base Point → Reference Point → destination. The factor is the rat
 
 Mirror uses first axis point → second axis point. The two points must be distinct and define an infinite mirror line. Reflection preserves EntityIds; reflected Arcs reverse signed sweep orientation so the authored directed arc matches the reflected geometry. Geometry that is exactly unchanged by the chosen axis completes as a no-op.
 
-Pointer movement updates runtime-only preview from the interaction-start geometry snapshot. LMB at the final point stage or Enter commits the current valid preview. Number keys are not a numeric-input path: typing values such as `0.5`, `2` or `90` while the viewport has focus does not replace the pointer-derived Scale factor or Rotate angle. Enter still means commit the current preview.
+Pointer movement updates runtime-only preview from the interaction-start geometry snapshot. LMB at the final point stage or Enter commits the current valid transform/placement. Number keys are not a numeric-input path: typing values such as `0.5`, `2` or `90` while the viewport has focus does not replace pointer-derived Scale/Rotate/COPY input. Enter still means commit the current valid preview.
 
-A non-no-op accepted common transform executes one semantic `UpdateSketchGeometryCommand`, validates the captured revision and all frozen EntityIds, stages one Part state, commits atomically, increments revision once and creates one Undo entry. EntityIds are preserved. Exact semantic no-ops create no revision, dirty-state or history change.
+Non-COPY transforms preserve existing EntityIds. COPY allocates fresh identities only at accepted placement commit; preview and cancelled/zero placements consume none. Save/Close/Reopen uses unchanged Part schema v4 and persists `next_entity_id` together with authored Sketch geometry.
 
-Center grips still move the complete frozen selection using the grip start as implicit base. Owner-only reshape semantics for Line/Circle/Arc are unchanged. Undo/Redo first cancels transient common-transform/direct-manipulation state, then runs ordinary DocumentSession history and reconciles surviving semantic selection.
+Center grips still move the complete frozen selection using the grip start as implicit base. Owner-only reshape semantics for Line/Circle/Arc are unchanged. Grip Copy modifier and Rotate/Scale/Mirror+Copy remain outside the current surface.
 
-Switching tools or Documents clears uncommitted transform state safely. Save/Close/Reopen uses unchanged Part schema v4; transformed canonical geometry and EntityIds persist without a migration.
-
-Space inside text-entry focus remains text input. Copy/repeated Copy, Repeat Last Command, numeric transform input, snapping/inference, Dynamic Input and later Sketch breadth remain outside the current surface.
+Switching tools or Documents clears uncommitted transform/COPY state safely. Space inside text-entry focus remains text input.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and provider-surface Navigation Cube
@@ -152,11 +159,11 @@ There is still no modeled Part B-Rep at this milestone; the OCCT provider remain
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, hover, active grip, direct-manipulation session, common-transform tool/stage, frozen selection snapshot, Base/Reference/axis points, current pointer-derived preview, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/transform drag state and Command Line text/prompt state are runtime-only.
+Selection, primary selection, hover, active grip, direct-manipulation session, common-transform/COPY tool and stage, frozen source selection/geometry snapshot, Base/Reference/axis points, current pointer-derived preview, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/transform drag state and Command Line text/prompt state are runtime-only.
 
-Persistent Origin visibility and authored Sketch geometry remain separate domain state.
+Persistent Origin visibility, authored Sketch geometry, committed copied entities and the model-local identity high-water are authored/durable state. COPY preview itself is never persisted.
 
-Closing/reopening the application recreates runtime view/interaction state while preserving saved authored geometry and visibility in the Part file.
+Closing/reopening the application recreates runtime view/interaction state while preserving saved authored geometry, copied EntityIds, the persisted next-identity cursor and visibility in the Part file.
 
-The native Workbench/Qt-OCCT stress regression continues to exercise repeated selection, navigation, resizing and lifecycle operations. Common transforms do not introduce a second provider-owned transform state or semantic selection authority.
+The native Workbench/Qt-OCCT stress regression continues to exercise repeated selection, navigation, resizing and lifecycle operations. COPY does not introduce a provider-owned duplication state or second semantic selection authority.
 

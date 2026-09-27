@@ -2,6 +2,7 @@
 
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/sketch/transform.hpp>
 
 #include <cstddef>
 #include <filesystem>
@@ -91,6 +92,12 @@ struct UpdateSketchGeometryCommand final {
     std::vector<SketchArcGeometryUpdate> arcs;
 };
 
+struct DuplicateSketchGeometryCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    sketch::SketchTransformGeometry geometry;
+};
+
 enum class DocumentSessionErrorCode {
     none,
     invalid_command,
@@ -157,6 +164,16 @@ struct AddSketchArcResult final {
     }
 };
 
+struct DuplicateSketchGeometryResult final {
+    bool changed{false};
+    std::vector<sketch::EntityId> entity_ids;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
 class DocumentSession final {
 public:
     DocumentSession(std::filesystem::path path, part::PartDocument document);
@@ -203,6 +220,8 @@ public:
         const UpdateSketchLinesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const UpdateSketchGeometryCommand& command);
+    [[nodiscard]] DuplicateSketchGeometryResult execute(
+        const DuplicateSketchGeometryCommand& command);
     [[nodiscard]] DocumentSessionResult undo();
     [[nodiscard]] DocumentSessionResult redo();
     [[nodiscard]] DocumentSessionResult save();

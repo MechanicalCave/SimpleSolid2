@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-07C_COPY_REPEATED_COPY_AND_FRESH_IDENTITY.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,13 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - implement accepted SK-07C within the bounded normal COPY + repeated-placement + fresh-identity scope
-  - reuse the existing provider-independent translation transform and SK-07A/SK-07B selection-first/command-first grammar
-  - preserve source selection and allocate fresh non-aliasing EntityIds only on accepted placements
-  - verify high-water identity behavior across Undo/Redo/new Copy/save-reopen without changing schema v4
-  - use FAST/SUBSYSTEM checkpoints during implementation
-  - require exact-head Windows FULL plus Owner manual verification before completion
-  - keep grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, numeric/Dynamic Input and R8+ inactive
+  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
+  - propose the next bounded R7 slice for the remaining Copy modifier / command-grammar work before any implementation
+  - preserve completed SK-07A/SK-07B/SK-07C Move/Rotate/Scale/Mirror/COPY behavior and fresh-identity semantics as the implementation baseline
+  - keep Rotate/Scale/Mirror+Copy, semantic Space CycleEditMode, ordinary-Select RMB context, Repeat Last Command, numeric/Dynamic Input, snapping/inference and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -122,3 +119,10 @@ notes:
   - The proposal keeps source entities selected, creates fresh identities per placement and requires non-reuse across Undo/Redo/save-reopen.
   - Grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, numeric/Dynamic Input and R8+ remain inactive.
   - Owner explicitly accepted SK-07C on 2026-09-27; this bounded R7C slice is active.
+
+  - SK-07C final exact-head candidate 03baaf6d82c5f7ba73d3701791dc8af8f356ce5f passed Windows FULL #549 with documentation verification, Build, FAST/SUBSYSTEM selector checks, 66/66 unfiltered CTest tests and stable windows-msvc.
+  - Owner manual Windows verification passed on 2026-09-27 for normal COPY/repeated placement, zero-displacement no-op, Undo/Redo, Save/Close/Reopen and regression checks.
+  - Required internal and PL/EN Product documentation plus deterministic Product Browser freshness passed on the final candidate.
+  - SK-07C acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
+  - Grip Copy modifier, Rotate/Scale/Mirror+Copy, semantic Space CycleEditMode, ordinary-Select RMB context, Repeat Last Command, numeric/Dynamic Input, snapping/inference and R8+ remain inactive.
+

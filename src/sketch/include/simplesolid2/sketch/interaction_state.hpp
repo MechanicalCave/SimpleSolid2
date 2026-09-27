@@ -17,6 +17,7 @@ enum class SketchTool : std::uint8_t {
     circle,
     arc,
     move,
+    copy,
     rotate,
     scale,
     mirror,
@@ -243,6 +244,8 @@ public:
     void activateArc() noexcept;
     [[nodiscard]] bool activateMove(
         const SketchModel& model);
+    [[nodiscard]] bool activateCopy(
+        const SketchModel& model);
     [[nodiscard]] bool activateRotate(
         const SketchModel& model);
     [[nodiscard]] bool activateScale(
@@ -258,6 +261,7 @@ public:
         ResolvedSketchInput input) noexcept;
     [[nodiscard]] std::optional<SketchTransformGeometry>
     transformGeometryState() const;
+    [[nodiscard]] bool continueCopyPlacement() noexcept;
     void finishTransform() noexcept;
 
     // SK-07A source compatibility.

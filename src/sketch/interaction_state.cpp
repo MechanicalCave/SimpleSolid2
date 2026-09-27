@@ -306,6 +306,7 @@ SketchInteractionState::commonTransformStage() const noexcept {
 bool SketchInteractionState::commonTransformTool()
     const noexcept {
     return tool_ == SketchTool::move ||
+           tool_ == SketchTool::copy ||
            tool_ == SketchTool::rotate ||
            tool_ == SketchTool::scale ||
            tool_ == SketchTool::mirror;
@@ -345,6 +346,7 @@ bool SketchInteractionState::activateCommonTransform(
     SketchTool tool,
     const SketchModel& model) {
     if (tool != SketchTool::move &&
+        tool != SketchTool::copy &&
         tool != SketchTool::rotate &&
         tool != SketchTool::scale &&
         tool != SketchTool::mirror) {
@@ -392,6 +394,13 @@ bool SketchInteractionState::activateMove(
     const SketchModel& model) {
     return activateCommonTransform(
         SketchTool::move,
+        model);
+}
+
+bool SketchInteractionState::activateCopy(
+    const SketchModel& model) {
+    return activateCommonTransform(
+        SketchTool::copy,
         model);
 }
 
@@ -460,6 +469,7 @@ bool SketchInteractionState::acceptTransformPoint(
     switch (transform_session_->stage) {
     case CommonTransformStage::await_base_point:
         if (tool_ != SketchTool::move &&
+            tool_ != SketchTool::copy &&
             tool_ != SketchTool::rotate &&
             tool_ != SketchTool::scale) {
             return false;
@@ -468,10 +478,12 @@ bool SketchInteractionState::acceptTransformPoint(
         transform_session_->reference_point.reset();
         transform_session_->current_preview.reset();
         transform_session_->stage =
-            tool_ == SketchTool::move
+            (tool_ == SketchTool::move ||
+             tool_ == SketchTool::copy)
                 ? CommonTransformStage::await_destination
                 : CommonTransformStage::await_reference_point;
-        if (tool_ == SketchTool::move) {
+        if (tool_ == SketchTool::move ||
+            tool_ == SketchTool::copy) {
             transform_session_->current_preview = input;
         }
         clearHover();
@@ -522,6 +534,7 @@ bool SketchInteractionState::updateTransformPreview(
         transform_session_->stage ==
             CommonTransformStage::await_destination &&
         (tool_ == SketchTool::move ||
+         tool_ == SketchTool::copy ||
          tool_ == SketchTool::rotate ||
          tool_ == SketchTool::scale);
     const bool axis_end =
@@ -551,7 +564,8 @@ SketchInteractionState::transformGeometryState() const {
     const auto current =
         transform_session_->current_preview->position;
 
-    if (tool_ == SketchTool::move &&
+    if ((tool_ == SketchTool::move ||
+         tool_ == SketchTool::copy) &&
         transform_session_->stage ==
             CommonTransformStage::await_destination) {
         return translateSketchGeometry(
@@ -614,6 +628,22 @@ SketchInteractionState::transformGeometryState() const {
     }
 
     return std::nullopt;
+}
+
+bool SketchInteractionState::continueCopyPlacement() noexcept {
+    if (tool_ != SketchTool::copy ||
+        !transform_session_ ||
+        transform_session_->stage !=
+            CommonTransformStage::await_destination ||
+        !transform_session_->base_point ||
+        transform_session_->selection_snapshot.empty() ||
+        transform_session_->initial_geometry.empty()) {
+        return false;
+    }
+
+    transform_session_->current_preview.reset();
+    clearHover();
+    return true;
 }
 
 void SketchInteractionState::finishTransform() noexcept {

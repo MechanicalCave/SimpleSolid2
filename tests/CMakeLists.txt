@@ -1132,6 +1132,66 @@ set_tests_properties(sk07b.transform_controller PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
 )
 
+add_executable(sk07c_copy_command_test
+    sk07c_copy_command_test.cpp
+)
+
+target_link_libraries(sk07c_copy_command_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(sk07c_copy_command_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk07c.copy_command
+    COMMAND sk07c_copy_command_test
+)
+
+add_executable(sk07c_copy_interaction_state_test
+    sk07c_copy_interaction_state_test.cpp
+)
+
+target_link_libraries(sk07c_copy_interaction_state_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(sk07c_copy_interaction_state_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk07c.copy_interaction_state
+    COMMAND sk07c_copy_interaction_state_test
+)
+
+add_executable(sk07c_copy_controller_test
+    sk07c_copy_controller_test.cpp
+)
+
+target_include_directories(sk07c_copy_controller_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/application
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(sk07c_copy_controller_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(sk07c_copy_controller_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME sk07c.copy_controller
+    COMMAND sk07c_copy_controller_test
+)
+
+set_tests_properties(sk07c.copy_controller PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+)
+
 # CI-02 test metadata. FULL remains the unfiltered CTest suite.
 # New tests are intentionally not FAST by default; authors classify them explicitly.
 set(_ss2_fast_tests
@@ -1232,6 +1292,9 @@ set(_ss2_sketch_tests
     sk07b.transform_core
     sk07b.common_transform_state
     sk07b.transform_controller
+    sk07c.copy_command
+    sk07c.copy_interaction_state
+    sk07c.copy_controller
 )
 set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
 
@@ -1272,6 +1335,8 @@ set(_ss2_part_tests
     sk06a.circle_arc_model_persistence
     sk07a.move_controller
     sk07b.transform_controller
+    sk07c.copy_command
+    sk07c.copy_controller
 )
 set_property(TEST ${_ss2_part_tests} APPEND PROPERTY LABELS "subsystem-part")
 
@@ -1295,6 +1360,8 @@ set(_ss2_application_tests
     sk06a.circle_arc_model_persistence
     sk07a.move_controller
     sk07b.transform_controller
+    sk07c.copy_command
+    sk07c.copy_controller
 )
 set_property(TEST ${_ss2_application_tests} APPEND PROPERTY LABELS "subsystem-application")
 
@@ -1305,6 +1372,7 @@ set(_ss2_persistence_tests
     sk02b.part_sketch_persistence
     sk05a.line_geometry_command
     sk06a.circle_arc_model_persistence
+    sk07c.copy_command
 )
 set_property(TEST ${_ss2_persistence_tests} APPEND PROPERTY LABELS "subsystem-persistence")
 
@@ -1339,6 +1407,7 @@ set(_ss2_viewer_tests
     sk05a.part_sketch_direct_manipulation
     sk07a.move_controller
     sk07b.transform_controller
+    sk07c.copy_controller
 )
 set_property(TEST ${_ss2_viewer_tests} APPEND PROPERTY LABELS "subsystem-viewer")
 
@@ -1357,6 +1426,7 @@ set(_ss2_ui_tests
     sk05a.part_sketch_direct_manipulation
     sk07a.move_controller
     sk07b.transform_controller
+    sk07c.copy_controller
 )
 set_property(TEST ${_ss2_ui_tests} APPEND PROPERTY LABELS "subsystem-ui")
 
@@ -1385,6 +1455,7 @@ set(_ss2_ui_test_targets
     sk05a_part_sketch_direct_manipulation_test
     sk07a_move_controller_test
     sk07b_transform_controller_test
+    sk07c_copy_controller_test
 )
 foreach(_target IN LISTS _ss2_ui_test_targets)
     target_link_libraries(${_target} PRIVATE simplesolid2_ui)

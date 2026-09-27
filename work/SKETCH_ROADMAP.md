@@ -611,7 +611,7 @@ Goal:
 - prove the R5 interaction architecture is not Line-specific.
 
 ### R7 — Common transforms, Copy and command grammar
-**Status:** active — SK-07A/SK-07B completed; SK-07C accepted 2026-09-27 for normal COPY/repeated Copy + fresh identity
+**Status:** active — SK-07A, SK-07B and SK-07C completed; remaining R7 requires separate accepted slices
 
 Goal:
 
@@ -729,7 +729,7 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7 active — SK-07A/SK-07B completed; SK-07C accepted for normal COPY/repeated Copy + fresh identity; grip Copy modifier and later command grammar remain unauthorized  
+R7 active — SK-07A, SK-07B and SK-07C completed; grip Copy modifier and later command grammar remain unauthorized  
 R8+ not started
 
 Roadmap v1.2 remains authoritative. Remaining R7 work and R8+ require separate explicit Owner-accepted Work Contracts.
