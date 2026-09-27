@@ -817,8 +817,9 @@ int main(int argc, char* argv[]) {
         140.0, 100.0,
         1.0, 0.0);
 
-    // SK-07F: an active semantic PointRequest owns Command Line
-    // submission before top-level command activation.
+    // SK-07F/WB-02: an active semantic PointRequest owns Command
+    // Line submission before top-level command activation. Rejection
+    // keeps LINE authoritative but Enter consumes the submitted token.
     command_input->setText(QStringLiteral("MOVE"));
     QTest::keyClick(command_input, Qt::Key_Return);
     QApplication::processEvents();
@@ -828,7 +829,7 @@ int main(int argc, char* argv[]) {
         session->document()
             .findSketch(sketch_id)
             ->model.entityCount() == 0U);
-    CHECK(command_input->text() == QStringLiteral("MOVE"));
+    CHECK(command_input->text().isEmpty());
 
     // Current-locale decimal separator and '.' both feed the same
     // Direct Distance path. Keep two segments temporarily so both
