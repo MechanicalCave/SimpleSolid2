@@ -41,6 +41,9 @@ public:
     [[nodiscard]] std::size_t selectedCount() const noexcept;
     [[nodiscard]] bool directManipulationActive()
         const noexcept;
+    [[nodiscard]] std::optional<sketch::DirectEditMode>
+    directEditMode() const noexcept;
+    [[nodiscard]] bool cycleDirectEditMode();
     [[nodiscard]] std::optional<sketch::SketchTool>
     lastRepeatableCommand() const noexcept {
         return last_repeatable_command_;
