@@ -16,10 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
-  - propose the next bounded R7 slice for grip Copy modifier behavior before any implementation
+  - review work/SK-07F_GRIP_COPY_MODIFIER.md as the proposed sixth bounded R7 Work Contract
+  - require explicit Owner acceptance before any SK-07F production implementation
   - preserve completed SK-07A/SK-07B/SK-07C/SK-07D/SK-07E transform, COPY, Repeat Last Command and Space CycleEditMode behavior as the implementation baseline
-  - keep Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, numeric/Dynamic Input, snapping/inference and R8+ inactive
+  - keep Reshape+Copy, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, numeric/Dynamic Input, snapping/inference and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -149,4 +149,9 @@ notes:
   - Required internal and PL/EN Product documentation plus deterministic Product Browser freshness passed on the final candidate.
   - SK-07E acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
   - Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, numeric/Dynamic Input, snapping/inference and R8+ remain inactive.
+
+  - SK-07F is proposed on 2026-09-27 as the sixth bounded R7 slice: Ctrl grip Copy modifier for DirectEditMode Move.
+  - Proposed Ctrl is a held modifier: Move+Copy duplicates the complete frozen selection using the existing SK-07C fresh-identity path; releasing Ctrl returns to ordinary Move.
+  - Reshape+Copy, Rotate/Scale/Mirror+Copy, repeated grip-copy placement and ordinary-Select RMB context remain inactive.
+  - SK-07F is not active until explicit Owner acceptance.
 
