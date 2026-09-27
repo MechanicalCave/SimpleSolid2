@@ -1,8 +1,10 @@
 # SK-07C — COPY, Repeated Copy and Fresh Entity Identity
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-27  
-**Owner acceptance:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  **Owner manual Windows verification:** PASS — 2026-09-27  
+**Final exact-head Windows FULL:** #549 — `03baaf6d82c5f7ba73d3701791dc8af8f356ce5f` — PASS  
+
 **Decision class:** D2 fresh-identity lifecycle + transform/interaction semantics + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -451,3 +453,19 @@ Completion requires:
 - Owner manual Windows verification passes;
 - closeout CLOSURE passes;
 - remaining R7 and R8+ work stays inactive until separately accepted.
+
+## 20. Completion evidence
+
+SK-07C completed its bounded third R7 slice on 2026-09-27.
+
+- Normal translation COPY and repeated placement reuse the existing provider-independent translation/common-transform interaction path for mixed Line/Circle/Arc.
+- Each accepted placement is one atomic semantic duplication command/transaction/Undo entry, leaves the original source selected and allocates fresh non-aliasing EntityIds.
+- Undo/Redo preserves historical copied identities, and a new COPY after Undo allocates above the session-preserved identity high-water rather than reusing undone IDs.
+- Save → Close → Reopen preserves committed copied geometry, copied EntityIds and the schema-v4 `next_entity_id` allocator state.
+- Exact zero displacement creates no copy, no revision/history mutation and consumes no EntityIds.
+- Toolbar Modify exposes Copy and Command Line `COPY` routes to the same semantic interaction state.
+- Required internal and PL/EN Product documentation is current and deterministic Product Browser freshness passed on the final candidate.
+- Owner manual Windows verification passed the accepted SK-07C checklist on 2026-09-27.
+- Final exact-head Windows FULL #549 passed on `03baaf6d82c5f7ba73d3701791dc8af8f356ce5f`: documentation verification, Build, FAST/SUBSYSTEM selector checks, 66/66 unfiltered CTest tests and stable `windows-msvc` all succeeded.
+- Grip Copy modifier, Rotate/Scale/Mirror+Copy, semantic Space CycleEditMode, ordinary-Select RMB context, Repeat Last Command, numeric/Dynamic Input, snapping/inference and R8+ remain outside this completed contract.
+
