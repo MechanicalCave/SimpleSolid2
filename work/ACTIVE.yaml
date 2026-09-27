@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-07E_SPACE_CYCLE_EDIT_MODE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,13 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - implement accepted SK-07E within the bounded Space CycleEditMode scope
-  - cycle only existing DirectEditMode values Reshape/Move on supported non-center grips
-  - keep center grips Move-only and preserve active grip, pivot, frozen selection and current resolved pointer across cycling
-  - recompute preview from interaction-start authored geometry and preserve existing commit/cancel/history semantics
-  - use FAST/SUBSYSTEM checkpoints during implementation
-  - require exact-head Windows FULL plus Owner manual verification before completion
-  - keep ordinary-Select RMB context, grip Copy modifier, Rotate/Scale/Mirror+Copy, numeric/Dynamic Input, snapping/inference and R8+ inactive
+  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
+  - propose the next bounded R7 slice for grip Copy modifier behavior before any implementation
+  - preserve completed SK-07A/SK-07B/SK-07C/SK-07D/SK-07E transform, COPY, Repeat Last Command and Space CycleEditMode behavior as the implementation baseline
+  - keep Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, numeric/Dynamic Input, snapping/inference and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
