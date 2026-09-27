@@ -16,10 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
-  - propose the next bounded R7 slice for the remaining Copy modifier / command-grammar work before any implementation
+  - review work/SK-07D_REPEAT_LAST_COMMAND.md as the proposed fourth bounded R7 Work Contract
+  - require explicit Owner acceptance before any SK-07D production implementation
   - preserve completed SK-07A/SK-07B/SK-07C Move/Rotate/Scale/Mirror/COPY behavior and fresh-identity semantics as the implementation baseline
-  - keep Rotate/Scale/Mirror+Copy, semantic Space CycleEditMode, ordinary-Select RMB context, Repeat Last Command, numeric/Dynamic Input, snapping/inference and R8+ inactive
+  - keep ordinary-Select RMB context, semantic Space CycleEditMode, grip Copy modifier, Rotate/Scale/Mirror+Copy, numeric/Dynamic Input, snapping/inference and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
@@ -125,4 +125,10 @@ notes:
   - Required internal and PL/EN Product documentation plus deterministic Product Browser freshness passed on the final candidate.
   - SK-07C acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
   - Grip Copy modifier, Rotate/Scale/Mirror+Copy, semantic Space CycleEditMode, ordinary-Select RMB context, Repeat Last Command, numeric/Dynamic Input, snapping/inference and R8+ remain inactive.
+
+  - SK-07D is proposed on 2026-09-27 as the fourth bounded R7 slice: Repeat Last Command in ordinary Select.
+  - Proposed repeatable commands are Line/Circle/Arc/Move/Copy/Rotate/Scale/Mirror, remembered only for the active Sketch edit runtime session.
+  - Enter/Space repeat only with viewport CAD focus in ordinary Select; active command/manipulation and text-focus semantics retain priority.
+  - Ordinary-Select RMB context, semantic Space CycleEditMode, grip Copy modifier and later R7/R8+ work remain inactive.
+  - SK-07D is not active until explicit Owner acceptance.
 
