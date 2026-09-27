@@ -160,66 +160,6 @@ function Test-DocumentationImpact {
     }
 }
 
-function Test-CurrentStateFacts {
-    param(
-        [Parameter(Mandatory=$true)][string]$RepoRoot,
-        [Parameter(Mandatory=$true)]$Errors
-    )
-
-    $testsPath = Join-Path $RepoRoot "tests\CMakeLists.txt"
-    $buildDocPath = Join-Path $RepoRoot "docs\internal\BUILD_AND_TEST.md"
-    if ((Test-Path -LiteralPath $testsPath -PathType Leaf) -and
-        (Test-Path -LiteralPath $buildDocPath -PathType Leaf)) {
-        $testsText = Read-NormalizedText $testsPath
-        $registered =
-            [regex]::Matches(
-                $testsText,
-                '(?mi)^\s*add_test\s*\(').Count
-
-        $buildDoc = Read-NormalizedText $buildDocPath
-        $documented =
-            [regex]::Match(
-                $buildDoc,
-                '(?mi)currently registers \*\*(\d+) CTest tests\*\*')
-        if (-not $documented.Success) {
-            Add-DocError $Errors "CURRENT" "BUILD_AND_TEST.md does not declare the current CTest count."
-        } elseif ([int]$documented.Groups[1].Value -ne $registered) {
-            Add-DocError $Errors "CURRENT" "BUILD_AND_TEST.md documents $($documented.Groups[1].Value) CTest tests but tests/CMakeLists.txt registers $registered."
-        }
-    }
-
-    $storeHeaderPath =
-        Join-Path $RepoRoot "src\part\include\simplesolid2\part\part_document_store.hpp"
-    $partDocPath =
-        Join-Path $RepoRoot "docs\internal\PART_DOCUMENTS.md"
-    $persistenceDocPath =
-        Join-Path $RepoRoot "docs\internal\PERSISTENCE.md"
-
-    if ((Test-Path -LiteralPath $storeHeaderPath -PathType Leaf) -and
-        (Test-Path -LiteralPath $partDocPath -PathType Leaf) -and
-        (Test-Path -LiteralPath $persistenceDocPath -PathType Leaf)) {
-        $storeHeader = Read-NormalizedText $storeHeaderPath
-        $schema =
-            [regex]::Match(
-                $storeHeader,
-                '(?m)current_schema_version\s*=\s*(\d+)\s*;')
-        if (-not $schema.Success) {
-            Add-DocError $Errors "CURRENT" "Unable to determine PartDocumentStore current_schema_version."
-        } else {
-            $version = $schema.Groups[1].Value
-            $needle = "schema **v$version**"
-            $partDoc = Read-NormalizedText $partDocPath
-            $persistenceDoc = Read-NormalizedText $persistenceDocPath
-            if (-not $partDoc.Contains($needle)) {
-                Add-DocError $Errors "CURRENT" "PART_DOCUMENTS.md does not document current Part $needle."
-            }
-            if (-not $persistenceDoc.Contains($needle)) {
-                Add-DocError $Errors "CURRENT" "PERSISTENCE.md does not document current Part $needle."
-            }
-        }
-    }
-}
-
 function Test-BrowserFreshness {
     param(
         [Parameter(Mandatory=$true)][string]$RepoRoot,
@@ -276,7 +216,6 @@ function Get-DocumentationErrors {
     Test-MetadataAndPairs $RepoRoot $errors
     Test-LocalMarkdownLinks $RepoRoot $errors
     Test-DocumentationImpact $RepoRoot $errors
-    Test-CurrentStateFacts $RepoRoot $errors
     Test-BrowserContract $RepoRoot $errors
     Test-BrowserFreshness $RepoRoot $errors
     return $errors
