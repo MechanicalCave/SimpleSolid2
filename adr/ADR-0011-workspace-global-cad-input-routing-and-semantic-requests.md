@@ -1,7 +1,8 @@
 # ADR-0011 — Workspace-global CAD Input routing and semantic request ownership
 
-**Status:** PROPOSED — NOT ACTIVE  
+**Status:** ACCEPTED  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D2 Architecture  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Related:** ADR-0003, ADR-0006, ADR-0007, ADR-0008, ADR-0009, SK-07F

@@ -1,11 +1,11 @@
 # Sketcher Program Roadmap
 
-**Status:** PROPOSED  
+**Status:** ACCEPTED  
 **Version:** 1.4  
-**Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Previous accepted version:** 1.3 — 2026-09-27  
 **Foundation:** 1.0 (foundation-v1.0)  
-**Architecture:** ADR-0008, ADR-0009; proposed ADR-0011  
+**Architecture:** ADR-0008, ADR-0009, ADR-0011  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
 
@@ -27,7 +27,7 @@ Roadmap v1.4 therefore proposes:
 - leave new quantity request types, coordinates/units, Dynamic Input, Ortho/Polar and snapping for their later concrete contracts;
 - leave Grip Copy and RMB context unauthorized until separately accepted.
 
-Roadmap v1.3 remains authoritative until the Owner explicitly accepts v1.4, proposed ADR-0011 and a bounded WB-02 Work Contract.
+Roadmap v1.4 is authoritative. ADR-0011 and WB-02 were explicitly Owner-accepted on 2026-09-27.
 
 ## 2. Preserved accepted invariants
 
@@ -614,7 +614,7 @@ Goal:
 - prove the R5 interaction architecture is not Line-specific.
 
 ### R7 — Common transforms, shared precision foundation, Copy and command grammar
-**Status:** paused at completed SK-07F pending proposed cross-cutting WB-02; remaining R7 still requires separate accepted slices
+**Status:** paused at completed SK-07F while accepted cross-cutting WB-02 is active; remaining R7 still requires separate accepted slices
 
 Goal:
 
@@ -736,7 +736,7 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7 paused after completed SK-07F — proposed WB-02 global CAD Input foundation is the next cross-cutting prerequisite; Grip Copy and RMB context remain unauthorized  
+R7 paused after completed SK-07F — accepted WB-02 global CAD Input foundation is active as the next cross-cutting prerequisite; Grip Copy and RMB context remain unauthorized  
 R8+ not started
 
-Roadmap v1.4 is PROPOSED only. Accepted roadmap v1.3 remains authoritative until explicit Owner acceptance. Proposed ADR-0011/WB-02 does not activate Grip Copy, RMB, R8, R9 or R10 and does not authorize any new semantic request type beyond migrating the existing Sketch client.
+Roadmap v1.4 is authoritative. Active WB-02 does not activate Grip Copy, RMB, R8, R9 or R10 and does not authorize any new semantic request type beyond migrating the existing Sketch client.

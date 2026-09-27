@@ -1,10 +1,11 @@
 # WB-02 — Global CAD Input Routing and Keyboard-First Command Line
 
-**Status:** PROPOSED — NOT ACTIVE  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D2 shared input/workspace architecture + bounded D1 implementation  
 **Foundation:** 1.0 (foundation-v1.0)  
-**Architecture:** ADR-0003, ADR-0006, ADR-0007, ADR-0008, ADR-0009, proposed ADR-0011  
+**Architecture:** ADR-0003, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0011  
 **Baseline:** main at 6141c9306f0ed977130b688b8b2a1573493c5186 after completed SK-07F
 
 ## 1. Goal
@@ -402,9 +403,7 @@ Reason: WB-02 changes the global keyboard workflow and Command Line ownership ac
 
 ## 20. Activation and completion boundary
 
-WB-02 is only a proposal until the Owner explicitly accepts ADR-0011 and this Work Contract.
-
-After acceptance, production implementation is authorized only within this bounded scope.
+ADR-0011, WB-02 and roadmap v1.4 were explicitly Owner-accepted on 2026-09-27. Production implementation is authorized only within this bounded scope.
 
 Completion requires:
 

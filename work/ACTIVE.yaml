@@ -1,9 +1,9 @@
 version: 1
-status: completed
-active_work: "work/SK-07F_SHARED_PRECISION_INPUT_AND_DIRECT_DISTANCE.md"
+status: active
+active_work: "work/WB-02_GLOBAL_CAD_INPUT_ROUTING_AND_KEYBOARD_FIRST_COMMAND_LINE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
-program_roadmap_version: "1.3"
+program_roadmap_version: "1.4"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -15,11 +15,12 @@ accepted_adrs:
   - "adr/ADR-0008-shared-2d-authoring-and-sketcher-semantic-foundation.md"
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
+  - "adr/ADR-0011-workspace-global-cad-input-routing-and-semantic-requests.md"
 next:
-  - propose a separate D2 global CAD Input routing / semantic InputRequest foundation before further Grip Copy or later precision-input expansion
-  - require explicit Owner acceptance of the new ADR and bounded Work Contract before any runtime implementation
-  - preserve completed SK-07A through SK-07F behavior as the implementation baseline
-  - keep Grip Copy grammar, Reshape+Copy, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, Ortho/Polar, Dynamic Input, snapping/inference and R8+ inactive
+  - implement accepted WB-02 workspace-global CAD Input router/live buffer and focus arbitration within the bounded contract
+  - move visible Command Line ownership to Project Workspace Shell and migrate existing Part/Sketch submission as the first generic endpoint
+  - prove viewport keyboard-first command/direct-distance entry without focus transfer while preserving real text-editor and shortcut ownership
+  - preserve completed SK-07A through SK-07F semantics and keep Grip Copy, RMB, new request kinds, units/coordinates, Dynamic Input, Ortho/Polar and snapping inactive
 
 notes:
   - R0 through R4 are completed.
@@ -161,3 +162,6 @@ notes:
   - Owner manual Windows verification passed on 2026-09-27 for the accepted SK-07F Direct Distance workflows and regressions.
   - Manual use identified a separate UX/architecture requirement: keyboard-first Command Line availability without clicking the text field; this was explicitly outside SK-07F global-key interception scope and is deferred to a new D2 global CAD Input foundation.
   - SK-07F acceptance conditions are satisfied; this closeout candidate now awaits only the work-only CLOSURE gate and merge.
+
+  - Owner explicitly accepted ADR-0011, WB-02 and Sketcher roadmap v1.4 on 2026-09-27; WB-02 is the active bounded cross-cutting input slice.
+  - Proposal head e09ef375ac438532187c7a91d7d99ac713d63d42 passed Windows PR gate #605 before activation.
