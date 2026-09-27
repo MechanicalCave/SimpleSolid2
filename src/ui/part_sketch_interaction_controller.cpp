@@ -106,6 +106,45 @@ directManipulationActive() const noexcept {
     return interaction_.directManipulationActive();
 }
 
+std::optional<sketch::DirectEditMode>
+PartSketchInteractionController::directEditMode() const noexcept {
+    return interaction_.directEditMode();
+}
+
+bool PartSketchInteractionController::cycleDirectEditMode() {
+    if (!active() ||
+        !interaction_.directManipulationActive()) {
+        return false;
+    }
+
+    const bool changed =
+        interaction_.cycleDirectEditMode();
+    if (!changed) {
+        reportStatus(
+            "Only Move is available for this grip.");
+        notifyStateChanged();
+        return false;
+    }
+
+    const auto geometry =
+        interaction_.directManipulationGeometryState();
+    if (!geometry ||
+        !viewport_controller_->setSketchGeometryPreview(
+            *geometry)) {
+        viewport_controller_->clearSketchPreview();
+    }
+
+    projectInteraction();
+    notifyStateChanged();
+
+    reportStatus(
+        interaction_.directEditMode() ==
+                sketch::DirectEditMode::move
+            ? "Grip edit mode: Move."
+            : "Grip edit mode: Reshape.");
+    return true;
+}
+
 bool PartSketchInteractionController::repeatLastCommand() {
     if (!active() ||
         interaction_.tool() != sketch::SketchTool::select ||
