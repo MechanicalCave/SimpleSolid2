@@ -1,6 +1,7 @@
 #include <simplesolid2/persistence/file_snapshot.hpp>
 
 #include <algorithm>
+#include <cerrno>
 #include <array>
 #include <bit>
 #include <cstddef>
@@ -77,16 +78,17 @@ private:
     HANDLE value_{INVALID_HANDLE_VALUE};
 };
 
-FileIdentity fileIdentity(HANDLE handle) {
+std::optional<FileIdentity> fileIdentity(
+    HANDLE handle) {
     FILE_ID_INFO info{};
-    FileIdentity result;
     if (!::GetFileInformationByHandleEx(
             handle,
             FileIdInfo,
             &info,
             sizeof(info))) {
-        return result;
+        return std::nullopt;
     }
+    FileIdentity result;
     result.volume =
         static_cast<std::uint64_t>(
             info.VolumeSerialNumber);
@@ -307,10 +309,19 @@ FileSnapshotResult readFileSnapshot(
         offset += read;
     }
 
+    const auto identity =
+        fileIdentity(handle.get());
+    if (!identity) {
+        return failure(
+            FileSnapshotErrorCode::io_failure,
+            "Unable to capture file identity",
+            path);
+    }
+
     return FileSnapshotResult{
         FileSnapshot{
             bytes,
-            fileIdentity(handle.get()),
+            *identity,
             sha256(bytes)},
         FileSnapshotDiagnostic{},
     };
