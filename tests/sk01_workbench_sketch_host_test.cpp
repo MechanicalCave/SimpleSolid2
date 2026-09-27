@@ -7,6 +7,7 @@
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QWidget>
@@ -791,14 +792,48 @@ int main(int argc, char* argv[]) {
         100.0, 100.0,
         0.0, 0.0);
     viewport->emitSketchPointerXZ(
-        viewer::SpatialPointerPhase::primary_press,
+        viewer::SpatialPointerPhase::move,
         140.0, 100.0,
-        10.0, 0.0);
+        1.0, 0.0);
+
+    // SK-07F: an active semantic PointRequest owns Command Line
+    // submission before top-level command activation.
+    command_input->setText(QStringLiteral("MOVE"));
+    QTest::keyClick(command_input, Qt::Key_Return);
     QApplication::processEvents();
+    CHECK(line_button->isChecked());
+    CHECK(!move_button->isChecked());
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 0U);
+    CHECK(command_input->text() == QStringLiteral("MOVE"));
+
+    // Current-locale decimal separator and '.' both feed the same
+    // Direct Distance path. Keep two segments temporarily so both
+    // forms are exercised without changing the later Sketch workflow.
+    const QLocale previous_locale = QLocale{};
+    QLocale::setDefault(QLocale{QStringLiteral("pl_PL")});
+    command_input->setText(QStringLiteral("10,5"));
+    QTest::keyClick(command_input, Qt::Key_Return);
+    QApplication::processEvents();
+    QLocale::setDefault(previous_locale);
     CHECK(
         session->document()
             .findSketch(sketch_id)
             ->model.entityCount() == 1U);
+
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        140.0, 120.0,
+        10.5, 1.0);
+    command_input->setText(QStringLiteral("5.5"));
+    QTest::keyClick(command_input, Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 2U);
 
     finish_line_button->click();
     QApplication::processEvents();
@@ -896,8 +931,14 @@ int main(int argc, char* argv[]) {
     CHECK(session->document().revision() == cycle_revision);
     CHECK(session->undoDepth() == cycle_undo);
 
-    // Remove the temporary Line so later history assertions retain their
-    // original pre-SK-07E shape.
+    // Remove the two temporary SK-07F Line segments so later history
+    // assertions retain their original pre-SK-07E shape.
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 1U);
     undo_button->click();
     QApplication::processEvents();
     CHECK(
