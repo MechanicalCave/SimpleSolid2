@@ -1,10 +1,12 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 
+#include <cstdint>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <limits>
 #include <string>
 
 #if defined(_WIN32)
@@ -171,6 +173,151 @@ int main() {
 
     CHECK(session.undo().changed);
     CHECK(!session.needsSave());
+
+    {
+        auto branch_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession branch_session{
+            {},
+            std::move(branch_document)};
+
+        core::DocumentProperties branch_properties;
+        branch_properties.title = "A";
+        CHECK(branch_session.execute(
+                  application::SetDocumentPropertiesCommand{
+                      branch_properties})
+                  .changed);
+        branch_properties.title = "B";
+        CHECK(branch_session.execute(
+                  application::SetDocumentPropertiesCommand{
+                      branch_properties})
+                  .changed);
+        branch_properties.title = "C";
+        CHECK(branch_session.execute(
+                  application::SetDocumentPropertiesCommand{
+                      branch_properties})
+                  .changed);
+        CHECK(branch_session.undoDepth() == 3U);
+        CHECK(branch_session.redoDepth() == 0U);
+
+        CHECK(branch_session.undo().changed);
+        CHECK(
+            branch_session.document().properties().title ==
+            "B");
+        CHECK(branch_session.undoDepth() == 2U);
+        CHECK(branch_session.redoDepth() == 1U);
+
+        const auto branch_revision =
+            branch_session.document().revision();
+        const auto branch_no_op =
+            branch_session.execute(
+                application::SetDocumentPropertiesCommand{
+                    branch_session.document().properties()});
+        CHECK(branch_no_op.ok());
+        CHECK(!branch_no_op.changed);
+        CHECK(
+            branch_session.document().revision() ==
+            branch_revision);
+        CHECK(branch_session.undoDepth() == 2U);
+        CHECK(branch_session.redoDepth() == 1U);
+
+        const auto rejected_with_redo =
+            branch_session.execute(
+                application::SetBuiltinReferenceVisibilityCommand{
+                    {
+                        static_cast<
+                            core::BuiltinReferenceRole>(255U),
+                    },
+                    false});
+        CHECK(!rejected_with_redo.ok());
+        CHECK(
+            rejected_with_redo.diagnostic.code ==
+            application::DocumentSessionErrorCode::
+                invalid_command);
+        CHECK(branch_session.undoDepth() == 2U);
+        CHECK(branch_session.redoDepth() == 1U);
+        CHECK(
+            branch_session.document().properties().title ==
+            "B");
+
+        branch_properties =
+            branch_session.document().properties();
+        branch_properties.title = "D";
+        const auto branched =
+            branch_session.execute(
+                application::SetDocumentPropertiesCommand{
+                    branch_properties});
+        CHECK(branched.ok());
+        CHECK(branched.changed);
+        CHECK(branch_session.undoDepth() == 3U);
+        CHECK(branch_session.redoDepth() == 0U);
+        CHECK(
+            branch_session.document().properties().title ==
+            "D");
+
+        CHECK(branch_session.undo().changed);
+        CHECK(
+            branch_session.document().properties().title ==
+            "B");
+        CHECK(branch_session.redoDepth() == 1U);
+
+        CHECK(branch_session.redo().changed);
+        CHECK(
+            branch_session.document().properties().title ==
+            "D");
+        CHECK(branch_session.redoDepth() == 0U);
+        CHECK(!branch_session.redo().changed);
+    }
+
+    {
+        const auto exhausted_id =
+            core::DocumentId::generate();
+        auto exhausted_seed =
+            part::PartDocument::create(
+                exhausted_id);
+        auto exhausted_restore =
+            part::PartDocument::restore(
+                exhausted_id,
+                exhausted_seed.state(),
+                core::DocumentRevision{
+                    std::numeric_limits<
+                        std::uint64_t>::max()});
+        CHECK(exhausted_restore.ok());
+
+        application::DocumentSession exhausted_session{
+            {},
+            std::move(*exhausted_restore.document)};
+        const auto exhausted_before =
+            exhausted_session.document().state();
+        const auto exhausted_revision =
+            exhausted_session.document().revision();
+
+        core::DocumentProperties exhausted_properties;
+        exhausted_properties.title =
+            "Must not commit at max revision";
+        const auto exhausted =
+            exhausted_session.execute(
+                application::SetDocumentPropertiesCommand{
+                    exhausted_properties});
+        CHECK(!exhausted.ok());
+        CHECK(
+            exhausted.diagnostic.code ==
+            application::DocumentSessionErrorCode::
+                transaction_failure);
+        CHECK(
+            exhausted.diagnostic.commit_code ==
+            part::PartCommitErrorCode::
+                revision_exhausted);
+        CHECK(
+            exhausted_session.document().state() ==
+            exhausted_before);
+        CHECK(
+            exhausted_session.document().revision() ==
+            exhausted_revision);
+        CHECK(exhausted_session.undoDepth() == 0U);
+        CHECK(exhausted_session.redoDepth() == 0U);
+    }
 
 #if defined(_WIN32)
     const auto durable_before_failed_save = readText(path);
