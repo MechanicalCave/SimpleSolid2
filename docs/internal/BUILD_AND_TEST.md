@@ -52,7 +52,7 @@ The repository currently registers **74 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
-The R7 transform/COPY regressions include:
+The current transform/COPY regressions include:
 
 - `sk07a.transform_core` and `sk07a.move_controller` — provider-independent mixed translation plus selection-first/command-first MOVE;
 - `sk07b.transform_core`, `sk07b.common_transform_state` and `sk07b.transform_controller` — Rotate/positive uniform Scale/Mirror core, interaction and controller semantics;
@@ -62,7 +62,7 @@ The R7 transform/COPY regressions include:
 - `sk07d.repeat_last_command_controller` — one runtime repeat target, repeatable command recording, current-selection reuse, fresh COPY restart, non-overwrite by Select/grip/history/Delete and reset across Sketch edit sessions.
 - `sk07e.space_cycle_edit_mode` — supported grip-role defaults/cycles, frozen selection/primary preservation, owner-vs-selection interaction-start geometry and non-compounding Reshape↔Move preview.
 
-The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence, active-grip Space CycleEditMode precedence and text-focus keyboard behavior. It also contains the AUDIT-01 Package-A real-Workbench checks: pointer movement preserves a token inside one PointRequest, replacing the request or finishing Sketch clears stale input without authored mutation, and non-empty-buffer Delete cannot fall through to geometry deletion. The existing `sk05a.part_sketch_direct_manipulation` controller regression additionally verifies preview cardinality, no-mutation cycling and atomic commit after Reshape↔Move switching.
+The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence, active-grip Space CycleEditMode precedence and text-focus keyboard behavior. It also checks that pointer movement preserves a token inside one PointRequest, replacing the request or finishing Sketch clears stale input without authored mutation, and non-empty-buffer Delete cannot fall through to geometry deletion. The existing `sk05a.part_sketch_direct_manipulation` controller regression additionally verifies preview cardinality, no-mutation cycling and atomic commit after Reshape↔Move switching.
 
 `wb02.cad_input_session`, `wb02.cad_input_boundaries` and `wb02.global_cad_input_ui` cover provider-neutral CAD-input transport, dependency boundaries, semantic-generation lifetime, foreign-window/popup ownership, two-visible-shell isolation, ordinary text-editor ownership, application-shortcut preservation and fixed Command Line geometry/diagnostic behavior.
 
