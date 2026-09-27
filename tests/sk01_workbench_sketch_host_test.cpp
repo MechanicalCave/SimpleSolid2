@@ -980,6 +980,24 @@ int main(int argc, char* argv[]) {
             .findSketch(sketch_id)
             ->model.entityCount() == 2U);
 
+    // History restoration is authored-state authority, not selection
+    // presentation authority. Re-establish the semantic selection
+    // explicitly before testing grip input.
+    viewport->setSketchGripHit(std::nullopt);
+    viewport->setSketchPointHit(line_token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        120.0, 100.0,
+        5.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        120.0, 100.0,
+        5.0, 0.0);
+    QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
     // WB-02: grip Reshape uses the global keyboard buffer and the
     // existing SK-07F semantic Direct Distance resolver.
     viewport->setSketchGripHit(
@@ -1021,6 +1039,21 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(session->document().state() == keyboard_baseline);
     CHECK(session->undoDepth() == keyboard_undo);
+
+    viewport->setSketchGripHit(std::nullopt);
+    viewport->setSketchPointHit(line_token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        120.0, 100.0,
+        5.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        120.0, 100.0,
+        5.0, 0.0);
+    QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
 
     // Establish the direction in Reshape, then Space-switch to Move.
     // The same pointer candidate must survive the mode cycle and the
