@@ -885,6 +885,191 @@ int main(int argc, char* argv[]) {
         operations_label->text() ==
         QStringLiteral("Select — 1 entity selected"));
 
+    // WB-02: normal MOVE consumes the same global keyboard-first
+    // buffer. Restore the authored fixture after the commit so later
+    // grip/history assertions keep their original baseline.
+    const auto keyboard_baseline =
+        session->document().state();
+    const auto keyboard_undo =
+        session->undoDepth();
+
+    move_button->click();
+    QApplication::processEvents();
+    CHECK(move_button->isChecked());
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        120.0, 100.0,
+        1.0, 0.0);
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("5"));
+    CHECK(
+        command_input->text() ==
+        QStringLiteral("5"));
+    CHECK(QApplication::focusWidget() == viewport);
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(!move_button->isChecked());
+    CHECK(command_input->text().isEmpty());
+    CHECK(session->undoDepth() == keyboard_undo + 1U);
+
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().state() == keyboard_baseline);
+    CHECK(session->undoDepth() == keyboard_undo);
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    // WB-02: repeated COPY placement is also keyboard-first. COPY
+    // remains active after accepted placement; Esc ends the transient
+    // session and Undo removes only that placement.
+    copy_button->click();
+    QApplication::processEvents();
+    CHECK(copy_button->isChecked());
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        100.0, 120.0,
+        0.0, 1.0);
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("5"));
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(copy_button->isChecked());
+    CHECK(command_input->text().isEmpty());
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 3U);
+    CHECK(session->undoDepth() == keyboard_undo + 1U);
+
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!copy_button->isChecked());
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().state() == keyboard_baseline);
+    CHECK(session->undoDepth() == keyboard_undo);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 2U);
+
+    // WB-02: grip Reshape uses the global keyboard buffer and the
+    // existing SK-07F semantic Direct Distance resolver.
+    viewport->setSketchGripHit(
+        viewer::SketchGripKey{
+            line_token,
+            viewer::SketchGripRole::line_start});
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        110.0, 100.0,
+        1.0, 0.0);
+    QApplication::processEvents();
+    CHECK(
+        viewport->interactionPresentation().
+            active_grip.has_value());
+
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("5"));
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        !viewport->interactionPresentation().
+            active_grip.has_value());
+    CHECK(command_input->text().isEmpty());
+    CHECK(session->undoDepth() == keyboard_undo + 1U);
+
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().state() == keyboard_baseline);
+    CHECK(session->undoDepth() == keyboard_undo);
+
+    // Establish the direction in Reshape, then Space-switch to Move.
+    // The same pointer candidate must survive the mode cycle and the
+    // numeric value must still arrive through the global buffer.
+    viewport->setSketchGripHit(
+        viewer::SketchGripKey{
+            line_token,
+            viewer::SketchGripRole::line_start});
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        100.0, 100.0,
+        0.0, 0.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::move,
+        110.0, 100.0,
+        1.0, 0.0);
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Space);
+    QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Grip — Move; Space cycles mode; Enter/LMB commits; Esc cancels"));
+
+    QTest::keyClicks(
+        viewport,
+        QStringLiteral("5"));
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        !viewport->interactionPresentation().
+            active_grip.has_value());
+    CHECK(command_input->text().isEmpty());
+    CHECK(session->undoDepth() == keyboard_undo + 1U);
+
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().state() == keyboard_baseline);
+    CHECK(session->undoDepth() == keyboard_undo);
+
+    // Re-enter an uncommitted grip session for the existing SK-07E
+    // cycle/no-mutation regression below.
     viewport->setSketchGripHit(
         viewer::SketchGripKey{
             line_token,
