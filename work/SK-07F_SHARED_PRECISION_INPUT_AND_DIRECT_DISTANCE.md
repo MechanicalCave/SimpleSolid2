@@ -1,7 +1,8 @@
 # SK-07F — Shared Precision Input and Direct Distance Foundation
 
-**Status:** PROPOSED — OWNER REVIEW  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-27  
+**Owner acceptance:** 2026-09-27  
 **Decision class:** D2 interaction/input architecture + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0010  
@@ -447,14 +448,9 @@ R10 remains responsible for Object Snap, tracking and inference.
 
 ## 23. Activation and completion boundary
 
-SK-07F is proposal-only.
+SK-07F and Sketcher roadmap v1.3 were explicitly Owner-accepted on 2026-09-27. Production implementation is authorized only within this bounded contract.
 
-No production implementation is authorized until explicit Owner acceptance of both:
-
-- this Work Contract;
-- proposed Sketcher roadmap v1.3 sequencing.
-
-If accepted as written, completion requires:
+Completion requires:
 
 - one shared provider-neutral PointRequest/direct-distance path;
 - context-first Command Line numeric routing;
