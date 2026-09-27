@@ -145,6 +145,8 @@ Project Workspace Shell owns Project-level Document Tabs. Selecting a tab naviga
 
 Changing the Project-level tab switches Document Tree, Properties context, Viewer scene, runtime selection and runtime camera state. Closing the last open Document navigates to Workspace without closing the Project.
 
+Workspace CAD input is bound to the active semantic editing-context generation. Replacing the active Document/Sketch/request or leaving Sketch edit invalidates the old live token and diagnostic before the new context may consume keyboard input; detach-before-destroy remains mandatory. Pointer movement inside one unchanged PointRequest does not replace that context.
+
 Camera and selection are runtime-only. Camera state is retained per DocumentId while navigating between open Documents/Workspace and is cleared at the Project runtime boundary; it is never persisted.
 
 <!-- section-id: internal.application-lifecycle.close -->
@@ -245,7 +247,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The repository currently registers **68 CTest tests**.
+The repository currently registers **73 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
@@ -259,7 +261,9 @@ The R7 transform/COPY regressions include:
 - `sk07d.repeat_last_command_controller` — one runtime repeat target, repeatable command recording, current-selection reuse, fresh COPY restart, non-overwrite by Select/grip/history/Delete and reset across Sketch edit sessions.
 - `sk07e.space_cycle_edit_mode` — supported grip-role defaults/cycles, frozen selection/primary preservation, owner-vs-selection interaction-start geometry and non-compounding Reshape↔Move preview.
 
-The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence, active-grip Space CycleEditMode precedence and text-focus keyboard behavior. The existing `sk05a.part_sketch_direct_manipulation` controller regression additionally verifies preview cardinality, no-mutation cycling and atomic commit after Reshape↔Move switching.
+The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence, active-grip Space CycleEditMode precedence and text-focus keyboard behavior. It also contains the AUDIT-01 Package-A real-Workbench checks: pointer movement preserves a token inside one PointRequest, replacing the request or finishing Sketch clears stale input without authored mutation, and non-empty-buffer Delete cannot fall through to geometry deletion. The existing `sk05a.part_sketch_direct_manipulation` controller regression additionally verifies preview cardinality, no-mutation cycling and atomic commit after Reshape↔Move switching.
+
+WB-02 adds `wb02.cad_input_session`, `wb02.cad_input_boundaries` and `wb02.global_cad_input_ui`. Package-A coverage binds tokens to endpoint semantic generations and verifies fail-closed stale submission, foreign-window/popup ownership, two-visible-shell isolation, ordinary text-editor ownership, application-shortcut preservation and fixed Command Line geometry/diagnostic behavior.
 
 The completed SK-07D exact-head baseline is Windows FULL #567 on `ef84954ddb22a4263d31c5a540fe7d96304e33e2`, where Build and **67/67** unfiltered CTest tests passed. SK-07E adds one registered semantic state regression; its final exact-head Windows FULL result is recorded only at Work Contract closeout.
 
@@ -455,6 +459,12 @@ Modify
 The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit the existing command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
 
 WB-02 makes that surface keyboard-first. With a normal CAD surface such as the viewport focused, printable unmodified text is appended to the same runtime buffer and mirrored immediately in Command Line without transferring Qt focus. Clicking Command Line remains an equivalent adapter to the same buffer. Real text editors, editable properties, modal dialogs and application shortcuts keep their own keyboard ownership.
+
+AUDIT-01 Package A hardens that routing boundary. Each live token is bound to an opaque `CadInputContextGeneration` supplied by the active semantic endpoint. The Sketch adapter advances that generation when the owning semantic context/request is replaced — for example tool/stage/base-request replacement, active-grip edit-mode replacement, authored revision change, entering/leaving a Sketch or switching the active endpoint. The live buffer and diagnostic are cleared when the observed generation changes. Pointer-direction movement inside the same PointRequest does not advance the semantic context and therefore does not clear a partially entered value. On submit, the generation that owned the token is passed back to the endpoint and is validated before token interpretation or any domain effect.
+
+The QApplication-level event filter is global only as a transport hook; capture authority is Workspace-local. Printable CAD input is accepted only when the active top-level window is the owning Workspace, the focus and key target belong to its active Document Workbench, no popup/menu or modal surface owns the keyboard, the focus is not a real text editor, and an active CAD endpoint exists. A foreign non-modal window or another visible Workspace therefore cannot feed the background buffer.
+
+Delete follows the same precedence rule as the rest of live CAD input. With normal CAD focus and a non-empty viewport-entered buffer, Delete is consumed by the input layer and does not reach semantic Delete Selection; the append-only viewport buffer is left unchanged and Backspace remains the character-removal key. With an empty buffer, existing Delete Selection behavior is unchanged. With direct QLineEdit/text-editor focus, Delete remains ordinary local text editing.
 
 The Command Line presentation is a geometry-stable single row. Its diagnostic region is permanently reserved and single-line; a long message is elided in place (with the full message available as tooltip) instead of wrapping, changing the input width or shrinking/moving the Viewer above it.
 
@@ -1502,7 +1512,11 @@ Command Line is a shared Workspace surface and no longer requires a click before
 
 Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. Enter consumes the submitted token even when it is invalid: the model and active tool/stage stay unchanged, the editable field is cleared and a diagnostic reports the error instead of forcing you to delete the rejected text manually.
 
-Real text-entry fields — for example property editors — keep keyboard ownership and do not feed Command Line. Application shortcuts using Ctrl/Alt/Meta are also not converted into CAD text. Switching Documents or navigating to Workspace clears any partial token so it can never leak into a hidden Document.
+Real text-entry fields — for example property editors — keep keyboard ownership and do not feed Command Line. Application shortcuts using Ctrl/Alt/Meta are also not converted into CAD text. Menus, popups, modal dialogs, another application window and another visible SS2 Workspace keep their own keyboard ownership; they do not feed a background Command Line.
+
+A partially typed CAD token belongs to the semantic request in which typing started. Changing to another request/tool/Sketch/Document clears that partial token before it can execute in the new context. Moving the pointer to adjust direction inside the same PointRequest does not clear it. Switching Documents or navigating to Workspace likewise clears partial input so it can never leak into a hidden Document.
+
+With viewport CAD focus and a non-empty Command Line buffer, Delete is reserved by live input and does not delete selected geometry. Use Backspace to remove the last character. When the buffer is empty, normal Delete Selection behavior remains unchanged. If the Command Line or another real text field itself has focus, Delete behaves as normal text editing.
 
 The bottom Command Line stays one row high. Its right-side diagnostic area is permanently reserved, so showing an error does not resize the input field or make the Viewer jump. Long diagnostics are shortened visually in that row; the complete text is available as a tooltip.
 
@@ -1969,7 +1983,11 @@ Command Line jest wspólną powierzchnią Workspace i nie wymaga kliknięcia prz
 
 W aktywnym Sketchu obsługiwane są słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`. Command Line jest kontekstowy: jeżeli aktywny etap oczekuje punktu, bieżący semantic PointRequest ma pierwszeństwo przed uruchomieniem nowej komendy. W etapach obsługujących Direct Distance samodzielna wartość liczbowa jest interpretowana jako odległość. Enter konsumuje wpisany token także wtedy, gdy jest błędny: model oraz aktywne narzędzie/etap pozostają bez zmian, edytowane pole jest czyszczone, a diagnostic informuje o błędzie bez zmuszania użytkownika do ręcznego kasowania odrzuconego tekstu.
 
-Prawdziwe pola tekstowe — np. edycja właściwości — zachowują własny focus i wpisywanie do nich nie zasila Command Line. Skróty aplikacji z Ctrl/Alt/Meta również nie są zamieniane na tekst CAD. Przy zmianie Dokumentu lub przejściu do Workspace częściowo wpisany token jest czyszczony i nie może trafić do ukrytego Dokumentu.
+Prawdziwe pola tekstowe — np. edycja właściwości — zachowują własny focus i wpisywanie do nich nie zasila Command Line. Skróty aplikacji z Ctrl/Alt/Meta również nie są zamieniane na tekst CAD. Menu, popup, okno modalne, inne okno aplikacji oraz drugi widoczny Workspace SS2 zachowują własność klawiatury i nie zasilają Command Line działającego w tle.
+
+Częściowo wpisany token CAD należy do semantycznego requestu, w którym rozpoczęto wpisywanie. Zmiana requestu/narzędzia/Sketcha/Dokumentu czyści taki token, zanim mógłby wykonać się w nowym kontekście. Zwykły ruch kursora zmieniający kierunek w ramach tego samego PointRequest nie czyści wpisu. Zmiana Dokumentu lub przejście do Workspace również usuwa częściowy input, więc nie może on trafić do ukrytego Dokumentu.
+
+Przy focusie viewportu i niepustym buforze Command Line klawisz Delete należy do aktywnego inputu i nie usuwa zaznaczonej geometrii. Ostatni znak usuwa Backspace. Gdy bufor jest pusty, zwykłe Delete Selection działa jak wcześniej. Jeżeli focus ma sam Command Line albo inne prawdziwe pole tekstowe, Delete pozostaje normalną edycją tekstu.
 
 Dolny Command Line pozostaje zawsze jednym wierszem. Obszar diagnostyczny po prawej stronie ma stale zarezerwowane miejsce, więc pojawienie się błędu nie zmienia szerokości pola wejściowego i nie powoduje przeskoku Viewera. Długi komunikat jest wizualnie skracany w tym wierszu, a pełna treść jest dostępna jako tooltip.
 
