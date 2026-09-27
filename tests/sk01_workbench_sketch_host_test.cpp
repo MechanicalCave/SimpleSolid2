@@ -869,7 +869,7 @@ int main(int argc, char* argv[]) {
     CHECK(!line_button->isChecked());
     CHECK(!viewport->sketchScene().lines.empty());
 
-    const auto line_token =
+    auto line_token =
         viewport->sketchScene().lines.front().token;
     viewport->setSketchPointHit(line_token);
     viewport->emitSketchPointerXZ(
@@ -979,6 +979,9 @@ int main(int argc, char* argv[]) {
         session->document()
             .findSketch(sketch_id)
             ->model.entityCount() == 2U);
+    CHECK(!viewport->sketchScene().lines.empty());
+    line_token =
+        viewport->sketchScene().lines.front().token;
 
     // History restoration is authored-state authority, not selection
     // presentation authority. Re-establish the semantic selection
@@ -1039,6 +1042,9 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(session->document().state() == keyboard_baseline);
     CHECK(session->undoDepth() == keyboard_undo);
+    CHECK(!viewport->sketchScene().lines.empty());
+    line_token =
+        viewport->sketchScene().lines.front().token;
 
     viewport->setSketchGripHit(std::nullopt);
     viewport->setSketchPointHit(line_token);
@@ -1100,6 +1106,9 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(session->document().state() == keyboard_baseline);
     CHECK(session->undoDepth() == keyboard_undo);
+    CHECK(!viewport->sketchScene().lines.empty());
+    line_token =
+        viewport->sketchScene().lines.front().token;
 
     // Re-enter an uncommitted grip session for the existing SK-07E
     // cycle/no-mutation regression below.
