@@ -602,6 +602,9 @@ int main() {
     CHECK(
         reopened.document->properties().title ==
         "Normal Save");
+    CHECK(
+        normal_session.fileCheckpoint() ==
+        reopened.checkpoint);
 
     // Competing create-new publications cannot both claim one target.
     {
@@ -676,6 +679,18 @@ int main() {
         CHECK(
             created_race.document->documentId() ==
             (a_result.ok() ? id_a : id_b));
+    }
+
+    // Atomic publication must not leave sibling temporary files behind.
+    for (const auto& entry :
+         std::filesystem::directory_iterator{
+             temp.path}) {
+        CHECK(
+            entry.path()
+                .filename()
+                .string()
+                .find(".tmp-") ==
+            std::string::npos);
     }
 
     return EXIT_SUCCESS;
