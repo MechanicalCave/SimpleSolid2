@@ -340,7 +340,7 @@ If the second gate later authorizes production history changes, that implementat
 ## Documentation impact
 
 Internal docs: required  
-User/Product docs: not required during measurement-only phase  
+User/Product docs: not required  
 Reason: C2 initially adds internal measurement tooling/evidence and characterizes runtime history cost without changing user-visible Undo/Redo behavior. If the second Owner decision authorizes a visible history budget or workflow change, User/Product docs must be reclassified to required before production implementation.
 
 ## 16. Stop conditions
