@@ -48,6 +48,14 @@ A multi-selection Show/Hide is one semantic command, one successful revision inc
 
 A no-op creates neither a revision increment nor an Undo entry. A rejected/failed transaction leaves authored state and existing history unchanged.
 
+AUDIT-01 B2 binds each `PartDocumentTransaction` to the technical `DocumentRevision` from which its staged full-state snapshot was created. Commit is authorized only when that base revision still equals the owning `PartDocument` revision. A mismatch returns typed `stale_transaction` before validation, no-op comparison or authored mutation, so an older full-state transaction cannot silently overwrite a newer accepted mutation.
+
+Part transactions are one-shot. The first commit attempt is terminal whether it succeeds, is a no-op, or fails as stale, invalid-state or revision-exhausted; a later commit returns `inactive_transaction`. Rollback is terminal and idempotent. Fresh current-revision no-op semantics remain unchanged.
+
+The Part domain validates the complete staged `PartAuthoredState` at commit: hosted Sketch support and placement must be valid and match, and hosted SketchId values must be unique. Invalid full-state replacement returns typed `invalid_state` without changing authored state or revision. The same validator protects `PartDocument::restore`, which now returns a structured validated reconstruction result rather than constructing an invalid live document.
+
+`DocumentSession::verifyRevision()` remains a second command/history consistency guard; it is not the authority that makes Part transactions safe. B2 makes no multi-threading, file-conflict or stale-state-merge guarantee.
+
 Undo and Redo reapply authored states through PartDocumentTransaction and therefore count as new semantic mutations with increasing technical DocumentRevision.
 
 <!-- section-id: internal.part-documents.session -->
