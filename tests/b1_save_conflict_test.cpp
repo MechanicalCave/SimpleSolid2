@@ -6,7 +6,9 @@
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <future>
 #include <iostream>
+#include <thread>
 #include <string>
 
 using namespace simplesolid2;
@@ -172,17 +174,36 @@ int main() {
         second_checkpoint);
     CHECK(second.needsSave());
 
-    // Guard ownership is fail-fast and cannot publish.
+    // Guard ownership is fail-fast and cannot publish. Hold the
+    // cooperative guard on another thread because a Windows mutex is
+    // recursive for its owning thread.
     {
         auto guarded = openSession(shared_path);
         setTitle(guarded, "Guarded writer");
         const auto before =
             readBytes(shared_path);
-        auto guard =
-            persistence::
-                acquireCooperativeSaveGuard(
-                    shared_path);
-        CHECK(guard.ok());
+
+        std::promise<bool> acquired_promise;
+        auto acquired =
+            acquired_promise.get_future();
+        std::promise<void> release_promise;
+        auto release =
+            release_promise.get_future();
+
+        std::thread holder{
+            [&] {
+                auto guard =
+                    persistence::
+                        acquireCooperativeSaveGuard(
+                            shared_path);
+                acquired_promise.set_value(
+                    guard.ok());
+                if (guard.ok()) {
+                    release.wait();
+                }
+            }};
+        CHECK(acquired.get());
+
         const auto busy = guarded.save();
         CHECK(!busy.ok());
         CHECK(
@@ -191,6 +212,9 @@ int main() {
                 save_conflict_busy);
         CHECK(readBytes(shared_path) == before);
         CHECK(guarded.needsSave());
+
+        release_promise.set_value();
+        holder.join();
     }
 
     // Same file object, same byte length, changed bytes -> content conflict.

@@ -208,11 +208,14 @@ int main(int argc, char* argv[]) {
 
     auto document =
         part::PartDocument::create(core::DocumentId::generate());
-    CHECK(store.createNew(path, document).ok());
+    const auto published =
+        store.createNew(path, document);
+    CHECK(published.ok());
 
     application::DocumentSession session{
         path,
-        std::move(document)};
+        std::move(document),
+        *published.checkpoint};
 
     const auto created =
         session.execute(
