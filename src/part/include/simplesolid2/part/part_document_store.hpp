@@ -79,6 +79,9 @@ struct PartSaveResult final {
     }
 };
 
+[[nodiscard]] bool isSaveConflict(
+    PartStoreErrorCode code) noexcept;
+
 class PartDocumentStore final {
 public:
     static constexpr int current_schema_version = 4;
