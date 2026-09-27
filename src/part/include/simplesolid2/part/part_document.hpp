@@ -29,8 +29,17 @@ struct PartAuthoredState final {
 enum class PartCommitErrorCode {
     none,
     inactive_transaction,
+    stale_transaction,
+    invalid_state,
     revision_exhausted,
 };
+
+enum class PartReconstructErrorCode {
+    none,
+    invalid_state,
+};
+
+struct PartReconstructResult;
 
 struct PartCommitResult final {
     PartCommitErrorCode code{PartCommitErrorCode::none};
@@ -52,7 +61,7 @@ public:
     ~PartDocument() = default;
 
     [[nodiscard]] static PartDocument create(core::DocumentId id);
-    [[nodiscard]] static PartDocument restore(
+    [[nodiscard]] static PartReconstructResult restore(
         core::DocumentId id,
         PartAuthoredState state,
         core::DocumentRevision revision = {});
@@ -89,17 +98,35 @@ private:
           state_{std::move(state)},
           revision_{revision} {}
 
-    [[nodiscard]] PartCommitResult commitState(PartAuthoredState state);
+    [[nodiscard]] static bool validAuthoredState(
+        const PartAuthoredState& state) noexcept;
+
+    [[nodiscard]] PartCommitResult commitState(
+        core::DocumentRevision expected_revision,
+        PartAuthoredState state);
 
     core::DocumentId id_;
     PartAuthoredState state_;
     core::DocumentRevision revision_;
 };
 
+struct PartReconstructResult final {
+    std::optional<PartDocument> document;
+    PartReconstructErrorCode code{
+        PartReconstructErrorCode::none};
+
+    [[nodiscard]] bool ok() const noexcept {
+        return document.has_value() &&
+               code == PartReconstructErrorCode::none;
+    }
+};
+
 class PartDocumentTransaction final {
 public:
     explicit PartDocumentTransaction(PartDocument& document)
-        : document_{&document}, staged_{document.state()} {}
+        : document_{&document},
+          base_revision_{document.revision()},
+          staged_{document.state()} {}
 
     PartDocumentTransaction(const PartDocumentTransaction&) = delete;
     PartDocumentTransaction& operator=(const PartDocumentTransaction&) = delete;
@@ -130,6 +157,7 @@ public:
 
 private:
     PartDocument* document_{};
+    core::DocumentRevision base_revision_;
     PartAuthoredState staged_;
     bool active_{true};
 };

@@ -907,11 +907,19 @@ PartLoadResult PartDocumentStore::load(
             path);
     }
 
+    auto restored =
+        PartDocument::restore(
+            std::move(*id),
+            std::move(*state));
+    if (!restored.ok()) {
+        return loadFailure(
+            PartStoreErrorCode::malformed_document,
+            "Native Part violates Part authored-state invariants",
+            path);
+    }
+
     return PartLoadResult{
-        std::optional<PartDocument>{
-            PartDocument::restore(
-                std::move(*id),
-                std::move(*state))},
+        std::move(restored.document),
         PartStoreDiagnostic{},
     };
 }
