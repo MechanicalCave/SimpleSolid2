@@ -87,7 +87,7 @@ CooperativeSaveGuard&
 CooperativeSaveGuard::operator=(
     CooperativeSaveGuard&& other) noexcept {
     if (this == &other) return *this;
-    this->~CooperativeSaveGuard();
+    release();
     native_handle_ =
         std::exchange(
             other.native_handle_,
@@ -96,6 +96,10 @@ CooperativeSaveGuard::operator=(
 }
 
 CooperativeSaveGuard::~CooperativeSaveGuard() {
+    release();
+}
+
+void CooperativeSaveGuard::release() noexcept {
     if (native_handle_ < 0) return;
 #if defined(_WIN32)
     auto handle =
