@@ -20,6 +20,7 @@ void PartSketchInteractionController::begin(
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
+    last_repeatable_command_.reset();
 
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
@@ -35,6 +36,7 @@ void PartSketchInteractionController::end() {
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
+    last_repeatable_command_.reset();
 
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clearSketchPreview();
@@ -104,6 +106,42 @@ directManipulationActive() const noexcept {
     return interaction_.directManipulationActive();
 }
 
+bool PartSketchInteractionController::repeatLastCommand() {
+    if (!active() ||
+        interaction_.tool() != sketch::SketchTool::select ||
+        interaction_.directManipulationActive() ||
+        interaction_.commonTransformStage().has_value() ||
+        !last_repeatable_command_) {
+        return false;
+    }
+
+    switch (*last_repeatable_command_) {
+    case sketch::SketchTool::line:
+        activateLine();
+        return true;
+    case sketch::SketchTool::circle:
+        activateCircle();
+        return true;
+    case sketch::SketchTool::arc:
+        activateArc();
+        return true;
+    case sketch::SketchTool::move:
+        return activateMove();
+    case sketch::SketchTool::copy:
+        return activateCopy();
+    case sketch::SketchTool::rotate:
+        return activateRotate();
+    case sketch::SketchTool::scale:
+        return activateScale();
+    case sketch::SketchTool::mirror:
+        return activateMirror();
+    case sketch::SketchTool::select:
+        return false;
+    }
+
+    return false;
+}
+
 void PartSketchInteractionController::activateSelect() {
     if (!active()) return;
 
@@ -133,6 +171,8 @@ void PartSketchInteractionController::activateLine() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
+    last_repeatable_command_ =
+        sketch::SketchTool::line;
     notifyStateChanged();
 }
 
@@ -149,6 +189,8 @@ void PartSketchInteractionController::activateCircle() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
+    last_repeatable_command_ =
+        sketch::SketchTool::circle;
     notifyStateChanged();
 }
 
@@ -165,6 +207,8 @@ void PartSketchInteractionController::activateArc() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
+    last_repeatable_command_ =
+        sketch::SketchTool::arc;
     notifyStateChanged();
 }
 
@@ -190,6 +234,8 @@ bool PartSketchInteractionController::activateMove() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
+    last_repeatable_command_ =
+        sketch::SketchTool::move;
     notifyStateChanged();
     return true;
 }
@@ -216,6 +262,8 @@ bool PartSketchInteractionController::activateCopy() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
+    last_repeatable_command_ =
+        sketch::SketchTool::copy;
     notifyStateChanged();
     return true;
 }
@@ -242,6 +290,8 @@ bool PartSketchInteractionController::activateRotate() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
+    last_repeatable_command_ =
+        sketch::SketchTool::rotate;
     notifyStateChanged();
     return true;
 }
@@ -268,6 +318,8 @@ bool PartSketchInteractionController::activateScale() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
+    last_repeatable_command_ =
+        sketch::SketchTool::scale;
     notifyStateChanged();
     return true;
 }
@@ -294,6 +346,8 @@ bool PartSketchInteractionController::activateMirror() {
     projectSelection();
     projectInteraction();
     configureForCurrentTool();
+    last_repeatable_command_ =
+        sketch::SketchTool::mirror;
     notifyStateChanged();
     return true;
 }

@@ -41,6 +41,11 @@ public:
     [[nodiscard]] std::size_t selectedCount() const noexcept;
     [[nodiscard]] bool directManipulationActive()
         const noexcept;
+    [[nodiscard]] std::optional<sketch::SketchTool>
+    lastRepeatableCommand() const noexcept {
+        return last_repeatable_command_;
+    }
+    [[nodiscard]] bool repeatLastCommand();
 
     // Line/Circle/Arc are adapters to the same semantic
     // SketchInteractionState and resolved-input path.
@@ -121,6 +126,8 @@ private:
         manipulation_revision_;
     std::optional<core::DocumentRevision>
         transform_revision_;
+    std::optional<sketch::SketchTool>
+        last_repeatable_command_;
 
     StateChangedHandler state_changed_handler_;
     StatusHandler status_handler_;

@@ -336,6 +336,15 @@ int main(int argc, char* argv[]) {
     auto* operations_label =
         workbench.findChild<QLabel*>(
             QStringLiteral("operationsPlaceholder"));
+    auto* line_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("lineSketchToolButton"));
+    auto* circle_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("circleSketchToolButton"));
+    auto* arc_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("arcSketchToolButton"));
     auto* move_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("moveSketchToolButton"));
@@ -374,6 +383,9 @@ int main(int argc, char* argv[]) {
     CHECK(operations_content != nullptr);
     CHECK(editor_host != nullptr);
     CHECK(operations_label != nullptr);
+    CHECK(line_button != nullptr);
+    CHECK(circle_button != nullptr);
+    CHECK(arc_button != nullptr);
     CHECK(move_button != nullptr);
     CHECK(copy_button != nullptr);
     CHECK(create_tools_label != nullptr);
@@ -464,6 +476,15 @@ int main(int argc, char* argv[]) {
     CHECK(!rotate_button->isHidden());
     CHECK(!scale_button->isHidden());
     CHECK(!mirror_button->isHidden());
+
+    // SK-07D: a fresh Sketch edit session has no repeat target.
+    QTest::keyClick(viewport, Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(!line_button->isChecked());
+    CHECK(!circle_button->isChecked());
+    CHECK(!arc_button->isChecked());
+    CHECK(!move_button->isChecked());
+    CHECK(!copy_button->isChecked());
 
     // SK-07C: toolbar and Command Line COPY are adapters to the
     // same command-first semantic COPY state.
@@ -605,6 +626,84 @@ int main(int argc, char* argv[]) {
         Qt::Key_Escape);
     QApplication::processEvents();
     CHECK(!move_button->isChecked());
+
+    // SK-07D: MOVE remains the last repeatable command after Esc.
+    // Viewport Enter and Space repeat it from ordinary Select.
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(move_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Move — Select objects; Enter/Space/RMB to continue"));
+
+    // Space while MOVE is already active retains transform-selection
+    // precedence and must not start a second repeated command.
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Space);
+    QApplication::processEvents();
+    CHECK(move_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Move — Select objects; Enter/Space/RMB to continue"));
+
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!move_button->isChecked());
+
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Space);
+    QApplication::processEvents();
+    CHECK(move_button->isChecked());
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!move_button->isChecked());
+
+    // Explicit Line activation replaces MOVE as the repeat target.
+    line_button->click();
+    QApplication::processEvents();
+    CHECK(line_button->isChecked());
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!line_button->isChecked());
+
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(line_button->isChecked());
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!line_button->isChecked());
+
+    // Text-entry focus keeps text semantics; Space and empty Return do
+    // not invoke viewport Repeat Last Command.
+    command_input->clear();
+    command_input->setFocus();
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Space);
+    QApplication::processEvents();
+    CHECK(
+        command_input->text() ==
+        QStringLiteral(" "));
+    CHECK(!line_button->isChecked());
+
+    command_input->clear();
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(!line_button->isChecked());
+
+    if (viewport != nullptr) {
+        viewport->setFocus(Qt::OtherFocusReason);
+    }
 
     auto* root =
         tree->topLevelItem(0);

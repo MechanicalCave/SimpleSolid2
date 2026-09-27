@@ -115,6 +115,19 @@ Modify
 
 The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`.
 
+### Repeat Last Command
+
+During one active Sketch Edit session, SimpleSolid remembers the last successfully activated command from `Line / Circle / Arc / Move / Copy / Rotate / Scale / Mirror`.
+
+While ordinary `Select` is active and the viewport has focus, **Enter** or **Space** starts that command again.
+
+Repeat starts a fresh command invocation. It does not replay earlier Base/Reference/axis/placement points, preview state or a previous selection snapshot. It uses the current selection through the command's normal entry grammar — for example, MOVE with a current selection is selection-first, while MOVE with no selection enters Select objects. Repeated COPY asks for a new Base Point and does not reuse prior placements.
+
+`Select`, ordinary selection changes, Delete, grip manipulation, Undo/Redo and Esc do not replace the remembered command. The memory is cleared when Sketch Edit ends and does not carry into another Sketch, Document or reopened file.
+
+Existing key meaning keeps priority: Enter still commits active manipulation/transforms, Enter/Space still completes Select objects during an active transform, and Space in text-entry focus remains a literal text space.
+
+
 Line/Circle/Arc creation and ordinary selection retain the existing behavior. Selected editable entities show state-based square grips: hollow idle, cyan hollow hover and filled yellow active/captured. Center grips move the complete frozen mixed selection; owner-only reshape grips keep their existing primitive-specific behavior.
 
 ### Selecting objects for Modify
@@ -196,7 +209,7 @@ Space typed while a text-entry field has focus remains text input; it does not t
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, clipboard/cross-Sketch Copy, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
+Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, semantic Space CycleEditMode, clipboard/cross-Sketch Copy, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -245,9 +258,9 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 
 The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the stabilized 3D Workbench/Viewer foundation and durable Origin-plane Sketches with Line/Circle/Arc authored geometry.
 
-The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Center-grip Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
+The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Repeat Last Command through Enter/Space in ordinary Select, Center-grip Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
 
-The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, clipboard/cross-Sketch Copy, numeric angle/distance/scale/coordinate entry and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
+The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, semantic Space CycleEditMode, clipboard/cross-Sketch Copy, numeric angle/distance/scale/coordinate entry and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
 
