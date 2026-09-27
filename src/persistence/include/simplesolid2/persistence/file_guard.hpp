@@ -43,6 +43,8 @@ private:
         std::intptr_t native_handle) noexcept
         : native_handle_{native_handle} {}
 
+    void release() noexcept;
+
     std::intptr_t native_handle_{-1};
 };
 
