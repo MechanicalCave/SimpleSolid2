@@ -1,8 +1,10 @@
 # WB-02 — Global CAD Input Routing and Keyboard-First Command Line
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-27  
 **Owner acceptance:** 2026-09-27  
+**Owner manual Windows verification:** PASS — 2026-09-27  
+**Final exact-head Windows FULL:** #626 — `c66d550280485430ab6ddeb92d998919260e9b00` — PASS — 73/73  
 **Decision class:** D2 shared input/workspace architecture + bounded D1 implementation  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Architecture:** ADR-0003, ADR-0006, ADR-0007, ADR-0008, ADR-0009, ADR-0011  
@@ -469,3 +471,25 @@ Automated Package-A evidence on that runtime candidate:
 - Existing Line, grip Reshape/Move, MOVE, repeated COPY, Repeat Last Command, CycleEditMode, history and document lifecycle regressions remain in the unfiltered FULL suite.
 
 This checkpoint is not final WB-02 completion evidence. Current documentation/Product Browser, a final exact-head FULL on the documented candidate and Owner manual Windows verification are still required.
+
+
+## 23. Final completion record
+
+WB-02 and AUDIT-01 Package A are complete on runtime/documentation candidate `c66d550280485430ab6ddeb92d998919260e9b00`.
+
+Final evidence:
+
+- Windows PR gate #626 checked out that exact SHA and passed documentation verification, Build, selector checks, **73/73** unfiltered CTest tests and stable `windows-msvc`;
+- `sk01.workbench_sketch_host`, `wb02.cad_input_session`, `wb02.cad_input_boundaries` and `wb02.global_cad_input_ui` all pass;
+- A1 semantic-context generation binds a live token to the semantic request/context, invalidates it on real context replacement and rejects stale context before semantic interpretation/domain effect;
+- pointer/direction movement inside the same PointRequest preserves typed input;
+- A2 non-empty-buffer Delete is consumed by CAD input precedence and leaves authored model, revision and Undo/Redo unchanged; empty-buffer Delete retains existing geometry-delete semantics;
+- A3 global Qt capture is constrained to the active owning Workspace/window/focus and yields to real text editors, foreign windows, popup/menu ownership, modal ownership and application shortcuts;
+- A4 real Workbench regression evidence covers Line Direct Distance, grips, MOVE, repeated COPY/fresh IDs, Repeat Last Command, CycleEditMode, history interaction, Document lifecycle and prior WB-02 refinements;
+- provider-neutral CAD input boundary remains free of Qt/OCCT/Part/Sketch request types;
+- Command Line remains keyboard-first, rejected Enter consumes the token without mutating authored state, and the one-row diagnostic geometry remains stable;
+- Owner manual Windows verification passed on 2026-09-27 on the final candidate.
+
+No B2/B1/C/D/E/F implementation is authorized by this completion. The next program step is a separately accepted bounded B2 stale-transaction-protection contract.
+
+WB-02 closeout now requires only CLOSURE and merge of PR #78.

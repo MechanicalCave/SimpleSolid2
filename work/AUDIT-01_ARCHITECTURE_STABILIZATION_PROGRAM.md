@@ -65,7 +65,7 @@ Default order is strict:
 
 | Order | Package | Required outcome | Activation |
 | --- | --- | --- | --- |
-| 1 | **A — WB-02 closeout hardening** | context lifetime, Delete precedence, input-capture ownership, real integration evidence | **ACTIVE now through WB-02 amendment** |
+| 1 | **A — WB-02 closeout hardening** | context lifetime, Delete precedence, input-capture ownership, real integration evidence | **COMPLETED — 2026-09-27** |
 | 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | future bounded Work Contract |
 | 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | future bounded Work Contract |
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | future bounded Work Contract |
@@ -81,7 +81,7 @@ No demonstrational/provisional Extrude is allowed before package F passes its ga
 
 ## 5. Package A — mandatory WB-02 closeout hardening
 
-Package A is incorporated into the active WB-02 contract by Owner acceptance on 2026-09-27.
+Package A was incorporated into WB-02 by Owner acceptance on 2026-09-27 and is **COMPLETED** on final candidate `c66d550280485430ab6ddeb92d998919260e9b00`.
 
 ### A1 — bind live buffer to semantic editing-context identity
 
@@ -194,6 +194,22 @@ Current classification after implementation and Windows FULL #622 on `91877f6297
 - **A4 — PARTIAL PASS:** the real Workbench regression and provider-neutral/session/UI tests pass in the 73-test FULL suite. Final status remains pending current documentation, regenerated Browser, final exact-head FULL and Owner manual Windows verification.
 
 Package A is not complete until those remaining evidence gates pass.
+
+### Package A final completion evidence
+
+**Completed:** 2026-09-27  
+**Final candidate:** `c66d550280485430ab6ddeb92d998919260e9b00`  
+**Windows FULL:** #626 — PASS — 73/73  
+**Owner manual Windows:** PASS — 2026-09-27
+
+Package-A findings are closed as follows:
+
+- **A1 — CONFIRMED / FIXED / VERIFIED:** opaque semantic context generation now owns live-token lifetime; request/context replacement invalidates old input while pointer movement in the same request preserves it; stale generation is rejected before semantic effect.
+- **A2 — CONFIRMED / FIXED / VERIFIED:** Delete cannot fall through to geometry deletion while a viewport-entered live token is non-empty; authored state/revision/history remain unchanged.
+- **A3 — CONFIRMED / FIXED / VERIFIED:** qApp capture is constrained by active Workspace/window/focus ownership and yields to text editors, foreign windows, popup/menu, modal ownership and modifiers/shortcuts.
+- **A4 — EVIDENCE CLOSED:** real Workbench and global-input tests plus the unfiltered FULL suite re-prove accepted Sketch/Direct-Distance/grip/MOVE/COPY/history/document-lifecycle behavior.
+
+Package A completion does not activate B2 automatically. B2 remains the next mandatory AUDIT-01 package and requires a separate bounded Owner-accepted Work Contract.
 
 ## 6. Package B2 — stale transaction protection
 
