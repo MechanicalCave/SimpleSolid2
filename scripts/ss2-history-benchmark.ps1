@@ -62,6 +62,7 @@ if ($LASTEXITCODE -ne 0) { throw "C2 benchmark smoke failed." }
 Write-Host "[c2] benchmark invalid-argument rejection"
 & $exe --entities 0 --depth 5 --scenario add --samples 1 --warmup 0 --git-sha $sha
 if ($LASTEXITCODE -eq 0) { throw "C2 benchmark accepted invalid --entities 0." }
+$global:LASTEXITCODE = 0
 
 $os = $null
 $cpu = $null
@@ -247,3 +248,6 @@ $rows | Export-Csv -NoTypeInformation -Encoding UTF8 -LiteralPath $csvPath
 
 Write-Host "[c2] evidence: $aggregatePath"
 Write-Host "[c2] summary: $csvPath"
+
+$global:LASTEXITCODE = 0
+exit 0
