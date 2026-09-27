@@ -68,6 +68,8 @@ bool PartDocument::validAuthoredState(
     return true;
 }
 
+// AUDIT-01 B2 authority boundary: base revision freshness and complete
+// Part authored-state validity are checked here before any state replacement.
 PartCommitResult PartDocument::commitState(
     core::DocumentRevision expected_revision,
     PartAuthoredState state) {
