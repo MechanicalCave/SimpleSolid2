@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-07C_COPY_REPEATED_COPY_AND_FRESH_IDENTITY.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -16,13 +16,10 @@ accepted_adrs:
   - "adr/ADR-0009-sketch-identity-frame-references-and-interaction-grammar.md"
   - "adr/ADR-0010-provider-surface-navigation-overlay-rendering.md"
 next:
-  - implement accepted SK-07C within the bounded normal COPY + repeated-placement + fresh-identity scope
-  - reuse the existing provider-independent translation transform and SK-07A/SK-07B selection-first/command-first grammar
-  - preserve source selection and allocate fresh non-aliasing EntityIds only on accepted placements
-  - verify high-water identity behavior across Undo/Redo/new Copy/save-reopen without changing schema v4
-  - use FAST/SUBSYSTEM checkpoints during implementation
-  - require exact-head Windows FULL plus Owner manual verification before completion
-  - keep grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, numeric/Dynamic Input and R8+ inactive
+  - keep remaining R7 work inactive until a separate Owner-accepted Work Contract exists
+  - propose the next bounded R7 slice for the remaining Copy modifier / command-grammar work before any implementation
+  - preserve completed SK-07A/SK-07B/SK-07C Move/Rotate/Scale/Mirror/COPY behavior and fresh-identity semantics as the implementation baseline
+  - keep Rotate/Scale/Mirror+Copy, semantic Space CycleEditMode, ordinary-Select RMB context, Repeat Last Command, numeric/Dynamic Input, snapping/inference and R8+ inactive
 
 notes:
   - R0 through R4 are completed.
