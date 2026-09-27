@@ -578,9 +578,9 @@ SampleMeasurement runSample(
         const std::size_t update_count =
             scenario == "edit"
                 ? 1U
-                : std::max<std::size_t>(
-                      1U,
-                      options.entities / 10U);
+                : std::min<std::size_t>(
+                      100U,
+                      options.entities);
 
         const auto first_id =
             fixture.entity_ids.front();
@@ -962,9 +962,9 @@ void writeJson(
     out << "  \"sample_fixture_policy\": "
            "\"fresh-equivalent-semantic-baseline\",\n";
     out << "  \"transform_entity_count\": "
-        << std::max<std::size_t>(
-               1U,
-               options.entities / 10U)
+        << std::min<std::size_t>(
+               100U,
+               options.entities)
         << ",\n";
     out << "  \"setup_ms\": "
         << setup_statistics.median
