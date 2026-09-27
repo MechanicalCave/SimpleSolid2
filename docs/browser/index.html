@@ -245,7 +245,7 @@ Machine-local configuration is written under `.ss2-local/` and is not committed.
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The repository currently registers **66 CTest tests**.
+The repository currently registers **67 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
@@ -256,10 +256,11 @@ The R7 transform/COPY regressions include:
 - `sk07c.copy_interaction_state` — normal COPY state, frozen source/Base Point and repeated placement;
 - `sk07c.copy_command` — atomic mixed duplication, fresh/non-reused EntityIds, Undo/Redo and schema-v4 high-water persistence;
 - `sk07c.copy_controller` — zero-placement rejection, repeated independent placements, source-selection retention and stale-revision failure.
+- `sk07d.repeat_last_command_controller` — one runtime repeat target, repeatable command recording, current-selection reuse, fresh COPY restart, non-overwrite by Select/grip/history/Delete and reset across Sketch edit sessions.
 
-The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, and text-focus keyboard behavior.
+The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence and text-focus keyboard behavior.
 
-The last completed pre-SK-07C exact-head baseline was Windows FULL #510 on `dc58b767e2e3effbff90ba62d90a7a5f70fda5c5`, where Build and **63/63** unfiltered CTest tests passed. SK-07C adds three registered tests; its final exact-head Windows FULL result is recorded only at Work Contract closeout.
+The completed SK-07C exact-head baseline is Windows FULL #549 on `03baaf6d82c5f7ba73d3701791dc8af8f356ce5f`, where Build and **66/66** unfiltered CTest tests passed. SK-07D adds one registered controller regression; its final exact-head Windows FULL result is recorded only at Work Contract closeout.
 
 Repository documentation validation runs outside CTest through `ss2 verify`. Tests must not be weakened to obtain a pass.
 
@@ -450,6 +451,13 @@ Modify
 
 The compact Command Line accepts the command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. These keywords activate tools only; the current Command Line does not parse numeric transform/COPY values.
 
+`PartSketchInteractionController` owns one runtime-only **last repeatable command** identity for the active Sketch edit session. Successful explicit activation of Line/Circle/Arc/Move/Copy/Rotate/Scale/Mirror through toolbar or Command Line updates that one value. Select, Delete, selection changes, grip/direct manipulation, Undo/Redo and Esc do not replace it.
+
+In ordinary Select with viewport CAD focus, Enter or Space repeats that remembered command through the same existing activation methods. Repeat starts a fresh command invocation: it uses the current semantic selection and does not replay prior Base/Reference/axis/placement points, prior selection snapshots, preview state or copied EntityIds. An empty remembered state is a no-op. The remembered identity is cleared by Sketch edit begin/end, so it does not leak across Sketches, Documents or reopen.
+
+Existing key precedence remains authoritative: Enter commits active direct manipulation; Enter/Space in transform `Select objects` completes collection when valid; Enter at final transform stages commits the preview; Command Line Return submits the field; Space in text-entry focus remains text. Semantic Space CycleEditMode and ordinary-Select RMB context remain outside SK-07D.
+
+
 Move/Copy/Rotate/Scale/Mirror share one frozen-selection common-transform interaction pipeline. Selection-first activation skips object collection. Command-first activation collects objects with the ordinary semantic selection grammar and freezes the affected/source EntityIds before reference-point stages begin.
 
 Move uses Base Point → destination and previews one translation `destination - base`.
@@ -503,7 +511,7 @@ There is still no modeled Part B-Rep at this milestone; the OCCT provider remain
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, hover, active grip, direct-manipulation session, common-transform/COPY tool and stage, frozen source selection/geometry snapshot, Base/Reference/axis points, current pointer-derived preview, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/transform drag state and Command Line text/prompt state are runtime-only.
+Selection, primary selection, hover, active grip, direct-manipulation session, common-transform/COPY tool and stage, frozen source selection/geometry snapshot, Base/Reference/axis points, current pointer-derived preview, the last repeatable Sketch command identity, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/transform drag state and Command Line text/prompt state are runtime-only.
 
 Persistent Origin visibility, authored Sketch geometry, committed copied entities and the model-local identity high-water are authored/durable state. COPY preview itself is never persisted.
 
@@ -1437,6 +1445,19 @@ Modify
 
 The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`.
 
+### Repeat Last Command
+
+During one active Sketch Edit session, SimpleSolid remembers the last successfully activated command from `Line / Circle / Arc / Move / Copy / Rotate / Scale / Mirror`.
+
+While ordinary `Select` is active and the viewport has focus, **Enter** or **Space** starts that command again.
+
+Repeat starts a fresh command invocation. It does not replay earlier Base/Reference/axis/placement points, preview state or a previous selection snapshot. It uses the current selection through the command's normal entry grammar — for example, MOVE with a current selection is selection-first, while MOVE with no selection enters Select objects. Repeated COPY asks for a new Base Point and does not reuse prior placements.
+
+`Select`, ordinary selection changes, Delete, grip manipulation, Undo/Redo and Esc do not replace the remembered command. The memory is cleared when Sketch Edit ends and does not carry into another Sketch, Document or reopened file.
+
+Existing key meaning keeps priority: Enter still commits active manipulation/transforms, Enter/Space still completes Select objects during an active transform, and Space in text-entry focus remains a literal text space.
+
+
 Line/Circle/Arc creation and ordinary selection retain the existing behavior. Selected editable entities show state-based square grips: hollow idle, cyan hollow hover and filled yellow active/captured. Center grips move the complete frozen mixed selection; owner-only reshape grips keep their existing primitive-specific behavior.
 
 ### Selecting objects for Modify
@@ -1518,7 +1539,7 @@ Space typed while a text-entry field has focus remains text input; it does not t
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, clipboard/cross-Sketch Copy, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
+Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, semantic Space CycleEditMode, clipboard/cross-Sketch Copy, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -1567,11 +1588,11 @@ A damaged or unsupported native Part is shown as an invalid entry instead of bei
 
 The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the stabilized 3D Workbench/Viewer foundation and durable Origin-plane Sketches with Line/Circle/Arc authored geometry.
 
-The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Center-grip Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
+The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Repeat Last Command through Enter/Space in ordinary Select, Center-grip Move, bounded owner-only reshape, atomic mixed Delete, Undo/Redo, Operations and the compact Command Line.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
 
-The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, clipboard/cross-Sketch Copy, numeric angle/distance/scale/coordinate entry and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
+The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, semantic Space CycleEditMode, clipboard/cross-Sketch Copy, numeric angle/distance/scale/coordinate entry and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -1861,6 +1882,19 @@ Modify
 
 Kompaktowy Command Line obsługuje słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`.
 
+### Powtórzenie ostatniej komendy
+
+Podczas jednego aktywnego Sketch Edit SimpleSolid pamięta ostatnią poprawnie uruchomioną komendę z zestawu `Line / Circle / Arc / Move / Copy / Rotate / Scale / Mirror`.
+
+Gdy jesteś w zwykłym `Select` i focus ma viewport, **Enter** albo **Space** uruchamia tę komendę ponownie.
+
+Powtórzenie zaczyna świeżą komendę. Nie odtwarza poprzednich Base/Reference/axis/placement points, preview ani wcześniejszego selection snapshotu. Używa aktualnego selection zgodnie z normalną gramatyką narzędzia — np. MOVE z aktualnym selection działa selection-first, a bez selection przechodzi do Select objects. Powtórzone COPY ponownie prosi o Base Point i nie używa wcześniejszych placementów.
+
+`Select`, zwykłe zaznaczanie, Delete, grip manipulation, Undo/Redo i Esc nie zastępują zapamiętanej komendy. Pamięć jest czyszczona po zakończeniu Sketch Edit i nie przechodzi do innego Sketchu, Dokumentu ani po ponownym otwarciu pliku.
+
+Istniejące znaczenie klawiszy ma pierwszeństwo: Enter nadal zatwierdza aktywną manipulację/transformację, Enter/Space nadal kończy Select objects w aktywnej transformacji, a Space przy focusie pola tekstowego pozostaje zwykłą spacją.
+
+
 Tworzenie Line/Circle/Arc i zwykłe selection zachowują dotychczasową gramatykę. Zaznaczone edytowalne entities pokazują grips kodujące stan: pusty kwadrat w idle, pusty cyan na hover i pełny żółty dla aktywnego/captured gripa. Center grip przesuwa cały zamrożony mieszany selection; owner-only reshape zachowuje dotychczasową semantykę prymitywu.
 
 ### Wybór obiektów dla Modify
@@ -1942,7 +1976,7 @@ Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uru
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję. Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin.
 
-Grip Copy modifier, Copy połączone z Rotate/Scale/Mirror, Repeat Last Command, clipboard/cross-Sketch Copy, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
+Grip Copy modifier, Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, semantic Space CycleEditMode, clipboard/cross-Sketch Copy, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
@@ -1991,11 +2025,11 @@ Uszkodzony albo nieobsługiwany natywny Part jest pokazywany jako niepoprawny wp
 
 Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, ustabilizowany fundament Workbench/Viewer 3D oraz trwałe Sketches na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
 
-Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Copy/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Center-grip Move, ograniczony owner-only reshape, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
+Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Copy/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Repeat Last Command przez Enter/Space w zwykłym Select, Center-grip Move, ograniczony owner-only reshape, atomowy mieszany Delete, Undo/Redo, Operations oraz kompaktowy Command Line.
 
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 
-Nadal brakuje grip Copy modifier, Rotate/Scale/Mirror+Copy, Repeat Last Command, clipboard/cross-Sketch Copy, numerycznego wpisywania kątów/odległości/skali/współrzędnych i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+Nadal brakuje grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, semantic Space CycleEditMode, clipboard/cross-Sketch Copy, numerycznego wpisywania kątów/odległości/skali/współrzędnych i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty
