@@ -115,6 +115,8 @@ Modify
 
 The compact Command Line accepts `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`.
 
+Command Line is context-sensitive. When the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At stages that support Direct Distance, a bare numeric value is interpreted as a distance; an invalid token is rejected and the current point stage remains active.
+
 ### Repeat Last Command
 
 During one active Sketch Edit session, SimpleSolid remembers the last successfully activated command from `Line / Circle / Arc / Move / Copy / Rotate / Scale / Mirror`.
@@ -148,6 +150,8 @@ LMB or Enter commits the current mode. Esc cancels the complete uncommitted mani
 
 Space during active grip manipulation has precedence over Repeat Last Command. Space while Command Line or another text-entry field has focus remains a literal text space.
 
+During grip Reshape or grip Move you can also use Direct Distance: point the cursor in a direction from the grip's interaction-start position, type a distance in Command Line and press Enter. For Move this resolves a destination exactly that distance from the pivot; for Reshape the same resolved point is passed to the normal primitive-specific reshape semantics.
+
 ### Selecting objects for Modify
 
 Move, Copy, Rotate, Scale and Mirror work on any mixed selection of Line, Circle and Arc.
@@ -168,11 +172,11 @@ If nothing is selected, activate the tool first. The command enters **Select obj
 
 Specify a **Base Point**, then a destination. The complete frozen selection previews one rigid translation equal to `destination - base`.
 
-LMB or Enter accepts a valid destination. A zero-distance Move is a clean no-op: it creates no authored change and no Undo step.
+You can specify the destination with LMB or Direct Distance: after Base Point, point the cursor in a direction, type a distance in Command Line and press Enter. A zero-distance Move is a clean no-op: it creates no authored change and no Undo step.
 
 ### Copy
 
-COPY uses the same object-selection grammar as the other Modify tools. After the source selection is frozen, specify a **Base Point**, then a placement point.
+COPY uses the same object-selection grammar as the other Modify tools. After the source selection is frozen, specify a **Base Point**, then a placement point. The placement can be clicked with LMB or resolved through Direct Distance using the current cursor direction.
 
 Preview shows the original source selection translated by `placement - base`. On each valid non-zero placement:
 
@@ -221,13 +225,17 @@ Move/Copy/Rotate/Scale/Mirror preview is runtime-only. Move/Rotate/Scale/Mirror 
 
 LMB at the final point stage or Enter commits the current valid preview/placement. Esc cancels uncommitted transient state and preserves the relevant selection.
 
-The current version **does not support numeric entry of transform angles, distances, scale factors or COPY coordinates**. Typing values such as `0.5`, `2` or `90` while the viewport has focus does not replace the value derived from pointer position. Enter still commits the current preview.
+The current version supports **Direct Distance** at five point-input locations: the second/next LINE point, grip Reshape, grip Move, normal MOVE destination and normal COPY placement. A base/pivot must already exist; then establish a non-zero direction with the cursor, type a finite non-negative distance in Command Line and press Enter. `.` is always accepted as a decimal separator, and the current locale decimal separator is accepted as well.
+
+After a numeric COPY placement, COPY remains active for another placement, but the previous direction is not silently reused — move the pointer to establish the direction for the next Direct Distance. Continuous LINE behaves the same way from its new endpoint. A value of `0` can be resolved, after which normal tool semantics decide the no-op/rejection: LINE creates no zero-length segment, MOVE is a no-op, and COPY creates no coincident copy.
+
+Numeric Rotate angle, Scale factor, absolute/relative Cartesian coordinates, polar syntax, unit suffixes/expressions, Dynamic Input, Ortho/Polar and snapping/tracking are not implemented yet. Digits typed while the viewport itself has focus are not globally intercepted; Direct Distance is submitted through Command Line to the active PointRequest.
 
 Space typed while a text-entry field has focus remains text input; it does not trigger a CAD action.
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
+Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeric Rotate/Scale, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube

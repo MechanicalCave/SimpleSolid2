@@ -115,6 +115,8 @@ Modify
 
 Kompaktowy Command Line obsługuje słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`.
 
+Command Line jest kontekstowy. Jeżeli aktywny etap oczekuje punktu, bieżący semantic PointRequest ma pierwszeństwo przed uruchomieniem nowej komendy. W etapach obsługujących Direct Distance samodzielna wartość liczbowa jest interpretowana jako odległość; błędny token zostaje odrzucony i bieżący etap pozostaje aktywny.
+
 ### Powtórzenie ostatniej komendy
 
 Podczas jednego aktywnego Sketch Edit SimpleSolid pamięta ostatnią poprawnie uruchomioną komendę z zestawu `Line / Circle / Arc / Move / Copy / Rotate / Scale / Mirror`.
@@ -148,6 +150,8 @@ LMB albo Enter zatwierdza aktualny tryb. Esc anuluje całą niezatwierdzoną man
 
 Space podczas aktywnej manipulacji gripem ma pierwszeństwo przed Repeat Last Command. Space przy focusie Command Line/pola tekstowego pozostaje zwykłą spacją.
 
+Podczas grip Reshape albo grip Move możesz także użyć Direct Distance: ustaw kursorem kierunek od położenia gripa ze startu sesji, wpisz odległość w Command Line i naciśnij Enter. Dla Move rozwiązuje to punkt docelowy dokładnie w zadanej odległości od pivotu; dla Reshape ten sam resolved point trafia do zwykłej semantyki reshape danego gripa.
+
 ### Wybór obiektów dla Modify
 
 Move, Copy, Rotate, Scale i Mirror działają na dowolnym mieszanym selection Line/Circle/Arc.
@@ -168,11 +172,11 @@ Jeżeli nic nie jest zaznaczone, uruchom narzędzie najpierw. Komenda przechodzi
 
 Wskaż **Base Point**, a potem destination. Cały zamrożony selection pokazuje preview jednego sztywnego przesunięcia `destination - base`.
 
-LMB albo Enter zatwierdza poprawny destination. Przesunięcie o zero jest czystym no-op: nie zmienia authored state i nie tworzy kroku Undo.
+Destination możesz wskazać LMB albo podać przez Direct Distance: po Base Point ustaw kursorem kierunek, wpisz odległość w Command Line i naciśnij Enter. Przesunięcie o zero jest czystym no-op: nie zmienia authored state i nie tworzy kroku Undo.
 
 ### Copy
 
-COPY używa tego samego modelu wyboru obiektów co pozostałe narzędzia Modify. Po zamrożeniu source selection wskaż **Base Point**, a następnie placement point.
+COPY używa tego samego modelu wyboru obiektów co pozostałe narzędzia Modify. Po zamrożeniu source selection wskaż **Base Point**, a następnie placement point. Placement możesz wskazać LMB albo rozwiązać przez Direct Distance z bieżącego kierunku kursora.
 
 Preview pokazuje translację oryginalnego source selection o `placement - base`. Przy poprawnym niezerowym placement:
 
@@ -221,13 +225,17 @@ Preview Move/Copy/Rotate/Scale/Mirror jest tylko runtime. Move/Rotate/Scale/Mirr
 
 LMB na końcowym etapie albo Enter zatwierdza bieżący poprawny preview/placement. Esc anuluje niezatwierdzony stan i zachowuje właściwy selection.
 
-Obecna wersja **nie obsługuje wpisywania numerycznych kątów, odległości, współczynników skali ani współrzędnych COPY**. Wpisanie np. `0.5`, `2` albo `90` przy focusie viewportu nie zastępuje wartości wynikającej z położenia kursora. Enter zatwierdza wtedy bieżący preview.
+Obecna wersja obsługuje **Direct Distance** w pięciu wejściach punktowych: drugi/kolejny punkt LINE, grip Reshape, grip Move, destination normalnego MOVE oraz placement normalnego COPY. Najpierw musi istnieć base/pivot, następnie ustaw kursorem niezerowy kierunek, wpisz w Command Line skończoną nieujemną odległość i naciśnij Enter. Separator `.` jest zawsze akceptowany; akceptowany jest również bieżący separator dziesiętny locale, np. `,` w polskiej konfiguracji.
+
+Po numerycznym placement COPY pozostaje aktywne dla następnej kopii, ale poprzedni kierunek nie jest używany ponownie po cichu — przesuń kursor, aby ustalić kierunek kolejnego Direct Distance. W LINE kolejny segment analogicznie wymaga nowego kierunku od nowego endpointu. Wartość `0` przechodzi przez resolver, po czym zwykła semantyka narzędzia decyduje o no-op/rejection: LINE nie tworzy odcinka zerowego, MOVE jest no-op, a COPY nie tworzy nakładającej się kopii.
+
+Nie są jeszcze obsługiwane: numeryczny kąt Rotate, współczynnik Scale, współrzędne absolutne/względne, zapis polarny, sufiksy/jednostki, Dynamic Input, Ortho/Polar ani snapping/tracking. Liczby wpisywane bezpośrednio przy focusie viewportu nie są globalnie przechwytywane; Direct Distance jest składane przez Command Line dla aktywnego PointRequest.
 
 Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uruchamia akcji CAD.
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję. Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin.
 
-Grip Copy modifier, Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, snapping/inference, coordinate/Dynamic Input, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
+Grip Copy modifier, Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeryczne Rotate/Scale, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube

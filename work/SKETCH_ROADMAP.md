@@ -1,30 +1,32 @@
 # Sketcher Program Roadmap
 
 **Status:** ACCEPTED  
-**Version:** 1.2  
-**Owner acceptance:** 2026-09-26  
+**Version:** 1.3  
+**Owner acceptance:** 2026-09-27  
+**Previous accepted version:** 1.2 — 2026-09-26  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Architecture:** ADR-0008, ADR-0009  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
 
-## 1. Why v1.2 changed the program
+## 1. Why v1.3 changes the sequence
 
-Roadmap v1.1 correctly used Line as the first vertical slice through identity, persistence, Viewer input, Select, continuous creation and Delete.
+Roadmap v1.2 correctly established direct manipulation on Line, introduced Circle/Arc early and validated one semantic interaction model before precision-input work.
 
-That remains valid for R1–R4.
+SK-07A through SK-07E then exposed a sequencing dependency that v1.2 intentionally deferred: remaining grip/Copy command grammar needs one shared precision-input seam before Copy-specific interaction is safe to implement.
 
-The next risk is different: if direct manipulation, precision input, snapping, measurement and future relations are all designed only against Line, the architecture can accidentally become endpoint/linear-geometry-specific.
+In classical CAD interaction, a numeric value such as `50` is not owned by MOVE or COPY. It satisfies the active semantic input request. The same direct-distance resolution is useful for Line construction, grip Reshape, grip Move, normal MOVE and normal COPY.
 
-The revised order therefore:
+Roadmap v1.3 therefore:
 
-- keeps R0–R4 unchanged;
-- establishes direct-manipulation foundations on Line;
-- introduces Circle and Arc early;
-- validates one interaction model across unlike primitives;
-- only then expands precision input, Object Snap, tracking and later constraint-capable behavior.
+- preserves completed R0–R6 and SK-07A through SK-07E;
+- pulls only the minimal shared PointRequest / context-first Command Line / Direct Distance foundation forward into R7 as SK-07F;
+- requires remaining Grip Copy grammar to consume that shared input path rather than introduce a local parser;
+- leaves Ortho/Polar expansion, coordinate syntaxes, Dynamic Input and unit-expression work in R9;
+- leaves Object Snap, Object Snap Tracking and inference in R10;
+- keeps R8 Measure sequencing unchanged.
 
-R5 implementation is authorized only by an accepted R5 Work Contract. SK-05A is the active accepted R5 contract.
+This is a sequencing correction, not authorization to implement all later precision features.
 
 ## 2. Preserved accepted invariants
 
@@ -610,8 +612,8 @@ Goal:
 - add the agreed primitive grips and minimal direct reshape/move paths;
 - prove the R5 interaction architecture is not Line-specific.
 
-### R7 — Common transforms, Copy and command grammar
-**Status:** active — SK-07A, SK-07B, SK-07C, SK-07D and SK-07E completed; remaining R7 requires separate accepted slices
+### R7 — Common transforms, shared precision foundation, Copy and command grammar
+**Status:** active — SK-07A through SK-07F completed; remaining R7 requires separate accepted slices
 
 Goal:
 
@@ -622,7 +624,10 @@ Goal:
 - explicit Base Point for normal Move/Copy/Rotate/Scale;
 - two-point mirror axis for normal Mirror;
 - repeated Copy with fresh EntityIds and per-placement Undo;
-- Copy modifier behavior during grip manipulation;
+- one shared semantic point-input request and context-first Command Line routing;
+- Direct Distance resolved from base + current pointer direction + numeric scalar;
+- first Direct Distance clients: Line second point, grip Reshape, grip Move, normal MOVE destination and normal COPY placement;
+- Grip Copy command grammar only after the shared precision foundation exists;
 - context RMB behavior;
 - Repeat Last Command;
 - common preview/commit/cancel pipeline;
@@ -638,19 +643,18 @@ Goal:
 - Selection and whole-Sketch Show Dimensions runtime overlays;
 - no authored dimensions or constraints.
 
-### R9 — Precision input, Ortho, Polar and Dynamic Input
+### R9 — Precision input expansion, Ortho, Polar and Dynamic Input
 Goal:
 
-- productionize the shared Input Resolution path;
+- extend the shared Input Resolution path established by SK-07F rather than replace it;
 - absolute/relative Cartesian input;
 - relative polar input;
-- direct distance;
-- unit-aware and locale-safe numeric parser;
+- unit-aware expression grammar beyond the bare scalar foundation;
 - Dynamic Input fields and Tab locking;
 - Ortho/Polar mutual exclusion;
 - configurable polar increments/additional angles;
 - Absolute/Relative Polar preference;
-- Command Line and Dynamic Input feed one request.
+- Command Line and Dynamic Input feed one semantic request.
 
 ### R10 — Object Snap, Object Snap Tracking and inference
 Goal:
@@ -729,7 +733,7 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7 active — SK-07A, SK-07B, SK-07C, SK-07D and SK-07E completed; RMB context, grip Copy modifier and later command grammar remain unauthorized  
+R7 active — SK-07A through SK-07F completed; Grip Copy and RMB context remain unauthorized  
 R8+ not started
 
-Roadmap v1.2 remains authoritative. Remaining R7 work and R8+ require separate explicit Owner-accepted Work Contracts.
+Roadmap v1.3 remains authoritative for completed SK-07F semantics. All remaining R7/R8+/R9/R10 work requires separate explicit Owner-accepted Work Contracts; the newly identified global keyboard-first CAD Input requirement is a separate D2 architecture proposal and does not silently activate later precision-input scope.

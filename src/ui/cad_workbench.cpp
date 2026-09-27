@@ -12,6 +12,7 @@
 #include <QKeyEvent>
 #include <QLabel>
 #include <QLineEdit>
+#include <QLocale>
 #include <QMessageBox>
 #include <QMouseEvent>
 #include <QPlainTextEdit>
@@ -21,6 +22,7 @@
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
 
+#include <cmath>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -41,6 +43,57 @@ QString fromUtf8(std::string_view value) {
     return QString::fromUtf8(
         value.data(),
         static_cast<qsizetype>(value.size()));
+}
+
+std::optional<double> parseBareSketchDistance(
+    const QString& text,
+    const QLocale& locale = QLocale{}) {
+    const QString trimmed = text.trimmed();
+    if (trimmed.isEmpty()) {
+        return std::nullopt;
+    }
+
+    const QString locale_decimal = locale.decimalPoint();
+    QString normalized = trimmed;
+    if (locale_decimal != QStringLiteral(".")) {
+        if (normalized.contains(QLatin1Char('.')) &&
+            normalized.contains(locale_decimal)) {
+            return std::nullopt;
+        }
+        normalized.replace(
+            locale_decimal,
+            QStringLiteral("."));
+    }
+
+    bool saw_digit = false;
+    bool saw_decimal = false;
+    for (const QChar ch : normalized) {
+        if (ch.isDigit()) {
+            saw_digit = true;
+            continue;
+        }
+
+        if (ch == QLatin1Char('.') && !saw_decimal) {
+            saw_decimal = true;
+            continue;
+        }
+
+        // SK-07F deliberately rejects signs, grouping separators,
+        // units, tuples, polar syntax and exponent notation.
+        return std::nullopt;
+    }
+
+    if (!saw_digit) {
+        return std::nullopt;
+    }
+
+    bool ok = false;
+    const double value =
+        QLocale::c().toDouble(normalized, &ok);
+    if (!ok || !std::isfinite(value) || value < 0.0) {
+        return std::nullopt;
+    }
+    return value;
 }
 
 QString fromFilesystemPath(const std::filesystem::path& value) {
@@ -1214,11 +1267,43 @@ void CadWorkbench::submitSketchCommandLine() {
         return;
     }
 
-    const auto command =
-        command_input_->text().trimmed().toUpper();
-    if (command.isEmpty()) {
+    const auto submitted =
+        command_input_->text().trimmed();
+    if (submitted.isEmpty()) {
         return;
     }
+
+    // Context-first grammar: an active semantic PointRequest owns
+    // submission before command-local/top-level command activation.
+    if (const auto request =
+            sketch_interaction_controller_->activePointRequest()) {
+        const auto distance =
+            parseBareSketchDistance(submitted);
+        if (!distance) {
+            status_->setText(
+                QStringLiteral(
+                    "Active point input expects a bare finite distance."));
+            return;
+        }
+        if (!request->direct_distance_enabled) {
+            status_->setText(
+                QStringLiteral(
+                    "Direct Distance is not available at this point stage."));
+            return;
+        }
+        if (!sketch_interaction_controller_->
+                submitDirectDistance(*distance)) {
+            return;
+        }
+
+        command_input_->clear();
+        if (viewport_widget_ != nullptr) {
+            viewport_widget_->setFocus(Qt::OtherFocusReason);
+        }
+        return;
+    }
+
+    const auto command = submitted.toUpper();
 
     if (command == QStringLiteral("SELECT")) {
         activateSketchSelect();

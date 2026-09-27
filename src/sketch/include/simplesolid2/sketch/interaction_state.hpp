@@ -196,6 +196,25 @@ struct ResolvedSketchInput final {
         const ResolvedSketchInput&) = default;
 };
 
+struct PointRequest final {
+    std::optional<Point2> base;
+    std::optional<Point2> pointer_candidate;
+    bool direct_distance_enabled{};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return (!base || base->finite()) &&
+               (!pointer_candidate ||
+                pointer_candidate->finite());
+    }
+
+    friend bool operator==(
+        const PointRequest&,
+        const PointRequest&) = default;
+};
+
+// R5/R6 source compatibility for clients that only need
+// identity pointer resolution. SK-07F stateful clients use the
+// active PointRequest methods on SketchInteractionState.
 [[nodiscard]] inline std::optional<ResolvedSketchInput>
 resolveSketchInput(Point2 raw) noexcept {
     if (!raw.finite()) {
@@ -224,6 +243,15 @@ public:
 
     [[nodiscard]] std::optional<CommonTransformStage>
     commonTransformStage() const noexcept;
+
+    [[nodiscard]] std::optional<PointRequest>
+    activePointRequest() const noexcept;
+
+    [[nodiscard]] std::optional<ResolvedSketchInput>
+    resolvePointerInput(Point2 raw) noexcept;
+
+    [[nodiscard]] std::optional<ResolvedSketchInput>
+    resolveDirectDistance(double distance) const noexcept;
 
     [[nodiscard]] std::optional<Point2>
     lineAnchor() const noexcept {
@@ -465,6 +493,10 @@ private:
     std::optional<EntityId> hovered_entity_;
     std::optional<SketchGripRef> hovered_grip_;
     std::optional<DirectManipulationSession> manipulation_;
+
+    // One shared runtime pointer candidate feeds the active semantic
+    // PointRequest. It is never authored or persisted.
+    std::optional<Point2> point_pointer_candidate_;
 };
 
 } // namespace simplesolid2::sketch

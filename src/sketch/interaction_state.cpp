@@ -312,8 +312,115 @@ bool SketchInteractionState::commonTransformTool()
            tool_ == SketchTool::mirror;
 }
 
+std::optional<PointRequest>
+SketchInteractionState::activePointRequest() const noexcept {
+    if (manipulation_) {
+        PointRequest request{
+            manipulation_->pivot,
+            point_pointer_candidate_,
+            true};
+        return request.valid()
+            ? std::optional<PointRequest>{request}
+            : std::nullopt;
+    }
+
+    if (tool_ == SketchTool::line &&
+        !pending_line_request_) {
+        PointRequest request{
+            line_stage_ == LineStage::await_next_point
+                ? line_anchor_
+                : std::nullopt,
+            point_pointer_candidate_,
+            line_stage_ == LineStage::await_next_point &&
+                line_anchor_.has_value()};
+        return request.valid()
+            ? std::optional<PointRequest>{request}
+            : std::nullopt;
+    }
+
+    if (!commonTransformTool() ||
+        !transform_session_ ||
+        transform_session_->stage ==
+            CommonTransformStage::select_objects) {
+        return std::nullopt;
+    }
+
+    PointRequest request{
+        transform_session_->base_point,
+        point_pointer_candidate_,
+        false};
+
+    switch (transform_session_->stage) {
+    case CommonTransformStage::await_base_point:
+    case CommonTransformStage::await_axis_start:
+        request.base.reset();
+        break;
+    case CommonTransformStage::await_destination:
+        request.direct_distance_enabled =
+            (tool_ == SketchTool::move ||
+             tool_ == SketchTool::copy) &&
+            request.base.has_value();
+        break;
+    case CommonTransformStage::await_reference_point:
+    case CommonTransformStage::await_axis_end:
+        break;
+    case CommonTransformStage::select_objects:
+        return std::nullopt;
+    }
+
+    return request.valid()
+        ? std::optional<PointRequest>{request}
+        : std::nullopt;
+}
+
+std::optional<ResolvedSketchInput>
+SketchInteractionState::resolvePointerInput(
+    Point2 raw) noexcept {
+    if (!raw.finite() || !activePointRequest()) {
+        return std::nullopt;
+    }
+
+    point_pointer_candidate_ = raw;
+    return ResolvedSketchInput{raw};
+}
+
+std::optional<ResolvedSketchInput>
+SketchInteractionState::resolveDirectDistance(
+    double requested_distance) const noexcept {
+    if (!std::isfinite(requested_distance) ||
+        requested_distance < 0.0) {
+        return std::nullopt;
+    }
+
+    const auto request = activePointRequest();
+    if (!request ||
+        !request->direct_distance_enabled ||
+        !request->base ||
+        !request->pointer_candidate) {
+        return std::nullopt;
+    }
+
+    const auto base = *request->base;
+    const auto pointer = *request->pointer_candidate;
+    const double du = pointer.u - base.u;
+    const double dv = pointer.v - base.v;
+    const double length = std::hypot(du, dv);
+    if (!std::isfinite(length) || length <= 0.0) {
+        return std::nullopt;
+    }
+
+    const Point2 resolved{
+        base.u + (du / length) * requested_distance,
+        base.v + (dv / length) * requested_distance};
+    return resolved.finite()
+        ? std::optional<ResolvedSketchInput>{
+              ResolvedSketchInput{resolved}}
+        : std::nullopt;
+}
+
 void SketchInteractionState::activateLine() noexcept {
     manipulation_.reset();
+    point_pointer_candidate_.reset();
     resetCommonTransform();
     clearHover();
     tool_ = SketchTool::line;
@@ -324,6 +431,7 @@ void SketchInteractionState::activateLine() noexcept {
 
 void SketchInteractionState::activateCircle() noexcept {
     manipulation_.reset();
+    point_pointer_candidate_.reset();
     resetCommonTransform();
     clearHover();
     tool_ = SketchTool::circle;
@@ -334,6 +442,7 @@ void SketchInteractionState::activateCircle() noexcept {
 
 void SketchInteractionState::activateArc() noexcept {
     manipulation_.reset();
+    point_pointer_candidate_.reset();
     resetCommonTransform();
     clearHover();
     tool_ = SketchTool::arc;
@@ -354,6 +463,7 @@ bool SketchInteractionState::activateCommonTransform(
     }
 
     manipulation_.reset();
+    point_pointer_candidate_.reset();
     resetCommonTransform();
     clearHover();
     resetLineStage();
@@ -448,6 +558,7 @@ bool SketchInteractionState::completeTransformSelection(
     transform_session_->base_point.reset();
     transform_session_->reference_point.reset();
     transform_session_->current_preview.reset();
+    point_pointer_candidate_.reset();
     transform_session_->stage =
         tool_ == SketchTool::mirror
             ? CommonTransformStage::await_axis_start
@@ -475,6 +586,7 @@ bool SketchInteractionState::acceptTransformPoint(
             return false;
         }
         transform_session_->base_point = input.position;
+        point_pointer_candidate_ = input.position;
         transform_session_->reference_point.reset();
         transform_session_->current_preview.reset();
         transform_session_->stage =
@@ -499,6 +611,7 @@ bool SketchInteractionState::acceptTransformPoint(
         }
         transform_session_->reference_point =
             input.position;
+        point_pointer_candidate_ = input.position;
         transform_session_->current_preview = input;
         transform_session_->stage =
             CommonTransformStage::await_destination;
@@ -510,6 +623,7 @@ bool SketchInteractionState::acceptTransformPoint(
             return false;
         }
         transform_session_->base_point = input.position;
+        point_pointer_candidate_ = input.position;
         transform_session_->reference_point.reset();
         transform_session_->current_preview = input;
         transform_session_->stage =
@@ -642,6 +756,7 @@ bool SketchInteractionState::continueCopyPlacement() noexcept {
     }
 
     transform_session_->current_preview.reset();
+    point_pointer_candidate_.reset();
     clearHover();
     return true;
 }
@@ -706,6 +821,7 @@ SketchInteractionState::acceptLinePoint(
     if (line_stage_ ==
         LineStage::await_first_point) {
         line_anchor_ = point;
+        point_pointer_candidate_ = point;
         line_stage_ =
             LineStage::await_next_point;
         return {
@@ -877,6 +993,7 @@ bool SketchInteractionState::resolveLineRequest(
 
     if (committed) {
         line_anchor_ = resolved.end;
+        point_pointer_candidate_ = resolved.end;
     }
 
     return true;
@@ -1458,6 +1575,7 @@ bool SketchInteractionState::beginDirectManipulation(
 
     session.current_input =
         ResolvedSketchInput{session.pivot};
+    point_pointer_candidate_ = session.pivot;
     manipulation_ = std::move(session);
     clearHover();
     return true;
@@ -1630,12 +1748,14 @@ SketchInteractionState::directManipulationGeometry()
 void SketchInteractionState::finishDirectManipulation()
     noexcept {
     manipulation_.reset();
+    point_pointer_candidate_.reset();
     clearHover();
 }
 
 void SketchInteractionState::cancelDirectManipulation()
     noexcept {
     manipulation_.reset();
+    point_pointer_candidate_.reset();
     clearHover();
 }
 
@@ -1665,6 +1785,7 @@ void SketchInteractionState::resetLineStage()
         LineStage::await_first_point;
     line_anchor_.reset();
     pending_line_request_.reset();
+    point_pointer_candidate_.reset();
 }
 
 void SketchInteractionState::resetCircleStage()
@@ -1687,6 +1808,7 @@ void SketchInteractionState::resetArcStage()
 void SketchInteractionState::resetCommonTransform()
     noexcept {
     transform_session_.reset();
+    point_pointer_candidate_.reset();
 }
 
 } // namespace simplesolid2::sketch
