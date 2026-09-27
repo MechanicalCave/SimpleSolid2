@@ -1368,7 +1368,7 @@ bool SketchInteractionState::beginDirectManipulation(
         if (owner == nullptr) return false;
         session.mode = DirectEditMode::reshape;
         session.pivot = owner->end();
-        session.initial_geometry.lines.push_back(
+        session.owner_geometry.lines.push_back(
             {owner->id(), owner->start(), owner->end()});
         break;
     }
@@ -1421,8 +1421,8 @@ bool SketchInteractionState::beginDirectManipulation(
         const auto* owner =
             model.findArc(grip.entity_id);
         if (owner == nullptr) return false;
+        session.mode = DirectEditMode::move;
         session.pivot = owner->center();
-        if (!capture_move()) return false;
         break;
     }
     case SketchGripRole::arc_start:
