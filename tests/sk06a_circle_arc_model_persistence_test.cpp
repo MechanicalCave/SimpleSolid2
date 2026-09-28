@@ -381,6 +381,10 @@ int main() {
     CHECK(
         legacy_sketch->model.findLine(*legacy_id)->role() ==
         sketch::EntityRole::regular);
+    CHECK(legacy_loaded.document->profiles().empty());
+    CHECK(
+        legacy_loaded.document->profileIdCursor()
+            .serialized() == "1");
 
     const auto unknown_path =
         temp.path / "UnknownKind.ss2part";

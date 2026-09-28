@@ -475,6 +475,79 @@ int main() {
             "\"profiles\"") !=
         std::string::npos);
 
+    // Package F: malformed durable Profile intent must fail closed at load.
+    // The source Sketch and ProfileId are otherwise structurally valid, so
+    // rejection proves the RegionIntent boundary rather than a missing owner.
+    const auto malformed_profile_path =
+        temp.path / "MalformedProfileIntent.ss2part";
+    const auto malformed_profile_document_id =
+        core::DocumentId::generate();
+    const auto malformed_profile_sketch_id =
+        sketch::SketchId::generate();
+    const std::string malformed_profile_authored =
+        std::string{
+            "{"
+            "\"properties\":{"
+                "\"number\":\"\","
+                "\"title\":\"\","
+                "\"description\":\"\","
+                "\"engineering_revision\":\"\""
+            "},"
+            "\"presentation\":{"
+                "\"builtin_reference_visibility_mask\":15"
+            "},"
+            "\"sketches\":[{"
+                "\"id\":\""} +
+        std::string{malformed_profile_sketch_id.value()} +
+        "\","
+        "\"support\":{"
+            "\"kind\":\"builtin_origin_plane\","
+            "\"builtin_plane\":\"xy_plane\""
+        "},"
+        "\"placement\":{"
+            "\"origin\":[0,0,0],"
+            "\"u_axis\":[1,0,0],"
+            "\"v_axis\":[0,1,0]"
+        "},"
+        "\"visible\":true,"
+        "\"model\":{"
+            "\"next_entity_id\":\"2\","
+            "\"entities\":[{"
+                "\"kind\":\"circle\","
+                "\"id\":\"1\","
+                "\"role\":\"regular\","
+                "\"center\":[0,0],"
+                "\"radius\":5"
+            "}]"
+        "}"
+        "}],"
+        "\"next_profile_id\":\"2\","
+        "\"profiles\":[{"
+            "\"id\":\"1\","
+            "\"source_sketch_id\":\"" +
+        std::string{malformed_profile_sketch_id.value()} +
+        "\","
+        "\"name\":\"Broken\","
+        "\"visible\":true,"
+        "\"region_intent\":{"
+            "\"outer\":[],"
+            "\"holes\":[]"
+        "}"
+        "}]"
+        "}";
+    writeBytes(
+        malformed_profile_path,
+        buildPartPackage(
+            malformed_profile_document_id,
+            6,
+            malformed_profile_authored));
+    const auto malformed_profile_loaded =
+        store.load(malformed_profile_path);
+    CHECK(!malformed_profile_loaded.ok());
+    CHECK(
+        malformed_profile_loaded.diagnostic.code ==
+        part::PartStoreErrorCode::malformed_document);
+
     CHECK(malformedV3ModelRejected(
         temp.path / "DuplicateEntity.ss2part",
         store,
