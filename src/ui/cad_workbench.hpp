@@ -103,6 +103,9 @@ private:
 
     void applyProperties();
     void applyProfileProperties();
+    void deleteSelectedProfile();
+    void setSketchSelectionRole(
+        sketch::EntityRole role);
     void startSketchTool();
     void cancelSketchTool();
     void requestEditSketch(
@@ -211,8 +214,13 @@ private:
     QLabel* profile_identity_{};
     QLabel* profile_source_{};
     QLabel* profile_status_{};
+    QLabel* profile_diagnostic_{};
+    QLabel* profile_area_{};
+    QLabel* profile_perimeter_{};
+    QLabel* profile_holes_{};
     QCheckBox* profile_visible_{};
     QPushButton* apply_profile_button_{};
+    QPushButton* delete_profile_button_{};
     std::optional<part::ProfileId>
         selected_profile_id_;
     QLineEdit* number_{};
@@ -241,6 +249,9 @@ private:
     QPushButton* finish_line_button_{};
     QPushButton* cancel_line_button_{};
     QPushButton* delete_selection_button_{};
+    QLabel* entity_role_label_{};
+    QPushButton* regular_role_button_{};
+    QPushButton* construction_role_button_{};
 
     QWidget* profile_operations_widget_{};
     QPushButton* profile_add_area_button_{};

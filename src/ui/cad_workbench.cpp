@@ -645,6 +645,25 @@ void CadWorkbench::buildUi() {
     profile_status_->setObjectName(
         QStringLiteral("profilePropertyStatus"));
 
+    profile_diagnostic_ =
+        new QLabel(profile_properties_page_);
+    profile_diagnostic_->setObjectName(
+        QStringLiteral("profilePropertyDiagnostic"));
+    profile_diagnostic_->setWordWrap(true);
+
+    profile_area_ =
+        new QLabel(profile_properties_page_);
+    profile_area_->setObjectName(
+        QStringLiteral("profilePropertyArea"));
+    profile_perimeter_ =
+        new QLabel(profile_properties_page_);
+    profile_perimeter_->setObjectName(
+        QStringLiteral("profilePropertyPerimeter"));
+    profile_holes_ =
+        new QLabel(profile_properties_page_);
+    profile_holes_->setObjectName(
+        QStringLiteral("profilePropertyHoles"));
+
     profile_visible_ =
         new QCheckBox(
             QStringLiteral("Visible"),
@@ -659,6 +678,13 @@ void CadWorkbench::buildUi() {
     apply_profile_button_->setObjectName(
         QStringLiteral("applyProfilePropertiesButton"));
 
+    delete_profile_button_ =
+        new QPushButton(
+            QStringLiteral("Delete Profile"),
+            profile_properties_page_);
+    delete_profile_button_->setObjectName(
+        QStringLiteral("deleteProfileButton"));
+
     profile_root->addRow(
         QStringLiteral("Name"),
         profile_name_);
@@ -672,10 +698,24 @@ void CadWorkbench::buildUi() {
         QStringLiteral("Status"),
         profile_status_);
     profile_root->addRow(
+        QStringLiteral("Diagnostic"),
+        profile_diagnostic_);
+    profile_root->addRow(
+        QStringLiteral("Area"),
+        profile_area_);
+    profile_root->addRow(
+        QStringLiteral("Perimeter"),
+        profile_perimeter_);
+    profile_root->addRow(
+        QStringLiteral("Holes"),
+        profile_holes_);
+    profile_root->addRow(
         QStringLiteral("Visibility"),
         profile_visible_);
     profile_root->addRow(
         apply_profile_button_);
+    profile_root->addRow(
+        delete_profile_button_);
 
     properties_stack_->addWidget(
         profile_properties_page_);
@@ -715,6 +755,38 @@ void CadWorkbench::buildUi() {
         QStringLiteral("deleteSketchSelectionButton"));
     operations_layout->addWidget(
         delete_selection_button_);
+
+    entity_role_label_ =
+        new QLabel(
+            QStringLiteral("Selected geometry role:"),
+            operations_content);
+    entity_role_label_->setObjectName(
+        QStringLiteral("sketchEntityRoleLabel"));
+    entity_role_label_->setVisible(false);
+    operations_layout->addWidget(
+        entity_role_label_);
+
+    regular_role_button_ =
+        new QPushButton(
+            QStringLiteral("Regular"),
+            operations_content);
+    regular_role_button_->setObjectName(
+        QStringLiteral("sketchRegularRoleButton"));
+    regular_role_button_->setCheckable(true);
+    regular_role_button_->setVisible(false);
+    operations_layout->addWidget(
+        regular_role_button_);
+
+    construction_role_button_ =
+        new QPushButton(
+            QStringLiteral("Construction"),
+            operations_content);
+    construction_role_button_->setObjectName(
+        QStringLiteral("sketchConstructionRoleButton"));
+    construction_role_button_->setCheckable(true);
+    construction_role_button_->setVisible(false);
+    operations_layout->addWidget(
+        construction_role_button_);
 
     finish_line_button_ =
         new QPushButton(
@@ -887,6 +959,11 @@ void CadWorkbench::buildUi() {
         this,
         [this] { applyProfileProperties(); });
     QObject::connect(
+        delete_profile_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { deleteSelectedProfile(); });
+    QObject::connect(
         sketch_button_,
         &QPushButton::clicked,
         this,
@@ -979,6 +1056,22 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { deleteSketchSelection(); });
+    QObject::connect(
+        regular_role_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            setSketchSelectionRole(
+                sketch::EntityRole::regular);
+        });
+    QObject::connect(
+        construction_role_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            setSketchSelectionRole(
+                sketch::EntityRole::construction);
+        });
 
     QObject::connect(
         profile_add_area_button_,
@@ -1227,6 +1320,59 @@ void CadWorkbench::applyProfileProperties() {
                   "Profile properties changed — save is required.")
             : QStringLiteral(
                   "No authored Profile property change."));
+}
+
+void CadWorkbench::deleteSelectedProfile() {
+    auto* document_session = activeDocumentSession();
+    if (document_session == nullptr ||
+        !selected_profile_id_ ||
+        (sketch_interaction_controller_ &&
+         sketch_interaction_controller_->
+             profileToolActive())) {
+        return;
+    }
+
+    const auto profile_id =
+        *selected_profile_id_;
+    const auto result =
+        document_session->execute(
+            application::DeleteProfileCommand{
+                profile_id,
+                document_session->document().revision()});
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        return;
+    }
+    if (!result.changed) {
+        setStatusText(
+            QStringLiteral("No Profile was deleted."));
+        return;
+    }
+
+    selected_profile_id_.reset();
+    refreshActiveContext();
+    properties_stack_->setCurrentWidget(
+        document_properties_page_);
+    setStatusText(
+        QStringLiteral(
+            "Profile deleted — source Sketch geometry is unchanged."));
+}
+
+void CadWorkbench::setSketchSelectionRole(
+    sketch::EntityRole role) {
+    if (!sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->
+             setSelectedEntityRole(role)) {
+        return;
+    }
+
+    refreshActiveContext();
+    setStatusText(
+        role == sketch::EntityRole::construction
+            ? QStringLiteral(
+                  "Selected geometry marked Construction.")
+            : QStringLiteral(
+                  "Selected geometry marked Regular."));
 }
 
 void CadWorkbench::startSketchTool() {
@@ -2096,6 +2242,10 @@ void CadWorkbench::clearActiveContext() {
     profile_identity_->clear();
     profile_source_->clear();
     profile_status_->clear();
+    profile_diagnostic_->clear();
+    profile_area_->clear();
+    profile_perimeter_->clear();
+    profile_holes_->clear();
     profile_visible_->setChecked(false);
 
     number_->setEnabled(false);
@@ -2257,10 +2407,67 @@ void CadWorkbench::refreshProfileProperties(
     const auto evaluation =
         document_session->document()
             .evaluateProfile(profile_id);
+    const bool valid =
+        evaluation && evaluation->valid();
     profile_status_->setText(
-        evaluation && evaluation->valid()
+        valid
             ? QStringLiteral("Valid")
             : QStringLiteral("Invalid"));
+
+    QString diagnostic =
+        QStringLiteral("—");
+    if (evaluation && !evaluation->valid()) {
+        switch (evaluation->status) {
+        case part::ProfileIntentResolutionStatus::valid:
+            break;
+        case part::ProfileIntentResolutionStatus::invalid_intent:
+            diagnostic =
+                QStringLiteral("Invalid RegionIntent");
+            break;
+        case part::ProfileIntentResolutionStatus::missing_source_entity:
+            diagnostic =
+                QStringLiteral("Missing source entity");
+            break;
+        case part::ProfileIntentResolutionStatus::ambiguous_topology:
+            diagnostic =
+                QStringLiteral("Ambiguous source topology");
+            break;
+        case part::ProfileIntentResolutionStatus::unresolved_intent:
+            diagnostic =
+                QStringLiteral("Region intent no longer resolves");
+            break;
+        }
+    }
+    profile_diagnostic_->setText(diagnostic);
+
+    if (valid) {
+        profile_area_->setText(
+            QString::number(
+                evaluation->region->area,
+                'g',
+                12));
+        profile_perimeter_->setText(
+            QString::number(
+                evaluation->region->perimeter,
+                'g',
+                12));
+        profile_holes_->setText(
+            QString::number(
+                static_cast<qulonglong>(
+                    evaluation->region->holes.size())));
+    } else {
+        profile_area_->setText(
+            QStringLiteral("—"));
+        profile_perimeter_->setText(
+            QStringLiteral("—"));
+        profile_holes_->setText(
+            QStringLiteral("—"));
+    }
+
+    delete_profile_button_->setEnabled(
+        !sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->
+             profileToolActive());
 
     properties_stack_->setCurrentWidget(
         profile_properties_page_);
@@ -2294,6 +2501,15 @@ bool CadWorkbench::eventFilter(
         event->type() == QEvent::KeyPress) {
         auto* key_event =
             static_cast<QKeyEvent*>(event);
+
+        if (watched == viewport_widget_ &&
+            (!sketch_interaction_controller_ ||
+             !sketch_interaction_controller_->active()) &&
+            selected_profile_id_ &&
+            key_event->key() == Qt::Key_Delete) {
+            deleteSelectedProfile();
+            return true;
+        }
 
         if (watched == viewport_widget_ &&
             sketch_interaction_controller_ &&
@@ -2403,6 +2619,16 @@ bool CadWorkbench::eventFilter(
 
 void CadWorkbench::syncSketchInteractionUi() {
     notifyCadInputContextChanged();
+
+    if (entity_role_label_ != nullptr) {
+        entity_role_label_->setVisible(false);
+    }
+    if (regular_role_button_ != nullptr) {
+        regular_role_button_->setVisible(false);
+    }
+    if (construction_role_button_ != nullptr) {
+        construction_role_button_->setVisible(false);
+    }
 
     const bool editing =
         sketch_interaction_controller_ &&
@@ -2709,6 +2935,25 @@ void CadWorkbench::syncSketchInteractionUi() {
         delete_selection_button_->setVisible(true);
         delete_selection_button_->setEnabled(
             selected > 0U);
+
+        entity_role_label_->setVisible(
+            selected > 0U);
+        regular_role_button_->setVisible(
+            selected > 0U);
+        construction_role_button_->setVisible(
+            selected > 0U);
+        const auto selected_role =
+            sketch_interaction_controller_->
+                selectedEntityRole();
+        regular_role_button_->setChecked(
+            selected_role &&
+            *selected_role ==
+                sketch::EntityRole::regular);
+        construction_role_button_->setChecked(
+            selected_role &&
+            *selected_role ==
+                sketch::EntityRole::construction);
+
         finish_line_button_->setVisible(false);
         cancel_line_button_->setVisible(false);
                 return;
