@@ -198,6 +198,53 @@ PartSketchInteractionController::profileHoverStatus()
         ->hover_result->status;
 }
 
+std::optional<part::ProfileIntentResolutionStatus>
+PartSketchInteractionController::
+profileDraftResolutionStatus() const {
+    if (!profile_session_) {
+        return std::nullopt;
+    }
+
+    if (profile_session_->hover_result &&
+        profile_session_->hover_result->
+            draft_resolution_status) {
+        return profile_session_->hover_result->
+            draft_resolution_status;
+    }
+
+    if (!profile_session_->draft_intent) {
+        return std::nullopt;
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return std::nullopt;
+    }
+
+    return part::resolveProfileRegionIntent(
+               hosted->model,
+               *profile_session_->draft_intent)
+        .status;
+}
+
+bool PartSketchInteractionController::
+profileDraftValid() const {
+    if (!profile_session_ ||
+        !profile_session_->draft_intent ||
+        session_ == nullptr ||
+        profile_session_->expected_revision !=
+            session_->document().revision()) {
+        return false;
+    }
+
+    const auto status =
+        profileDraftResolutionStatus();
+    return status &&
+           *status ==
+               part::ProfileIntentResolutionStatus::
+                   valid;
+}
+
 std::optional<sketch::RegionCandidate2D>
 PartSketchInteractionController::profileHoverPreview()
     const {
@@ -566,8 +613,19 @@ PartSketchInteractionController::profileProblemCount() {
         !profile_analysis_cache_) {
         return 0U;
     }
-    return profile_analysis_cache_
-        ->analysis.diagnostics.size();
+
+    auto count =
+        profile_analysis_cache_
+            ->analysis.diagnostics.size();
+    const auto draft_status =
+        profileDraftResolutionStatus();
+    if (draft_status &&
+        *draft_status !=
+            part::ProfileIntentResolutionStatus::
+                valid) {
+        ++count;
+    }
+    return count;
 }
 
 bool PartSketchInteractionController::
@@ -744,6 +802,11 @@ bool PartSketchInteractionController::finishProfile() {
     if (!profile_session_->draft_intent) {
         reportStatus(
             "Profile draft has no material region.");
+        return false;
+    }
+    if (!profileDraftValid()) {
+        reportStatus(
+            "Profile draft is not valid against the current Sketch.");
         return false;
     }
 
@@ -1657,11 +1720,29 @@ updateProfileHover(
             return;
         }
 
+        const auto resolved =
+            part::resolveProfileRegionIntent(
+                hosted->model,
+                *intent);
+        if (!resolved.valid()) {
+            profile_session_->hover_result =
+                part::ProfileAreaEditResult{
+                    part::ProfileAreaEditStatus::
+                        invalid_draft,
+                    std::nullopt,
+                    std::nullopt,
+                    resolved.status};
+            notifyStateChanged();
+            return;
+        }
+
         profile_session_->hover_result =
             part::ProfileAreaEditResult{
                 part::ProfileAreaEditStatus::changed,
                 *intent,
-                *found};
+                *resolved.region,
+                part::ProfileIntentResolutionStatus::
+                    valid};
         notifyStateChanged();
         return;
     }
