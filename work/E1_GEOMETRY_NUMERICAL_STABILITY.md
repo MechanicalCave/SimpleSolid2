@@ -318,3 +318,49 @@ After acceptance:
 After E1 completion, AUDIT-01 schedules E2 next.
 
 E1 completion does not activate E2, F, profile semantics or solid modeling.
+
+## 20. Phase A evidence and classification
+
+**Characterization head:** `3bfd9fe426f53a83d98fc932ac4e31b5266447f2`  
+**Windows FULL:** #711 — expected FAIL in `e1.arc_numerical_stability`
+
+The supported Windows/MSVC reproducer confirmed the audit finding before any production numerical fix.
+
+```text
+origin:
+  center = (-2.6174955891688792e-17, -2.6174955891688792e-17)
+  radius = 0.10000000000000003
+  sweep  = 1.5707963267948961
+  residuals = (0, 0, 0)
+
+translated (+1e6,+1e6):
+  center = (1000000.0015197014, 1000000.0005987521)
+  radius = 0.098482118697732227
+  sweep  = 1.5921635329958603
+  residuals = (0, 2.2061059179179221e-05, 0.00093074556350988824)
+
+translation-equivalence error = 0.0015197014436126018
+scale-aware numerical bound    = 2.842171227257495e-08
+```
+
+The End residual exceeded the numerical evidence bound by more than four orders of magnitude and translation materially changed center, radius and sweep.
+
+**Finding classification: CONFIRMED.**
+
+## 21. Numerical correction checkpoint
+
+**Correction head:** `dc6b6128a4cb74a983035e2c25c649677502c711`  
+**Windows FULL:** #712 — PASS
+
+The private circumcenter implementation now subtracts Start first, normalizes `Through - Start` and `End - Start` by one common finite scale, performs determinant/squared-norm arithmetic in that normalized frame and restores the center offset afterward. Exact zero normalized cross remains the collinear failure criterion; no Product epsilon was introduced.
+
+The mandatory reproducer that failed #711 passed unchanged after the correction.
+
+## 22. Characterization matrix checkpoint
+
+**Matrix head:** `1d438235b83d24713679cca4d06c3cf093777564`  
+**Windows FULL:** #713 — PASS
+
+The E1 regression covers radius 0.1 at origin and ±1e6 translation, short CCW/CW and long branch semantics, radii `1e-200` and `1e200`, near-collinear finite input, exact collinear/duplicate/non-finite rejection, unrepresentable local subtraction failure, radial residual through all three requested points and signed-path ordering.
+
+No E1 evidence required a Product tolerance, coordinate limit, minimum feature size, persistence/public-API change or visible interaction change. Manual GUI verification remains not required.

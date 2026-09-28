@@ -249,3 +249,8 @@ notes:
   - D is complete pending work-only CLOSURE verification and merge; E1 remains inactive until a separate Work Contract is explicitly Owner-accepted.
   - Owner accepted Package E1 Work Contract on 2026-09-28.
   - E1 is active on proposal-e1-geometry-numerical-stability; Phase A characterization must precede any production numerical fix.
+  - E1 Phase A supported-MSVC reproducer on 3bfd9fe426f53a83d98fc932ac4e31b5266447f2 failed FULL #711 at e1.arc_numerical_stability and classified the finding CONFIRMED.
+  - #711 radius-0.1/+1e6 evidence: center equivalence error 0.0015197014436126018; translated radius 0.098482118697732227 vs origin 0.10000000000000003; translated sweep 1.5921635329958603 vs 1.5707963267948961; End residual 0.00093074556350988824 vs bound 2.842171227257495e-08.
+  - Translation-local/common-scale-normalized correction dc6b6128a4cb74a983035e2c25c649677502c711 passed FULL #712.
+  - Expanded matrix 1d438235b83d24713679cca4d06c3cf093777564 passed FULL #713: +/-1e6, CW/CCW/long, 1e-200, 1e200, near-collinear, exact collinear, duplicate, non-finite and unrepresentable-intermediate cases.
+  - No Product tolerance, coordinate/radius limit, persistence, identity, history or visible Arc workflow change was introduced.

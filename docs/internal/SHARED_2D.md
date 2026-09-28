@@ -123,6 +123,10 @@ The default tool is Select. Creation tools preserve the existing semantic select
 
 Line keeps the continuous Start/Next-point grammar. Circle uses Center → Radius; exact zero radius produces no commit request. Arc uses Start → Through → End; duplicate accepted points, collinear triples or any invalid circumcircle/sweep fail closed.
 
+The 3-Point Arc circumcenter is evaluated from `Through - Start` and `End - Start` in a translation-local frame. Those local vectors are normalized by one finite common scale before determinant and squared-norm arithmetic, then the center offset is restored to Sketch coordinates. This removes the prior dependence on absolute-coordinate squares and protects representable very small/large constructions from avoidable intermediate underflow/overflow.
+
+This is numerical conditioning, not a Product geometric tolerance. E1 does not introduce an epsilon for coincidence or collinearity, a minimum feature size or a maximum coordinate/radius policy. Exact duplicate points and a zero normalized cross product still fail closed; non-finite or unrepresentable intermediate/output values also fail closed. Near-collinear but representable input is not rejected by a new fixed cutoff.
+
 The same state owns transient selection as `EntityId` values plus optional primary identity. Point selection is additive, Ctrl toggles membership, Window/Crossing adds or toggles, and provider result order never chooses primary.
 
 Move, Copy, Rotate, Scale and Mirror reuse one common transform lifecycle. Selection-first activation immediately freezes an existing non-empty semantic selection. Command-first activation starts with Select objects; click/Ctrl/Window/Crossing reuse the existing semantic query bridge, blank LMB is a no-op, and Enter/Space/RMB completes object collection only when non-empty. After collection, the frozen semantic set cannot change until the operation completes or is cancelled.
@@ -219,6 +223,7 @@ Key registered tests include:
 
 - `sk02a.shared_2d_core` / `sk02a.shared_2d_boundaries` — neutral model and dependency boundaries;
 - `sk06a.circle_arc_model_persistence` / `sk06a.circle_arc_interaction_state` — mixed Line/Circle/Arc authored and interaction semantics;
+- `e1.arc_numerical_stability` — 3-Point Arc translation/scale conditioning, radial residual through all requested points, CW/CCW/long branch preservation, ±1e6 translation, 1e-200/1e200 scale, near-collinear acceptance and fail-closed exact/invalid extremes;
 - `sk07a.transform_core`, `sk07b.transform_core`, `sk07b.common_transform_state`, `sk07b.transform_controller` — mixed transforms and atomic controller behavior;
 - `sk07c.copy_command`, `sk07c.copy_interaction_state`, `sk07c.copy_controller` — fresh identity, repeated placement, Undo/Redo identity restoration and high-water persistence;
 - `sk07d.repeat_last_command_controller` and `sk07e.space_cycle_edit_mode` — runtime command/grip grammar;
