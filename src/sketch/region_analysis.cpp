@@ -141,6 +141,13 @@ struct RawRelation final {
 [[nodiscard]] std::optional<double> lineParameter(
     const CurveView& line,
     Point2 point) noexcept {
+    if (point == line.first) {
+        return 0.0;
+    }
+    if (point == line.second) {
+        return 1.0;
+    }
+
     const double du =
         line.second.u - line.first.u;
     const double dv =
@@ -270,13 +277,22 @@ struct RawRelation final {
 [[nodiscard]] std::optional<Point2> linePoint(
     const CurveView& line,
     double parameter) noexcept {
+    if (!finiteValue(parameter)) {
+        return std::nullopt;
+    }
+    if (parameter == 0.0) {
+        return line.first;
+    }
+    if (parameter == 1.0) {
+        return line.second;
+    }
+
     const double du =
         line.second.u - line.first.u;
     const double dv =
         line.second.v - line.first.v;
     if (!finiteValue(du) ||
-        !finiteValue(dv) ||
-        !finiteValue(parameter)) {
+        !finiteValue(dv)) {
         return std::nullopt;
     }
 
@@ -293,7 +309,15 @@ struct RawRelation final {
     double av,
     double bu,
     double bv) noexcept {
-    return std::fma(au, bv, -av * bu);
+    // Compensated difference of products. Besides reducing cancellation
+    // error, this preserves exact algebraic zero for bit-identical parallel
+    // vectors (for example cross(v, v)) without introducing a tolerance.
+    const double second_product = av * bu;
+    const double second_error =
+        std::fma(-av, bu, second_product);
+    const double difference =
+        std::fma(au, bv, -second_product);
+    return difference + second_error;
 }
 
 [[nodiscard]] RawRelation lineLine(
@@ -341,6 +365,35 @@ struct RawRelation final {
     if (!finiteValue(denominator) ||
         !finiteValue(collinearity)) {
         return {};
+    }
+
+    if (denominator != 0.0) {
+        const auto exact_shared_endpoint =
+            [&]() -> std::optional<RawIntersection> {
+            if (first.first == second.first) {
+                return RawIntersection{
+                    first.first, 0.0, 0.0, false};
+            }
+            if (first.first == second.second) {
+                return RawIntersection{
+                    first.first, 0.0, 1.0, false};
+            }
+            if (first.second == second.first) {
+                return RawIntersection{
+                    first.second, 1.0, 0.0, false};
+            }
+            if (first.second == second.second) {
+                return RawIntersection{
+                    first.second, 1.0, 1.0, false};
+            }
+            return std::nullopt;
+        }();
+
+        if (exact_shared_endpoint) {
+            return RawRelation{
+                CurveRelationStatus::discrete,
+                {*exact_shared_endpoint}};
+        }
     }
 
     if (denominator == 0.0) {
