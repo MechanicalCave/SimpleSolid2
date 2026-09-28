@@ -5,6 +5,7 @@
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
 #include <QAction>
+#include <algorithm>
 #include <QCheckBox>
 #include <QApplication>
 #include <QLabel>
