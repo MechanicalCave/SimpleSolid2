@@ -62,6 +62,18 @@ public:
         preview_scene_ = scene;
         return true;
     }
+    bool setProfileScene(
+        const viewer::ProfileScene& scene) override {
+        if (!scene.valid()) return false;
+        profile_scene_ = scene;
+        return true;
+    }
+    bool setProfilePreviewScene(
+        const viewer::ProfilePreviewScene& scene) override {
+        if (!scene.valid()) return false;
+        profile_preview_scene_ = scene;
+        return true;
+    }
     bool setSketchGripScene(
         const viewer::SketchGripScene& scene) override {
         if (!scene.valid()) return false;
@@ -129,6 +141,8 @@ public:
 
     viewer::CameraState camera_;
     viewer::SketchScene sketch_scene_;
+    viewer::ProfileScene profile_scene_;
+    viewer::ProfilePreviewScene profile_preview_scene_;
     viewer::SketchPreviewScene preview_scene_;
     viewer::SketchGripScene grip_scene_;
     viewer::SketchInteractionPresentation
@@ -472,6 +486,9 @@ int main(int argc, char* argv[]) {
     CHECK(
         interaction.profileHoverPreview()
             .has_value());
+    CHECK(
+        viewport.profile_preview_scene_
+            .region.has_value());
 
     interaction.onPointer(pointer(
         sketch_id,
@@ -605,6 +622,9 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.profileDraftIntent().has_value());
     CHECK(interaction.escape());
     CHECK(!interaction.profileToolActive());
+    CHECK(
+        !viewport.profile_preview_scene_
+             .region.has_value());
     CHECK(session.undoDepth() == before_cancel);
     CHECK(
         session.document()

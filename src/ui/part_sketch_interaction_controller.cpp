@@ -2504,6 +2504,35 @@ refreshCadInputContextGeneration() {
 
 void PartSketchInteractionController::notifyStateChanged() {
     refreshCadInputContextGeneration();
+
+    if (viewport_controller_ != nullptr) {
+        if (!profile_session_) {
+            viewport_controller_->clearProfileDraftPreview();
+        } else {
+            std::optional<sketch::RegionCandidate2D> preview;
+
+            if (profile_session_->options.highlight_on_hover &&
+                profile_session_->hover_result &&
+                profile_session_->hover_result->region) {
+                preview = profile_session_->hover_result->region;
+            } else if (
+                profile_session_->draft_intent &&
+                activeSketch() != nullptr) {
+                const auto resolved =
+                    part::resolveProfileRegionIntent(
+                        activeSketch()->model,
+                        *profile_session_->draft_intent);
+                if (resolved.valid()) {
+                    preview = resolved.region;
+                }
+            }
+
+            static_cast<void>(
+                viewport_controller_->setProfileDraftPreview(
+                    preview));
+        }
+    }
+
     if (state_changed_handler_) {
         state_changed_handler_();
     }
