@@ -1,6 +1,6 @@
 # C2 — Measured History Representation and Budget Decision
 
-**Status:** ACCEPTED — ACTIVE (PHASE A COMPLETE / SECOND OWNER DECISION PENDING)  
+**Status:** COMPLETED — KEEP  
 **Proposed:** 2026-09-27  
 **Owner acceptance:** 2026-09-27  
 **Decision class:** D1 measurement infrastructure first; any deeper history architecture or product-visible history budget is a later explicit Owner decision  
@@ -435,3 +435,26 @@ Decision consequences:
 The Phase A benchmark infrastructure remains opt-in maintainer evidence tooling with the default product build path unchanged.
 
 With KEEP accepted, C2 requires no production implementation phase. Remaining completion work is governance closeout, exact evidence references, CLOSURE verification and merge.
+
+## 21. Final completion record
+
+**C2 outcome:** KEEP  
+**Owner acceptance:** 2026-09-28  
+**Measured candidate:** `54605075e8ad7ac3d168dfd820cf84004c3a1023`  
+**Windows FULL:** #686 — PASS  
+**Dedicated C2 Release benchmark:** #686 — PASS  
+**Decision/docs candidate:** `b865f77e74fcde8e5fa1808a3e6a41436a551328`  
+**Documentation gate:** #690 — PASS
+
+Completion classification:
+
+- history performance finding: **MEASURED**;
+- deeper redesign requirement now: **NOT SELECTED**;
+- accepted decision: **KEEP**;
+- Product history limit: **NONE INTRODUCED**;
+- production history mutation after C1: **NONE**;
+- current internal documentation and generated Browser: **VERIFIED**.
+
+The exact production/runtime benchmark candidate already passed Windows FULL #686. Subsequent decision/documentation changes do not alter runtime code. The final work-only closeout must pass CLOSURE before merge.
+
+After merge, Package D is the next mandatory AUDIT-01 package but remains inactive until a separate bounded Work Contract is explicitly Owner-accepted.

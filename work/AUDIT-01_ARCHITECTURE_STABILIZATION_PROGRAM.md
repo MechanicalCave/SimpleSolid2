@@ -69,7 +69,7 @@ Default order is strict:
 | 2 | **B2 — transaction freshness** | stale overlapping domain transaction cannot overwrite newer state | **COMPLETED — 2026-09-27** |
 | 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | **COMPLETED — 2026-09-27** |
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **COMPLETED — 2026-09-27** |
-| 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **ACTIVE — Phase A measured; Owner decision pending** |
+| 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **COMPLETED — KEEP accepted 2026-09-28** |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | future bounded Work Contract |
 | 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | future bounded Work Contract |
 | 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | future bounded Work Contract |
@@ -421,6 +421,21 @@ The initial accepted authority is measurement-only Phase A. It authorizes a head
 All six primary 1,000/10,000 entity × depth 10/100/1,000 cells completed with 20 samples per primary semantic operation and no benchmark safety cutoff. Peak working set reached 787.4 MiB for 10,000 entities/depth 1,000. Primary operation latency remained below 0.5 ms maximum in this matrix; the supplemental single-sample half-depth branch reached 7.9412 ms at the largest cell.
 
 This evidence does not select a new representation or Product history budget. C2 is stopped at its second explicit Owner decision gate. Package D and later packages remain inactive.
+
+### C2 Phase B decision and completion record
+
+**Owner decision:** KEEP — accepted 2026-09-28  
+**Measured candidate:** `54605075e8ad7ac3d168dfd820cf84004c3a1023`  
+**Windows FULL + dedicated Release benchmark:** #686 — PASS  
+**Decision/docs candidate:** `b865f77e74fcde8e5fa1808a3e6a41436a551328`  
+**Documentation gate:** #690 — PASS
+
+The completed C2 outcome keeps the C1 `HistoryEntry{before, after}` snapshot representation. No Product history depth/memory limit, automatic eviction, persistent history, event sourcing, delta history or copy-on-write history is introduced.
+
+Measured retained-history memory growth remains a documented scale risk, not a Product limit. Future history redesign requires new evidence and separately accepted authority.
+
+C2 is **CONFIRMED / MEASURED / DECIDED / VERIFIED**. Package D is next in AUDIT-01 but is not activated by C2 completion.
+
 ## 10. Package D — semantic input ownership outside QWidget and core-only build
 
 Preserve neutral `CadInputSession`.

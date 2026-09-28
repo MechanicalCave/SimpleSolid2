@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/C2_MEASURED_HISTORY_REPRESENTATION_AND_BUDGET.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
@@ -19,11 +19,10 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - present the completed C2 Phase A Release evidence and bounded alternatives to the Owner
-  - require the second explicit Owner C2 decision before any production history representation/budget mutation
-  - if no deeper change is accepted, record that decision and close C2 without a production redesign
-  - if a change is accepted, amend C2 precisely and require explicit Owner acceptance before implementation
-  - keep D, E1, E2 and F queued by AUDIT-01 but inactive
+  - draft a separate bounded Package D semantic-input-ownership/core-only-build Work Contract under AUDIT-01
+  - require explicit Owner acceptance of Package D before any production refactor
+  - keep E1, E2 and F queued by AUDIT-01 but inactive
+  - preserve completed C1/C2 history semantics and the C2 KEEP decision as the current baseline
 
 notes:
   - R0 through R4 are completed.
@@ -232,3 +231,9 @@ notes:
   - Supplemental half-depth branch at 10,000 entities/depth 1,000 measured 7.9412 ms as one limited sample.
   - Durable evidence: work/C2_HISTORY_BENCHMARK_RESULTS.md and docs/internal/HISTORY_PERFORMANCE.md.
   - C2 Phase A is complete; production history redesign/budget remains unauthorized until the second explicit Owner decision.
+
+  - C2 Phase A measured SHA 54605075e8ad7ac3d168dfd820cf84004c3a1023 passed Windows FULL and dedicated Release benchmark #686.
+  - C2 primary semantic operations remained below 0.5 ms maximum in the accepted matrix; peak semantic-only process working set reached 787.4 MiB at 10,000 entities/depth 1,000.
+  - Owner accepted C2 Phase B decision KEEP on 2026-09-28: retain the completed C1 two-snapshot history representation with no Product history depth/memory limit and no automatic eviction.
+  - C2 decision/internal documentation candidate b865f77e74fcde8e5fa1808a3e6a41436a551328 passed documentation gate #690 after Browser regeneration.
+  - C2 completion requires only work-only CLOSURE verification and merge; Package D remains inactive until a separate Work Contract is explicitly Owner-accepted.
