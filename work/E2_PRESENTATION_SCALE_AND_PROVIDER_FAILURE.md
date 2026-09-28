@@ -1,6 +1,6 @@
 # E2 — Presentation Scale and Provider Failure
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-28  
 **Owner acceptance:** 2026-09-28  
 **Decision class:** bounded D2 presentation-consistency contract under AUDIT-01; implementation remains D1 while provider-neutral API/ownership is unchanged; any differential-update protocol or `IDocumentViewport` contract expansion requires a separate Owner decision  
@@ -316,4 +316,15 @@ Measured native replacement/preview showed an approximately 33 ms floor from one
 
 The measurements do not justify a differential-update/public Viewer API redesign in E2. Large and highly segmented Sketches remain a documented scale risk, and the measured values are not Product performance guarantees.
 
-Provider-failure consistency/recovery remains the active E2 implementation work. Package F remains inactive.
+## 20. Completion record
+
+**Final exact-head candidate:** `6c021cf7140fbb9cc7181def5eaa812e74d9a05d`  
+**Windows FULL:** #736 — PASS  
+**CTest:** 77/77 PASS  
+**Manual GUI:** not required by Section 14; normal successful presentation interaction was unchanged and the failure/recovery path is deterministically injected in automated tests.
+
+E2 is complete. The final candidate includes Phase A Release evidence, deterministic preview call-count characterization, KEEP CURRENT REBUILD classification, explicit runtime presentation-degraded reporting, authored-state invariants across provider failure, successful full-refresh recovery, user-facing Workbench diagnostic coverage, current internal/Product PL/EN documentation and regenerated Browser.
+
+The one-shot benchmark workflow step was retired after evidence collection while the opt-in benchmark harness and durable result record remain available. No differential-update/public `IDocumentViewport` expansion, durable presentation identity, persistence change, authored geometry change or Product latency guarantee was introduced.
+
+Package F is next in AUDIT-01 ordering but remains inactive until a separate Work Contract is proposed and explicitly accepted by the Owner. Extrude and other Part solid operations remain outside active authority.
