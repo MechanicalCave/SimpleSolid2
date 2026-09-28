@@ -74,6 +74,8 @@ add_library(simplesolid2_part STATIC
     part/part_document.cpp
     part/part_document_store.cpp
     part/part_sketch.cpp
+    part/profile.cpp
+    part/profile_id.cpp
 )
 
 target_include_directories(simplesolid2_part
