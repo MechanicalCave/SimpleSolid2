@@ -58,6 +58,7 @@ struct ProfileScene final {
 
 struct ProfilePreviewScene final {
     std::optional<ProfileRegionPresentation> region;
+    bool show_boundary{false};
 
     [[nodiscard]] bool valid() const noexcept {
         return !region || region->valid();

@@ -2638,7 +2638,9 @@ void PartSketchInteractionController::notifyStateChanged() {
 
             static_cast<void>(
                 viewport_controller_->setProfileDraftPreview(
-                    preview));
+                    preview,
+                    profile_session_->
+                        options.show_region_boundaries));
         }
     }
 

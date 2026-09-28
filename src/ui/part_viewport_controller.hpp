@@ -124,7 +124,8 @@ public:
     void clearSketchPreview();
 
     [[nodiscard]] bool setProfileDraftPreview(
-        const std::optional<sketch::RegionCandidate2D>& region);
+        const std::optional<sketch::RegionCandidate2D>& region,
+        bool show_boundary = false);
     void clearProfileDraftPreview();
 
     [[nodiscard]] bool setSketchPrimaryPointerRouting(

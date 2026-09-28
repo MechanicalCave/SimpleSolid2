@@ -1137,7 +1137,9 @@ public:
 
         try {
             auto object =
-                makeProfileObject(*scene.region);
+                makeProfileObject(
+                    *scene.region,
+                    scene.show_boundary);
             if (object.IsNull()) {
                 return false;
             }
@@ -2136,7 +2138,8 @@ public:
 
     [[nodiscard]] static Handle(AIS_Shape)
     makeProfileObject(
-        const viewer::ProfileRegionPresentation& region) {
+        const viewer::ProfileRegionPresentation& region,
+        bool draw_boundary = true) {
         const auto outer_wire =
             makeProfileWire(region.outer);
         const auto outer_normal =
@@ -2175,7 +2178,9 @@ public:
         Handle(AIS_Shape) object =
             new AIS_Shape(face.Shape());
         object->Attributes()->SetFaceBoundaryDraw(
-            Standard_True);
+            draw_boundary
+                ? Standard_True
+                : Standard_False);
         return object;
     }
 
