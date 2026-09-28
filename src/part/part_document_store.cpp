@@ -71,6 +71,28 @@ const char* supportRoleName(
     }
 }
 
+const char* entityRoleName(
+    sketch::EntityRole role) noexcept {
+    switch (role) {
+    case sketch::EntityRole::regular:
+        return "regular";
+    case sketch::EntityRole::construction:
+        return "construction";
+    }
+    return "";
+}
+
+std::optional<sketch::EntityRole>
+parseEntityRole(std::string_view value) noexcept {
+    if (value == "regular") {
+        return sketch::EntityRole::regular;
+    }
+    if (value == "construction") {
+        return sketch::EntityRole::construction;
+    }
+    return std::nullopt;
+}
+
 std::optional<core::BuiltinReferenceRole>
 parseSupportRole(std::string_view value) noexcept {
     if (value == "xy_plane") {
@@ -115,6 +137,7 @@ std::string serializeAuthored(
                 {
                     {"kind", "line"},
                     {"id", line.id.serialized()},
+                    {"role", entityRoleName(line.role)},
                     {"start", pointJson(line.start)},
                     {"end", pointJson(line.end)},
                 });
@@ -124,6 +147,7 @@ std::string serializeAuthored(
                 {
                     {"kind", "circle"},
                     {"id", circle.id.serialized()},
+                    {"role", entityRoleName(circle.role)},
                     {"center", pointJson(circle.center)},
                     {"radius", circle.radius},
                 });
@@ -133,6 +157,7 @@ std::string serializeAuthored(
                 {
                     {"kind", "arc"},
                     {"id", arc.id.serialized()},
+                    {"role", entityRoleName(arc.role)},
                     {"center", pointJson(arc.center)},
                     {"radius", arc.radius},
                     {"start_angle", arc.start_angle},
@@ -349,8 +374,9 @@ parseSketchModelV3(
 }
 
 std::optional<sketch::SketchModel>
-parseSketchModelV4(
+parseSketchModelV4OrV5(
     const nlohmann::json& model_json,
+    bool has_entity_role,
     std::string& error) {
     if (!model_json.is_object() ||
         model_json.size() != 2U ||
@@ -399,8 +425,34 @@ parseSketchModelV4(
         const auto kind =
             item["kind"].get<std::string>();
 
+        sketch::EntityRole entity_role =
+            sketch::EntityRole::regular;
+        if (has_entity_role) {
+            if (!item.contains("role") ||
+                !item["role"].is_string()) {
+                error =
+                    "Native Part contains malformed schema-v5 Sketch entity role";
+                return std::nullopt;
+            }
+            const auto parsed_role =
+                parseEntityRole(
+                    item["role"].get<std::string>());
+            if (!parsed_role) {
+                error =
+                    "Native Part contains invalid schema-v5 Sketch entity role";
+                return std::nullopt;
+            }
+            entity_role = *parsed_role;
+        } else if (item.contains("role")) {
+            error =
+                "Native Part schema-v4 Sketch entity unexpectedly contains role";
+            return std::nullopt;
+        }
+        const std::size_t role_field =
+            has_entity_role ? 1U : 0U;
+
         if (kind == "line") {
-            if (item.size() != 4U ||
+            if (item.size() != 4U + role_field ||
                 !item.contains("start") ||
                 !item.contains("end")) {
                 error =
@@ -418,12 +470,13 @@ parseSketchModelV4(
                 sketch::SketchLineState{
                     *id,
                     *start,
-                    *end});
+                    *end,
+                    entity_role});
             continue;
         }
 
         if (kind == "circle") {
-            if (item.size() != 4U ||
+            if (item.size() != 4U + role_field ||
                 !item.contains("center") ||
                 !item.contains("radius") ||
                 !item["radius"].is_number()) {
@@ -443,12 +496,13 @@ parseSketchModelV4(
                 sketch::SketchCircleState{
                     *id,
                     *center,
-                    radius});
+                    radius,
+                    entity_role});
             continue;
         }
 
         if (kind == "arc") {
-            if (item.size() != 6U ||
+            if (item.size() != 6U + role_field ||
                 !item.contains("center") ||
                 !item.contains("radius") ||
                 !item.contains("start_angle") ||
@@ -481,7 +535,8 @@ parseSketchModelV4(
                     *center,
                     radius,
                     start_angle,
-                    sweep_angle});
+                    sweep_angle,
+                    entity_role});
             continue;
         }
 
@@ -618,8 +673,9 @@ bool parseSketches(
                     ? parseSketchModelV3(
                           item["model"],
                           error)
-                    : parseSketchModelV4(
+                    : parseSketchModelV4OrV5(
                           item["model"],
+                          schema_version >= 5,
                           error);
             if (!parsed_model) {
                 return false;
@@ -926,6 +982,7 @@ PartLoadResult PartDocumentStore::load(
     if (descriptor.domain_schema_version != 1 &&
         descriptor.domain_schema_version != 2 &&
         descriptor.domain_schema_version != 3 &&
+        descriptor.domain_schema_version != 4 &&
         descriptor.domain_schema_version !=
             current_schema_version) {
         return loadFailure(

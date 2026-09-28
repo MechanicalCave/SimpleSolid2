@@ -59,6 +59,13 @@ struct EraseSketchEntitiesCommand final {
     std::vector<sketch::EntityId> entity_ids;
 };
 
+struct SetSketchEntityRoleCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    std::vector<sketch::EntityId> entity_ids;
+    sketch::EntityRole role{sketch::EntityRole::regular};
+};
+
 struct SketchLineGeometryUpdate final {
     sketch::EntityId entity_id;
     sketch::Point2 start;
@@ -229,6 +236,8 @@ public:
         const EraseSketchEntityCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const EraseSketchEntitiesCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const SetSketchEntityRoleCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const UpdateSketchLinesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(

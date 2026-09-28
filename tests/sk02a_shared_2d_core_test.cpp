@@ -53,7 +53,10 @@ int main() {
     const auto first_id =
         model.addLine(Point2{0.0, 0.0}, Point2{10.0, 0.0});
     const auto second_id =
-        model.addLine(Point2{10.0, 0.0}, Point2{10.0, 5.0});
+        model.addLine(
+            Point2{10.0, 0.0},
+            Point2{10.0, 5.0},
+            EntityRole::construction);
 
     CHECK(first_id.valid());
     CHECK(second_id.valid());
@@ -69,6 +72,25 @@ int main() {
     CHECK((first->end() == Point2{10.0, 0.0}));
     CHECK((second->start() == Point2{10.0, 0.0}));
     CHECK((second->end() == Point2{10.0, 5.0}));
+    CHECK(first->role() == EntityRole::regular);
+    CHECK(second->role() == EntityRole::construction);
+
+    CHECK(model.setEntityRole(
+        first_id,
+        EntityRole::construction));
+    CHECK(
+        model.findLine(first_id)->role() ==
+        EntityRole::construction);
+    CHECK(model.updateLine(
+        first_id,
+        Point2{0.0, 0.0},
+        Point2{9.0, 0.0}));
+    CHECK(
+        model.findLine(first_id)->role() ==
+        EntityRole::construction);
+    CHECK(model.setEntityRole(
+        first_id,
+        EntityRole::regular));
 
     // Equal endpoint coordinates are merely equal values. They do not create
     // another authored object, shared Point identity or persistent relation.

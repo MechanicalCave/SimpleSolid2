@@ -516,6 +516,65 @@ DocumentSessionResult DocumentSession::execute(
 }
 
 DocumentSessionResult DocumentSession::execute(
+    const SetSketchEntityRoleCommand& command) {
+    if (command.entity_ids.empty()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Set Sketch Entity Role requires at least one EntityId",
+            path_);
+    }
+
+    if (command.role != sketch::EntityRole::regular &&
+        command.role != sketch::EntityRole::construction) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Set Sketch Entity Role contains an invalid role",
+            path_);
+    }
+
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Set Sketch Entity Role was started from a stale DocumentRevision",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* target = findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Set Sketch Entity Role target SketchId does not exist",
+            path_);
+    }
+
+    std::set<sketch::EntityId> unique;
+    for (const auto id : command.entity_ids) {
+        if (!id.valid() ||
+            !unique.insert(id).second ||
+            !target->model.contains(id)) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Set Sketch Entity Role contains an invalid, duplicate or missing EntityId",
+                path_);
+        }
+    }
+
+    for (const auto id : command.entity_ids) {
+        if (!target->model.setEntityRole(id, command.role)) {
+            return failure(
+                DocumentSessionErrorCode::transaction_failure,
+                "Set Sketch Entity Role validation diverged before commit",
+                path_);
+        }
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while setting Sketch entity role");
+}
+
+DocumentSessionResult DocumentSession::execute(
     const UpdateSketchLinesCommand& command) {
     return execute(
         UpdateSketchGeometryCommand{
@@ -757,13 +816,15 @@ DuplicateSketchGeometryResult DocumentSession::execute(
             created.push_back(
                 target->model.addLine(
                     line.start,
-                    line.end));
+                    line.end,
+                    target->model.findLine(line.id)->role()));
         }
         for (const auto& circle : command.geometry.circles) {
             created.push_back(
                 target->model.addCircle(
                     circle.center,
-                    circle.radius));
+                    circle.radius,
+                    target->model.findCircle(circle.id)->role()));
         }
         for (const auto& arc : command.geometry.arcs) {
             created.push_back(
@@ -771,7 +832,8 @@ DuplicateSketchGeometryResult DocumentSession::execute(
                     arc.center,
                     arc.radius,
                     arc.start_angle,
-                    arc.sweep_angle));
+                    arc.sweep_angle,
+                    target->model.findArc(arc.id)->role()));
         }
     } catch (const std::invalid_argument&) {
         const auto failed = failure(

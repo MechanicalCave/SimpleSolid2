@@ -181,6 +181,54 @@ int main() {
         baseline_undo_depth + 1U);
     CHECK(session.needsSave());
 
+    const auto role_revision =
+        session.document().revision();
+    const auto role_depth =
+        session.undoDepth();
+    const auto role_changed =
+        session.execute(
+            application::SetSketchEntityRoleCommand{
+                sketch_id,
+                role_revision,
+                {*first.entity_id},
+                sketch::EntityRole::construction});
+    CHECK(role_changed.ok() && role_changed.changed);
+    CHECK(session.undoDepth() == role_depth + 1U);
+    CHECK(
+        session.document()
+            .findSketch(sketch_id)
+            ->model.findLine(*first.entity_id)
+            ->role() ==
+        sketch::EntityRole::construction);
+
+    const auto stale_role =
+        session.execute(
+            application::SetSketchEntityRoleCommand{
+                sketch_id,
+                role_revision,
+                {*first.entity_id},
+                sketch::EntityRole::regular});
+    CHECK(!stale_role.ok());
+    CHECK(
+        stale_role.diagnostic.code ==
+        application::DocumentSessionErrorCode::revision_diverged);
+
+    CHECK(session.undo().changed);
+    CHECK(
+        session.document()
+            .findSketch(sketch_id)
+            ->model.findLine(*first.entity_id)
+            ->role() ==
+        sketch::EntityRole::regular);
+    CHECK(session.redo().changed);
+    CHECK(
+        session.document()
+            .findSketch(sketch_id)
+            ->model.findLine(*first.entity_id)
+            ->role() ==
+        sketch::EntityRole::construction);
+    CHECK(session.undo().changed);
+
     CHECK(session.undo().changed);
     CHECK(!session.needsSave());
     const auto* after_undo =
