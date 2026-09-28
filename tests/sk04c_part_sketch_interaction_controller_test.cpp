@@ -3,6 +3,7 @@
 #include "part_viewport_controller.hpp"
 
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/part/profile.hpp>
 
 #include <QApplication>
 #include <QTreeWidget>
@@ -13,6 +14,7 @@
 #include <iostream>
 #include <optional>
 #include <utility>
+#include <vector>
 
 using namespace simplesolid2;
 
@@ -357,6 +359,198 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.escape());
     CHECK(interaction.selectedCount() == 0U);
     CHECK(!interaction.escape());
+
+    // Package F Profile tool session: hover/draft are runtime-only and the
+    // full Create/Edit session commits exactly once on Finish.
+    for (const auto& line :
+         std::vector<std::pair<sketch::Point2, sketch::Point2>>{
+             {{100.0, 100.0}, {104.0, 100.0}},
+             {{104.0, 100.0}, {104.0, 104.0}},
+             {{104.0, 104.0}, {100.0, 104.0}},
+             {{100.0, 104.0}, {100.0, 100.0}}}) {
+        const auto result =
+            session.execute(
+                application::AddSketchLineCommand{
+                    sketch_id,
+                    line.first,
+                    line.second});
+        CHECK(result.ok());
+    }
+
+    const auto before_profile_tool =
+        session.undoDepth();
+    CHECK(
+        session.document()
+            .profileIdCursor()
+            .serialized() == "1");
+    CHECK(session.document().profiles().empty());
+
+    CHECK(interaction.activateProfileCreate());
+    CHECK(interaction.profileToolActive());
+    CHECK(
+        interaction.profileToolSessionKind() ==
+        ui::ProfileToolSessionKind::create);
+    CHECK(
+        interaction.profileAreaMode() ==
+        part::ProfileAreaEditMode::add_area);
+    CHECK(
+        viewport.cursor_mode_ ==
+        viewer::ViewportCursorMode::
+            create_edit_crosshair);
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::move,
+        300.0, 300.0,
+        102.0, 102.0));
+    CHECK(
+        interaction.profileAnalysisBuildCount() ==
+        1U);
+    CHECK(
+        interaction.profileHoverStatus() ==
+        part::ProfileAreaEditStatus::changed);
+    CHECK(
+        interaction.profileHoverPreview()
+            .has_value());
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::move,
+        301.0, 301.0,
+        101.0, 101.0));
+    CHECK(
+        interaction.profileAnalysisBuildCount() ==
+        1U);
+    CHECK(
+        session.undoDepth() ==
+        before_profile_tool);
+    CHECK(session.document().profiles().empty());
+    CHECK(
+        session.document()
+            .profileIdCursor()
+            .serialized() == "1");
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        301.0, 301.0,
+        101.0, 101.0));
+    CHECK(
+        interaction.profileDraftIntent()
+            .has_value());
+    CHECK(
+        session.undoDepth() ==
+        before_profile_tool);
+    CHECK(session.document().profiles().empty());
+    CHECK(
+        session.document()
+            .profileIdCursor()
+            .serialized() == "1");
+
+    CHECK(interaction.finishProfile());
+    CHECK(!interaction.profileToolActive());
+    CHECK(
+        session.undoDepth() ==
+        before_profile_tool + 1U);
+    CHECK(session.document().profiles().size() == 1U);
+    const auto profile_id =
+        session.document().profiles().front().id;
+    CHECK(profile_id.serialized() == "1");
+
+    // Add source geometry first, then Edit Profile subtracts it only in the
+    // transient draft until Finish.
+    const auto inner_circle =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                {102.0, 102.0},
+                1.0});
+    CHECK(inner_circle.ok());
+    const auto before_edit =
+        session.undoDepth();
+
+    CHECK(
+        interaction.activateProfileEdit(
+            profile_id));
+    CHECK(
+        interaction.profileToolSessionKind() ==
+        ui::ProfileToolSessionKind::edit);
+    CHECK(
+        interaction.editedProfileId() ==
+        profile_id);
+    CHECK(
+        interaction.setProfileAreaMode(
+            part::ProfileAreaEditMode::
+                subtract_area));
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::move,
+        302.0, 302.0,
+        102.0, 102.0));
+    CHECK(
+        interaction.profileAnalysisBuildCount() ==
+        1U);
+    CHECK(
+        interaction.profileHoverStatus() ==
+        part::ProfileAreaEditStatus::changed);
+    CHECK(
+        interaction.profileHoverPreview()
+            ->holes.size() == 1U);
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        302.0, 302.0,
+        102.0, 102.0));
+    CHECK(
+        session.undoDepth() ==
+        before_edit);
+    CHECK(
+        session.document()
+            .findProfile(profile_id)
+            ->region_intent !=
+        *interaction.profileDraftIntent());
+
+    CHECK(interaction.finishProfile());
+    CHECK(
+        session.undoDepth() ==
+        before_edit + 1U);
+    CHECK(
+        session.document()
+            .findProfile(profile_id) !=
+        nullptr);
+    CHECK(
+        session.document()
+            .evaluateProfile(profile_id)
+            ->valid());
+    CHECK(
+        session.document()
+            .evaluateProfile(profile_id)
+            ->region->holes.size() == 1U);
+
+    // Cancel discards a fresh draft without allocating identity/history.
+    const auto before_cancel =
+        session.undoDepth();
+    const auto cursor_before_cancel =
+        session.document()
+            .profileIdCursor()
+            .serialized();
+    CHECK(interaction.activateProfileCreate());
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        300.0, 300.0,
+        101.0, 101.0));
+    CHECK(interaction.profileDraftIntent().has_value());
+    CHECK(interaction.escape());
+    CHECK(!interaction.profileToolActive());
+    CHECK(session.undoDepth() == before_cancel);
+    CHECK(
+        session.document()
+            .profileIdCursor()
+            .serialized() ==
+        cursor_before_cancel);
 
     interaction.end();
     CHECK(!interaction.active());

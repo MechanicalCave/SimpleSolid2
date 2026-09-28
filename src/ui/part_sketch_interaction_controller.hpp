@@ -5,6 +5,7 @@
 #include <simplesolid2/application/cad_input.hpp>
 #include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 
 #include <cstddef>
@@ -15,6 +16,22 @@
 #include <utility>
 
 namespace simplesolid2::ui {
+
+enum class ProfileToolSessionKind : std::uint8_t {
+    create,
+    edit,
+};
+
+struct ProfileToolOptions final {
+    bool detect_islands{true};
+    bool highlight_on_hover{true};
+    bool show_region_boundaries{false};
+    bool show_problems{true};
+
+    friend bool operator==(
+        const ProfileToolOptions&,
+        const ProfileToolOptions&) = default;
+};
 
 class PartSketchInteractionController final
     : public application::ISketchCadInputSemanticTarget {
@@ -76,6 +93,40 @@ public:
     }
     [[nodiscard]] bool repeatLastCommand();
 
+    [[nodiscard]] bool profileToolActive() const noexcept {
+        return profile_session_.has_value();
+    }
+    [[nodiscard]] std::optional<ProfileToolSessionKind>
+    profileToolSessionKind() const noexcept;
+    [[nodiscard]] part::ProfileAreaEditMode
+    profileAreaMode() const noexcept;
+    [[nodiscard]] ProfileToolOptions
+    profileToolOptions() const noexcept;
+    [[nodiscard]] bool setProfileToolOptions(
+        ProfileToolOptions options);
+    [[nodiscard]] bool setProfileAreaMode(
+        part::ProfileAreaEditMode mode);
+    [[nodiscard]] std::optional<part::ProfileId>
+    editedProfileId() const noexcept;
+    [[nodiscard]] std::optional<part::ProfileRegionIntent>
+    profileDraftIntent() const;
+    [[nodiscard]] std::optional<std::uint32_t>
+    profileHoveredRegion() const noexcept;
+    [[nodiscard]] std::optional<part::ProfileAreaEditStatus>
+    profileHoverStatus() const noexcept;
+    [[nodiscard]] std::optional<sketch::RegionCandidate2D>
+    profileHoverPreview() const;
+    [[nodiscard]] std::size_t
+    profileAnalysisBuildCount() const noexcept {
+        return profile_analysis_build_count_;
+    }
+
+    [[nodiscard]] bool activateProfileCreate();
+    [[nodiscard]] bool activateProfileEdit(
+        part::ProfileId profile_id);
+    [[nodiscard]] bool finishProfile();
+    void cancelProfile();
+
     // Line/Circle/Arc are adapters to the same semantic
     // SketchInteractionState and resolved-input path.
     void activateSelect();
@@ -125,6 +176,11 @@ private:
     void handleArcPointer(const SketchPointerInput& input);
     void handleCommonTransformPointer(
         const SketchPointerInput& input);
+    void handleProfilePointer(
+        const SketchPointerInput& input);
+    [[nodiscard]] bool ensureProfileAnalysis();
+    void updateProfileHover(sketch::Point2 point);
+    void resetProfileRuntime() noexcept;
     [[nodiscard]] bool acceptLineResolvedPoint(
         sketch::ResolvedSketchInput input);
     void updateRectangleOverlay(viewer::ViewportPoint2 current);
@@ -155,6 +211,11 @@ private:
         bool direct_manipulation_active{};
         std::optional<sketch::DirectEditMode>
             direct_edit_mode;
+        bool profile_active{};
+        std::optional<ProfileToolSessionKind>
+            profile_session_kind;
+        part::ProfileAreaEditMode profile_area_mode{
+            part::ProfileAreaEditMode::add_area};
         std::optional<sketch::Point2> point_base;
         bool direct_distance_enabled{};
         std::optional<core::DocumentRevision>
@@ -184,6 +245,33 @@ private:
         transform_revision_;
     std::optional<sketch::SketchTool>
         last_repeatable_command_;
+
+    struct ProfileToolSession final {
+        ProfileToolSessionKind kind{
+            ProfileToolSessionKind::create};
+        part::ProfileAreaEditMode area_mode{
+            part::ProfileAreaEditMode::add_area};
+        ProfileToolOptions options;
+        std::optional<part::ProfileId> profile_id;
+        std::optional<part::ProfileRegionIntent>
+            draft_intent;
+        std::optional<std::uint32_t>
+            hovered_region;
+        std::optional<part::ProfileAreaEditResult>
+            hover_result;
+        core::DocumentRevision expected_revision;
+    };
+
+    struct ProfileAnalysisCache final {
+        sketch::SketchModelState model_state;
+        sketch::RegionAnalysis2D analysis;
+    };
+
+    std::optional<ProfileToolSession>
+        profile_session_;
+    std::optional<ProfileAnalysisCache>
+        profile_analysis_cache_;
+    std::size_t profile_analysis_build_count_{};
 
     application::CadInputContextGeneration
         cad_input_context_generation_{};
