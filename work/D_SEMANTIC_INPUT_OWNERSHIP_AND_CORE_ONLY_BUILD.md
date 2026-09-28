@@ -508,7 +508,7 @@ Expected bounded files may include:
 
 If implementation requires a broad move/rewrite of the whole Sketch interaction controller, stop for scope review.
 
-## 21. Documentation impact
+## Documentation impact
 
 Internal docs: required  
 User/Product docs: not required
