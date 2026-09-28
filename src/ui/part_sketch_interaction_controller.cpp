@@ -1691,6 +1691,28 @@ handleProfilePointer(
         updateProfileHover(input.position);
         if (!profile_session_ ||
             !profile_session_->hover_result) {
+            if (profile_analysis_cache_) {
+                const bool open_boundary =
+                    std::any_of(
+                        profile_analysis_cache_
+                            ->analysis.diagnostics.begin(),
+                        profile_analysis_cache_
+                            ->analysis.diagnostics.end(),
+                        [](const sketch::
+                               RegionAnalysisDiagnostic2D&
+                               diagnostic) {
+                            return diagnostic.kind ==
+                                   sketch::
+                                       RegionAnalysisDiagnosticKind::
+                                           open_boundary;
+                        });
+                reportStatus(
+                    open_boundary
+                        ? std::string{
+                              "No bounded Profile region at pointer; open boundary remains in Sketch."}
+                        : std::string{
+                              "No bounded Profile region at pointer."});
+            }
             return;
         }
 

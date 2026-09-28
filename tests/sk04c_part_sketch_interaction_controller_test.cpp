@@ -658,5 +658,164 @@ int main(int argc, char* argv[]) {
     interaction.end();
     CHECK(!interaction.active());
 
+    // Manual-F regression: the ordinary Line tool must be deterministic when
+    // endpoints are exactly shared. An open chain reports a problem; after an
+    // exact closing segment, repeated hover/click/Finish creates one Profile.
+    {
+        auto exact_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession exact_session{
+            std::filesystem::path{
+                "sk04c-exact-profile.ss2part"},
+            std::move(exact_document)};
+
+        const auto exact_created =
+            exact_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            exact_created.ok() &&
+            exact_created.sketch_id.has_value());
+        const auto exact_sketch_id =
+            *exact_created.sketch_id;
+
+        QTreeWidget exact_tree;
+        ui::PartDocumentTreeController
+            exact_tree_controller{exact_tree};
+        TestViewport exact_viewport;
+        ui::PartViewportController
+            exact_viewport_controller{
+                exact_tree_controller,
+                &exact_viewport};
+        exact_viewport_controller.setDocumentSession(
+            &exact_session);
+        exact_viewport_controller.setSketchEditSketch(
+            exact_sketch_id);
+
+        ui::PartSketchInteractionController
+            exact_interaction{
+                exact_viewport_controller};
+        exact_interaction.begin(
+            exact_session,
+            exact_sketch_id);
+
+        std::string exact_status;
+        exact_interaction.setStatusHandler(
+            [&exact_status](
+                const std::string& message) {
+                exact_status = message;
+            });
+
+        exact_interaction.activateLine();
+        for (const auto& point :
+             std::vector<sketch::Point2>{
+                 {200.0, 200.0},
+                 {204.0, 200.0},
+                 {204.0, 204.0},
+                 {200.0, 204.0}}) {
+            exact_interaction.onPointer(
+                pointer(
+                    exact_sketch_id,
+                    viewer::SpatialPointerPhase::
+                        primary_press,
+                    point.u,
+                    point.v,
+                    point.u,
+                    point.v));
+        }
+        CHECK(
+            exact_session.document()
+                .findSketch(exact_sketch_id)
+                ->model.lines().size() == 3U);
+
+        CHECK(exact_interaction.activateProfileCreate());
+        exact_interaction.onPointer(
+            pointer(
+                exact_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                202.0,
+                202.0,
+                202.0,
+                202.0));
+        CHECK(
+            !exact_interaction.profileDraftIntent()
+                 .has_value());
+        CHECK(
+            exact_status.find("open boundary") !=
+            std::string::npos);
+        exact_interaction.cancelProfile();
+
+        exact_interaction.activateLine();
+        exact_interaction.onPointer(
+            pointer(
+                exact_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                200.0,
+                204.0,
+                200.0,
+                204.0));
+        exact_interaction.onPointer(
+            pointer(
+                exact_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                200.0,
+                200.0,
+                200.0,
+                200.0));
+        CHECK(
+            exact_session.document()
+                .findSketch(exact_sketch_id)
+                ->model.lines().size() == 4U);
+
+        CHECK(exact_interaction.activateProfileCreate());
+        for (int index = 0; index < 16; ++index) {
+            exact_interaction.onPointer(
+                pointer(
+                    exact_sketch_id,
+                    viewer::SpatialPointerPhase::move,
+                    202.0,
+                    202.0,
+                    202.0,
+                    202.0));
+            CHECK(
+                exact_interaction.profileHoverStatus() ==
+                part::ProfileAreaEditStatus::changed);
+            CHECK(
+                exact_interaction.profileHoverPreview()
+                    .has_value());
+        }
+
+        exact_interaction.onPointer(
+            pointer(
+                exact_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                202.0,
+                202.0,
+                202.0,
+                202.0));
+        CHECK(
+            exact_interaction.profileDraftIntent()
+                .has_value());
+        CHECK(exact_interaction.finishProfile());
+        CHECK(
+            exact_session.document().profiles().size() ==
+            1U);
+        CHECK(
+            exact_tree.findItems(
+                    QStringLiteral("Profile 1"),
+                    Qt::MatchExactly |
+                        Qt::MatchRecursive,
+                    0)
+                .size() == 1U);
+
+        exact_interaction.end();
+    }
+
     return EXIT_SUCCESS;
 }
