@@ -750,7 +750,8 @@ ProfileAreaEditResult applyProfileAreaEdit(
         return {
             ProfileAreaEditStatus::invalid_draft,
             std::nullopt,
-            std::nullopt};
+            std::nullopt,
+            resolved.status};
     }
 
     const auto analysis =

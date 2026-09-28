@@ -110,6 +110,8 @@ struct ProfileAreaEditResult final {
         ProfileAreaEditStatus::invalid_draft};
     std::optional<ProfileRegionIntent> region_intent;
     std::optional<sketch::RegionCandidate2D> region;
+    std::optional<ProfileIntentResolutionStatus>
+        draft_resolution_status;
 
     [[nodiscard]] bool changed() const noexcept {
         return status ==

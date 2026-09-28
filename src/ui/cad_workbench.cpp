@@ -2873,11 +2873,46 @@ void CadWorkbench::syncSketchInteractionUi() {
                             "Invalid selection");
                     break;
                 case part::ProfileAreaEditStatus::
-                    invalid_draft:
+                    invalid_draft: {
                     status =
                         QStringLiteral(
                             "Invalid draft");
+                    const auto resolution =
+                        sketch_interaction_controller_->
+                            profileDraftResolutionStatus();
+                    if (resolution) {
+                        switch (*resolution) {
+                        case part::ProfileIntentResolutionStatus::
+                            invalid_intent:
+                            status +=
+                                QStringLiteral(
+                                    " — invalid intent");
+                            break;
+                        case part::ProfileIntentResolutionStatus::
+                            missing_source_entity:
+                            status +=
+                                QStringLiteral(
+                                    " — missing source");
+                            break;
+                        case part::ProfileIntentResolutionStatus::
+                            ambiguous_topology:
+                            status +=
+                                QStringLiteral(
+                                    " — ambiguous topology");
+                            break;
+                        case part::ProfileIntentResolutionStatus::
+                            unresolved_intent:
+                            status +=
+                                QStringLiteral(
+                                    " — unresolved intent");
+                            break;
+                        case part::ProfileIntentResolutionStatus::
+                            valid:
+                            break;
+                        }
+                    }
                     break;
+                }
                 case part::ProfileAreaEditStatus::
                     no_change:
                     status =

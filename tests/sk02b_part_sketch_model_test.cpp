@@ -230,6 +230,19 @@ int main() {
             .status ==
         part::ProfileIntentResolutionStatus::
             missing_source_entity);
+    const auto missing_source_edit =
+        part::applyProfileAreaEdit(
+            profile_model,
+            *profile_intent,
+            0U,
+            part::ProfileAreaEditMode::add_area);
+    CHECK(
+        missing_source_edit.status ==
+        part::ProfileAreaEditStatus::invalid_draft);
+    CHECK(
+        missing_source_edit.draft_resolution_status ==
+        part::ProfileIntentResolutionStatus::
+            missing_source_entity);
     const auto replacement_top =
         profile_model.addLine(
             {4.0, 3.0},
