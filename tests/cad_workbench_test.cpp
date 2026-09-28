@@ -111,9 +111,14 @@ public:
 
     bool setSketchScene(
         const viewer::SketchScene& scene) override {
+        if (fail_sketch_scene_) return false;
         if (!scene.valid()) return false;
         sketch_scene_ = scene;
         return true;
+    }
+
+    void setFailSketchScene(bool fail) noexcept {
+        fail_sketch_scene_ = fail;
     }
 
     bool setSketchPreviewScene(
@@ -214,6 +219,7 @@ private:
     viewer::NavigationCubeActionHandler
         navigation_cube_handler_;
     int fit_all_count_{};
+    bool fail_sketch_scene_{};
 };
 
 struct TempDirectory final {
@@ -348,6 +354,9 @@ int main(int argc, char* argv[]) {
     auto* reference_visibility =
         workbench.findChild<QLabel*>(
             QStringLiteral("referencePropertyVisibility"));
+    auto* status =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("workbenchStatus"));
 
     CHECK(tree != nullptr);
     CHECK(editor != nullptr);
@@ -363,6 +372,7 @@ int main(int argc, char* argv[]) {
     CHECK(properties_stack != nullptr);
     CHECK(reference_name != nullptr);
     CHECK(reference_visibility != nullptr);
+    CHECK(status != nullptr);
 
     CHECK(operations->text() ==
           QStringLiteral("Part modeling context."));
@@ -640,14 +650,55 @@ int main(int argc, char* argv[]) {
     CHECK(properties_stack->currentWidget()->objectName() ==
           QStringLiteral("documentPropertiesPage"));
 
+    const auto before_failed_presentation_revision =
+        first_session->document().revision();
+    const auto before_failed_presentation_undo =
+        first_session->undoDepth();
+
+    viewport->setFailSketchScene(true);
     title->setText(QStringLiteral("Drive Shaft Rev"));
     apply->click();
 
     CHECK(first_session->needsSave());
     CHECK(first_session->document().properties().title ==
           "Drive Shaft Rev");
+    CHECK(
+        first_session->document().revision() ==
+        *before_failed_presentation_revision.next());
+    CHECK(
+        first_session->undoDepth() ==
+        before_failed_presentation_undo + 1U);
     CHECK(undo->isEnabled());
     CHECK(save->isEnabled());
+    CHECK(
+        status->text().contains(
+            QStringLiteral(
+                "3D presentation update failed")));
+
+    const auto committed_revision =
+        first_session->document().revision();
+    const auto committed_undo =
+        first_session->undoDepth();
+    const auto committed_dirty =
+        first_session->needsSave();
+
+    // The next normal full refresh retries from authored state and clears
+    // the runtime-only degraded presentation diagnostic.
+    viewport->setFailSketchScene(false);
+    CHECK(workbench.activateDocument(
+        first_session,
+        workspace));
+    CHECK(
+        !status->text().contains(
+            QStringLiteral(
+                "3D presentation update failed")));
+    CHECK(
+        first_session->document().revision() ==
+        committed_revision);
+    CHECK(first_session->undoDepth() ==
+          committed_undo);
+    CHECK(first_session->needsSave() ==
+          committed_dirty);
 
     undo->click();
     CHECK(first_session->document().properties().title ==

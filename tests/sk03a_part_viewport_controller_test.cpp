@@ -7,6 +7,7 @@
 #include <QTreeWidget>
 #include <QWidget>
 
+#include <cstddef>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -78,6 +79,8 @@ public:
 
     bool setSketchScene(
         const viewer::SketchScene& scene) override {
+        ++sketch_scene_calls_;
+        if (fail_sketch_scene_) return false;
         if (!scene.valid()) return false;
         sketch_scene_ = scene;
         return true;
@@ -85,6 +88,8 @@ public:
 
     bool setSketchPreviewScene(
         const viewer::SketchPreviewScene& scene) override {
+        ++preview_scene_calls_;
+        if (fail_preview_) return false;
         if (!scene.valid()) return false;
         preview_scene_ = scene;
         return true;
@@ -151,6 +156,10 @@ public:
     viewer::ReferenceScene reference_scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene preview_scene_;
+    std::size_t sketch_scene_calls_{};
+    std::size_t preview_scene_calls_{};
+    bool fail_preview_{};
+    bool fail_sketch_scene_{};
     viewer::SelectionIntentHandler selection_handler_;
     viewer::SpatialPointerHandler spatial_handler_;
     viewer::PrimaryPointerRouting routing_{
@@ -204,6 +213,12 @@ int main(int argc, char* argv[]) {
     ui::PartViewportController controller{
         tree_controller,
         &viewport};
+
+    std::vector<bool> presentation_transitions;
+    controller.setPresentationStateChangedHandler(
+        [&presentation_transitions](bool degraded) {
+            presentation_transitions.push_back(degraded);
+        });
 
     controller.setDocumentSession(&session);
     CHECK(viewport.sketch_scene_.lines.empty());
@@ -278,6 +293,76 @@ int main(int argc, char* argv[]) {
         viewport.preview_scene_.lines[0].end ==
         viewer::Point3{7.0, 3.0, 0.0}));
 
+    // E2 Phase A: creation and transform previews stay on the transient
+    // preview channel; they must not rebuild the authored Sketch scene.
+    const auto sketch_scene_calls_before_previews =
+        viewport.sketch_scene_calls_;
+
+    CHECK(controller.setSketchCirclePreview(
+        sketch::CircleIntent{
+            sketch::Point2{3.0, 3.0},
+            2.0}));
+    CHECK(
+        viewport.sketch_scene_calls_ ==
+        sketch_scene_calls_before_previews);
+
+    CHECK(controller.setSketchArcPreview(
+        sketch::ArcIntent{
+            sketch::Point2{3.0, 3.0},
+            2.0,
+            0.0,
+            1.0}));
+    CHECK(
+        viewport.sketch_scene_calls_ ==
+        sketch_scene_calls_before_previews);
+
+    sketch::DirectManipulationGeometry geometry_preview;
+    geometry_preview.lines.push_back(
+        sketch::SketchLineState{
+            *first.entity_id,
+            sketch::Point2{1.0, 2.0},
+            sketch::Point2{5.0, 2.0}});
+    CHECK(controller.setSketchGeometryPreview(
+        geometry_preview));
+    CHECK(
+        viewport.sketch_scene_calls_ ==
+        sketch_scene_calls_before_previews);
+
+    const auto state_before_failed_preview =
+        session.document().state();
+    const auto revision_before_failed_preview =
+        session.document().revision();
+    const auto undo_before_failed_preview =
+        session.undoDepth();
+    const auto dirty_before_failed_preview =
+        session.needsSave();
+    const auto preview_calls_before_failure =
+        viewport.preview_scene_calls_;
+
+    viewport.fail_preview_ = true;
+    CHECK(!controller.setSketchPreview(
+        {
+            ui::SketchPreviewLine2D{
+                sketch::Point2{2.0, 3.0},
+                sketch::Point2{8.0, 3.0}},
+        }));
+    viewport.fail_preview_ = false;
+
+    CHECK(
+        viewport.preview_scene_calls_ ==
+        preview_calls_before_failure + 1U);
+    CHECK(
+        viewport.sketch_scene_calls_ ==
+        sketch_scene_calls_before_previews);
+    CHECK(session.document().state() ==
+          state_before_failed_preview);
+    CHECK(session.document().revision() ==
+          revision_before_failed_preview);
+    CHECK(session.undoDepth() ==
+          undo_before_failed_preview);
+    CHECK(session.needsSave() ==
+          dirty_before_failed_preview);
+
     controller.clearSketchPreview();
     CHECK(viewport.preview_scene_.lines.empty());
     CHECK(
@@ -294,6 +379,8 @@ int main(int argc, char* argv[]) {
             resolved = input;
         });
 
+    const auto sketch_scene_calls_before_pointer_move =
+        viewport.sketch_scene_calls_;
     viewport.emitSpatial(
         viewer::SpatialPointerEvent{
             viewer::SpatialPointerPhase::move,
@@ -301,6 +388,9 @@ int main(int argc, char* argv[]) {
             viewer::Ray3{
                 viewer::Point3{3.0, 5.0, 10.0},
                 viewer::Vec3{0.0, 0.0, -1.0}}});
+    CHECK(
+        viewport.sketch_scene_calls_ ==
+        sketch_scene_calls_before_pointer_move);
     CHECK(resolved.has_value());
     CHECK(resolved->sketch_id == sketch_id);
     CHECK(
@@ -358,14 +448,63 @@ int main(int argc, char* argv[]) {
         viewer::ViewportCursorMode::
             select_pick_box);
 
-    CHECK(
+    const auto erased =
         session.execute(
             application::EraseSketchEntityCommand{
                 sketch_id,
-                *second.entity_id})
-            .ok());
+                *second.entity_id});
+    CHECK(erased.ok() && erased.changed);
+
+    const auto state_after_commit =
+        session.document().state();
+    const auto revision_after_commit =
+        session.document().revision();
+    const auto undo_after_commit =
+        session.undoDepth();
+    const auto dirty_after_commit =
+        session.needsSave();
+    const auto sketch_scene_calls_before_commit_refresh =
+        viewport.sketch_scene_calls_;
+
+    viewport.fail_sketch_scene_ = true;
     controller.refreshPresentation();
+
+    CHECK(controller.presentationDegraded());
+    CHECK(
+        presentation_transitions ==
+        std::vector<bool>{true});
+    CHECK(
+        viewport.sketch_scene_calls_ ==
+        sketch_scene_calls_before_commit_refresh + 1U);
+    CHECK(session.document().state() ==
+          state_after_commit);
+    CHECK(session.document().revision() ==
+          revision_after_commit);
+    CHECK(session.undoDepth() ==
+          undo_after_commit);
+    CHECK(session.needsSave() ==
+          dirty_after_commit);
+
+    // Recovery is always a full rebuild from the current authored model.
+    viewport.fail_sketch_scene_ = false;
+    controller.refreshPresentation();
+
+    CHECK(!controller.presentationDegraded());
+    CHECK(
+        presentation_transitions ==
+        (std::vector<bool>{true, false}));
+    CHECK(
+        viewport.sketch_scene_calls_ ==
+        sketch_scene_calls_before_commit_refresh + 2U);
     CHECK(viewport.sketch_scene_.lines.size() == 1U);
+    CHECK(session.document().state() ==
+          state_after_commit);
+    CHECK(session.document().revision() ==
+          revision_after_commit);
+    CHECK(session.undoDepth() ==
+          undo_after_commit);
+    CHECK(session.needsSave() ==
+          dirty_after_commit);
 
     CHECK(session.undo().changed);
     controller.refreshPresentation();

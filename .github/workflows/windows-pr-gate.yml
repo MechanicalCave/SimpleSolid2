@@ -261,7 +261,7 @@ jobs:
     defaults:
       run:
         shell: >-
-          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+          C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe
           -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass
           -Command "& ([scriptblock]::Create((Get-Content -Raw -LiteralPath '{0}')))"
     steps:

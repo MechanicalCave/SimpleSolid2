@@ -258,6 +258,15 @@ Projection is independent from Cube orientation. The `ORTHO/PERSP` control next 
 
 Navigation and camera changes are temporary view state. They do not dirty the Part, do not require Save and do not create CAD Undo entries.
 
+<!-- section-id: product.parts.presentation-recovery -->
+## 3D presentation failure and retry
+
+If a CAD operation is committed successfully in the authored model but the 3D Viewer cannot refresh its presentation, the model change remains committed. Document revision, Save/dirty state and Undo/Redo history are not rolled back because of a display failure.
+
+The Workbench then shows a diagnostic that the 3D presentation update failed. While that diagnostic is present, the visible scene must not be treated as synchronized with the current model.
+
+The next normal full Viewer refresh automatically retries presentation from the current authored state. After a complete successful refresh, the degraded state and diagnostic clear. Recovery never reconstructs the model from Viewer objects and does not create an extra Undo entry.
+
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 

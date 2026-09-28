@@ -87,7 +87,7 @@ CadWorkbench::CadWorkbench(
       viewport_factory_{std::move(viewport_factory)} {
     buildUi();
     deactivateDocument();
-    status_->setText(
+    setStatusText(
         QStringLiteral("No Part is active."));
 }
 
@@ -140,7 +140,7 @@ void CadWorkbench::buildUi() {
             }
 
             refreshActiveContext();
-            status_->setText(
+            setStatusText(
                 result.changed
                     ? (visible
                            ? QStringLiteral(
@@ -386,6 +386,13 @@ void CadWorkbench::buildUi() {
             tryCreateSketchFromSupport(primary);
         });
 
+    viewport_controller_->setPresentationStateChangedHandler(
+        [this](bool) {
+            // Empty normal status means: show only the degradation
+            // diagnostic while failed, and clear it after recovery.
+            setStatusText(QString{});
+        });
+
     sketch_interaction_controller_ =
         std::make_unique<PartSketchInteractionController>(
             *viewport_controller_);
@@ -397,7 +404,7 @@ void CadWorkbench::buildUi() {
         });
     sketch_interaction_controller_->setStatusHandler(
         [this](const std::string& message) {
-            status_->setText(fromUtf8(message));
+            setStatusText(fromUtf8(message));
         });
     viewport_controller_->setSketchPointerHandler(
         [this](const SketchPointerInput& input) {
@@ -715,7 +722,7 @@ bool CadWorkbench::activateDocument(
     if (document_session_ == session) {
         workspace_root_ = std::move(workspace_root);
         refreshActiveContext();
-        status_->setText(
+        setStatusText(
             QStringLiteral("Part Document activated."));
         return true;
     }
@@ -731,7 +738,7 @@ bool CadWorkbench::activateDocument(
 
     restoreActiveViewState();
     refreshActiveContext();
-    status_->setText(
+    setStatusText(
         QStringLiteral("Part Document activated."));
     return true;
 }
@@ -746,14 +753,14 @@ void CadWorkbench::deactivateDocument() {
     workspace_root_.clear();
 
     clearActiveContext();
-    status_->setText(
+    setStatusText(
         QStringLiteral("No Part Document is active."));
 }
 
 void CadWorkbench::resetRuntimeState() {
     deactivateDocument();
     document_view_states_.clear();
-    status_->setText(
+    setStatusText(
         QStringLiteral(
             "No Part Document is active."));
 }
@@ -792,7 +799,7 @@ void CadWorkbench::applyProperties() {
     }
 
     refreshActiveContext();
-    status_->setText(
+    setStatusText(
         result.changed
             ? QStringLiteral(
                   "Properties changed — save is required.")
@@ -806,7 +813,7 @@ void CadWorkbench::startSketchTool() {
     }
 
     if (active_sketch_id_) {
-        status_->setText(
+        setStatusText(
             QStringLiteral(
                 "Finish the active Sketch before creating another one."));
         return;
@@ -816,7 +823,7 @@ void CadWorkbench::startSketchTool() {
     operations_placeholder_->setText(
         QStringLiteral(
             "Sketch: select XY, XZ or YZ Origin plane in the Tree or 3D Viewport."));
-    status_->setText(
+    setStatusText(
         QStringLiteral(
             "Sketch tool active — select an Origin plane."));
     syncActionState();
@@ -828,7 +835,7 @@ void CadWorkbench::cancelSketchTool() {
     }
 
     clearSketchRuntimeContext();
-    status_->setText(
+    setStatusText(
         QStringLiteral(
             "Sketch creation cancelled."));
     syncActionState();
@@ -844,11 +851,11 @@ void CadWorkbench::requestEditSketch(
 
     if (active_sketch_id_) {
         if (*active_sketch_id_ == sketch_id) {
-            status_->setText(
+            setStatusText(
                 QStringLiteral(
                     "This Sketch is already being edited."));
         } else {
-            status_->setText(
+            setStatusText(
                 QStringLiteral(
                     "Finish the active Sketch before editing another one."));
         }
@@ -861,7 +868,7 @@ void CadWorkbench::requestEditSketch(
 
     if (document_session->document()
             .findSketch(sketch_id) == nullptr) {
-        status_->setText(
+        setStatusText(
             QStringLiteral(
                 "Sketch is no longer available in the active Part."));
         syncActionState();
@@ -869,7 +876,7 @@ void CadWorkbench::requestEditSketch(
     }
 
     enterSketchEdit(sketch_id);
-    status_->setText(
+    setStatusText(
         QStringLiteral(
             "Sketch edit context opened in the 3D Viewport."));
 }
@@ -885,7 +892,7 @@ void CadWorkbench::tryCreateSketchFromSupport(
     }
 
     if (!part::isSketchOriginPlane(*support)) {
-        status_->setText(
+        setStatusText(
             QStringLiteral(
                 "Sketch support must be XY, XZ or YZ Origin plane."));
         return;
@@ -909,7 +916,7 @@ void CadWorkbench::tryCreateSketchFromSupport(
 
     if (!created.changed ||
         !created.sketch_id) {
-        status_->setText(
+        setStatusText(
             QStringLiteral(
                 "Sketch was not created."));
         return;
@@ -923,7 +930,7 @@ void CadWorkbench::tryCreateSketchFromSupport(
     refreshActiveContext();
     enterSketchEdit(created_id);
 
-    status_->setText(
+    setStatusText(
         QStringLiteral(
             "Sketch created — editing in the 3D Viewport. "
             "Pan/Zoom/Orbit remain available."));
@@ -1014,7 +1021,7 @@ void CadWorkbench::activateSketchArc() {
 void CadWorkbench::activateSketchMove() {
     if (sketch_interaction_controller_ &&
         !sketch_interaction_controller_->activateMove()) {
-        status_->setText(
+        setStatusText(
             QStringLiteral("MOVE could not be activated."));
         return;
     }
@@ -1026,7 +1033,7 @@ void CadWorkbench::activateSketchMove() {
 void CadWorkbench::activateSketchCopy() {
     if (sketch_interaction_controller_ &&
         !sketch_interaction_controller_->activateCopy()) {
-        status_->setText(
+        setStatusText(
             QStringLiteral("COPY could not be activated."));
         return;
     }
@@ -1038,7 +1045,7 @@ void CadWorkbench::activateSketchCopy() {
 void CadWorkbench::activateSketchRotate() {
     if (sketch_interaction_controller_ &&
         !sketch_interaction_controller_->activateRotate()) {
-        status_->setText(
+        setStatusText(
             QStringLiteral("ROTATE could not be activated."));
         return;
     }
@@ -1050,7 +1057,7 @@ void CadWorkbench::activateSketchRotate() {
 void CadWorkbench::activateSketchScale() {
     if (sketch_interaction_controller_ &&
         !sketch_interaction_controller_->activateScale()) {
-        status_->setText(
+        setStatusText(
             QStringLiteral("SCALE could not be activated."));
         return;
     }
@@ -1062,7 +1069,7 @@ void CadWorkbench::activateSketchScale() {
 void CadWorkbench::activateSketchMirror() {
     if (sketch_interaction_controller_ &&
         !sketch_interaction_controller_->activateMirror()) {
-        status_->setText(
+        setStatusText(
             QStringLiteral("MIRROR could not be activated."));
         return;
     }
@@ -1082,35 +1089,35 @@ void CadWorkbench::finishSketchLine() {
 
     switch (tool) {
     case sketch::SketchTool::line:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Line finished — Select active."));
         break;
     case sketch::SketchTool::circle:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Circle finished — Select active."));
         break;
     case sketch::SketchTool::arc:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Arc finished — Select active."));
         break;
     case sketch::SketchTool::move:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Move finished — Select active."));
         break;
     case sketch::SketchTool::copy:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Copy finished — Select active."));
         break;
     case sketch::SketchTool::rotate:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Rotate finished — Select active."));
         break;
     case sketch::SketchTool::scale:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Scale finished — Select active."));
         break;
     case sketch::SketchTool::mirror:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Mirror finished — Select active."));
         break;
     case sketch::SketchTool::select:
@@ -1129,38 +1136,38 @@ void CadWorkbench::cancelSketchLine() {
 
     switch (tool) {
     case sketch::SketchTool::line:
-        status_->setText(
+        setStatusText(
             QStringLiteral(
                 "Line cancelled — committed segments preserved."));
         break;
     case sketch::SketchTool::circle:
-        status_->setText(
+        setStatusText(
             QStringLiteral(
                 "Circle cancelled — committed circles preserved."));
         break;
     case sketch::SketchTool::arc:
-        status_->setText(
+        setStatusText(
             QStringLiteral(
                 "Arc cancelled — committed arcs preserved."));
         break;
     case sketch::SketchTool::move:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Move cancelled — selection preserved."));
         break;
     case sketch::SketchTool::copy:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Copy cancelled — committed copies preserved; selection preserved."));
         break;
     case sketch::SketchTool::rotate:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Rotate cancelled — selection preserved."));
         break;
     case sketch::SketchTool::scale:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Scale cancelled — selection preserved."));
         break;
     case sketch::SketchTool::mirror:
-        status_->setText(
+        setStatusText(
             QStringLiteral("Mirror cancelled — selection preserved."));
         break;
     case sketch::SketchTool::select:
@@ -1174,7 +1181,7 @@ void CadWorkbench::deleteSketchSelection() {
         return;
     }
 
-    status_->setText(
+    setStatusText(
         QStringLiteral("Sketch selection deleted."));
 }
 
@@ -1221,7 +1228,7 @@ CadWorkbench::submitCadInput(
     if (!result.accepted &&
         status_ != nullptr &&
         !result.diagnostic.empty()) {
-        status_->setText(fromUtf8(result.diagnostic));
+        setStatusText(fromUtf8(result.diagnostic));
     }
     return result;
 }
@@ -1379,7 +1386,7 @@ void CadWorkbench::finishSketch() {
     }
 
     clearSketchRuntimeContext();
-    status_->setText(
+    setStatusText(
         QStringLiteral(
             "Sketch edit finished. The Sketch remains authored in the Part."));
     syncActionState();
@@ -1465,7 +1472,7 @@ void CadWorkbench::undo() {
     }
 
     refreshActiveContext();
-    status_->setText(
+    setStatusText(
         result.changed
             ? QStringLiteral("Undo applied.")
             : QStringLiteral("Nothing to undo."));
@@ -1487,7 +1494,7 @@ void CadWorkbench::redo() {
     }
 
     refreshActiveContext();
-    status_->setText(
+    setStatusText(
         result.changed
             ? QStringLiteral("Redo applied.")
             : QStringLiteral("Nothing to redo."));
@@ -1506,7 +1513,7 @@ void CadWorkbench::save() {
     }
 
     refreshActiveContext();
-    status_->setText(
+    setStatusText(
         QStringLiteral("Part saved."));
 }
 
@@ -1715,7 +1722,7 @@ bool CadWorkbench::eventFilter(
                 sketch::CommonTransformStage::select_objects) {
             if (sketch_interaction_controller_->
                     completeTransformSelection()) {
-                status_->setText(
+                setStatusText(
                     QStringLiteral(
                         "Transform objects accepted."));
             }
@@ -1738,7 +1745,7 @@ bool CadWorkbench::eventFilter(
 
             if (key_event->key() == Qt::Key_Escape) {
                 if (sketch_interaction_controller_->escape()) {
-                    status_->setText(
+                    setStatusText(
                         QStringLiteral(
                             "Sketch interaction cancelled."));
                 }
@@ -1760,7 +1767,7 @@ bool CadWorkbench::eventFilter(
                     directManipulationActive()) {
                 if (sketch_interaction_controller_->
                         commitDirectManipulation()) {
-                    status_->setText(
+                    setStatusText(
                         QStringLiteral(
                             "Sketch edit committed."));
                 }
@@ -1779,7 +1786,7 @@ bool CadWorkbench::eventFilter(
                             select_objects) {
                     if (sketch_interaction_controller_->
                             completeTransformSelection()) {
-                        status_->setText(
+                        setStatusText(
                             QStringLiteral(
                                 "Transform objects accepted."));
                     }
@@ -1815,14 +1822,14 @@ bool CadWorkbench::eventFilter(
                         lastRepeatableCommand();
                 if (!sketch_interaction_controller_->
                         repeatLastCommand()) {
-                    status_->setText(
+                    setStatusText(
                         remembered
                             ? QStringLiteral(
                                   "Last Sketch command could not be repeated.")
                             : QStringLiteral(
                                   "No repeatable Sketch command."));
                 } else {
-                    status_->setText(
+                    setStatusText(
                         QStringLiteral(
                             "Last Sketch command repeated."));
                 }
@@ -2210,6 +2217,33 @@ void CadWorkbench::notifyDocumentStateChanged() {
         document_state_changed_handler_(
             document_session_->documentId());
     }
+}
+
+void CadWorkbench::setStatusText(
+    const QString& message) {
+    if (status_ == nullptr) {
+        return;
+    }
+
+    const bool degraded =
+        viewport_controller_ != nullptr &&
+        viewport_controller_->presentationDegraded();
+
+    if (!degraded) {
+        status_->setText(message);
+        return;
+    }
+
+    const auto presentation_diagnostic =
+        QStringLiteral(
+            "3D presentation update failed. Authored CAD state remains "
+            "authoritative; the next full refresh will retry.");
+
+    status_->setText(
+        message.isEmpty()
+            ? presentation_diagnostic
+            : message + QStringLiteral(" ") +
+                  presentation_diagnostic);
 }
 
 void CadWorkbench::showFailure(

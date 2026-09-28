@@ -269,6 +269,7 @@ void PartViewportController::clear() {
                 viewer::PresentationSelection{}));
     }
 
+    setPresentationDegraded(false);
     applySketchViewportMode();
     notifySelectionChanged();
 }
@@ -295,6 +296,7 @@ void PartViewportController::refreshPresentation() {
         static_cast<void>(
             viewport_->setSketchScene(
                 viewer::SketchScene{}));
+        setPresentationDegraded(false);
         return;
     }
 
@@ -313,19 +315,32 @@ void PartViewportController::refreshPresentation() {
         applySketchViewportMode();
     }
 
-    static_cast<void>(
+    const bool reference_ok =
         viewport_->setReferenceScene(
-            buildReferenceScene()));
+            buildReferenceScene());
 
     const auto sketch_scene =
         buildSketchScene();
-    static_cast<void>(
-        viewport_->setSketchScene(
-            sketch_scene
-                ? *sketch_scene
-                : viewer::SketchScene{}));
+    const bool sketch_ok =
+        sketch_scene.has_value() &&
+        viewport_->setSketchScene(*sketch_scene);
+
+    setPresentationDegraded(
+        !reference_ok || !sketch_ok);
 
     applySelectionToSurfaces();
+}
+
+void PartViewportController::setPresentationDegraded(
+    bool degraded) {
+    if (presentation_degraded_ == degraded) {
+        return;
+    }
+
+    presentation_degraded_ = degraded;
+    if (presentation_state_changed_handler_) {
+        presentation_state_changed_handler_(degraded);
+    }
 }
 
 void PartViewportController::setSketchEditSketch(

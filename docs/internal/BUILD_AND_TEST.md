@@ -197,6 +197,15 @@ Canonical Release evidence is run with:
 The runner executes semantic `DocumentSession` operations without Qt/Viewer/OCCT rendering in the timed path. It uses a working-set ceiling of the minimum of 25% physical RAM and 4 GiB, a five-minute per-cell timeout and BelowNormal child-process priority. These are benchmark-machine safety controls, not Product history limits.
 
 Current C2 evidence is summarized in [History Performance](HISTORY_PERFORMANCE.md) and in the [C2 benchmark decision record](../../work/C2_HISTORY_BENCHMARK_RESULTS.md).
+<!-- section-id: internal.build-test.e2-presentation-benchmark -->
+## E2 presentation benchmark
+
+The E2 presentation benchmark is maintainer evidence tooling and is opt-in. `SS2_ENABLE_E2_PRESENTATION_BENCHMARK` defaults to `OFF`, so ordinary product builds and the normal CTest graph do not include the benchmark executable.
+
+The retained Release harness is configured with `SS2_BUILD_DESKTOP=ON` and `SS2_ENABLE_E2_PRESENTATION_BENCHMARK=ON`, then built as target `e2_presentation_benchmark`. It records authored-refresh, native scene-replacement, single-line preview and transform-preview timings together with semantic/native object counts. Timing is observational evidence only; it is not a machine-independent pass/fail Product requirement.
+
+The one-shot PR benchmark gate used to collect E2 evidence was retired after measurement. Durable environment/results and the KEEP CURRENT REBUILD decision are recorded in [E2 Presentation Benchmark Results](../../work/E2_PRESENTATION_BENCHMARK_RESULTS.md). Windows FULL #727 collected the accepted Release evidence while the ordinary regression graph remained at 77 CTest tests.
+
 <!-- section-id: internal.build-test.docs-validation -->
 ## Documentation validation
 

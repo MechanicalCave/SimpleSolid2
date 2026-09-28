@@ -80,6 +80,9 @@ public:
     using SketchPointerHandler =
         std::function<void(const SketchPointerInput&)>;
 
+    using PresentationStateChangedHandler =
+        std::function<void(bool degraded)>;
+
     PartViewportController(
         PartDocumentTreeController& tree,
         viewer::IDocumentViewport* viewport,
@@ -91,6 +94,16 @@ public:
     void clear();
     void resetRuntimeState();
     void refreshPresentation();
+
+    [[nodiscard]] bool presentationDegraded() const noexcept {
+        return presentation_degraded_;
+    }
+
+    void setPresentationStateChangedHandler(
+        PresentationStateChangedHandler handler) {
+        presentation_state_changed_handler_ =
+            std::move(handler);
+    }
 
     void setSketchEditSketch(
         std::optional<sketch::SketchId> sketch_id);
@@ -202,6 +215,7 @@ private:
     void applySelectionToSurfaces();
     void applySketchViewportMode();
     void notifySelectionChanged();
+    void setPresentationDegraded(bool degraded);
 
     PartDocumentTreeController* tree_{};
     viewer::IDocumentViewport* viewport_{};
@@ -229,9 +243,12 @@ private:
     bool projected_grips_visible_{};
     std::vector<sketch::EntityId>
         projected_grip_selection_;
+    bool presentation_degraded_{};
 
     SelectionChangedHandler selection_changed_handler_;
     SketchPointerHandler sketch_pointer_handler_;
+    PresentationStateChangedHandler
+        presentation_state_changed_handler_;
 };
 
 } // namespace simplesolid2::ui
