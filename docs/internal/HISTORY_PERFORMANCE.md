@@ -46,4 +46,6 @@ The benchmark is headless semantic history evidence. It excludes Qt UI, Viewer/O
 
 The measured command latency remains sub-millisecond across all primary matrix cells on the measured runner, while retained-history process memory grows strongly with model size and history depth. This is evidence for the C2 Owner decision; it is not by itself a product history limit or authorization to redesign history.
 
-C2 remains active until the second Owner decision selects no deeper change, a bounded private optimization, a product-visible budget, or another experiment.
+The Owner accepted the C2 **KEEP** decision on 2026-09-28. The current C1 two-snapshot representation remains the production baseline, with no Product history depth/memory limit and no automatic eviction.
+
+The measured retained-history memory growth remains a documented scale risk. A future redesign requires new evidence and separately accepted authority; this C2 decision does not pre-authorize event sourcing, delta/COW history or persistent Undo.

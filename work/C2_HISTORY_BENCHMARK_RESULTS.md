@@ -123,3 +123,16 @@ No product memory/depth budget is inferred from this one machine. No production 
 Phase A now stops at the second Owner decision gate defined by the accepted C2 Work Contract. The bounded categories remain: keep the current C1 representation for now; approve a bounded private representation optimization; approve a product-visible history budget with explicit behavior/documentation; or request another experiment.
 
 Before any production history mutation, the Owner must explicitly select and accept the next C2 direction. If a change is selected, the contract must be amended to state the exact representation problem, preserved invariants and verification evidence.
+
+## 9. Owner decision
+
+**Decision:** KEEP  
+**Accepted:** 2026-09-28
+
+The Owner accepted retaining the current completed C1 two-snapshot history representation with **no Product history depth or memory limit**.
+
+The decision is based on the measured boundary, not on a claim that retained-history memory is negligible. Primary semantic latency remained below 0.5 ms maximum in the accepted matrix on the measured runner, while the largest semantic-only process peak reached 787.4 MiB at 10,000 entities/depth 1,000.
+
+Accordingly, C2 does not add event sourcing, delta/COW history, persistent history, eviction or a Product budget. The measured memory scaling and limited half-depth branch evidence remain recorded risks for future workloads and future separately authorized work.
+
+No production history code changes are required after this decision.

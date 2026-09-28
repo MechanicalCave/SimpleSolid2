@@ -407,3 +407,31 @@ Phase A completion facts:
 No production history representation, eviction policy, persistent history or Product history budget is authorized by these measurements alone.
 
 C2 is now stopped at the second Owner decision gate in section 13. The next production mutation, if any, requires the Owner to explicitly accept the evidence-driven C2 direction and any necessary contract amendment.
+
+## 20. Phase B Owner decision — KEEP
+
+**Owner decision:** KEEP  
+**Accepted:** 2026-09-28
+
+The Owner accepted the evidence-driven no-deeper-change outcome after reviewing Phase A.
+
+C2 therefore keeps the completed C1 production history representation:
+
+```text
+std::vector<HistoryEntry>
+HistoryEntry = { before PartAuthoredState, after PartAuthoredState }
+```
+
+Decision consequences:
+
+- no production history representation change is authorized or required by C2;
+- no Product Undo depth limit or memory budget is introduced;
+- no automatic history eviction is introduced;
+- no persistent history, event sourcing, delta history or copy-on-write history is introduced;
+- current Undo/Redo, dirty-state, authored identity, EntityId high-water and B2 strong-consistency semantics remain unchanged;
+- the measured model-size × history-depth memory growth remains a documented scale risk for future evidence, not a current Product limit;
+- future history redesign requires new evidence and separately accepted authority rather than reopening C2 implicitly.
+
+The Phase A benchmark infrastructure remains opt-in maintainer evidence tooling with the default product build path unchanged.
+
+With KEEP accepted, C2 requires no production implementation phase. Remaining completion work is governance closeout, exact evidence references, CLOSURE verification and merge.
