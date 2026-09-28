@@ -363,7 +363,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 4);
+            .domain_schema_version == 5);
     CHECK(
         migrated.package->authored_json.find(
             "\"model\"") !=
