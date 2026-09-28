@@ -995,6 +995,6 @@ The decimal scale/translation two-touch reproducer from the external defect audi
 
 Required internal and paired Product PL/EN documentation plus generated Browser freshness passed on the final candidate.
 
-Package F acceptance conditions are satisfied. This bookkeeping closeout changes only `work/**` and awaits the work-only CLOSURE gate and merge of PR #86.
+Package F acceptance conditions are satisfied. The closeout head passed work-only CLOSURE #821/#823 and PR #86 was squash-merged to `main` as `26483c5d318af00ea0f82e7e901827a77c74b90a` on 2026-09-28.
 
 Completion of F does **not** authorize Extrude or another solid operation. A separate Owner-accepted Part solid-operation Work Contract remains mandatory.
