@@ -100,10 +100,16 @@ std::optional<CaseResult> buildArc(
         return std::nullopt;
     }
 
+    const auto preview = state.previewArc(end);
+    if (!preview) {
+        return std::nullopt;
+    }
+
     const auto result = state.acceptArcPoint(end);
     if (result.outcome !=
             sketch::ArcPointOutcome::arc_requested ||
-        !result.request) {
+        !result.request ||
+        *preview != *result.request) {
         return std::nullopt;
     }
 
@@ -169,6 +175,19 @@ void verifyResiduals(const CaseResult& value) {
 
 void verifyThroughOnSignedSweep(
     const CaseResult& value) {
+    const double start_angle =
+        pointDirection(
+            value.arc.center,
+            value.start);
+    CHECK(
+        std::abs(
+            std::remainder(
+                start_angle -
+                    value.arc.start_angle,
+                full_turn)) <=
+        1024.0 *
+            std::numeric_limits<double>::epsilon());
+
     const double through_angle =
         pointDirection(
             value.arc.center,
