@@ -288,6 +288,11 @@ int main(int argc, char* argv[]) {
 
     controller.setSketchEditSketch(sketch_id);
     CHECK(viewport.sketch_scene_.lines.size() == 2U);
+    const auto profile_edit_token =
+        controller.profilePresentationFor(
+            profile_id);
+    CHECK(profile_edit_token.has_value());
+    CHECK(*profile_edit_token != profile_token);
 
     const auto first_token =
         viewport.sketch_scene_.lines[0].token;
@@ -407,14 +412,14 @@ int main(int argc, char* argv[]) {
         profile_id);
     CHECK(
         viewport.selection_.primary ==
-        profile_token);
+        *profile_edit_token);
     CHECK(
         tree_controller.selectedProfileIds() ==
         std::vector<part::ProfileId>{profile_id});
 
     viewport.emitReferenceIntent(
         viewer::SelectionIntent{
-            profile_token,
+            *profile_edit_token,
             viewer::SelectionIntentMode::replace});
     CHECK(
         reported_profiles ==
@@ -428,7 +433,7 @@ int main(int argc, char* argv[]) {
 
     viewport.emitReferenceIntent(
         viewer::SelectionIntent{
-            profile_token,
+            *profile_edit_token,
             viewer::SelectionIntentMode::toggle});
     CHECK(reported_profiles.empty());
     CHECK(!reported_primary_profile.has_value());
@@ -472,7 +477,7 @@ int main(int argc, char* argv[]) {
 
     const auto stale_token = first_token;
     const auto stale_profile_token =
-        profile_token;
+        *profile_edit_token;
     controller.refreshPresentation();
     CHECK(
         !controller.sketchEntityFor(

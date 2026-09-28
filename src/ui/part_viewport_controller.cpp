@@ -1549,6 +1549,11 @@ void PartViewportController::onTreeSelection(
 
     auto& selection = activeSelection();
     selection.selected = selected;
+    selection.profiles =
+        tree_->selectedProfileIds();
+
+    const auto profile_primary =
+        tree_->primaryProfileId();
 
     if (primary &&
         std::find(
@@ -1557,11 +1562,25 @@ void PartViewportController::onTreeSelection(
             *primary) != selected.end()) {
         selection.primary = primary;
         selection.primary_profile.reset();
+    } else if (profile_primary &&
+               std::find(
+                   selection.profiles.begin(),
+                   selection.profiles.end(),
+                   *profile_primary) !=
+                   selection.profiles.end()) {
+        selection.primary.reset();
+        selection.primary_profile =
+            profile_primary;
     } else if (!selected.empty()) {
         selection.primary = selected.front();
         selection.primary_profile.reset();
+    } else if (!selection.profiles.empty()) {
+        selection.primary.reset();
+        selection.primary_profile =
+            selection.profiles.front();
     } else {
         selection.primary.reset();
+        selection.primary_profile.reset();
     }
 
     applySelectionToSurfaces();

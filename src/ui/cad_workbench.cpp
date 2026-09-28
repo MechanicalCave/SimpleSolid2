@@ -433,12 +433,25 @@ void CadWorkbench::buildUi() {
         [this](
             const std::vector<part::ProfileId>& selected,
             std::optional<part::ProfileId> primary) {
-            if (viewport_controller_) {
-                viewport_controller_->
-                    setProfileSelectionFromTree(
-                        selected,
-                        primary);
+            const auto semantic =
+                selected.size() == 1U && primary
+                    ? primary
+                    : std::nullopt;
+            if (sketch_interaction_controller_) {
+                sketch_interaction_controller_->
+                    setSelectedProfileForCadInput(
+                        semantic);
             }
+            if (primary) {
+                refreshProfileProperties(*primary);
+            } else if (selected_profile_id_) {
+                selected_profile_id_.reset();
+                if (properties_stack_ != nullptr) {
+                    properties_stack_->setCurrentWidget(
+                        document_properties_page_);
+                }
+            }
+            syncSketchInteractionUi();
         });
     viewport_controller_->setProfileSelectionChangedHandler(
         [this](
