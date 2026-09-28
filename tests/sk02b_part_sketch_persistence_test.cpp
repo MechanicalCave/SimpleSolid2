@@ -2,6 +2,7 @@
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/persistence/native_document_container.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -205,6 +206,57 @@ int main() {
         other_local_line.ok() &&
         other_local_line.entity_id.has_value());
 
+    const auto profile_circle =
+        session.execute(
+            application::AddSketchCircleCommand{
+                second_sketch,
+                sketch::Point2{10.0, 10.0},
+                2.0});
+    CHECK(profile_circle.ok());
+    CHECK(profile_circle.entity_id.has_value());
+
+    const auto* profile_source =
+        session.document().findSketch(
+            second_sketch);
+    CHECK(profile_source != nullptr);
+    const auto profile_analysis =
+        sketch::analyzeRegions(
+            profile_source->model);
+    const auto profile_pick =
+        sketch::pickRegion(
+            profile_source->model,
+            profile_analysis,
+            sketch::Point2{10.0, 10.0});
+    CHECK(profile_pick.region_index.has_value());
+    const auto profile_region =
+        std::find_if(
+            profile_analysis.regions.begin(),
+            profile_analysis.regions.end(),
+            [&profile_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *profile_pick.region_index;
+            });
+    CHECK(
+        profile_region !=
+        profile_analysis.regions.end());
+    const auto profile_intent =
+        part::makeProfileRegionIntent(
+            *profile_region);
+    CHECK(profile_intent.has_value());
+
+    const auto profile_created =
+        session.execute(
+            application::CreateProfileCommand{
+                second_sketch,
+                session.document().revision(),
+                *profile_intent});
+    CHECK(profile_created.ok());
+    CHECK(profile_created.profile_id.has_value());
+    CHECK(
+        profile_created.profile_id->serialized() ==
+        "1");
+
     CHECK(line_a.entity_id->serialized() == "1");
     CHECK(line_b.entity_id->serialized() == "2");
     CHECK(
@@ -227,7 +279,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 5);
+            .domain_schema_version == 6);
     CHECK(
         package.package->authored_json.find(
             "\"next_entity_id\"") !=
@@ -235,6 +287,18 @@ int main() {
     CHECK(
         package.package->authored_json.find(
             "\"entities\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
+            "\"next_profile_id\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
+            "\"profiles\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
+            "\"whole_closed_curve\"") !=
         std::string::npos);
 
     auto loaded = store.load(path);
@@ -274,6 +338,24 @@ int main() {
     CHECK(
         *other_local_line.entity_id ==
         *line_a.entity_id);
+    CHECK(
+        loaded.document->profileIdCursor()
+            .serialized() == "2");
+    const auto* loaded_profile =
+        loaded.document->findProfile(
+            *profile_created.profile_id);
+    CHECK(loaded_profile != nullptr);
+    CHECK(
+        loaded_profile->source_sketch_id ==
+        second_sketch);
+    CHECK(
+        loaded_profile->name ==
+        "Profile001");
+    CHECK(
+        loaded.document
+            ->evaluateProfile(
+                *profile_created.profile_id)
+            ->valid());
 
     application::DocumentSession reopened{
         path,
@@ -290,6 +372,18 @@ int main() {
     CHECK(line_c.entity_id.has_value());
     CHECK(line_c.entity_id->serialized() == "3");
     CHECK(*line_c.entity_id != *line_b.entity_id);
+
+    const auto duplicate_profile =
+        reopened.execute(
+            application::CreateProfileCommand{
+                second_sketch,
+                reopened.document().revision(),
+                *profile_intent});
+    CHECK(duplicate_profile.ok());
+    CHECK(duplicate_profile.profile_id.has_value());
+    CHECK(
+        duplicate_profile.profile_id->serialized() ==
+        "2");
 
     const auto legacy_v2_path =
         temp.path / "LegacyV2.ss2part";
@@ -363,7 +457,7 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 5);
+            .domain_schema_version == 6);
     CHECK(
         migrated.package->authored_json.find(
             "\"model\"") !=
@@ -371,6 +465,14 @@ int main() {
     CHECK(
         migrated.package->authored_json.find(
             "\"next_entity_id\"") !=
+        std::string::npos);
+    CHECK(
+        migrated.package->authored_json.find(
+            "\"next_profile_id\"") !=
+        std::string::npos);
+    CHECK(
+        migrated.package->authored_json.find(
+            "\"profiles\"") !=
         std::string::npos);
 
     CHECK(malformedV3ModelRejected(

@@ -322,6 +322,11 @@ referencedEntities(
 
 } // namespace
 
+bool profileRegionIntentStructurallyValid(
+    const ProfileRegionIntent& intent) noexcept {
+    return validIntent(intent);
+}
+
 std::optional<ProfileRegionIntent>
 makeProfileRegionIntent(
     const sketch::RegionCandidate2D& region) {

@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <set>
 #include <string>
 #include <string_view>
@@ -119,6 +120,77 @@ nlohmann::json pointJson(
         {value.u, value.v});
 }
 
+const char* profileAnchorKindName(
+    ProfileBoundaryAnchorKind kind) noexcept {
+    switch (kind) {
+    case ProfileBoundaryAnchorKind::endpoint_start:
+        return "endpoint_start";
+    case ProfileBoundaryAnchorKind::endpoint_end:
+        return "endpoint_end";
+    case ProfileBoundaryAnchorKind::intersection:
+        return "intersection";
+    }
+    return "";
+}
+
+nlohmann::json profileAnchorJson(
+    const ProfileBoundaryAnchor& anchor) {
+    if (anchor.kind ==
+        ProfileBoundaryAnchorKind::intersection) {
+        return nlohmann::json{
+            {"kind", profileAnchorKindName(anchor.kind)},
+            {"other_entity",
+             anchor.other_entity.serialized()},
+            {"branch", anchor.canonical_branch},
+        };
+    }
+    return nlohmann::json{
+        {"kind", profileAnchorKindName(anchor.kind)},
+    };
+}
+
+nlohmann::json profileUseJson(
+    const ProfileBoundaryUseIntent& use) {
+    nlohmann::json result{
+        {"source_entity",
+         use.source_entity.serialized()},
+        {"follows_source_direction",
+         use.follows_source_direction},
+        {"whole_closed_curve",
+         use.whole_closed_curve},
+    };
+    if (!use.whole_closed_curve) {
+        result["start_anchor"] =
+            profileAnchorJson(*use.start_anchor);
+        result["end_anchor"] =
+            profileAnchorJson(*use.end_anchor);
+    }
+    return result;
+}
+
+nlohmann::json profileLoopJson(
+    const ProfileLoopIntent& loop) {
+    nlohmann::json result =
+        nlohmann::json::array();
+    for (const auto& use : loop.boundary) {
+        result.push_back(profileUseJson(use));
+    }
+    return result;
+}
+
+nlohmann::json profileIntentJson(
+    const ProfileRegionIntent& intent) {
+    nlohmann::json holes =
+        nlohmann::json::array();
+    for (const auto& hole : intent.holes) {
+        holes.push_back(profileLoopJson(hole));
+    }
+    return nlohmann::json{
+        {"outer", profileLoopJson(intent.outer)},
+        {"holes", std::move(holes)},
+    };
+}
+
 std::string serializeAuthored(
     const PartDocument& document) {
     const auto& properties =
@@ -194,6 +266,25 @@ std::string serializeAuthored(
             });
     }
 
+    nlohmann::json profiles =
+        nlohmann::json::array();
+    for (const auto& profile :
+         document.profiles()) {
+        profiles.push_back(
+            {
+                {"id",
+                 profile.id.serialized()},
+                {"source_sketch_id",
+                 std::string{
+                     profile.source_sketch_id.value()}},
+                {"name", profile.name},
+                {"visible", profile.visible},
+                {"region_intent",
+                 profileIntentJson(
+                     profile.region_intent)},
+            });
+    }
+
     nlohmann::json authored{
         {"properties",
          {
@@ -211,6 +302,9 @@ std::string serializeAuthored(
                       .builtin_references.mask())},
          }},
         {"sketches", std::move(sketches)},
+        {"next_profile_id",
+         document.profileIdCursor().serialized()},
+        {"profiles", std::move(profiles)},
     };
 
     std::string text = authored.dump(2);
@@ -695,6 +789,296 @@ bool parseSketches(
     return true;
 }
 
+std::optional<std::uint32_t> parseUint32(
+    const nlohmann::json& value) {
+    std::uint64_t parsed{};
+    if (value.is_number_unsigned()) {
+        parsed = value.get<std::uint64_t>();
+    } else if (value.is_number_integer()) {
+        const auto signed_value =
+            value.get<std::int64_t>();
+        if (signed_value < 0) {
+            return std::nullopt;
+        }
+        parsed =
+            static_cast<std::uint64_t>(
+                signed_value);
+    } else {
+        return std::nullopt;
+    }
+    if (parsed >
+        std::numeric_limits<std::uint32_t>::max()) {
+        return std::nullopt;
+    }
+    return static_cast<std::uint32_t>(parsed);
+}
+
+std::optional<ProfileBoundaryAnchor>
+parseProfileAnchor(
+    const nlohmann::json& value,
+    std::string& error) {
+    if (!value.is_object() ||
+        !value.contains("kind") ||
+        !value["kind"].is_string()) {
+        error =
+            "Native Part contains malformed Profile boundary anchor";
+        return std::nullopt;
+    }
+
+    const auto kind =
+        value["kind"].get<std::string>();
+    if (kind == "endpoint_start" ||
+        kind == "endpoint_end") {
+        if (value.size() != 1U) {
+            error =
+                "Native Part endpoint Profile anchor has unexpected fields";
+            return std::nullopt;
+        }
+        return ProfileBoundaryAnchor{
+            kind == "endpoint_start"
+                ? ProfileBoundaryAnchorKind::
+                      endpoint_start
+                : ProfileBoundaryAnchorKind::
+                      endpoint_end,
+            {},
+            0U};
+    }
+
+    if (kind != "intersection" ||
+        value.size() != 3U ||
+        !value.contains("other_entity") ||
+        !value.contains("branch") ||
+        !value["other_entity"].is_string()) {
+        error =
+            "Native Part contains malformed Profile intersection anchor";
+        return std::nullopt;
+    }
+
+    const auto other =
+        sketch::EntityId::parse(
+            value["other_entity"]
+                .get<std::string>());
+    const auto branch =
+        parseUint32(value["branch"]);
+    if (!other || !branch) {
+        error =
+            "Native Part contains invalid Profile intersection anchor";
+        return std::nullopt;
+    }
+
+    return ProfileBoundaryAnchor{
+        ProfileBoundaryAnchorKind::intersection,
+        *other,
+        *branch};
+}
+
+std::optional<ProfileBoundaryUseIntent>
+parseProfileUse(
+    const nlohmann::json& value,
+    std::string& error) {
+    if (!value.is_object() ||
+        !value.contains("source_entity") ||
+        !value.contains(
+            "follows_source_direction") ||
+        !value.contains(
+            "whole_closed_curve") ||
+        !value["source_entity"].is_string() ||
+        !value["follows_source_direction"]
+             .is_boolean() ||
+        !value["whole_closed_curve"]
+             .is_boolean()) {
+        error =
+            "Native Part contains malformed Profile boundary use";
+        return std::nullopt;
+    }
+
+    const auto source =
+        sketch::EntityId::parse(
+            value["source_entity"]
+                .get<std::string>());
+    if (!source) {
+        error =
+            "Native Part contains invalid Profile source EntityId";
+        return std::nullopt;
+    }
+
+    ProfileBoundaryUseIntent result;
+    result.source_entity = *source;
+    result.follows_source_direction =
+        value["follows_source_direction"]
+            .get<bool>();
+    result.whole_closed_curve =
+        value["whole_closed_curve"]
+            .get<bool>();
+
+    if (result.whole_closed_curve) {
+        if (value.size() != 3U) {
+            error =
+                "Native Part whole-curve Profile use has unexpected anchors";
+            return std::nullopt;
+        }
+        return result;
+    }
+
+    if (value.size() != 5U ||
+        !value.contains("start_anchor") ||
+        !value.contains("end_anchor")) {
+        error =
+            "Native Part open Profile boundary use is missing anchors";
+        return std::nullopt;
+    }
+
+    result.start_anchor =
+        parseProfileAnchor(
+            value["start_anchor"],
+            error);
+    if (!result.start_anchor) {
+        return std::nullopt;
+    }
+    result.end_anchor =
+        parseProfileAnchor(
+            value["end_anchor"],
+            error);
+    if (!result.end_anchor) {
+        return std::nullopt;
+    }
+    return result;
+}
+
+std::optional<ProfileLoopIntent>
+parseProfileLoop(
+    const nlohmann::json& value,
+    std::string& error) {
+    if (!value.is_array() ||
+        value.empty()) {
+        error =
+            "Native Part contains malformed Profile loop";
+        return std::nullopt;
+    }
+
+    ProfileLoopIntent result;
+    result.boundary.reserve(value.size());
+    for (const auto& item : value) {
+        auto use =
+            parseProfileUse(item, error);
+        if (!use) {
+            return std::nullopt;
+        }
+        result.boundary.push_back(
+            std::move(*use));
+    }
+    return result;
+}
+
+std::optional<ProfileRegionIntent>
+parseProfileIntent(
+    const nlohmann::json& value,
+    std::string& error) {
+    if (!value.is_object() ||
+        value.size() != 2U ||
+        !value.contains("outer") ||
+        !value.contains("holes") ||
+        !value["holes"].is_array()) {
+        error =
+            "Native Part contains malformed Profile RegionIntent";
+        return std::nullopt;
+    }
+
+    auto outer =
+        parseProfileLoop(
+            value["outer"],
+            error);
+    if (!outer) {
+        return std::nullopt;
+    }
+
+    ProfileRegionIntent result;
+    result.outer = std::move(*outer);
+    result.holes.reserve(
+        value["holes"].size());
+    for (const auto& hole_json :
+         value["holes"]) {
+        auto hole =
+            parseProfileLoop(
+                hole_json,
+                error);
+        if (!hole) {
+            return std::nullopt;
+        }
+        result.holes.push_back(
+            std::move(*hole));
+    }
+
+    if (!profileRegionIntentStructurallyValid(
+            result)) {
+        error =
+            "Native Part Profile RegionIntent violates structural invariants";
+        return std::nullopt;
+    }
+    return result;
+}
+
+bool parseProfiles(
+    const nlohmann::json& value,
+    ProfileIdCursor cursor,
+    std::vector<PartProfile>& profiles,
+    std::string& error) {
+    if (!value.is_array()) {
+        error =
+            "Native Part profiles payload is invalid";
+        return false;
+    }
+
+    profiles.clear();
+    profiles.reserve(value.size());
+    for (const auto& item : value) {
+        if (!item.is_object() ||
+            item.size() != 5U ||
+            !item.contains("id") ||
+            !item.contains("source_sketch_id") ||
+            !item.contains("name") ||
+            !item.contains("visible") ||
+            !item.contains("region_intent") ||
+            !item["id"].is_string() ||
+            !item["source_sketch_id"].is_string() ||
+            !item["name"].is_string() ||
+            !item["visible"].is_boolean()) {
+            error =
+                "Native Part contains malformed Profile record";
+            return false;
+        }
+
+        const auto id =
+            ProfileId::parse(
+                item["id"].get<std::string>());
+        const auto sketch_id =
+            sketch::SketchId::parse(
+                item["source_sketch_id"]
+                    .get<std::string>());
+        auto intent =
+            parseProfileIntent(
+                item["region_intent"],
+                error);
+        if (!id || !sketch_id || !intent ||
+            !cursor.containsAllocated(*id)) {
+            if (error.empty()) {
+                error =
+                    "Native Part contains invalid Profile identity/reference";
+            }
+            return false;
+        }
+
+        profiles.push_back(
+            PartProfile{
+                *id,
+                std::move(*sketch_id),
+                item["name"].get<std::string>(),
+                item["visible"].get<bool>(),
+                std::move(*intent)});
+    }
+    return true;
+}
+
 std::optional<PartAuthoredState> parseAuthored(
     const std::string& text,
     int schema_version,
@@ -707,8 +1091,12 @@ std::optional<PartAuthoredState> parseAuthored(
 
     const bool legacy_v1 =
         schema_version == 1;
+    const bool has_profiles =
+        schema_version >= 6;
     const std::size_t expected_fields =
-        legacy_v1 ? 2U : 3U;
+        legacy_v1
+            ? 2U
+            : (has_profiles ? 5U : 3U);
 
     if (authored.is_discarded() ||
         !authored.is_object() ||
@@ -716,7 +1104,10 @@ std::optional<PartAuthoredState> parseAuthored(
         !authored.contains("properties") ||
         !authored.contains("presentation") ||
         (!legacy_v1 &&
-         !authored.contains("sketches"))) {
+         !authored.contains("sketches")) ||
+        (has_profiles &&
+         (!authored.contains("next_profile_id") ||
+          !authored.contains("profiles")))) {
         error =
             "Native Part authored payload has an invalid top-level schema";
         return std::nullopt;
@@ -789,6 +1180,31 @@ std::optional<PartAuthoredState> parseAuthored(
             state.sketches,
             error)) {
         return std::nullopt;
+    }
+
+    if (has_profiles) {
+        if (!authored["next_profile_id"].is_string()) {
+            error =
+                "Native Part next_profile_id is invalid";
+            return std::nullopt;
+        }
+        const auto cursor =
+            ProfileIdCursor::parse(
+                authored["next_profile_id"]
+                    .get<std::string>());
+        if (!cursor) {
+            error =
+                "Native Part next_profile_id is invalid";
+            return std::nullopt;
+        }
+        state.next_profile_id = *cursor;
+        if (!parseProfiles(
+                authored["profiles"],
+                *cursor,
+                state.profiles,
+                error)) {
+            return std::nullopt;
+        }
     }
 
     return state;
@@ -983,6 +1399,7 @@ PartLoadResult PartDocumentStore::load(
         descriptor.domain_schema_version != 2 &&
         descriptor.domain_schema_version != 3 &&
         descriptor.domain_schema_version != 4 &&
+        descriptor.domain_schema_version != 5 &&
         descriptor.domain_schema_version !=
             current_schema_version) {
         return loadFailure(

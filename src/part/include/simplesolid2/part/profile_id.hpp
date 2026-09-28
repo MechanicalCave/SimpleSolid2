@@ -53,6 +53,12 @@ public:
     void preserve(
         ProfileIdCursor observed) noexcept;
 
+    [[nodiscard]] constexpr bool containsAllocated(
+        ProfileId id) const noexcept {
+        return id.valid() &&
+               id.value_ < next_value_;
+    }
+
     friend bool operator==(
         const ProfileIdCursor&,
         const ProfileIdCursor&) = default;

@@ -3,10 +3,12 @@
 #include <simplesolid2/part/profile_id.hpp>
 #include <simplesolid2/sketch/entity_id.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
+#include <simplesolid2/sketch/sketch_id.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
 
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace simplesolid2::part {
@@ -57,6 +59,18 @@ struct ProfileRegionIntent final {
         const ProfileRegionIntent&) = default;
 };
 
+struct PartProfile final {
+    ProfileId id;
+    sketch::SketchId source_sketch_id;
+    std::string name;
+    bool visible{true};
+    ProfileRegionIntent region_intent;
+
+    friend bool operator==(
+        const PartProfile&,
+        const PartProfile&) = default;
+};
+
 enum class ProfileIntentResolutionStatus {
     valid,
     invalid_intent,
@@ -76,6 +90,10 @@ struct ResolvedProfileRegion final {
                region.has_value();
     }
 };
+
+[[nodiscard]] bool
+profileRegionIntentStructurallyValid(
+    const ProfileRegionIntent& intent) noexcept;
 
 // Converts derived Shared-2D topology to durable Part intent. Parameters,
 // coordinates, Viewer tokens and tessellation are deliberately discarded.

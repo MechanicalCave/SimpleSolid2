@@ -308,7 +308,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor.domain_schema_version ==
-        5);
+        6);
     CHECK(
         package.package->authored_json.find(
             "\"kind\": \"circle\"") !=

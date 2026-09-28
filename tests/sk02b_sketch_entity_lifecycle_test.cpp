@@ -1,6 +1,8 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/part/profile.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -312,6 +314,218 @@ int main() {
             .findSketch(sketch_id)
             ->model
             .findLine(*branched.entity_id) ==
+        nullptr);
+
+
+    // Package F durable Profile lifecycle.
+    const auto profile_circle =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                sketch::Point2{20.0, 20.0},
+                2.0});
+    CHECK(profile_circle.ok());
+    CHECK(profile_circle.entity_id.has_value());
+
+    const auto* profile_sketch =
+        session.document().findSketch(sketch_id);
+    CHECK(profile_sketch != nullptr);
+    const auto region_analysis =
+        sketch::analyzeRegions(
+            profile_sketch->model);
+    const auto region_pick =
+        sketch::pickRegion(
+            profile_sketch->model,
+            region_analysis,
+            sketch::Point2{20.0, 20.0});
+    CHECK(region_pick.region_index.has_value());
+    const auto region_it =
+        std::find_if(
+            region_analysis.regions.begin(),
+            region_analysis.regions.end(),
+            [&region_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *region_pick.region_index;
+            });
+    CHECK(region_it != region_analysis.regions.end());
+    const auto region_intent =
+        part::makeProfileRegionIntent(*region_it);
+    CHECK(region_intent.has_value());
+
+    const auto create_profile =
+        session.execute(
+            application::CreateProfileCommand{
+                sketch_id,
+                session.document().revision(),
+                *region_intent});
+    CHECK(create_profile.ok());
+    CHECK(create_profile.changed);
+    CHECK(create_profile.profile_id.has_value());
+    CHECK(
+        create_profile.profile_id->serialized() ==
+        "1");
+    const auto first_profile_id =
+        *create_profile.profile_id;
+    CHECK(
+        session.document()
+            .findProfile(first_profile_id) !=
+        nullptr);
+    CHECK(
+        session.document()
+            .findProfile(first_profile_id)
+            ->name == "Profile001");
+    CHECK(
+        session.document()
+            .evaluateProfile(first_profile_id)
+            ->valid());
+
+    CHECK(session.undo().changed);
+    CHECK(
+        session.document()
+            .findProfile(first_profile_id) ==
+        nullptr);
+    CHECK(
+        session.document()
+            .profileIdCursor()
+            .serialized() == "2");
+    CHECK(session.redo().changed);
+    CHECK(
+        session.document()
+            .findProfile(first_profile_id) !=
+        nullptr);
+    CHECK(session.undo().changed);
+
+    // Branching after Undo must not reuse committed ProfileId 1.
+    const auto create_profile_2 =
+        session.execute(
+            application::CreateProfileCommand{
+                sketch_id,
+                session.document().revision(),
+                *region_intent});
+    CHECK(create_profile_2.ok());
+    CHECK(create_profile_2.profile_id.has_value());
+    CHECK(
+        create_profile_2.profile_id->serialized() ==
+        "2");
+    CHECK(!session.canRedo());
+    const auto second_profile_id =
+        *create_profile_2.profile_id;
+
+    // Explicit rename/visibility keeps identity.
+    CHECK(
+        session.execute(
+            application::SetProfilePropertiesCommand{
+                second_profile_id,
+                session.document().revision(),
+                "Main plate",
+                false})
+            .ok());
+    CHECK(
+        session.document()
+            .findProfile(second_profile_id)
+            ->name == "Main plate");
+    CHECK(
+        !session.document()
+             .findProfile(second_profile_id)
+             ->visible);
+
+    // Source-geometry changes may invalidate evaluation without mutating
+    // Profile identity or RegionIntent.
+    CHECK(
+        session.execute(
+            application::SetSketchEntityRoleCommand{
+                sketch_id,
+                session.document().revision(),
+                {*profile_circle.entity_id},
+                sketch::EntityRole::construction})
+            .ok());
+    CHECK(
+        !session.document()
+             .evaluateProfile(second_profile_id)
+             ->valid());
+    CHECK(
+        session.document()
+            .findProfile(second_profile_id) !=
+        nullptr);
+    CHECK(
+        session.execute(
+            application::SetSketchEntityRoleCommand{
+                sketch_id,
+                session.document().revision(),
+                {*profile_circle.entity_id},
+                sketch::EntityRole::regular})
+            .ok());
+    CHECK(
+        session.document()
+            .evaluateProfile(second_profile_id)
+            ->valid());
+
+    // Explicit Edit Profile may replace RegionIntent while preserving id.
+    const auto profile_circle_2 =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                sketch::Point2{30.0, 20.0},
+                1.0});
+    CHECK(profile_circle_2.ok());
+    const auto* edit_sketch =
+        session.document().findSketch(sketch_id);
+    const auto edit_analysis =
+        sketch::analyzeRegions(
+            edit_sketch->model);
+    const auto edit_pick =
+        sketch::pickRegion(
+            edit_sketch->model,
+            edit_analysis,
+            sketch::Point2{30.0, 20.0});
+    CHECK(edit_pick.region_index.has_value());
+    const auto edit_region =
+        std::find_if(
+            edit_analysis.regions.begin(),
+            edit_analysis.regions.end(),
+            [&edit_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *edit_pick.region_index;
+            });
+    CHECK(edit_region != edit_analysis.regions.end());
+    const auto edit_intent =
+        part::makeProfileRegionIntent(
+            *edit_region);
+    CHECK(edit_intent.has_value());
+
+    CHECK(
+        session.execute(
+            application::ReplaceProfileRegionIntentCommand{
+                second_profile_id,
+                session.document().revision(),
+                *edit_intent})
+            .ok());
+    CHECK(
+        session.document()
+            .findProfile(second_profile_id)
+            ->region_intent == *edit_intent);
+    CHECK(
+        session.document()
+            .evaluateProfile(second_profile_id)
+            ->valid());
+
+    const auto delete_profile =
+        session.execute(
+            application::DeleteProfileCommand{
+                second_profile_id,
+                session.document().revision()});
+    CHECK(delete_profile.ok());
+    CHECK(delete_profile.changed);
+    CHECK(
+        session.document()
+            .findProfile(second_profile_id) ==
+        nullptr);
+    CHECK(session.undo().changed);
+    CHECK(
+        session.document()
+            .findProfile(second_profile_id) !=
         nullptr);
 
     return EXIT_SUCCESS;
