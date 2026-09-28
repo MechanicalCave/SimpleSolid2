@@ -152,6 +152,7 @@ private:
 
     void showFailure(
         const application::DocumentSessionDiagnostic& diagnostic);
+    void setStatusText(const QString& message);
 
     application::DocumentSession* document_session_{};
     std::filesystem::path workspace_root_;
