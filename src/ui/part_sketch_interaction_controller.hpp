@@ -3,6 +3,7 @@
 #include "part_viewport_controller.hpp"
 
 #include <simplesolid2/application/cad_input.hpp>
+#include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 
@@ -15,7 +16,8 @@
 
 namespace simplesolid2::ui {
 
-class PartSketchInteractionController final {
+class PartSketchInteractionController final
+    : public application::ISketchCadInputSemanticTarget {
 public:
     using StateChangedHandler = std::function<void()>;
     using StatusHandler = std::function<void(const std::string&)>;
@@ -47,6 +49,21 @@ public:
         return cad_input_context_generation_;
     }
     [[nodiscard]] bool submitDirectDistance(double distance);
+
+    [[nodiscard]] bool cadInputSemanticActive() const noexcept override {
+        return active();
+    }
+    [[nodiscard]] std::optional<sketch::PointRequest>
+    cadInputSemanticPointRequest() const noexcept override {
+        return activePointRequest();
+    }
+    [[nodiscard]] bool activateCadInputSemanticTool(
+        sketch::SketchTool tool) override;
+    [[nodiscard]] bool submitCadInputSemanticDirectDistance(
+        double distance) override {
+        return submitDirectDistance(distance);
+    }
+
     [[nodiscard]] std::size_t selectedCount() const noexcept;
     [[nodiscard]] bool directManipulationActive()
         const noexcept;

@@ -4,6 +4,8 @@
 #include "part_sketch_interaction_controller.hpp"
 #include "part_viewport_controller.hpp"
 
+#include <simplesolid2/application/cad_input_semantics.hpp>
+
 #include <QEvent>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -43,57 +45,6 @@ QString fromUtf8(std::string_view value) {
     return QString::fromUtf8(
         value.data(),
         static_cast<qsizetype>(value.size()));
-}
-
-std::optional<double> parseBareSketchDistance(
-    const QString& text,
-    const QLocale& locale = QLocale{}) {
-    const QString trimmed = text.trimmed();
-    if (trimmed.isEmpty()) {
-        return std::nullopt;
-    }
-
-    const QString locale_decimal = locale.decimalPoint();
-    QString normalized = trimmed;
-    if (locale_decimal != QStringLiteral(".")) {
-        if (normalized.contains(QLatin1Char('.')) &&
-            normalized.contains(locale_decimal)) {
-            return std::nullopt;
-        }
-        normalized.replace(
-            locale_decimal,
-            QStringLiteral("."));
-    }
-
-    bool saw_digit = false;
-    bool saw_decimal = false;
-    for (const QChar ch : normalized) {
-        if (ch.isDigit()) {
-            saw_digit = true;
-            continue;
-        }
-
-        if (ch == QLatin1Char('.') && !saw_decimal) {
-            saw_decimal = true;
-            continue;
-        }
-
-        // SK-07F deliberately rejects signs, grouping separators,
-        // units, tuples, polar syntax and exponent notation.
-        return std::nullopt;
-    }
-
-    if (!saw_digit) {
-        return std::nullopt;
-    }
-
-    bool ok = false;
-    const double value =
-        QLocale::c().toDouble(normalized, &ok);
-    if (!ok || !std::isfinite(value) || value < 0.0) {
-        return std::nullopt;
-    }
-    return value;
 }
 
 QString fromFilesystemPath(const std::filesystem::path& value) {
@@ -1244,109 +1195,26 @@ CadWorkbench::submitCadInput(
     std::string_view text,
     application::CadInputContextGeneration
         expected_context_generation) {
-    if (expected_context_generation !=
-        cadInputContextGeneration()) {
-        return {
-            false,
-            "CAD input semantic context is stale."};
+    if (expected_context_generation != cadInputContextGeneration()) {
+        return {false, "CAD input semantic context is stale."};
     }
-    if (!sketch_interaction_controller_ ||
-        !sketch_interaction_controller_->active()) {
-        return {
-            false,
-            "No active CAD command context."};
+    if (!sketch_interaction_controller_) {
+        return {false, "No active CAD command context."};
     }
 
-    const auto submitted =
-        fromUtf8(text).trimmed();
-    if (submitted.isEmpty()) {
-        return {
-            false,
-            "CAD input is empty."};
+    application::SketchCadInputSemanticEndpoint endpoint{
+        *sketch_interaction_controller_,
+        application::CadInputNumberFormat{
+            toUtf8(QLocale{}.decimalPoint())}};
+
+    auto result = endpoint.submit(text);
+    if (!result.accepted &&
+        status_ != nullptr &&
+        !result.diagnostic.empty()) {
+        status_->setText(fromUtf8(result.diagnostic));
     }
-
-    const auto reject =
-        [this](QString message) {
-            if (status_ != nullptr) {
-                status_->setText(message);
-            }
-            return application::CadInputSubmitResult{
-                false,
-                toUtf8(message)};
-        };
-
-    if (const auto request =
-            sketch_interaction_controller_->
-                activePointRequest()) {
-        const auto distance =
-            parseBareSketchDistance(submitted);
-        if (!distance) {
-            return reject(
-                QStringLiteral(
-                    "Active point input expects a bare finite distance."));
-        }
-        if (!request->direct_distance_enabled) {
-            return reject(
-                QStringLiteral(
-                    "Direct Distance is not available at this point stage."));
-        }
-        if (!sketch_interaction_controller_->
-                submitDirectDistance(*distance)) {
-            return reject(
-                QStringLiteral(
-                    "Direct Distance could not be resolved."));
-        }
-
-        return {true, {}};
-    }
-
-    const auto command = submitted.toUpper();
-    std::optional<sketch::SketchTool>
-        expected_tool;
-
-    if (command == QStringLiteral("SELECT")) {
-        activateSketchSelect();
-        expected_tool = sketch::SketchTool::select;
-    } else if (command == QStringLiteral("LINE")) {
-        activateSketchLine();
-        expected_tool = sketch::SketchTool::line;
-    } else if (command == QStringLiteral("CIRCLE")) {
-        activateSketchCircle();
-        expected_tool = sketch::SketchTool::circle;
-    } else if (command == QStringLiteral("ARC")) {
-        activateSketchArc();
-        expected_tool = sketch::SketchTool::arc;
-    } else if (command == QStringLiteral("MOVE")) {
-        activateSketchMove();
-        expected_tool = sketch::SketchTool::move;
-    } else if (command == QStringLiteral("COPY")) {
-        activateSketchCopy();
-        expected_tool = sketch::SketchTool::copy;
-    } else if (command == QStringLiteral("ROTATE")) {
-        activateSketchRotate();
-        expected_tool = sketch::SketchTool::rotate;
-    } else if (command == QStringLiteral("SCALE")) {
-        activateSketchScale();
-        expected_tool = sketch::SketchTool::scale;
-    } else if (command == QStringLiteral("MIRROR")) {
-        activateSketchMirror();
-        expected_tool = sketch::SketchTool::mirror;
-    } else {
-        return reject(
-            QStringLiteral("Unknown Sketch command."));
-    }
-
-    if (!expected_tool ||
-        sketch_interaction_controller_->tool() !=
-            *expected_tool) {
-        return reject(
-            QStringLiteral(
-                "CAD command could not be activated."));
-    }
-
-    return {true, {}};
+    return result;
 }
-
 QString CadWorkbench::cadInputPromptText() const {
     if (!sketch_interaction_controller_ ||
         !sketch_interaction_controller_->active()) {
