@@ -1,6 +1,6 @@
 # E1 — Geometry Numerical Stability
 
-**Status:** COMPLETED  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-28  
 **Owner acceptance:** 2026-09-28  
 **Decision class:** D1 numerical implementation within existing Sketch semantics; stop for Owner D2/D3 amendment if tolerance/coordinate/product validity semantics must change  
@@ -382,3 +382,9 @@ Completion evidence:
 E1 is **CONFIRMED / IMPLEMENTED / VERIFIED / COMPLETED**. Remaining lifecycle work is work-only CLOSURE verification and merge.
 
 After merge, AUDIT-01 schedules E2 next. E1 completion does not activate E2 or F.
+
+## 24. Closeout verification continuation
+
+The first completion-record commit did not receive the required CLOSURE tier because documentation changes after the last trusted FULL kept the classifier in docs mode (#715). E1 is therefore temporarily returned to ACTIVE verification status.
+
+No production correction is reopened. The only remaining runtime-adjacent mutation is test evidence already required by this contract: explicit Arc preview/accepted-intent parity and explicit validation that the authored Start point matches the returned `start_angle`. This test-only mutation must obtain a new FULL on the documentation-complete branch before closeout is attempted again.
