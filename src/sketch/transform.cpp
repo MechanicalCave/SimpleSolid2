@@ -129,7 +129,8 @@ captureSketchTransformGeometry(
                 SketchLineState{
                     line->id(),
                     line->start(),
-                    line->end()});
+                    line->end(),
+                    line->role()});
             continue;
         }
 
@@ -138,7 +139,8 @@ captureSketchTransformGeometry(
                 SketchCircleState{
                     circle->id(),
                     circle->center(),
-                    circle->radius()});
+                    circle->radius(),
+                    circle->role()});
             continue;
         }
 
@@ -149,7 +151,8 @@ captureSketchTransformGeometry(
                     arc->center(),
                     arc->radius(),
                     arc->startAngle(),
-                    arc->sweepAngle()});
+                    arc->sweepAngle(),
+                    arc->role()});
             continue;
         }
 

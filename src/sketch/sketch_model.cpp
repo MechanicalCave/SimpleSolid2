@@ -14,6 +14,12 @@ namespace {
 constexpr double full_turn =
     2.0 * std::numbers::pi_v<double>;
 
+[[nodiscard]] bool validEntityRole(
+    EntityRole role) noexcept {
+    return role == EntityRole::regular ||
+           role == EntityRole::construction;
+}
+
 [[nodiscard]] bool validCircleGeometry(
     Point2 center,
     double radius) noexcept {
@@ -50,7 +56,13 @@ EntityId SketchModel::allocateEntityId() {
 
 EntityId SketchModel::addLine(
     Point2 start,
-    Point2 end) {
+    Point2 end,
+    EntityRole role) {
+    if (!validEntityRole(role)) {
+        throw std::invalid_argument{
+            "Sketch EntityRole is invalid"};
+    }
+
     if (!start.finite() || !end.finite()) {
         throw std::invalid_argument{
             "Sketch Line coordinates must be finite"};
@@ -62,20 +74,25 @@ EntityId SketchModel::addLine(
     }
 
     const auto id = allocateEntityId();
-    lines_.push_back(Line{id, start, end});
+    lines_.push_back(Line{id, start, end, role});
     return id;
 }
 
 EntityId SketchModel::addCircle(
     Point2 center,
-    double radius) {
+    double radius,
+    EntityRole role) {
+    if (!validEntityRole(role)) {
+        throw std::invalid_argument{
+            "Sketch EntityRole is invalid"};
+    }
     if (!validCircleGeometry(center, radius)) {
         throw std::invalid_argument{
             "Sketch Circle center/radius must be finite and radius positive"};
     }
 
     const auto id = allocateEntityId();
-    circles_.push_back(Circle{id, center, radius});
+    circles_.push_back(Circle{id, center, radius, role});
     return id;
 }
 
@@ -83,7 +100,12 @@ EntityId SketchModel::addArc(
     Point2 center,
     double radius,
     double start_angle,
-    double sweep_angle) {
+    double sweep_angle,
+    EntityRole role) {
+    if (!validEntityRole(role)) {
+        throw std::invalid_argument{
+            "Sketch EntityRole is invalid"};
+    }
     if (!validArcGeometry(
             center,
             radius,
@@ -100,7 +122,8 @@ EntityId SketchModel::addArc(
             center,
             radius,
             start_angle,
-            sweep_angle});
+            sweep_angle,
+            role});
     return id;
 }
 
@@ -187,7 +210,7 @@ bool SketchModel::updateLine(
         return false;
     }
 
-    *found = Line{id, start, end};
+    *found = Line{id, start, end, found->role()};
     return true;
 }
 
@@ -211,7 +234,7 @@ bool SketchModel::updateCircle(
         return false;
     }
 
-    *found = Circle{id, center, radius};
+    *found = Circle{id, center, radius, found->role()};
     return true;
 }
 
@@ -246,8 +269,19 @@ bool SketchModel::updateArc(
         center,
         radius,
         start_angle,
-        sweep_angle};
+        sweep_angle,
+        found->role()};
     return true;
+}
+
+bool SketchModel::setEntityRole(
+    EntityId id,
+    EntityRole role) noexcept {
+    if (!id.valid() || !validEntityRole(role)) return false;
+    if (auto it=std::find_if(lines_.begin(),lines_.end(),[id](const Line& v){return v.id()==id;}); it!=lines_.end()) { *it=Line{it->id(),it->start(),it->end(),role}; return true; }
+    if (auto it=std::find_if(circles_.begin(),circles_.end(),[id](const Circle& v){return v.id()==id;}); it!=circles_.end()) { *it=Circle{it->id(),it->center(),it->radius(),role}; return true; }
+    if (auto it=std::find_if(arcs_.begin(),arcs_.end(),[id](const Arc& v){return v.id()==id;}); it!=arcs_.end()) { *it=Arc{it->id(),it->center(),it->radius(),it->startAngle(),it->sweepAngle(),role}; return true; }
+    return false;
 }
 
 bool SketchModel::erase(
@@ -312,14 +346,16 @@ SketchModelState SketchModel::state() const {
             SketchLineState{
                 line.id(),
                 line.start(),
-                line.end()});
+                line.end(),
+                line.role()});
     }
     for (const auto& circle : circles_) {
         result.circles.push_back(
             SketchCircleState{
                 circle.id(),
                 circle.center(),
-                circle.radius()});
+                circle.radius(),
+                circle.role()});
     }
     for (const auto& arc : arcs_) {
         result.arcs.push_back(
@@ -328,7 +364,8 @@ SketchModelState SketchModel::state() const {
                 arc.center(),
                 arc.radius(),
                 arc.startAngle(),
-                arc.sweepAngle()});
+                arc.sweepAngle(),
+                arc.role()});
     }
 
     return result;
@@ -353,6 +390,7 @@ std::optional<SketchModel> SketchModel::restore(
 
     for (const auto& item : state.lines) {
         if (!valid_id(item.id) ||
+            !validEntityRole(item.role) ||
             !item.start.finite() ||
             !item.end.finite() ||
             item.start == item.end) {
@@ -363,11 +401,13 @@ std::optional<SketchModel> SketchModel::restore(
             Line{
                 item.id,
                 item.start,
-                item.end});
+                item.end,
+                item.role});
     }
 
     for (const auto& item : state.circles) {
         if (!valid_id(item.id) ||
+            !validEntityRole(item.role) ||
             !validCircleGeometry(
                 item.center,
                 item.radius)) {
@@ -378,11 +418,13 @@ std::optional<SketchModel> SketchModel::restore(
             Circle{
                 item.id,
                 item.center,
-                item.radius});
+                item.radius,
+                item.role});
     }
 
     for (const auto& item : state.arcs) {
         if (!valid_id(item.id) ||
+            !validEntityRole(item.role) ||
             !validArcGeometry(
                 item.center,
                 item.radius,
@@ -397,7 +439,8 @@ std::optional<SketchModel> SketchModel::restore(
                 item.center,
                 item.radius,
                 item.start_angle,
-                item.sweep_angle});
+                item.sweep_angle,
+                item.role});
     }
 
     model.next_entity_value_ =
