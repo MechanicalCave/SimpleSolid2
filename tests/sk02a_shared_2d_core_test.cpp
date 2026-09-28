@@ -1,7 +1,10 @@
+#include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
 
+#include <cmath>
 #include <iostream>
 #include <limits>
+#include <numbers>
 #include <stdexcept>
 
 namespace {
@@ -141,6 +144,269 @@ int main() {
         (void)model.addLine(Point2{7.0, 7.0}, Point2{7.0, 7.0});
     }));
     CHECK(model.entityCount() == before_invalid);
+
+
+    // F region-analysis seam: relation classification is provider-neutral,
+    // canonical by EntityId and independent from Viewer tessellation.
+    SketchModel relations;
+    const auto horizontal =
+        relations.addLine(
+            Point2{-2.0, 0.0},
+            Point2{2.0, 0.0});
+    const auto vertical =
+        relations.addLine(
+            Point2{0.0, -2.0},
+            Point2{0.0, 2.0});
+
+    const auto crossing =
+        analyzeCurveRelation(
+            relations,
+            vertical,
+            horizontal);
+    CHECK(crossing.valid());
+    CHECK(
+        crossing.status ==
+        CurveRelationStatus::discrete);
+    CHECK(crossing.first_entity == horizontal);
+    CHECK(crossing.second_entity == vertical);
+    CHECK(crossing.intersections.size() == 1U);
+    CHECK(
+        crossing.intersections.front().point ==
+        Point2{0.0, 0.0});
+    CHECK(
+        crossing.intersections.front().contact ==
+        CurveContactKind::proper_crossing);
+    CHECK(
+        crossing.intersections.front().canonical_branch ==
+        0U);
+
+    const auto endpoint_line =
+        relations.addLine(
+            Point2{2.0, 0.0},
+            Point2{2.0, 3.0});
+    const auto endpoint =
+        analyzeCurveRelation(
+            relations,
+            horizontal,
+            endpoint_line);
+    CHECK(
+        endpoint.status ==
+        CurveRelationStatus::discrete);
+    CHECK(endpoint.intersections.size() == 1U);
+    CHECK(
+        endpoint.intersections.front().contact ==
+        CurveContactKind::endpoint_intersection);
+    CHECK(endpoint.intersections.front().first_endpoint);
+    CHECK(endpoint.intersections.front().second_endpoint);
+
+    const auto overlapping =
+        relations.addLine(
+            Point2{-1.0, 0.0},
+            Point2{1.0, 0.0});
+    CHECK(
+        analyzeCurveRelation(
+            relations,
+            horizontal,
+            overlapping)
+            .status ==
+        CurveRelationStatus::overlap);
+
+    const auto unit_circle =
+        relations.addCircle(
+            Point2{0.0, 0.0},
+            1.0);
+    const auto line_circle =
+        analyzeCurveRelation(
+            relations,
+            horizontal,
+            unit_circle);
+    CHECK(
+        line_circle.status ==
+        CurveRelationStatus::discrete);
+    CHECK(line_circle.intersections.size() == 2U);
+    CHECK(
+        line_circle.intersections[0].canonical_branch ==
+        0U);
+    CHECK(
+        line_circle.intersections[1].canonical_branch ==
+        1U);
+    CHECK(
+        line_circle.intersections[0].first_parameter <
+        line_circle.intersections[1].first_parameter);
+
+    const auto tangent_line =
+        relations.addLine(
+            Point2{-2.0, 1.0},
+            Point2{2.0, 1.0});
+    const auto tangent =
+        analyzeCurveRelation(
+            relations,
+            tangent_line,
+            unit_circle);
+    CHECK(
+        tangent.status ==
+        CurveRelationStatus::discrete);
+    CHECK(tangent.intersections.size() == 1U);
+    CHECK(
+        tangent.intersections.front().contact ==
+        CurveContactKind::tangent);
+
+    const auto second_circle =
+        relations.addCircle(
+            Point2{1.0, 0.0},
+            1.0);
+    const auto circle_circle =
+        analyzeCurveRelation(
+            relations,
+            unit_circle,
+            second_circle);
+    CHECK(
+        circle_circle.status ==
+        CurveRelationStatus::discrete);
+    CHECK(circle_circle.intersections.size() == 2U);
+    CHECK(
+        circle_circle.intersections[0].canonical_branch ==
+        0U);
+    CHECK(
+        circle_circle.intersections[1].canonical_branch ==
+        1U);
+
+    const auto tangent_circle =
+        relations.addCircle(
+            Point2{2.0, 0.0},
+            1.0);
+    const auto circle_tangent =
+        analyzeCurveRelation(
+            relations,
+            unit_circle,
+            tangent_circle);
+    CHECK(
+        circle_tangent.status ==
+        CurveRelationStatus::discrete);
+    CHECK(circle_tangent.intersections.size() == 1U);
+    CHECK(
+        circle_tangent.intersections.front().contact ==
+        CurveContactKind::tangent);
+
+    const auto coincident_circle =
+        relations.addCircle(
+            Point2{0.0, 0.0},
+            1.0);
+    CHECK(
+        analyzeCurveRelation(
+            relations,
+            unit_circle,
+            coincident_circle)
+            .status ==
+        CurveRelationStatus::overlap);
+
+    const double pi =
+        std::numbers::pi_v<double>;
+    const auto upper_arc =
+        relations.addArc(
+            Point2{0.0, 0.0},
+            1.0,
+            0.0,
+            pi);
+    const auto vertical_arc =
+        analyzeCurveRelation(
+            relations,
+            vertical,
+            upper_arc);
+    CHECK(
+        vertical_arc.status ==
+        CurveRelationStatus::discrete);
+    CHECK(vertical_arc.intersections.size() == 1U);
+    CHECK(
+        std::abs(
+            vertical_arc.intersections.front().point.v -
+            1.0) < 1.0e-12);
+
+    CHECK(
+        analyzeCurveRelation(
+            relations,
+            unit_circle,
+            upper_arc)
+            .status ==
+        CurveRelationStatus::overlap);
+
+    const auto right_arc =
+        relations.addArc(
+            Point2{0.0, 0.0},
+            2.0,
+            -pi * 0.5,
+            pi);
+    const auto left_arc =
+        relations.addArc(
+            Point2{2.0, 0.0},
+            2.0,
+            pi * 0.5,
+            pi);
+    const auto arc_arc =
+        analyzeCurveRelation(
+            relations,
+            right_arc,
+            left_arc);
+    CHECK(
+        arc_arc.status ==
+        CurveRelationStatus::discrete);
+    CHECK(arc_arc.intersections.size() == 2U);
+
+    const auto first_quarter =
+        relations.addArc(
+            Point2{5.0, 0.0},
+            1.0,
+            0.0,
+            pi * 0.5);
+    const auto second_quarter =
+        relations.addArc(
+            Point2{5.0, 0.0},
+            1.0,
+            pi * 0.5,
+            pi * 0.5);
+    const auto shared_arc_endpoint =
+        analyzeCurveRelation(
+            relations,
+            first_quarter,
+            second_quarter);
+    CHECK(
+        shared_arc_endpoint.status ==
+        CurveRelationStatus::discrete);
+    CHECK(
+        shared_arc_endpoint.intersections.size() ==
+        1U);
+    CHECK(
+        shared_arc_endpoint.intersections.front().contact ==
+        CurveContactKind::endpoint_intersection);
+
+    const auto overlapping_arc =
+        relations.addArc(
+            Point2{5.0, 0.0},
+            1.0,
+            pi * 0.25,
+            pi * 0.5);
+    CHECK(
+        analyzeCurveRelation(
+            relations,
+            first_quarter,
+            overlapping_arc)
+            .status ==
+        CurveRelationStatus::overlap);
+
+    CHECK(
+        analyzeCurveRelation(
+            relations,
+            EntityId{},
+            horizontal)
+            .status ==
+        CurveRelationStatus::invalid);
+    CHECK(
+        analyzeCurveRelation(
+            relations,
+            horizontal,
+            horizontal)
+            .status ==
+        CurveRelationStatus::invalid);
 
     return 0;
 }
