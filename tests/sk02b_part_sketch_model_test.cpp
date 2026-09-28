@@ -640,6 +640,72 @@ int main() {
         part::ProfileAreaEditStatus::no_change);
 
 
+    // Manual-F regression D: screenshot topology with two exact shared
+    // endpoints plus one proper intersection. Hover can discover the bounded
+    // triangular cell; accepting it must survive RegionIntent round-trip.
+    sketch::SketchModel two_touch_triangle_model;
+    (void)two_touch_triangle_model.addLine(
+        {-2.0, 2.0},
+        {4.0, 2.0});
+    (void)two_touch_triangle_model.addLine(
+        {1.0, -1.0},
+        {4.0, 2.0});
+    (void)two_touch_triangle_model.addLine(
+        {-1.0, 3.0},
+        {1.0, -1.0});
+
+    const auto two_touch_analysis =
+        sketch::analyzeRegions(
+            two_touch_triangle_model);
+    CHECK(two_touch_analysis.regions.size() == 1U);
+    const auto two_touch_pick =
+        sketch::pickRegion(
+            two_touch_triangle_model,
+            two_touch_analysis,
+            {1.5, 1.0});
+    CHECK(
+        two_touch_pick.location ==
+        sketch::RegionPointLocation::inside);
+    CHECK(two_touch_pick.region_index.has_value());
+
+    const auto two_touch_candidate =
+        std::find_if(
+            two_touch_analysis.regions.begin(),
+            two_touch_analysis.regions.end(),
+            [&two_touch_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *two_touch_pick.region_index;
+            });
+    CHECK(
+        two_touch_candidate !=
+        two_touch_analysis.regions.end());
+
+    const auto two_touch_intent =
+        part::makeProfileRegionIntent(
+            *two_touch_candidate);
+    CHECK(two_touch_intent.has_value());
+
+    const auto two_touch_resolved =
+        part::resolveProfileRegionIntent(
+            two_touch_triangle_model,
+            *two_touch_intent);
+    CHECK(
+        two_touch_resolved.status ==
+        part::ProfileIntentResolutionStatus::valid);
+    CHECK(two_touch_resolved.region.has_value());
+
+    const auto two_touch_add_same =
+        part::applyProfileAreaEdit(
+            two_touch_triangle_model,
+            *two_touch_intent,
+            *two_touch_pick.region_index,
+            part::ProfileAreaEditMode::add_area);
+    CHECK(
+        two_touch_add_same.status ==
+        part::ProfileAreaEditStatus::no_change);
+
+
     // Package F transient Add/Subtract algebra. These pure draft operations
     // produce RegionIntent only; authored mutation remains a later Finish.
     sketch::SketchModel add_model;
