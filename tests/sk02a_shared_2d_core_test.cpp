@@ -641,6 +641,19 @@ int main() {
             Point2{2.0, 0.0})
             .location ==
         RegionPointLocation::inside);
+
+    // A non-boundary point remains pickable even when both axis-aligned
+    // classification rays are tangent to the circular hole.
+    const auto tangent_ray_pick =
+        pickRegion(
+            nested,
+            nested_regions,
+            Point2{-1.0, -1.0});
+    CHECK(
+        tangent_ray_pick.location ==
+        RegionPointLocation::inside);
+    CHECK(tangent_ray_pick.region_index.has_value());
+
     CHECK(
         pickRegion(
             nested,

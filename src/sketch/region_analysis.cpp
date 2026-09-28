@@ -1804,7 +1804,10 @@ struct BuiltLoop final {
         }
         if (ratio == -1.0 ||
             ratio == 1.0) {
-            return std::nullopt;
+            // A ray tangent to a circular boundary touches but does not
+            // cross it, so it must not toggle parity. Boundary membership
+            // of the query point itself was already checked exactly above.
+            continue;
         }
 
         const double base =
@@ -1911,7 +1914,10 @@ struct BuiltLoop final {
         }
         if (ratio == -1.0 ||
             ratio == 1.0) {
-            return std::nullopt;
+            // A ray tangent to a circular boundary touches but does not
+            // cross it, so it must not toggle parity. Boundary membership
+            // of the query point itself was already checked exactly above.
+            continue;
         }
 
         const double base =
@@ -2094,7 +2100,10 @@ scanlineIntersections(
         }
         if (ratio == -1.0 ||
             ratio == 1.0) {
-            return std::nullopt;
+            // A ray tangent to a circular boundary touches but does not
+            // cross it, so it must not toggle parity. Boundary membership
+            // of the query point itself was already checked exactly above.
+            continue;
         }
 
         const double base =
