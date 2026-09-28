@@ -171,8 +171,8 @@ int main() {
     CHECK(crossing.second_entity == vertical);
     CHECK(crossing.intersections.size() == 1U);
     CHECK(
-        crossing.intersections.front().point ==
-        Point2{0.0, 0.0});
+        (crossing.intersections.front().point ==
+         Point2{0.0, 0.0}));
     CHECK(
         crossing.intersections.front().contact ==
         CurveContactKind::proper_crossing);
