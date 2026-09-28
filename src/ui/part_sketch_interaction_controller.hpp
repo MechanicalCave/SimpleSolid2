@@ -126,14 +126,8 @@ public:
     profileHoverStatus() const noexcept;
     [[nodiscard]] std::optional<
         part::ProfileIntentResolutionStatus>
-    profileDraftResolutionStatus() const noexcept {
-        if (!profile_session_ ||
-            !profile_session_->hover_result) {
-            return std::nullopt;
-        }
-        return profile_session_->
-            hover_result->draft_resolution_status;
-    }
+    profileDraftResolutionStatus() const;
+    [[nodiscard]] bool profileDraftValid() const;
     [[nodiscard]] std::optional<sketch::RegionCandidate2D>
     profileHoverPreview() const;
     [[nodiscard]] std::optional<sketch::RegionCandidate2D>
