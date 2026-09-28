@@ -489,6 +489,19 @@ int main(int argc, char* argv[]) {
     CHECK(
         viewport.profile_preview_scene_
             .region.has_value());
+    CHECK(
+        !viewport.profile_preview_scene_
+             .show_boundary);
+
+    auto profile_options =
+        interaction.profileToolOptions();
+    profile_options.show_region_boundaries = true;
+    CHECK(
+        interaction.setProfileToolOptions(
+            profile_options));
+    CHECK(
+        viewport.profile_preview_scene_
+            .show_boundary);
 
     interaction.onPointer(pointer(
         sketch_id,
