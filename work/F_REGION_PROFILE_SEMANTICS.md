@@ -1,6 +1,6 @@
 # F — Region and Profile Semantics
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-28  
 **Owner acceptance:** 2026-09-28  
 **Decision class:** bounded D2 Part/Shared-2D semantics contract under AUDIT-01; durable Profile identity, Profile↔Sketch reference semantics, Construction role persistence, native schema evolution and bounded provider-neutral profile presentation/picking are authorized only after explicit Owner acceptance; detailed numerical algorithms and private implementation remain D1 while this contract is preserved  
@@ -970,3 +970,31 @@ F completion requires:
 - merge to main.
 
 After F completion, AUDIT-01 may complete its A→F stabilization program, but Extrude still requires a separate Owner-accepted Part solid-operation Work Contract.
+
+
+## 35. Completion record
+
+**Completed:** 2026-09-28  
+**Final exact-head runtime candidate:** `c76676350426dc5e81abd60d10246ff8c6f507be`  
+**Windows FULL:** #818 — PASS  
+**CTest:** 77/77 PASS  
+**Core-only CTest:** 14/14 PASS  
+**Owner manual Windows verification:** PASS on 2026-09-28 on the same exact candidate
+
+The final Owner verification covered the required Section 31.6 Profile workflow and the two manual defect areas that blocked earlier closeout: exact shared-endpoint Profile creation/round-trip and Profile fill color consistency between TOP and oblique views.
+
+The final bounded fixes remained inside the accepted F contract:
+
+- exact authored-equal Line endpoints are preserved as semantic endpoint contacts with canonical 0/1 parameters and source coordinates;
+- line relation arithmetic was stabilized without a Product geometric tolerance, automatic gap healing or welding of distinct points;
+- a Profile candidate presented as acceptable must survive `candidate -> RegionIntent -> resolve` before draft acceptance;
+- Finish readiness reflects a currently resolvable valid draft rather than mere intent presence;
+- Profile native fill creates its own UNLIT shading aspect so the intended presentation is not lost to inherited/default material lighting.
+
+The decimal scale/translation two-touch reproducer from the external defect audit is retained as an automated regression. Existing Line/Circle/Arc relation, region, persistence, lifecycle, provider and UI regressions remain active and passed the final FULL gate.
+
+Required internal and paired Product PL/EN documentation plus generated Browser freshness passed on the final candidate.
+
+Package F acceptance conditions are satisfied. This bookkeeping closeout changes only `work/**` and awaits the work-only CLOSURE gate and merge of PR #86.
+
+Completion of F does **not** authorize Extrude or another solid operation. A separate Owner-accepted Part solid-operation Work Contract remains mandatory.
