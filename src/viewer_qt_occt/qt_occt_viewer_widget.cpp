@@ -20,6 +20,7 @@
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <Geom_CartesianPoint.hxx>
 #include <Graphic3d_Camera.hxx>
+#include <Graphic3d_TypeOfShadingModel.hxx>
 #include <Graphic3d_HorizontalTextAlignment.hxx>
 #include <Graphic3d_TransformPers.hxx>
 #include <Graphic3d_VerticalTextAlignment.hxx>
@@ -2307,6 +2308,8 @@ public:
         // The neutral PresentationToken remains the semantic transport.
         Handle(AIS_Shape) object =
             new AIS_Shape(face.Shape());
+        object->Attributes()->SetShadingModel(
+            Graphic3d_TOSM_UNLIT);
         return object;
     }
 
