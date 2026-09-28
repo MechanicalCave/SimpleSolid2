@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/D_SEMANTIC_INPUT_OWNERSHIP_AND_CORE_ONLY_BUILD.md"
+status: active
+active_work: "work/E1_GEOMETRY_NUMERICAL_STABILITY.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
 program_roadmap_version: "1.0"
@@ -19,10 +19,10 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - draft a separate bounded Package E1 numerical-stability Work Contract under AUDIT-01
-  - require explicit Owner acceptance of Package E1 before any production geometry mutation
+  - run E1 Phase A supported-MSVC Arc 3-Point numerical characterization before any production fix
+  - classify the translated/small-scale finding as CONFIRMED or NOT REPRODUCED from evidence
+  - if CONFIRMED, apply only the accepted translation-local / scale-normalized private numerical correction
   - keep E2 and F queued by AUDIT-01 but inactive
-  - preserve completed D semantic-input ownership and core-only build boundaries
 
 notes:
   - R0 through R4 are completed.
@@ -247,3 +247,5 @@ notes:
   - Final D candidate 79fcfa1b66182dbf1ddfe19dee6e983e3878d259 passed Windows FULL #705.
   - Owner bounded manual Windows verification PASS on 2026-09-28 for viewport LINE input, Direct Distance Line/MOVE/COPY, Command Line parity/focus handoff, text-editor keyboard ownership and rejection-without-authored-mutation.
   - D is complete pending work-only CLOSURE verification and merge; E1 remains inactive until a separate Work Contract is explicitly Owner-accepted.
+  - Owner accepted Package E1 Work Contract on 2026-09-28.
+  - E1 is active on proposal-e1-geometry-numerical-stability; Phase A characterization must precede any production numerical fix.

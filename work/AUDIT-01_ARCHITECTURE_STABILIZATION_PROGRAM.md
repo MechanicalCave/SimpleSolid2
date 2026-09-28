@@ -71,7 +71,7 @@ Default order is strict:
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **COMPLETED — 2026-09-27** |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **COMPLETED — KEEP accepted 2026-09-28** |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | **COMPLETED — 2026-09-28** |
-| 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | future bounded Work Contract |
+| 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | **ACTIVE — accepted 2026-09-28** |
 | 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | future bounded Work Contract |
 | 9 | **F — region/profile semantics gate** | accepted exact region/profile semantics required by Part before solid modeling | future bounded Work Contract |
 
@@ -483,6 +483,15 @@ Package D moved current Sketch command-token meaning and bare Direct Distance pa
 D is **CONFIRMED / IMPLEMENTED / VERIFIED / MANUALLY ACCEPTED**. E1 is next in AUDIT-01 but remains inactive until a separate bounded Work Contract is explicitly Owner-accepted.
 
 ## 11. Package E1 — numerical stability of geometric construction
+
+### E1 activation record
+
+**Owner acceptance:** 2026-09-28  
+**Work Contract:** `work/E1_GEOMETRY_NUMERICAL_STABILITY.md` — ACCEPTED / ACTIVE  
+**Proposal evidence:** Windows proposal gate #708 PASS on `116cd782cd64445e6dd88c8a99295d917649cc08`
+
+Phase A must add supported-Windows/MSVC characterization before any production numerical correction. The mandatory radius-0.1 / (+1e6,+1e6) translated 3-Point Arc case determines whether the runtime finding is CONFIRMED or NOT REPRODUCED.
+
 
 Before region/profile consumers depend on these constructions:
 

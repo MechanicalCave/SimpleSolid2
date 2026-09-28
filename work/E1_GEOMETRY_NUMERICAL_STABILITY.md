@@ -1,7 +1,8 @@
 # E1 — Geometry Numerical Stability
 
-**Status:** PROPOSED — INACTIVE  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-28  
+**Owner acceptance:** 2026-09-28  
 **Decision class:** D1 numerical implementation within existing Sketch semantics; stop for Owner D2/D3 amendment if tolerance/coordinate/product validity semantics must change  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package E1  
