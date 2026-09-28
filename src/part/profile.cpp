@@ -1,6 +1,7 @@
 #include <simplesolid2/part/profile.hpp>
 
 #include <algorithm>
+#include <cstddef>
 #include <set>
 #include <utility>
 

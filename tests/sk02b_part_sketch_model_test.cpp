@@ -2,6 +2,7 @@
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/part/profile.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
