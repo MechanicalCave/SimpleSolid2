@@ -2296,54 +2296,10 @@ buildComponentLoops(
     std::vector<std::vector<Cut>> cuts(
         entities.size());
 
-    for (std::size_t index = 0U;
-         index < entities.size();
-         ++index) {
-        const auto curve =
-            curveView(
-                model,
-                entities[index]);
-        if (!curve) {
-            return std::nullopt;
-        }
-
-        if (curve->kind == CurveKind::line) {
-            const auto first =
-                findOrAddVertex(
-                    vertices,
-                    curve->first);
-            const auto second =
-                findOrAddVertex(
-                    vertices,
-                    curve->second);
-            if (!addCut(cuts[index], 0.0, first) ||
-                !addCut(cuts[index], 1.0, second)) {
-                return std::nullopt;
-            }
-        } else if (curve->kind == CurveKind::arc) {
-            const auto first_point =
-                arcEndpoint(*curve, false);
-            const auto second_point =
-                arcEndpoint(*curve, true);
-            if (!first_point ||
-                !second_point) {
-                return std::nullopt;
-            }
-            const auto first =
-                findOrAddVertex(
-                    vertices,
-                    *first_point);
-            const auto second =
-                findOrAddVertex(
-                    vertices,
-                    *second_point);
-            if (!addCut(cuts[index], 0.0, first) ||
-                !addCut(cuts[index], 1.0, second)) {
-                return std::nullopt;
-            }
-        }
-    }
-
+    // Intersection anchors are the canonical topology vertices. Process
+    // them before authored open-curve endpoints so an exact endpoint
+    // parameter (0/1) uses the relation point rather than a separately
+    // re-evaluated trigonometric image of the same semantic endpoint.
     for (const auto& intersection : intersections) {
         const auto first =
             entityIndex(
@@ -2369,6 +2325,76 @@ buildComponentLoops(
                 intersection.second_parameter,
                 vertex)) {
             return std::nullopt;
+        }
+    }
+
+    const auto ensure_endpoint =
+        [&vertices, &cuts](
+            std::size_t entity_index,
+            double parameter,
+            Point2 evaluated_point) {
+            const auto existing =
+                std::find_if(
+                    cuts[entity_index].begin(),
+                    cuts[entity_index].end(),
+                    [parameter](const Cut& cut) {
+                        return cut.parameter ==
+                               parameter;
+                    });
+            if (existing !=
+                cuts[entity_index].end()) {
+                return true;
+            }
+
+            const auto vertex =
+                findOrAddVertex(
+                    vertices,
+                    evaluated_point);
+            return addCut(
+                cuts[entity_index],
+                parameter,
+                vertex);
+        };
+
+    for (std::size_t index = 0U;
+         index < entities.size();
+         ++index) {
+        const auto curve =
+            curveView(
+                model,
+                entities[index]);
+        if (!curve) {
+            return std::nullopt;
+        }
+
+        if (curve->kind == CurveKind::line) {
+            if (!ensure_endpoint(
+                    index,
+                    0.0,
+                    curve->first) ||
+                !ensure_endpoint(
+                    index,
+                    1.0,
+                    curve->second)) {
+                return std::nullopt;
+            }
+        } else if (curve->kind == CurveKind::arc) {
+            const auto first_point =
+                arcEndpoint(*curve, false);
+            const auto second_point =
+                arcEndpoint(*curve, true);
+            if (!first_point ||
+                !second_point ||
+                !ensure_endpoint(
+                    index,
+                    0.0,
+                    *first_point) ||
+                !ensure_endpoint(
+                    index,
+                    1.0,
+                    *second_point)) {
+                return std::nullopt;
+            }
         }
     }
 
