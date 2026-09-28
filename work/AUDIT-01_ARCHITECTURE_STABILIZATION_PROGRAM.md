@@ -595,7 +595,7 @@ The final defect closeout preserved the accepted numerical/product boundary: exa
 
 Package F is **IMPLEMENTED / DOCUMENTED / VERIFIED / MANUALLY ACCEPTED / COMPLETED**. All AUDIT-01 packages A through F are now completed.
 
-AUDIT-01 therefore satisfies its Section 16 program-completion conditions on this closeout candidate, subject only to the work-only CLOSURE gate and merge of PR #86 to `main`.
+AUDIT-01 satisfied its Section 16 program-completion conditions on the final closeout candidate. Work-only CLOSURE #821/#823 passed and PR #86 was squash-merged to `main` as `26483c5d318af00ea0f82e7e901827a77c74b90a` on 2026-09-28. The A→F stabilization program is closed.
 
 Completion of AUDIT-01 and Package F still does **not** authorize Extrude or another solid operation. Any such work requires a separate Owner-accepted Part solid-operation Work Contract.
 
