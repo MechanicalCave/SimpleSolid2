@@ -516,6 +516,8 @@ E1 replaced only the private absolute-coordinate 3-Point Arc circumcenter evalua
 
 E1 is **CONFIRMED / IMPLEMENTED / VERIFIED / COMPLETED**. E2 is next but remains inactive until a separate Work Contract is explicitly Owner-accepted.
 
+**Final documentation-complete verification:** `68047d4cc460fd3213fb97ad6ca711167fd36875` — Windows FULL #718 PASS, including explicit Arc preview/accepted-intent parity and authored start-angle evidence.
+
 ## 12. Package E2 — presentation update scale and provider failure
 
 Treat current scene rebuild / sampled curves / per-segment AIS behavior as a scale risk to measure, not as automatic proof that renderer must be rewritten.

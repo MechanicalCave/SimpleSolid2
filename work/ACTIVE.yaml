@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/E1_GEOMETRY_NUMERICAL_STABILITY.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
@@ -259,3 +259,6 @@ notes:
   - E1 is complete pending work-only CLOSURE verification and merge; E2 remains inactive until a separate Work Contract is explicitly Owner-accepted.
   - E1 closeout was deferred because #715 classified the post-docs head as docs rather than CLOSURE.
   - Verification remains active only to add explicit preview/commit-intent parity and authored start-angle evidence, then obtain a FULL on the documentation-complete head.
+  - Final documentation-complete E1 candidate 68047d4cc460fd3213fb97ad6ca711167fd36875 passed Windows FULL #718.
+  - #718 includes explicit Arc preview/accepted-intent parity and authored start-angle evidence in addition to the full numerical matrix.
+  - E1 is complete pending work-only CLOSURE verification and merge; E2 remains inactive until a separate Owner-accepted Work Contract.

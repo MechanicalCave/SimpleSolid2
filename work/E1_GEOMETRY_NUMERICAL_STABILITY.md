@@ -1,6 +1,6 @@
 # E1 — Geometry Numerical Stability
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-28  
 **Owner acceptance:** 2026-09-28  
 **Decision class:** D1 numerical implementation within existing Sketch semantics; stop for Owner D2/D3 amendment if tolerance/coordinate/product validity semantics must change  
@@ -388,3 +388,17 @@ After merge, AUDIT-01 schedules E2 next. E1 completion does not activate E2 or F
 The first completion-record commit did not receive the required CLOSURE tier because documentation changes after the last trusted FULL kept the classifier in docs mode (#715). E1 is therefore temporarily returned to ACTIVE verification status.
 
 No production correction is reopened. The only remaining runtime-adjacent mutation is test evidence already required by this contract: explicit Arc preview/accepted-intent parity and explicit validation that the authored Start point matches the returned `start_angle`. This test-only mutation must obtain a new FULL on the documentation-complete branch before closeout is attempted again.
+
+## 25. Final verification and closeout
+
+**Documentation-complete final candidate:** `68047d4cc460fd3213fb97ad6ca711167fd36875`  
+**Windows FULL:** #718 — PASS
+
+The final FULL includes the completed internal documentation/Browser, the E1 numerical correction, the complete characterization matrix, and two explicit semantic evidence checks required by this contract:
+
+- `previewArc(end)` and the subsequently accepted Arc request are exactly the same `ArcIntent`;
+- the requested Start point direction matches the returned `start_angle`, in addition to the existing Through-on-signed-path and End/sweep evidence.
+
+This supersedes the earlier provisional closeout wording. No production code changed after the already verified local/common-scale-normalized circumcenter correction. No Product tolerance or visible Arc semantics were introduced.
+
+E1 is **CONFIRMED / IMPLEMENTED / VERIFIED / COMPLETED**. Only work-only CLOSURE verification and merge remain.
