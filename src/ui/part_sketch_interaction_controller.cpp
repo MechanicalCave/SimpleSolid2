@@ -816,6 +816,7 @@ bool PartSketchInteractionController::finishProfile() {
     }
 
     resetProfileRuntime();
+    viewport_controller_->refreshDocumentTree();
     viewport_controller_->refreshPresentation();
     configureForCurrentTool();
     projectSelection();

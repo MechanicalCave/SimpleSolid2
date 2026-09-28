@@ -543,6 +543,13 @@ int main(int argc, char* argv[]) {
         session.undoDepth() ==
         before_profile_tool + 1U);
     CHECK(session.document().profiles().size() == 1U);
+    CHECK(
+        tree.findItems(
+                QStringLiteral("Profile 1"),
+                Qt::MatchExactly |
+                    Qt::MatchRecursive,
+                0)
+            .size() == 1);
     const auto profile_id =
         session.document().profiles().front().id;
     CHECK(profile_id.serialized() == "1");

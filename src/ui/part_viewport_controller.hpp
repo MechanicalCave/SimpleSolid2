@@ -98,6 +98,7 @@ public:
 
     void clear();
     void resetRuntimeState();
+    void refreshDocumentTree();
     void refreshPresentation();
 
     [[nodiscard]] bool presentationDegraded() const noexcept {

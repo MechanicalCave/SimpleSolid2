@@ -443,6 +443,12 @@ void PartViewportController::resetRuntimeState() {
     clear();
 }
 
+void PartViewportController::refreshDocumentTree() {
+    if (tree_ != nullptr) {
+        tree_->setDocumentSession(session_);
+    }
+}
+
 void PartViewportController::refreshPresentation() {
     if (viewport_ == nullptr) return;
 
