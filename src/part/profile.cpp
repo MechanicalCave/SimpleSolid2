@@ -734,6 +734,185 @@ ResolvedProfileRegion resolveProfileRegionIntent(
     return {
         ProfileIntentResolutionStatus::valid,
         std::move(region)};
+
+}
+
+ProfileAreaEditResult applyProfileAreaEdit(
+    const sketch::SketchModel& model,
+    const ProfileRegionIntent& draft,
+    std::uint32_t region_index,
+    ProfileAreaEditMode mode) {
+    const auto resolved =
+        resolveProfileRegionIntent(
+            model,
+            draft);
+    if (!resolved.valid()) {
+        return {
+            ProfileAreaEditStatus::invalid_draft,
+            std::nullopt,
+            std::nullopt};
+    }
+
+    const auto analysis =
+        sketch::analyzeRegions(model);
+    const auto target =
+        std::find_if(
+            analysis.regions.begin(),
+            analysis.regions.end(),
+            [region_index](
+                const sketch::RegionCandidate2D&
+                    region) {
+                return region.region_index ==
+                       region_index;
+            });
+    if (target == analysis.regions.end()) {
+        return {
+            ProfileAreaEditStatus::
+                invalid_selection,
+            std::nullopt,
+            std::nullopt};
+    }
+
+    sketch::RegionAnalysis2D draft_analysis;
+    auto draft_region =
+        *resolved.region;
+    draft_region.region_index = 0U;
+    draft_analysis.regions.push_back(
+        draft_region);
+
+    std::vector<bool> selected(
+        analysis.regions.size(),
+        false);
+    std::optional<std::size_t>
+        target_position;
+
+    for (std::size_t index = 0U;
+         index < analysis.regions.size();
+         ++index) {
+        const auto& candidate =
+            analysis.regions[index];
+        if (candidate.region_index ==
+            region_index) {
+            target_position = index;
+        }
+
+        const auto sample =
+            sketch::regionInteriorPoint(
+                model,
+                candidate);
+        if (!sample) {
+            return {
+                ProfileAreaEditStatus::
+                    ambiguous_topology,
+                std::nullopt,
+                std::nullopt};
+        }
+
+        const auto membership =
+            sketch::pickRegion(
+                model,
+                draft_analysis,
+                *sample);
+        if (membership.location ==
+                sketch::RegionPointLocation::
+                    boundary ||
+            membership.location ==
+                sketch::RegionPointLocation::
+                    ambiguous) {
+            return {
+                ProfileAreaEditStatus::
+                    ambiguous_topology,
+                std::nullopt,
+                std::nullopt};
+        }
+
+        selected[index] =
+            membership.location ==
+            sketch::RegionPointLocation::inside;
+    }
+
+    if (!target_position) {
+        return {
+            ProfileAreaEditStatus::
+                invalid_selection,
+            std::nullopt,
+            std::nullopt};
+    }
+
+    const bool target_selected =
+        selected[*target_position];
+    if ((mode ==
+             ProfileAreaEditMode::add_area &&
+         target_selected) ||
+        (mode ==
+             ProfileAreaEditMode::subtract_area &&
+         !target_selected)) {
+        return {
+            ProfileAreaEditStatus::no_change,
+            draft,
+            *resolved.region};
+    }
+
+    selected[*target_position] =
+        mode ==
+        ProfileAreaEditMode::add_area;
+
+    std::vector<sketch::RegionCandidate2D>
+        material_cells;
+    for (std::size_t index = 0U;
+         index < analysis.regions.size();
+         ++index) {
+        if (selected[index]) {
+            material_cells.push_back(
+                analysis.regions[index]);
+        }
+    }
+
+    const auto composition =
+        sketch::composeRegionCells(
+            model,
+            material_cells);
+    if (composition.status ==
+            sketch::RegionCompositionStatus::
+                disconnected ||
+        composition.status ==
+            sketch::RegionCompositionStatus::empty) {
+        return {
+            ProfileAreaEditStatus::
+                disconnected_result,
+            std::nullopt,
+            std::nullopt};
+    }
+    if (!composition.valid()) {
+        return {
+            ProfileAreaEditStatus::
+                ambiguous_topology,
+            std::nullopt,
+            std::nullopt};
+    }
+
+    const auto intent =
+        makeProfileRegionIntent(
+            *composition.region);
+    if (!intent) {
+        return {
+            ProfileAreaEditStatus::
+                ambiguous_topology,
+            std::nullopt,
+            std::nullopt};
+    }
+
+    if (*intent == draft) {
+        return {
+            ProfileAreaEditStatus::no_change,
+            draft,
+            *composition.region};
+    }
+
+    return {
+        ProfileAreaEditStatus::changed,
+        *intent,
+        *composition.region};
 }
 
 } // namespace simplesolid2::part

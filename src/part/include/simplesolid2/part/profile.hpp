@@ -91,6 +91,32 @@ struct ResolvedProfileRegion final {
     }
 };
 
+enum class ProfileAreaEditMode {
+    add_area,
+    subtract_area,
+};
+
+enum class ProfileAreaEditStatus {
+    changed,
+    no_change,
+    invalid_draft,
+    invalid_selection,
+    disconnected_result,
+    ambiguous_topology,
+};
+
+struct ProfileAreaEditResult final {
+    ProfileAreaEditStatus status{
+        ProfileAreaEditStatus::invalid_draft};
+    std::optional<ProfileRegionIntent> region_intent;
+    std::optional<sketch::RegionCandidate2D> region;
+
+    [[nodiscard]] bool changed() const noexcept {
+        return status ==
+               ProfileAreaEditStatus::changed;
+    }
+};
+
 [[nodiscard]] bool
 profileRegionIntentStructurallyValid(
     const ProfileRegionIntent& intent) noexcept;
@@ -107,5 +133,15 @@ makeProfileRegionIntent(
 resolveProfileRegionIntent(
     const sketch::SketchModel& model,
     const ProfileRegionIntent& intent);
+
+// Pure transient-draft operation. No ProfileId allocation, DocumentRevision
+// mutation or Undo entry occurs here; Finish persists the returned intent via
+// the normal Replace/Edit Profile command.
+[[nodiscard]] ProfileAreaEditResult
+applyProfileAreaEdit(
+    const sketch::SketchModel& model,
+    const ProfileRegionIntent& draft,
+    std::uint32_t region_index,
+    ProfileAreaEditMode mode);
 
 } // namespace simplesolid2::part

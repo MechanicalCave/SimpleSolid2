@@ -167,6 +167,39 @@ validateRegionBoundary(
     RegionLoop2D outer,
     std::vector<RegionLoop2D> holes);
 
+enum class RegionCompositionStatus {
+    valid,
+    empty,
+    disconnected,
+    invalid_topology,
+};
+
+struct RegionComposition2D final {
+    RegionCompositionStatus status{
+        RegionCompositionStatus::invalid_topology};
+    std::optional<RegionCandidate2D> region;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return status == RegionCompositionStatus::valid &&
+               region.has_value();
+    }
+};
+
+// Returns one guaranteed interior material point for a valid candidate. The
+// sample is runtime-only and never becomes durable Profile identity.
+[[nodiscard]] std::optional<Point2>
+regionInteriorPoint(
+    const SketchModel& model,
+    const RegionCandidate2D& region);
+
+// Exact cell-union composition used by transient Profile Add/Subtract drafts.
+// Shared boundaries are cancelled by semantic runtime fragments; point-only
+// contact does not merge separate material components.
+[[nodiscard]] RegionComposition2D
+composeRegionCells(
+    const SketchModel& model,
+    const std::vector<RegionCandidate2D>& cells);
+
 // Runtime point-pick against a previously built analysis. A point on any
 // profile boundary is reported as boundary, never assigned arbitrarily to an
 // adjacent region.

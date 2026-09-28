@@ -3290,6 +3290,447 @@ validatedLoop(
     return false;
 }
 
+[[nodiscard]] RegionBoundaryUse2D
+reversedUse(
+    const RegionBoundaryUse2D& use) {
+    return RegionBoundaryUse2D{
+        use.source_entity,
+        use.end_parameter,
+        use.start_parameter,
+        use.end_anchor,
+        use.start_anchor,
+        !use.follows_source_direction,
+        use.crosses_closed_seam,
+        use.whole_closed_curve};
+}
+
+[[nodiscard]] bool inverseUses(
+    const RegionBoundaryUse2D& first,
+    const RegionBoundaryUse2D& second) {
+    return first == reversedUse(second);
+}
+
+void appendMaterialLoop(
+    std::vector<RegionBoundaryUse2D>& boundary,
+    const RegionLoop2D& loop,
+    bool material_on_left) {
+    if (material_on_left) {
+        boundary.insert(
+            boundary.end(),
+            loop.boundary.begin(),
+            loop.boundary.end());
+        return;
+    }
+
+    for (auto it = loop.boundary.rbegin();
+         it != loop.boundary.rend();
+         ++it) {
+        boundary.push_back(
+            reversedUse(*it));
+    }
+}
+
+[[nodiscard]] std::optional<std::pair<double, double>>
+loopMetrics(
+    const SketchModel& model,
+    const std::vector<RegionBoundaryUse2D>& boundary) {
+    double area = 0.0;
+    double perimeter = 0.0;
+    for (const auto& use : boundary) {
+        const auto curve =
+            curveView(
+                model,
+                use.source_entity);
+        if (!curve) {
+            return std::nullopt;
+        }
+        const auto contribution =
+            useAreaContribution(
+                *curve,
+                use);
+        const auto length =
+            usePerimeter(
+                *curve,
+                use);
+        if (!contribution || !length) {
+            return std::nullopt;
+        }
+        area += *contribution;
+        perimeter += *length;
+    }
+    if (!finiteValue(area) ||
+        !finiteValue(perimeter)) {
+        return std::nullopt;
+    }
+    return std::pair<double, double>{
+        area,
+        perimeter};
+}
+
+[[nodiscard]] RegionLoop2D reversedLoop(
+    const RegionLoop2D& loop) {
+    RegionLoop2D result;
+    result.boundary.reserve(
+        loop.boundary.size());
+    for (auto it = loop.boundary.rbegin();
+         it != loop.boundary.rend();
+         ++it) {
+        result.boundary.push_back(
+            reversedUse(*it));
+    }
+    result.signed_area =
+        -loop.signed_area;
+    result.perimeter =
+        loop.perimeter;
+    return result;
+}
+
+[[nodiscard]] bool pointInRegionMaterial(
+    const SketchModel& model,
+    const RegionCandidate2D& region,
+    Point2 point) {
+    if (pointInLoop(
+            model,
+            region.outer,
+            point) !=
+        LoopPointState::inside) {
+        return false;
+    }
+
+    for (const auto& hole :
+         region.holes) {
+        if (pointInLoop(
+                model,
+                hole,
+                point) !=
+            LoopPointState::outside) {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] std::optional<Point2>
+regionInteriorPointImpl(
+    const SketchModel& model,
+    const RegionCandidate2D& region) {
+    const auto simple =
+        interiorPoint(
+            model,
+            region.outer);
+    if (simple &&
+        pointInRegionMaterial(
+            model,
+            region,
+            *simple)) {
+        return simple;
+    }
+
+    std::vector<double> vertical_values;
+    const auto append_loop_bounds =
+        [&model, &vertical_values](
+            const RegionLoop2D& loop) {
+            for (const auto& use :
+                 loop.boundary) {
+                const auto curve =
+                    curveView(
+                        model,
+                        use.source_entity);
+                if (!curve) {
+                    return false;
+                }
+                appendUseVerticalBounds(
+                    *curve,
+                    use,
+                    vertical_values);
+            }
+            return true;
+        };
+
+    if (!append_loop_bounds(region.outer)) {
+        return std::nullopt;
+    }
+    for (const auto& hole :
+         region.holes) {
+        if (!append_loop_bounds(hole)) {
+            return std::nullopt;
+        }
+    }
+
+    std::sort(
+        vertical_values.begin(),
+        vertical_values.end());
+    vertical_values.erase(
+        std::unique(
+            vertical_values.begin(),
+            vertical_values.end()),
+        vertical_values.end());
+
+    for (std::size_t y_index = 0U;
+         y_index + 1U <
+             vertical_values.size();
+         ++y_index) {
+        if (!(vertical_values[y_index + 1U] >
+              vertical_values[y_index])) {
+            continue;
+        }
+        const double y =
+            (vertical_values[y_index] +
+             vertical_values[y_index + 1U]) *
+            0.5;
+        if (!finiteValue(y)) {
+            continue;
+        }
+
+        std::vector<double> xs;
+        const auto append_scan =
+            [&model, y, &xs](
+                const RegionLoop2D& loop) {
+                const auto values =
+                    scanlineIntersections(
+                        model,
+                        loop,
+                        y);
+                if (!values) {
+                    return false;
+                }
+                xs.insert(
+                    xs.end(),
+                    values->begin(),
+                    values->end());
+                return true;
+            };
+
+        if (!append_scan(region.outer)) {
+            continue;
+        }
+        bool holes_ok = true;
+        for (const auto& hole :
+             region.holes) {
+            if (!append_scan(hole)) {
+                holes_ok = false;
+                break;
+            }
+        }
+        if (!holes_ok) {
+            continue;
+        }
+
+        std::sort(xs.begin(), xs.end());
+        xs.erase(
+            std::unique(
+                xs.begin(),
+                xs.end()),
+            xs.end());
+
+        for (std::size_t x_index = 0U;
+             x_index + 1U < xs.size();
+             ++x_index) {
+            if (!(xs[x_index + 1U] >
+                  xs[x_index])) {
+                continue;
+            }
+
+            const Point2 candidate{
+                (xs[x_index] +
+                 xs[x_index + 1U]) *
+                    0.5,
+                y};
+            if (candidate.finite() &&
+                pointInRegionMaterial(
+                    model,
+                    region,
+                    candidate)) {
+                return candidate;
+            }
+        }
+    }
+
+    return std::nullopt;
+}
+
+[[nodiscard]] RegionComposition2D
+composeRegionCellsImpl(
+    const SketchModel& model,
+    const std::vector<RegionCandidate2D>& cells) {
+    if (cells.empty()) {
+        return {
+            RegionCompositionStatus::empty,
+            std::nullopt};
+    }
+
+    std::vector<RegionBoundaryUse2D>
+        boundary;
+    for (const auto& cell : cells) {
+        appendMaterialLoop(
+            boundary,
+            cell.outer,
+            true);
+        for (const auto& hole :
+             cell.holes) {
+            appendMaterialLoop(
+                boundary,
+                hole,
+                false);
+        }
+    }
+
+    std::vector<RegionBoundaryUse2D>
+        exposed;
+    exposed.reserve(boundary.size());
+    for (const auto& use : boundary) {
+        const auto inverse =
+            std::find_if(
+                exposed.begin(),
+                exposed.end(),
+                [&use](
+                    const RegionBoundaryUse2D&
+                        existing) {
+                    return inverseUses(
+                        existing,
+                        use);
+                });
+        if (inverse != exposed.end()) {
+            exposed.erase(inverse);
+        } else {
+            exposed.push_back(use);
+        }
+    }
+
+    if (exposed.empty()) {
+        return {
+            RegionCompositionStatus::empty,
+            std::nullopt};
+    }
+
+    std::vector<bool> used(
+        exposed.size(),
+        false);
+    std::vector<RegionLoop2D>
+        positive_loops;
+    std::vector<RegionLoop2D>
+        negative_loops;
+
+    for (std::size_t start = 0U;
+         start < exposed.size();
+         ++start) {
+        if (used[start]) {
+            continue;
+        }
+
+        RegionLoop2D loop;
+        std::size_t current = start;
+        for (std::size_t guard = 0U;
+             guard <= exposed.size();
+             ++guard) {
+            if (used[current]) {
+                return {
+                    RegionCompositionStatus::
+                        invalid_topology,
+                    std::nullopt};
+            }
+
+            used[current] = true;
+            loop.boundary.push_back(
+                exposed[current]);
+
+            if (usesJoin(
+                    model,
+                    loop.boundary.back(),
+                    loop.boundary.front())) {
+                break;
+            }
+
+            std::optional<std::size_t> next;
+            for (std::size_t candidate = 0U;
+                 candidate < exposed.size();
+                 ++candidate) {
+                if (used[candidate] ||
+                    !usesJoin(
+                        model,
+                        exposed[current],
+                        exposed[candidate])) {
+                    continue;
+                }
+                if (next) {
+                    return {
+                        RegionCompositionStatus::
+                            invalid_topology,
+                        std::nullopt};
+                }
+                next = candidate;
+            }
+
+            if (!next) {
+                return {
+                    RegionCompositionStatus::
+                        invalid_topology,
+                    std::nullopt};
+            }
+            current = *next;
+        }
+
+        if (loop.boundary.empty() ||
+            !usesJoin(
+                model,
+                loop.boundary.back(),
+                loop.boundary.front())) {
+            return {
+                RegionCompositionStatus::
+                    invalid_topology,
+                std::nullopt};
+        }
+
+        const auto metrics =
+            loopMetrics(
+                model,
+                loop.boundary);
+        if (!metrics ||
+            metrics->first == 0.0 ||
+            !(metrics->second > 0.0)) {
+            return {
+                RegionCompositionStatus::
+                    invalid_topology,
+                std::nullopt};
+        }
+
+        loop.signed_area =
+            metrics->first;
+        loop.perimeter =
+            metrics->second;
+
+        if (loop.signed_area > 0.0) {
+            positive_loops.push_back(
+                std::move(loop));
+        } else {
+            negative_loops.push_back(
+                reversedLoop(loop));
+        }
+    }
+
+    if (positive_loops.size() != 1U) {
+        return {
+            RegionCompositionStatus::disconnected,
+            std::nullopt};
+    }
+
+    auto result =
+        validateRegionBoundary(
+            model,
+            std::move(positive_loops.front()),
+            std::move(negative_loops));
+    if (!result) {
+        return {
+            RegionCompositionStatus::
+                invalid_topology,
+            std::nullopt};
+    }
+
+    return {
+        RegionCompositionStatus::valid,
+        std::move(result)};
+}
+
 } // namespace
 
 RegionAnalysis2D analyzeRegions(
@@ -3663,6 +4104,23 @@ validateRegionBoundary(
     result.area = area;
     result.perimeter = perimeter;
     return result;
+}
+
+std::optional<Point2>
+regionInteriorPoint(
+    const SketchModel& model,
+    const RegionCandidate2D& region) {
+    return regionInteriorPointImpl(
+        model,
+        region);
+}
+
+RegionComposition2D composeRegionCells(
+    const SketchModel& model,
+    const std::vector<RegionCandidate2D>& cells) {
+    return composeRegionCellsImpl(
+        model,
+        cells);
 }
 
 RegionPick2D pickRegion(

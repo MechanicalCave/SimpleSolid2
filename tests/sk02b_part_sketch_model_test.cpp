@@ -434,5 +434,391 @@ int main() {
         tee_intent_model.findLine(
             tee_bottom) != nullptr);
 
+
+    // Package F transient Add/Subtract algebra. These pure draft operations
+    // produce RegionIntent only; authored mutation remains a later Finish.
+    sketch::SketchModel add_model;
+    (void)add_model.addLine(
+        {0.0, 0.0},
+        {4.0, 0.0});
+    (void)add_model.addLine(
+        {4.0, 0.0},
+        {4.0, 2.0});
+    (void)add_model.addLine(
+        {4.0, 2.0},
+        {0.0, 2.0});
+    (void)add_model.addLine(
+        {0.0, 2.0},
+        {0.0, 0.0});
+    (void)add_model.addLine(
+        {2.0, 0.0},
+        {2.0, 2.0});
+
+    const auto add_analysis =
+        sketch::analyzeRegions(add_model);
+    CHECK(add_analysis.complete());
+    CHECK(add_analysis.regions.size() == 2U);
+    const auto add_left_pick =
+        sketch::pickRegion(
+            add_model,
+            add_analysis,
+            {1.0, 1.0});
+    const auto add_right_pick =
+        sketch::pickRegion(
+            add_model,
+            add_analysis,
+            {3.0, 1.0});
+    CHECK(add_left_pick.region_index.has_value());
+    CHECK(add_right_pick.region_index.has_value());
+
+    const auto add_left =
+        std::find_if(
+            add_analysis.regions.begin(),
+            add_analysis.regions.end(),
+            [&add_left_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *add_left_pick.region_index;
+            });
+    CHECK(add_left != add_analysis.regions.end());
+    const auto add_draft =
+        part::makeProfileRegionIntent(*add_left);
+    CHECK(add_draft.has_value());
+
+    const auto added =
+        part::applyProfileAreaEdit(
+            add_model,
+            *add_draft,
+            *add_right_pick.region_index,
+            part::ProfileAreaEditMode::add_area);
+    CHECK(added.changed());
+    CHECK(added.region_intent.has_value());
+    CHECK(added.region.has_value());
+    CHECK(
+        std::abs(added.region->area - 8.0) <
+        1.0e-12);
+    CHECK(added.region->holes.empty());
+    CHECK(
+        part::resolveProfileRegionIntent(
+            add_model,
+            *added.region_intent)
+            .valid());
+
+    const auto add_again =
+        part::applyProfileAreaEdit(
+            add_model,
+            *added.region_intent,
+            *add_right_pick.region_index,
+            part::ProfileAreaEditMode::add_area);
+    CHECK(
+        add_again.status ==
+        part::ProfileAreaEditStatus::no_change);
+
+    const auto subtract_right =
+        part::applyProfileAreaEdit(
+            add_model,
+            *added.region_intent,
+            *add_right_pick.region_index,
+            part::ProfileAreaEditMode::
+                subtract_area);
+    CHECK(subtract_right.changed());
+    CHECK(subtract_right.region.has_value());
+    CHECK(
+        std::abs(
+            subtract_right.region->area -
+            4.0) < 1.0e-12);
+
+    // Subtracting an internal bounded cell creates a hole; adding it back
+    // removes the shared hole boundary.
+    sketch::SketchModel hole_model;
+    (void)hole_model.addLine(
+        {0.0, 0.0},
+        {4.0, 0.0});
+    (void)hole_model.addLine(
+        {4.0, 0.0},
+        {4.0, 4.0});
+    (void)hole_model.addLine(
+        {4.0, 4.0},
+        {0.0, 4.0});
+    (void)hole_model.addLine(
+        {0.0, 4.0},
+        {0.0, 0.0});
+    const auto hole_base_analysis =
+        sketch::analyzeRegions(
+            hole_model);
+    CHECK(
+        hole_base_analysis.regions.size() ==
+        1U);
+    const auto hole_full_intent =
+        part::makeProfileRegionIntent(
+            hole_base_analysis.regions.front());
+    CHECK(hole_full_intent.has_value());
+
+    (void)hole_model.addCircle(
+        {2.0, 2.0},
+        1.0);
+    const auto hole_analysis =
+        sketch::analyzeRegions(
+            hole_model);
+    CHECK(hole_analysis.complete());
+    CHECK(hole_analysis.regions.size() == 2U);
+    const auto hole_disk_pick =
+        sketch::pickRegion(
+            hole_model,
+            hole_analysis,
+            {2.0, 2.0});
+    CHECK(hole_disk_pick.region_index.has_value());
+
+    const auto hole_subtracted =
+        part::applyProfileAreaEdit(
+            hole_model,
+            *hole_full_intent,
+            *hole_disk_pick.region_index,
+            part::ProfileAreaEditMode::
+                subtract_area);
+    CHECK(hole_subtracted.changed());
+    CHECK(hole_subtracted.region.has_value());
+    CHECK(
+        hole_subtracted.region->holes.size() ==
+        1U);
+    CHECK(
+        std::abs(
+            hole_subtracted.region->area -
+            (16.0 -
+             std::numbers::pi_v<double>)) <
+        1.0e-12);
+
+    const auto hole_added_back =
+        part::applyProfileAreaEdit(
+            hole_model,
+            *hole_subtracted.region_intent,
+            *hole_disk_pick.region_index,
+            part::ProfileAreaEditMode::add_area);
+    CHECK(hole_added_back.changed());
+    CHECK(hole_added_back.region.has_value());
+    CHECK(hole_added_back.region->holes.empty());
+    CHECK(
+        std::abs(
+            hole_added_back.region->area -
+            16.0) < 1.0e-12);
+
+    // A corner-cell subtraction creates a notch while preserving one
+    // connected material component.
+    sketch::SketchModel notch_model;
+    (void)notch_model.addLine(
+        {0.0, 0.0},
+        {4.0, 0.0});
+    (void)notch_model.addLine(
+        {4.0, 0.0},
+        {4.0, 4.0});
+    (void)notch_model.addLine(
+        {4.0, 4.0},
+        {0.0, 4.0});
+    (void)notch_model.addLine(
+        {0.0, 4.0},
+        {0.0, 0.0});
+    const auto notch_base =
+        sketch::analyzeRegions(
+            notch_model);
+    const auto notch_full_intent =
+        part::makeProfileRegionIntent(
+            notch_base.regions.front());
+    CHECK(notch_full_intent.has_value());
+    (void)notch_model.addLine(
+        {2.0, 0.0},
+        {2.0, 4.0});
+    (void)notch_model.addLine(
+        {0.0, 2.0},
+        {4.0, 2.0});
+    const auto notch_analysis =
+        sketch::analyzeRegions(
+            notch_model);
+    CHECK(notch_analysis.regions.size() == 4U);
+    const auto notch_pick =
+        sketch::pickRegion(
+            notch_model,
+            notch_analysis,
+            {3.0, 3.0});
+    CHECK(notch_pick.region_index.has_value());
+    const auto notch_result =
+        part::applyProfileAreaEdit(
+            notch_model,
+            *notch_full_intent,
+            *notch_pick.region_index,
+            part::ProfileAreaEditMode::
+                subtract_area);
+    CHECK(notch_result.changed());
+    CHECK(notch_result.region.has_value());
+    CHECK(notch_result.region->holes.empty());
+    CHECK(
+        std::abs(
+            notch_result.region->area -
+            12.0) < 1.0e-12);
+
+    // Removing a middle strip would split the material into two islands.
+    sketch::SketchModel split_model;
+    (void)split_model.addLine(
+        {0.0, 0.0},
+        {6.0, 0.0});
+    (void)split_model.addLine(
+        {6.0, 0.0},
+        {6.0, 2.0});
+    (void)split_model.addLine(
+        {6.0, 2.0},
+        {0.0, 2.0});
+    (void)split_model.addLine(
+        {0.0, 2.0},
+        {0.0, 0.0});
+    const auto split_base =
+        sketch::analyzeRegions(
+            split_model);
+    const auto split_full_intent =
+        part::makeProfileRegionIntent(
+            split_base.regions.front());
+    CHECK(split_full_intent.has_value());
+    (void)split_model.addLine(
+        {2.0, 0.0},
+        {2.0, 2.0});
+    (void)split_model.addLine(
+        {4.0, 0.0},
+        {4.0, 2.0});
+    const auto split_analysis =
+        sketch::analyzeRegions(
+            split_model);
+    CHECK(split_analysis.regions.size() == 3U);
+    const auto split_middle_pick =
+        sketch::pickRegion(
+            split_model,
+            split_analysis,
+            {3.0, 1.0});
+    CHECK(
+        split_middle_pick.region_index.has_value());
+    const auto split_result =
+        part::applyProfileAreaEdit(
+            split_model,
+            *split_full_intent,
+            *split_middle_pick.region_index,
+            part::ProfileAreaEditMode::
+                subtract_area);
+    CHECK(
+        split_result.status ==
+        part::ProfileAreaEditStatus::
+            disconnected_result);
+    CHECK(!split_result.region_intent.has_value());
+
+    // Disconnected and point-only Add are rejected.
+    sketch::SketchModel disconnected_model;
+    (void)disconnected_model.addCircle(
+        {0.0, 0.0},
+        1.0);
+    (void)disconnected_model.addCircle(
+        {4.0, 0.0},
+        1.0);
+    const auto disconnected_analysis =
+        sketch::analyzeRegions(
+            disconnected_model);
+    CHECK(
+        disconnected_analysis.regions.size() ==
+        2U);
+    const auto disconnected_left =
+        sketch::pickRegion(
+            disconnected_model,
+            disconnected_analysis,
+            {0.0, 0.0});
+    const auto disconnected_right =
+        sketch::pickRegion(
+            disconnected_model,
+            disconnected_analysis,
+            {4.0, 0.0});
+    CHECK(disconnected_left.region_index.has_value());
+    CHECK(disconnected_right.region_index.has_value());
+    const auto disconnected_left_region =
+        std::find_if(
+            disconnected_analysis.regions.begin(),
+            disconnected_analysis.regions.end(),
+            [&disconnected_left](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *disconnected_left.region_index;
+            });
+    CHECK(
+        disconnected_left_region !=
+        disconnected_analysis.regions.end());
+    const auto disconnected_intent =
+        part::makeProfileRegionIntent(
+            *disconnected_left_region);
+    CHECK(disconnected_intent.has_value());
+    CHECK(
+        part::applyProfileAreaEdit(
+            disconnected_model,
+            *disconnected_intent,
+            *disconnected_right.region_index,
+            part::ProfileAreaEditMode::add_area)
+            .status ==
+        part::ProfileAreaEditStatus::
+            disconnected_result);
+
+    sketch::SketchModel tangent_add_model;
+    (void)tangent_add_model.addCircle(
+        {-1.0, 0.0},
+        1.0);
+    (void)tangent_add_model.addCircle(
+        {1.0, 0.0},
+        1.0);
+    const auto tangent_add_analysis =
+        sketch::analyzeRegions(
+            tangent_add_model);
+    CHECK(
+        tangent_add_analysis.regions.size() ==
+        2U);
+    const auto tangent_left_pick =
+        sketch::pickRegion(
+            tangent_add_model,
+            tangent_add_analysis,
+            {-1.0, 0.0});
+    const auto tangent_right_pick =
+        sketch::pickRegion(
+            tangent_add_model,
+            tangent_add_analysis,
+            {1.0, 0.0});
+    CHECK(tangent_left_pick.region_index.has_value());
+    CHECK(tangent_right_pick.region_index.has_value());
+    const auto tangent_left_region =
+        std::find_if(
+            tangent_add_analysis.regions.begin(),
+            tangent_add_analysis.regions.end(),
+            [&tangent_left_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *tangent_left_pick.region_index;
+            });
+    CHECK(
+        tangent_left_region !=
+        tangent_add_analysis.regions.end());
+    const auto tangent_add_intent =
+        part::makeProfileRegionIntent(
+            *tangent_left_region);
+    CHECK(tangent_add_intent.has_value());
+    CHECK(
+        part::applyProfileAreaEdit(
+            tangent_add_model,
+            *tangent_add_intent,
+            *tangent_right_pick.region_index,
+            part::ProfileAreaEditMode::add_area)
+            .status ==
+        part::ProfileAreaEditStatus::
+            disconnected_result);
+
+    // Subtracting a disjoint candidate is a draft no-op.
+    CHECK(
+        part::applyProfileAreaEdit(
+            disconnected_model,
+            *disconnected_intent,
+            *disconnected_right.region_index,
+            part::ProfileAreaEditMode::
+                subtract_area)
+            .status ==
+        part::ProfileAreaEditStatus::no_change);
+
     return EXIT_SUCCESS;
 }
