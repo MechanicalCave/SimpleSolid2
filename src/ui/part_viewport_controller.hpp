@@ -126,7 +126,9 @@ public:
 
     [[nodiscard]] bool setProfileDraftPreview(
         const std::optional<sketch::RegionCandidate2D>& region,
-        bool show_boundary = false);
+        bool show_boundary = false,
+        viewer::ProfilePreviewTone tone =
+            viewer::ProfilePreviewTone::additive);
     void clearProfileDraftPreview();
 
     [[nodiscard]] bool setSketchPrimaryPointerRouting(

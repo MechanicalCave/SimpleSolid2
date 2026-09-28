@@ -56,9 +56,15 @@ struct ProfileScene final {
     }
 };
 
+enum class ProfilePreviewTone {
+    additive,
+    subtractive,
+};
+
 struct ProfilePreviewScene final {
     std::optional<ProfileRegionPresentation> region;
     bool show_boundary{false};
+    ProfilePreviewTone tone{ProfilePreviewTone::additive};
 
     [[nodiscard]] bool valid() const noexcept {
         return !region || region->valid();

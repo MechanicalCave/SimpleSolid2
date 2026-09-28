@@ -1154,9 +1154,15 @@ public:
                 false);
             context_->SetColor(
                 object,
-                Quantity_Color{
-                    0.22, 0.82, 0.96,
-                    Quantity_TOC_RGB},
+                scene.tone ==
+                        viewer::ProfilePreviewTone::
+                            subtractive
+                    ? Quantity_Color{
+                          0.98, 0.33, 0.16,
+                          Quantity_TOC_RGB}
+                    : Quantity_Color{
+                          0.22, 0.82, 0.96,
+                          Quantity_TOC_RGB},
                 false);
             context_->SetTransparency(
                 object,

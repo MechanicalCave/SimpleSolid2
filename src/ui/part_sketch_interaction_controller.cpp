@@ -2641,7 +2641,14 @@ void PartSketchInteractionController::notifyStateChanged() {
                 viewport_controller_->setProfileDraftPreview(
                     preview,
                     profile_session_->
-                        options.show_region_boundaries));
+                        options.show_region_boundaries,
+                    profile_session_->area_mode ==
+                            part::ProfileAreaEditMode::
+                                subtract_area
+                        ? viewer::ProfilePreviewTone::
+                              subtractive
+                        : viewer::ProfilePreviewTone::
+                              additive));
         }
     }
 

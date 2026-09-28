@@ -694,7 +694,8 @@ void PartViewportController::clearSketchPreview() {
 
 bool PartViewportController::setProfileDraftPreview(
     const std::optional<sketch::RegionCandidate2D>& region,
-    bool show_boundary) {
+    bool show_boundary,
+    viewer::ProfilePreviewTone tone) {
     if (viewport_ == nullptr) return false;
     if (!region) {
         return viewport_->setProfilePreviewScene(
@@ -711,7 +712,8 @@ bool PartViewportController::setProfileDraftPreview(
            viewport_->setProfilePreviewScene(
                viewer::ProfilePreviewScene{
                    *presentation,
-                   show_boundary});
+                   show_boundary,
+                   tone});
 }
 
 void PartViewportController::clearProfileDraftPreview() {

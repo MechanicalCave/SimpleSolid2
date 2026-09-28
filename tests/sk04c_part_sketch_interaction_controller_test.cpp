@@ -594,6 +594,9 @@ int main(int argc, char* argv[]) {
     CHECK(
         interaction.profileHoverPreview()
             ->holes.size() == 1U);
+    CHECK(
+        viewport.profile_preview_scene_.tone ==
+        viewer::ProfilePreviewTone::subtractive);
 
     interaction.onPointer(pointer(
         sketch_id,
