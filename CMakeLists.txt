@@ -23,8 +23,15 @@ option(
     OFF
 )
 
+option(
+    SS2_ENABLE_E2_PRESENTATION_BENCHMARK
+    "Build the E2 presentation measurement evidence target"
+    OFF
+)
+
 add_subdirectory(src)
-if(SS2_ENABLE_C2_HISTORY_BENCHMARK)
+if(SS2_ENABLE_C2_HISTORY_BENCHMARK OR
+   SS2_ENABLE_E2_PRESENTATION_BENCHMARK)
     add_subdirectory(benchmarks)
 endif()
 if(SS2_BUILD_DESKTOP)
