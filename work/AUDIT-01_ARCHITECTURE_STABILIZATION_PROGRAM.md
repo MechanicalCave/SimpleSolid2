@@ -72,7 +72,7 @@ Default order is strict:
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **COMPLETED — KEEP accepted 2026-09-28** |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | **COMPLETED — 2026-09-28** |
 | 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | **COMPLETED — 2026-09-28** |
-| 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | future bounded Work Contract |
+| 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | **COMPLETED — KEEP accepted 2026-09-28** |
 | 9 | **F — region/profile semantics gate** | accepted exact region/profile semantics required by Part before solid modeling | future bounded Work Contract |
 
 Interleaving feature work with this order requires an explicit Owner scheduling amendment. Context loss is not authorization to skip a package.
@@ -534,6 +534,21 @@ Required:
 - renderer tessellation/chords never define region/profile semantics.
 
 Any optimization claim requires measured before/after evidence and preserved picking behavior.
+
+### E2 completion record
+
+**Completed:** 2026-09-28  
+**Phase A measured candidate:** `401629b8cc4f943e6ad5577918bb1999256fdc37` — Windows FULL #727 PASS with dedicated Release presentation benchmark  
+**Final documentation-complete candidate:** `6c021cf7140fbb9cc7181def5eaa812e74d9a05d` — Windows FULL #736 PASS — 77/77 CTest  
+**Performance decision:** KEEP CURRENT REBUILD
+
+E2 measured authored refresh, native scene replacement and pointer/transform preview behavior before making an optimization decision. The accepted result keeps the current full authored-scene replacement design; differential updates and public `IDocumentViewport` expansion were not justified by the measured evidence.
+
+Provider-setter failure is now explicit and recoverable at runtime: a successful CAD command remains authored authority, revision/dirty/Undo state is not rolled back because presentation failed, the Workbench surfaces degraded presentation state, and the next full refresh retries from current authored state. Successful full refresh clears the degraded state.
+
+Circle/Arc sampling and native presentation segments remain presentation-only and never define closure, intersections, loops, regions or profiles. Package F must consume exact accepted/evaluated 2D geometry outside Viewer.
+
+E2 is **MEASURED / DECIDED / IMPLEMENTED / VERIFIED / COMPLETED**. Package F is next in AUDIT-01 but remains inactive until a separate bounded Work Contract is explicitly Owner-accepted.
 
 ## 13. Package F — region and profile semantics gate
 
