@@ -2830,26 +2830,62 @@ buildComponentLoops(
            *first == *second;
 }
 
-[[nodiscard]] bool allowedAdjacentContact(
+[[nodiscard]] bool relationParametersMatch(
+    const CurveRelation2D& relation,
+    const CurveIntersection2D& item,
+    const RegionBoundaryUse2D& first,
+    double first_parameter,
+    const RegionBoundaryUse2D& second,
+    double second_parameter) noexcept {
+    const double relation_first =
+        relation.first_entity ==
+                first.source_entity
+            ? item.first_parameter
+            : item.second_parameter;
+    const double relation_second =
+        relation.first_entity ==
+                second.source_entity
+            ? item.first_parameter
+            : item.second_parameter;
+    return relation_first == first_parameter &&
+           relation_second == second_parameter;
+}
+
+[[nodiscard]] bool usesJoin(
     const SketchModel& model,
     const RegionBoundaryUse2D& first,
-    const RegionBoundaryUse2D& second,
-    Point2 point) {
-    const auto first_curve =
-        curveView(model, first.source_entity);
-    const auto second_curve =
-        curveView(model, second.source_entity);
-    if (!first_curve || !second_curve) {
+    const RegionBoundaryUse2D& second) {
+    if (first.source_entity ==
+        second.source_entity) {
+        return first.end_parameter ==
+                   second.start_parameter &&
+               first.end_anchor ==
+                   second.start_anchor;
+    }
+
+    const auto relation =
+        analyzeCurveRelation(
+            model,
+            first.source_entity,
+            second.source_entity);
+    if (relation.status !=
+        CurveRelationStatus::discrete) {
         return false;
     }
-    const auto first_end =
-        useEndPoint(*first_curve, first);
-    const auto second_start =
-        useStartPoint(*second_curve, second);
-    return first_end &&
-           second_start &&
-           *first_end == point &&
-           *second_start == point;
+
+    return std::any_of(
+        relation.intersections.begin(),
+        relation.intersections.end(),
+        [&relation, &first, &second](
+            const CurveIntersection2D& item) {
+            return relationParametersMatch(
+                relation,
+                item,
+                first,
+                first.end_parameter,
+                second,
+                second.start_parameter);
+        });
 }
 
 [[nodiscard]] bool usesHaveUnexpectedContact(
@@ -2975,11 +3011,13 @@ buildComponentLoops(
         }
 
         if (!adjacent_first_to_second ||
-            !allowedAdjacentContact(
-                model,
+            !relationParametersMatch(
+                relation,
+                item,
                 first,
+                first.end_parameter,
                 second,
-                item.point)) {
+                second.start_parameter)) {
             return true;
         }
     }
@@ -2999,18 +3037,14 @@ buildComponentLoops(
         return true;
     }
 
-    const auto first_start =
-        useStartPoint(*first_curve, first);
-    const auto first_end =
-        useEndPoint(*first_curve, first);
-    const auto second_start =
-        useStartPoint(*second_curve, second);
-    const auto second_end =
-        useEndPoint(*second_curve, second);
-    if (!first_start || !first_end ||
-        !second_start || !second_end ||
-        *first_end != *second_start ||
-        *second_end != *first_start) {
+    if (!usesJoin(
+            model,
+            first,
+            second) ||
+        !usesJoin(
+            model,
+            second,
+            first)) {
         return true;
     }
 
@@ -3070,8 +3104,24 @@ buildComponentLoops(
             continue;
         }
 
-        if (item.point != *first_end &&
-            item.point != *second_end) {
+        const bool forward_join =
+            relationParametersMatch(
+                relation,
+                item,
+                first,
+                first.end_parameter,
+                second,
+                second.start_parameter);
+        const bool reverse_join =
+            relationParametersMatch(
+                relation,
+                item,
+                first,
+                first.start_parameter,
+                second,
+                second.end_parameter);
+        if (!forward_join &&
+            !reverse_join) {
             return true;
         }
     }
@@ -3154,16 +3204,10 @@ validatedLoop(
                 loop.boundary[
                     (index + 1U) %
                     loop.boundary.size()];
-            const auto next_curve =
-                curveView(
+            if (!usesJoin(
                     model,
-                    next.source_entity);
-            if (!next_curve ||
-                !samePoint(
-                    useEndPoint(*curve, use),
-                    useStartPoint(
-                        *next_curve,
-                        next))) {
+                    use,
+                    next)) {
                 return std::nullopt;
             }
         }
