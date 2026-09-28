@@ -287,6 +287,136 @@ bool PartSketchInteractionController::activateCadInputSemanticTool(
     return false;
 }
 
+application::CadInputSubmitResult
+PartSketchInteractionController::
+submitCadInputSemanticProfileCommand(
+    const application::ProfileCadInputCommand& command) {
+    using Kind =
+        application::ProfileCadInputCommandKind;
+
+    switch (command.kind) {
+    case Kind::start_create:
+        if (!activateProfileCreate()) {
+            return {
+                false,
+                "PROFILE could not be activated."};
+        }
+        return {true, {}};
+
+    case Kind::start_edit:
+        // Profile semantic selection is wired in the later Profile
+        // Tree/Viewport selection atom. Until then, fail closed rather
+        // than guessing an authored Profile from geometry or list order.
+        return {
+            false,
+            "EDITPROFILE requires exactly one selected Profile."};
+
+    case Kind::add_area:
+        if (!profile_session_) {
+            return {
+                false,
+                "ADD requires an active Profile session."};
+        }
+        return {
+            setProfileAreaMode(
+                part::ProfileAreaEditMode::add_area),
+            {}};
+
+    case Kind::subtract_area:
+        if (!profile_session_) {
+            return {
+                false,
+                "SUBTRACT requires an active Profile session."};
+        }
+        return {
+            setProfileAreaMode(
+                part::ProfileAreaEditMode::subtract_area),
+            {}};
+
+    case Kind::find_all_regions:
+        if (!profile_session_ ||
+            !ensureProfileAnalysis() ||
+            !profile_analysis_cache_) {
+            return {
+                false,
+                "FIND requires an active analyzable Profile session."};
+        }
+        reportStatus(
+            "Profile regions: " +
+            std::to_string(
+                profile_analysis_cache_->
+                    analysis.regions.size()) +
+            "; problems: " +
+            std::to_string(
+                profile_analysis_cache_->
+                    analysis.diagnostics.size()) +
+            ".");
+        return {true, {}};
+
+    case Kind::finish:
+        if (!profile_session_) {
+            return {
+                false,
+                "FINISH requires an active Profile session."};
+        }
+        if (!finishProfile()) {
+            return {
+                false,
+                "Profile Finish was rejected."};
+        }
+        return {true, {}};
+
+    case Kind::cancel:
+        if (!profile_session_) {
+            return {
+                false,
+                "CANCEL requires an active Profile session."};
+        }
+        cancelProfile();
+        return {true, {}};
+
+    case Kind::set_detect_islands:
+    case Kind::set_show_boundaries:
+    case Kind::set_show_problems:
+        if (!profile_session_ ||
+            !command.enabled.has_value()) {
+            return {
+                false,
+                "Profile option command requires an active Profile session and ON/OFF."};
+        }
+
+        {
+            auto options =
+                profileToolOptions();
+            if (command.kind ==
+                Kind::set_detect_islands) {
+                options.detect_islands =
+                    *command.enabled;
+            } else if (
+                command.kind ==
+                Kind::set_show_boundaries) {
+                options.show_region_boundaries =
+                    *command.enabled;
+            } else {
+                options.show_problems =
+                    *command.enabled;
+            }
+
+            if (!setProfileToolOptions(
+                    options)) {
+                return {
+                    false,
+                    "Profile option could not be changed."};
+            }
+        }
+        return {true, {}};
+    }
+
+    return {
+        false,
+        "Unsupported Profile command."};
+}
+
 std::size_t
 PartSketchInteractionController::selectedCount() const noexcept {
     return interaction_.selectedEntities().size();

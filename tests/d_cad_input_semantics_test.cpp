@@ -26,6 +26,10 @@ public:
     std::optional<sketch::PointRequest> request;
     std::optional<sketch::SketchTool> activated;
     std::optional<double> submitted_distance;
+    std::optional<application::ProfileCadInputCommand>
+        profile_command;
+    application::CadInputSubmitResult
+        profile_result{true, {}};
 
     bool cadInputSemanticActive() const noexcept override { return active; }
     std::optional<sketch::PointRequest>
@@ -37,6 +41,13 @@ public:
     bool submitCadInputSemanticDirectDistance(double distance) override {
         submitted_distance = distance;
         return direct_result;
+    }
+
+    application::CadInputSubmitResult
+    submitCadInputSemanticProfileCommand(
+        const application::ProfileCadInputCommand& command) override {
+        profile_command = command;
+        return profile_result;
     }
 };
 } // namespace
@@ -60,6 +71,53 @@ int main() {
     CHECK(result.accepted);
     CHECK(target.activated == sketch::SketchTool::copy);
 
+    target.profile_command.reset();
+    result = dot.submit("PROFILE");
+    CHECK(result.accepted);
+    CHECK(target.profile_command.has_value());
+    CHECK(
+        target.profile_command->kind ==
+        application::ProfileCadInputCommandKind::
+            start_create);
+
+    target.profile_command.reset();
+    result = dot.submit(" subtract ");
+    CHECK(result.accepted);
+    CHECK(target.profile_command.has_value());
+    CHECK(
+        target.profile_command->kind ==
+        application::ProfileCadInputCommandKind::
+            subtract_area);
+
+    target.profile_command.reset();
+    result = dot.submit("ISLANDS OFF");
+    CHECK(result.accepted);
+    CHECK(target.profile_command.has_value());
+    CHECK(
+        target.profile_command->kind ==
+        application::ProfileCadInputCommandKind::
+            set_detect_islands);
+    CHECK(target.profile_command->enabled == false);
+
+    target.profile_command.reset();
+    result = dot.submit("BOUNDARIES ON");
+    CHECK(result.accepted);
+    CHECK(target.profile_command.has_value());
+    CHECK(
+        target.profile_command->kind ==
+        application::ProfileCadInputCommandKind::
+            set_show_boundaries);
+    CHECK(target.profile_command->enabled == true);
+
+    target.profile_command.reset();
+    result = dot.submit("EDITPROFILE");
+    CHECK(result.accepted);
+    CHECK(target.profile_command.has_value());
+    CHECK(
+        target.profile_command->kind ==
+        application::ProfileCadInputCommandKind::
+            start_edit);
+
     target.activated.reset();
     result = dot.submit("nonesuch");
     CHECK(!result.accepted);
@@ -78,6 +136,13 @@ int main() {
 
     target.activated.reset();
     target.submitted_distance.reset();
+    target.profile_command.reset();
+    result = dot.submit("PROFILE");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic ==
+          "Active point input expects a bare finite distance.");
+    CHECK(!target.profile_command.has_value());
+
     result = dot.submit("LINE");
     CHECK(!result.accepted);
     CHECK(result.diagnostic ==

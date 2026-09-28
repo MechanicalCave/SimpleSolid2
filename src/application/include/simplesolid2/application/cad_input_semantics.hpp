@@ -13,6 +13,25 @@ struct CadInputNumberFormat final {
     std::string decimal_separator{"."};
 };
 
+enum class ProfileCadInputCommandKind {
+    start_create,
+    start_edit,
+    add_area,
+    subtract_area,
+    find_all_regions,
+    finish,
+    cancel,
+    set_detect_islands,
+    set_show_boundaries,
+    set_show_problems,
+};
+
+struct ProfileCadInputCommand final {
+    ProfileCadInputCommandKind kind{
+        ProfileCadInputCommandKind::start_create};
+    std::optional<bool> enabled;
+};
+
 class ISketchCadInputSemanticTarget {
 public:
     virtual ~ISketchCadInputSemanticTarget() = default;
@@ -28,6 +47,10 @@ public:
 
     [[nodiscard]] virtual bool submitCadInputSemanticDirectDistance(
         double distance) = 0;
+
+    [[nodiscard]] virtual CadInputSubmitResult
+    submitCadInputSemanticProfileCommand(
+        const ProfileCadInputCommand& command) = 0;
 };
 
 class SketchCadInputSemanticEndpoint final {

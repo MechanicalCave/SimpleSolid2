@@ -80,6 +80,10 @@ public:
         double distance) override {
         return submitDirectDistance(distance);
     }
+    [[nodiscard]] application::CadInputSubmitResult
+    submitCadInputSemanticProfileCommand(
+        const application::ProfileCadInputCommand&
+            command) override;
 
     [[nodiscard]] std::size_t selectedCount() const noexcept;
     [[nodiscard]] bool directManipulationActive()

@@ -2,6 +2,7 @@
 #include "part_sketch_interaction_controller.hpp"
 #include "part_viewport_controller.hpp"
 
+#include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/profile.hpp>
 
@@ -359,6 +360,65 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.escape());
     CHECK(interaction.selectedCount() == 0U);
     CHECK(!interaction.escape());
+
+    // Package F Command Line uses the existing semantic endpoint and the
+    // same controller-owned Profile session; no QWidget parser/state exists.
+    application::SketchCadInputSemanticEndpoint
+        profile_command_endpoint{
+            interaction,
+            application::CadInputNumberFormat{"."}};
+
+    auto profile_command =
+        profile_command_endpoint.submit(
+            "PROFILE");
+    CHECK(profile_command.accepted);
+    CHECK(interaction.profileToolActive());
+    CHECK(
+        interaction.profileAreaMode() ==
+        part::ProfileAreaEditMode::add_area);
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "SUBTRACT");
+    CHECK(profile_command.accepted);
+    CHECK(
+        interaction.profileAreaMode() ==
+        part::ProfileAreaEditMode::subtract_area);
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "ISLANDS OFF");
+    CHECK(profile_command.accepted);
+    CHECK(
+        !interaction.profileToolOptions()
+             .detect_islands);
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "BOUNDARIES ON");
+    CHECK(profile_command.accepted);
+    CHECK(
+        interaction.profileToolOptions()
+            .show_region_boundaries);
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "FIND");
+    CHECK(profile_command.accepted);
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "CANCEL");
+    CHECK(profile_command.accepted);
+    CHECK(!interaction.profileToolActive());
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "EDITPROFILE");
+    CHECK(!profile_command.accepted);
+    CHECK(
+        profile_command.diagnostic ==
+        "EDITPROFILE requires exactly one selected Profile.");
 
     // Package F Profile tool session: hover/draft are runtime-only and the
     // full Create/Edit session commits exactly once on Finish.
