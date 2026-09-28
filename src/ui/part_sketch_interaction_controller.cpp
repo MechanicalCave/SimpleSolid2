@@ -1725,6 +1725,8 @@ handleProfilePointer(
                 profile_session_->hover_result
                     ->region_intent;
             notifyStateChanged();
+            reportStatus(
+                "Profile draft updated. Use Finish Profile to commit.");
             return;
         }
 
