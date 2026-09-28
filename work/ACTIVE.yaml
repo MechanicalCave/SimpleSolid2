@@ -265,3 +265,8 @@ notes:
 
   - Owner explicitly accepted Package E2 on 2026-09-28 and directed verification to be consolidated to the necessary minimum without dropping required evidence.
   - E2 is active on proposal-e2-presentation-scale-provider-failure; Phase A measurement/call-count characterization must precede optimization.
+
+  - E2 Phase A exact measured SHA 401629b8cc4f943e6ad5577918bb1999256fdc37 passed Windows FULL #727 with 77/77 CTest plus the dedicated Release presentation benchmark.
+  - Phase A added no new CTest executable; required call-count/failure-preview assertions are consolidated in sk03a.part_viewport_controller.
+  - E2 performance decision is KEEP CURRENT REBUILD: ~33 ms native floor through 1,000 line objects, ~83 ms around 4,000-5,000 native objects, with large/highly segmented Sketch scale retained as a documented risk.
+  - Differential-update/public IDocumentViewport expansion is not justified by current evidence; provider-failure consistency/recovery remains active E2 scope.
