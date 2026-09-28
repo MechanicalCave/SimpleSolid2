@@ -1202,12 +1202,22 @@ CadWorkbench::submitCadInput(
         return {false, "No active CAD command context."};
     }
 
+    const bool top_level_command_context =
+        !sketch_interaction_controller_->
+             activePointRequest()
+             .has_value();
+
     application::SketchCadInputSemanticEndpoint endpoint{
         *sketch_interaction_controller_,
         application::CadInputNumberFormat{
             toUtf8(QLocale{}.decimalPoint())}};
 
     auto result = endpoint.submit(text);
+    if (result.accepted &&
+        top_level_command_context &&
+        viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
     if (!result.accepted &&
         status_ != nullptr &&
         !result.diagnostic.empty()) {
