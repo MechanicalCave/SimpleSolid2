@@ -5,6 +5,7 @@
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
 #include <QAction>
+#include <QCheckBox>
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
@@ -413,6 +414,27 @@ int main(int argc, char* argv[]) {
     auto* edit_sketch_action =
         workbench.findChild<QAction*>(
             QStringLiteral("editSketchAction"));
+    auto* edit_profile_action =
+        workbench.findChild<QAction*>(
+            QStringLiteral("editProfileAction"));
+    auto* profile_properties_page =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("profilePropertiesPage"));
+    auto* profile_name_edit =
+        workbench.findChild<QLineEdit*>(
+            QStringLiteral("profilePropertyName"));
+    auto* profile_visible_check =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("profilePropertyVisible"));
+    auto* profile_source_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("profilePropertySourceSketch"));
+    auto* profile_status_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("profilePropertyStatus"));
+    auto* apply_profile_properties =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("applyProfilePropertiesButton"));
     auto* operations_content =
         workbench.findChild<QWidget*>(
             QStringLiteral("partOperationsContent"));
@@ -500,6 +522,13 @@ int main(int argc, char* argv[]) {
     CHECK(redo_button != nullptr);
     CHECK(tree != nullptr);
     CHECK(edit_sketch_action != nullptr);
+    CHECK(edit_profile_action != nullptr);
+    CHECK(profile_properties_page != nullptr);
+    CHECK(profile_name_edit != nullptr);
+    CHECK(profile_visible_check != nullptr);
+    CHECK(profile_source_label != nullptr);
+    CHECK(profile_status_label != nullptr);
+    CHECK(apply_profile_properties != nullptr);
     CHECK(operations_content != nullptr);
     CHECK(editor_host != nullptr);
     CHECK(operations_label != nullptr);
@@ -719,6 +748,216 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(!profile_button->isChecked());
     CHECK(profile_operations->isHidden());
+
+    // Package F: authored Profiles are semantic Tree children of their
+    // source Sketch. Tree selection carries ProfileId into Properties and
+    // EDITPROFILE; labels/status are derived from current evaluation.
+    const auto profile_tree_undo_baseline =
+        session->undoDepth();
+
+    const auto tree_circle =
+        session->execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                sketch::Point2{50.0, 50.0},
+                5.0});
+    CHECK(tree_circle.ok());
+    CHECK(tree_circle.entity_id.has_value());
+
+    const auto* tree_profile_source =
+        session->document()
+            .findSketch(sketch_id);
+    CHECK(tree_profile_source != nullptr);
+    const auto tree_profile_analysis =
+        sketch::analyzeRegions(
+            tree_profile_source->model);
+    const auto tree_profile_pick =
+        sketch::pickRegion(
+            tree_profile_source->model,
+            tree_profile_analysis,
+            sketch::Point2{50.0, 50.0});
+    CHECK(tree_profile_pick.region_index.has_value());
+    const auto tree_profile_region =
+        std::find_if(
+            tree_profile_analysis.regions.begin(),
+            tree_profile_analysis.regions.end(),
+            [&tree_profile_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *tree_profile_pick.region_index;
+            });
+    CHECK(
+        tree_profile_region !=
+        tree_profile_analysis.regions.end());
+    const auto tree_profile_intent =
+        part::makeProfileRegionIntent(
+            *tree_profile_region);
+    CHECK(tree_profile_intent.has_value());
+
+    const auto tree_profile_created =
+        session->execute(
+            application::CreateProfileCommand{
+                sketch_id,
+                session->document().revision(),
+                *tree_profile_intent});
+    CHECK(tree_profile_created.ok());
+    CHECK(tree_profile_created.profile_id.has_value());
+    const auto tree_profile_id =
+        *tree_profile_created.profile_id;
+
+    CHECK(
+        workbench.activateDocument(
+            session,
+            workspace));
+    QApplication::processEvents();
+
+    auto profile_items =
+        tree->findItems(
+            QStringLiteral("Profile001"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    auto* profile_item =
+        profile_items.front();
+    CHECK(profile_item != nullptr);
+    CHECK(profile_item->parent() != nullptr);
+    CHECK(
+        profile_item->parent()->text(0) ==
+        QStringLiteral("Sketch 1"));
+
+    tree->clearSelection();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+
+    CHECK(!profile_properties_page->isHidden());
+    CHECK(
+        profile_name_edit->text() ==
+        QStringLiteral("Profile001"));
+    CHECK(profile_visible_check->isChecked());
+    CHECK(
+        profile_source_label->text() ==
+        QString::fromUtf8(
+            sketch_id.value().data(),
+            static_cast<qsizetype>(
+                sketch_id.value().size())));
+    CHECK(
+        profile_status_label->text() ==
+        QStringLiteral("Valid"));
+
+    command_input->setText(
+        QStringLiteral("EDITPROFILE"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(profile_button->isChecked());
+    CHECK(!profile_operations->isHidden());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Profile — Edit — Profile001"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: EDITPROFILE — Add Area — Hover/click bounded region"));
+    profile_cancel_button->click();
+    QApplication::processEvents();
+
+    profile_name_edit->setText(
+        QStringLiteral("Main Profile"));
+    profile_visible_check->setChecked(false);
+    apply_profile_properties->click();
+    QApplication::processEvents();
+
+    const auto* renamed_profile =
+        session->document()
+            .findProfile(tree_profile_id);
+    CHECK(renamed_profile != nullptr);
+    CHECK(
+        renamed_profile->name ==
+        "Main Profile");
+    CHECK(!renamed_profile->visible);
+
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    CHECK(profile_item->font(0).italic());
+
+    const auto construction_result =
+        session->execute(
+            application::SetSketchEntityRoleCommand{
+                sketch_id,
+                session->document().revision(),
+                {*tree_circle.entity_id},
+                sketch::EntityRole::construction});
+    CHECK(construction_result.ok());
+    CHECK(
+        workbench.activateDocument(
+            session,
+            workspace));
+    QApplication::processEvents();
+
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile [Invalid]"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    tree->clearSelection();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+    CHECK(
+        profile_status_label->text() ==
+        QStringLiteral("Invalid"));
+
+    const auto regular_result =
+        session->execute(
+            application::SetSketchEntityRoleCommand{
+                sketch_id,
+                session->document().revision(),
+                {*tree_circle.entity_id},
+                sketch::EntityRole::regular});
+    CHECK(regular_result.ok());
+    CHECK(
+        workbench.activateDocument(
+            session,
+            workspace));
+    QApplication::processEvents();
+    CHECK(
+        tree->findItems(
+                QStringLiteral("Main Profile"),
+                Qt::MatchExactly |
+                    Qt::MatchRecursive,
+                0)
+            .size() == 1);
+
+    while (session->undoDepth() >
+           profile_tree_undo_baseline) {
+        const auto undone =
+            session->undo();
+        CHECK(undone.ok());
+        CHECK(undone.changed);
+    }
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 0U);
+    CHECK(session->document().profiles().empty());
+    CHECK(
+        workbench.activateDocument(
+            session,
+            workspace));
+    QApplication::processEvents();
 
     // SK-07D: a fresh Sketch edit session has no repeat target.
     QTest::keyClick(viewport, Qt::Key_Return);

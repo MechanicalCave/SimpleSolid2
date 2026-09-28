@@ -6,6 +6,7 @@
 
 #include <simplesolid2/application/cad_input_semantics.hpp>
 
+#include <QCheckBox>
 #include <QEvent>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -427,6 +428,30 @@ void CadWorkbench::buildUi() {
         [this](const std::string& message) {
             setStatusText(fromUtf8(message));
         });
+
+    tree_controller_->setProfileSelectionHandler(
+        [this](
+            const std::vector<part::ProfileId>& selected,
+            std::optional<part::ProfileId> primary) {
+            const auto semantic =
+                selected.size() == 1U && primary
+                    ? primary
+                    : std::nullopt;
+            if (sketch_interaction_controller_) {
+                sketch_interaction_controller_->
+                    setSelectedProfileForCadInput(
+                        semantic);
+            }
+            if (primary) {
+                refreshProfileProperties(*primary);
+            }
+            syncSketchInteractionUi();
+        });
+    tree_controller_->setProfileEditHandler(
+        [this](part::ProfileId profile_id) {
+            requestEditProfile(profile_id);
+        });
+
     viewport_controller_->setSketchPointerHandler(
         [this](const SketchPointerInput& input) {
             if (sketch_interaction_controller_) {
@@ -561,6 +586,69 @@ void CadWorkbench::buildUi() {
 
     properties_stack_->addWidget(
         reference_properties_page_);
+
+    profile_properties_page_ =
+        new QWidget(properties_stack_);
+    profile_properties_page_->setObjectName(
+        QStringLiteral("profilePropertiesPage"));
+    auto* profile_root =
+        new QFormLayout(profile_properties_page_);
+
+    profile_name_ =
+        new QLineEdit(profile_properties_page_);
+    profile_name_->setObjectName(
+        QStringLiteral("profilePropertyName"));
+
+    profile_identity_ =
+        new QLabel(profile_properties_page_);
+    profile_identity_->setObjectName(
+        QStringLiteral("profilePropertyIdentity"));
+
+    profile_source_ =
+        new QLabel(profile_properties_page_);
+    profile_source_->setObjectName(
+        QStringLiteral("profilePropertySourceSketch"));
+    profile_source_->setWordWrap(true);
+
+    profile_status_ =
+        new QLabel(profile_properties_page_);
+    profile_status_->setObjectName(
+        QStringLiteral("profilePropertyStatus"));
+
+    profile_visible_ =
+        new QCheckBox(
+            QStringLiteral("Visible"),
+            profile_properties_page_);
+    profile_visible_->setObjectName(
+        QStringLiteral("profilePropertyVisible"));
+
+    apply_profile_button_ =
+        new QPushButton(
+            QStringLiteral("Apply Profile Properties"),
+            profile_properties_page_);
+    apply_profile_button_->setObjectName(
+        QStringLiteral("applyProfilePropertiesButton"));
+
+    profile_root->addRow(
+        QStringLiteral("Name"),
+        profile_name_);
+    profile_root->addRow(
+        QStringLiteral("ProfileId"),
+        profile_identity_);
+    profile_root->addRow(
+        QStringLiteral("Source Sketch"),
+        profile_source_);
+    profile_root->addRow(
+        QStringLiteral("Status"),
+        profile_status_);
+    profile_root->addRow(
+        QStringLiteral("Visibility"),
+        profile_visible_);
+    profile_root->addRow(
+        apply_profile_button_);
+
+    properties_stack_->addWidget(
+        profile_properties_page_);
     properties_stack_->setCurrentWidget(
         document_properties_page_);
 
@@ -763,6 +851,11 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { applyProperties(); });
+    QObject::connect(
+        apply_profile_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { applyProfileProperties(); });
     QObject::connect(
         sketch_button_,
         &QPushButton::clicked,
@@ -1066,6 +1159,46 @@ void CadWorkbench::applyProperties() {
             : QStringLiteral("No authored property change."));
 }
 
+void CadWorkbench::applyProfileProperties() {
+    auto* document_session = activeDocumentSession();
+    if (document_session == nullptr ||
+        !selected_profile_id_) {
+        return;
+    }
+
+    const auto profile_id =
+        *selected_profile_id_;
+    if (document_session->document()
+            .findProfile(profile_id) == nullptr) {
+        selected_profile_id_.reset();
+        properties_stack_->setCurrentWidget(
+            document_properties_page_);
+        return;
+    }
+
+    const auto result =
+        document_session->execute(
+            application::SetProfilePropertiesCommand{
+                profile_id,
+                document_session->document().revision(),
+                toUtf8(profile_name_->text()),
+                profile_visible_->isChecked()});
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        refreshProfileProperties(profile_id);
+        return;
+    }
+
+    refreshActiveContext();
+    refreshProfileProperties(profile_id);
+    setStatusText(
+        result.changed
+            ? QStringLiteral(
+                  "Profile properties changed — save is required.")
+            : QStringLiteral(
+                  "No authored Profile property change."));
+}
+
 void CadWorkbench::startSketchTool() {
     if (activeDocumentSession() == nullptr ||
         sketch_support_pick_active_) {
@@ -1139,6 +1272,64 @@ void CadWorkbench::requestEditSketch(
     setStatusText(
         QStringLiteral(
             "Sketch edit context opened in the 3D Viewport."));
+}
+
+void CadWorkbench::requestEditProfile(
+    part::ProfileId profile_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        return;
+    }
+
+    const auto* profile =
+        document_session->document()
+            .findProfile(profile_id);
+    if (profile == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Profile is no longer available in the active Part."));
+        return;
+    }
+
+    if (active_sketch_id_ &&
+        *active_sketch_id_ !=
+            profile->source_sketch_id) {
+        setStatusText(
+            QStringLiteral(
+                "Finish the active Sketch before editing a Profile from another Sketch."));
+        return;
+    }
+
+    if (!active_sketch_id_) {
+        requestEditSketch(
+            profile->source_sketch_id);
+    }
+
+    if (!active_sketch_id_ ||
+        *active_sketch_id_ !=
+            profile->source_sketch_id ||
+        !sketch_interaction_controller_) {
+        return;
+    }
+
+    sketch_interaction_controller_->
+        setSelectedProfileForCadInput(profile_id);
+    if (!sketch_interaction_controller_->
+             activateProfileEdit(profile_id)) {
+        setStatusText(
+            QStringLiteral(
+                "Profile edit could not be activated."));
+        return;
+    }
+
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    setStatusText(
+        QStringLiteral(
+            "Profile edit context opened."));
 }
 
 void CadWorkbench::tryCreateSketchFromSupport(
@@ -1224,6 +1415,15 @@ void CadWorkbench::enterSketchEdit(
         sketch_interaction_controller_->begin(
             *document_session,
             sketch_id);
+
+        const auto selected_profiles =
+            tree_controller_->selectedProfileIds();
+        sketch_interaction_controller_->
+            setSelectedProfileForCadInput(
+                selected_profiles.size() == 1U
+                    ? tree_controller_->
+                          primaryProfileId()
+                    : std::nullopt);
     }
 
     if (viewport_ != nullptr) {
@@ -1861,6 +2061,12 @@ void CadWorkbench::clearActiveContext() {
     title_->clear();
     description_->clear();
     engineering_revision_->clear();
+    selected_profile_id_.reset();
+    profile_name_->clear();
+    profile_identity_->clear();
+    profile_source_->clear();
+    profile_status_->clear();
+    profile_visible_->setChecked(false);
 
     number_->setEnabled(false);
     title_->setEnabled(false);
@@ -1986,6 +2192,48 @@ void CadWorkbench::refreshPropertiesContext(
 
     properties_stack_->setCurrentWidget(
         reference_properties_page_);
+}
+
+void CadWorkbench::refreshProfileProperties(
+    part::ProfileId profile_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (properties_stack_ == nullptr ||
+        document_session == nullptr) {
+        return;
+    }
+
+    const auto* profile =
+        document_session->document()
+            .findProfile(profile_id);
+    if (profile == nullptr) {
+        selected_profile_id_.reset();
+        properties_stack_->setCurrentWidget(
+            document_properties_page_);
+        return;
+    }
+
+    selected_profile_id_ = profile_id;
+    profile_name_->setText(
+        fromUtf8(profile->name));
+    profile_identity_->setText(
+        fromUtf8(profile->id.serialized()));
+    profile_source_->setText(
+        fromUtf8(
+            profile->source_sketch_id.value()));
+    profile_visible_->setChecked(
+        profile->visible);
+
+    const auto evaluation =
+        document_session->document()
+            .evaluateProfile(profile_id);
+    profile_status_->setText(
+        evaluation && evaluation->valid()
+            ? QStringLiteral("Valid")
+            : QStringLiteral("Invalid"));
+
+    properties_stack_->setCurrentWidget(
+        profile_properties_page_);
 }
 
 bool CadWorkbench::eventFilter(

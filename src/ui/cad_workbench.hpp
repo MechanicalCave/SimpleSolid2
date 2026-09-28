@@ -16,6 +16,7 @@
 #include <string>
 #include <unordered_map>
 
+class QCheckBox;
 class QEvent;
 class QLabel;
 class QLineEdit;
@@ -101,10 +102,13 @@ private:
     void buildUi();
 
     void applyProperties();
+    void applyProfileProperties();
     void startSketchTool();
     void cancelSketchTool();
     void requestEditSketch(
         const sketch::SketchId& sketch_id);
+    void requestEditProfile(
+        part::ProfileId profile_id);
     void tryCreateSketchFromSupport(
         std::optional<core::BuiltinReferenceRole> support);
     void enterSketchEdit(
@@ -136,6 +140,8 @@ private:
     void restoreActiveViewState();
     void refreshPropertiesContext(
         std::optional<core::BuiltinReferenceRole> primary);
+    void refreshProfileProperties(
+        part::ProfileId profile_id);
     void syncActionState();
     void notifyDocumentStateChanged();
     void notifyCadInputContextChanged();
@@ -194,12 +200,21 @@ private:
     QStackedWidget* properties_stack_{};
     QWidget* document_properties_page_{};
     QWidget* reference_properties_page_{};
+    QWidget* profile_properties_page_{};
     QLabel* active_path_{};
     QLabel* active_id_{};
     QLabel* reference_name_{};
     QLabel* reference_kind_{};
     QLabel* reference_identity_{};
     QLabel* reference_visibility_{};
+    QLineEdit* profile_name_{};
+    QLabel* profile_identity_{};
+    QLabel* profile_source_{};
+    QLabel* profile_status_{};
+    QCheckBox* profile_visible_{};
+    QPushButton* apply_profile_button_{};
+    std::optional<part::ProfileId>
+        selected_profile_id_;
     QLineEdit* number_{};
     QLineEdit* title_{};
     QPlainTextEdit* description_{};

@@ -23,6 +23,7 @@ void PartSketchInteractionController::begin(
     transform_revision_.reset();
     last_repeatable_command_.reset();
     resetProfileRuntime();
+    selected_profile_id_.reset();
 
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
@@ -40,6 +41,7 @@ void PartSketchInteractionController::end() {
     transform_revision_.reset();
     last_repeatable_command_.reset();
     resetProfileRuntime();
+    selected_profile_id_.reset();
 
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clearSketchPreview();
@@ -335,12 +337,18 @@ submitCadInputSemanticProfileCommand(
         return {true, {}};
 
     case Kind::start_edit:
-        // Profile semantic selection is wired in the later Profile
-        // Tree/Viewport selection atom. Until then, fail closed rather
-        // than guessing an authored Profile from geometry or list order.
-        return {
-            false,
-            "EDITPROFILE requires exactly one selected Profile."};
+        if (!selected_profile_id_) {
+            return {
+                false,
+                "EDITPROFILE requires exactly one selected Profile."};
+        }
+        if (!activateProfileEdit(
+                *selected_profile_id_)) {
+            return {
+                false,
+                "EDITPROFILE selected Profile is not editable in the active Sketch."};
+        }
+        return {true, {}};
 
     case Kind::add_area:
         if (!profile_session_) {
@@ -722,6 +730,16 @@ void PartSketchInteractionController::cancelProfile() {
     projectSelection();
     projectInteraction();
     notifyStateChanged();
+}
+
+void PartSketchInteractionController::
+setSelectedProfileForCadInput(
+    std::optional<part::ProfileId> profile_id) {
+    if (selected_profile_id_ == profile_id) {
+        return;
+    }
+    selected_profile_id_ = profile_id;
+    refreshCadInputContextGeneration();
 }
 
 void PartSketchInteractionController::activateSelect() {
@@ -2452,6 +2470,8 @@ currentCadInputContextFingerprint() const noexcept {
         interaction_.directEditMode();
     fingerprint.profile_active =
         profile_session_.has_value();
+    fingerprint.selected_profile_id =
+        selected_profile_id_;
     if (profile_session_) {
         fingerprint.profile_session_kind =
             profile_session_->kind;

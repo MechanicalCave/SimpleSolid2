@@ -132,6 +132,12 @@ public:
         part::ProfileId profile_id);
     [[nodiscard]] bool finishProfile();
     void cancelProfile();
+    void setSelectedProfileForCadInput(
+        std::optional<part::ProfileId> profile_id);
+    [[nodiscard]] std::optional<part::ProfileId>
+    selectedProfileForCadInput() const noexcept {
+        return selected_profile_id_;
+    }
 
     // Line/Circle/Arc are adapters to the same semantic
     // SketchInteractionState and resolved-input path.
@@ -222,6 +228,8 @@ private:
             profile_session_kind;
         part::ProfileAreaEditMode profile_area_mode{
             part::ProfileAreaEditMode::add_area};
+        std::optional<part::ProfileId>
+            selected_profile_id;
         std::optional<sketch::Point2> point_base;
         bool direct_distance_enabled{};
         std::optional<core::DocumentRevision>
@@ -278,6 +286,8 @@ private:
     std::optional<ProfileAnalysisCache>
         profile_analysis_cache_;
     std::size_t profile_analysis_build_count_{};
+    std::optional<part::ProfileId>
+        selected_profile_id_;
 
     application::CadInputContextGeneration
         cad_input_context_generation_{};
