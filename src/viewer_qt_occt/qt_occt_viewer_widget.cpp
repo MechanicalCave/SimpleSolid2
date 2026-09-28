@@ -2285,7 +2285,7 @@ public:
         Handle(AIS_Shape) object =
             new AIS_Shape(face.Shape());
         object->Attributes()->SetShadingModel(
-            Graphic3d_TOSM_UNLIT);
+            Graphic3d_TOSM_UNLIT,\n            Standard_True);
         object->Attributes()->SetFaceBoundaryDraw(
             draw_boundary
                 ? Standard_True
