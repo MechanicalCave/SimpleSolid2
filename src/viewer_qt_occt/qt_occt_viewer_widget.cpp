@@ -2173,7 +2173,7 @@ public:
         }
 
         Handle(AIS_Shape) object =
-            new AIS_Shape(face.Face());
+            new AIS_Shape(face.Shape());
         object->Attributes()->SetFaceBoundaryDraw(
             Standard_True);
         return object;
