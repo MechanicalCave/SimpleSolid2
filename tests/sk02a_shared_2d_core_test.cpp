@@ -84,7 +84,7 @@ int main() {
     CHECK(model.updateLine(
         first_id,
         Point2{0.0, 0.0},
-        Point2{9.0, 0.0}));
+        Point2{10.0, 0.0}));
     CHECK(
         model.findLine(first_id)->role() ==
         EntityRole::construction);

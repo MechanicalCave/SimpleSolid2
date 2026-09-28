@@ -227,7 +227,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 4);
+            .domain_schema_version == 5);
     CHECK(
         package.package->authored_json.find(
             "\"next_entity_id\"") !=
