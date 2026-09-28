@@ -68,6 +68,7 @@ struct CurveRelation2D final {
 
 enum class RegionAnalysisDiagnosticKind {
     ambiguous_overlap,
+    open_boundary,
     invalid_topology,
 };
 
@@ -207,5 +208,14 @@ composeRegionCells(
     const SketchModel& model,
     const RegionAnalysis2D& analysis,
     Point2 point);
+
+// Returns bounded arrangement regions that are material islands nested at an
+// even positive containment depth below a hole of the supplied current
+// result. This is runtime analysis only; it creates no authored Profile.
+[[nodiscard]] std::vector<std::uint32_t>
+nestedIslandRegions(
+    const SketchModel& model,
+    const RegionAnalysis2D& analysis,
+    const RegionCandidate2D& current);
 
 } // namespace simplesolid2::sketch

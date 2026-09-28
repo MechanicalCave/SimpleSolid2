@@ -3900,6 +3900,15 @@ RegionAnalysis2D analyzeRegions(
             continue;
         }
 
+        if (built->empty()) {
+            result.diagnostics.push_back(
+                RegionAnalysisDiagnostic2D{
+                    RegionAnalysisDiagnosticKind::
+                        open_boundary,
+                    entities});
+            continue;
+        }
+
         loops.insert(
             loops.end(),
             built->begin(),
@@ -4130,6 +4139,91 @@ RegionComposition2D composeRegionCells(
     return composeRegionCellsImpl(
         model,
         cells);
+}
+
+std::vector<std::uint32_t>
+nestedIslandRegions(
+    const SketchModel& model,
+    const RegionAnalysis2D& analysis,
+    const RegionCandidate2D& current) {
+    std::vector<std::uint32_t> result;
+    if (current.holes.empty()) {
+        return result;
+    }
+
+    for (const auto& hole : current.holes) {
+        struct NestedCandidate final {
+            const RegionCandidate2D* region{};
+            Point2 sample;
+        };
+        std::vector<NestedCandidate> nested;
+
+        for (const auto& candidate : analysis.regions) {
+            if (candidate.region_index ==
+                current.region_index) {
+                continue;
+            }
+            const auto sample =
+                regionInteriorPointImpl(
+                    model,
+                    candidate);
+            if (!sample) {
+                continue;
+            }
+            const auto in_hole =
+                pointInLoop(
+                    model,
+                    hole,
+                    *sample);
+            if (in_hole ==
+                LoopPointState::inside) {
+                nested.push_back(
+                    NestedCandidate{
+                        &candidate,
+                        *sample});
+            }
+        }
+
+        for (const auto& target : nested) {
+            std::size_t depth = 0U;
+            bool ambiguous = false;
+            for (const auto& container : nested) {
+                const auto state =
+                    pointInLoop(
+                        model,
+                        container.region->outer,
+                        target.sample);
+                if (state ==
+                        LoopPointState::boundary ||
+                    state ==
+                        LoopPointState::ambiguous) {
+                    ambiguous = true;
+                    break;
+                }
+                if (state ==
+                    LoopPointState::inside) {
+                    ++depth;
+                }
+            }
+
+            if (!ambiguous &&
+                depth > 0U &&
+                depth % 2U == 0U) {
+                result.push_back(
+                    target.region->region_index);
+            }
+        }
+    }
+
+    std::sort(
+        result.begin(),
+        result.end());
+    result.erase(
+        std::unique(
+            result.begin(),
+            result.end()),
+        result.end());
+    return result;
 }
 
 RegionPick2D pickRegion(

@@ -702,5 +702,69 @@ int main() {
             .location ==
         RegionPointLocation::inside);
 
+    // Package F diagnostics keep open geometry local and explicit. An open
+    // chain does not become a region and does not use a gap tolerance.
+    SketchModel open_gap;
+    (void)open_gap.addLine(
+        Point2{0.0, 0.0},
+        Point2{10.0, 0.0});
+    (void)open_gap.addLine(
+        Point2{10.0, 0.0},
+        Point2{10.0, 10.0});
+    (void)open_gap.addLine(
+        Point2{10.0, 10.0},
+        Point2{0.0, 10.0});
+    const auto open_gap_regions =
+        analyzeRegions(open_gap);
+    CHECK(open_gap_regions.regions.empty());
+    CHECK(open_gap_regions.diagnostics.size() == 1U);
+    CHECK(
+        open_gap_regions.diagnostics.front().kind ==
+        RegionAnalysisDiagnosticKind::open_boundary);
+
+    // Three nested circles model outer material, a hole-space cell and an
+    // inner disconnected material island. Detect Islands reports only the
+    // even-depth material island, not the immediate hole-space cell.
+    SketchModel nested_islands;
+    (void)nested_islands.addCircle(
+        Point2{0.0, 0.0}, 10.0);
+    (void)nested_islands.addCircle(
+        Point2{0.0, 0.0}, 6.0);
+    (void)nested_islands.addCircle(
+        Point2{0.0, 0.0}, 2.0);
+    const auto nested_analysis =
+        analyzeRegions(nested_islands);
+    CHECK(nested_analysis.complete());
+    CHECK(nested_analysis.regions.size() == 3U);
+    const auto outer_pick =
+        pickRegion(
+            nested_islands,
+            nested_analysis,
+            Point2{8.0, 0.0});
+    CHECK(outer_pick.region_index.has_value());
+    const auto outer_region =
+        std::find_if(
+            nested_analysis.regions.begin(),
+            nested_analysis.regions.end(),
+            [&outer_pick](
+                const RegionCandidate2D& item) {
+                return item.region_index ==
+                       *outer_pick.region_index;
+            });
+    CHECK(outer_region != nested_analysis.regions.end());
+    const auto islands =
+        nestedIslandRegions(
+            nested_islands,
+            nested_analysis,
+            *outer_region);
+    CHECK(islands.size() == 1U);
+    const auto island_pick =
+        pickRegion(
+            nested_islands,
+            nested_analysis,
+            Point2{0.0, 0.0});
+    CHECK(island_pick.region_index.has_value());
+    CHECK(islands.front() == *island_pick.region_index);
+
     return 0;
 }
