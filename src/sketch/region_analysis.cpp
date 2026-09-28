@@ -746,6 +746,32 @@ struct RawRelation final {
 [[nodiscard]] bool sameSupportArcsOverlap(
     const CurveView& first,
     const CurveView& second) noexcept {
+    const double first_end =
+        first.start_angle +
+        first.sweep_angle;
+    const double second_end =
+        second.start_angle +
+        second.sweep_angle;
+
+    // Positive-length overlap exists when an endpoint of either finite arc
+    // lies strictly inside the other. The midpoint fallback also covers
+    // identical arcs, whose endpoints are shared boundaries rather than
+    // strict interior points.
+    if (arcContainsAngleStrict(
+            second,
+            first.start_angle) ||
+        arcContainsAngleStrict(
+            second,
+            first_end) ||
+        arcContainsAngleStrict(
+            first,
+            second.start_angle) ||
+        arcContainsAngleStrict(
+            first,
+            second_end)) {
+        return true;
+    }
+
     const double first_mid =
         first.start_angle +
         first.sweep_angle * 0.5;
