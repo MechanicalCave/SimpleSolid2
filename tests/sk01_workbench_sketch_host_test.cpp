@@ -934,10 +934,10 @@ int main(int argc, char* argv[]) {
     // Construction is a user-visible authored role, not a test-only
     // mutation. Select the source Circle normally and switch its role from
     // the Operations surface.
-    CHECK(!viewport->sketchScene().circles.empty());
+    CHECK(!viewport->sketchScene().curves.empty());
     viewport->setSketchGripHit(std::nullopt);
     viewport->setSketchPointHit(
-        viewport->sketchScene().circles.front().token);
+        viewport->sketchScene().curves.front().token);
     viewport->emitSketchPointerXZ(
         viewer::SpatialPointerPhase::primary_press,
         120.0, 120.0,
@@ -988,7 +988,7 @@ int main(int argc, char* argv[]) {
         QStringLiteral("—"));
 
     viewport->setSketchPointHit(
-        viewport->sketchScene().circles.front().token);
+        viewport->sketchScene().curves.front().token);
     viewport->emitSketchPointerXZ(
         viewer::SpatialPointerPhase::primary_press,
         120.0, 120.0,
