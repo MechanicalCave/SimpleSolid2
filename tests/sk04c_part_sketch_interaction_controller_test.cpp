@@ -728,7 +728,7 @@ int main(int argc, char* argv[]) {
         CHECK(
             exact_session.document()
                 .findSketch(exact_sketch_id)
-                ->model.lines().size() == 3U);
+                ->model.state().lines.size() == 3U);
 
         CHECK(exact_interaction.activateProfileCreate());
         exact_interaction.onPointer(
@@ -770,7 +770,7 @@ int main(int argc, char* argv[]) {
         CHECK(
             exact_session.document()
                 .findSketch(exact_sketch_id)
-                ->model.lines().size() == 4U);
+                ->model.state().lines.size() == 4U);
 
         CHECK(exact_interaction.activateProfileCreate());
         for (int index = 0; index < 16; ++index) {
