@@ -1520,150 +1520,6 @@ QString CadWorkbench::cadInputPromptText() const {
             .arg(command, mode);
     }
 
-    if (profile_active) {
-        delete_selection_button_->setVisible(false);
-        finish_line_button_->setVisible(false);
-        cancel_line_button_->setVisible(false);
-
-        const auto kind =
-            sketch_interaction_controller_->
-                profileToolSessionKind();
-        const auto editing_profile =
-            kind &&
-            *kind ==
-                ProfileToolSessionKind::edit;
-        QString title =
-            editing_profile
-                ? QStringLiteral("Profile — Edit")
-                : QStringLiteral("Profile — Create");
-
-        if (editing_profile) {
-            const auto id =
-                sketch_interaction_controller_->
-                    editedProfileId();
-            if (id && document_session_ != nullptr) {
-                const auto* profile =
-                    document_session_->document()
-                        .findProfile(*id);
-                if (profile != nullptr) {
-                    title +=
-                        QStringLiteral(" — ") +
-                        QString::fromUtf8(
-                            profile->name.c_str());
-                }
-            }
-        }
-        operations_placeholder_->setText(title);
-
-        const bool add_mode =
-            sketch_interaction_controller_->
-                profileAreaMode() ==
-            part::ProfileAreaEditMode::add_area;
-        profile_add_area_button_->setChecked(
-            add_mode);
-        profile_subtract_area_button_->setChecked(
-            !add_mode);
-
-        const auto options =
-            sketch_interaction_controller_->
-                profileToolOptions();
-        profile_detect_islands_button_->setChecked(
-            options.detect_islands);
-        profile_highlight_hover_button_->setChecked(
-            options.highlight_on_hover);
-        profile_show_boundaries_button_->setChecked(
-            options.show_region_boundaries);
-        profile_show_problems_button_->setChecked(
-            options.show_problems);
-
-        const auto current =
-            sketch_interaction_controller_->
-                profileCurrentResult();
-        QString status_text;
-        if (current) {
-            status_text =
-                QStringLiteral(
-                    "Current result\n"
-                    "Status: Valid\n"
-                    "Area: %1\n"
-                    "Perimeter: %2\n"
-                    "Holes: %3\n"
-                    "Islands: 1")
-                    .arg(
-                        QString::number(
-                            current->area,
-                            'g',
-                            12),
-                        QString::number(
-                            current->perimeter,
-                            'g',
-                            12))
-                    .arg(
-                        static_cast<qulonglong>(
-                            current->holes.size()));
-        } else {
-            QString status =
-                QStringLiteral("Ready");
-            const auto hover =
-                sketch_interaction_controller_->
-                    profileHoverStatus();
-            if (hover) {
-                switch (*hover) {
-                case part::ProfileAreaEditStatus::
-                    disconnected_result:
-                    status =
-                        QStringLiteral(
-                            "Rejected — disconnected material");
-                    break;
-                case part::ProfileAreaEditStatus::
-                    ambiguous_topology:
-                    status =
-                        QStringLiteral(
-                            "Rejected — ambiguous topology");
-                    break;
-                case part::ProfileAreaEditStatus::
-                    invalid_selection:
-                    status =
-                        QStringLiteral(
-                            "Invalid selection");
-                    break;
-                case part::ProfileAreaEditStatus::
-                    invalid_draft:
-                    status =
-                        QStringLiteral(
-                            "Invalid draft");
-                    break;
-                case part::ProfileAreaEditStatus::
-                    no_change:
-                    status =
-                        QStringLiteral("No change");
-                    break;
-                case part::ProfileAreaEditStatus::
-                    changed:
-                    status =
-                        QStringLiteral("Preview");
-                    break;
-                }
-            }
-            status_text =
-                QStringLiteral(
-                    "Current result\n"
-                    "Status: %1\n"
-                    "Area: —\n"
-                    "Perimeter: —\n"
-                    "Holes: —\n"
-                    "Islands: —")
-                    .arg(status);
-        }
-        profile_result_label_->setText(
-            status_text);
-        profile_finish_button_->setEnabled(
-            sketch_interaction_controller_->
-                profileDraftIntent()
-                .has_value());
-        return;
-    }
-
     const auto tool =
         sketch_interaction_controller_->tool();
 
@@ -2393,6 +2249,150 @@ void CadWorkbench::syncSketchInteractionUi() {
         if (cancel_line_button_ != nullptr) {
             cancel_line_button_->setVisible(false);
         }
+        return;
+    }
+
+    if (profile_active) {
+        delete_selection_button_->setVisible(false);
+        finish_line_button_->setVisible(false);
+        cancel_line_button_->setVisible(false);
+
+        const auto kind =
+            sketch_interaction_controller_->
+                profileToolSessionKind();
+        const auto editing_profile =
+            kind &&
+            *kind ==
+                ProfileToolSessionKind::edit;
+        QString title =
+            editing_profile
+                ? QStringLiteral("Profile — Edit")
+                : QStringLiteral("Profile — Create");
+
+        if (editing_profile) {
+            const auto id =
+                sketch_interaction_controller_->
+                    editedProfileId();
+            if (id && document_session_ != nullptr) {
+                const auto* profile =
+                    document_session_->document()
+                        .findProfile(*id);
+                if (profile != nullptr) {
+                    title +=
+                        QStringLiteral(" — ") +
+                        QString::fromUtf8(
+                            profile->name.c_str());
+                }
+            }
+        }
+        operations_placeholder_->setText(title);
+
+        const bool add_mode =
+            sketch_interaction_controller_->
+                profileAreaMode() ==
+            part::ProfileAreaEditMode::add_area;
+        profile_add_area_button_->setChecked(
+            add_mode);
+        profile_subtract_area_button_->setChecked(
+            !add_mode);
+
+        const auto options =
+            sketch_interaction_controller_->
+                profileToolOptions();
+        profile_detect_islands_button_->setChecked(
+            options.detect_islands);
+        profile_highlight_hover_button_->setChecked(
+            options.highlight_on_hover);
+        profile_show_boundaries_button_->setChecked(
+            options.show_region_boundaries);
+        profile_show_problems_button_->setChecked(
+            options.show_problems);
+
+        const auto current =
+            sketch_interaction_controller_->
+                profileCurrentResult();
+        QString status_text;
+        if (current) {
+            status_text =
+                QStringLiteral(
+                    "Current result\n"
+                    "Status: Valid\n"
+                    "Area: %1\n"
+                    "Perimeter: %2\n"
+                    "Holes: %3\n"
+                    "Islands: 1")
+                    .arg(
+                        QString::number(
+                            current->area,
+                            'g',
+                            12),
+                        QString::number(
+                            current->perimeter,
+                            'g',
+                            12))
+                    .arg(
+                        static_cast<qulonglong>(
+                            current->holes.size()));
+        } else {
+            QString status =
+                QStringLiteral("Ready");
+            const auto hover =
+                sketch_interaction_controller_->
+                    profileHoverStatus();
+            if (hover) {
+                switch (*hover) {
+                case part::ProfileAreaEditStatus::
+                    disconnected_result:
+                    status =
+                        QStringLiteral(
+                            "Rejected — disconnected material");
+                    break;
+                case part::ProfileAreaEditStatus::
+                    ambiguous_topology:
+                    status =
+                        QStringLiteral(
+                            "Rejected — ambiguous topology");
+                    break;
+                case part::ProfileAreaEditStatus::
+                    invalid_selection:
+                    status =
+                        QStringLiteral(
+                            "Invalid selection");
+                    break;
+                case part::ProfileAreaEditStatus::
+                    invalid_draft:
+                    status =
+                        QStringLiteral(
+                            "Invalid draft");
+                    break;
+                case part::ProfileAreaEditStatus::
+                    no_change:
+                    status =
+                        QStringLiteral("No change");
+                    break;
+                case part::ProfileAreaEditStatus::
+                    changed:
+                    status =
+                        QStringLiteral("Preview");
+                    break;
+                }
+            }
+            status_text =
+                QStringLiteral(
+                    "Current result\n"
+                    "Status: %1\n"
+                    "Area: —\n"
+                    "Perimeter: —\n"
+                    "Holes: —\n"
+                    "Islands: —")
+                    .arg(status);
+        }
+        profile_result_label_->setText(
+            status_text);
+        profile_finish_button_->setEnabled(
+            sketch_interaction_controller_->
+                profileDraftIntent()
+                .has_value());
         return;
     }
 
