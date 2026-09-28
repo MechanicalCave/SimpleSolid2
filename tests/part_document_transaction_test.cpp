@@ -303,6 +303,51 @@ int main() {
         checkInactive(transaction);
     }
 
+    // Package F dependency integrity: a durable Profile cannot survive in
+    // authored state after its source Sketch disappears.
+    {
+        const auto profile_id =
+            part::ProfileId::parse("1");
+        const auto profile_cursor =
+            part::ProfileIdCursor::parse("2");
+        const auto entity_id =
+            sketch::EntityId::parse("1");
+        CHECK(profile_id.has_value());
+        CHECK(profile_cursor.has_value());
+        CHECK(entity_id.has_value());
+
+        part::ProfileRegionIntent intent;
+        intent.outer.boundary.push_back(
+            part::ProfileBoundaryUseIntent{
+                *entity_id,
+                std::nullopt,
+                std::nullopt,
+                true,
+                true});
+
+        part::PartAuthoredState orphaned;
+        orphaned.next_profile_id =
+            *profile_cursor;
+        orphaned.profiles.push_back(
+            part::PartProfile{
+                *profile_id,
+                sketch::SketchId::generate(),
+                "Orphaned",
+                true,
+                intent});
+
+        auto rejected =
+            part::PartDocument::restore(
+                core::DocumentId::generate(),
+                std::move(orphaned));
+        CHECK(!rejected.ok());
+        CHECK(!rejected.document.has_value());
+        CHECK(
+            rejected.code ==
+            part::PartReconstructErrorCode::
+                invalid_state);
+    }
+
     // Reconstruction itself uses the same Part authored-state validator.
     {
         part::PartAuthoredState invalid;
