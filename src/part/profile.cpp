@@ -921,7 +921,7 @@ ProfileAreaEditResult applyProfileAreaEdit(
             ProfileAreaEditStatus::no_change,
             draft,
             *round_trip.region,
-            part::ProfileIntentResolutionStatus::
+            ProfileIntentResolutionStatus::
                 valid};
     }
 
@@ -929,7 +929,7 @@ ProfileAreaEditResult applyProfileAreaEdit(
         ProfileAreaEditStatus::changed,
         *intent,
         *round_trip.region,
-        part::ProfileIntentResolutionStatus::
+        ProfileIntentResolutionStatus::
             valid};
 }
 
