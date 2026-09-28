@@ -579,6 +579,7 @@ int main(int argc, char* argv[]) {
     copy_button->click();
     QApplication::processEvents();
     CHECK(copy_button->isChecked());
+    CHECK(QApplication::focusWidget() == viewport);
     CHECK(
         operations_label->text() ==
         QStringLiteral(
@@ -692,6 +693,7 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(move_button->isChecked());
     CHECK(command_input->text().isEmpty());
+    CHECK(QApplication::focusWidget() == viewport);
     CHECK(
         operations_label->text() ==
         QStringLiteral(
