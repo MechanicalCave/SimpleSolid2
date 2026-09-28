@@ -70,7 +70,7 @@ Default order is strict:
 | 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | **COMPLETED — 2026-09-27** |
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **COMPLETED — 2026-09-27** |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **COMPLETED — KEEP accepted 2026-09-28** |
-| 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | **ACTIVE — accepted 2026-09-28** |
+| 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | **COMPLETED — 2026-09-28** |
 | 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | future bounded Work Contract |
 | 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | future bounded Work Contract |
 | 9 | **F — region/profile semantics gate** | accepted exact region/profile semantics required by Part before solid modeling | future bounded Work Contract |
@@ -470,6 +470,17 @@ Acceptance:
 - GUI adapter reaches the same semantic result/revision/history;
 - add an explicit CMake configuration that compiles/tests the neutral core without Qt/OCCT/provider targets;
 - full Windows GUI/provider gate remains mandatory.
+
+
+### D completion record
+
+**Final candidate:** `79fcfa1b66182dbf1ddfe19dee6e983e3878d259`  
+**Windows FULL:** #705 — PASS  
+**Owner bounded manual Windows verification:** PASS — 2026-09-28
+
+Package D moved current Sketch command-token meaning and bare Direct Distance parsing out of QWidget into neutral Application code, kept `CadInputSession` transport-only, added a 13-test Qt/OCCT-free semantic build graph, preserved production command/request semantics and verified GUI focus/input parity. No ADR-0011 amendment was required.
+
+D is **CONFIRMED / IMPLEMENTED / VERIFIED / MANUALLY ACCEPTED**. E1 is next in AUDIT-01 but remains inactive until a separate bounded Work Contract is explicitly Owner-accepted.
 
 ## 11. Package E1 — numerical stability of geometric construction
 

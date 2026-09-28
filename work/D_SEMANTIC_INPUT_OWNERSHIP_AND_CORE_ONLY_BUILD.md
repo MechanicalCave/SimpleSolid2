@@ -1,6 +1,6 @@
 # D — Semantic CAD Input Ownership and Core-only Build
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-28  
 **Owner acceptance:** 2026-09-28  
 **Decision class:** D2 Architecture implementation under accepted ADR-0011  
@@ -549,19 +549,11 @@ Stop for Owner review if implementation requires:
 - Linux desktop support work;
 - weakening full GUI/provider verification.
 
-## 24. Activation gate
+## 24. Activation record
 
-This proposal does **not** activate Package D.
+Package D was explicitly Owner-accepted on 2026-09-28 and activated on the proposal branch.
 
-Activation requires explicit Owner acceptance of this D2 Work Contract.
-
-No new ADR is required for the proposed implementation because ADR-0011 already owns the architectural decision. If implementation discovers that ADR-0011 must change, stop and obtain a separately accepted ADR amendment.
-
-Only after Owner acceptance may:
-
-- `work/ACTIVE.yaml` switch from completed C2 to active D;
-- production semantic-input ownership refactoring begin;
-- core-only build/test configuration be added.
+No ADR-0011 amendment was required. The implementation stayed within the accepted ownership split: `CadInputSession` remains generic transport, Application owns current Sketch token meaning, and Qt remains a presentation/input adapter.
 
 ## 25. Completion gate
 
@@ -599,3 +591,27 @@ Verified at this checkpoint:
 - the ordinary desktop FULL suite remains green.
 
 This is not D completion. Required internal documentation is being synchronized, a final exact-head FULL remains required, and Owner manual Windows verification is still pending.
+
+## 27. Completion record
+
+**Final candidate:** `79fcfa1b66182dbf1ddfe19dee6e983e3878d259`  
+**Final exact-head Windows FULL:** #705 — PASS  
+**Owner manual Windows verification:** PASS — 2026-09-28
+
+Completion evidence:
+
+- raw submitted-token grammar is no longer owned by QWidget code;
+- bare Direct Distance parsing is neutral and Qt-free;
+- `CadInputSession` remains generic transport;
+- PointRequest precedence and the existing Sketch command grammar are preserved;
+- neutral Line/MOVE/COPY semantic evidence runs in the core-only graph without QWidget/OCCT;
+- GUI adapter parity and explicit viewport-focus regression are green;
+- `SS2_BUILD_DESKTOP=OFF` configures/builds/tests with Qt6/OpenCASCADE discovery disabled;
+- default desktop Windows FULL is green;
+- required internal documentation and generated Browser are current;
+- Owner bounded manual smoke passed for LINE, Direct Distance, MOVE, COPY, Command Line parity, text-editor ownership and rejection-without-authored-mutation;
+- no persistence/schema, history, selection grammar or user-visible command-language expansion was introduced.
+
+D is **CONFIRMED / IMPLEMENTED / VERIFIED / MANUALLY ACCEPTED**. Remaining repository lifecycle work is work-only CLOSURE verification and merge.
+
+After merge, AUDIT-01 schedules E1 next. D completion does not activate E1.

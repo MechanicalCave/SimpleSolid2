@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/D_SEMANTIC_INPUT_OWNERSHIP_AND_CORE_ONLY_BUILD.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
@@ -19,10 +19,10 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - implement accepted Package D semantic-input ownership correction under ADR-0011
-  - add explicit core-only build/test configuration without Qt/OCCT discovery
-  - preserve current CAD command grammar, Direct Distance behavior and C1/C2 history semantics
-  - keep E1, E2 and F queued by AUDIT-01 but inactive
+  - draft a separate bounded Package E1 numerical-stability Work Contract under AUDIT-01
+  - require explicit Owner acceptance of Package E1 before any production geometry mutation
+  - keep E2 and F queued by AUDIT-01 but inactive
+  - preserve completed D semantic-input ownership and core-only build boundaries
 
 notes:
   - R0 through R4 are completed.
@@ -244,3 +244,6 @@ notes:
   - #703 verified the normal desktop build/test graph plus the 13-test SS2_BUILD_DESKTOP=OFF semantic graph with Qt/OpenCASCADE discovery disabled.
   - D audit confirmed raw token grammar and bare-distance parsing are outside QWidget; accepted top-level command focus handoff to the viewport is preserved.
   - Owner manual Windows smoke and final closeout remain pending.
+  - Final D candidate 79fcfa1b66182dbf1ddfe19dee6e983e3878d259 passed Windows FULL #705.
+  - Owner bounded manual Windows verification PASS on 2026-09-28 for viewport LINE input, Direct Distance Line/MOVE/COPY, Command Line parity/focus handoff, text-editor keyboard ownership and rejection-without-authored-mutation.
+  - D is complete pending work-only CLOSURE verification and merge; E1 remains inactive until a separate Work Contract is explicitly Owner-accepted.
