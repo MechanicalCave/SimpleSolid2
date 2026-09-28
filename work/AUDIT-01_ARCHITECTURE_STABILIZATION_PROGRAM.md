@@ -1,6 +1,6 @@
 # AUDIT-01 — Architecture Stabilization and Audit Implementation Program
 
-**Status:** ACCEPTED — PROGRAM CONTRACT  
+**Status:** COMPLETED — PROGRAM CLOSED  
 **Version:** 1.0  
 **Owner acceptance:** 2026-09-27  
 **Decision class:** D2 program sequencing / architecture stabilization  
@@ -73,7 +73,7 @@ Default order is strict:
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | **COMPLETED — 2026-09-28** |
 | 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | **COMPLETED — 2026-09-28** |
 | 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | **COMPLETED — KEEP accepted 2026-09-28** |
-| 9 | **F — region/profile semantics gate** | accepted exact region/profile semantics required by Part before solid modeling | **ACTIVE — accepted 2026-09-28** |
+| 9 | **F — region/profile semantics gate** | accepted exact region/profile semantics required by Part before solid modeling | **COMPLETED — 2026-09-28** |
 
 Interleaving feature work with this order requires an explicit Owner scheduling amendment. Context loss is not authorization to skip a package.
 
@@ -582,6 +582,22 @@ This program does not preselect snapshot vs reference and does not imply full as
 Region/profile tests may be implemented before any solid B-Rep feature.
 
 After F passes, the first Part solid operation requires a separate Owner-accepted contract using provider-neutral Kernel API and no durable OCCT topology ordinals.
+
+### F completion record
+
+**Completed:** 2026-09-28  
+**Final exact-head runtime candidate:** `c76676350426dc5e81abd60d10246ff8c6f507be` — Windows FULL #818 PASS — 77/77 CTest, 14/14 core-only CTest  
+**Owner manual Windows verification:** PASS on 2026-09-28 on the same exact candidate
+
+F completed the required provider-neutral exact Shared 2D region analysis and durable Part Profile semantics gate. The final closeout includes Regular/Construction participation, exact Line/Circle/Arc region analysis, durable ProfileId + live RegionIntent, fail-closed invalidation/recovery, Add/Subtract, persistence/lifecycle, common semantic authority across Operations/Properties/Tree/Viewport/Command Line, and provider-neutral/native Profile presentation/picking.
+
+The final defect closeout preserved the accepted numerical/product boundary: exact authored-equal endpoints are treated as exact semantic contacts, distinct points are not welded, no Product tolerance or automatic gap healing was introduced, and displayed Profile candidates must round-trip through durable intent resolution before acceptance. Native Profile fill also uses an explicitly owned UNLIT shading aspect; Viewer/provider state remains presentation-only.
+
+Package F is **IMPLEMENTED / DOCUMENTED / VERIFIED / MANUALLY ACCEPTED / COMPLETED**. All AUDIT-01 packages A through F are now completed.
+
+AUDIT-01 therefore satisfies its Section 16 program-completion conditions on this closeout candidate, subject only to the work-only CLOSURE gate and merge of PR #86 to `main`.
+
+Completion of AUDIT-01 and Package F still does **not** authorize Extrude or another solid operation. Any such work requires a separate Owner-accepted Part solid-operation Work Contract.
 
 ## 14. Cross-package invariants
 
