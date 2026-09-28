@@ -171,6 +171,31 @@ int main() {
             resolved_stretched.region->area -
             12.0) < 1.0e-12);
 
+    // New unrelated Regular geometry may subdivide the arrangement inside
+    // a Profile without changing its authored semantic outer boundary.
+    const auto internal_circle =
+        profile_model.addCircle(
+            {2.0, 1.5},
+            0.5);
+    CHECK(internal_circle.valid());
+    const auto subdivided =
+        sketch::analyzeRegions(
+            profile_model);
+    CHECK(subdivided.complete());
+    CHECK(subdivided.regions.size() == 2U);
+    const auto resolved_subdivided =
+        part::resolveProfileRegionIntent(
+            profile_model,
+            *profile_intent);
+    CHECK(resolved_subdivided.valid());
+    CHECK(
+        std::abs(
+            resolved_subdivided.region->area -
+            12.0) < 1.0e-12);
+    CHECK(
+        resolved_subdivided.region
+            ->holes.empty());
+
     // Construction removes the source from material-region topology without
     // rewriting the durable intent. Restoring Regular recovers it.
     CHECK(

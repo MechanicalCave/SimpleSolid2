@@ -2771,6 +2771,379 @@ buildComponentLoops(
     return result;
 }
 
+[[nodiscard]] bool regularCurve(
+    const SketchModel& model,
+    EntityId id) noexcept {
+    if (const auto* line = model.findLine(id)) {
+        return line->role() == EntityRole::regular;
+    }
+    if (const auto* circle = model.findCircle(id)) {
+        return circle->role() == EntityRole::regular;
+    }
+    if (const auto* arc = model.findArc(id)) {
+        return arc->role() == EntityRole::regular;
+    }
+    return false;
+}
+
+[[nodiscard]] std::optional<double> useMidParameter(
+    const CurveView& curve,
+    const RegionBoundaryUse2D& use) noexcept {
+    if (use.whole_closed_curve) {
+        return 0.5;
+    }
+
+    double from =
+        use.follows_source_direction
+            ? use.start_parameter
+            : use.end_parameter;
+    double to =
+        use.follows_source_direction
+            ? use.end_parameter
+            : use.start_parameter;
+
+    if (curve.kind == CurveKind::circle &&
+        use.crosses_closed_seam) {
+        if (to <= from) {
+            to += 1.0;
+        }
+        double value = (from + to) * 0.5;
+        if (value >= 1.0) {
+            value -= 1.0;
+        }
+        return finiteValue(value)
+            ? std::optional<double>{value}
+            : std::nullopt;
+    }
+
+    const double value =
+        (from + to) * 0.5;
+    return finiteValue(value)
+        ? std::optional<double>{value}
+        : std::nullopt;
+}
+
+[[nodiscard]] bool samePoint(
+    const std::optional<Point2>& first,
+    const std::optional<Point2>& second) noexcept {
+    return first && second &&
+           *first == *second;
+}
+
+[[nodiscard]] bool allowedAdjacentContact(
+    const SketchModel& model,
+    const RegionBoundaryUse2D& first,
+    const RegionBoundaryUse2D& second,
+    Point2 point) {
+    const auto first_curve =
+        curveView(model, first.source_entity);
+    const auto second_curve =
+        curveView(model, second.source_entity);
+    if (!first_curve || !second_curve) {
+        return false;
+    }
+    const auto first_end =
+        useEndPoint(*first_curve, first);
+    const auto second_start =
+        useStartPoint(*second_curve, second);
+    return first_end &&
+           second_start &&
+           *first_end == point &&
+           *second_start == point;
+}
+
+[[nodiscard]] bool usesHaveUnexpectedContact(
+    const SketchModel& model,
+    const RegionBoundaryUse2D& first,
+    const RegionBoundaryUse2D& second,
+    bool adjacent_first_to_second) {
+    const auto first_curve =
+        curveView(model, first.source_entity);
+    const auto second_curve =
+        curveView(model, second.source_entity);
+    if (!first_curve || !second_curve) {
+        return true;
+    }
+
+    if (first.source_entity ==
+        second.source_entity) {
+        const auto first_start =
+            useStartPoint(*first_curve, first);
+        const auto first_end =
+            useEndPoint(*first_curve, first);
+        const auto second_start =
+            useStartPoint(*second_curve, second);
+        const auto second_end =
+            useEndPoint(*second_curve, second);
+        if (!first_start || !first_end ||
+            !second_start || !second_end) {
+            return true;
+        }
+
+        const auto expected =
+            adjacent_first_to_second
+                ? std::optional<Point2>{*first_end}
+                : std::nullopt;
+
+        const Point2 points[] = {
+            *first_start,
+            *first_end,
+            *second_start,
+            *second_end,
+        };
+        for (const auto point : points) {
+            const bool on_first =
+                pointOnUse(
+                    *first_curve,
+                    first,
+                    point);
+            const bool on_second =
+                pointOnUse(
+                    *second_curve,
+                    second,
+                    point);
+            if (!on_first || !on_second) {
+                continue;
+            }
+            if (!expected ||
+                point != *expected) {
+                return true;
+            }
+        }
+
+        const auto first_mid =
+            useMidParameter(
+                *first_curve,
+                first);
+        const auto second_mid =
+            useMidParameter(
+                *second_curve,
+                second);
+        if (!first_mid || !second_mid) {
+            return true;
+        }
+        if (parameterInUse(
+                *second_curve,
+                second,
+                *first_mid) ||
+            parameterInUse(
+                *first_curve,
+                first,
+                *second_mid)) {
+            return true;
+        }
+        return false;
+    }
+
+    const auto relation =
+        analyzeCurveRelation(
+            model,
+            first.source_entity,
+            second.source_entity);
+    if (relation.status ==
+            CurveRelationStatus::invalid ||
+        relation.status ==
+            CurveRelationStatus::overlap) {
+        return true;
+    }
+    if (relation.status !=
+        CurveRelationStatus::discrete) {
+        return false;
+    }
+
+    for (const auto& item :
+         relation.intersections) {
+        const double first_parameter =
+            relation.first_entity ==
+                    first.source_entity
+                ? item.first_parameter
+                : item.second_parameter;
+        const double second_parameter =
+            relation.first_entity ==
+                    second.source_entity
+                ? item.first_parameter
+                : item.second_parameter;
+        if (!parameterInUse(
+                *first_curve,
+                first,
+                first_parameter) ||
+            !parameterInUse(
+                *second_curve,
+                second,
+                second_parameter)) {
+            continue;
+        }
+
+        if (!adjacent_first_to_second ||
+            !allowedAdjacentContact(
+                model,
+                first,
+                second,
+                item.point)) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+[[nodiscard]] std::optional<RegionLoop2D>
+validatedLoop(
+    const SketchModel& model,
+    RegionLoop2D loop) {
+    if (loop.boundary.empty()) {
+        return std::nullopt;
+    }
+
+    if (loop.boundary.size() == 1U &&
+        loop.boundary.front()
+            .whole_closed_curve) {
+        const auto& use =
+            loop.boundary.front();
+        const auto curve =
+            curveView(
+                model,
+                use.source_entity);
+        if (!curve ||
+            curve->kind != CurveKind::circle ||
+            !regularCurve(
+                model,
+                use.source_entity) ||
+            use.start_anchor ||
+            use.end_anchor) {
+            return std::nullopt;
+        }
+    } else {
+        for (const auto& use :
+             loop.boundary) {
+            if (use.whole_closed_curve ||
+                !use.start_anchor ||
+                !use.end_anchor ||
+                !regularCurve(
+                    model,
+                    use.source_entity)) {
+                return std::nullopt;
+            }
+        }
+    }
+
+    double area = 0.0;
+    double perimeter = 0.0;
+    for (std::size_t index = 0U;
+         index < loop.boundary.size();
+         ++index) {
+        const auto& use =
+            loop.boundary[index];
+        const auto curve =
+            curveView(
+                model,
+                use.source_entity);
+        if (!curve) {
+            return std::nullopt;
+        }
+
+        const auto contribution =
+            useAreaContribution(
+                *curve,
+                use);
+        const auto length =
+            usePerimeter(
+                *curve,
+                use);
+        if (!contribution ||
+            !length) {
+            return std::nullopt;
+        }
+        area += *contribution;
+        perimeter += *length;
+
+        if (loop.boundary.size() > 1U) {
+            const auto& next =
+                loop.boundary[
+                    (index + 1U) %
+                    loop.boundary.size()];
+            const auto next_curve =
+                curveView(
+                    model,
+                    next.source_entity);
+            if (!next_curve ||
+                !samePoint(
+                    useEndPoint(*curve, use),
+                    useStartPoint(
+                        *next_curve,
+                        next))) {
+                return std::nullopt;
+            }
+        }
+    }
+
+    if (!finiteValue(area) ||
+        !finiteValue(perimeter) ||
+        !(area > 0.0) ||
+        !(perimeter > 0.0)) {
+        return std::nullopt;
+    }
+
+    for (std::size_t first = 0U;
+         first < loop.boundary.size();
+         ++first) {
+        for (std::size_t second =
+                 first + 1U;
+             second < loop.boundary.size();
+             ++second) {
+            const bool adjacent =
+                second == first + 1U;
+            const bool wrap_adjacent =
+                first == 0U &&
+                second + 1U ==
+                    loop.boundary.size();
+
+            if (wrap_adjacent) {
+                if (usesHaveUnexpectedContact(
+                        model,
+                        loop.boundary[second],
+                        loop.boundary[first],
+                        true)) {
+                    return std::nullopt;
+                }
+                continue;
+            }
+
+            if (usesHaveUnexpectedContact(
+                    model,
+                    loop.boundary[first],
+                    loop.boundary[second],
+                    adjacent)) {
+                return std::nullopt;
+            }
+        }
+    }
+
+    loop.signed_area = area;
+    loop.perimeter = perimeter;
+    return loop;
+}
+
+[[nodiscard]] bool loopsTouchOrCross(
+    const SketchModel& model,
+    const RegionLoop2D& first,
+    const RegionLoop2D& second) {
+    for (const auto& first_use :
+         first.boundary) {
+        for (const auto& second_use :
+             second.boundary) {
+            if (usesHaveUnexpectedContact(
+                    model,
+                    first_use,
+                    second_use,
+                    false)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 RegionAnalysis2D analyzeRegions(
@@ -3038,6 +3411,111 @@ RegionAnalysis2D analyzeRegions(
             std::move(candidate));
     }
 
+    return result;
+}
+
+std::optional<RegionCandidate2D>
+validateRegionBoundary(
+    const SketchModel& model,
+    RegionLoop2D outer,
+    std::vector<RegionLoop2D> holes) {
+    auto valid_outer =
+        validatedLoop(
+            model,
+            std::move(outer));
+    if (!valid_outer) {
+        return std::nullopt;
+    }
+
+    std::vector<RegionLoop2D>
+        valid_holes;
+    valid_holes.reserve(
+        holes.size());
+    for (auto& hole : holes) {
+        auto valid_hole =
+            validatedLoop(
+                model,
+                std::move(hole));
+        if (!valid_hole) {
+            return std::nullopt;
+        }
+
+        if (loopsTouchOrCross(
+                model,
+                *valid_outer,
+                *valid_hole)) {
+            return std::nullopt;
+        }
+
+        const auto sample =
+            interiorPoint(
+                model,
+                *valid_hole);
+        if (!sample ||
+            pointInLoop(
+                model,
+                *valid_outer,
+                *sample) !=
+                LoopPointState::inside) {
+            return std::nullopt;
+        }
+
+        for (const auto& existing :
+             valid_holes) {
+            if (loopsTouchOrCross(
+                    model,
+                    existing,
+                    *valid_hole)) {
+                return std::nullopt;
+            }
+            const auto existing_sample =
+                interiorPoint(
+                    model,
+                    existing);
+            if (!existing_sample) {
+                return std::nullopt;
+            }
+            if (pointInLoop(
+                    model,
+                    existing,
+                    *sample) ==
+                    LoopPointState::inside ||
+                pointInLoop(
+                    model,
+                    *valid_hole,
+                    *existing_sample) ==
+                    LoopPointState::inside) {
+                return std::nullopt;
+            }
+        }
+
+        valid_holes.push_back(
+            std::move(*valid_hole));
+    }
+
+    double area =
+        valid_outer->signed_area;
+    double perimeter =
+        valid_outer->perimeter;
+    for (const auto& hole :
+         valid_holes) {
+        area -= hole.signed_area;
+        perimeter += hole.perimeter;
+    }
+    if (!finiteValue(area) ||
+        !finiteValue(perimeter) ||
+        !(area > 0.0) ||
+        !(perimeter > 0.0)) {
+        return std::nullopt;
+    }
+
+    RegionCandidate2D result;
+    result.outer =
+        std::move(*valid_outer);
+    result.holes =
+        std::move(valid_holes);
+    result.area = area;
+    result.perimeter = perimeter;
     return result;
 }
 

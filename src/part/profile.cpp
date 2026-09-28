@@ -384,55 +384,254 @@ ResolvedProfileRegion resolveProfileRegionIntent(
         }
     }
 
-    const auto analysis =
-        sketch::analyzeRegions(model);
+    const auto regular_source =
+        [&model](sketch::EntityId id) {
+            if (const auto* line =
+                    model.findLine(id)) {
+                return line->role() ==
+                       sketch::EntityRole::regular;
+            }
+            if (const auto* circle =
+                    model.findCircle(id)) {
+                return circle->role() ==
+                       sketch::EntityRole::regular;
+            }
+            if (const auto* arc =
+                    model.findArc(id)) {
+                return arc->role() ==
+                       sketch::EntityRole::regular;
+            }
+            return false;
+        };
 
-    std::optional<sketch::RegionCandidate2D>
-        matched;
-    for (const auto& candidate :
-         analysis.regions) {
-        const auto candidate_intent =
-            makeProfileRegionIntent(candidate);
-        if (!candidate_intent ||
-            *candidate_intent != intent) {
-            continue;
+    const auto runtime_anchor =
+        [](const ProfileBoundaryAnchor& anchor)
+            -> sketch::RegionBoundaryAnchor2D {
+            switch (anchor.kind) {
+            case ProfileBoundaryAnchorKind::
+                endpoint_start:
+                return {
+                    sketch::RegionBoundaryAnchorKind::
+                        endpoint_start,
+                    {},
+                    0U};
+            case ProfileBoundaryAnchorKind::
+                endpoint_end:
+                return {
+                    sketch::RegionBoundaryAnchorKind::
+                        endpoint_end,
+                    {},
+                    0U};
+            case ProfileBoundaryAnchorKind::
+                intersection:
+                return {
+                    sketch::RegionBoundaryAnchorKind::
+                        intersection,
+                    anchor.other_entity,
+                    anchor.canonical_branch};
+            }
+            return {};
+        };
+
+    const auto resolve_anchor =
+        [&model](
+            sketch::EntityId source,
+            const ProfileBoundaryAnchor& anchor)
+            -> std::optional<double> {
+            if (anchor.kind ==
+                ProfileBoundaryAnchorKind::
+                    endpoint_start) {
+                if (model.findLine(source) ||
+                    model.findArc(source)) {
+                    return 0.0;
+                }
+                return std::nullopt;
+            }
+            if (anchor.kind ==
+                ProfileBoundaryAnchorKind::
+                    endpoint_end) {
+                if (model.findLine(source) ||
+                    model.findArc(source)) {
+                    return 1.0;
+                }
+                return std::nullopt;
+            }
+
+            const auto relation =
+                sketch::analyzeCurveRelation(
+                    model,
+                    source,
+                    anchor.other_entity);
+            if (relation.status !=
+                sketch::CurveRelationStatus::
+                    discrete) {
+                return std::nullopt;
+            }
+
+            const auto found =
+                std::find_if(
+                    relation.intersections.begin(),
+                    relation.intersections.end(),
+                    [&anchor](
+                        const sketch::
+                            CurveIntersection2D& item) {
+                        return item.canonical_branch ==
+                               anchor.canonical_branch;
+                    });
+            if (found ==
+                relation.intersections.end()) {
+                return std::nullopt;
+            }
+
+            if (found->contact ==
+                    sketch::CurveContactKind::tangent &&
+                !found->first_endpoint &&
+                !found->second_endpoint) {
+                return std::nullopt;
+            }
+
+            return relation.first_entity == source
+                ? std::optional<double>{
+                      found->first_parameter}
+                : std::optional<double>{
+                      found->second_parameter};
+        };
+
+    const auto resolve_loop =
+        [&model,
+         &regular_source,
+         &runtime_anchor,
+         &resolve_anchor](
+            const ProfileLoopIntent& loop)
+            -> std::optional<
+                sketch::RegionLoop2D> {
+            sketch::RegionLoop2D result;
+            result.boundary.reserve(
+                loop.boundary.size());
+
+            for (const auto& use :
+                 loop.boundary) {
+                if (!regular_source(
+                        use.source_entity)) {
+                    return std::nullopt;
+                }
+
+                if (use.whole_closed_curve) {
+                    if (!model.findCircle(
+                            use.source_entity)) {
+                        return std::nullopt;
+                    }
+                    result.boundary.push_back(
+                        sketch::RegionBoundaryUse2D{
+                            use.source_entity,
+                            0.0,
+                            0.0,
+                            std::nullopt,
+                            std::nullopt,
+                            use.follows_source_direction,
+                            true,
+                            true});
+                    continue;
+                }
+
+                const auto start =
+                    resolve_anchor(
+                        use.source_entity,
+                        *use.start_anchor);
+                const auto end =
+                    resolve_anchor(
+                        use.source_entity,
+                        *use.end_anchor);
+                if (!start || !end) {
+                    return std::nullopt;
+                }
+
+                const bool circle =
+                    model.findCircle(
+                        use.source_entity) !=
+                    nullptr;
+                const bool crosses_seam =
+                    circle &&
+                    (use.follows_source_direction
+                         ? *start > *end
+                         : *start < *end);
+
+                result.boundary.push_back(
+                    sketch::RegionBoundaryUse2D{
+                        use.source_entity,
+                        *start,
+                        *end,
+                        runtime_anchor(
+                            *use.start_anchor),
+                        runtime_anchor(
+                            *use.end_anchor),
+                        use.follows_source_direction,
+                        crosses_seam,
+                        false});
+            }
+            return result;
+        };
+
+    auto outer =
+        resolve_loop(intent.outer);
+    if (!outer) {
+        return {
+            ProfileIntentResolutionStatus::
+                unresolved_intent,
+            std::nullopt};
+    }
+
+    std::vector<sketch::RegionLoop2D>
+        holes;
+    holes.reserve(intent.holes.size());
+    for (const auto& hole :
+         intent.holes) {
+        auto resolved =
+            resolve_loop(hole);
+        if (!resolved) {
+            return {
+                ProfileIntentResolutionStatus::
+                    unresolved_intent,
+                std::nullopt};
         }
-        if (matched) {
+        holes.push_back(
+            std::move(*resolved));
+    }
+
+    auto region =
+        sketch::validateRegionBoundary(
+            model,
+            std::move(*outer),
+            std::move(holes));
+    if (!region) {
+        const auto analysis =
+            sketch::analyzeRegions(model);
+        if (std::any_of(
+                analysis.diagnostics.begin(),
+                analysis.diagnostics.end(),
+                [&references](
+                    const sketch::
+                        RegionAnalysisDiagnostic2D&
+                            diagnostic) {
+                    return diagnosticTouches(
+                        diagnostic,
+                        references);
+                })) {
             return {
                 ProfileIntentResolutionStatus::
                     ambiguous_topology,
                 std::nullopt};
         }
-        matched = candidate;
-    }
 
-    if (matched) {
-        return {
-            ProfileIntentResolutionStatus::valid,
-            std::move(matched)};
-    }
-
-    if (std::any_of(
-            analysis.diagnostics.begin(),
-            analysis.diagnostics.end(),
-            [&references](
-                const sketch::
-                    RegionAnalysisDiagnostic2D&
-                        diagnostic) {
-                return diagnosticTouches(
-                    diagnostic,
-                    references);
-            })) {
         return {
             ProfileIntentResolutionStatus::
-                ambiguous_topology,
+                unresolved_intent,
             std::nullopt};
     }
 
     return {
-        ProfileIntentResolutionStatus::
-            unresolved_intent,
-        std::nullopt};
+        ProfileIntentResolutionStatus::valid,
+        std::move(region)};
 }
 
 } // namespace simplesolid2::part

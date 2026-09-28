@@ -158,6 +158,15 @@ struct RegionPick2D final {
 [[nodiscard]] RegionAnalysis2D analyzeRegions(
     const SketchModel& model);
 
+// Validates one explicit provider-neutral connected region boundary against
+// current evaluated Sketch geometry. Boundary parameters are runtime values;
+// durable identity remains the semantic anchors carried by each use.
+[[nodiscard]] std::optional<RegionCandidate2D>
+validateRegionBoundary(
+    const SketchModel& model,
+    RegionLoop2D outer,
+    std::vector<RegionLoop2D> holes);
+
 // Runtime point-pick against a previously built analysis. A point on any
 // profile boundary is reported as boundary, never assigned arbitrarily to an
 // adjacent region.
