@@ -1008,44 +1008,94 @@ public:
         clearSketchScene();
 
         try {
-            for (const auto& line : scene.lines) {
-                Handle(Geom_CartesianPoint) start =
-                    new Geom_CartesianPoint(
-                        toPoint(line.start));
-                Handle(Geom_CartesianPoint) end =
-                    new Geom_CartesianPoint(
-                        toPoint(line.end));
-                Handle(AIS_Line) object =
-                    new AIS_Line(start, end);
+            const auto display_segment =
+                [this](
+                    viewer::PresentationToken token,
+                    const viewer::Point3& start_point,
+                    const viewer::Point3& end_point,
+                    bool construction) {
+                    Handle(Geom_CartesianPoint) start =
+                        new Geom_CartesianPoint(
+                            toPoint(start_point));
+                    Handle(Geom_CartesianPoint) end =
+                        new Geom_CartesianPoint(
+                            toPoint(end_point));
+                    Handle(AIS_Line) object =
+                        new AIS_Line(start, end);
 
-                sketch_objects_.push_back(
-                    SketchObject{
+                    sketch_objects_.push_back(
+                        SketchObject{
+                            token,
+                            object,
+                            construction});
+                    context_->Display(object, false);
+                };
+
+            const auto interpolate =
+                [](const viewer::Point3& first,
+                   const viewer::Point3& second,
+                   double parameter) {
+                    return viewer::Point3{
+                        first.x +
+                            (second.x - first.x) *
+                                parameter,
+                        first.y +
+                            (second.y - first.y) *
+                                parameter,
+                        first.z +
+                            (second.z - first.z) *
+                                parameter};
+                };
+
+            for (const auto& line : scene.lines) {
+                if (!line.construction) {
+                    display_segment(
                         line.token,
-                        object,
-                        line.construction});
-                context_->Display(object, false);
+                        line.start,
+                        line.end,
+                        false);
+                    continue;
+                }
+
+                // Stable world-space construction dashes. The geometry, not
+                // screen-space stippling, owns the visible dash phase.
+                constexpr std::size_t kSlices = 24U;
+                for (std::size_t slice = 0U;
+                     slice < kSlices;
+                     slice += 2U) {
+                    const double first =
+                        static_cast<double>(slice) /
+                        static_cast<double>(kSlices);
+                    const double second =
+                        static_cast<double>(slice + 1U) /
+                        static_cast<double>(kSlices);
+                    display_segment(
+                        line.token,
+                        interpolate(
+                            line.start,
+                            line.end,
+                            first),
+                        interpolate(
+                            line.start,
+                            line.end,
+                            second),
+                        true);
+                }
             }
 
             for (const auto& curve : scene.curves) {
                 for (std::size_t index = 1U;
                      index < curve.points.size();
                      ++index) {
-                    Handle(Geom_CartesianPoint) start =
-                        new Geom_CartesianPoint(
-                            toPoint(
-                                curve.points[index - 1U]));
-                    Handle(Geom_CartesianPoint) end =
-                        new Geom_CartesianPoint(
-                            toPoint(curve.points[index]));
-                    Handle(AIS_Line) object =
-                        new AIS_Line(start, end);
-
-                    sketch_objects_.push_back(
-                        SketchObject{
-                            curve.token,
-                            object,
-                            curve.construction});
-                    context_->Display(object, false);
+                    if (curve.construction &&
+                        (index % 2U) == 0U) {
+                        continue;
+                    }
+                    display_segment(
+                        curve.token,
+                        curve.points[index - 1U],
+                        curve.points[index],
+                        curve.construction);
                 }
             }
 
@@ -1179,6 +1229,7 @@ public:
                     2.0,
                     false);
                 context_->Deactivate(object);
+                context_->Redisplay(object, false);
                 profile_preview_object_ = object;
             }
 
@@ -1216,6 +1267,7 @@ public:
                     3.0,
                     false);
                 context_->Deactivate(emphasis);
+                context_->Redisplay(emphasis, false);
                 profile_preview_emphasis_object_ =
                     emphasis;
             }
@@ -2651,6 +2703,13 @@ public:
                     ? 3.5
                     : (selected ? 2.8 : 1.6),
                 false);
+
+            // AIS_Shape shaded presentation may already be cached. Force
+            // rebuild after unlit color/transparency changes so top and
+            // oblique views use the same authored presentation color.
+            context_->Redisplay(
+                entry.object,
+                false);
         }
 
         for (const auto& entry : sketch_objects_) {
@@ -2693,14 +2752,11 @@ public:
             entry.object->Attributes()->SetLineAspect(
                 new Prs3d_LineAspect(
                     color,
-                    entry.construction
-                        ? Aspect_TOL_DASH
-                        : Aspect_TOL_SOLID,
+                    Aspect_TOL_SOLID,
                     width));
 
-            // AIS_Line presentation is already computed by Display().
-            // Direct drawer replacement does not rebuild that presentation,
-            // so force a provider-local redisplay for line type/width/color.
+            // Construction dash geometry is already split in world-space.
+            // Redisplay is still required after replacing the line drawer.
             context_->Redisplay(
                 entry.object,
                 false);
