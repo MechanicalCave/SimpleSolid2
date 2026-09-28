@@ -543,16 +543,18 @@ int main(int argc, char* argv[]) {
         session.undoDepth() ==
         before_profile_tool + 1U);
     CHECK(session.document().profiles().size() == 1U);
-    CHECK(
-        tree.findItems(
-                QStringLiteral("Profile 1"),
-                Qt::MatchExactly |
-                    Qt::MatchRecursive,
-                0)
-            .size() == 1);
     const auto profile_id =
         session.document().profiles().front().id;
     CHECK(profile_id.serialized() == "1");
+    tree_controller.setProfileSelection(
+        {profile_id},
+        profile_id);
+    CHECK(
+        tree_controller.selectedProfileIds() ==
+        std::vector<part::ProfileId>{profile_id});
+    CHECK(
+        tree_controller.primaryProfileId() ==
+        profile_id);
 
     // Add source geometry first, then Edit Profile subtracts it only in the
     // transient draft until Finish.
@@ -809,13 +811,19 @@ int main(int argc, char* argv[]) {
         CHECK(
             exact_session.document().profiles().size() ==
             1U);
+        const auto exact_profile_id =
+            exact_session.document().profiles()
+                .front().id;
+        exact_tree_controller.setProfileSelection(
+            {exact_profile_id},
+            exact_profile_id);
         CHECK(
-            exact_tree.findItems(
-                    QStringLiteral("Profile 1"),
-                    Qt::MatchExactly |
-                        Qt::MatchRecursive,
-                    0)
-                .size() == 1U);
+            exact_tree_controller.selectedProfileIds() ==
+            std::vector<part::ProfileId>{
+                exact_profile_id});
+        CHECK(
+            exact_tree_controller.primaryProfileId() ==
+            exact_profile_id);
 
         exact_interaction.end();
     }
