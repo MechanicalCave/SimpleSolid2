@@ -434,6 +434,77 @@ int main() {
         tee_intent_model.findLine(
             tee_bottom) != nullptr);
 
+    // Manual-F regression: a bounded region remains a valid durable draft
+    // even when the same connected component contains an unrelated open tail.
+    // Hover may legitimately report the region together with Problems: 1;
+    // accepting that exact region must not round-trip into invalid_draft.
+    sketch::SketchModel tailed_region_model;
+    (void)tailed_region_model.addLine(
+        {0.0, 0.0},
+        {4.0, 0.0});
+    const auto tailed_right =
+        tailed_region_model.addLine(
+            {4.0, 0.0},
+            {4.0, 3.0});
+    (void)tailed_region_model.addLine(
+        {4.0, 2.0},
+        {0.0, 2.0});
+    (void)tailed_region_model.addLine(
+        {0.0, 2.0},
+        {0.0, 0.0});
+
+    const auto tailed_analysis =
+        sketch::analyzeRegions(
+            tailed_region_model);
+    CHECK(tailed_right.valid());
+    CHECK(tailed_analysis.regions.size() == 1U);
+    CHECK(!tailed_analysis.diagnostics.empty());
+
+    const auto tailed_pick =
+        sketch::pickRegion(
+            tailed_region_model,
+            tailed_analysis,
+            {2.0, 1.0});
+    CHECK(
+        tailed_pick.location ==
+        sketch::RegionPointLocation::inside);
+    CHECK(tailed_pick.region_index.has_value());
+
+    const auto tailed_candidate =
+        std::find_if(
+            tailed_analysis.regions.begin(),
+            tailed_analysis.regions.end(),
+            [&tailed_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *tailed_pick.region_index;
+            });
+    CHECK(
+        tailed_candidate !=
+        tailed_analysis.regions.end());
+
+    const auto tailed_intent =
+        part::makeProfileRegionIntent(
+            *tailed_candidate);
+    CHECK(tailed_intent.has_value());
+
+    const auto tailed_resolved =
+        part::resolveProfileRegionIntent(
+            tailed_region_model,
+            *tailed_intent);
+    CHECK(tailed_resolved.valid());
+
+    const auto tailed_add_same =
+        part::applyProfileAreaEdit(
+            tailed_region_model,
+            *tailed_intent,
+            *tailed_pick.region_index,
+            part::ProfileAreaEditMode::add_area);
+    CHECK(
+        tailed_add_same.status ==
+        part::ProfileAreaEditStatus::no_change);
+    CHECK(tailed_add_same.region.has_value());
+
 
     // Package F transient Add/Subtract algebra. These pure draft operations
     // produce RegionIntent only; authored mutation remains a later Finish.
