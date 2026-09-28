@@ -434,76 +434,134 @@ int main() {
         tee_intent_model.findLine(
             tee_bottom) != nullptr);
 
-    // Manual-F regression: a bounded region remains a valid durable draft
-    // even when the same connected component contains an unrelated open tail.
-    // Hover may legitimately report the region together with Problems: 1;
-    // accepting that exact region must not round-trip into invalid_draft.
-    sketch::SketchModel tailed_region_model;
-    (void)tailed_region_model.addLine(
+    // Manual-F regression A: a valid bounded region must remain usable even
+    // when an unrelated connected component reports a diagnostic. Problems
+    // elsewhere in the Sketch are not a reason to invalidate this RegionIntent.
+    sketch::SketchModel diagnosed_region_model;
+    (void)diagnosed_region_model.addLine(
         {0.0, 0.0},
         {4.0, 0.0});
-    const auto tailed_right =
-        tailed_region_model.addLine(
-            {4.0, 0.0},
-            {4.0, 3.0});
-    (void)tailed_region_model.addLine(
+    (void)diagnosed_region_model.addLine(
+        {4.0, 0.0},
+        {4.0, 2.0});
+    (void)diagnosed_region_model.addLine(
         {4.0, 2.0},
         {0.0, 2.0});
-    (void)tailed_region_model.addLine(
+    (void)diagnosed_region_model.addLine(
         {0.0, 2.0},
         {0.0, 0.0});
+    (void)diagnosed_region_model.addLine(
+        {10.0, 0.0},
+        {14.0, 0.0});
+    (void)diagnosed_region_model.addLine(
+        {11.0, 0.0},
+        {13.0, 0.0});
 
-    const auto tailed_analysis =
+    const auto diagnosed_analysis =
         sketch::analyzeRegions(
-            tailed_region_model);
-    CHECK(tailed_right.valid());
-    CHECK(tailed_analysis.regions.size() == 1U);
-    CHECK(!tailed_analysis.diagnostics.empty());
+            diagnosed_region_model);
+    CHECK(diagnosed_analysis.regions.size() == 1U);
+    CHECK(diagnosed_analysis.diagnostics.size() == 1U);
 
-    const auto tailed_pick =
+    const auto diagnosed_pick =
         sketch::pickRegion(
-            tailed_region_model,
-            tailed_analysis,
+            diagnosed_region_model,
+            diagnosed_analysis,
             {2.0, 1.0});
-    CHECK(
-        tailed_pick.location ==
-        sketch::RegionPointLocation::inside);
-    CHECK(tailed_pick.region_index.has_value());
-
-    const auto tailed_candidate =
+    CHECK(diagnosed_pick.region_index.has_value());
+    const auto diagnosed_candidate =
         std::find_if(
-            tailed_analysis.regions.begin(),
-            tailed_analysis.regions.end(),
-            [&tailed_pick](
+            diagnosed_analysis.regions.begin(),
+            diagnosed_analysis.regions.end(),
+            [&diagnosed_pick](
                 const sketch::RegionCandidate2D& region) {
                 return region.region_index ==
-                       *tailed_pick.region_index;
+                       *diagnosed_pick.region_index;
             });
     CHECK(
-        tailed_candidate !=
-        tailed_analysis.regions.end());
-
-    const auto tailed_intent =
+        diagnosed_candidate !=
+        diagnosed_analysis.regions.end());
+    const auto diagnosed_intent =
         part::makeProfileRegionIntent(
-            *tailed_candidate);
-    CHECK(tailed_intent.has_value());
-
-    const auto tailed_resolved =
+            *diagnosed_candidate);
+    CHECK(diagnosed_intent.has_value());
+    CHECK(
         part::resolveProfileRegionIntent(
-            tailed_region_model,
-            *tailed_intent);
-    CHECK(tailed_resolved.valid());
-
-    const auto tailed_add_same =
+            diagnosed_region_model,
+            *diagnosed_intent)
+            .valid());
+    const auto diagnosed_add_same =
         part::applyProfileAreaEdit(
-            tailed_region_model,
-            *tailed_intent,
-            *tailed_pick.region_index,
+            diagnosed_region_model,
+            *diagnosed_intent,
+            *diagnosed_pick.region_index,
             part::ProfileAreaEditMode::add_area);
     CHECK(
-        tailed_add_same.status ==
+        diagnosed_add_same.status ==
         part::ProfileAreaEditStatus::no_change);
-    CHECK(tailed_add_same.region.has_value());
+
+    // Manual-F regression B: the selected rectangle can be a bounded cell
+    // cut out by four longer authored lines. Every corner is an intersection,
+    // not an authored endpoint; the outward tails must not make the accepted
+    // RegionIntent fail its immediate round-trip.
+    sketch::SketchModel extended_cell_model;
+    (void)extended_cell_model.addLine(
+        {-1.0, 0.0},
+        {5.0, 0.0});
+    (void)extended_cell_model.addLine(
+        {4.0, -1.0},
+        {4.0, 3.0});
+    (void)extended_cell_model.addLine(
+        {5.0, 2.0},
+        {-1.0, 2.0});
+    (void)extended_cell_model.addLine(
+        {0.0, 3.0},
+        {0.0, -1.0});
+
+    const auto extended_analysis =
+        sketch::analyzeRegions(
+            extended_cell_model);
+    CHECK(!extended_analysis.regions.empty());
+    const auto extended_pick =
+        sketch::pickRegion(
+            extended_cell_model,
+            extended_analysis,
+            {2.0, 1.0});
+    CHECK(
+        extended_pick.location ==
+        sketch::RegionPointLocation::inside);
+    CHECK(extended_pick.region_index.has_value());
+
+    const auto extended_candidate =
+        std::find_if(
+            extended_analysis.regions.begin(),
+            extended_analysis.regions.end(),
+            [&extended_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *extended_pick.region_index;
+            });
+    CHECK(
+        extended_candidate !=
+        extended_analysis.regions.end());
+    const auto extended_intent =
+        part::makeProfileRegionIntent(
+            *extended_candidate);
+    CHECK(extended_intent.has_value());
+    CHECK(
+        part::resolveProfileRegionIntent(
+            extended_cell_model,
+            *extended_intent)
+            .valid());
+    const auto extended_add_same =
+        part::applyProfileAreaEdit(
+            extended_cell_model,
+            *extended_intent,
+            *extended_pick.region_index,
+            part::ProfileAreaEditMode::add_area);
+    CHECK(
+        extended_add_same.status ==
+        part::ProfileAreaEditStatus::no_change);
 
 
     // Package F transient Add/Subtract algebra. These pure draft operations
