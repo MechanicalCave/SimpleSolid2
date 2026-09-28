@@ -778,6 +778,90 @@ int main() {
         chain_two_touch_add_same.status ==
         part::ProfileAreaEditStatus::no_change);
 
+    // Audit regression: the same exact-endpoint topology must remain
+    // invariant under ordinary decimal scale + translation. The shared
+    // vertices below reuse the exact same Point2 values; this is not gap
+    // healing and must not depend on a screen/model tolerance.
+    const auto audit_point =
+        [](double u, double v) {
+            return sketch::Point2{
+                u * 0.3 + 0.123,
+                v * 0.3 + 0.456};
+        };
+    const auto audit_p0 = audit_point(-2.0, 2.0);
+    const auto audit_p1 = audit_point(4.0, 2.0);
+    const auto audit_p2 = audit_point(1.0, -1.0);
+    const auto audit_p3 = audit_point(-1.0, 3.0);
+
+    sketch::SketchModel
+        decimal_two_touch_model;
+    (void)decimal_two_touch_model.addLine(
+        audit_p0,
+        audit_p1);
+    (void)decimal_two_touch_model.addLine(
+        audit_p1,
+        audit_p2);
+    (void)decimal_two_touch_model.addLine(
+        audit_p2,
+        audit_p3);
+
+    const auto decimal_two_touch_analysis =
+        sketch::analyzeRegions(
+            decimal_two_touch_model);
+    CHECK(
+        decimal_two_touch_analysis.regions.size() ==
+        1U);
+    CHECK(
+        decimal_two_touch_analysis.diagnostics
+            .empty());
+
+    const auto decimal_two_touch_pick =
+        sketch::pickRegion(
+            decimal_two_touch_model,
+            decimal_two_touch_analysis,
+            audit_point(1.5, 1.0));
+    CHECK(
+        decimal_two_touch_pick.location ==
+        sketch::RegionPointLocation::inside);
+    CHECK(
+        decimal_two_touch_pick.region_index
+            .has_value());
+
+    const auto decimal_two_touch_candidate =
+        std::find_if(
+            decimal_two_touch_analysis.regions.begin(),
+            decimal_two_touch_analysis.regions.end(),
+            [&decimal_two_touch_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *decimal_two_touch_pick
+                            .region_index;
+            });
+    CHECK(
+        decimal_two_touch_candidate !=
+        decimal_two_touch_analysis.regions.end());
+
+    const auto decimal_two_touch_intent =
+        part::makeProfileRegionIntent(
+            *decimal_two_touch_candidate);
+    CHECK(decimal_two_touch_intent.has_value());
+
+    const auto decimal_two_touch_resolved =
+        part::resolveProfileRegionIntent(
+            decimal_two_touch_model,
+            *decimal_two_touch_intent);
+    CHECK(decimal_two_touch_resolved.valid());
+
+    const auto decimal_two_touch_add_same =
+        part::applyProfileAreaEdit(
+            decimal_two_touch_model,
+            *decimal_two_touch_intent,
+            *decimal_two_touch_pick.region_index,
+            part::ProfileAreaEditMode::add_area);
+    CHECK(
+        decimal_two_touch_add_same.status ==
+        part::ProfileAreaEditStatus::no_change);
+
 
     // Package F transient Add/Subtract algebra. These pure draft operations
     // produce RegionIntent only; authored mutation remains a later Finish.
