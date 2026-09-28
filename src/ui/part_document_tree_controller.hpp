@@ -56,6 +56,10 @@ public:
         const std::vector<core::BuiltinReferenceRole>& selected,
         std::optional<core::BuiltinReferenceRole> primary);
 
+    void setProfileSelection(
+        const std::vector<part::ProfileId>& selected,
+        std::optional<part::ProfileId> primary);
+
     void setSketchEditHandler(SketchEditHandler handler) {
         sketch_edit_handler_ = std::move(handler);
     }

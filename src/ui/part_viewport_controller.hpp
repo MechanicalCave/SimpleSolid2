@@ -77,6 +77,11 @@ public:
         const std::vector<core::BuiltinReferenceRole>&,
         std::optional<core::BuiltinReferenceRole>)>;
 
+    using ProfileSelectionChangedHandler =
+        std::function<void(
+            const std::vector<part::ProfileId>&,
+            std::optional<part::ProfileId>)>;
+
     using SketchPointerHandler =
         std::function<void(const SketchPointerInput&)>;
 
@@ -118,6 +123,10 @@ public:
         const sketch::DirectManipulationGeometry& geometry);
     void clearSketchPreview();
 
+    [[nodiscard]] bool setProfileDraftPreview(
+        const std::optional<sketch::RegionCandidate2D>& region);
+    void clearProfileDraftPreview();
+
     [[nodiscard]] bool setSketchPrimaryPointerRouting(
         viewer::PrimaryPointerRouting routing);
 
@@ -156,6 +165,15 @@ public:
     sketchPresentationFor(
         sketch::EntityId entity_id) const;
 
+    [[nodiscard]] std::optional<part::ProfileId>
+    profileFor(viewer::PresentationToken token) const;
+    [[nodiscard]] std::optional<viewer::PresentationToken>
+    profilePresentationFor(part::ProfileId profile_id) const;
+
+    void setProfileSelectionFromTree(
+        const std::vector<part::ProfileId>& selected,
+        std::optional<part::ProfileId> primary);
+
     [[nodiscard]] bool projectSketchEntitySelection(
         const std::vector<sketch::EntityId>& selected,
         std::optional<sketch::EntityId> primary);
@@ -172,6 +190,12 @@ public:
         selection_changed_handler_ = std::move(handler);
     }
 
+    void setProfileSelectionChangedHandler(
+        ProfileSelectionChangedHandler handler) {
+        profile_selection_changed_handler_ =
+            std::move(handler);
+    }
+
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primarySelection() const;
 
@@ -179,6 +203,8 @@ private:
     struct SemanticSelection final {
         std::vector<core::BuiltinReferenceRole> selected;
         std::optional<core::BuiltinReferenceRole> primary;
+        std::vector<part::ProfileId> profiles;
+        std::optional<part::ProfileId> primary_profile;
     };
 
     [[nodiscard]] static viewer::PresentationToken tokenFor(
@@ -196,8 +222,16 @@ private:
     [[nodiscard]] std::optional<viewer::SketchScene>
     buildSketchScene();
 
+    [[nodiscard]] std::optional<viewer::ProfileScene>
+    buildProfileScene();
+
+    [[nodiscard]] std::optional<viewer::ProfileRegionPresentation>
+    buildProfileRegionPresentation(
+        const part::PartSketch& source,
+        const sketch::RegionCandidate2D& region) const;
+
     [[nodiscard]] std::optional<viewer::PresentationToken>
-    allocateSketchPresentationToken() noexcept;
+    allocatePresentationToken() noexcept;
 
     [[nodiscard]] SemanticSelection& activeSelection();
     [[nodiscard]] const SemanticSelection* activeSelection() const;
@@ -237,7 +271,11 @@ private:
         std::uint64_t,
         SketchEntityAddress>
         sketch_entity_bindings_;
-    std::uint64_t next_sketch_presentation_token_{
+    std::unordered_map<
+        std::uint64_t,
+        part::ProfileId>
+        profile_bindings_;
+    std::uint64_t next_presentation_token_{
         0x10000U};
     bool sketch_grip_projection_valid_{};
     bool projected_grips_visible_{};
@@ -246,6 +284,8 @@ private:
     bool presentation_degraded_{};
 
     SelectionChangedHandler selection_changed_handler_;
+    ProfileSelectionChangedHandler
+        profile_selection_changed_handler_;
     SketchPointerHandler sketch_pointer_handler_;
     PresentationStateChangedHandler
         presentation_state_changed_handler_;

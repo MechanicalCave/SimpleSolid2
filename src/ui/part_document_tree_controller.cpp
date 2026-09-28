@@ -326,6 +326,57 @@ void PartDocumentTreeController::setBuiltinReferenceSelection(
     updateVisibilityActions();
 }
 
+void PartDocumentTreeController::setProfileSelection(
+    const std::vector<part::ProfileId>& selected,
+    std::optional<part::ProfileId> primary) {
+    const QSignalBlocker blocked{tree_};
+
+    QTreeWidgetItem* first_selected = nullptr;
+    QTreeWidgetItem* primary_item = nullptr;
+
+    const auto visit =
+        [&](auto&& self, QTreeWidgetItem* item) -> void {
+            if (item == nullptr) return;
+
+            if (const auto id = profileIdForItem(*item)) {
+                const bool should_select =
+                    std::find(
+                        selected.begin(),
+                        selected.end(),
+                        *id) != selected.end();
+                item->setSelected(should_select);
+                if (should_select && first_selected == nullptr) {
+                    first_selected = item;
+                }
+                if (should_select && primary && *primary == *id) {
+                    primary_item = item;
+                }
+            }
+
+            for (int index = 0; index < item->childCount(); ++index) {
+                self(self, item->child(index));
+            }
+        };
+
+    for (int index = 0; index < tree_->topLevelItemCount(); ++index) {
+        visit(visit, tree_->topLevelItem(index));
+    }
+
+    if (primary_item != nullptr) {
+        tree_->setCurrentItem(
+            primary_item,
+            0,
+            QItemSelectionModel::NoUpdate);
+    } else if (first_selected != nullptr) {
+        tree_->setCurrentItem(
+            first_selected,
+            0,
+            QItemSelectionModel::NoUpdate);
+    }
+
+    updateVisibilityActions();
+}
+
 bool PartDocumentTreeController::
 selectionContainsOnlyBuiltinReferences() const {
     const auto selected = tree_->selectedItems();
