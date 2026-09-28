@@ -237,3 +237,4 @@ notes:
   - Owner accepted C2 Phase B decision KEEP on 2026-09-28: retain the completed C1 two-snapshot history representation with no Product history depth/memory limit and no automatic eviction.
   - C2 decision/internal documentation candidate b865f77e74fcde8e5fa1808a3e6a41436a551328 passed documentation gate #690 after Browser regeneration.
   - C2 completion requires only work-only CLOSURE verification and merge; Package D remains inactive until a separate Work Contract is explicitly Owner-accepted.
+  - Final C2 exact-head candidate 2280efa33139a09f24817edf027894e132364245 retired the one-shot proposal benchmark CI job and passed Windows FULL #692.

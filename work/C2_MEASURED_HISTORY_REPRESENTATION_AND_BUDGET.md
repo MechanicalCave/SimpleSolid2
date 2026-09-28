@@ -445,6 +445,8 @@ With KEEP accepted, C2 requires no production implementation phase. Remaining co
 **Dedicated C2 Release benchmark:** #686 — PASS  
 **Decision/docs candidate:** `b865f77e74fcde8e5fa1808a3e6a41436a551328`  
 **Documentation gate:** #690 — PASS
+**Final exact-head candidate:** `2280efa33139a09f24817edf027894e132364245`  
+**Final Windows FULL:** #692 — PASS
 
 Completion classification:
 
