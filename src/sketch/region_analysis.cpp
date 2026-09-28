@@ -2987,6 +2987,98 @@ buildComponentLoops(
     return false;
 }
 
+[[nodiscard]] bool twoUseLoopHasUnexpectedContact(
+    const SketchModel& model,
+    const RegionBoundaryUse2D& first,
+    const RegionBoundaryUse2D& second) {
+    const auto first_curve =
+        curveView(model, first.source_entity);
+    const auto second_curve =
+        curveView(model, second.source_entity);
+    if (!first_curve || !second_curve) {
+        return true;
+    }
+
+    const auto first_start =
+        useStartPoint(*first_curve, first);
+    const auto first_end =
+        useEndPoint(*first_curve, first);
+    const auto second_start =
+        useStartPoint(*second_curve, second);
+    const auto second_end =
+        useEndPoint(*second_curve, second);
+    if (!first_start || !first_end ||
+        !second_start || !second_end ||
+        *first_end != *second_start ||
+        *second_end != *first_start) {
+        return true;
+    }
+
+    if (first.source_entity ==
+        second.source_entity) {
+        const auto first_mid =
+            useMidParameter(
+                *first_curve,
+                first);
+        const auto second_mid =
+            useMidParameter(
+                *second_curve,
+                second);
+        if (!first_mid || !second_mid) {
+            return true;
+        }
+        return parameterInUse(
+                   *second_curve,
+                   second,
+                   *first_mid) ||
+               parameterInUse(
+                   *first_curve,
+                   first,
+                   *second_mid);
+    }
+
+    const auto relation =
+        analyzeCurveRelation(
+            model,
+            first.source_entity,
+            second.source_entity);
+    if (relation.status !=
+        CurveRelationStatus::discrete) {
+        return true;
+    }
+
+    for (const auto& item :
+         relation.intersections) {
+        const double first_parameter =
+            relation.first_entity ==
+                    first.source_entity
+                ? item.first_parameter
+                : item.second_parameter;
+        const double second_parameter =
+            relation.first_entity ==
+                    second.source_entity
+                ? item.first_parameter
+                : item.second_parameter;
+        if (!parameterInUse(
+                *first_curve,
+                first,
+                first_parameter) ||
+            !parameterInUse(
+                *second_curve,
+                second,
+                second_parameter)) {
+            continue;
+        }
+
+        if (item.point != *first_end &&
+            item.point != *second_end) {
+            return true;
+        }
+    }
+
+    return false;
+}
+
 [[nodiscard]] std::optional<RegionLoop2D>
 validatedLoop(
     const SketchModel& model,
@@ -3091,6 +3183,16 @@ validatedLoop(
                  first + 1U;
              second < loop.boundary.size();
              ++second) {
+            if (loop.boundary.size() == 2U) {
+                if (twoUseLoopHasUnexpectedContact(
+                        model,
+                        loop.boundary[first],
+                        loop.boundary[second])) {
+                    return std::nullopt;
+                }
+                continue;
+            }
+
             const bool adjacent =
                 second == first + 1U;
             const bool wrap_adjacent =

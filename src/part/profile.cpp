@@ -219,15 +219,112 @@ void canonicalizeLoop(
         validLoop);
 }
 
+[[nodiscard]] bool mergeableUses(
+    const sketch::RegionBoundaryUse2D& first,
+    const sketch::RegionBoundaryUse2D& second) noexcept {
+    return !first.whole_closed_curve &&
+           !second.whole_closed_curve &&
+           first.source_entity ==
+               second.source_entity &&
+           first.follows_source_direction ==
+               second.follows_source_direction &&
+           first.end_parameter ==
+               second.start_parameter &&
+           first.end_anchor &&
+           second.start_anchor &&
+           *first.end_anchor ==
+               *second.start_anchor;
+}
+
+[[nodiscard]] std::vector<sketch::RegionBoundaryUse2D>
+coalescedUses(
+    const sketch::RegionLoop2D& source) {
+    auto uses = source.boundary;
+    if (uses.size() < 2U) {
+        return uses;
+    }
+
+    bool closed_single_source = true;
+    for (std::size_t index = 0U;
+         index < uses.size();
+         ++index) {
+        if (!mergeableUses(
+                uses[index],
+                uses[(index + 1U) %
+                     uses.size()])) {
+            closed_single_source = false;
+            break;
+        }
+    }
+    if (closed_single_source) {
+        return {
+            sketch::RegionBoundaryUse2D{
+                uses.front().source_entity,
+                0.0,
+                0.0,
+                std::nullopt,
+                std::nullopt,
+                uses.front()
+                    .follows_source_direction,
+                true,
+                true}};
+    }
+
+    std::size_t first_after_break = 0U;
+    for (std::size_t index = 0U;
+         index < uses.size();
+         ++index) {
+        const auto previous =
+            (index + uses.size() - 1U) %
+            uses.size();
+        if (!mergeableUses(
+                uses[previous],
+                uses[index])) {
+            first_after_break = index;
+            break;
+        }
+    }
+    std::rotate(
+        uses.begin(),
+        uses.begin() +
+            static_cast<std::ptrdiff_t>(
+                first_after_break),
+        uses.end());
+
+    std::vector<sketch::RegionBoundaryUse2D>
+        result;
+    result.reserve(uses.size());
+    for (const auto& use : uses) {
+        if (result.empty() ||
+            !mergeableUses(
+                result.back(),
+                use)) {
+            result.push_back(use);
+            continue;
+        }
+
+        auto& previous = result.back();
+        previous.end_parameter =
+            use.end_parameter;
+        previous.end_anchor =
+            use.end_anchor;
+        previous.crosses_closed_seam =
+            previous.crosses_closed_seam ||
+            use.crosses_closed_seam;
+    }
+    return result;
+}
+
 [[nodiscard]] std::optional<ProfileLoopIntent>
 convertLoop(
     const sketch::RegionLoop2D& source) {
     ProfileLoopIntent result;
+    const auto uses =
+        coalescedUses(source);
     result.boundary.reserve(
-        source.boundary.size());
+        uses.size());
 
-    for (const auto& use :
-         source.boundary) {
+    for (const auto& use : uses) {
         if (!use.source_entity.valid()) {
             return std::nullopt;
         }
@@ -434,7 +531,7 @@ ResolvedProfileRegion resolveProfileRegionIntent(
         };
 
     const auto resolve_anchor =
-        [&model](
+        [&model, &regular_source](
             sketch::EntityId source,
             const ProfileBoundaryAnchor& anchor)
             -> std::optional<double> {
@@ -454,6 +551,11 @@ ResolvedProfileRegion resolveProfileRegionIntent(
                     model.findArc(source)) {
                     return 1.0;
                 }
+                return std::nullopt;
+            }
+
+            if (!regular_source(
+                    anchor.other_entity)) {
                 return std::nullopt;
             }
 

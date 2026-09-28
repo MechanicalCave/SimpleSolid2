@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <numbers>
 
 using namespace simplesolid2;
 
@@ -325,6 +326,113 @@ int main() {
             grid_model,
             *grid_intent)
             .valid());
+
+
+    // Direct intent validation accepts the legitimate two-use Arc+Line loop,
+    // where the same curve pair meets at both closure vertices.
+    sketch::SketchModel two_use_model;
+    const auto two_use_arc =
+        two_use_model.addArc(
+            {0.0, 0.0},
+            1.0,
+            0.0,
+            std::numbers::pi_v<double>);
+    const auto two_use_line =
+        two_use_model.addLine(
+            {-1.0, 0.0},
+            {1.0, 0.0});
+    CHECK(two_use_arc.valid());
+    CHECK(two_use_line.valid());
+    const auto two_use_analysis =
+        sketch::analyzeRegions(
+            two_use_model);
+    CHECK(two_use_analysis.complete());
+    CHECK(
+        two_use_analysis.regions.size() ==
+        1U);
+    const auto two_use_intent =
+        part::makeProfileRegionIntent(
+            two_use_analysis.regions.front());
+    CHECK(two_use_intent.has_value());
+    const auto two_use_resolved =
+        part::resolveProfileRegionIntent(
+            two_use_model,
+            *two_use_intent);
+    CHECK(two_use_resolved.valid());
+    CHECK(
+        std::abs(
+            two_use_resolved.region->area -
+            std::numbers::pi_v<double> *
+                0.5) < 1.0e-12);
+
+    // A blind T branch may fragment runtime arrangement edges, but bridge
+    // cancellation plus same-source coalescing keeps it out of durable intent.
+    sketch::SketchModel tee_intent_model;
+    const auto tee_bottom =
+        tee_intent_model.addLine(
+            {0.0, 0.0},
+            {4.0, 0.0});
+    (void)tee_intent_model.addLine(
+        {4.0, 0.0},
+        {4.0, 2.0});
+    (void)tee_intent_model.addLine(
+        {4.0, 2.0},
+        {0.0, 2.0});
+    (void)tee_intent_model.addLine(
+        {0.0, 2.0},
+        {0.0, 0.0});
+    const auto tee_branch =
+        tee_intent_model.addLine(
+            {2.0, 0.0},
+            {2.0, 1.0});
+
+    const auto tee_intent_analysis =
+        sketch::analyzeRegions(
+            tee_intent_model);
+    CHECK(tee_intent_analysis.complete());
+    CHECK(
+        tee_intent_analysis.regions.size() ==
+        1U);
+    const auto tee_intent =
+        part::makeProfileRegionIntent(
+            tee_intent_analysis.regions.front());
+    CHECK(tee_intent.has_value());
+
+    bool tee_branch_referenced = false;
+    for (const auto& use :
+         tee_intent->outer.boundary) {
+        CHECK(use.source_entity != tee_branch);
+        if ((use.start_anchor &&
+             use.start_anchor->kind ==
+                 part::ProfileBoundaryAnchorKind::
+                     intersection &&
+             use.start_anchor->other_entity ==
+                 tee_branch) ||
+            (use.end_anchor &&
+             use.end_anchor->kind ==
+                 part::ProfileBoundaryAnchorKind::
+                     intersection &&
+             use.end_anchor->other_entity ==
+                 tee_branch)) {
+            tee_branch_referenced = true;
+        }
+    }
+    CHECK(!tee_branch_referenced);
+    CHECK(
+        tee_intent_model.erase(
+            tee_branch));
+    const auto tee_after_delete =
+        part::resolveProfileRegionIntent(
+            tee_intent_model,
+            *tee_intent);
+    CHECK(tee_after_delete.valid());
+    CHECK(
+        std::abs(
+            tee_after_delete.region->area -
+            8.0) < 1.0e-12);
+    CHECK(
+        tee_intent_model.findLine(
+            tee_bottom) != nullptr);
 
     return EXIT_SUCCESS;
 }
