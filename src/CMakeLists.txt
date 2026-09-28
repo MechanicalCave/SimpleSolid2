@@ -131,6 +131,7 @@ target_link_libraries(simplesolid2_application
 
 target_compile_features(simplesolid2_application PUBLIC cxx_std_20)
 
+if(SS2_BUILD_DESKTOP)
 find_package(Qt6 6 REQUIRED COMPONENTS Widgets)
 find_package(OpenCASCADE CONFIG REQUIRED)
 
@@ -235,3 +236,4 @@ target_compile_features(simplesolid2 PRIVATE cxx_std_20)
 set_target_properties(simplesolid2 PROPERTIES
     OUTPUT_NAME "SimpleSolid2"
 )
+endif()

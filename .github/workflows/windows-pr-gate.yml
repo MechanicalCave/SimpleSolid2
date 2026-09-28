@@ -221,6 +221,16 @@ jobs:
           .\ss2.ps1 build
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Verify core-only build/test without Qt or OCCT
+        run: |
+          $ErrorActionPreference = "Stop"
+          cmake -S . -B build\core-only -DSS2_BUILD_DESKTOP=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_OpenCASCADE=TRUE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          cmake --build build\core-only --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          ctest --test-dir build\core-only -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Verify FAST and SUBSYSTEM selectors
         run: |
           $ErrorActionPreference = "Stop"
