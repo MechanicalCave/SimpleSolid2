@@ -706,6 +706,79 @@ int main() {
         part::ProfileAreaEditStatus::no_change);
 
 
+    // Same topology authored as one natural LINE chain:
+    // p0 -> p1 -> p2 -> p3, where p3 crosses the first segment.
+    // The two shared chain vertices are exact by construction.
+    sketch::SketchModel chain_two_touch_model;
+    (void)chain_two_touch_model.addLine(
+        {-2.0, 2.0},
+        {4.0, 2.0});
+    (void)chain_two_touch_model.addLine(
+        {4.0, 2.0},
+        {1.0, -1.0});
+    (void)chain_two_touch_model.addLine(
+        {1.0, -1.0},
+        {-1.0, 3.0});
+
+    const auto chain_two_touch_analysis =
+        sketch::analyzeRegions(
+            chain_two_touch_model);
+    CHECK(
+        chain_two_touch_analysis.regions.size() ==
+        1U);
+    const auto chain_two_touch_pick =
+        sketch::pickRegion(
+            chain_two_touch_model,
+            chain_two_touch_analysis,
+            {1.5, 1.0});
+    CHECK(
+        chain_two_touch_pick.location ==
+        sketch::RegionPointLocation::inside);
+    CHECK(
+        chain_two_touch_pick.region_index
+            .has_value());
+
+    const auto chain_two_touch_candidate =
+        std::find_if(
+            chain_two_touch_analysis.regions.begin(),
+            chain_two_touch_analysis.regions.end(),
+            [&chain_two_touch_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *chain_two_touch_pick
+                            .region_index;
+            });
+    CHECK(
+        chain_two_touch_candidate !=
+        chain_two_touch_analysis.regions.end());
+
+    const auto chain_two_touch_intent =
+        part::makeProfileRegionIntent(
+            *chain_two_touch_candidate);
+    CHECK(chain_two_touch_intent.has_value());
+
+    const auto chain_two_touch_resolved =
+        part::resolveProfileRegionIntent(
+            chain_two_touch_model,
+            *chain_two_touch_intent);
+    CHECK(
+        chain_two_touch_resolved.status ==
+        part::ProfileIntentResolutionStatus::valid);
+    CHECK(
+        chain_two_touch_resolved.region
+            .has_value());
+
+    const auto chain_two_touch_add_same =
+        part::applyProfileAreaEdit(
+            chain_two_touch_model,
+            *chain_two_touch_intent,
+            *chain_two_touch_pick.region_index,
+            part::ProfileAreaEditMode::add_area);
+    CHECK(
+        chain_two_touch_add_same.status ==
+        part::ProfileAreaEditStatus::no_change);
+
+
     // Package F transient Add/Subtract algebra. These pure draft operations
     // produce RegionIntent only; authored mutation remains a later Finish.
     sketch::SketchModel add_model;
