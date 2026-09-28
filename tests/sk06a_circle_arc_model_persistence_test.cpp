@@ -215,6 +215,15 @@ int main() {
     CHECK(line_result.ok() && line_result.entity_id.has_value());
     CHECK(circle_result.ok() && circle_result.entity_id.has_value());
     CHECK(arc_result.ok() && arc_result.entity_id.has_value());
+
+    const auto role_changed =
+        session.execute(
+            application::SetSketchEntityRoleCommand{
+                sketch_id,
+                session.document().revision(),
+                {*circle_result.entity_id},
+                sketch::EntityRole::construction});
+    CHECK(role_changed.ok() && role_changed.changed);
     CHECK(line_result.entity_id->serialized() == "1");
     CHECK(circle_result.entity_id->serialized() == "2");
     CHECK(arc_result.entity_id->serialized() == "3");
@@ -299,7 +308,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor.domain_schema_version ==
-        4);
+        6);
     CHECK(
         package.package->authored_json.find(
             "\"kind\": \"circle\"") !=
@@ -311,6 +320,10 @@ int main() {
     CHECK(
         package.package->authored_json.find(
             "\"entities\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
+            "\"role\": \"construction\"") !=
         std::string::npos);
 
     auto loaded = store.load(path);
@@ -332,9 +345,46 @@ int main() {
             *circle_result.entity_id)->id() ==
         *circle_result.entity_id);
     CHECK(
+        reopened->model.findCircle(
+            *circle_result.entity_id)->role() ==
+        sketch::EntityRole::construction);
+    CHECK(
         reopened->model.findArc(
             *arc_result.entity_id)->id() ==
         *arc_result.entity_id);
+
+    const auto legacy_path =
+        temp.path / "LegacyV4RoleDefault.ss2part";
+    const auto legacy_sketch_id =
+        sketch::SketchId::generate();
+    writeBytes(
+        legacy_path,
+        buildV4PackageWithModel(
+            core::DocumentId::generate(),
+            legacy_sketch_id,
+            "{"
+            "\"next_entity_id\":\"2\","
+            "\"entities\":["
+                "{\"kind\":\"line\",\"id\":\"1\","
+                 "\"start\":[0,0],\"end\":[1,0]}"
+            "]"
+            "}"));
+    const auto legacy_loaded = store.load(legacy_path);
+    CHECK(legacy_loaded.ok());
+    const auto* legacy_sketch =
+        legacy_loaded.document->findSketch(
+            legacy_sketch_id);
+    CHECK(legacy_sketch != nullptr);
+    const auto legacy_id =
+        sketch::EntityId::parse("1");
+    CHECK(legacy_id.has_value());
+    CHECK(
+        legacy_sketch->model.findLine(*legacy_id)->role() ==
+        sketch::EntityRole::regular);
+    CHECK(legacy_loaded.document->profiles().empty());
+    CHECK(
+        legacy_loaded.document->profileIdCursor()
+            .serialized() == "1");
 
     const auto unknown_path =
         temp.path / "UnknownKind.ss2part";

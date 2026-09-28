@@ -31,6 +31,64 @@ std::string upperAscii(std::string_view text) {
     return result;
 }
 
+std::optional<ProfileCadInputCommand>
+profileCommand(std::string_view token) noexcept {
+    if (token == "PROFILE") {
+        return ProfileCadInputCommand{
+            ProfileCadInputCommandKind::start_create,
+            std::nullopt};
+    }
+    if (token == "EDITPROFILE") {
+        return ProfileCadInputCommand{
+            ProfileCadInputCommandKind::start_edit,
+            std::nullopt};
+    }
+    if (token == "ADD") {
+        return ProfileCadInputCommand{
+            ProfileCadInputCommandKind::add_area,
+            std::nullopt};
+    }
+    if (token == "SUBTRACT") {
+        return ProfileCadInputCommand{
+            ProfileCadInputCommandKind::subtract_area,
+            std::nullopt};
+    }
+    if (token == "FIND") {
+        return ProfileCadInputCommand{
+            ProfileCadInputCommandKind::find_all_regions,
+            std::nullopt};
+    }
+    if (token == "FINISH") {
+        return ProfileCadInputCommand{
+            ProfileCadInputCommandKind::finish,
+            std::nullopt};
+    }
+    if (token == "CANCEL") {
+        return ProfileCadInputCommand{
+            ProfileCadInputCommandKind::cancel,
+            std::nullopt};
+    }
+    if (token == "ISLANDS ON" ||
+        token == "ISLANDS OFF") {
+        return ProfileCadInputCommand{
+            ProfileCadInputCommandKind::set_detect_islands,
+            token == "ISLANDS ON"};
+    }
+    if (token == "BOUNDARIES ON" ||
+        token == "BOUNDARIES OFF") {
+        return ProfileCadInputCommand{
+            ProfileCadInputCommandKind::set_show_boundaries,
+            token == "BOUNDARIES ON"};
+    }
+    if (token == "PROBLEMS ON" ||
+        token == "PROBLEMS OFF") {
+        return ProfileCadInputCommand{
+            ProfileCadInputCommandKind::set_show_problems,
+            token == "PROBLEMS ON"};
+    }
+    return std::nullopt;
+}
+
 std::optional<sketch::SketchTool>
 commandTool(std::string_view token) noexcept {
     if (token == "SELECT") return sketch::SketchTool::select;
@@ -87,7 +145,15 @@ SketchCadInputSemanticEndpoint::submit(
         return {true, {}};
     }
 
-    const auto command = commandTool(upperAscii(submitted));
+    const auto upper = upperAscii(submitted);
+    if (const auto profile =
+            profileCommand(upper)) {
+        return target_->
+            submitCadInputSemanticProfileCommand(
+                *profile);
+    }
+
+    const auto command = commandTool(upper);
     if (!command) {
         return {false, "Unknown Sketch command."};
     }

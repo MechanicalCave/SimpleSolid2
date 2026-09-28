@@ -243,7 +243,30 @@ Space typed while a text-entry field has focus remains text input; it does not t
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeric Rotate/Scale, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
+Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeric Rotate/Scale, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages.
+
+<!-- section-id: product.parts.profiles -->
+## Construction and Profile
+
+Every Sketch Line, Circle and Arc can be **Regular** or **Construction**. Select geometry in ordinary Select and use `Regular` or `Construction` in Operations. Construction remains saved helper geometry, but it does not close or split regions used by Profile. The viewport presents Construction geometry with a dashed line; this is only a presentation cue, while the authored entity role remains semantic truth.
+
+The **Profile** tool works inside the active Sketch. Moving the pointer over closed geometry shows a translucent region result; clicking accepts that candidate into the current draft and Status reminds you that **Finish Profile** performs the durable commit. Region truth comes from exact Line/Circle/Arc semantics, not from Viewer tessellation.
+
+Operations provides **Add Area**, **Subtract Area**, **Detect Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Find All Regions**, **Finish Profile** and **Cancel**. Find All Regions is diagnostic only and creates no Profile automatically. During Subtract the resulting draft remains cyan/blue, while the currently hovered region to remove receives a separate red-orange emphasis fill.
+
+An open chain remains open: SimpleSolid does not close a small gap with a hidden tolerance or auto-repair it. Clicking where no bounded region exists reports an open-boundary diagnostic when the analysis detects one. Without snapping/OSNAP, two points that only look coincident on screen are not silently made equal. A disconnected Add result, subtraction that splits material, or ambiguous topology is rejected without changing the Document.
+
+Finish creates a Part-owned Profile with a stable `ProfileId`. The Profile stores semantic references to source-Sketch geometry rather than a copy of the visible fill. Source edits can keep the Profile **Valid**, make it **Invalid**, and later restore it to Valid without changing ProfileId. SimpleSolid does not automatically rebind an Invalid Profile to similar or nearest replacement geometry.
+
+A Profile appears under its source Sketch in Document Tree. Properties shows Name, ProfileId, Source Sketch, Status, diagnostic, Area, Perimeter, Holes and Visibility. Area/Perimeter/Holes are derived and become unavailable for Invalid instead of retaining stale values. Name and Visibility are authored.
+
+After **Finish Sketch**, a visible Valid Profile remains a flat selectable Part object on the source Sketch plane. Profile visibility is independent from Sketch geometry visibility. Selecting it selects the Profile semantic object, not its source curves. **Delete Profile** removes only the Profile and leaves source Sketch geometry unchanged.
+
+To change an existing Profile region, select exactly one Profile and use **Edit Profile** or enter `EDITPROFILE`. Editing preserves ProfileId. Use `PROFILE` to start a new Profile draft.
+
+Command Line and Operations drive the same Profile state. Context commands are `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL`, plus `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF` and `PROBLEMS ON|OFF`.
+
+Profile is 2D/Part semantics. **It does not perform Extrude or create a solid.** Modeled solid operations require separate Part functionality.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -270,7 +293,7 @@ The next normal full Viewer refresh automatically retries presentation from the 
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state, including Origin visibility and created Sketches with durable identity/support/placement, Line/Circle/Arc geometry and stable EntityIds, to its `.ss2part` file.
+`Save` writes the current authored Part state, including Origin visibility, Sketches with durable identity/support/placement, Line/Circle/Arc geometry with Regular/Construction roles and stable EntityIds, and Profiles with ProfileId/RegionIntent/name/visibility, to its `.ss2part` file.
 
 Ordinary Save is conditional on the exact native file version that this session loaded or last saved. If that target was removed, replaced, changed on disk, changed to another DocumentId or is currently guarded by another cooperating SS2 Save, SimpleSolid reports a Save conflict instead of silently overwriting the target. The in-memory Part remains open and keeps its local changes/Undo history.
 
@@ -287,7 +310,7 @@ If saving fails or reports a conflict, the Document/Project remains open. Closin
 
 After restarting the application, open the same Project.
 
-SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties, saved Origin visibility and saved Sketch records.
+SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties, saved Origin visibility, saved Sketch records including geometry roles, and saved Profiles with the same ProfileIds.
 
 Undo/Redo history, active selection, active Sketch edit context and camera state are not stored in the file and start fresh after reopening.
 
@@ -303,11 +326,11 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation and durable Origin-plane Sketches with Line/Circle/Arc authored geometry.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, and Part-owned Profiles with live RegionIntent semantics.
 
 The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
 
-Direct Distance is available for the supported PointRequest stages documented above. The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
+Direct Distance is available for the supported PointRequest stages documented above. Profile is not a solid operation. The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
 

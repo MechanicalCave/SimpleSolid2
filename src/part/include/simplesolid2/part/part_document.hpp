@@ -3,6 +3,7 @@
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/core/document_reference.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
+#include <simplesolid2/part/profile.hpp>
 
 #include <optional>
 #include <utility>
@@ -22,8 +23,12 @@ struct PartAuthoredState final {
     core::DocumentProperties properties;
     PartPresentationState presentation;
     std::vector<PartSketch> sketches;
+    ProfileIdCursor next_profile_id;
+    std::vector<PartProfile> profiles;
 
-    friend bool operator==(const PartAuthoredState&, const PartAuthoredState&) = default;
+    friend bool operator==(
+        const PartAuthoredState&,
+        const PartAuthoredState&) = default;
 };
 
 enum class PartCommitErrorCode {
@@ -86,6 +91,22 @@ public:
 
     [[nodiscard]] const PartSketch* findSketch(
         const sketch::SketchId& id) const noexcept;
+
+    [[nodiscard]] ProfileIdCursor profileIdCursor()
+        const noexcept {
+        return state_.next_profile_id;
+    }
+
+    [[nodiscard]] const std::vector<PartProfile>&
+    profiles() const noexcept {
+        return state_.profiles;
+    }
+
+    [[nodiscard]] const PartProfile* findProfile(
+        ProfileId id) const noexcept;
+
+    [[nodiscard]] std::optional<ResolvedProfileRegion>
+    evaluateProfile(ProfileId id) const;
 
 private:
     friend class PartDocumentTransaction;

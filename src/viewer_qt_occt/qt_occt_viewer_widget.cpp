@@ -3,6 +3,7 @@
 #include "navigation_mapping.hpp"
 
 #include <AIS_AnimationCamera.hxx>
+#include <AIS_DisplayMode.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_InteractiveObject.hxx>
 #include <AIS_Line.hxx>
@@ -12,11 +13,14 @@
 #include <AIS_TextLabel.hxx>
 #include <AIS_ViewCube.hxx>
 #include <Aspect_DisplayConnection.hxx>
+#include <Aspect_PolygonOffsetMode.hxx>
 #include <Aspect_TypeOfLine.hxx>
 #include <Aspect_TypeOfTriedronPosition.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
 #include <Geom_CartesianPoint.hxx>
 #include <Graphic3d_Camera.hxx>
+#include <Graphic3d_TypeOfShadingModel.hxx>
 #include <Graphic3d_HorizontalTextAlignment.hxx>
 #include <Graphic3d_TransformPers.hxx>
 #include <Graphic3d_VerticalTextAlignment.hxx>
@@ -24,10 +28,12 @@
 #include <Graphic3d_ZLayerId.hxx>
 #include <NCollection_HArray1.hxx>
 #include <OpenGl_GraphicDriver.hxx>
+#include <Prs3d_LineAspect.hxx>
 #include <Prs3d_PointAspect.hxx>
 #include <Quantity_Color.hxx>
 #include <Standard_Failure.hxx>
 #include <TCollection_ExtendedString.hxx>
+#include <TopoDS_Wire.hxx>
 #include <V3d_TypeOfOrientation.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
@@ -1002,42 +1008,94 @@ public:
         clearSketchScene();
 
         try {
-            for (const auto& line : scene.lines) {
-                Handle(Geom_CartesianPoint) start =
-                    new Geom_CartesianPoint(
-                        toPoint(line.start));
-                Handle(Geom_CartesianPoint) end =
-                    new Geom_CartesianPoint(
-                        toPoint(line.end));
-                Handle(AIS_Line) object =
-                    new AIS_Line(start, end);
+            const auto display_segment =
+                [this](
+                    viewer::PresentationToken token,
+                    const viewer::Point3& start_point,
+                    const viewer::Point3& end_point,
+                    bool construction) {
+                    Handle(Geom_CartesianPoint) start =
+                        new Geom_CartesianPoint(
+                            toPoint(start_point));
+                    Handle(Geom_CartesianPoint) end =
+                        new Geom_CartesianPoint(
+                            toPoint(end_point));
+                    Handle(AIS_Line) object =
+                        new AIS_Line(start, end);
 
-                sketch_objects_.push_back(
-                    SketchObject{
+                    sketch_objects_.push_back(
+                        SketchObject{
+                            token,
+                            object,
+                            construction});
+                    context_->Display(object, false);
+                };
+
+            const auto interpolate =
+                [](const viewer::Point3& first,
+                   const viewer::Point3& second,
+                   double parameter) {
+                    return viewer::Point3{
+                        first.x +
+                            (second.x - first.x) *
+                                parameter,
+                        first.y +
+                            (second.y - first.y) *
+                                parameter,
+                        first.z +
+                            (second.z - first.z) *
+                                parameter};
+                };
+
+            for (const auto& line : scene.lines) {
+                if (!line.construction) {
+                    display_segment(
                         line.token,
-                        object});
-                context_->Display(object, false);
+                        line.start,
+                        line.end,
+                        false);
+                    continue;
+                }
+
+                // Stable world-space construction dashes. The geometry, not
+                // screen-space stippling, owns the visible dash phase.
+                constexpr std::size_t kSlices = 24U;
+                for (std::size_t slice = 0U;
+                     slice < kSlices;
+                     slice += 2U) {
+                    const double first =
+                        static_cast<double>(slice) /
+                        static_cast<double>(kSlices);
+                    const double second =
+                        static_cast<double>(slice + 1U) /
+                        static_cast<double>(kSlices);
+                    display_segment(
+                        line.token,
+                        interpolate(
+                            line.start,
+                            line.end,
+                            first),
+                        interpolate(
+                            line.start,
+                            line.end,
+                            second),
+                        true);
+                }
             }
 
             for (const auto& curve : scene.curves) {
                 for (std::size_t index = 1U;
                      index < curve.points.size();
                      ++index) {
-                    Handle(Geom_CartesianPoint) start =
-                        new Geom_CartesianPoint(
-                            toPoint(
-                                curve.points[index - 1U]));
-                    Handle(Geom_CartesianPoint) end =
-                        new Geom_CartesianPoint(
-                            toPoint(curve.points[index]));
-                    Handle(AIS_Line) object =
-                        new AIS_Line(start, end);
-
-                    sketch_objects_.push_back(
-                        SketchObject{
-                            curve.token,
-                            object});
-                    context_->Display(object, false);
+                    if (curve.construction &&
+                        (index % 2U) == 0U) {
+                        continue;
+                    }
+                    display_segment(
+                        curve.token,
+                        curve.points[index - 1U],
+                        curve.points[index],
+                        curve.construction);
                 }
             }
 
@@ -1068,6 +1126,158 @@ public:
             return true;
         } catch (...) {
             clearSketchScene();
+            throw;
+        }
+    }
+
+    bool setProfileScene(
+        const viewer::ProfileScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearProfileScene();
+
+        try {
+            for (const auto& profile : scene.profiles) {
+                auto object =
+                    makeProfileObject(profile.region);
+                if (object.IsNull()) {
+                    clearProfileScene();
+                    return false;
+                }
+
+                profile_objects_.push_back(
+                    ProfileObject{
+                        profile.token,
+                        object});
+                context_->Display(object, false);
+                context_->SetDisplayMode(
+                    object,
+                    AIS_Shaded,
+                    false);
+                object->SetPolygonOffsets(
+                    Aspect_POM_Fill,
+                    -1.0F,
+                    -1.0F);
+            }
+
+            profile_scene_ = scene;
+            applySelectionStyles();
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearProfileScene();
+            throw;
+        }
+    }
+
+    bool setProfilePreviewScene(
+        const viewer::ProfilePreviewScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearProfilePreviewScene();
+
+        if (!scene.region &&
+            !scene.emphasis_region) {
+            profile_preview_scene_ = scene;
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        }
+
+        try {
+            if (scene.region) {
+                auto object =
+                    makeProfileObject(
+                        *scene.region,
+                        scene.show_boundary);
+                if (object.IsNull()) {
+                    return false;
+                }
+
+                context_->Display(object, false);
+                context_->SetDisplayMode(
+                    object,
+                    AIS_Shaded,
+                    false);
+                object->SetPolygonOffsets(
+                    Aspect_POM_Fill,
+                    -1.0F,
+                    -1.0F);
+                context_->SetColor(
+                    object,
+                    Quantity_Color{
+                        0.22, 0.82, 0.96,
+                        Quantity_TOC_RGB},
+                    false);
+                context_->SetTransparency(
+                    object,
+                    0.58,
+                    false);
+                context_->SetWidth(
+                    object,
+                    2.0,
+                    false);
+                context_->Deactivate(object);
+                context_->Redisplay(object, false);
+                profile_preview_object_ = object;
+            }
+
+            if (scene.emphasis_region) {
+                auto emphasis =
+                    makeProfileObject(
+                        *scene.emphasis_region,
+                        true);
+                if (emphasis.IsNull()) {
+                    clearProfilePreviewScene();
+                    return false;
+                }
+
+                context_->Display(emphasis, false);
+                context_->SetDisplayMode(
+                    emphasis,
+                    AIS_Shaded,
+                    false);
+                emphasis->SetPolygonOffsets(
+                    Aspect_POM_Fill,
+                    -2.0F,
+                    -2.0F);
+                context_->SetColor(
+                    emphasis,
+                    Quantity_Color{
+                        0.98, 0.33, 0.16,
+                        Quantity_TOC_RGB},
+                    false);
+                context_->SetTransparency(
+                    emphasis,
+                    0.30,
+                    false);
+                context_->SetWidth(
+                    emphasis,
+                    3.0,
+                    false);
+                context_->Deactivate(emphasis);
+                context_->Redisplay(emphasis, false);
+                profile_preview_emphasis_object_ =
+                    emphasis;
+            }
+
+            profile_preview_scene_ = scene;
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearProfilePreviewScene();
             throw;
         }
     }
@@ -1838,6 +2048,15 @@ public:
                 }
 
                 if (!detected_token) {
+                    for (const auto& entry : profile_objects_) {
+                        if (entry.object == detected) {
+                            detected_token = entry.token;
+                            break;
+                        }
+                    }
+                }
+
+                if (!detected_token) {
                     for (const auto& entry : sketch_objects_) {
                         if (entry.object == detected) {
                             detected_token = entry.token;
@@ -1938,6 +2157,12 @@ public:
     struct SketchObject final {
         viewer::PresentationToken token;
         Handle(AIS_InteractiveObject) object;
+        bool construction{false};
+    };
+
+    struct ProfileObject final {
+        viewer::PresentationToken token;
+        Handle(AIS_Shape) object;
     };
 
     enum class SketchGripVisualState
@@ -1962,6 +2187,111 @@ public:
     [[nodiscard]] static gp_Dir toDirection(
         const viewer::Vec3& vector) {
         return gp_Dir{vector.x, vector.y, vector.z};
+    }
+
+    [[nodiscard]] static std::size_t profileLoopSize(
+        const std::vector<viewer::Point3>& loop) noexcept {
+        if (loop.size() > 3U &&
+            loop.front() == loop.back()) {
+            return loop.size() - 1U;
+        }
+        return loop.size();
+    }
+
+    [[nodiscard]] static std::optional<viewer::Vec3>
+    profileLoopNormal(
+        const std::vector<viewer::Point3>& loop) noexcept {
+        const auto count = profileLoopSize(loop);
+        if (count < 3U) return std::nullopt;
+
+        viewer::Vec3 normal{};
+        for (std::size_t index = 0U;
+             index < count;
+             ++index) {
+            const auto& current = loop[index];
+            const auto& next =
+                loop[(index + 1U) % count];
+            normal.x +=
+                (current.y - next.y) *
+                (current.z + next.z);
+            normal.y +=
+                (current.z - next.z) *
+                (current.x + next.x);
+            normal.z +=
+                (current.x - next.x) *
+                (current.y + next.y);
+        }
+        return viewer::normalized(normal);
+    }
+
+    [[nodiscard]] static std::optional<TopoDS_Wire>
+    makeProfileWire(
+        const std::vector<viewer::Point3>& loop) {
+        const auto count = profileLoopSize(loop);
+        if (count < 3U) return std::nullopt;
+
+        BRepBuilderAPI_MakePolygon polygon;
+        for (std::size_t index = 0U;
+             index < count;
+             ++index) {
+            polygon.Add(toPoint(loop[index]));
+        }
+        polygon.Close();
+        if (!polygon.IsDone()) {
+            return std::nullopt;
+        }
+        return polygon.Wire();
+    }
+
+    [[nodiscard]] static Handle(AIS_Shape)
+    makeProfileObject(
+        const viewer::ProfileRegionPresentation& region,
+        bool draw_boundary = true) {
+        const auto outer_wire =
+            makeProfileWire(region.outer);
+        const auto outer_normal =
+            profileLoopNormal(region.outer);
+        if (!outer_wire || !outer_normal) {
+            return {};
+        }
+
+        BRepBuilderAPI_MakeFace face{
+            *outer_wire,
+            Standard_True};
+        if (!face.IsDone()) {
+            return {};
+        }
+
+        for (const auto& hole : region.holes) {
+            auto hole_wire = makeProfileWire(hole);
+            const auto hole_normal =
+                profileLoopNormal(hole);
+            if (!hole_wire || !hole_normal) {
+                return {};
+            }
+
+            if (viewer::dot(
+                    *outer_normal,
+                    *hole_normal) > 0.0) {
+                hole_wire->Reverse();
+            }
+            face.Add(*hole_wire);
+        }
+
+        if (!face.IsDone()) {
+            return {};
+        }
+
+        Handle(AIS_Shape) object =
+            new AIS_Shape(face.Shape());
+        object->Attributes()->SetShadingModel(
+            Graphic3d_TOSM_UNLIT,
+            Standard_True);
+        object->Attributes()->SetFaceBoundaryDraw(
+            draw_boundary
+                ? Standard_True
+                : Standard_False);
+        return object;
     }
 
     [[nodiscard]] static Quantity_Color baseColor(
@@ -2033,7 +2363,68 @@ public:
         // The neutral PresentationToken remains the semantic transport.
         Handle(AIS_Shape) object =
             new AIS_Shape(face.Shape());
+        object->Attributes()->SetShadingModel(
+            Graphic3d_TOSM_UNLIT);
         return object;
+    }
+
+    void clearProfileScene() noexcept {
+        if (!context_.IsNull()) {
+            guardedVoid(
+                "clearProfileDetected",
+                [this] {
+                    context_->ClearDetected(false);
+                });
+
+            for (const auto& entry :
+                 profile_objects_) {
+                if (entry.object.IsNull()) continue;
+                const auto retained = entry.object;
+                guardedVoid(
+                    "removeProfileObject",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+
+        profile_objects_.clear();
+        profile_scene_.profiles.clear();
+    }
+
+    void clearProfilePreviewScene() noexcept {
+        if (!context_.IsNull()) {
+            if (!profile_preview_object_.IsNull()) {
+                const auto retained =
+                    profile_preview_object_;
+                guardedVoid(
+                    "removeProfilePreviewObject",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+
+            if (!profile_preview_emphasis_object_.IsNull()) {
+                const auto retained =
+                    profile_preview_emphasis_object_;
+                guardedVoid(
+                    "removeProfilePreviewEmphasisObject",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+
+        profile_preview_object_.Nullify();
+        profile_preview_emphasis_object_.Nullify();
+        profile_preview_scene_.region.reset();
+        profile_preview_scene_.emphasis_region.reset();
     }
 
     void clearSketchScene() noexcept {
@@ -2278,6 +2669,50 @@ public:
             }
         }
 
+        for (const auto& entry : profile_objects_) {
+            if (entry.object.IsNull()) continue;
+
+            const bool selected =
+                isSelected(entry.token);
+            const bool primary =
+                selection_.primary &&
+                *selection_.primary == entry.token;
+
+            context_->SetColor(
+                entry.object,
+                primary
+                    ? Quantity_Color{
+                          1.0, 0.90, 0.25,
+                          Quantity_TOC_RGB}
+                    : selected
+                        ? Quantity_Color{
+                              1.0, 0.63, 0.18,
+                              Quantity_TOC_RGB}
+                        : Quantity_Color{
+                              0.30, 0.66, 0.88,
+                              Quantity_TOC_RGB},
+                false);
+            context_->SetTransparency(
+                entry.object,
+                primary
+                    ? 0.36
+                    : (selected ? 0.48 : 0.68),
+                false);
+            context_->SetWidth(
+                entry.object,
+                primary
+                    ? 3.5
+                    : (selected ? 2.8 : 1.6),
+                false);
+
+            // AIS_Shape shaded presentation may already be cached. Force
+            // rebuild after unlit color/transparency changes so top and
+            // oblique views use the same authored presentation color.
+            context_->Redisplay(
+                entry.object,
+                false);
+        }
+
         for (const auto& entry : sketch_objects_) {
             if (entry.object.IsNull()) continue;
 
@@ -2292,8 +2727,7 @@ public:
                 *sketch_interaction_presentation_.
                     hovered_entity == entry.token;
 
-            context_->SetColor(
-                entry.object,
+            const auto color =
                 primary
                     ? Quantity_Color{
                           1.0, 0.90, 0.25,
@@ -2308,15 +2742,24 @@ public:
                                   Quantity_TOC_RGB}
                             : Quantity_Color{
                                   0.92, 0.92, 0.94,
-                                  Quantity_TOC_RGB},
-                false);
-            context_->SetWidth(
-                entry.object,
+                                  Quantity_TOC_RGB};
+            const double width =
                 primary
                     ? 4.0
                     : (selected
                            ? 3.0
-                           : (hovered ? 3.0 : 2.0)),
+                           : (hovered ? 3.0 : 2.0));
+
+            entry.object->Attributes()->SetLineAspect(
+                new Prs3d_LineAspect(
+                    color,
+                    Aspect_TOL_SOLID,
+                    width));
+
+            // Construction dash geometry is already split in world-space.
+            // Redisplay is still required after replacing the line drawer.
+            context_->Redisplay(
+                entry.object,
                 false);
         }
     }
@@ -2505,6 +2948,8 @@ private:
     int last_mouse_y_{};
 
     viewer::ReferenceScene reference_scene_;
+    viewer::ProfileScene profile_scene_;
+    viewer::ProfilePreviewScene profile_preview_scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene sketch_preview_scene_;
     viewer::SketchGripScene sketch_grip_scene_;
@@ -2536,6 +2981,9 @@ private:
     std::vector<NavigationControl>
         navigation_controls_;
     std::vector<ReferenceObject> reference_objects_;
+    std::vector<ProfileObject> profile_objects_;
+    Handle(AIS_Shape) profile_preview_object_;
+    Handle(AIS_Shape) profile_preview_emphasis_object_;
     std::vector<SketchObject> sketch_objects_;
     std::vector<SketchGripObject>
         sketch_grip_objects_;
@@ -2650,6 +3098,24 @@ bool QtOcctViewerWidget::setSketchScene(
         "setSketchScene",
         [this, &scene] {
             return impl_->setSketchScene(scene);
+        });
+}
+
+bool QtOcctViewerWidget::setProfileScene(
+    const viewer::ProfileScene& scene) {
+    return guardedBool(
+        "setProfileScene",
+        [this, &scene] {
+            return impl_->setProfileScene(scene);
+        });
+}
+
+bool QtOcctViewerWidget::setProfilePreviewScene(
+    const viewer::ProfilePreviewScene& scene) {
+    return guardedBool(
+        "setProfilePreviewScene",
+        [this, &scene] {
+            return impl_->setProfilePreviewScene(scene);
         });
 }
 

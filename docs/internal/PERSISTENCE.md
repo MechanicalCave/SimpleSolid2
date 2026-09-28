@@ -43,26 +43,15 @@ Part001.ss2part
 
 Container v1 uses UTF-8 JSON. The common manifest contains `format`, `container_version`, `document_kind`, `document_id` and `domain_schema_version`. Shared persistence owns package/container safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part domain writer is schema **v4**. It persists document properties, built-in Origin visibility and the ordered collection of Part-hosted Sketch records. Each Sketch record persists stable SketchId, built-in Origin-plane support, explicit SketchPlacement, visibility and one embedded Shared 2D model.
+The current Part domain writer is schema **v6**. It persists document properties, built-in Origin visibility, hosted Sketch records, `next_profile_id` and authored Profiles.
 
-Schema-v4 Sketch models contain:
+Schema-v6 Sketch models store canonical `next_entity_id` plus mixed `entities[]`. Each Line/Circle/Arc record stores its semantic kind, canonical EntityId, canonical geometry and authored `regular`/`construction` role.
 
-```text
-next_entity_id
-entities[]
-```
+Each Profile record stores canonical ProfileId, source SketchId, authored name/visibility and semantic RegionIntent. RegionIntent persists source EntityIds and endpoint/intersection anchors; runtime region indices, evaluated parameters, cached arrangements, sampled fills and provider topology are not persisted.
 
-`next_entity_id` is the canonical positive decimal shared EntityId high-water string. Each entity record has an explicit semantic `kind`:
+Schemas v1–v5 remain readable. V1 restores no Sketches; v2 restores host Sketch records with empty Shared 2D models; v3 reads the former Line-only model; v4 reads mixed Line/Circle/Arc and defaults roles to Regular; v5 reads persisted roles and creates no Profiles. A later successful Save of an older loaded file publishes schema v6.
 
-- `line`: `id`, `start`, `end`;
-- `circle`: `id`, `center`, `radius`;
-- `arc`: `id`, `center`, `radius`, `start_angle`, `sweep_angle`.
-
-Only canonical authored parameters are serialized. Tessellation, presentation tokens, grips, hover/selection, preview and creation-method metadata are not persisted.
-
-Part schemas v1, v2 and v3 remain readable. V1 restores an empty Sketch collection. V2 restores host Sketch records with empty Shared 2D models and an initial cursor. V3 reads the previous `next_entity_id + lines[]` Line-only model. Opening an old schema does not rewrite the file; a later successful ordinary Save writes current schema v4.
-
-DocumentId remains only in the common manifest. ProjectId is not embedded in the Document. `DocumentRevision` and Undo/Redo are runtime-only.
+DocumentId remains only in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tool state, region-analysis cache and Viewer state are runtime-only.
 
 The former line-based `SS2PART` bootstrap format remains unsupported legacy test data and fails closed rather than being migrated.
 
@@ -118,6 +107,7 @@ The following state is not serialized as Part authored state:
 - Sketch support-pick tool state;
 - Qt objects;
 - Viewer provider objects and OCCT handles;
+- cached Shared 2D region analysis and transient Profile drafts;
 - evaluated B-Rep or tessellation.
 
 Persistent user visibility of built-in Origin references is intentionally **not** in this runtime-only list; it is authored Part state.
@@ -133,9 +123,9 @@ Part discovery reads the common manifest, then Part authored state.
 
 A rename or move inside the Workspace does not change DocumentId. Duplicate native Part files declaring one DocumentId remain a fail-closed identity conflict; no automatic ID rewrite is performed.
 
-Schema-v4 Sketch loading rejects malformed/non-canonical identity strings, duplicate EntityIds across any primitive kinds, EntityIds greater than or equal to `next_entity_id`, malformed/unknown `kind` values, non-finite geometry, exact-zero Lines, non-positive Circle/Arc radius, zero Arc sweep and Arc sweep whose magnitude reaches/exceeds a full turn. The same local EntityId value in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
+Schema-v6 loading rejects malformed/non-canonical identity strings, duplicate EntityIds across primitive kinds, EntityIds outside `next_entity_id`, malformed/unknown entity kind or role, invalid/non-finite geometry and invalid primitive parameters. The same local EntityId in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
 
-Schema-v3 validation remains intact for backward read compatibility.
+Profile loading fails closed on malformed/non-canonical ProfileId/cursor values, duplicate or out-of-range ProfileIds, missing/invalid source Sketch identity, malformed RegionIntent structure or invalid boundary-anchor encoding. Earlier schema validation remains intact for backward read compatibility.
 
 After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid Sketch support/placement relationships or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family. This validation adds no serialized field and does not change the native schema version.
 

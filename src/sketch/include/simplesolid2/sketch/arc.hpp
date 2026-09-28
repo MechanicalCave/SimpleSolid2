@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/sketch/entity_id.hpp>
+#include <simplesolid2/sketch/entity_role.hpp>
 #include <simplesolid2/sketch/point2.hpp>
 
 namespace simplesolid2::sketch {
@@ -11,6 +12,10 @@ class Arc final {
 public:
     [[nodiscard]] constexpr EntityId id() const noexcept {
         return id_;
+    }
+
+    [[nodiscard]] constexpr EntityRole role() const noexcept {
+        return role_;
     }
 
     [[nodiscard]] constexpr const Point2& center() const noexcept {
@@ -37,18 +42,21 @@ private:
         Point2 center,
         double radius,
         double start_angle,
-        double sweep_angle) noexcept
+        double sweep_angle,
+        EntityRole role) noexcept
         : id_{id},
           center_{center},
           radius_{radius},
           start_angle_{start_angle},
-          sweep_angle_{sweep_angle} {}
+          sweep_angle_{sweep_angle},
+          role_{role} {}
 
     EntityId id_;
     Point2 center_;
     double radius_{};
     double start_angle_{};
     double sweep_angle_{};
+    EntityRole role_{EntityRole::regular};
 
     friend class SketchModel;
 };

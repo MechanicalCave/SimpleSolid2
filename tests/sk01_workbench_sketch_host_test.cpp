@@ -5,6 +5,8 @@
 #include <simplesolid2/application/project_workspace_metadata.hpp>
 
 #include <QAction>
+#include <algorithm>
+#include <QCheckBox>
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
@@ -413,6 +415,42 @@ int main(int argc, char* argv[]) {
     auto* edit_sketch_action =
         workbench.findChild<QAction*>(
             QStringLiteral("editSketchAction"));
+    auto* edit_profile_action =
+        workbench.findChild<QAction*>(
+            QStringLiteral("editProfileAction"));
+    auto* profile_properties_page =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("profilePropertiesPage"));
+    auto* profile_name_edit =
+        workbench.findChild<QLineEdit*>(
+            QStringLiteral("profilePropertyName"));
+    auto* profile_visible_check =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("profilePropertyVisible"));
+    auto* profile_source_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("profilePropertySourceSketch"));
+    auto* profile_status_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("profilePropertyStatus"));
+    auto* profile_diagnostic_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("profilePropertyDiagnostic"));
+    auto* profile_area_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("profilePropertyArea"));
+    auto* profile_perimeter_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("profilePropertyPerimeter"));
+    auto* profile_holes_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("profilePropertyHoles"));
+    auto* delete_profile_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("deleteProfileButton"));
+    auto* apply_profile_properties =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("applyProfilePropertiesButton"));
     auto* operations_content =
         workbench.findChild<QWidget*>(
             QStringLiteral("partOperationsContent"));
@@ -431,6 +469,45 @@ int main(int argc, char* argv[]) {
     auto* arc_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("arcSketchToolButton"));
+    auto* profile_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileSketchToolButton"));
+    auto* regular_role_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("sketchRegularRoleButton"));
+    auto* construction_role_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("sketchConstructionRoleButton"));
+    auto* profile_operations =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("profileOperationsWidget"));
+    auto* profile_add_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileAddAreaButton"));
+    auto* profile_subtract_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileSubtractAreaButton"));
+    auto* profile_detect_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileDetectIslandsButton"));
+    auto* profile_highlight_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileHighlightHoverButton"));
+    auto* profile_boundaries_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileShowBoundariesButton"));
+    auto* profile_problems_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileShowProblemsButton"));
+    auto* profile_find_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileFindRegionsButton"));
+    auto* profile_finish_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileFinishButton"));
+    auto* profile_cancel_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileCancelButton"));
     auto* move_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("moveSketchToolButton"));
@@ -467,12 +544,37 @@ int main(int argc, char* argv[]) {
     CHECK(redo_button != nullptr);
     CHECK(tree != nullptr);
     CHECK(edit_sketch_action != nullptr);
+    CHECK(edit_profile_action != nullptr);
+    CHECK(profile_properties_page != nullptr);
+    CHECK(profile_name_edit != nullptr);
+    CHECK(profile_visible_check != nullptr);
+    CHECK(profile_source_label != nullptr);
+    CHECK(profile_status_label != nullptr);
+    CHECK(profile_diagnostic_label != nullptr);
+    CHECK(profile_area_label != nullptr);
+    CHECK(profile_perimeter_label != nullptr);
+    CHECK(profile_holes_label != nullptr);
+    CHECK(delete_profile_button != nullptr);
+    CHECK(apply_profile_properties != nullptr);
     CHECK(operations_content != nullptr);
     CHECK(editor_host != nullptr);
     CHECK(operations_label != nullptr);
     CHECK(line_button != nullptr);
     CHECK(circle_button != nullptr);
     CHECK(arc_button != nullptr);
+    CHECK(profile_button != nullptr);
+    CHECK(regular_role_button != nullptr);
+    CHECK(construction_role_button != nullptr);
+    CHECK(profile_operations != nullptr);
+    CHECK(profile_add_button != nullptr);
+    CHECK(profile_subtract_button != nullptr);
+    CHECK(profile_detect_button != nullptr);
+    CHECK(profile_highlight_button != nullptr);
+    CHECK(profile_boundaries_button != nullptr);
+    CHECK(profile_problems_button != nullptr);
+    CHECK(profile_find_button != nullptr);
+    CHECK(profile_finish_button != nullptr);
+    CHECK(profile_cancel_button != nullptr);
     CHECK(move_button != nullptr);
     CHECK(copy_button != nullptr);
     CHECK(create_tools_label != nullptr);
@@ -563,6 +665,428 @@ int main(int argc, char* argv[]) {
     CHECK(!rotate_button->isHidden());
     CHECK(!scale_button->isHidden());
     CHECK(!mirror_button->isHidden());
+
+    // Package F: toolbar, Operations and Command Line are adapters to one
+    // controller-owned transient Profile session.
+    CHECK(!profile_button->isHidden());
+    CHECK(profile_operations->isHidden());
+
+    const auto profile_ui_state_before =
+        session->document().state();
+    const auto profile_ui_revision_before =
+        session->document().revision();
+    const auto profile_ui_undo_before =
+        session->undoDepth();
+
+    profile_button->click();
+    QApplication::processEvents();
+    CHECK(profile_button->isChecked());
+    CHECK(!profile_operations->isHidden());
+    CHECK(profile_add_button->isChecked());
+    CHECK(!profile_subtract_button->isChecked());
+    CHECK(profile_detect_button->isChecked());
+    CHECK(profile_highlight_button->isChecked());
+    CHECK(!profile_boundaries_button->isChecked());
+    CHECK(profile_problems_button->isChecked());
+    CHECK(profile_finish_button->isEnabled() == false);
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Profile — Create"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: PROFILE — Add Area — Hover/click bounded region"));
+
+    command_input->setText(
+        QStringLiteral("SUBTRACT"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(profile_subtract_button->isChecked());
+    CHECK(!profile_add_button->isChecked());
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: PROFILE — Subtract Area — Hover/click bounded region"));
+
+    profile_add_button->click();
+    QApplication::processEvents();
+    CHECK(profile_add_button->isChecked());
+    CHECK(!profile_subtract_button->isChecked());
+
+    profile_boundaries_button->click();
+    QApplication::processEvents();
+    CHECK(profile_boundaries_button->isChecked());
+
+    command_input->setText(
+        QStringLiteral("BOUNDARIES OFF"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(!profile_boundaries_button->isChecked());
+
+    profile_detect_button->click();
+    QApplication::processEvents();
+    CHECK(!profile_detect_button->isChecked());
+    command_input->setText(
+        QStringLiteral("ISLANDS ON"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(profile_detect_button->isChecked());
+
+    profile_find_button->click();
+    QApplication::processEvents();
+
+    profile_cancel_button->click();
+    QApplication::processEvents();
+    CHECK(!profile_button->isChecked());
+    CHECK(profile_operations->isHidden());
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral("Command: SELECT"));
+
+    CHECK(
+        session->document().state() ==
+        profile_ui_state_before);
+    CHECK(
+        session->document().revision() ==
+        profile_ui_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        profile_ui_undo_before);
+
+    command_input->setText(
+        QStringLiteral("PROFILE"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(profile_button->isChecked());
+    CHECK(!profile_operations->isHidden());
+    CHECK(profile_add_button->isChecked());
+
+    command_input->setText(
+        QStringLiteral("CANCEL"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(!profile_button->isChecked());
+    CHECK(profile_operations->isHidden());
+
+    // Package F: authored Profiles are semantic Tree children of their
+    // source Sketch. Tree selection carries ProfileId into Properties and
+    // EDITPROFILE; labels/status are derived from current evaluation.
+    const auto profile_tree_undo_baseline =
+        session->undoDepth();
+
+    const auto tree_circle =
+        session->execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                sketch::Point2{50.0, 50.0},
+                5.0});
+    CHECK(tree_circle.ok());
+    CHECK(tree_circle.entity_id.has_value());
+
+    const auto* tree_profile_source =
+        session->document()
+            .findSketch(sketch_id);
+    CHECK(tree_profile_source != nullptr);
+    const auto tree_profile_analysis =
+        sketch::analyzeRegions(
+            tree_profile_source->model);
+    const auto tree_profile_pick =
+        sketch::pickRegion(
+            tree_profile_source->model,
+            tree_profile_analysis,
+            sketch::Point2{50.0, 50.0});
+    CHECK(tree_profile_pick.region_index.has_value());
+    const auto tree_profile_region =
+        std::find_if(
+            tree_profile_analysis.regions.begin(),
+            tree_profile_analysis.regions.end(),
+            [&tree_profile_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *tree_profile_pick.region_index;
+            });
+    CHECK(
+        tree_profile_region !=
+        tree_profile_analysis.regions.end());
+    const auto tree_profile_intent =
+        part::makeProfileRegionIntent(
+            *tree_profile_region);
+    CHECK(tree_profile_intent.has_value());
+
+    const auto tree_profile_created =
+        session->execute(
+            application::CreateProfileCommand{
+                sketch_id,
+                session->document().revision(),
+                *tree_profile_intent});
+    CHECK(tree_profile_created.ok());
+    CHECK(tree_profile_created.profile_id.has_value());
+    const auto tree_profile_id =
+        *tree_profile_created.profile_id;
+
+    CHECK(
+        workbench.activateDocument(
+            session,
+            workspace));
+    QApplication::processEvents();
+
+    auto profile_items =
+        tree->findItems(
+            QStringLiteral("Profile001"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    auto* profile_item =
+        profile_items.front();
+    CHECK(profile_item != nullptr);
+    CHECK(profile_item->parent() != nullptr);
+    CHECK(
+        profile_item->parent()->text(0) ==
+        QStringLiteral("Sketch 1"));
+
+    tree->clearSelection();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+
+    CHECK(!profile_properties_page->isHidden());
+    CHECK(
+        profile_name_edit->text() ==
+        QStringLiteral("Profile001"));
+    CHECK(profile_visible_check->isChecked());
+    CHECK(
+        profile_source_label->text() ==
+        QString::fromUtf8(
+            sketch_id.value().data(),
+            static_cast<qsizetype>(
+                sketch_id.value().size())));
+    CHECK(
+        profile_status_label->text() ==
+        QStringLiteral("Valid"));
+    CHECK(
+        profile_diagnostic_label->text() ==
+        QStringLiteral("—"));
+    CHECK(
+        profile_area_label->text() !=
+        QStringLiteral("—"));
+    CHECK(
+        profile_perimeter_label->text() !=
+        QStringLiteral("—"));
+    CHECK(
+        profile_holes_label->text() ==
+        QStringLiteral("0"));
+
+    command_input->setText(
+        QStringLiteral("EDITPROFILE"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(profile_button->isChecked());
+    CHECK(!profile_operations->isHidden());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Profile — Edit — Profile001"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: EDITPROFILE — Add Area — Hover/click bounded region"));
+    profile_cancel_button->click();
+    QApplication::processEvents();
+
+    profile_name_edit->setText(
+        QStringLiteral("Main Profile"));
+    profile_visible_check->setChecked(false);
+    apply_profile_properties->click();
+    QApplication::processEvents();
+
+    const auto* renamed_profile =
+        session->document()
+            .findProfile(tree_profile_id);
+    CHECK(renamed_profile != nullptr);
+    CHECK(
+        renamed_profile->name ==
+        "Main Profile");
+    CHECK(!renamed_profile->visible);
+
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    CHECK(profile_item->font(0).italic());
+
+    // Construction is a user-visible authored role, not a test-only
+    // mutation. Select the source Circle normally and switch its role from
+    // the Operations surface.
+    CHECK(!viewport->sketchScene().curves.empty());
+    viewport->setSketchGripHit(std::nullopt);
+    viewport->setSketchPointHit(
+        viewport->sketchScene().curves.front().token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        120.0, 120.0,
+        50.0, 50.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        120.0, 120.0,
+        50.0, 50.0);
+    QApplication::processEvents();
+    CHECK(!construction_role_button->isHidden());
+    CHECK(regular_role_button->isChecked());
+    construction_role_button->click();
+    QApplication::processEvents();
+    CHECK(construction_role_button->isChecked());
+    CHECK(
+        std::any_of(
+            viewport->sketchScene().curves.begin(),
+            viewport->sketchScene().curves.end(),
+            [](const viewer::SketchCurvePresentation& curve) {
+                return curve.construction;
+            }));
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.findCircle(*tree_circle.entity_id)
+            ->role() ==
+        sketch::EntityRole::construction);
+
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile [Invalid]"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    tree->clearSelection();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+    CHECK(
+        profile_status_label->text() ==
+        QStringLiteral("Invalid"));
+    CHECK(
+        profile_diagnostic_label->text() !=
+        QStringLiteral("—"));
+    CHECK(
+        profile_area_label->text() ==
+        QStringLiteral("—"));
+    CHECK(
+        profile_perimeter_label->text() ==
+        QStringLiteral("—"));
+    CHECK(
+        profile_holes_label->text() ==
+        QStringLiteral("—"));
+
+    viewport->setSketchPointHit(
+        viewport->sketchScene().curves.front().token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        120.0, 120.0,
+        50.0, 50.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        120.0, 120.0,
+        50.0, 50.0);
+    QApplication::processEvents();
+    regular_role_button->click();
+    QApplication::processEvents();
+    CHECK(regular_role_button->isChecked());
+    CHECK(
+        std::none_of(
+            viewport->sketchScene().curves.begin(),
+            viewport->sketchScene().curves.end(),
+            [](const viewer::SketchCurvePresentation& curve) {
+                return curve.construction;
+            }));
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.findCircle(*tree_circle.entity_id)
+            ->role() ==
+        sketch::EntityRole::regular);
+    CHECK(
+        tree->findItems(
+                QStringLiteral("Main Profile"),
+                Qt::MatchExactly |
+                    Qt::MatchRecursive,
+                0)
+            .size() == 1);
+
+    // Profile deletion acts on Profile identity only. Source Sketch geometry
+    // remains authored, and Undo restores the same ProfileId.
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    tree->clearSelection();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+
+    const auto entities_before_profile_delete =
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount();
+    delete_profile_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findProfile(tree_profile_id) == nullptr);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() ==
+        entities_before_profile_delete);
+
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findProfile(tree_profile_id) != nullptr);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() ==
+        entities_before_profile_delete);
+
+    while (session->undoDepth() >
+           profile_tree_undo_baseline) {
+        const auto undone =
+            session->undo();
+        CHECK(undone.ok());
+        CHECK(undone.changed);
+    }
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() == 0U);
+    CHECK(session->document().profiles().empty());
+    CHECK(
+        workbench.activateDocument(
+            session,
+            workspace));
+    QApplication::processEvents();
 
     // SK-07D: a fresh Sketch edit session has no repeat target.
     QTest::keyClick(viewport, Qt::Key_Return);

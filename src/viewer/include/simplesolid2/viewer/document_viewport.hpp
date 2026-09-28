@@ -3,6 +3,7 @@
 #include <simplesolid2/viewer/camera_state.hpp>
 #include <simplesolid2/viewer/navigation.hpp>
 #include <simplesolid2/viewer/navigation_cube.hpp>
+#include <simplesolid2/viewer/profile_presentation.hpp>
 #include <simplesolid2/viewer/reference_presentation.hpp>
 #include <simplesolid2/viewer/selection.hpp>
 #include <simplesolid2/viewer/sketch_presentation.hpp>
@@ -55,6 +56,18 @@ public:
 
     virtual bool setSketchScene(
         const SketchScene& scene) = 0;
+
+    virtual bool setProfileScene(
+        const ProfileScene& scene) {
+        return scene.valid() &&
+               scene.profiles.empty();
+    }
+
+    virtual bool setProfilePreviewScene(
+        const ProfilePreviewScene& scene) {
+        return scene.valid() &&
+               !scene.region.has_value();
+    }
 
     virtual bool setSketchPreviewScene(
         const SketchPreviewScene& scene) = 0;

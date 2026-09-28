@@ -6,6 +6,7 @@
 
 #include <simplesolid2/application/cad_input_semantics.hpp>
 
+#include <QCheckBox>
 #include <QEvent>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -308,6 +309,27 @@ void CadWorkbench::buildUi() {
         5,
         arc_sketch_button_);
 
+    profile_tools_label_ =
+        new QLabel(
+            QStringLiteral("Profile:"),
+            shell_);
+    profile_tools_label_->setObjectName(
+        QStringLiteral("sketchProfileToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        6,
+        profile_tools_label_);
+
+    profile_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Profile"),
+            shell_);
+    profile_sketch_button_->setObjectName(
+        QStringLiteral("profileSketchToolButton"));
+    profile_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        7,
+        profile_sketch_button_);
+
     modify_tools_label_ =
         new QLabel(
             QStringLiteral("Modify:"),
@@ -315,7 +337,7 @@ void CadWorkbench::buildUi() {
     modify_tools_label_->setObjectName(
         QStringLiteral("sketchModifyToolsLabel"));
     shell_->editorToolsLayout().insertWidget(
-        6,
+        8,
         modify_tools_label_);
 
     move_sketch_button_ =
@@ -326,7 +348,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("moveSketchToolButton"));
     move_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        7,
+        9,
         move_sketch_button_);
 
     copy_sketch_button_ =
@@ -337,7 +359,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("copySketchToolButton"));
     copy_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        8,
+        10,
         copy_sketch_button_);
 
     rotate_sketch_button_ =
@@ -348,7 +370,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("rotateSketchToolButton"));
     rotate_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        9,
+        11,
         rotate_sketch_button_);
 
     scale_sketch_button_ =
@@ -359,7 +381,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("scaleSketchToolButton"));
     scale_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        10,
+        12,
         scale_sketch_button_);
 
     mirror_sketch_button_ =
@@ -370,7 +392,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("mirrorSketchToolButton"));
     mirror_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        11,
+        13,
         mirror_sketch_button_);
 
     viewport_controller_ =
@@ -406,6 +428,60 @@ void CadWorkbench::buildUi() {
         [this](const std::string& message) {
             setStatusText(fromUtf8(message));
         });
+
+    tree_controller_->setProfileSelectionHandler(
+        [this](
+            const std::vector<part::ProfileId>& selected,
+            std::optional<part::ProfileId> primary) {
+            const auto semantic =
+                selected.size() == 1U && primary
+                    ? primary
+                    : std::nullopt;
+            if (sketch_interaction_controller_) {
+                sketch_interaction_controller_->
+                    setSelectedProfileForCadInput(
+                        semantic);
+            }
+            if (primary) {
+                refreshProfileProperties(*primary);
+            } else if (selected_profile_id_) {
+                selected_profile_id_.reset();
+                if (properties_stack_ != nullptr) {
+                    properties_stack_->setCurrentWidget(
+                        document_properties_page_);
+                }
+            }
+            syncSketchInteractionUi();
+        });
+    viewport_controller_->setProfileSelectionChangedHandler(
+        [this](
+            const std::vector<part::ProfileId>& selected,
+            std::optional<part::ProfileId> primary) {
+            const auto semantic =
+                selected.size() == 1U && primary
+                    ? primary
+                    : std::nullopt;
+            if (sketch_interaction_controller_) {
+                sketch_interaction_controller_->
+                    setSelectedProfileForCadInput(
+                        semantic);
+            }
+            if (primary) {
+                refreshProfileProperties(*primary);
+            } else if (selected_profile_id_) {
+                selected_profile_id_.reset();
+                if (properties_stack_ != nullptr) {
+                    properties_stack_->setCurrentWidget(
+                        document_properties_page_);
+                }
+            }
+            syncSketchInteractionUi();
+        });
+    tree_controller_->setProfileEditHandler(
+        [this](part::ProfileId profile_id) {
+            requestEditProfile(profile_id);
+        });
+
     viewport_controller_->setSketchPointerHandler(
         [this](const SketchPointerInput& input) {
             if (sketch_interaction_controller_) {
@@ -540,6 +616,109 @@ void CadWorkbench::buildUi() {
 
     properties_stack_->addWidget(
         reference_properties_page_);
+
+    profile_properties_page_ =
+        new QWidget(properties_stack_);
+    profile_properties_page_->setObjectName(
+        QStringLiteral("profilePropertiesPage"));
+    auto* profile_root =
+        new QFormLayout(profile_properties_page_);
+
+    profile_name_ =
+        new QLineEdit(profile_properties_page_);
+    profile_name_->setObjectName(
+        QStringLiteral("profilePropertyName"));
+
+    profile_identity_ =
+        new QLabel(profile_properties_page_);
+    profile_identity_->setObjectName(
+        QStringLiteral("profilePropertyIdentity"));
+
+    profile_source_ =
+        new QLabel(profile_properties_page_);
+    profile_source_->setObjectName(
+        QStringLiteral("profilePropertySourceSketch"));
+    profile_source_->setWordWrap(true);
+
+    profile_status_ =
+        new QLabel(profile_properties_page_);
+    profile_status_->setObjectName(
+        QStringLiteral("profilePropertyStatus"));
+
+    profile_diagnostic_ =
+        new QLabel(profile_properties_page_);
+    profile_diagnostic_->setObjectName(
+        QStringLiteral("profilePropertyDiagnostic"));
+    profile_diagnostic_->setWordWrap(true);
+
+    profile_area_ =
+        new QLabel(profile_properties_page_);
+    profile_area_->setObjectName(
+        QStringLiteral("profilePropertyArea"));
+    profile_perimeter_ =
+        new QLabel(profile_properties_page_);
+    profile_perimeter_->setObjectName(
+        QStringLiteral("profilePropertyPerimeter"));
+    profile_holes_ =
+        new QLabel(profile_properties_page_);
+    profile_holes_->setObjectName(
+        QStringLiteral("profilePropertyHoles"));
+
+    profile_visible_ =
+        new QCheckBox(
+            QStringLiteral("Visible"),
+            profile_properties_page_);
+    profile_visible_->setObjectName(
+        QStringLiteral("profilePropertyVisible"));
+
+    apply_profile_button_ =
+        new QPushButton(
+            QStringLiteral("Apply Profile Properties"),
+            profile_properties_page_);
+    apply_profile_button_->setObjectName(
+        QStringLiteral("applyProfilePropertiesButton"));
+
+    delete_profile_button_ =
+        new QPushButton(
+            QStringLiteral("Delete Profile"),
+            profile_properties_page_);
+    delete_profile_button_->setObjectName(
+        QStringLiteral("deleteProfileButton"));
+
+    profile_root->addRow(
+        QStringLiteral("Name"),
+        profile_name_);
+    profile_root->addRow(
+        QStringLiteral("ProfileId"),
+        profile_identity_);
+    profile_root->addRow(
+        QStringLiteral("Source Sketch"),
+        profile_source_);
+    profile_root->addRow(
+        QStringLiteral("Status"),
+        profile_status_);
+    profile_root->addRow(
+        QStringLiteral("Diagnostic"),
+        profile_diagnostic_);
+    profile_root->addRow(
+        QStringLiteral("Area"),
+        profile_area_);
+    profile_root->addRow(
+        QStringLiteral("Perimeter"),
+        profile_perimeter_);
+    profile_root->addRow(
+        QStringLiteral("Holes"),
+        profile_holes_);
+    profile_root->addRow(
+        QStringLiteral("Visibility"),
+        profile_visible_);
+    profile_root->addRow(
+        apply_profile_button_);
+    profile_root->addRow(
+        delete_profile_button_);
+
+    properties_stack_->addWidget(
+        profile_properties_page_);
     properties_stack_->setCurrentWidget(
         document_properties_page_);
 
@@ -577,6 +756,38 @@ void CadWorkbench::buildUi() {
     operations_layout->addWidget(
         delete_selection_button_);
 
+    entity_role_label_ =
+        new QLabel(
+            QStringLiteral("Selected geometry role:"),
+            operations_content);
+    entity_role_label_->setObjectName(
+        QStringLiteral("sketchEntityRoleLabel"));
+    entity_role_label_->setVisible(false);
+    operations_layout->addWidget(
+        entity_role_label_);
+
+    regular_role_button_ =
+        new QPushButton(
+            QStringLiteral("Regular"),
+            operations_content);
+    regular_role_button_->setObjectName(
+        QStringLiteral("sketchRegularRoleButton"));
+    regular_role_button_->setCheckable(true);
+    regular_role_button_->setVisible(false);
+    operations_layout->addWidget(
+        regular_role_button_);
+
+    construction_role_button_ =
+        new QPushButton(
+            QStringLiteral("Construction"),
+            operations_content);
+    construction_role_button_->setObjectName(
+        QStringLiteral("sketchConstructionRoleButton"));
+    construction_role_button_->setCheckable(true);
+    construction_role_button_->setVisible(false);
+    operations_layout->addWidget(
+        construction_role_button_);
+
     finish_line_button_ =
         new QPushButton(
             QStringLiteral("Finish Line"),
@@ -594,6 +805,115 @@ void CadWorkbench::buildUi() {
         QStringLiteral("cancelSketchLineButton"));
     operations_layout->addWidget(
         cancel_line_button_);
+
+    profile_operations_widget_ =
+        new QWidget(operations_content);
+    profile_operations_widget_->setObjectName(
+        QStringLiteral("profileOperationsWidget"));
+    auto* profile_operations_layout =
+        new QVBoxLayout(profile_operations_widget_);
+    profile_operations_layout->setContentsMargins(
+        0, 0, 0, 0);
+
+    profile_add_area_button_ =
+        new QPushButton(
+            QStringLiteral("Add Area"),
+            profile_operations_widget_);
+    profile_add_area_button_->setObjectName(
+        QStringLiteral("profileAddAreaButton"));
+    profile_add_area_button_->setCheckable(true);
+    profile_operations_layout->addWidget(
+        profile_add_area_button_);
+
+    profile_subtract_area_button_ =
+        new QPushButton(
+            QStringLiteral("Subtract Area"),
+            profile_operations_widget_);
+    profile_subtract_area_button_->setObjectName(
+        QStringLiteral("profileSubtractAreaButton"));
+    profile_subtract_area_button_->setCheckable(true);
+    profile_operations_layout->addWidget(
+        profile_subtract_area_button_);
+
+    profile_detect_islands_button_ =
+        new QPushButton(
+            QStringLiteral("Detect Islands"),
+            profile_operations_widget_);
+    profile_detect_islands_button_->setObjectName(
+        QStringLiteral("profileDetectIslandsButton"));
+    profile_detect_islands_button_->setCheckable(true);
+    profile_operations_layout->addWidget(
+        profile_detect_islands_button_);
+
+    profile_highlight_hover_button_ =
+        new QPushButton(
+            QStringLiteral("Highlight on Hover"),
+            profile_operations_widget_);
+    profile_highlight_hover_button_->setObjectName(
+        QStringLiteral("profileHighlightHoverButton"));
+    profile_highlight_hover_button_->setCheckable(true);
+    profile_operations_layout->addWidget(
+        profile_highlight_hover_button_);
+
+    profile_show_boundaries_button_ =
+        new QPushButton(
+            QStringLiteral("Show Region Boundaries"),
+            profile_operations_widget_);
+    profile_show_boundaries_button_->setObjectName(
+        QStringLiteral("profileShowBoundariesButton"));
+    profile_show_boundaries_button_->setCheckable(true);
+    profile_operations_layout->addWidget(
+        profile_show_boundaries_button_);
+
+    profile_show_problems_button_ =
+        new QPushButton(
+            QStringLiteral("Show Problems"),
+            profile_operations_widget_);
+    profile_show_problems_button_->setObjectName(
+        QStringLiteral("profileShowProblemsButton"));
+    profile_show_problems_button_->setCheckable(true);
+    profile_operations_layout->addWidget(
+        profile_show_problems_button_);
+
+    profile_result_label_ =
+        new QLabel(
+            QStringLiteral("Current result: —"),
+            profile_operations_widget_);
+    profile_result_label_->setObjectName(
+        QStringLiteral("profileCurrentResult"));
+    profile_result_label_->setWordWrap(true);
+    profile_operations_layout->addWidget(
+        profile_result_label_);
+
+    profile_find_regions_button_ =
+        new QPushButton(
+            QStringLiteral("Find All Regions"),
+            profile_operations_widget_);
+    profile_find_regions_button_->setObjectName(
+        QStringLiteral("profileFindRegionsButton"));
+    profile_operations_layout->addWidget(
+        profile_find_regions_button_);
+
+    profile_finish_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Profile"),
+            profile_operations_widget_);
+    profile_finish_button_->setObjectName(
+        QStringLiteral("profileFinishButton"));
+    profile_operations_layout->addWidget(
+        profile_finish_button_);
+
+    profile_cancel_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel"),
+            profile_operations_widget_);
+    profile_cancel_button_->setObjectName(
+        QStringLiteral("profileCancelButton"));
+    profile_operations_layout->addWidget(
+        profile_cancel_button_);
+
+    operations_layout->addWidget(
+        profile_operations_widget_);
 
     operations_layout->addStretch(1);
 
@@ -634,6 +954,16 @@ void CadWorkbench::buildUi() {
         this,
         [this] { applyProperties(); });
     QObject::connect(
+        apply_profile_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { applyProfileProperties(); });
+    QObject::connect(
+        delete_profile_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { deleteSelectedProfile(); });
+    QObject::connect(
         sketch_button_,
         &QPushButton::clicked,
         this,
@@ -658,6 +988,24 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchArc(); });
+    QObject::connect(
+        profile_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (sketch_interaction_controller_ &&
+                !sketch_interaction_controller_->
+                     activateProfileCreate()) {
+                setStatusText(
+                    QStringLiteral(
+                        "PROFILE could not be activated."));
+                return;
+            }
+            if (viewport_widget_ != nullptr) {
+                viewport_widget_->setFocus(
+                    Qt::OtherFocusReason);
+            }
+        });
     QObject::connect(
         move_sketch_button_,
         &QPushButton::clicked,
@@ -708,6 +1056,134 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { deleteSketchSelection(); });
+    QObject::connect(
+        regular_role_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            setSketchSelectionRole(
+                sketch::EntityRole::regular);
+        });
+    QObject::connect(
+        construction_role_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            setSketchSelectionRole(
+                sketch::EntityRole::construction);
+        });
+
+    QObject::connect(
+        profile_add_area_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (sketch_interaction_controller_) {
+                static_cast<void>(
+                    sketch_interaction_controller_->
+                        setProfileAreaMode(
+                            part::ProfileAreaEditMode::
+                                add_area));
+            }
+        });
+    QObject::connect(
+        profile_subtract_area_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (sketch_interaction_controller_) {
+                static_cast<void>(
+                    sketch_interaction_controller_->
+                        setProfileAreaMode(
+                            part::ProfileAreaEditMode::
+                                subtract_area));
+            }
+        });
+
+    const auto update_profile_options =
+        [this] {
+            if (!sketch_interaction_controller_ ||
+                !sketch_interaction_controller_->
+                     profileToolActive()) {
+                return;
+            }
+            auto options =
+                sketch_interaction_controller_->
+                    profileToolOptions();
+            options.detect_islands =
+                profile_detect_islands_button_->
+                    isChecked();
+            options.highlight_on_hover =
+                profile_highlight_hover_button_->
+                    isChecked();
+            options.show_region_boundaries =
+                profile_show_boundaries_button_->
+                    isChecked();
+            options.show_problems =
+                profile_show_problems_button_->
+                    isChecked();
+            static_cast<void>(
+                sketch_interaction_controller_->
+                    setProfileToolOptions(options));
+        };
+
+    for (auto* button : {
+             profile_detect_islands_button_,
+             profile_highlight_hover_button_,
+             profile_show_boundaries_button_,
+             profile_show_problems_button_}) {
+        QObject::connect(
+            button,
+            &QPushButton::clicked,
+            this,
+            update_profile_options);
+    }
+
+    QObject::connect(
+        profile_find_regions_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (!sketch_interaction_controller_) {
+                return;
+            }
+            const auto result =
+                sketch_interaction_controller_->
+                    submitCadInputSemanticProfileCommand(
+                        application::
+                            ProfileCadInputCommand{
+                                application::
+                                    ProfileCadInputCommandKind::
+                                        find_all_regions,
+                                std::nullopt});
+            if (!result.accepted &&
+                !result.diagnostic.empty()) {
+                setStatusText(
+                    fromUtf8(result.diagnostic));
+            }
+        });
+    QObject::connect(
+        profile_finish_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (sketch_interaction_controller_) {
+                static_cast<void>(
+                    sketch_interaction_controller_->
+                        finishProfile());
+            }
+        });
+    QObject::connect(
+        profile_cancel_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (sketch_interaction_controller_) {
+                sketch_interaction_controller_->
+                    cancelProfile();
+            }
+        });
+
     syncSketchInteractionUi();
 }
 
@@ -806,6 +1282,99 @@ void CadWorkbench::applyProperties() {
             : QStringLiteral("No authored property change."));
 }
 
+void CadWorkbench::applyProfileProperties() {
+    auto* document_session = activeDocumentSession();
+    if (document_session == nullptr ||
+        !selected_profile_id_) {
+        return;
+    }
+
+    const auto profile_id =
+        *selected_profile_id_;
+    if (document_session->document()
+            .findProfile(profile_id) == nullptr) {
+        selected_profile_id_.reset();
+        properties_stack_->setCurrentWidget(
+            document_properties_page_);
+        return;
+    }
+
+    const auto result =
+        document_session->execute(
+            application::SetProfilePropertiesCommand{
+                profile_id,
+                document_session->document().revision(),
+                toUtf8(profile_name_->text()),
+                profile_visible_->isChecked()});
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        refreshProfileProperties(profile_id);
+        return;
+    }
+
+    refreshActiveContext();
+    refreshProfileProperties(profile_id);
+    setStatusText(
+        result.changed
+            ? QStringLiteral(
+                  "Profile properties changed — save is required.")
+            : QStringLiteral(
+                  "No authored Profile property change."));
+}
+
+void CadWorkbench::deleteSelectedProfile() {
+    auto* document_session = activeDocumentSession();
+    if (document_session == nullptr ||
+        !selected_profile_id_ ||
+        (sketch_interaction_controller_ &&
+         sketch_interaction_controller_->
+             profileToolActive())) {
+        return;
+    }
+
+    const auto profile_id =
+        *selected_profile_id_;
+    const auto result =
+        document_session->execute(
+            application::DeleteProfileCommand{
+                profile_id,
+                document_session->document().revision()});
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        return;
+    }
+    if (!result.changed) {
+        setStatusText(
+            QStringLiteral("No Profile was deleted."));
+        return;
+    }
+
+    selected_profile_id_.reset();
+    refreshActiveContext();
+    properties_stack_->setCurrentWidget(
+        document_properties_page_);
+    setStatusText(
+        QStringLiteral(
+            "Profile deleted — source Sketch geometry is unchanged."));
+}
+
+void CadWorkbench::setSketchSelectionRole(
+    sketch::EntityRole role) {
+    if (!sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->
+             setSelectedEntityRole(role)) {
+        return;
+    }
+
+    refreshActiveContext();
+    setStatusText(
+        role == sketch::EntityRole::construction
+            ? QStringLiteral(
+                  "Selected geometry marked Construction.")
+            : QStringLiteral(
+                  "Selected geometry marked Regular."));
+}
+
 void CadWorkbench::startSketchTool() {
     if (activeDocumentSession() == nullptr ||
         sketch_support_pick_active_) {
@@ -879,6 +1448,64 @@ void CadWorkbench::requestEditSketch(
     setStatusText(
         QStringLiteral(
             "Sketch edit context opened in the 3D Viewport."));
+}
+
+void CadWorkbench::requestEditProfile(
+    part::ProfileId profile_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        return;
+    }
+
+    const auto* profile =
+        document_session->document()
+            .findProfile(profile_id);
+    if (profile == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Profile is no longer available in the active Part."));
+        return;
+    }
+
+    if (active_sketch_id_ &&
+        *active_sketch_id_ !=
+            profile->source_sketch_id) {
+        setStatusText(
+            QStringLiteral(
+                "Finish the active Sketch before editing a Profile from another Sketch."));
+        return;
+    }
+
+    if (!active_sketch_id_) {
+        requestEditSketch(
+            profile->source_sketch_id);
+    }
+
+    if (!active_sketch_id_ ||
+        *active_sketch_id_ !=
+            profile->source_sketch_id ||
+        !sketch_interaction_controller_) {
+        return;
+    }
+
+    sketch_interaction_controller_->
+        setSelectedProfileForCadInput(profile_id);
+    if (!sketch_interaction_controller_->
+             activateProfileEdit(profile_id)) {
+        setStatusText(
+            QStringLiteral(
+                "Profile edit could not be activated."));
+        return;
+    }
+
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    setStatusText(
+        QStringLiteral(
+            "Profile edit context opened."));
 }
 
 void CadWorkbench::tryCreateSketchFromSupport(
@@ -964,6 +1591,15 @@ void CadWorkbench::enterSketchEdit(
         sketch_interaction_controller_->begin(
             *document_session,
             sketch_id);
+
+        const auto selected_profiles =
+            tree_controller_->selectedProfileIds();
+        sketch_interaction_controller_->
+            setSelectedProfileForCadInput(
+                selected_profiles.size() == 1U
+                    ? tree_controller_->
+                          primaryProfileId()
+                    : std::nullopt);
     }
 
     if (viewport_ != nullptr) {
@@ -1236,6 +1872,28 @@ QString CadWorkbench::cadInputPromptText() const {
     if (!sketch_interaction_controller_ ||
         !sketch_interaction_controller_->active()) {
         return QStringLiteral("Command:");
+    }
+
+    if (sketch_interaction_controller_->
+            profileToolActive()) {
+        const auto kind =
+            sketch_interaction_controller_->
+                profileToolSessionKind();
+        const auto command =
+            kind &&
+                    *kind ==
+                        ProfileToolSessionKind::edit
+                ? QStringLiteral("EDITPROFILE")
+                : QStringLiteral("PROFILE");
+        const auto mode =
+            sketch_interaction_controller_->
+                    profileAreaMode() ==
+                part::ProfileAreaEditMode::add_area
+                ? QStringLiteral("Add Area")
+                : QStringLiteral("Subtract Area");
+        return QStringLiteral(
+                   "Command: %1 — %2 — Hover/click bounded region")
+            .arg(command, mode);
     }
 
     const auto tool =
@@ -1579,6 +2237,16 @@ void CadWorkbench::clearActiveContext() {
     title_->clear();
     description_->clear();
     engineering_revision_->clear();
+    selected_profile_id_.reset();
+    profile_name_->clear();
+    profile_identity_->clear();
+    profile_source_->clear();
+    profile_status_->clear();
+    profile_diagnostic_->clear();
+    profile_area_->clear();
+    profile_perimeter_->clear();
+    profile_holes_->clear();
+    profile_visible_->setChecked(false);
 
     number_->setEnabled(false);
     title_->setEnabled(false);
@@ -1706,6 +2374,105 @@ void CadWorkbench::refreshPropertiesContext(
         reference_properties_page_);
 }
 
+void CadWorkbench::refreshProfileProperties(
+    part::ProfileId profile_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (properties_stack_ == nullptr ||
+        document_session == nullptr) {
+        return;
+    }
+
+    const auto* profile =
+        document_session->document()
+            .findProfile(profile_id);
+    if (profile == nullptr) {
+        selected_profile_id_.reset();
+        properties_stack_->setCurrentWidget(
+            document_properties_page_);
+        return;
+    }
+
+    selected_profile_id_ = profile_id;
+    profile_name_->setText(
+        fromUtf8(profile->name));
+    profile_identity_->setText(
+        fromUtf8(profile->id.serialized()));
+    profile_source_->setText(
+        fromUtf8(
+            profile->source_sketch_id.value()));
+    profile_visible_->setChecked(
+        profile->visible);
+
+    const auto evaluation =
+        document_session->document()
+            .evaluateProfile(profile_id);
+    const bool valid =
+        evaluation && evaluation->valid();
+    profile_status_->setText(
+        valid
+            ? QStringLiteral("Valid")
+            : QStringLiteral("Invalid"));
+
+    QString diagnostic =
+        QStringLiteral("—");
+    if (evaluation && !evaluation->valid()) {
+        switch (evaluation->status) {
+        case part::ProfileIntentResolutionStatus::valid:
+            break;
+        case part::ProfileIntentResolutionStatus::invalid_intent:
+            diagnostic =
+                QStringLiteral("Invalid RegionIntent");
+            break;
+        case part::ProfileIntentResolutionStatus::missing_source_entity:
+            diagnostic =
+                QStringLiteral("Missing source entity");
+            break;
+        case part::ProfileIntentResolutionStatus::ambiguous_topology:
+            diagnostic =
+                QStringLiteral("Ambiguous source topology");
+            break;
+        case part::ProfileIntentResolutionStatus::unresolved_intent:
+            diagnostic =
+                QStringLiteral("Region intent no longer resolves");
+            break;
+        }
+    }
+    profile_diagnostic_->setText(diagnostic);
+
+    if (valid) {
+        profile_area_->setText(
+            QString::number(
+                evaluation->region->area,
+                'g',
+                12));
+        profile_perimeter_->setText(
+            QString::number(
+                evaluation->region->perimeter,
+                'g',
+                12));
+        profile_holes_->setText(
+            QString::number(
+                static_cast<qulonglong>(
+                    evaluation->region->holes.size())));
+    } else {
+        profile_area_->setText(
+            QStringLiteral("—"));
+        profile_perimeter_->setText(
+            QStringLiteral("—"));
+        profile_holes_->setText(
+            QStringLiteral("—"));
+    }
+
+    delete_profile_button_->setEnabled(
+        !sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->
+             profileToolActive());
+
+    properties_stack_->setCurrentWidget(
+        profile_properties_page_);
+}
+
 bool CadWorkbench::eventFilter(
     QObject* watched,
     QEvent* event) {
@@ -1734,6 +2501,15 @@ bool CadWorkbench::eventFilter(
         event->type() == QEvent::KeyPress) {
         auto* key_event =
             static_cast<QKeyEvent*>(event);
+
+        if (watched == viewport_widget_ &&
+            (!sketch_interaction_controller_ ||
+             !sketch_interaction_controller_->active()) &&
+            selected_profile_id_ &&
+            key_event->key() == Qt::Key_Delete) {
+            deleteSelectedProfile();
+            return true;
+        }
 
         if (watched == viewport_widget_ &&
             sketch_interaction_controller_ &&
@@ -1844,6 +2620,16 @@ bool CadWorkbench::eventFilter(
 void CadWorkbench::syncSketchInteractionUi() {
     notifyCadInputContextChanged();
 
+    if (entity_role_label_ != nullptr) {
+        entity_role_label_->setVisible(false);
+    }
+    if (regular_role_button_ != nullptr) {
+        regular_role_button_->setVisible(false);
+    }
+    if (construction_role_button_ != nullptr) {
+        construction_role_button_->setVisible(false);
+    }
+
     const bool editing =
         sketch_interaction_controller_ &&
         sketch_interaction_controller_->active();
@@ -1856,12 +2642,24 @@ void CadWorkbench::syncSketchInteractionUi() {
         select_sketch_button_->setVisible(editing);
         select_sketch_button_->setChecked(
             editing &&
+            !sketch_interaction_controller_->
+                 profileToolActive() &&
             sketch_interaction_controller_->tool() ==
                 sketch::SketchTool::select);
     }
 
     if (create_tools_label_ != nullptr) {
         create_tools_label_->setVisible(editing);
+    }
+    if (profile_tools_label_ != nullptr) {
+        profile_tools_label_->setVisible(editing);
+    }
+    if (profile_sketch_button_ != nullptr) {
+        profile_sketch_button_->setVisible(editing);
+        profile_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->
+                profileToolActive());
     }
     if (modify_tools_label_ != nullptr) {
         modify_tools_label_->setVisible(editing);
@@ -1931,6 +2729,15 @@ void CadWorkbench::syncSketchInteractionUi() {
                 sketch::SketchTool::mirror);
     }
 
+    const bool profile_active =
+        editing &&
+        sketch_interaction_controller_->
+            profileToolActive();
+    if (profile_operations_widget_ != nullptr) {
+        profile_operations_widget_->setVisible(
+            profile_active);
+    }
+
     if (!editing) {
         if (operations_placeholder_ != nullptr &&
             !sketch_support_pick_active_) {
@@ -1946,6 +2753,202 @@ void CadWorkbench::syncSketchInteractionUi() {
         if (cancel_line_button_ != nullptr) {
             cancel_line_button_->setVisible(false);
         }
+        return;
+    }
+
+    if (profile_active) {
+        delete_selection_button_->setVisible(false);
+        finish_line_button_->setVisible(false);
+        cancel_line_button_->setVisible(false);
+
+        const auto kind =
+            sketch_interaction_controller_->
+                profileToolSessionKind();
+        const auto editing_profile =
+            kind &&
+            *kind ==
+                ProfileToolSessionKind::edit;
+        QString title =
+            editing_profile
+                ? QStringLiteral("Profile — Edit")
+                : QStringLiteral("Profile — Create");
+
+        if (editing_profile) {
+            const auto id =
+                sketch_interaction_controller_->
+                    editedProfileId();
+            if (id && document_session_ != nullptr) {
+                const auto* profile =
+                    document_session_->document()
+                        .findProfile(*id);
+                if (profile != nullptr) {
+                    title +=
+                        QStringLiteral(" — ") +
+                        QString::fromUtf8(
+                            profile->name.c_str());
+                }
+            }
+        }
+        operations_placeholder_->setText(title);
+
+        const bool add_mode =
+            sketch_interaction_controller_->
+                profileAreaMode() ==
+            part::ProfileAreaEditMode::add_area;
+        profile_add_area_button_->setChecked(
+            add_mode);
+        profile_subtract_area_button_->setChecked(
+            !add_mode);
+
+        const auto options =
+            sketch_interaction_controller_->
+                profileToolOptions();
+        profile_detect_islands_button_->setChecked(
+            options.detect_islands);
+        profile_highlight_hover_button_->setChecked(
+            options.highlight_on_hover);
+        profile_show_boundaries_button_->setChecked(
+            options.show_region_boundaries);
+        profile_show_problems_button_->setChecked(
+            options.show_problems);
+
+        const auto current =
+            sketch_interaction_controller_->
+                profileCurrentResult();
+        QString status_text;
+        if (current) {
+            status_text =
+                QStringLiteral(
+                    "Current result\n"
+                    "Status: Valid\n"
+                    "Area: %1\n"
+                    "Perimeter: %2\n"
+                    "Holes: %3\n"
+                    "Islands: %4\n"
+                    "Problems: %5")
+                    .arg(
+                        QString::number(
+                            current->area,
+                            'g',
+                            12),
+                        QString::number(
+                            current->perimeter,
+                            'g',
+                            12))
+                    .arg(
+                        static_cast<qulonglong>(
+                            current->holes.size()))
+                    .arg(
+                        static_cast<qulonglong>(
+                            sketch_interaction_controller_->
+                                profileIslandCount()))
+                    .arg(
+                        static_cast<qulonglong>(
+                            sketch_interaction_controller_->
+                                profileProblemCount()));
+        } else {
+            QString status =
+                QStringLiteral("Ready");
+            const auto hover =
+                sketch_interaction_controller_->
+                    profileHoverStatus();
+            if (hover) {
+                switch (*hover) {
+                case part::ProfileAreaEditStatus::
+                    disconnected_result:
+                    status =
+                        QStringLiteral(
+                            "Rejected — disconnected material");
+                    break;
+                case part::ProfileAreaEditStatus::
+                    ambiguous_topology:
+                    status =
+                        QStringLiteral(
+                            "Rejected — ambiguous topology");
+                    break;
+                case part::ProfileAreaEditStatus::
+                    invalid_selection:
+                    status =
+                        QStringLiteral(
+                            "Invalid selection");
+                    break;
+                case part::ProfileAreaEditStatus::
+                    invalid_draft: {
+                    status =
+                        QStringLiteral(
+                            "Invalid draft");
+                    const auto resolution =
+                        sketch_interaction_controller_->
+                            profileDraftResolutionStatus();
+                    if (resolution) {
+                        switch (*resolution) {
+                        case part::ProfileIntentResolutionStatus::
+                            invalid_intent:
+                            status +=
+                                QStringLiteral(
+                                    " — invalid intent");
+                            break;
+                        case part::ProfileIntentResolutionStatus::
+                            missing_source_entity:
+                            status +=
+                                QStringLiteral(
+                                    " — missing source");
+                            break;
+                        case part::ProfileIntentResolutionStatus::
+                            ambiguous_topology:
+                            status +=
+                                QStringLiteral(
+                                    " — ambiguous topology");
+                            break;
+                        case part::ProfileIntentResolutionStatus::
+                            unresolved_intent:
+                            status +=
+                                QStringLiteral(
+                                    " — unresolved intent");
+                            break;
+                        case part::ProfileIntentResolutionStatus::
+                            valid:
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case part::ProfileAreaEditStatus::
+                    no_change:
+                    status =
+                        QStringLiteral("No change");
+                    break;
+                case part::ProfileAreaEditStatus::
+                    changed:
+                    status =
+                        QStringLiteral("Preview");
+                    break;
+                }
+            }
+            status_text =
+                QStringLiteral(
+                    "Current result\n"
+                    "Status: %1\n"
+                    "Area: —\n"
+                    "Perimeter: —\n"
+                    "Holes: —\n"
+                    "Islands: %2\n"
+                    "Problems: %3")
+                    .arg(status)
+                    .arg(
+                        static_cast<qulonglong>(
+                            sketch_interaction_controller_->
+                                profileIslandCount()))
+                    .arg(
+                        static_cast<qulonglong>(
+                            sketch_interaction_controller_->
+                                profileProblemCount()));
+        }
+        profile_result_label_->setText(
+            status_text);
+        profile_finish_button_->setEnabled(
+            sketch_interaction_controller_->
+                profileDraftValid());
         return;
     }
 
@@ -1984,6 +2987,25 @@ void CadWorkbench::syncSketchInteractionUi() {
         delete_selection_button_->setVisible(true);
         delete_selection_button_->setEnabled(
             selected > 0U);
+
+        entity_role_label_->setVisible(
+            selected > 0U);
+        regular_role_button_->setVisible(
+            selected > 0U);
+        construction_role_button_->setVisible(
+            selected > 0U);
+        const auto selected_role =
+            sketch_interaction_controller_->
+                selectedEntityRole();
+        regular_role_button_->setChecked(
+            selected_role &&
+            *selected_role ==
+                sketch::EntityRole::regular);
+        construction_role_button_->setChecked(
+            selected_role &&
+            *selected_role ==
+                sketch::EntityRole::construction);
+
         finish_line_button_->setVisible(false);
         cancel_line_button_->setVisible(false);
                 return;

@@ -15,6 +15,7 @@ struct SketchLineState final {
     EntityId id;
     Point2 start;
     Point2 end;
+    EntityRole role{EntityRole::regular};
 
     friend bool operator==(
         const SketchLineState&,
@@ -25,6 +26,7 @@ struct SketchCircleState final {
     EntityId id;
     Point2 center;
     double radius{};
+    EntityRole role{EntityRole::regular};
 
     friend bool operator==(
         const SketchCircleState&,
@@ -37,6 +39,7 @@ struct SketchArcState final {
     double radius{};
     double start_angle{};
     double sweep_angle{};
+    EntityRole role{EntityRole::regular};
 
     friend bool operator==(
         const SketchArcState&,
@@ -58,17 +61,20 @@ class SketchModel final {
 public:
     [[nodiscard]] EntityId addLine(
         Point2 start,
-        Point2 end);
+        Point2 end,
+        EntityRole role = EntityRole::regular);
 
     [[nodiscard]] EntityId addCircle(
         Point2 center,
-        double radius);
+        double radius,
+        EntityRole role = EntityRole::regular);
 
     [[nodiscard]] EntityId addArc(
         Point2 center,
         double radius,
         double start_angle,
-        double sweep_angle);
+        double sweep_angle,
+        EntityRole role = EntityRole::regular);
 
     [[nodiscard]] const Line* findLine(
         EntityId id) const noexcept;
@@ -98,6 +104,10 @@ public:
         double radius,
         double start_angle,
         double sweep_angle) noexcept;
+
+    [[nodiscard]] bool setEntityRole(
+        EntityId id,
+        EntityRole role) noexcept;
 
     [[nodiscard]] bool erase(
         EntityId id) noexcept;

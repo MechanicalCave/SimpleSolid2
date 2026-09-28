@@ -12,6 +12,7 @@ target_compile_features(simplesolid2_core PUBLIC cxx_std_20)
 add_library(simplesolid2_sketch STATIC
     sketch/entity_id.cpp
     sketch/interaction_state.cpp
+    sketch/region_analysis.cpp
     sketch/sketch_id.cpp
     sketch/sketch_model.cpp
     sketch/transform.cpp
@@ -73,6 +74,8 @@ add_library(simplesolid2_part STATIC
     part/part_document.cpp
     part/part_document_store.cpp
     part/part_sketch.cpp
+    part/profile.cpp
+    part/profile_id.cpp
 )
 
 target_include_directories(simplesolid2_part

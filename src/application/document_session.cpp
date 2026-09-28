@@ -47,6 +47,36 @@ part::PartSketch* findSketch(
         : &*found;
 }
 
+part::PartProfile* findProfile(
+    part::PartAuthoredState& state,
+    part::ProfileId id) noexcept {
+    if (!id.valid()) {
+        return nullptr;
+    }
+    const auto found = std::find_if(
+        state.profiles.begin(),
+        state.profiles.end(),
+        [id](const part::PartProfile& item) {
+            return item.id == id;
+        });
+    return found == state.profiles.end()
+        ? nullptr
+        : &*found;
+}
+
+std::string defaultProfileName(
+    part::ProfileId id) {
+    const auto serialized = id.serialized();
+    std::string result{"Profile"};
+    if (serialized.size() < 3U) {
+        result.append(
+            3U - serialized.size(),
+            '0');
+    }
+    result += serialized;
+    return result;
+}
+
 } // namespace
 
 DocumentSession::DocumentSession(
@@ -57,6 +87,8 @@ DocumentSession::DocumentSession(
       saved_state_{document_.state()},
       expected_revision_{document_.revision()} {
     absorbSketchEntityIdCursors(document_.state());
+    profile_id_cursor_.preserve(
+        document_.state().next_profile_id);
 }
 
 DocumentSession::DocumentSession(
@@ -74,6 +106,8 @@ DocumentSession::DocumentSession(
             "DocumentSession file checkpoint DocumentId mismatch"};
     }
     absorbSketchEntityIdCursors(document_.state());
+    profile_id_cursor_.preserve(
+        document_.state().next_profile_id);
 }
 
 DocumentSessionResult DocumentSession::verifyRevision() const {
@@ -94,6 +128,7 @@ DocumentSessionResult DocumentSession::commitCommandState(
     }
 
     applySketchEntityIdCursors(after);
+    applyProfileIdCursor(after);
 
     if (after == document_.state()) {
         return success(false);
@@ -114,6 +149,10 @@ DocumentSessionResult DocumentSession::commitCommandState(
     absorbSketchEntityIdCursors(
         prepared_entity_id_cursors,
         pending.after);
+    auto prepared_profile_id_cursor =
+        profile_id_cursor_;
+    prepared_profile_id_cursor.preserve(
+        pending.after.next_profile_id);
 
     part::PartDocumentTransaction transaction{document_};
     transaction.replaceState(pending.after);
@@ -140,6 +179,8 @@ DocumentSessionResult DocumentSession::commitCommandState(
     cursor_ = history_.size();
     sketch_entity_id_cursors_.swap(
         prepared_entity_id_cursors);
+    profile_id_cursor_ =
+        prepared_profile_id_cursor;
     expected_revision_ = document_.revision();
     return success(true);
 }
@@ -516,6 +557,65 @@ DocumentSessionResult DocumentSession::execute(
 }
 
 DocumentSessionResult DocumentSession::execute(
+    const SetSketchEntityRoleCommand& command) {
+    if (command.entity_ids.empty()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Set Sketch Entity Role requires at least one EntityId",
+            path_);
+    }
+
+    if (command.role != sketch::EntityRole::regular &&
+        command.role != sketch::EntityRole::construction) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Set Sketch Entity Role contains an invalid role",
+            path_);
+    }
+
+    if (document_.revision() != command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Set Sketch Entity Role was started from a stale DocumentRevision",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* target = findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Set Sketch Entity Role target SketchId does not exist",
+            path_);
+    }
+
+    std::set<sketch::EntityId> unique;
+    for (const auto id : command.entity_ids) {
+        if (!id.valid() ||
+            !unique.insert(id).second ||
+            !target->model.contains(id)) {
+            return failure(
+                DocumentSessionErrorCode::invalid_command,
+                "Set Sketch Entity Role contains an invalid, duplicate or missing EntityId",
+                path_);
+        }
+    }
+
+    for (const auto id : command.entity_ids) {
+        if (!target->model.setEntityRole(id, command.role)) {
+            return failure(
+                DocumentSessionErrorCode::transaction_failure,
+                "Set Sketch Entity Role validation diverged before commit",
+                path_);
+        }
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while setting Sketch entity role");
+}
+
+DocumentSessionResult DocumentSession::execute(
     const UpdateSketchLinesCommand& command) {
     return execute(
         UpdateSketchGeometryCommand{
@@ -757,13 +857,15 @@ DuplicateSketchGeometryResult DocumentSession::execute(
             created.push_back(
                 target->model.addLine(
                     line.start,
-                    line.end));
+                    line.end,
+                    target->model.findLine(line.id)->role()));
         }
         for (const auto& circle : command.geometry.circles) {
             created.push_back(
                 target->model.addCircle(
                     circle.center,
-                    circle.radius));
+                    circle.radius,
+                    target->model.findCircle(circle.id)->role()));
         }
         for (const auto& arc : command.geometry.arcs) {
             created.push_back(
@@ -771,7 +873,8 @@ DuplicateSketchGeometryResult DocumentSession::execute(
                     arc.center,
                     arc.radius,
                     arc.start_angle,
-                    arc.sweep_angle));
+                    arc.sweep_angle,
+                    target->model.findArc(arc.id)->role()));
         }
     } catch (const std::invalid_argument&) {
         const auto failed = failure(
@@ -810,13 +913,225 @@ DuplicateSketchGeometryResult DocumentSession::execute(
         DocumentSessionDiagnostic{}};
 }
 
+CreateProfileResult DocumentSession::execute(
+    const CreateProfileCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Create Profile was started from a stale DocumentRevision",
+            path_);
+        return CreateProfileResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+    if (!part::profileRegionIntentStructurallyValid(
+            command.region_intent)) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Create Profile contains malformed RegionIntent",
+            path_);
+        return CreateProfileResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applyProfileIdCursor(after);
+    auto* source =
+        findSketch(after, command.source_sketch_id);
+    if (source == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Create Profile source SketchId does not exist",
+            path_);
+        return CreateProfileResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto resolved =
+        part::resolveProfileRegionIntent(
+            source->model,
+            command.region_intent);
+    if (!resolved.valid()) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Create Profile RegionIntent does not resolve to one current valid region",
+            path_);
+        return CreateProfileResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto id =
+        after.next_profile_id.allocate();
+    if (!id) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "ProfileId allocation space is exhausted",
+            path_);
+        return CreateProfileResult{
+            false,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    after.profiles.push_back(
+        part::PartProfile{
+            *id,
+            command.source_sketch_id,
+            defaultProfileName(*id),
+            true,
+            command.region_intent});
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while creating Profile");
+    if (!committed.ok() ||
+        !committed.changed) {
+        return CreateProfileResult{
+            committed.changed,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return CreateProfileResult{
+        true,
+        *id,
+        DocumentSessionDiagnostic{}};
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const ReplaceProfileRegionIntentCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Edit Profile was started from a stale DocumentRevision",
+            path_);
+    }
+    if (!part::profileRegionIntentStructurallyValid(
+            command.region_intent)) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Profile contains malformed RegionIntent",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* profile =
+        findProfile(after, command.profile_id);
+    if (profile == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Profile target ProfileId does not exist",
+            path_);
+    }
+    auto* source =
+        findSketch(
+            after,
+            profile->source_sketch_id);
+    if (source == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Edit Profile source SketchId is missing",
+            path_);
+    }
+
+    if (!part::resolveProfileRegionIntent(
+             source->model,
+             command.region_intent)
+             .valid()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Edit Profile RegionIntent does not resolve to one current valid region",
+            path_);
+    }
+
+    profile->region_intent =
+        command.region_intent;
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while editing Profile");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const SetProfilePropertiesCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Set Profile Properties was started from a stale DocumentRevision",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* profile =
+        findProfile(after, command.profile_id);
+    if (profile == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Set Profile Properties target ProfileId does not exist",
+            path_);
+    }
+
+    profile->name = command.name;
+    profile->visible = command.visible;
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while setting Profile properties");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const DeleteProfileCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Delete Profile was started from a stale DocumentRevision",
+            path_);
+    }
+
+    auto after = document_.state();
+    const auto found =
+        std::find_if(
+            after.profiles.begin(),
+            after.profiles.end(),
+            [&command](
+                const part::PartProfile& profile) {
+                return profile.id ==
+                       command.profile_id;
+            });
+    if (found == after.profiles.end()) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Delete Profile target ProfileId does not exist",
+            path_);
+    }
+
+    after.profiles.erase(found);
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while deleting Profile");
+}
+
 DocumentSessionResult DocumentSession::applyHistoricalState(
     const part::PartAuthoredState& expected_current,
     const part::PartAuthoredState& target) {
     if (const auto verified = verifyRevision(); !verified.ok()) {
         return verified;
     }
-    if (document_.state() != expected_current) {
+    auto adjusted_expected =
+        expected_current;
+    applyProfileIdCursor(
+        adjusted_expected);
+    if (document_.state() != adjusted_expected) {
         return failure(
             DocumentSessionErrorCode::history_diverged,
             "Authored state no longer matches the Undo/Redo history cursor",
@@ -825,6 +1140,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     auto adjusted_target = target;
     applySketchEntityIdCursors(adjusted_target);
+    applyProfileIdCursor(adjusted_target);
 
     part::PartDocumentTransaction transaction{document_};
     transaction.replaceState(std::move(adjusted_target));
@@ -839,6 +1155,8 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     expected_revision_ = document_.revision();
     absorbSketchEntityIdCursors(document_.state());
+    profile_id_cursor_.preserve(
+        document_.state().next_profile_id);
     return success(true);
 }
 
@@ -885,6 +1203,12 @@ void DocumentSession::applySketchEntityIdCursors(
         hosted.model.preserveEntityIdCursor(
             found->second);
     }
+}
+
+void DocumentSession::applyProfileIdCursor(
+    part::PartAuthoredState& state) const noexcept {
+    state.next_profile_id.preserve(
+        profile_id_cursor_);
 }
 
 DocumentSessionResult DocumentSession::undo() {

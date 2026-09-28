@@ -182,6 +182,161 @@ curveSegments(
 
 } // namespace
 
+[[nodiscard]] std::optional<sketch::Point2>
+profilePointAt(
+    const sketch::SketchModel& model,
+    sketch::EntityId id,
+    double parameter) {
+    if (!std::isfinite(parameter)) return std::nullopt;
+
+    if (const auto* line = model.findLine(id)) {
+        const sketch::Point2 point{
+            std::fma(parameter, line->end().u - line->start().u, line->start().u),
+            std::fma(parameter, line->end().v - line->start().v, line->start().v)};
+        return point.finite()
+            ? std::optional<sketch::Point2>{point}
+            : std::nullopt;
+    }
+
+    sketch::Point2 center;
+    double radius{};
+    double angle{};
+    if (const auto* circle = model.findCircle(id)) {
+        center = circle->center();
+        radius = circle->radius();
+        angle = 2.0 * std::numbers::pi_v<double> * parameter;
+    } else if (const auto* arc = model.findArc(id)) {
+        center = arc->center();
+        radius = arc->radius();
+        angle = arc->startAngle() + arc->sweepAngle() * parameter;
+    } else {
+        return std::nullopt;
+    }
+
+    const sketch::Point2 point{
+        std::fma(radius, std::cos(angle), center.u),
+        std::fma(radius, std::sin(angle), center.v)};
+    return point.finite()
+        ? std::optional<sketch::Point2>{point}
+        : std::nullopt;
+}
+
+[[nodiscard]] std::optional<double>
+profileUseDeltaAngle(
+    const sketch::SketchModel& model,
+    const sketch::RegionBoundaryUse2D& use) {
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+
+    if (model.findCircle(use.source_entity)) {
+        if (use.whole_closed_curve) {
+            return use.follows_source_direction
+                ? full_turn
+                : -full_turn;
+        }
+        const double from =
+            use.follows_source_direction
+                ? use.start_parameter
+                : use.end_parameter;
+        const double to =
+            use.follows_source_direction
+                ? use.end_parameter
+                : use.start_parameter;
+        double delta =
+            use.crosses_closed_seam
+                ? (1.0 - from) + to
+                : to - from;
+        delta *= full_turn;
+        if (!use.follows_source_direction) delta = -delta;
+        return std::isfinite(delta)
+            ? std::optional<double>{delta}
+            : std::nullopt;
+    }
+
+    if (const auto* arc = model.findArc(use.source_entity)) {
+        const double from =
+            use.follows_source_direction
+                ? use.start_parameter
+                : use.end_parameter;
+        const double to =
+            use.follows_source_direction
+                ? use.end_parameter
+                : use.start_parameter;
+        double delta = arc->sweepAngle() * (to - from);
+        if (!use.follows_source_direction) delta = -delta;
+        return std::isfinite(delta)
+            ? std::optional<double>{delta}
+            : std::nullopt;
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<std::vector<sketch::Point2>>
+sampleProfileUse(
+    const sketch::SketchModel& model,
+    const sketch::RegionBoundaryUse2D& use) {
+    if (model.findLine(use.source_entity)) {
+        const auto first = profilePointAt(
+            model, use.source_entity, use.start_parameter);
+        const auto second = profilePointAt(
+            model, use.source_entity, use.end_parameter);
+        if (!first || !second) return std::nullopt;
+        return std::vector<sketch::Point2>{*first, *second};
+    }
+
+    const auto delta = profileUseDeltaAngle(model, use);
+    if (!delta) return std::nullopt;
+
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    constexpr std::size_t full_segments = 96U;
+    const auto proportional =
+        static_cast<std::size_t>(
+            std::ceil(
+                std::abs(*delta) / full_turn *
+                static_cast<double>(full_segments)));
+    const auto count =
+        std::max<std::size_t>(4U, proportional);
+
+    sketch::Point2 center;
+    double radius{};
+    double start_angle{};
+    if (const auto* circle = model.findCircle(use.source_entity)) {
+        center = circle->center();
+        radius = circle->radius();
+        start_angle =
+            full_turn * use.start_parameter;
+    } else if (const auto* arc = model.findArc(use.source_entity)) {
+        center = arc->center();
+        radius = arc->radius();
+        start_angle =
+            arc->startAngle() +
+            arc->sweepAngle() * use.start_parameter;
+    } else {
+        return std::nullopt;
+    }
+
+    std::vector<sketch::Point2> points;
+    points.reserve(count + 1U);
+    for (std::size_t index = 0U; index <= count; ++index) {
+        const double fraction =
+            static_cast<double>(index) /
+            static_cast<double>(count);
+        const double angle =
+            start_angle + *delta * fraction;
+        const sketch::Point2 point{
+            std::fma(radius, std::cos(angle), center.u),
+            std::fma(radius, std::sin(angle), center.v)};
+        if (!point.finite()) return std::nullopt;
+        points.push_back(point);
+    }
+
+    if (use.whole_closed_curve && points.size() > 1U) {
+        points.pop_back();
+    }
+    return points;
+}
+
 PartViewportController::PartViewportController(
     PartDocumentTreeController& tree,
     viewer::IDocumentViewport* viewport,
@@ -228,7 +383,9 @@ void PartViewportController::setDocumentSession(
             viewer::ViewportCursorMode::
                 select_pick_box;
         sketch_entity_bindings_.clear();
+        profile_bindings_.clear();
         clearSketchPreview();
+        clearProfileDraftPreview();
         clearSketchSelectionBoxOverlay();
     }
 
@@ -251,6 +408,7 @@ void PartViewportController::clear() {
         viewer::ViewportCursorMode::
             select_pick_box;
     sketch_entity_bindings_.clear();
+    profile_bindings_.clear();
     clearSketchSelectionBoxOverlay();
     tree_->clear();
 
@@ -261,6 +419,12 @@ void PartViewportController::clear() {
         static_cast<void>(
             viewport_->setSketchScene(
                 viewer::SketchScene{}));
+        static_cast<void>(
+            viewport_->setProfileScene(
+                viewer::ProfileScene{}));
+        static_cast<void>(
+            viewport_->setProfilePreviewScene(
+                viewer::ProfilePreviewScene{}));
         static_cast<void>(
             viewport_->setSketchPreviewScene(
                 viewer::SketchPreviewScene{}));
@@ -279,6 +443,12 @@ void PartViewportController::resetRuntimeState() {
     clear();
 }
 
+void PartViewportController::refreshDocumentTree() {
+    if (tree_ != nullptr) {
+        tree_->setDocumentSession(session_);
+    }
+}
+
 void PartViewportController::refreshPresentation() {
     if (viewport_ == nullptr) return;
 
@@ -287,7 +457,9 @@ void PartViewportController::refreshPresentation() {
 
     if (session_ == nullptr) {
         sketch_entity_bindings_.clear();
+        profile_bindings_.clear();
         clearSketchPreview();
+        clearProfileDraftPreview();
         clearSketchSelectionBoxOverlay();
         applySketchViewportMode();
         static_cast<void>(
@@ -296,6 +468,12 @@ void PartViewportController::refreshPresentation() {
         static_cast<void>(
             viewport_->setSketchScene(
                 viewer::SketchScene{}));
+        static_cast<void>(
+            viewport_->setProfileScene(
+                viewer::ProfileScene{}));
+        static_cast<void>(
+            viewport_->setProfilePreviewScene(
+                viewer::ProfilePreviewScene{}));
         setPresentationDegraded(false);
         return;
     }
@@ -319,6 +497,12 @@ void PartViewportController::refreshPresentation() {
         viewport_->setReferenceScene(
             buildReferenceScene());
 
+    const auto profile_scene =
+        buildProfileScene();
+    const bool profile_ok =
+        profile_scene.has_value() &&
+        viewport_->setProfileScene(*profile_scene);
+
     const auto sketch_scene =
         buildSketchScene();
     const bool sketch_ok =
@@ -326,7 +510,7 @@ void PartViewportController::refreshPresentation() {
         viewport_->setSketchScene(*sketch_scene);
 
     setPresentationDegraded(
-        !reference_ok || !sketch_ok);
+        !reference_ok || !profile_ok || !sketch_ok);
 
     applySelectionToSurfaces();
 }
@@ -374,6 +558,7 @@ void PartViewportController::setSketchEditSketch(
             select_pick_box;
     sketch_entity_bindings_.clear();
     clearSketchPreview();
+    clearProfileDraftPreview();
     clearSketchSelectionBoxOverlay();
 
     if (sketch_edit_id_ &&
@@ -504,6 +689,52 @@ void PartViewportController::clearSketchPreview() {
         static_cast<void>(
             viewport_->setSketchPreviewScene(
                 viewer::SketchPreviewScene{}));
+    }
+}
+
+bool PartViewportController::setProfileDraftPreview(
+    const std::optional<sketch::RegionCandidate2D>& region,
+    bool show_boundary,
+    viewer::ProfilePreviewTone tone,
+    const std::optional<sketch::RegionCandidate2D>&
+        emphasis_region) {
+    if (viewport_ == nullptr) return false;
+    if (!region && !emphasis_region) {
+        return viewport_->setProfilePreviewScene(
+            viewer::ProfilePreviewScene{});
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) return false;
+
+    viewer::ProfilePreviewScene scene;
+    scene.show_boundary = show_boundary;
+    scene.tone = tone;
+
+    if (region) {
+        scene.region =
+            buildProfileRegionPresentation(
+                *hosted,
+                *region);
+        if (!scene.region) return false;
+    }
+
+    if (emphasis_region) {
+        scene.emphasis_region =
+            buildProfileRegionPresentation(
+                *hosted,
+                *emphasis_region);
+        if (!scene.emphasis_region) return false;
+    }
+
+    return viewport_->setProfilePreviewScene(scene);
+}
+
+void PartViewportController::clearProfileDraftPreview() {
+    if (viewport_ != nullptr) {
+        static_cast<void>(
+            viewport_->setProfilePreviewScene(
+                viewer::ProfilePreviewScene{}));
     }
 }
 
@@ -702,6 +933,58 @@ PartViewportController::sketchPresentationFor(
     return std::nullopt;
 }
 
+std::optional<part::ProfileId>
+PartViewportController::profileFor(
+    viewer::PresentationToken token) const {
+    if (!token.valid()) return std::nullopt;
+    const auto found =
+        profile_bindings_.find(token.value);
+    return found == profile_bindings_.end()
+        ? std::nullopt
+        : std::optional<part::ProfileId>{
+              found->second};
+}
+
+std::optional<viewer::PresentationToken>
+PartViewportController::profilePresentationFor(
+    part::ProfileId profile_id) const {
+    if (!profile_id.valid()) return std::nullopt;
+    for (const auto& [token, id] :
+         profile_bindings_) {
+        if (id == profile_id) {
+            return viewer::PresentationToken{
+                token};
+        }
+    }
+    return std::nullopt;
+}
+
+void PartViewportController::setProfileSelectionFromTree(
+    const std::vector<part::ProfileId>& selected,
+    std::optional<part::ProfileId> primary) {
+    if (session_ == nullptr) return;
+
+    auto& selection = activeSelection();
+    selection.profiles = selected;
+    if (primary &&
+        std::find(
+            selected.begin(),
+            selected.end(),
+            *primary) != selected.end()) {
+        selection.primary_profile = primary;
+        selection.primary.reset();
+    } else if (!selected.empty()) {
+        selection.primary_profile =
+            selected.front();
+        selection.primary.reset();
+    } else {
+        selection.primary_profile.reset();
+    }
+
+    applySelectionToSurfaces();
+    notifySelectionChanged();
+}
+
 bool PartViewportController::projectSketchEntitySelection(
     const std::vector<sketch::EntityId>& selected,
     std::optional<sketch::EntityId> primary) {
@@ -728,6 +1011,7 @@ bool PartViewportController::projectSketchEntitySelection(
     if (reference_selection != nullptr) {
         presentation.selected.reserve(
             reference_selection->selected.size() +
+            reference_selection->profiles.size() +
             selected.size());
 
         for (const auto role :
@@ -736,7 +1020,20 @@ bool PartViewportController::projectSketchEntitySelection(
                 tokenFor(role));
         }
 
-        if (reference_selection->primary) {
+        for (const auto profile_id :
+             reference_selection->profiles) {
+            const auto token =
+                profilePresentationFor(profile_id);
+            if (token) {
+                presentation.selected.push_back(*token);
+            }
+        }
+
+        if (reference_selection->primary_profile) {
+            presentation.primary =
+                profilePresentationFor(
+                    *reference_selection->primary_profile);
+        } else if (reference_selection->primary) {
             presentation.primary =
                 tokenFor(
                     *reference_selection->primary);
@@ -1026,6 +1323,115 @@ PartViewportController::buildReferenceScene() const {
     return scene;
 }
 
+std::optional<viewer::ProfileRegionPresentation>
+PartViewportController::buildProfileRegionPresentation(
+    const part::PartSketch& source,
+    const sketch::RegionCandidate2D& region) const {
+    const auto sample_loop =
+        [&source](
+            const sketch::RegionLoop2D& loop)
+            -> std::optional<
+                std::vector<viewer::Point3>> {
+            std::vector<viewer::Point3> result;
+            for (const auto& use : loop.boundary) {
+                const auto points =
+                    sampleProfileUse(
+                        source.model,
+                        use);
+                if (!points || points->empty()) {
+                    return std::nullopt;
+                }
+
+                const std::size_t first =
+                    result.empty() ? 0U : 1U;
+                for (std::size_t i = first;
+                     i < points->size();
+                     ++i) {
+                    const auto world =
+                        detail::sketchPointToWorld(
+                            source.placement,
+                            (*points)[i]);
+                    if (!world) return std::nullopt;
+                    result.push_back(*world);
+                }
+            }
+            return result.size() >= 3U
+                ? std::optional<
+                      std::vector<viewer::Point3>>{
+                      std::move(result)}
+                : std::nullopt;
+        };
+
+    auto outer = sample_loop(region.outer);
+    if (!outer) return std::nullopt;
+
+    viewer::ProfileRegionPresentation result;
+    result.outer = std::move(*outer);
+    result.holes.reserve(region.holes.size());
+    for (const auto& hole : region.holes) {
+        auto sampled = sample_loop(hole);
+        if (!sampled) return std::nullopt;
+        result.holes.push_back(
+            std::move(*sampled));
+    }
+    return result.valid()
+        ? std::optional<
+              viewer::ProfileRegionPresentation>{
+              std::move(result)}
+        : std::nullopt;
+}
+
+std::optional<viewer::ProfileScene>
+PartViewportController::buildProfileScene() {
+    profile_bindings_.clear();
+    viewer::ProfileScene scene;
+    if (session_ == nullptr) return scene;
+
+    for (const auto& profile :
+         session_->document().profiles()) {
+        if (!profile.visible) continue;
+
+        const auto evaluation =
+            session_->document()
+                .evaluateProfile(profile.id);
+        if (!evaluation || !evaluation->valid()) {
+            continue;
+        }
+
+        const auto* source =
+            session_->document().findSketch(
+                profile.source_sketch_id);
+        if (source == nullptr) {
+            profile_bindings_.clear();
+            return std::nullopt;
+        }
+
+        const auto region =
+            buildProfileRegionPresentation(
+                *source,
+                *evaluation->region);
+        const auto token =
+            allocatePresentationToken();
+        if (!region || !token ||
+            !profile_bindings_
+                 .emplace(token->value, profile.id)
+                 .second) {
+            profile_bindings_.clear();
+            return std::nullopt;
+        }
+        scene.profiles.push_back(
+            viewer::ProfilePresentation{
+                *token,
+                *region});
+    }
+
+    if (!scene.valid()) {
+        profile_bindings_.clear();
+        return std::nullopt;
+    }
+    return scene;
+}
+
 std::optional<viewer::SketchScene>
 PartViewportController::buildSketchScene() {
     sketch_entity_bindings_.clear();
@@ -1062,20 +1468,26 @@ PartViewportController::buildSketchScene() {
     for (const auto& line : model_state.lines) {
         const auto start = detail::sketchPointToWorld(hosted->placement, line.start);
         const auto end = detail::sketchPointToWorld(hosted->placement, line.end);
-        const auto token = allocateSketchPresentationToken();
+        const auto token = allocatePresentationToken();
         if (!start || !end || !token || !bind(*token, line.id)) {
             sketch_entity_bindings_.clear();
             return std::nullopt;
         }
-        scene.lines.push_back({*token, *start, *end});
+        scene.lines.push_back(
+            {*token,
+             *start,
+             *end,
+             line.role ==
+                 sketch::EntityRole::construction});
     }
 
     const auto add_curve = [&](sketch::EntityId id,
                                sketch::Point2 center,
                                double radius,
                                double start_angle,
-                               double sweep_angle) {
-        const auto token = allocateSketchPresentationToken();
+                               double sweep_angle,
+                               sketch::EntityRole role) {
+        const auto token = allocatePresentationToken();
         const auto segments =
             curveSegments(center, radius, start_angle, sweep_angle);
         if (!token || segments.empty() || !bind(*token, id)) {
@@ -1084,6 +1496,8 @@ PartViewportController::buildSketchScene() {
 
         viewer::SketchCurvePresentation curve;
         curve.token = *token;
+        curve.construction =
+            role == sketch::EntityRole::construction;
         curve.points.reserve(segments.size() + 1U);
 
         const auto first = detail::sketchPointToWorld(
@@ -1109,7 +1523,8 @@ PartViewportController::buildSketchScene() {
     for (const auto& circle : model_state.circles) {
         if (!add_curve(
                 circle.id, circle.center, circle.radius, 0.0,
-                2.0 * std::numbers::pi_v<double>)) {
+                2.0 * std::numbers::pi_v<double>,
+                circle.role)) {
             sketch_entity_bindings_.clear();
             return std::nullopt;
         }
@@ -1117,7 +1532,8 @@ PartViewportController::buildSketchScene() {
     for (const auto& arc : model_state.arcs) {
         if (!add_curve(
                 arc.id, arc.center, arc.radius,
-                arc.start_angle, arc.sweep_angle)) {
+                arc.start_angle, arc.sweep_angle,
+                arc.role)) {
             sketch_entity_bindings_.clear();
             return std::nullopt;
         }
@@ -1132,15 +1548,15 @@ PartViewportController::buildSketchScene() {
 }
 
 std::optional<viewer::PresentationToken>
-PartViewportController::allocateSketchPresentationToken()
+PartViewportController::allocatePresentationToken()
     noexcept {
-    if (next_sketch_presentation_token_ ==
+    if (next_presentation_token_ ==
         std::numeric_limits<std::uint64_t>::max()) {
         return std::nullopt;
     }
 
     return viewer::PresentationToken{
-        next_sketch_presentation_token_++};
+        next_presentation_token_++};
 }
 
 PartViewportController::SemanticSelection&
@@ -1167,6 +1583,11 @@ void PartViewportController::onTreeSelection(
 
     auto& selection = activeSelection();
     selection.selected = selected;
+    selection.profiles =
+        tree_->selectedProfileIds();
+
+    const auto profile_primary =
+        tree_->primaryProfileId();
 
     if (primary &&
         std::find(
@@ -1174,10 +1595,26 @@ void PartViewportController::onTreeSelection(
             selected.end(),
             *primary) != selected.end()) {
         selection.primary = primary;
+        selection.primary_profile.reset();
+    } else if (profile_primary &&
+               std::find(
+                   selection.profiles.begin(),
+                   selection.profiles.end(),
+                   *profile_primary) !=
+                   selection.profiles.end()) {
+        selection.primary.reset();
+        selection.primary_profile =
+            profile_primary;
     } else if (!selected.empty()) {
         selection.primary = selected.front();
+        selection.primary_profile.reset();
+    } else if (!selection.profiles.empty()) {
+        selection.primary.reset();
+        selection.primary_profile =
+            selection.profiles.front();
     } else {
         selection.primary.reset();
+        selection.primary_profile.reset();
     }
 
     applySelectionToSurfaces();
@@ -1197,18 +1634,55 @@ void PartViewportController::onViewportIntent(
         viewer::SelectionIntentMode::clear) {
         selection.selected.clear();
         selection.primary.reset();
+        selection.profiles.clear();
+        selection.primary_profile.reset();
+        applySelectionToSurfaces();
+        notifySelectionChanged();
+        return;
+    }
+
+    if (const auto profile =
+            profileFor(intent.token)) {
+        if (intent.mode ==
+            viewer::SelectionIntentMode::replace) {
+            selection.selected.clear();
+            selection.primary.reset();
+            selection.profiles = {*profile};
+            selection.primary_profile = *profile;
+        } else {
+            const auto found =
+                std::find(
+                    selection.profiles.begin(),
+                    selection.profiles.end(),
+                    *profile);
+            if (found == selection.profiles.end()) {
+                selection.profiles.push_back(*profile);
+                selection.primary_profile = *profile;
+                selection.primary.reset();
+            } else {
+                selection.profiles.erase(found);
+                if (selection.primary_profile &&
+                    *selection.primary_profile == *profile) {
+                    selection.primary_profile =
+                        selection.profiles.empty()
+                            ? std::nullopt
+                            : std::optional<part::ProfileId>{
+                                  selection.profiles.back()};
+                }
+            }
+        }
         applySelectionToSurfaces();
         notifySelectionChanged();
         return;
     }
 
     const auto role = roleFor(intent.token);
-    if (!role) {
-        return;
-    }
+    if (!role) return;
 
     if (intent.mode ==
         viewer::SelectionIntentMode::replace) {
+        selection.profiles.clear();
+        selection.primary_profile.reset();
         selection.selected = {*role};
         selection.primary = *role;
     } else {
@@ -1220,6 +1694,7 @@ void PartViewportController::onViewportIntent(
         if (found == selection.selected.end()) {
             selection.selected.push_back(*role);
             selection.primary = *role;
+            selection.primary_profile.reset();
         } else {
             selection.selected.erase(found);
             if (selection.primary &&
@@ -1272,6 +1747,9 @@ void PartViewportController::applySelectionToSurfaces() {
         tree_->setBuiltinReferenceSelection(
             {},
             std::nullopt);
+        tree_->setProfileSelection(
+            {},
+            std::nullopt);
         if (viewport_ != nullptr) {
             static_cast<void>(
                 viewport_->setPresentationSelection(
@@ -1284,19 +1762,36 @@ void PartViewportController::applySelectionToSurfaces() {
     tree_->setBuiltinReferenceSelection(
         selection.selected,
         selection.primary);
+    tree_->setProfileSelection(
+        selection.profiles,
+        selection.primary_profile);
 
     if (viewport_ == nullptr) return;
 
     viewer::PresentationSelection presentation;
     presentation.selected.reserve(
-        selection.selected.size());
+        selection.selected.size() +
+        selection.profiles.size());
 
     for (const auto role : selection.selected) {
         presentation.selected.push_back(
             tokenFor(role));
     }
 
-    if (selection.primary) {
+    for (const auto profile_id :
+         selection.profiles) {
+        const auto token =
+            profilePresentationFor(profile_id);
+        if (token) {
+            presentation.selected.push_back(*token);
+        }
+    }
+
+    if (selection.primary_profile) {
+        presentation.primary =
+            profilePresentationFor(
+                *selection.primary_profile);
+    } else if (selection.primary) {
         presentation.primary =
             tokenFor(*selection.primary);
     }
@@ -1329,21 +1824,33 @@ void PartViewportController::applySketchViewportMode() {
 }
 
 void PartViewportController::notifySelectionChanged() {
-    if (!selection_changed_handler_) return;
-
     const auto* selection =
         static_cast<const PartViewportController&>(*this)
             .activeSelection();
-    if (selection == nullptr) {
-        selection_changed_handler_(
-            {},
-            std::nullopt);
-        return;
+
+    if (selection_changed_handler_) {
+        if (selection == nullptr) {
+            selection_changed_handler_(
+                {},
+                std::nullopt);
+        } else {
+            selection_changed_handler_(
+                selection->selected,
+                selection->primary);
+        }
     }
 
-    selection_changed_handler_(
-        selection->selected,
-        selection->primary);
+    if (profile_selection_changed_handler_) {
+        if (selection == nullptr) {
+            profile_selection_changed_handler_(
+                {},
+                std::nullopt);
+        } else {
+            profile_selection_changed_handler_(
+                selection->profiles,
+                selection->primary_profile);
+        }
+    }
 }
 
 } // namespace simplesolid2::ui

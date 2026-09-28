@@ -488,18 +488,18 @@ Pointer routing and cursor mode remain independent runtime axes. Ordinary Select
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-`IDocumentViewport` remains provider-neutral. It exposes camera/navigation, reference scene, authored Sketch scene, transient preview scene, presentation selection, neutral pointer transport, primary-pointer routing/cursor mode, Sketch point/rectangle queries, finite Sketch grip scene/query, runtime hover/active-grip presentation and the selection-box overlay channel.
+`IDocumentViewport` remains provider-neutral. It exposes camera/navigation, reference scene, authored Sketch scene, Profile scene, transient Sketch/Profile preview scenes, presentation selection, neutral pointer transport, primary-pointer routing/cursor mode, Sketch point/rectangle queries, finite Sketch grip scene/query, runtime hover/active-grip presentation and the selection-box overlay channel.
 
-The authored Sketch scene carries one semantic presentation token per entity. Line uses one segment; Circle and Arc use one token plus an ordered finite point chain. Qt/OCCT may display a curve as multiple derived native segments, but all of those segments map back to the single semantic token.
+The authored Sketch scene carries one semantic presentation token per entity. Line uses one segment; Circle and Arc use one token plus an ordered finite point chain. It also carries the authored Regular/Construction role as presentation input. Qt/OCCT may display a curve as multiple derived native segments, but all of those segments map back to the single semantic token. Construction uses a dashed native line aspect; dash style is derived presentation only and never semantic identity.
 
-Grip keys are `PresentationToken + SketchGripRole` only inside the Viewer boundary. PartViewportController immediately maps them back to `SketchId + EntityId + semantic role`. No Qt/OCCT handle becomes CAD identity.
+Grip keys are `PresentationToken + SketchGripRole` only inside the Viewer boundary. PartViewportController immediately maps them back to `SketchId + EntityId + semantic role`. Profile presentation tokens are likewise runtime-only and are mapped immediately to Part-owned `ProfileId`. No Qt/OCCT handle becomes CAD identity.
 
 The production executable creates the concrete Qt/OCCT provider only in the composition root and injects it as a neutral `ViewportSurface`. Provider-native exceptions are contained at the Viewer boundary and fail closed.
 
 <!-- section-id: internal.cad-workbench-viewer.sketch-edit -->
 ## Part Sketch host and 3D edit context
 
-The current Part Sketch editor presents and edits durable Line/Circle/Arc geometry through the same semantic interaction and transaction path.
+The current Part Sketch editor presents and edits durable Line/Circle/Arc geometry and the Part-owned Profile workflow through the same semantic interaction and transaction path.
 
 In Part modeling the editor toolbar provides `Sketch`. In Sketch edit the tool strip is visibly organized as:
 
@@ -511,6 +511,9 @@ Create
   Circle
   Arc
 
+Profile
+  Profile
+
 Modify
   Move
   Copy
@@ -519,7 +522,7 @@ Modify
   Mirror
 ```
 
-The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit the existing command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
+The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE`, `MIRROR`, `PROFILE` and `EDITPROFILE`. An active Profile session additionally accepts `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` and the documented option toggles. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
 
 D makes that ownership explicit in code. `application::CadInputSession` remains transport-only: it owns the live buffer, endpoint attachment/lifetime, context-generation binding and diagnostic transport, but it does not know Sketch tools, PointRequest, command keywords or numeric meaning.
 
@@ -554,7 +557,7 @@ COPY also uses Base Point → placement point, but commit duplicates rather than
 
 Exact zero displacement is intentionally not a COPY commit. It allocates no EntityIds, changes no revision/dirty/history state and leaves COPY active at the placement stage.
 
-Each accepted repeated placement is a separate Part transaction and Undo entry. Undo/Redo is a boundary for an active transient COPY session: the transient preview is cancelled first, then ordinary global history runs. Redo restores the same copied identities. `DocumentSession` preserves the Sketch identity high-water through Undo so a new COPY in the same session cannot reuse the undone IDs. Undo back to the saved authored state remains clean; when a later committed copy is saved, its state persists the preserved high-water through the existing schema-v4 `next_entity_id` field.
+Each accepted repeated placement is a separate Part transaction and Undo entry. Undo/Redo is a boundary for an active transient COPY session: the transient preview is cancelled first, then ordinary global history runs. Redo restores the same copied identities. `DocumentSession` preserves the Sketch identity high-water through Undo so a new COPY in the same session cannot reuse the undone IDs. Undo back to the saved authored state remains clean; when a later committed copy is saved, its state persists the preserved high-water through the existing schema-v6 `next_entity_id` field.
 
 Rotate uses Base Point → Reference Point → destination. The Reference Point must differ from Base. The preview uses the signed angle between the reference and destination vectors in the Sketch frame, with positive counter-clockwise rotation. A zero-angle completion is a clean no-op.
 
@@ -570,7 +573,7 @@ The UI locale is adapter context only: Qt supplies its decimal separator to the 
 
 Numeric Rotate angle, Scale factor, Cartesian/polar coordinate entry, unit expressions, Dynamic Input, Ortho/Polar and snapping are not implemented. Viewport printable text may feed the workspace CAD input buffer, while the active semantic request/tool remains the only authority that can interpret or accept the submitted token.
 
-Non-COPY transforms preserve existing EntityIds. COPY allocates fresh identities only at accepted placement commit; preview and cancelled/zero placements consume none. Save/Close/Reopen uses unchanged Part schema v4 and persists `next_entity_id` together with authored Sketch geometry.
+Non-COPY transforms preserve existing EntityIds. COPY allocates fresh identities only at accepted placement commit; preview and cancelled/zero placements consume none. Save/Close/Reopen uses current Part schema v6 and persists entity roles, `next_entity_id`, Profiles/RegionIntent and `next_profile_id` together with authored Sketch geometry.
 
 Center grips remain Move-only and translate the complete frozen selection using the grip's interaction-start location as implicit base.
 
@@ -596,13 +599,13 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
-The provider presents visible Origin references, a non-selectable reference grid, active-Sketch authored Line/Circle/Arc geometry, intrinsic Sketch Origin, transient creation/direct-edit preview, runtime selection box, selected/primary/hover emphasis and finite semantic grips.
+The provider presents visible Origin references, a non-selectable reference grid, active-Sketch authored Line/Circle/Arc geometry, intrinsic Sketch Origin, valid visible Part Profiles, transient Sketch/Profile preview, runtime selection box, selected/primary/hover emphasis and finite semantic grips.
 
 Circle/Arc authored geometry is carried as one semantic curve presentation token with an ordered point chain; Qt/OCCT derives line-segment presentation objects without promoting those provider segments to semantic identity. Point/rectangle query likewise evaluates those derived projected segments but returns only the semantic token.
 
 Sketch grips are provider-only `AIS_Point` presentations deactivated from native OCCT selection and hit-tested separately in logical screen space. Their point aspects use custom square bitmaps: hollow for idle, cyan-emphasized hollow for hover and slightly larger filled yellow for active/captured. Marker dimensions are rebuilt for device-pixel ratio changes. Grip query runs before authored geometry query so an overlapping visible grip wins.
 
-The Sketch selection box remains OCCT `AIS_RubberBand` in the same native graphics surface. Principal reference planes remain finite provider presentation geometry. No native provider object is durable CAD identity.
+The Sketch selection box remains OCCT `AIS_RubberBand` in the same native graphics surface. Profile regions are derived planar OCCT faces with preserved holes, boundary display and transparency/selection styling. Profile fill uses an unlit shading model so its semantic presentation color does not depend on camera/light angle, plus provider-only polygon depth bias to avoid coplanar z-fighting; neither setting changes authored geometry. Native detection maps the picked Profile object to its neutral runtime token and then immediately to ProfileId. The separate Profile preview scene can present both the resulting draft and an optional hovered-candidate emphasis region; Subtract keeps the result cyan and overlays the candidate in red-orange. Principal reference planes remain finite provider presentation geometry. No native provider object is durable CAD identity.
 
 There is still no modeled Part B-Rep at this milestone; the OCCT provider remains presentation/navigation infrastructure.
 
@@ -617,14 +620,14 @@ The next normal full refresh reconstructs reference and authored Sketch presenta
 
 E2 Release evidence retained the current full authored-scene replacement strategy. The measured runner showed an approximately 33 ms native presentation floor through roughly 1,000 line objects and approximately 83 ms around 4,000–5,000 native presentation objects; a 5,000-line accepted mutation plus full authored refresh measured about 150 ms median. These values are engineering evidence, not Product latency guarantees. Large/highly segmented Sketches remain a documented scale risk; no differential-update or public `IDocumentViewport` expansion was introduced.
 
-Circle/Arc sampled point chains and native line segments remain presentation-only derived data. They never define closure, intersections, loops, regions or profiles; later Package F region/profile analysis must operate on exact accepted authored/evaluated 2D geometry outside the Viewer.
+Circle/Arc sampled point chains, native line segments and Profile face tessellation remain presentation-only derived data. They never define closure, intersections, loops, regions or Profile identity. Shared 2D region analysis operates on accepted authored/evaluated 2D geometry outside the Viewer; Part alone owns durable ProfileId/RegionIntent semantics.
 
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
 Selection, primary selection, hover, active grip, current DirectEditMode, the direct-manipulation interaction-start owner geometry plus complete frozen-selection geometry, common-transform/COPY tool and stage, frozen source selection/geometry snapshot, Base/Reference/axis points, active PointRequest, shared pointer candidate, Direct Distance resolution, current pointer-derived preview, the last repeatable Sketch command identity, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/transform drag state and workspace CAD input buffer/prompt/diagnostic state are runtime-only.
 
-Persistent Origin visibility, authored Sketch geometry, committed copied entities and the model-local identity high-water are authored/durable state. COPY preview itself is never persisted.
+Persistent Origin visibility, authored Sketch geometry and entity roles, committed copied entities, model-local identity high-water, Part Profiles/RegionIntent and ProfileId high-water are authored/durable state. COPY and Profile hover/draft preview are never persisted.
 
 Closing/reopening the application recreates runtime view/interaction state while preserving saved authored geometry, copied EntityIds, the persisted next-identity cursor and visibility in the Part file.
 
@@ -799,11 +802,13 @@ Operational documentation rules are defined in `governance/DOCUMENTATION.md`.
 <!-- section-id: internal.part-documents.model -->
 ## Current model
 
-The current `PartDocument` is persistent and hosts durable Part Sketch objects with embedded Shared 2D authored Line geometry. It still contains no Body, Feature or modeled solid B-Rep.
+The current `PartDocument` is persistent and hosts durable Part Sketch objects with embedded Shared 2D Line/Circle/Arc geometry plus Part-owned Profile objects. It still contains no Body, Feature or modeled solid B-Rep.
 
-Its authored state consists of stable `DocumentId`, common Document Properties, persistent presentation state for the seven built-in Origin references and an ordered collection of Part-hosted Sketch records.
+Its authored state consists of stable `DocumentId`, common Document Properties, persistent presentation state for the seven built-in Origin references, an ordered collection of Part-hosted Sketch records, a monotonic `ProfileId` cursor and an ordered collection of Profiles.
 
-Each Part Sketch has stable `SketchId`, semantic support restricted to XY/XZ/YZ built-in Origin planes, explicit `SketchPlacement`, persistent visibility and one value-owned `sketch::SketchModel`. Part owns host support/placement/visibility/persistence semantics; Shared 2D owns the embedded entity identity and authored 2D geometry.
+Each Part Sketch has stable `SketchId`, semantic support restricted to XY/XZ/YZ built-in Origin planes, explicit `SketchPlacement`, persistent visibility and one value-owned `sketch::SketchModel`. Shared 2D owns entity identity, Line/Circle/Arc geometry and Regular/Construction role; Part owns host support/placement/visibility/persistence.
+
+Each Profile has stable `ProfileId`, source `SketchId`, authored name/visibility and durable `ProfileRegionIntent`. RegionIntent references source EntityIds and semantic endpoint/intersection anchors. It does not store Viewer tokens, OCCT topology, sampled fill geometry or derived runtime region indices.
 
 `DocumentRevision` is a technical monotonic counter for successful semantic mutations within the loaded lifecycle.
 
@@ -831,13 +836,13 @@ Qt / caller
 → atomic domain commit
 ```
 
-Current commands cover common Document Properties, built-in reference visibility, Sketch creation, mixed Line/Circle/Arc creation and update, mixed deletion, common transforms and duplication. Durable mutation remains semantic-command driven; UI/Viewer presentation identity is never mutation authority.
+Current commands cover common Document Properties, built-in reference visibility, Sketch creation, mixed Line/Circle/Arc creation/update/deletion, Regular/Construction role changes, common transforms/duplication and Profile create/edit/properties/delete. Durable mutation remains semantic-command driven; UI/Viewer presentation identity is never mutation authority.
 
 Each `PartDocumentTransaction` captures the technical `DocumentRevision` from which its staged full-state snapshot was created. Commit is authorized only when that base revision still equals the owning `PartDocument` revision. A mismatch returns typed `stale_transaction` before validation, no-op comparison or authored mutation, so an older full-state transaction cannot overwrite a newer accepted mutation.
 
 Part transactions are one-shot. The first commit attempt is terminal whether it succeeds, is a no-op, or fails as stale, invalid-state or revision-exhausted; a later commit returns `inactive_transaction`. Rollback is terminal and idempotent. A fresh no-op creates neither a revision increment nor a history entry.
 
-The Part domain validates the complete staged `PartAuthoredState` at commit: hosted Sketch support and placement must be valid and match, and hosted SketchId values must be unique. Invalid full-state replacement returns typed `invalid_state` without changing authored state or revision. The same validator protects `PartDocument::restore`, which returns a structured validated reconstruction result rather than constructing an invalid live document.
+The Part domain validates the complete staged `PartAuthoredState` at commit: hosted Sketch support/placement must be valid and match, SketchId/ProfileId values must be unique and below their cursors, every Profile must reference an existing source Sketch, and RegionIntent structure must be valid. Invalid full-state replacement returns typed `invalid_state` without changing authored state or revision. The same validator protects `PartDocument::restore`, which returns a structured validated reconstruction result rather than constructing an invalid live document.
 
 `DocumentSession::verifyRevision()` remains a second command/history consistency guard; the owning Part transaction is the domain authority for stale-state rejection.
 
@@ -848,9 +853,9 @@ Undo and Redo reapply authored states through `PartDocumentTransaction` and ther
 
 `DocumentSession` is runtime-only and contains the current physical path, loaded `PartDocument`, expected technical revision, Undo/Redo history, the saved authored-state checkpoint and — for a native file opened/created through the Project runtime — a `PartFileCheckpoint`.
 
-Undo/Redo still uses a runtime `std::vector` of two-snapshot history entries containing the authored state before and after each accepted command. Adding a new command no longer deep-copies all older history entries. The session prepares one pending history entry, reserves the required vector capacity and prepares the Sketch EntityId high-water map before the Part transaction mutates the live document. History entries are non-copyable and no-throw movable, so vector relocation transfers ownership rather than copying prior authored snapshots.
+Undo/Redo still uses a runtime `std::vector` of two-snapshot history entries containing the authored state before and after each accepted command. Adding a new command no longer deep-copies all older history entries. The session prepares one pending history entry, reserves the required vector capacity and prepares the Sketch EntityId high-water map and ProfileId cursor before the Part transaction mutates the live document. History entries are non-copyable and no-throw movable, so vector relocation transfers ownership rather than copying prior authored snapshots.
 
-A Redo suffix remains logically intact while a command is being prepared. It is destroyed only after a successful changed Part commit, then the already-prepared entry is appended inside reserved capacity and the prepared EntityId cursor map is published by no-throw swap. A rejected, failed or no-op command therefore preserves the current Undo/Redo branch. C1 intentionally leaves the `before/after` snapshot representation and history depth policy unchanged; deeper representation or budgeting remains subject to AUDIT-01 C2 measurement.
+A Redo suffix remains logically intact while a command is being prepared. It is destroyed only after a successful changed Part commit, then the already-prepared entry is appended inside reserved capacity and the prepared identity high-waters are published without copying older history. A rejected, failed or no-op command therefore preserves the current Undo/Redo branch. C1 intentionally leaves the `before/after` snapshot representation and history depth policy unchanged; deeper representation or budgeting remains subject to AUDIT-01 C2 measurement.
 
 `needsSave()` compares authored state with the saved authored-state checkpoint. It is not defined by numeric `DocumentRevision` equality, which allows Undo back to the saved semantic state to become clean even though `DocumentRevision` increased.
 
@@ -863,17 +868,17 @@ Closing and reopening creates fresh runtime history.
 
 The native extension is `.ss2part`.
 
-The current Part domain writer uses schema **v4**. It stores document properties, built-in Origin visibility and the ordered hosted Sketch collection. Each Sketch record stores stable SketchId, Origin-plane support, explicit placement, visibility and one embedded Shared 2D model.
+The current Part domain writer uses schema **v6**. It stores document properties, built-in Origin visibility, hosted Sketch records, canonical `next_profile_id` and authored Profiles.
 
-Schema v4 stores canonical decimal `next_entity_id` plus mixed `entities[]` records. Supported authored kinds are Line, Circle and Arc. EntityId is model-local and shared across primitive kinds; malformed/non-canonical or duplicate IDs, IDs outside the cursor range and invalid primitive geometry fail closed.
+Each Sketch stores stable SketchId, Origin-plane support, explicit placement, visibility and one embedded Shared 2D model. The model stores canonical `next_entity_id` plus mixed Line/Circle/Arc `entities[]`. Since schema v5 every entity also stores authored `regular` or `construction` role.
 
-Part schema versions v1, v2 and v3 remain readable. V1 restores no Sketches, v2 restores hosted Sketch records with empty Shared 2D models, and v3 reads the former Line-only `next_entity_id + lines[]` model. Opening an older schema does not rewrite the file; a later successful ordinary Save publishes current schema v4.
+Each schema-v6 Profile stores canonical ProfileId, source SketchId, authored name/visibility and the semantic RegionIntent loop/anchor structure. Derived region indices, sampled presentation geometry, Viewer tokens and OCCT handles are not serialized.
 
-ProjectId, DocumentSession, Undo/Redo, active Sketch edit context, camera, active selection, Qt objects, Viewer objects and OCCT handles are not serialized as Part authored state.
+Schemas v1–v5 remain readable. V1 restores no Sketches; v2 restores hosted Sketch records with empty Shared 2D models; v3 reads the former Line-only model; v4 reads mixed Line/Circle/Arc records and defaults their role to Regular; v5 reads persisted entity roles and creates no Profiles. Opening an older schema does not rewrite the file; a later successful ordinary Save publishes current schema v6.
 
-Ordinary Save is conditional on the session's native-file checkpoint. A cooperative per-target Save guard serializes cooperating SS2 writers across inspect → compare → publish → new-checkpoint capture. Missing target, changed DocumentId, replaced file object, changed exact content or an already-owned Save guard fail closed with typed Save-conflict diagnostics. A failed/conflicted Save does not advance the saved authored-state checkpoint or file checkpoint.
+ProjectId, DocumentSession, Undo/Redo, active Sketch/Profile tool context, region-analysis cache, camera, active selection, Qt objects, Viewer objects and OCCT handles are not serialized as authored Part state.
 
-Successful publication uses whole-file atomic replacement and returns the checkpoint of the newly published target. The strict no-lost-update guarantee is for cooperating SS2 writers that use this guard; the implementation does not claim an atomic filesystem compare-and-swap against arbitrary unrelated writers.
+Ordinary Save remains conditional on the session's native-file checkpoint. Save-conflict rules and whole-file atomic publication are unchanged by F.
 
 <!-- section-id: internal.part-documents.discovery -->
 ## Discovery and canonical sessions
@@ -883,6 +888,17 @@ ProjectSession owns a rebuildable Workspace index.
 A DocumentId resolves only when exactly one valid native file in the Workspace declares it. Duplicate physical files with the same DocumentId form `IdentityConflict` and include all discovered relative paths.
 
 When a resolved Part is already open, a second Open request returns the existing canonical DocumentSession rather than creating a second mutable session for the same DocumentId.
+
+<!-- section-id: internal.part-documents.profiles -->
+## Profile semantics and lifecycle
+
+Profile creation/editing is a Part operation over derived Shared-2D regions. The Profile tool caches region analysis for the current Sketch model state, performs hover/pick against that cache and keeps Add/Subtract composition runtime-only. Repeated pointer motion on unchanged geometry does not rebuild the full arrangement.
+
+Finish executes one semantic Profile command. Create allocates one fresh ProfileId. Edit preserves the existing ProfileId and atomically replaces RegionIntent. Cancel, hover, diagnostic lookup and rejected drafts do not mutate authored state or consume identity.
+
+Profiles are live references rather than geometry snapshots. `evaluateProfile` resolves durable RegionIntent against current source Sketch geometry. Missing source entities/intersections or ambiguous/unresolved topology make the Profile Invalid without rewriting intent; later source repair can return the same ProfileId to Valid.
+
+Delete Profile removes only the Profile. Source Sketch geometry remains authored. Source Sketch removal cannot silently strand dependent Profiles.
 
 <!-- section-id: internal.part-documents.sketch-presentation -->
 ## Active Sketch presentation and spatial input
@@ -898,7 +914,7 @@ If the active Sketch disappears through Undo/history or the editing context is r
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The Part model durably owns Shared 2D Line/Circle/Arc entities. The active Sketch editor supports semantic point/Window/Crossing selection, mixed Delete, Line/Circle/Arc creation, Move/Copy/Rotate/Scale/Mirror, state-based grips, owner-only Reshape, grip Move, Space CycleEditMode, Repeat Last Command and Direct Distance at the currently supported point requests.
+The Part model durably owns hosted Shared 2D Line/Circle/Arc entities and Part-owned Profiles. The active Sketch editor supports semantic point/Window/Crossing selection, mixed Delete, Line/Circle/Arc creation, Regular/Construction role changes, Profile Create/Edit with Add/Subtract, Move/Copy/Rotate/Scale/Mirror, state-based grips, owner-only Reshape, grip Move, Space CycleEditMode, Repeat Last Command and Direct Distance at the currently supported point requests.
 
 Presentation tokens, preview, pointer input, Command Line buffer, hover/grip state and camera remain runtime-only and are not Part/Sketch identity.
 
@@ -952,26 +968,15 @@ Part001.ss2part
 
 Container v1 uses UTF-8 JSON. The common manifest contains `format`, `container_version`, `document_kind`, `document_id` and `domain_schema_version`. Shared persistence owns package/container safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part domain writer is schema **v4**. It persists document properties, built-in Origin visibility and the ordered collection of Part-hosted Sketch records. Each Sketch record persists stable SketchId, built-in Origin-plane support, explicit SketchPlacement, visibility and one embedded Shared 2D model.
+The current Part domain writer is schema **v6**. It persists document properties, built-in Origin visibility, hosted Sketch records, `next_profile_id` and authored Profiles.
 
-Schema-v4 Sketch models contain:
+Schema-v6 Sketch models store canonical `next_entity_id` plus mixed `entities[]`. Each Line/Circle/Arc record stores its semantic kind, canonical EntityId, canonical geometry and authored `regular`/`construction` role.
 
-```text
-next_entity_id
-entities[]
-```
+Each Profile record stores canonical ProfileId, source SketchId, authored name/visibility and semantic RegionIntent. RegionIntent persists source EntityIds and endpoint/intersection anchors; runtime region indices, evaluated parameters, cached arrangements, sampled fills and provider topology are not persisted.
 
-`next_entity_id` is the canonical positive decimal shared EntityId high-water string. Each entity record has an explicit semantic `kind`:
+Schemas v1–v5 remain readable. V1 restores no Sketches; v2 restores host Sketch records with empty Shared 2D models; v3 reads the former Line-only model; v4 reads mixed Line/Circle/Arc and defaults roles to Regular; v5 reads persisted roles and creates no Profiles. A later successful Save of an older loaded file publishes schema v6.
 
-- `line`: `id`, `start`, `end`;
-- `circle`: `id`, `center`, `radius`;
-- `arc`: `id`, `center`, `radius`, `start_angle`, `sweep_angle`.
-
-Only canonical authored parameters are serialized. Tessellation, presentation tokens, grips, hover/selection, preview and creation-method metadata are not persisted.
-
-Part schemas v1, v2 and v3 remain readable. V1 restores an empty Sketch collection. V2 restores host Sketch records with empty Shared 2D models and an initial cursor. V3 reads the previous `next_entity_id + lines[]` Line-only model. Opening an old schema does not rewrite the file; a later successful ordinary Save writes current schema v4.
-
-DocumentId remains only in the common manifest. ProjectId is not embedded in the Document. `DocumentRevision` and Undo/Redo are runtime-only.
+DocumentId remains only in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tool state, region-analysis cache and Viewer state are runtime-only.
 
 The former line-based `SS2PART` bootstrap format remains unsupported legacy test data and fails closed rather than being migrated.
 
@@ -1027,6 +1032,7 @@ The following state is not serialized as Part authored state:
 - Sketch support-pick tool state;
 - Qt objects;
 - Viewer provider objects and OCCT handles;
+- cached Shared 2D region analysis and transient Profile drafts;
 - evaluated B-Rep or tessellation.
 
 Persistent user visibility of built-in Origin references is intentionally **not** in this runtime-only list; it is authored Part state.
@@ -1042,9 +1048,9 @@ Part discovery reads the common manifest, then Part authored state.
 
 A rename or move inside the Workspace does not change DocumentId. Duplicate native Part files declaring one DocumentId remain a fail-closed identity conflict; no automatic ID rewrite is performed.
 
-Schema-v4 Sketch loading rejects malformed/non-canonical identity strings, duplicate EntityIds across any primitive kinds, EntityIds greater than or equal to `next_entity_id`, malformed/unknown `kind` values, non-finite geometry, exact-zero Lines, non-positive Circle/Arc radius, zero Arc sweep and Arc sweep whose magnitude reaches/exceeds a full turn. The same local EntityId value in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
+Schema-v6 loading rejects malformed/non-canonical identity strings, duplicate EntityIds across primitive kinds, EntityIds outside `next_entity_id`, malformed/unknown entity kind or role, invalid/non-finite geometry and invalid primitive parameters. The same local EntityId in two different SketchModels is valid because durable addressing is scoped by SketchId plus EntityId.
 
-Schema-v3 validation remains intact for backward read compatibility.
+Profile loading fails closed on malformed/non-canonical ProfileId/cursor values, duplicate or out-of-range ProfileIds, missing/invalid source Sketch identity, malformed RegionIntent structure or invalid boundary-anchor encoding. Earlier schema validation remains intact for backward read compatibility.
 
 After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid Sketch support/placement relationships or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family. This validation adds no serialized field and does not change the native schema version.
 
@@ -1162,7 +1168,9 @@ The target currently contains:
 - opaque model-local `EntityId`;
 - canonical decimal identity transport for `EntityId` and `EntityIdCursor`;
 - canonical authored primitives `Line`, `Circle` and `Arc`;
+- authored per-entity `Regular` / `Construction` role;
 - the value-semantic mixed-primitive `SketchModel` plus validated state/restore transfer;
+- provider-neutral Line/Circle/Arc curve-relation and bounded-region analysis, point-in-region picking, exact region composition and nested-island discovery;
 - host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips, bounded direct manipulation and common Move/Copy/Rotate/Scale/Mirror command stages;
 - a provider-independent mixed-primitive transform core for translation, rotation, positive uniform scale and reflection.
 
@@ -1244,6 +1252,7 @@ The current `SketchModel` owns typed Line/Circle/Arc collections behind one sema
 addLine / findLine / updateLine
 addCircle / findCircle / updateCircle
 addArc / findArc / updateArc
+setEntityRole(EntityId, EntityRole)
 erase(EntityId)
 contains(EntityId)
 entityCount()
@@ -1333,7 +1342,20 @@ After a Line segment or COPY placement completes, stale pointer direction is not
 
 Accepted non-no-op edit transforms/reshape commit through the host semantic geometry-update command and Part transaction and preserve EntityIds. Each accepted COPY placement instead executes one atomic semantic duplication command, allocates a fresh ID for each copied entity and creates one revision/Undo entry. Multiple repeated placements are independent Undo steps.
 
-Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/session.
+Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/se<!-- section-id: internal.shared-2d.regions -->
+## Construction and region analysis
+
+Every authored Line/Circle/Arc has an `EntityRole`. `Regular` geometry participates in region topology. `Construction` geometry remains authored, selectable and editable, but it is excluded from bounded-region formation and therefore cannot close or split a Profile region.
+
+The neutral region layer operates on current authored/evaluated 2D geometry, never on Viewer tessellation or provider topology. It provides canonical Line/Circle/Arc pair relations, deterministic fragmentation at accepted intersections, bounded loop/holes construction, point-in-region picking, exact connected cell composition for transient Add/Subtract, and nested-island discovery.
+
+Analysis returns bounded `RegionCandidate2D` values plus structured diagnostics. Open connected geometry with no bounded loop reports `open_boundary`; coincident/overlap ambiguity and invalid topology fail closed for the affected connected component while unrelated valid components remain usable.
+
+There is no Product gap tolerance or auto-close policy. A small geometric gap remains a gap. Tangency and point-only contact do not silently merge disconnected material, and a point on a region boundary is never assigned arbitrarily to one adjacent candidate.
+
+All derived region candidates, relation intersections, sampled interior points and analysis caches are runtime-only. Durable Profile identity is owned by Part through semantic RegionIntent references to source Sketch EntityIds and anchors.
+
+ssion.
 
 Numeric angles, scale factors, absolute/relative coordinates, polar coordinates, unit expressions and Dynamic Input are still not implemented. Direct Distance is the only numeric precision-input capability in the current interaction state.
 
@@ -1354,7 +1376,7 @@ The product still does not implement:
 - numeric Rotate/Scale values, absolute/relative coordinate entry, polar syntax, unit expressions or Dynamic Input;
 - authored dimensions, constraints or solver evaluation;
 - Rectangle/Polyline durable semantics;
-- intersections, profiles/regions or projected/reference geometry;
+- projected/reference geometry;
 - planar-face Sketch support.
 
 Those capabilities remain governed by later accepted Work Contracts.
@@ -1362,11 +1384,11 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Part hosting, schema-v4 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, Copy identity, Repeat Last Command, Space CycleEditMode and precision input.
+The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, Copy identity, Repeat Last Command, Space CycleEditMode and precision input.
 
 Key registered tests include:
 
-- `sk02a.shared_2d_core` / `sk02a.shared_2d_boundaries` — neutral model and dependency boundaries;
+- `sk02a.shared_2d_core` / `sk02a.shared_2d_boundaries` — neutral model/dependency boundaries plus curve relations, regions, Construction exclusion, open/overlap diagnostics, holes/islands, point picking and region composition;
 - `sk06a.circle_arc_model_persistence` / `sk06a.circle_arc_interaction_state` — mixed Line/Circle/Arc authored and interaction semantics;
 - `e1.arc_numerical_stability` — 3-Point Arc translation/scale conditioning, radial residual through all requested points, CW/CCW/long branch preservation, ±1e6 translation, 1e-200/1e200 scale, near-collinear acceptance and fail-closed exact/invalid extremes;
 - `sk07a.transform_core`, `sk07b.transform_core`, `sk07b.common_transform_state`, `sk07b.transform_controller` — mixed transforms and atomic controller behavior;
@@ -1802,7 +1824,30 @@ Space typed while a text-entry field has focus remains text input; it does not t
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeric Rotate/Scale, constraints/solver, authored dimensions, Construction/Datum planes and planar model faces remain later stages.
+Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeric Rotate/Scale, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages.
+
+<!-- section-id: product.parts.profiles -->
+## Construction and Profile
+
+Every Sketch Line, Circle and Arc can be **Regular** or **Construction**. Select geometry in ordinary Select and use `Regular` or `Construction` in Operations. Construction remains saved helper geometry, but it does not close or split regions used by Profile. The viewport presents Construction geometry with a dashed line; this is only a presentation cue, while the authored entity role remains semantic truth.
+
+The **Profile** tool works inside the active Sketch. Moving the pointer over closed geometry shows a translucent region result; clicking accepts that candidate into the current draft and Status reminds you that **Finish Profile** performs the durable commit. Region truth comes from exact Line/Circle/Arc semantics, not from Viewer tessellation.
+
+Operations provides **Add Area**, **Subtract Area**, **Detect Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Find All Regions**, **Finish Profile** and **Cancel**. Find All Regions is diagnostic only and creates no Profile automatically. During Subtract the resulting draft remains cyan/blue, while the currently hovered region to remove receives a separate red-orange emphasis fill.
+
+An open chain remains open: SimpleSolid does not close a small gap with a hidden tolerance or auto-repair it. Clicking where no bounded region exists reports an open-boundary diagnostic when the analysis detects one. Without snapping/OSNAP, two points that only look coincident on screen are not silently made equal. A disconnected Add result, subtraction that splits material, or ambiguous topology is rejected without changing the Document.
+
+Finish creates a Part-owned Profile with a stable `ProfileId`. The Profile stores semantic references to source-Sketch geometry rather than a copy of the visible fill. Source edits can keep the Profile **Valid**, make it **Invalid**, and later restore it to Valid without changing ProfileId. SimpleSolid does not automatically rebind an Invalid Profile to similar or nearest replacement geometry.
+
+A Profile appears under its source Sketch in Document Tree. Properties shows Name, ProfileId, Source Sketch, Status, diagnostic, Area, Perimeter, Holes and Visibility. Area/Perimeter/Holes are derived and become unavailable for Invalid instead of retaining stale values. Name and Visibility are authored.
+
+After **Finish Sketch**, a visible Valid Profile remains a flat selectable Part object on the source Sketch plane. Profile visibility is independent from Sketch geometry visibility. Selecting it selects the Profile semantic object, not its source curves. **Delete Profile** removes only the Profile and leaves source Sketch geometry unchanged.
+
+To change an existing Profile region, select exactly one Profile and use **Edit Profile** or enter `EDITPROFILE`. Editing preserves ProfileId. Use `PROFILE` to start a new Profile draft.
+
+Command Line and Operations drive the same Profile state. Context commands are `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL`, plus `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF` and `PROBLEMS ON|OFF`.
+
+Profile is 2D/Part semantics. **It does not perform Extrude or create a solid.** Modeled solid operations require separate Part functionality.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -1829,7 +1874,7 @@ The next normal full Viewer refresh automatically retries presentation from the 
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state, including Origin visibility and created Sketches with durable identity/support/placement, Line/Circle/Arc geometry and stable EntityIds, to its `.ss2part` file.
+`Save` writes the current authored Part state, including Origin visibility, Sketches with durable identity/support/placement, Line/Circle/Arc geometry with Regular/Construction roles and stable EntityIds, and Profiles with ProfileId/RegionIntent/name/visibility, to its `.ss2part` file.
 
 Ordinary Save is conditional on the exact native file version that this session loaded or last saved. If that target was removed, replaced, changed on disk, changed to another DocumentId or is currently guarded by another cooperating SS2 Save, SimpleSolid reports a Save conflict instead of silently overwriting the target. The in-memory Part remains open and keeps its local changes/Undo history.
 
@@ -1846,7 +1891,7 @@ If saving fails or reports a conflict, the Document/Project remains open. Closin
 
 After restarting the application, open the same Project.
 
-SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties, saved Origin visibility and saved Sketch records.
+SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties, saved Origin visibility, saved Sketch records including geometry roles, and saved Profiles with the same ProfileIds.
 
 Undo/Redo history, active selection, active Sketch edit context and camera state are not stored in the file and start fresh after reopening.
 
@@ -1862,11 +1907,11 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation and durable Origin-plane Sketches with Line/Circle/Arc authored geometry.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, and Part-owned Profiles with live RegionIntent semantics.
 
 The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
 
-Direct Distance is available for the supported PointRequest stages documented above. The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features, modeled solid geometry, Material, Assembly and Drawing tools.
+Direct Distance is available for the supported PointRequest stages documented above. Profile is not a solid operation. The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
 </script>
@@ -2290,6 +2335,29 @@ Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywu
 
 Grip Copy modifier, Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeryczne Rotate/Scale, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
 
+<!-- section-id: product.parts.profiles -->
+## Construction i Profile
+
+Każda linia, okrąg i łuk w Sketchu może mieć rolę **Regular** albo **Construction**. Zaznacz geometrię w zwykłym Select i użyj `Regular` lub `Construction` w Operations. Construction pozostaje zapisaną geometrią pomocniczą, ale nie zamyka ani nie dzieli regionów używanych przez Profile. W viewporcie geometria Construction jest pokazywana linią przerywaną; jest to wyłącznie wskazówka prezentacyjna, a trwałą prawdą pozostaje authored rola encji.
+
+Narzędzie **Profile** działa w aktywnym Sketchu. Przesuwanie kursora nad zamkniętą geometrią pokazuje półprzezroczysty wynik regionu; kliknięcie przyjmuje kandydata do bieżącego draftu i Status przypomina, że dopiero **Finish Profile** wykonuje trwały commit. O tym, co jest regionem, decyduje dokładna semantyka Line/Circle/Arc, nie tessellation Viewera.
+
+Operations udostępnia **Add Area**, **Subtract Area**, **Detect Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Find All Regions**, **Finish Profile** i **Cancel**. Find All Regions jest tylko diagnostyczne i nie tworzy Profile automatycznie. Podczas Subtract wynikowy draft pozostaje błękitny, a aktualnie wskazany region do odjęcia dostaje osobne czerwono-pomarańczowe podświetlenie.
+
+Otwarty łańcuch pozostaje otwarty: SimpleSolid nie domyka małej szczeliny ukrytą tolerancją ani nie naprawia jej automatycznie. Kliknięcie w miejscu, gdzie nie istnieje bounded region, zgłasza diagnostykę otwartej granicy, jeżeli analiza ją wykryła. Bez snapping/OSNAP dwa punkty, które tylko wyglądają na pokrywające się na ekranie, nie są automatycznie zrównywane. Rozłączony wynik Add, Subtract rozcinający materiał albo niejednoznaczna topologia są odrzucane bez zmiany Dokumentu.
+
+Finish tworzy Part-owned Profile ze stabilnym `ProfileId`. Profile przechowuje semantyczne odwołania do geometrii źródłowego Sketchu zamiast kopii widocznego wypełnienia. Edycja źródła może pozostawić Profile **Valid**, uczynić go **Invalid**, a późniejsza naprawa może przywrócić Valid bez zmiany ProfileId. SimpleSolid nie przepina automatycznie Invalid Profile do podobnej ani najbliższej nowej geometrii.
+
+Profile jest dzieckiem źródłowego Sketchu w Document Tree. Properties pokazuje Name, ProfileId, Source Sketch, Status, diagnostykę, Area, Perimeter, Holes i Visibility. Area/Perimeter/Holes są pochodne i dla Invalid stają się niedostępne zamiast pokazywać stare wartości. Name i Visibility są authored.
+
+Po **Finish Sketch** widoczny i Valid Profile pozostaje płaskim zaznaczalnym obiektem Part na płaszczyźnie źródłowego Sketchu. Widoczność Profile jest niezależna od widoczności geometrii Sketchu. Zaznaczenie wybiera Profile, nie jego krzywe źródłowe. **Delete Profile** usuwa tylko Profile i pozostawia geometrię Sketchu.
+
+Aby zmienić region istniejącego Profile, zaznacz dokładnie jeden Profile i użyj **Edit Profile** albo wpisz `EDITPROFILE`. Edycja zachowuje ProfileId. `PROFILE` rozpoczyna nowy draft.
+
+Command Line i Operations sterują tym samym stanem Profile. Komendy kontekstowe to `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` oraz `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF`, `PROBLEMS ON|OFF`.
+
+Profile jest semantyką 2D/Part. **Nie wykonuje Extrude i nie tworzy bryły.** Modelowane operacje bryłowe wymagają osobnej funkcji Part.
+
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
 
@@ -2352,7 +2420,7 @@ Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, tr
 
 Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Copy/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz keyboard-first Command Line.
 
-Direct Distance jest dostępny dla obsługiwanych etapów PointRequest opisanych wyżej. Nadal brakuje grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego kąta Rotate i współczynnika Scale, współrzędnych absolutnych/względnych/polarnych, unit expressions i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+Direct Distance jest dostępny dla obsługiwanych etapów PointRequest opisanych wyżej. Profile nie jest operacją bryłową. Nadal brakuje grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego kąta Rotate i współczynnika Scale, współrzędnych absolutnych/względnych/polarnych, unit expressions i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features/Extrude, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 </script>

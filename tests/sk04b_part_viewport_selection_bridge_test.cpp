@@ -2,11 +2,13 @@
 #include "part_viewport_controller.hpp"
 
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/part/profile.hpp>
 
 #include <QApplication>
 #include <QTreeWidget>
 #include <QWidget>
 
+#include <algorithm>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -79,6 +81,20 @@ public:
         return scene.valid();
     }
 
+    bool setProfileScene(
+        const viewer::ProfileScene& scene) override {
+        if (!scene.valid()) return false;
+        profile_scene_ = scene;
+        return true;
+    }
+
+    bool setProfilePreviewScene(
+        const viewer::ProfilePreviewScene& scene) override {
+        if (!scene.valid()) return false;
+        profile_preview_scene_ = scene;
+        return true;
+    }
+
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override {
         if (!selection.valid()) return false;
@@ -141,6 +157,8 @@ public:
 
     viewer::CameraState camera_;
     viewer::SketchScene sketch_scene_;
+    viewer::ProfileScene profile_scene_;
+    viewer::ProfilePreviewScene profile_preview_scene_;
     viewer::PresentationSelection selection_;
     viewer::SketchPointQueryResult point_query_{
         true,
@@ -198,6 +216,55 @@ int main(int argc, char* argv[]) {
     CHECK(first.ok() && first.entity_id.has_value());
     CHECK(second.ok() && second.entity_id.has_value());
 
+    const auto profile_circle =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                sketch::Point2{30.0, 30.0},
+                4.0});
+    CHECK(
+        profile_circle.ok() &&
+        profile_circle.entity_id.has_value());
+
+    const auto* profile_source =
+        session.document().findSketch(sketch_id);
+    CHECK(profile_source != nullptr);
+    const auto profile_analysis =
+        sketch::analyzeRegions(
+            profile_source->model);
+    const auto profile_pick =
+        sketch::pickRegion(
+            profile_source->model,
+            profile_analysis,
+            sketch::Point2{30.0, 30.0});
+    CHECK(profile_pick.region_index.has_value());
+    const auto profile_region =
+        std::find_if(
+            profile_analysis.regions.begin(),
+            profile_analysis.regions.end(),
+            [&profile_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *profile_pick.region_index;
+            });
+    CHECK(
+        profile_region !=
+        profile_analysis.regions.end());
+    const auto profile_intent =
+        part::makeProfileRegionIntent(
+            *profile_region);
+    CHECK(profile_intent.has_value());
+    const auto profile_created =
+        session.execute(
+            application::CreateProfileCommand{
+                sketch_id,
+                session.document().revision(),
+                *profile_intent});
+    CHECK(profile_created.ok());
+    CHECK(profile_created.profile_id.has_value());
+    const auto profile_id =
+        *profile_created.profile_id;
+
     QTreeWidget tree;
     ui::PartDocumentTreeController tree_controller{tree};
     TestViewport viewport;
@@ -206,8 +273,53 @@ int main(int argc, char* argv[]) {
         &viewport};
 
     controller.setDocumentSession(&session);
+    CHECK(viewport.profile_scene_.profiles.size() == 1U);
+    const auto profile_token =
+        viewport.profile_scene_.profiles.front().token;
+    CHECK(
+        controller.profileFor(profile_token) ==
+        profile_id);
+    CHECK(
+        controller.profilePresentationFor(profile_id) ==
+        profile_token);
+    CHECK(
+        viewport.profile_scene_.profiles.front()
+            .region.outer.size() >= 16U);
+
     controller.setSketchEditSketch(sketch_id);
     CHECK(viewport.sketch_scene_.lines.size() == 2U);
+
+    // Package F visibility is semantic per-object state: hiding the Profile
+    // must not hide or replace the active source Sketch presentation.
+    CHECK(
+        session.execute(
+            application::SetProfilePropertiesCommand{
+                profile_id,
+                session.document().revision(),
+                "Profile001",
+                false})
+            .ok());
+    controller.refreshPresentation();
+    CHECK(viewport.profile_scene_.profiles.empty());
+    CHECK(viewport.sketch_scene_.lines.size() == 2U);
+
+    CHECK(
+        session.execute(
+            application::SetProfilePropertiesCommand{
+                profile_id,
+                session.document().revision(),
+                "Profile001",
+                true})
+            .ok());
+    controller.refreshPresentation();
+    CHECK(viewport.profile_scene_.profiles.size() == 1U);
+    CHECK(viewport.sketch_scene_.lines.size() == 2U);
+
+    const auto profile_edit_token =
+        controller.profilePresentationFor(
+            profile_id);
+    CHECK(profile_edit_token.has_value());
+    CHECK(*profile_edit_token != profile_token);
 
     const auto first_token =
         viewport.sketch_scene_.lines[0].token;
@@ -310,6 +422,51 @@ int main(int argc, char* argv[]) {
         {*first.entity_id},
         *second.entity_id));
 
+    std::vector<part::ProfileId> reported_profiles;
+    std::optional<part::ProfileId>
+        reported_primary_profile;
+    controller.setProfileSelectionChangedHandler(
+        [&reported_profiles,
+         &reported_primary_profile](
+            const std::vector<part::ProfileId>& selected,
+            std::optional<part::ProfileId> primary) {
+            reported_profiles = selected;
+            reported_primary_profile = primary;
+        });
+
+    controller.setProfileSelectionFromTree(
+        {profile_id},
+        profile_id);
+    CHECK(
+        viewport.selection_.primary ==
+        *profile_edit_token);
+    CHECK(
+        tree_controller.selectedProfileIds() ==
+        std::vector<part::ProfileId>{profile_id});
+
+    viewport.emitReferenceIntent(
+        viewer::SelectionIntent{
+            *profile_edit_token,
+            viewer::SelectionIntentMode::replace});
+    CHECK(
+        reported_profiles ==
+        std::vector<part::ProfileId>{profile_id});
+    CHECK(
+        reported_primary_profile ==
+        profile_id);
+    CHECK(
+        tree_controller.primaryProfileId() ==
+        profile_id);
+
+    viewport.emitReferenceIntent(
+        viewer::SelectionIntent{
+            *profile_edit_token,
+            viewer::SelectionIntentMode::toggle});
+    CHECK(reported_profiles.empty());
+    CHECK(!reported_primary_profile.has_value());
+    CHECK(
+        tree_controller.selectedProfileIds().empty());
+
     CHECK(
         controller.setSketchPrimaryPointerRouting(
             viewer::PrimaryPointerRouting::
@@ -346,16 +503,28 @@ int main(int argc, char* argv[]) {
             spatial_tool_input);
 
     const auto stale_token = first_token;
+    const auto stale_profile_token =
+        *profile_edit_token;
     controller.refreshPresentation();
     CHECK(
         !controller.sketchEntityFor(
              stale_token)
+             .has_value());
+    CHECK(
+        !controller.profileFor(
+             stale_profile_token)
              .has_value());
     const auto new_first_token =
         controller.sketchPresentationFor(
             *first.entity_id);
     CHECK(new_first_token.has_value());
     CHECK(*new_first_token != stale_token);
+    const auto new_profile_token =
+        controller.profilePresentationFor(profile_id);
+    CHECK(new_profile_token.has_value());
+    CHECK(
+        *new_profile_token !=
+        stale_profile_token);
 
     controller.setSketchEditSketch(std::nullopt);
     CHECK(

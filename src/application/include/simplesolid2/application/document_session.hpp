@@ -59,6 +59,13 @@ struct EraseSketchEntitiesCommand final {
     std::vector<sketch::EntityId> entity_ids;
 };
 
+struct SetSketchEntityRoleCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    std::vector<sketch::EntityId> entity_ids;
+    sketch::EntityRole role{sketch::EntityRole::regular};
+};
+
 struct SketchLineGeometryUpdate final {
     sketch::EntityId entity_id;
     sketch::Point2 start;
@@ -97,6 +104,30 @@ struct DuplicateSketchGeometryCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
     sketch::SketchTransformGeometry geometry;
+};
+
+struct CreateProfileCommand final {
+    sketch::SketchId source_sketch_id;
+    core::DocumentRevision expected_revision;
+    part::ProfileRegionIntent region_intent;
+};
+
+struct ReplaceProfileRegionIntentCommand final {
+    part::ProfileId profile_id;
+    core::DocumentRevision expected_revision;
+    part::ProfileRegionIntent region_intent;
+};
+
+struct SetProfilePropertiesCommand final {
+    part::ProfileId profile_id;
+    core::DocumentRevision expected_revision;
+    std::string name;
+    bool visible{true};
+};
+
+struct DeleteProfileCommand final {
+    part::ProfileId profile_id;
+    core::DocumentRevision expected_revision;
 };
 
 enum class DocumentSessionErrorCode {
@@ -176,6 +207,17 @@ struct DuplicateSketchGeometryResult final {
     }
 };
 
+struct CreateProfileResult final {
+    bool changed{false};
+    std::optional<part::ProfileId> profile_id;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code ==
+               DocumentSessionErrorCode::none;
+    }
+};
+
 class DocumentSession final {
 public:
     DocumentSession(
@@ -230,11 +272,21 @@ public:
     [[nodiscard]] DocumentSessionResult execute(
         const EraseSketchEntitiesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
+        const SetSketchEntityRoleCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
         const UpdateSketchLinesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const UpdateSketchGeometryCommand& command);
     [[nodiscard]] DuplicateSketchGeometryResult execute(
         const DuplicateSketchGeometryCommand& command);
+    [[nodiscard]] CreateProfileResult execute(
+        const CreateProfileCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const ReplaceProfileRegionIntentCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const SetProfilePropertiesCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const DeleteProfileCommand& command);
     [[nodiscard]] DocumentSessionResult undo();
     [[nodiscard]] DocumentSessionResult redo();
     [[nodiscard]] DocumentSessionResult save();
@@ -295,6 +347,8 @@ private:
         const part::PartAuthoredState& state);
     void applySketchEntityIdCursors(
         part::PartAuthoredState& state) const;
+    void applyProfileIdCursor(
+        part::PartAuthoredState& state) const noexcept;
 
     std::filesystem::path path_;
     part::PartDocument document_;
@@ -305,6 +359,7 @@ private:
     std::vector<HistoryEntry> history_;
     std::size_t cursor_{0};
     SketchEntityIdCursorMap sketch_entity_id_cursors_;
+    part::ProfileIdCursor profile_id_cursor_;
     part::PartDocumentStore store_;
 };
 

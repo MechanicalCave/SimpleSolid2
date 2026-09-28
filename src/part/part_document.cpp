@@ -41,6 +41,39 @@ const PartSketch* PartDocument::findSketch(
         : &*found;
 }
 
+const PartProfile* PartDocument::findProfile(
+    ProfileId id) const noexcept {
+    if (!id.valid()) {
+        return nullptr;
+    }
+    const auto found = std::find_if(
+        state_.profiles.begin(),
+        state_.profiles.end(),
+        [id](const PartProfile& item) {
+            return item.id == id;
+        });
+    return found == state_.profiles.end()
+        ? nullptr
+        : &*found;
+}
+
+std::optional<ResolvedProfileRegion>
+PartDocument::evaluateProfile(
+    ProfileId id) const {
+    const auto* profile = findProfile(id);
+    if (profile == nullptr) {
+        return std::nullopt;
+    }
+    const auto* source =
+        findSketch(profile->source_sketch_id);
+    if (source == nullptr) {
+        return std::nullopt;
+    }
+    return resolveProfileRegionIntent(
+        source->model,
+        profile->region_intent);
+}
+
 bool PartDocument::validAuthoredState(
     const PartAuthoredState& state) noexcept {
     for (std::size_t index = 0;
@@ -60,6 +93,42 @@ bool PartDocument::validAuthoredState(
              ++previous) {
             if (state.sketches[previous].id ==
                 hosted.id) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < state.profiles.size();
+         ++index) {
+        const auto& profile =
+            state.profiles[index];
+
+        if (!profile.id.valid() ||
+            !state.next_profile_id
+                 .containsAllocated(profile.id) ||
+            !profileRegionIntentStructurallyValid(
+                profile.region_intent)) {
+            return false;
+        }
+
+        const auto source =
+            std::find_if(
+                state.sketches.begin(),
+                state.sketches.end(),
+                [&profile](const PartSketch& sketch) {
+                    return sketch.id ==
+                           profile.source_sketch_id;
+                });
+        if (source == state.sketches.end()) {
+            return false;
+        }
+
+        for (std::size_t previous = 0U;
+             previous < index;
+             ++previous) {
+            if (state.profiles[previous].id ==
+                profile.id) {
                 return false;
             }
         }

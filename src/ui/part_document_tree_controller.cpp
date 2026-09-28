@@ -24,6 +24,7 @@ namespace {
 constexpr int builtinReferenceRoleData = Qt::UserRole + 40;
 constexpr int builtinReferenceVisibleData = Qt::UserRole + 41;
 constexpr int sketchIdData = Qt::UserRole + 42;
+constexpr int profileIdData = Qt::UserRole + 43;
 
 constexpr std::array<core::BuiltinReferenceRole, 7> tree_reference_order{
     core::BuiltinReferenceRole::xy_plane,
@@ -93,6 +94,22 @@ PartDocumentTreeController::PartDocumentTreeController(
     edit_sketch_action_->setObjectName(
         QStringLiteral("editSketchAction"));
 
+    edit_profile_action_ =
+        new QAction(QStringLiteral("Edit Profile"), tree_);
+    edit_profile_action_->setObjectName(
+        QStringLiteral("editProfileAction"));
+
+    QObject::connect(
+        edit_profile_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (auto* item = tree_->currentItem();
+                item != nullptr) {
+                requestProfileEdit(*item);
+            }
+        });
+
     QObject::connect(
         edit_sketch_action_,
         &QAction::triggered,
@@ -160,11 +177,17 @@ bool PartDocumentTreeController::eventFilter(
                     tree_->itemAt(
                         mouse_event->position()
                             .toPoint());
-                item != nullptr &&
-                sketchIdForItem(*item)) {
-                tree_->setCurrentItem(item);
-                requestSketchEdit(*item);
-                return true;
+                item != nullptr) {
+                if (profileIdForItem(*item)) {
+                    tree_->setCurrentItem(item);
+                    requestProfileEdit(*item);
+                    return true;
+                }
+                if (sketchIdForItem(*item)) {
+                    tree_->setCurrentItem(item);
+                    requestSketchEdit(*item);
+                    return true;
+                }
             }
         }
     }
@@ -218,6 +241,35 @@ PartDocumentTreeController::primaryBuiltinReference() const {
     }
 
     return std::nullopt;
+}
+
+std::vector<part::ProfileId>
+PartDocumentTreeController::selectedProfileIds() const {
+    std::vector<part::ProfileId> ids;
+    for (const auto* item : tree_->selectedItems()) {
+        if (item == nullptr) {
+            continue;
+        }
+        if (const auto id = profileIdForItem(*item)) {
+            ids.push_back(*id);
+        }
+    }
+    return ids;
+}
+
+std::optional<part::ProfileId>
+PartDocumentTreeController::primaryProfileId() const {
+    const auto* current = tree_->currentItem();
+    if (current != nullptr && current->isSelected()) {
+        if (const auto id = profileIdForItem(*current)) {
+            return id;
+        }
+    }
+
+    const auto selected = selectedProfileIds();
+    return selected.empty()
+        ? std::nullopt
+        : std::optional<part::ProfileId>{selected.front()};
 }
 
 void PartDocumentTreeController::setBuiltinReferenceSelection(
@@ -274,6 +326,57 @@ void PartDocumentTreeController::setBuiltinReferenceSelection(
     updateVisibilityActions();
 }
 
+void PartDocumentTreeController::setProfileSelection(
+    const std::vector<part::ProfileId>& selected,
+    std::optional<part::ProfileId> primary) {
+    const QSignalBlocker blocked{tree_};
+
+    QTreeWidgetItem* first_selected = nullptr;
+    QTreeWidgetItem* primary_item = nullptr;
+
+    const auto visit =
+        [&](auto&& self, QTreeWidgetItem* item) -> void {
+            if (item == nullptr) return;
+
+            if (const auto id = profileIdForItem(*item)) {
+                const bool should_select =
+                    std::find(
+                        selected.begin(),
+                        selected.end(),
+                        *id) != selected.end();
+                item->setSelected(should_select);
+                if (should_select && first_selected == nullptr) {
+                    first_selected = item;
+                }
+                if (should_select && primary && *primary == *id) {
+                    primary_item = item;
+                }
+            }
+
+            for (int index = 0; index < item->childCount(); ++index) {
+                self(self, item->child(index));
+            }
+        };
+
+    for (int index = 0; index < tree_->topLevelItemCount(); ++index) {
+        visit(visit, tree_->topLevelItem(index));
+    }
+
+    if (primary_item != nullptr) {
+        tree_->setCurrentItem(
+            primary_item,
+            0,
+            QItemSelectionModel::NoUpdate);
+    } else if (first_selected != nullptr) {
+        tree_->setCurrentItem(
+            first_selected,
+            0,
+            QItemSelectionModel::NoUpdate);
+    }
+
+    updateVisibilityActions();
+}
+
 bool PartDocumentTreeController::
 selectionContainsOnlyBuiltinReferences() const {
     const auto selected = tree_->selectedItems();
@@ -293,10 +396,14 @@ void PartDocumentTreeController::rebuild(
 
     std::vector<core::BuiltinReferenceRole>
         previously_selected;
+    std::vector<part::ProfileId>
+        previously_selected_profiles;
 
     if (preserve_reference_selection) {
         previously_selected =
             selectedBuiltinReferences();
+        previously_selected_profiles =
+            selectedProfileIds();
     }
 
     tree_->clear();
@@ -402,6 +509,78 @@ void PartDocumentTreeController::rebuild(
             auto font = item->font(0);
             font.setItalic(!sketch.visible);
             item->setFont(0, font);
+
+            for (const auto& profile :
+                 session_->document().profiles()) {
+                if (profile.source_sketch_id !=
+                    sketch.id) {
+                    continue;
+                }
+
+                const auto evaluation =
+                    session_->document()
+                        .evaluateProfile(profile.id);
+                const bool valid =
+                    evaluation &&
+                    evaluation->valid();
+
+                QString label =
+                    profile.name.empty()
+                        ? QStringLiteral("Profile %1")
+                              .arg(fromUtf8(
+                                  profile.id.serialized()))
+                        : fromUtf8(profile.name);
+                if (!valid) {
+                    label += QStringLiteral(" [Invalid]");
+                }
+
+                auto* profile_item =
+                    new QTreeWidgetItem(
+                        item,
+                        QStringList{label});
+                profile_item->setData(
+                    0,
+                    profileIdData,
+                    fromUtf8(
+                        profile.id.serialized()));
+
+                auto profile_font =
+                    profile_item->font(0);
+                profile_font.setItalic(!profile.visible);
+                profile_item->setFont(
+                    0,
+                    profile_font);
+
+                profile_item->setToolTip(
+                    0,
+                    QStringLiteral("ProfileId: ") +
+                        fromUtf8(
+                            profile.id.serialized()) +
+                        QStringLiteral("\nSource SketchId: ") +
+                        fromUtf8(
+                            profile.source_sketch_id.value()) +
+                        QStringLiteral("\nStatus: ") +
+                        (valid
+                             ? QStringLiteral("Valid")
+                             : QStringLiteral("Invalid")));
+
+                if (preserve_reference_selection) {
+                    const bool was_selected =
+                        std::find(
+                            previously_selected_profiles
+                                .begin(),
+                            previously_selected_profiles
+                                .end(),
+                            profile.id) !=
+                        previously_selected_profiles.end();
+                    profile_item->setSelected(
+                        was_selected);
+                }
+            }
+
+            if (item->childCount() > 0) {
+                item->setExpanded(true);
+            }
         }
 
         sketches->setExpanded(true);
@@ -447,6 +626,15 @@ void PartDocumentTreeController::showContextMenu(
 
     if (auto* item = tree_->itemAt(position);
         item != nullptr) {
+        if (profileIdForItem(*item)) {
+            tree_->setCurrentItem(item);
+            QMenu menu{tree_};
+            menu.addAction(edit_profile_action_);
+            menu.exec(
+                tree_->viewport()->mapToGlobal(
+                    position));
+            return;
+        }
         if (sketchIdForItem(*item)) {
             tree_->setCurrentItem(item);
             QMenu menu{tree_};
@@ -506,12 +694,29 @@ void PartDocumentTreeController::requestSketchEdit(
     sketch_edit_handler_(*sketch_id);
 }
 
-void PartDocumentTreeController::notifySelectionChanged() {
-    if (!selection_handler_) return;
+void PartDocumentTreeController::requestProfileEdit(
+    const QTreeWidgetItem& item) {
+    const auto profile_id =
+        profileIdForItem(item);
+    if (!profile_id ||
+        !profile_edit_handler_) {
+        return;
+    }
 
-    selection_handler_(
-        selectedBuiltinReferences(),
-        primaryBuiltinReference());
+    profile_edit_handler_(*profile_id);
+}
+
+void PartDocumentTreeController::notifySelectionChanged() {
+    if (selection_handler_) {
+        selection_handler_(
+            selectedBuiltinReferences(),
+            primaryBuiltinReference());
+    }
+    if (profile_selection_handler_) {
+        profile_selection_handler_(
+            selectedProfileIds(),
+            primaryProfileId());
+    }
 }
 
 QString PartDocumentTreeController::labelFor(
@@ -570,6 +775,24 @@ PartDocumentTreeController::sketchIdForItem(
     const auto bytes =
         value.toString().toUtf8();
     return sketch::SketchId::parse(
+        std::string_view{
+            bytes.constData(),
+            static_cast<std::size_t>(
+                bytes.size())});
+}
+
+std::optional<part::ProfileId>
+PartDocumentTreeController::profileIdForItem(
+    const QTreeWidgetItem& item) {
+    const auto value =
+        item.data(0, profileIdData);
+    if (!value.isValid()) {
+        return std::nullopt;
+    }
+
+    const auto bytes =
+        value.toString().toUtf8();
+    return part::ProfileId::parse(
         std::string_view{
             bytes.constData(),
             static_cast<std::size_t>(

@@ -55,6 +55,12 @@ public:
     [[nodiscard]] bool setSketchScene(
         const viewer::SketchScene& scene) override;
 
+    [[nodiscard]] bool setProfileScene(
+        const viewer::ProfileScene& scene) override;
+
+    [[nodiscard]] bool setProfilePreviewScene(
+        const viewer::ProfilePreviewScene& scene) override;
+
     [[nodiscard]] bool setSketchPreviewScene(
         const viewer::SketchPreviewScene& scene) override;
 

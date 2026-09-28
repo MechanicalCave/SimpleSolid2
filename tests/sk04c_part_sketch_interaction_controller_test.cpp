@@ -2,7 +2,9 @@
 #include "part_sketch_interaction_controller.hpp"
 #include "part_viewport_controller.hpp"
 
+#include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/part/profile.hpp>
 
 #include <QApplication>
 #include <QTreeWidget>
@@ -13,6 +15,7 @@
 #include <iostream>
 #include <optional>
 #include <utility>
+#include <vector>
 
 using namespace simplesolid2;
 
@@ -57,6 +60,18 @@ public:
         const viewer::SketchPreviewScene& scene) override {
         if (!scene.valid()) return false;
         preview_scene_ = scene;
+        return true;
+    }
+    bool setProfileScene(
+        const viewer::ProfileScene& scene) override {
+        if (!scene.valid()) return false;
+        profile_scene_ = scene;
+        return true;
+    }
+    bool setProfilePreviewScene(
+        const viewer::ProfilePreviewScene& scene) override {
+        if (!scene.valid()) return false;
+        profile_preview_scene_ = scene;
         return true;
     }
     bool setSketchGripScene(
@@ -126,6 +141,8 @@ public:
 
     viewer::CameraState camera_;
     viewer::SketchScene sketch_scene_;
+    viewer::ProfileScene profile_scene_;
+    viewer::ProfilePreviewScene profile_preview_scene_;
     viewer::SketchPreviewScene preview_scene_;
     viewer::SketchGripScene grip_scene_;
     viewer::SketchInteractionPresentation
@@ -358,8 +375,458 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.selectedCount() == 0U);
     CHECK(!interaction.escape());
 
+    // Package F Command Line uses the existing semantic endpoint and the
+    // same controller-owned Profile session; no QWidget parser/state exists.
+    application::SketchCadInputSemanticEndpoint
+        profile_command_endpoint{
+            interaction,
+            application::CadInputNumberFormat{"."}};
+
+    auto profile_command =
+        profile_command_endpoint.submit(
+            "PROFILE");
+    CHECK(profile_command.accepted);
+    CHECK(interaction.profileToolActive());
+    CHECK(
+        interaction.profileAreaMode() ==
+        part::ProfileAreaEditMode::add_area);
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "SUBTRACT");
+    CHECK(profile_command.accepted);
+    CHECK(
+        interaction.profileAreaMode() ==
+        part::ProfileAreaEditMode::subtract_area);
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "ISLANDS OFF");
+    CHECK(profile_command.accepted);
+    CHECK(
+        !interaction.profileToolOptions()
+             .detect_islands);
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "BOUNDARIES ON");
+    CHECK(profile_command.accepted);
+    CHECK(
+        interaction.profileToolOptions()
+            .show_region_boundaries);
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "FIND");
+    CHECK(profile_command.accepted);
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "CANCEL");
+    CHECK(profile_command.accepted);
+    CHECK(!interaction.profileToolActive());
+
+    profile_command =
+        profile_command_endpoint.submit(
+            "EDITPROFILE");
+    CHECK(!profile_command.accepted);
+    CHECK(
+        profile_command.diagnostic ==
+        "EDITPROFILE requires exactly one selected Profile.");
+
+    // Package F Profile tool session: hover/draft are runtime-only and the
+    // full Create/Edit session commits exactly once on Finish.
+    for (const auto& line :
+         std::vector<std::pair<sketch::Point2, sketch::Point2>>{
+             {{100.0, 100.0}, {104.0, 100.0}},
+             {{104.0, 100.0}, {104.0, 104.0}},
+             {{104.0, 104.0}, {100.0, 104.0}},
+             {{100.0, 104.0}, {100.0, 100.0}}}) {
+        const auto result =
+            session.execute(
+                application::AddSketchLineCommand{
+                    sketch_id,
+                    line.first,
+                    line.second});
+        CHECK(result.ok());
+    }
+
+    const auto before_profile_tool =
+        session.undoDepth();
+    CHECK(
+        session.document()
+            .profileIdCursor()
+            .serialized() == "1");
+    CHECK(session.document().profiles().empty());
+
+    CHECK(interaction.activateProfileCreate());
+    CHECK(interaction.profileToolActive());
+    CHECK(
+        interaction.profileToolSessionKind() ==
+        ui::ProfileToolSessionKind::create);
+    CHECK(
+        interaction.profileAreaMode() ==
+        part::ProfileAreaEditMode::add_area);
+    CHECK(
+        viewport.cursor_mode_ ==
+        viewer::ViewportCursorMode::
+            create_edit_crosshair);
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::move,
+        300.0, 300.0,
+        102.0, 102.0));
+    CHECK(
+        interaction.profileAnalysisBuildCount() ==
+        1U);
+    CHECK(
+        interaction.profileHoverStatus() ==
+        part::ProfileAreaEditStatus::changed);
+    CHECK(
+        interaction.profileHoverPreview()
+            .has_value());
+    CHECK(
+        viewport.profile_preview_scene_
+            .region.has_value());
+    CHECK(
+        !viewport.profile_preview_scene_
+             .show_boundary);
+
+    auto profile_options =
+        interaction.profileToolOptions();
+    profile_options.show_region_boundaries = true;
+    CHECK(
+        interaction.setProfileToolOptions(
+            profile_options));
+    CHECK(
+        viewport.profile_preview_scene_
+            .show_boundary);
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::move,
+        301.0, 301.0,
+        101.0, 101.0));
+    CHECK(
+        interaction.profileAnalysisBuildCount() ==
+        1U);
+    CHECK(
+        session.undoDepth() ==
+        before_profile_tool);
+    CHECK(session.document().profiles().empty());
+    CHECK(
+        session.document()
+            .profileIdCursor()
+            .serialized() == "1");
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        301.0, 301.0,
+        101.0, 101.0));
+    CHECK(
+        interaction.profileDraftIntent()
+            .has_value());
+    CHECK(
+        session.undoDepth() ==
+        before_profile_tool);
+    CHECK(session.document().profiles().empty());
+    CHECK(
+        session.document()
+            .profileIdCursor()
+            .serialized() == "1");
+
+    CHECK(interaction.finishProfile());
+    CHECK(!interaction.profileToolActive());
+    CHECK(
+        session.undoDepth() ==
+        before_profile_tool + 1U);
+    CHECK(session.document().profiles().size() == 1U);
+    const auto profile_id =
+        session.document().profiles().front().id;
+    CHECK(profile_id.serialized() == "1");
+    tree_controller.setProfileSelection(
+        {profile_id},
+        profile_id);
+    CHECK(
+        tree_controller.selectedProfileIds() ==
+        std::vector<part::ProfileId>{profile_id});
+    CHECK(
+        tree_controller.primaryProfileId() ==
+        profile_id);
+
+    // Add source geometry first, then Edit Profile subtracts it only in the
+    // transient draft until Finish.
+    const auto inner_circle =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                {102.0, 102.0},
+                1.0});
+    CHECK(inner_circle.ok());
+    const auto before_edit =
+        session.undoDepth();
+
+    CHECK(
+        interaction.activateProfileEdit(
+            profile_id));
+    CHECK(
+        interaction.profileToolSessionKind() ==
+        ui::ProfileToolSessionKind::edit);
+    CHECK(
+        interaction.editedProfileId() ==
+        profile_id);
+    CHECK(
+        interaction.setProfileAreaMode(
+            part::ProfileAreaEditMode::
+                subtract_area));
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::move,
+        302.0, 302.0,
+        102.0, 102.0));
+    CHECK(
+        interaction.profileAnalysisBuildCount() ==
+        1U);
+    CHECK(
+        interaction.profileHoverStatus() ==
+        part::ProfileAreaEditStatus::changed);
+    CHECK(
+        interaction.profileHoverPreview()
+            ->holes.size() == 1U);
+    CHECK(
+        viewport.profile_preview_scene_.tone ==
+        viewer::ProfilePreviewTone::subtractive);
+    CHECK(
+        viewport.profile_preview_scene_
+            .emphasis_region.has_value());
+
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        302.0, 302.0,
+        102.0, 102.0));
+    CHECK(
+        session.undoDepth() ==
+        before_edit);
+    CHECK(
+        session.document()
+            .findProfile(profile_id)
+            ->region_intent !=
+        *interaction.profileDraftIntent());
+
+    CHECK(interaction.finishProfile());
+    CHECK(
+        session.undoDepth() ==
+        before_edit + 1U);
+    CHECK(
+        session.document()
+            .findProfile(profile_id) !=
+        nullptr);
+    CHECK(
+        session.document()
+            .evaluateProfile(profile_id)
+            ->valid());
+    CHECK(
+        session.document()
+            .evaluateProfile(profile_id)
+            ->region->holes.size() == 1U);
+
+    // Cancel discards a fresh draft without allocating identity/history.
+    const auto before_cancel =
+        session.undoDepth();
+    const auto cursor_before_cancel =
+        session.document()
+            .profileIdCursor()
+            .serialized();
+    CHECK(interaction.activateProfileCreate());
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        300.0, 300.0,
+        101.0, 101.0));
+    CHECK(interaction.profileDraftIntent().has_value());
+    CHECK(interaction.escape());
+    CHECK(!interaction.profileToolActive());
+    CHECK(
+        !viewport.profile_preview_scene_
+             .region.has_value());
+    CHECK(session.undoDepth() == before_cancel);
+    CHECK(
+        session.document()
+            .profileIdCursor()
+            .serialized() ==
+        cursor_before_cancel);
+
     interaction.end();
     CHECK(!interaction.active());
+
+    // Manual-F regression: the ordinary Line tool must be deterministic when
+    // endpoints are exactly shared. An open chain reports a problem; after an
+    // exact closing segment, repeated hover/click/Finish creates one Profile.
+    {
+        auto exact_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession exact_session{
+            std::filesystem::path{
+                "sk04c-exact-profile.ss2part"},
+            std::move(exact_document)};
+
+        const auto exact_created =
+            exact_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            exact_created.ok() &&
+            exact_created.sketch_id.has_value());
+        const auto exact_sketch_id =
+            *exact_created.sketch_id;
+
+        QTreeWidget exact_tree;
+        ui::PartDocumentTreeController
+            exact_tree_controller{exact_tree};
+        TestViewport exact_viewport;
+        ui::PartViewportController
+            exact_viewport_controller{
+                exact_tree_controller,
+                &exact_viewport};
+        exact_viewport_controller.setDocumentSession(
+            &exact_session);
+        exact_viewport_controller.setSketchEditSketch(
+            exact_sketch_id);
+
+        ui::PartSketchInteractionController
+            exact_interaction{
+                exact_viewport_controller};
+        exact_interaction.begin(
+            exact_session,
+            exact_sketch_id);
+
+        std::string exact_status;
+        exact_interaction.setStatusHandler(
+            [&exact_status](
+                const std::string& message) {
+                exact_status = message;
+            });
+
+        exact_interaction.activateLine();
+        for (const auto& point :
+             std::vector<sketch::Point2>{
+                 {200.0, 200.0},
+                 {204.0, 200.0},
+                 {204.0, 204.0},
+                 {200.0, 204.0}}) {
+            exact_interaction.onPointer(
+                pointer(
+                    exact_sketch_id,
+                    viewer::SpatialPointerPhase::
+                        primary_press,
+                    point.u,
+                    point.v,
+                    point.u,
+                    point.v));
+        }
+        CHECK(
+            exact_session.document()
+                .findSketch(exact_sketch_id)
+                ->model.state().lines.size() == 3U);
+
+        CHECK(exact_interaction.activateProfileCreate());
+        exact_interaction.onPointer(
+            pointer(
+                exact_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                202.0,
+                202.0,
+                202.0,
+                202.0));
+        CHECK(
+            !exact_interaction.profileDraftIntent()
+                 .has_value());
+        CHECK(
+            exact_status.find("open boundary") !=
+            std::string::npos);
+        exact_interaction.cancelProfile();
+
+        exact_interaction.activateLine();
+        exact_interaction.onPointer(
+            pointer(
+                exact_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                200.0,
+                204.0,
+                200.0,
+                204.0));
+        exact_interaction.onPointer(
+            pointer(
+                exact_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                200.0,
+                200.0,
+                200.0,
+                200.0));
+        CHECK(
+            exact_session.document()
+                .findSketch(exact_sketch_id)
+                ->model.state().lines.size() == 4U);
+
+        CHECK(exact_interaction.activateProfileCreate());
+        for (int index = 0; index < 16; ++index) {
+            exact_interaction.onPointer(
+                pointer(
+                    exact_sketch_id,
+                    viewer::SpatialPointerPhase::move,
+                    202.0,
+                    202.0,
+                    202.0,
+                    202.0));
+            CHECK(
+                exact_interaction.profileHoverStatus() ==
+                part::ProfileAreaEditStatus::changed);
+            CHECK(
+                exact_interaction.profileHoverPreview()
+                    .has_value());
+        }
+
+        exact_interaction.onPointer(
+            pointer(
+                exact_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                202.0,
+                202.0,
+                202.0,
+                202.0));
+        CHECK(
+            exact_interaction.profileDraftIntent()
+                .has_value());
+        CHECK(exact_interaction.finishProfile());
+        CHECK(
+            exact_session.document().profiles().size() ==
+            1U);
+        const auto exact_profile_id =
+            exact_session.document().profiles()
+                .front().id;
+        exact_tree_controller.setProfileSelection(
+            {exact_profile_id},
+            exact_profile_id);
+        CHECK(
+            exact_tree_controller.selectedProfileIds() ==
+            std::vector<part::ProfileId>{
+                exact_profile_id});
+        CHECK(
+            exact_tree_controller.primaryProfileId() ==
+            exact_profile_id);
+
+        exact_interaction.end();
+    }
 
     return EXIT_SUCCESS;
 }
