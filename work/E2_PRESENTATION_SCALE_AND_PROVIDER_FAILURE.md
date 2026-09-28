@@ -299,3 +299,21 @@ Active execution order:
 After E2 completion, AUDIT-01 schedules Package F next.
 
 E2 completion does not activate F, profile tooling, region semantics, Extrude or any solid-modeling feature.
+
+
+## 19. Phase A evidence and performance decision
+
+**Measured SHA:** `401629b8cc4f943e6ad5577918bb1999256fdc37`  
+**Windows FULL / Release benchmark:** #727 — PASS  
+**Ordinary CTest:** 77/77 PASS  
+**Durable results:** `work/E2_PRESENTATION_BENCHMARK_RESULTS.md`
+
+The E2 call-count characterization was consolidated into the existing `sk03a.part_viewport_controller` test; no new CTest executable was added.
+
+Measured native replacement/preview showed an approximately 33 ms floor from one object through roughly 1,000 line objects on the measured runner, rising to roughly 83 ms around 4,000–5,000 native presentation objects. The complete accepted-mutation + authored-refresh production path measured about 100 ms median at 100/1,000 lines and 150 ms at 5,000 lines. Exact values and environment are retained in the durable results file.
+
+**Performance classification: KEEP CURRENT REBUILD.**
+
+The measurements do not justify a differential-update/public Viewer API redesign in E2. Large and highly segmented Sketches remain a documented scale risk, and the measured values are not Product performance guarantees.
+
+Provider-failure consistency/recovery remains the active E2 implementation work. Package F remains inactive.
