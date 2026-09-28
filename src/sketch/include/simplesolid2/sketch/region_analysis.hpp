@@ -77,10 +77,35 @@ struct RegionAnalysisDiagnostic2D final {
     std::vector<EntityId> entities;
 };
 
+enum class RegionBoundaryAnchorKind {
+    endpoint_start,
+    endpoint_end,
+    intersection,
+};
+
+struct RegionBoundaryAnchor2D final {
+    RegionBoundaryAnchorKind kind{
+        RegionBoundaryAnchorKind::endpoint_start};
+
+    // Used only for intersection anchors.
+    EntityId other_entity;
+    std::uint32_t canonical_branch{};
+
+    friend bool operator==(
+        const RegionBoundaryAnchor2D&,
+        const RegionBoundaryAnchor2D&) = default;
+};
+
 struct RegionBoundaryUse2D final {
     EntityId source_entity;
     double start_parameter{};
     double end_parameter{};
+
+    // Semantic runtime provenance for durable RegionIntent construction.
+    // Whole closed curves intentionally have no anchors.
+    std::optional<RegionBoundaryAnchor2D> start_anchor;
+    std::optional<RegionBoundaryAnchor2D> end_anchor;
+
     bool follows_source_direction{true};
     bool crosses_closed_seam{false};
     bool whole_closed_curve{false};

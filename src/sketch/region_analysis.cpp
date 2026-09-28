@@ -1195,6 +1195,9 @@ struct TopologyIntersection final {
     Point2 point;
     double first_parameter{};
     double second_parameter{};
+    std::uint32_t canonical_branch{};
+    bool first_endpoint{false};
+    bool second_endpoint{false};
 };
 
 struct Vertex final {
@@ -1205,6 +1208,7 @@ struct Vertex final {
 struct Cut final {
     double parameter{};
     std::size_t vertex{};
+    std::optional<RegionBoundaryAnchor2D> anchor;
 };
 
 struct DerivedEdge final {
@@ -1214,6 +1218,8 @@ struct DerivedEdge final {
     std::size_t second_vertex{};
     double first_parameter{};
     double second_parameter{};
+    std::optional<RegionBoundaryAnchor2D> first_anchor;
+    std::optional<RegionBoundaryAnchor2D> second_anchor;
     bool crosses_closed_seam{false};
 };
 
@@ -1408,6 +1414,12 @@ struct BuiltLoop final {
         forward
             ? edge.second_parameter
             : edge.first_parameter,
+        forward
+            ? edge.first_anchor
+            : edge.second_anchor,
+        forward
+            ? edge.second_anchor
+            : edge.first_anchor,
         forward,
         edge.crosses_closed_seam,
         false};
@@ -2229,6 +2241,8 @@ wholeCircleLoop(
             id,
             0.0,
             0.0,
+            std::nullopt,
+            std::nullopt,
             true,
             true,
             true});
@@ -2268,23 +2282,76 @@ wholeCircleLoop(
         *sample};
 }
 
+[[nodiscard]] bool anchorLess(
+    const RegionBoundaryAnchor2D& first,
+    const RegionBoundaryAnchor2D& second) noexcept {
+    if (first.kind != second.kind) {
+        return first.kind < second.kind;
+    }
+    if (first.other_entity != second.other_entity) {
+        return first.other_entity < second.other_entity;
+    }
+    return first.canonical_branch <
+           second.canonical_branch;
+}
+
 [[nodiscard]] bool addCut(
     std::vector<Cut>& cuts,
     double parameter,
-    std::size_t vertex) {
+    std::size_t vertex,
+    std::optional<RegionBoundaryAnchor2D> anchor) {
     if (!finiteValue(parameter) ||
         parameter < 0.0 ||
         parameter > 1.0) {
         return false;
     }
-    for (const auto& existing : cuts) {
-        if (existing.parameter == parameter) {
-            return existing.vertex == vertex;
+    for (auto& existing : cuts) {
+        if (existing.parameter != parameter) {
+            continue;
         }
+        if (existing.vertex != vertex) {
+            return false;
+        }
+        if (anchor &&
+            (!existing.anchor ||
+             anchorLess(*anchor, *existing.anchor))) {
+            existing.anchor = *anchor;
+        }
+        return true;
     }
     cuts.push_back(
-        Cut{parameter, vertex});
+        Cut{parameter, vertex, std::move(anchor)});
     return true;
+}
+
+[[nodiscard]] std::optional<RegionBoundaryAnchor2D>
+intersectionAnchor(
+    EntityId other,
+    std::uint32_t branch,
+    bool endpoint,
+    double parameter) {
+    if (endpoint) {
+        if (parameter == 0.0) {
+            return RegionBoundaryAnchor2D{
+                RegionBoundaryAnchorKind::
+                    endpoint_start,
+                {},
+                0U};
+        }
+        if (parameter == 1.0) {
+            return RegionBoundaryAnchor2D{
+                RegionBoundaryAnchorKind::
+                    endpoint_end,
+                {},
+                0U};
+        }
+        return std::nullopt;
+    }
+
+    return RegionBoundaryAnchor2D{
+        RegionBoundaryAnchorKind::intersection,
+        other,
+        branch};
 }
 
 [[nodiscard]] std::optional<std::vector<BuiltLoop>>
@@ -2316,14 +2383,30 @@ buildComponentLoops(
             findOrAddVertex(
                 vertices,
                 intersection.point);
-        if (!addCut(
+        const auto first_anchor =
+            intersectionAnchor(
+                intersection.second,
+                intersection.canonical_branch,
+                intersection.first_endpoint,
+                intersection.first_parameter);
+        const auto second_anchor =
+            intersectionAnchor(
+                intersection.first,
+                intersection.canonical_branch,
+                intersection.second_endpoint,
+                intersection.second_parameter);
+        if (!first_anchor ||
+            !second_anchor ||
+            !addCut(
                 cuts[*first],
                 intersection.first_parameter,
-                vertex) ||
+                vertex,
+                *first_anchor) ||
             !addCut(
                 cuts[*second],
                 intersection.second_parameter,
-                vertex)) {
+                vertex,
+                *second_anchor)) {
             return std::nullopt;
         }
     }
@@ -2353,7 +2436,15 @@ buildComponentLoops(
             return addCut(
                 cuts[entity_index],
                 parameter,
-                vertex);
+                vertex,
+                RegionBoundaryAnchor2D{
+                    parameter == 0.0
+                        ? RegionBoundaryAnchorKind::
+                              endpoint_start
+                        : RegionBoundaryAnchorKind::
+                              endpoint_end,
+                    {},
+                    0U});
         };
 
     for (std::size_t index = 0U;
@@ -2462,6 +2553,8 @@ buildComponentLoops(
                         entity_cuts[next].vertex,
                         entity_cuts[cut].parameter,
                         entity_cuts[next].parameter,
+                        entity_cuts[cut].anchor,
+                        entity_cuts[next].anchor,
                         seam});
             }
             continue;
@@ -2485,6 +2578,8 @@ buildComponentLoops(
                     entity_cuts[cut + 1U].vertex,
                     entity_cuts[cut].parameter,
                     entity_cuts[cut + 1U].parameter,
+                    entity_cuts[cut].anchor,
+                    entity_cuts[cut + 1U].anchor,
                     false});
         }
     }
@@ -2748,7 +2843,10 @@ RegionAnalysis2D analyzeRegions(
                         relation.second_entity,
                         item.point,
                         item.first_parameter,
-                        item.second_parameter});
+                        item.second_parameter,
+                        item.canonical_branch,
+                        item.first_endpoint,
+                        item.second_endpoint});
             }
         }
     }

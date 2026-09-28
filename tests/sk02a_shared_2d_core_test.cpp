@@ -505,12 +505,25 @@ int main() {
         analyzeRegions(grid);
     CHECK(grid_regions.complete());
     CHECK(grid_regions.regions.size() == 4U);
+    bool saw_intersection_anchor = false;
     for (const auto& region :
          grid_regions.regions) {
         CHECK(
             std::abs(region.area - 2.0) <
             1.0e-12);
+        for (const auto& use :
+             region.outer.boundary) {
+            CHECK(use.start_anchor.has_value());
+            CHECK(use.end_anchor.has_value());
+            if (use.start_anchor->kind ==
+                    RegionBoundaryAnchorKind::intersection ||
+                use.end_anchor->kind ==
+                    RegionBoundaryAnchorKind::intersection) {
+                saw_intersection_anchor = true;
+            }
+        }
     }
+    CHECK(saw_intersection_anchor);
 
     // A standalone Circle is a bounded region without authored endpoints.
     SketchModel circle_region_model;
@@ -521,6 +534,21 @@ int main() {
         analyzeRegions(circle_region_model);
     CHECK(circle_regions.complete());
     CHECK(circle_regions.regions.size() == 1U);
+    CHECK(
+        circle_regions.regions.front()
+            .outer.boundary.size() == 1U);
+    CHECK(
+        circle_regions.regions.front()
+            .outer.boundary.front()
+            .whole_closed_curve);
+    CHECK(
+        !circle_regions.regions.front()
+             .outer.boundary.front()
+             .start_anchor.has_value());
+    CHECK(
+        !circle_regions.regions.front()
+             .outer.boundary.front()
+             .end_anchor.has_value());
     CHECK(
         std::abs(
             circle_regions.regions.front().area -
@@ -547,6 +575,17 @@ int main() {
         analyzeRegions(arc_region_model);
     CHECK(arc_regions.complete());
     CHECK(arc_regions.regions.size() == 1U);
+    for (const auto& use :
+         arc_regions.regions.front().outer.boundary) {
+        CHECK(use.start_anchor.has_value());
+        CHECK(use.end_anchor.has_value());
+        CHECK(
+            use.start_anchor->kind !=
+            RegionBoundaryAnchorKind::intersection);
+        CHECK(
+            use.end_anchor->kind !=
+            RegionBoundaryAnchorKind::intersection);
+    }
     CHECK(
         std::abs(
             arc_regions.regions.front().area -
