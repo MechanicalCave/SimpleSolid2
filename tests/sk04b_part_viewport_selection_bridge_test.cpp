@@ -288,6 +288,33 @@ int main(int argc, char* argv[]) {
 
     controller.setSketchEditSketch(sketch_id);
     CHECK(viewport.sketch_scene_.lines.size() == 2U);
+
+    // Package F visibility is semantic per-object state: hiding the Profile
+    // must not hide or replace the active source Sketch presentation.
+    CHECK(
+        session.execute(
+            application::SetProfilePropertiesCommand{
+                profile_id,
+                session.document().revision(),
+                "Profile001",
+                false})
+            .ok());
+    controller.refreshPresentation();
+    CHECK(viewport.profile_scene_.profiles.empty());
+    CHECK(viewport.sketch_scene_.lines.size() == 2U);
+
+    CHECK(
+        session.execute(
+            application::SetProfilePropertiesCommand{
+                profile_id,
+                session.document().revision(),
+                "Profile001",
+                true})
+            .ok());
+    controller.refreshPresentation();
+    CHECK(viewport.profile_scene_.profiles.size() == 1U);
+    CHECK(viewport.sketch_scene_.lines.size() == 2U);
+
     const auto profile_edit_token =
         controller.profilePresentationFor(
             profile_id);
