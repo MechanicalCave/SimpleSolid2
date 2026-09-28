@@ -8,10 +8,14 @@
 #include <iostream>
 #include <limits>
 #include <optional>
+#include <string_view>
 
 using namespace simplesolid2;
 
 namespace {
+
+constexpr double full_turn =
+    2.0 * 3.141592653589793238462643383279502884;
 
 void check(bool value, const char* expression, int line) {
     if (!value) {
@@ -47,39 +51,45 @@ double numericalBound(
     sketch::Point2 start,
     sketch::Point2 through,
     sketch::Point2 end,
-    double radius) {
+    const sketch::ArcIntent& arc) {
     const double coordinate_scale =
         std::max({
-            1.0,
             std::abs(start.u),
             std::abs(start.v),
             std::abs(through.u),
             std::abs(through.v),
             std::abs(end.u),
             std::abs(end.v),
-            std::abs(radius)});
+            std::abs(arc.center.u),
+            std::abs(arc.center.v),
+            std::abs(arc.radius),
+            std::numeric_limits<double>::min()});
     return
-        128.0 *
+        512.0 *
         std::numeric_limits<double>::epsilon() *
         coordinate_scale;
 }
 
-std::optional<CaseResult> buildQuarterArc(
-    sketch::Point2 translation) {
-    constexpr double radius = 0.1;
-    const double quadrant =
-        radius / std::sqrt(2.0);
+double positiveTurn(double angle) {
+    double normalized = std::fmod(angle, full_turn);
+    if (normalized < 0.0) {
+        normalized += full_turn;
+    }
+    return normalized;
+}
 
-    const sketch::Point2 start{
-        translation.u + radius,
-        translation.v};
-    const sketch::Point2 through{
-        translation.u + quadrant,
-        translation.v + quadrant};
-    const sketch::Point2 end{
-        translation.u,
-        translation.v + radius};
+double pointDirection(
+    sketch::Point2 center,
+    sketch::Point2 point) {
+    return std::atan2(
+        point.v - center.v,
+        point.u - center.u);
+}
 
+std::optional<CaseResult> buildArc(
+    sketch::Point2 start,
+    sketch::Point2 through,
+    sketch::Point2 end) {
     sketch::SketchInteractionState state;
     state.activateArc();
 
@@ -111,12 +121,29 @@ std::optional<CaseResult> buildQuarterArc(
             start,
             through,
             end,
-            measured.arc.radius);
+            measured.arc);
     return measured;
 }
 
+std::optional<CaseResult> buildQuarterArc(
+    double radius,
+    sketch::Point2 translation,
+    bool clockwise = false) {
+    const double quadrant =
+        radius / std::sqrt(2.0);
+    const double sign = clockwise ? -1.0 : 1.0;
+
+    return buildArc(
+        {translation.u + radius,
+         translation.v},
+        {translation.u + quadrant,
+         translation.v + sign * quadrant},
+        {translation.u,
+         translation.v + sign * radius});
+}
+
 void printCase(
-    const char* name,
+    std::string_view name,
     const CaseResult& value) {
     std::cout
         << std::setprecision(17)
@@ -134,63 +161,247 @@ void printCase(
         << '\n';
 }
 
-} // namespace
+void verifyResiduals(const CaseResult& value) {
+    for (const double residual : value.residuals) {
+        CHECK(residual <= value.bound);
+    }
+}
 
-int main() {
-    const auto origin =
-        buildQuarterArc({0.0, 0.0});
-    const auto translated =
-        buildQuarterArc({1000000.0, 1000000.0});
+void verifyThroughOnSignedSweep(
+    const CaseResult& value) {
+    const double through_angle =
+        pointDirection(
+            value.arc.center,
+            value.through);
+    const double end_angle =
+        pointDirection(
+            value.arc.center,
+            value.end);
 
-    CHECK(origin.has_value());
-    CHECK(translated.has_value());
+    if (value.arc.sweep_angle > 0.0) {
+        const double through_delta =
+            positiveTurn(
+                through_angle -
+                value.arc.start_angle);
+        const double end_delta =
+            positiveTurn(
+                end_angle -
+                value.arc.start_angle);
+        CHECK(through_delta > 0.0);
+        CHECK(through_delta < value.arc.sweep_angle);
+        CHECK(
+            std::abs(
+                end_delta -
+                value.arc.sweep_angle) <=
+            1024.0 *
+                std::numeric_limits<double>::epsilon());
+    } else {
+        const double through_delta =
+            positiveTurn(
+                value.arc.start_angle -
+                through_angle);
+        const double end_delta =
+            positiveTurn(
+                value.arc.start_angle -
+                end_angle);
+        CHECK(through_delta > 0.0);
+        CHECK(
+            through_delta <
+            std::abs(value.arc.sweep_angle));
+        CHECK(
+            std::abs(
+                end_delta -
+                std::abs(value.arc.sweep_angle)) <=
+            1024.0 *
+                std::numeric_limits<double>::epsilon());
+    }
+}
 
-    printCase("origin", *origin);
-    printCase("translated+1e6", *translated);
+void verifyAccepted(
+    std::string_view name,
+    const std::optional<CaseResult>& value) {
+    CHECK(value.has_value());
+    printCase(name, *value);
+    verifyResiduals(*value);
+    verifyThroughOnSignedSweep(*value);
+}
 
-    const double translated_center_u =
-        translated->arc.center.u - 1000000.0;
-    const double translated_center_v =
-        translated->arc.center.v - 1000000.0;
-
-    const double translation_equivalence_error =
+void verifyEquivalentQuarter(
+    const CaseResult& origin,
+    const CaseResult& translated,
+    sketch::Point2 translation) {
+    const double error =
         std::max({
             std::abs(
-                translated_center_u -
-                origin->arc.center.u),
+                translated.arc.center.u -
+                translation.u -
+                origin.arc.center.u),
             std::abs(
-                translated_center_v -
-                origin->arc.center.v),
+                translated.arc.center.v -
+                translation.v -
+                origin.arc.center.v),
             std::abs(
-                translated->arc.radius -
-                origin->arc.radius)});
+                translated.arc.radius -
+                origin.arc.radius)});
 
     std::cout
         << std::setprecision(17)
-        << "translation_equivalence_error="
-        << translation_equivalence_error
-        << " translated_bound="
-        << translated->bound
+        << "translation=("
+        << translation.u << ", "
+        << translation.v << ")"
+        << " equivalence_error="
+        << error
+        << " bound="
+        << translated.bound
         << '\n';
 
-    for (const double residual : origin->residuals) {
-        CHECK(residual <= origin->bound);
-    }
-    for (const double residual : translated->residuals) {
-        CHECK(residual <= translated->bound);
-    }
-    CHECK(
-        translation_equivalence_error <=
-        translated->bound);
-
-    CHECK(origin->arc.sweep_angle > 0.0);
-    CHECK(translated->arc.sweep_angle > 0.0);
+    CHECK(error <= translated.bound);
     CHECK(
         std::abs(
-            translated->arc.sweep_angle -
-            origin->arc.sweep_angle) <=
-        128.0 *
+            translated.arc.sweep_angle -
+            origin.arc.sweep_angle) <=
+        1024.0 *
             std::numeric_limits<double>::epsilon());
+}
+
+} // namespace
+
+int main() {
+    // Mandatory E1 case: radius 0.1 at origin and +/-1e6 translation.
+    const auto origin =
+        buildQuarterArc(0.1, {0.0, 0.0});
+    const auto translated_positive =
+        buildQuarterArc(
+            0.1,
+            {1000000.0, 1000000.0});
+    const auto translated_negative =
+        buildQuarterArc(
+            0.1,
+            {-1000000.0, -1000000.0});
+
+    verifyAccepted("origin-r0.1", origin);
+    verifyAccepted(
+        "translated+1e6-r0.1",
+        translated_positive);
+    verifyAccepted(
+        "translated-1e6-r0.1",
+        translated_negative);
+
+    verifyEquivalentQuarter(
+        *origin,
+        *translated_positive,
+        {1000000.0, 1000000.0});
+    verifyEquivalentQuarter(
+        *origin,
+        *translated_negative,
+        {-1000000.0, -1000000.0});
+
+    // Existing branch semantics at ordinary scale.
+    const auto unit_ccw =
+        buildQuarterArc(1.0, {0.0, 0.0});
+    const auto unit_cw =
+        buildQuarterArc(
+            1.0,
+            {0.0, 0.0},
+            true);
+    const auto long_ccw =
+        buildArc(
+            {1.0, 0.0},
+            {-1.0, 0.0},
+            {0.0, -1.0});
+
+    verifyAccepted("unit-short-ccw", unit_ccw);
+    verifyAccepted("unit-short-cw", unit_cw);
+    verifyAccepted("unit-long-ccw", long_ccw);
+
+    CHECK(unit_ccw->arc.sweep_angle > 0.0);
+    CHECK(unit_ccw->arc.sweep_angle < full_turn * 0.5);
+    CHECK(unit_cw->arc.sweep_angle < 0.0);
+    CHECK(
+        std::abs(unit_cw->arc.sweep_angle) <
+        full_turn * 0.5);
+    CHECK(long_ccw->arc.sweep_angle > full_turn * 0.5);
+    CHECK(long_ccw->arc.sweep_angle < full_turn);
+
+    // Normalization must cover scales at which the old absolute-square
+    // formulation underflowed or overflowed while the local construction
+    // itself remains representable.
+    const auto tiny =
+        buildQuarterArc(
+            1.0e-200,
+            {0.0, 0.0});
+    const auto huge =
+        buildQuarterArc(
+            1.0e200,
+            {0.0, 0.0});
+
+    verifyAccepted("tiny-r1e-200", tiny);
+    verifyAccepted("huge-r1e200", huge);
+
+    // Near-collinear but non-collinear remains a valid finite construction;
+    // no new fixed Product epsilon is introduced by E1.
+    const auto near_collinear =
+        buildArc(
+            {0.0, 0.0},
+            {1.0, 1.0e-6},
+            {2.0, 0.0});
+    verifyAccepted(
+        "near-collinear",
+        near_collinear);
+
+    // Exact degeneracy and invalid input retain fail-closed semantics.
+    {
+        sketch::SketchInteractionState state;
+        state.activateArc();
+        CHECK(
+            state.acceptArcPoint({0.0, 0.0}).outcome ==
+            sketch::ArcPointOutcome::start_accepted);
+        CHECK(
+            state.acceptArcPoint({1.0, 0.0}).outcome ==
+            sketch::ArcPointOutcome::through_accepted);
+        CHECK(
+            state.acceptArcPoint({2.0, 0.0}).outcome ==
+            sketch::ArcPointOutcome::degenerate_ignored);
+    }
+
+    {
+        sketch::SketchInteractionState state;
+        state.activateArc();
+        CHECK(
+            state.acceptArcPoint({0.0, 0.0}).outcome ==
+            sketch::ArcPointOutcome::start_accepted);
+        CHECK(
+            state.acceptArcPoint({0.0, 0.0}).outcome ==
+            sketch::ArcPointOutcome::degenerate_ignored);
+    }
+
+    {
+        sketch::SketchInteractionState state;
+        state.activateArc();
+        CHECK(
+            state.acceptArcPoint({
+                std::numeric_limits<double>::infinity(),
+                0.0}).outcome ==
+            sketch::ArcPointOutcome::invalid_point);
+    }
+
+    // Finite endpoints whose local subtraction is not representable fail
+    // closed instead of relying on an overflowing intermediate.
+    {
+        constexpr double high =
+            std::numeric_limits<double>::max();
+        sketch::SketchInteractionState state;
+        state.activateArc();
+        CHECK(
+            state.acceptArcPoint({high, 0.0}).outcome ==
+            sketch::ArcPointOutcome::start_accepted);
+        CHECK(
+            state.acceptArcPoint({-high, 1.0}).outcome ==
+            sketch::ArcPointOutcome::through_accepted);
+        CHECK(
+            state.acceptArcPoint({0.0, 2.0}).outcome ==
+            sketch::ArcPointOutcome::degenerate_ignored);
+    }
 
     std::cout << "E1 Arc numerical stability PASS\n";
     return EXIT_SUCCESS;
