@@ -21,6 +21,8 @@ if(SS2_ENABLE_E2_PRESENTATION_BENCHMARK)
             "E2 presentation benchmark requires SS2_BUILD_DESKTOP=ON")
     endif()
 
+    find_package(Qt6 6 REQUIRED COMPONENTS Widgets)
+
     add_executable(e2_presentation_benchmark
         e2_presentation_benchmark.cpp
     )
