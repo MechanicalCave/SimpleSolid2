@@ -1450,6 +1450,13 @@ set(_ss2_part_tests
 )
 set_property(TEST ${_ss2_part_tests} APPEND PROPERTY LABELS "subsystem-part")
 
+add_executable(d_cad_input_semantics_test
+    d_cad_input_semantics_test.cpp
+)
+target_link_libraries(d_cad_input_semantics_test PRIVATE simplesolid2_application)
+target_compile_features(d_cad_input_semantics_test PRIVATE cxx_std_20)
+add_test(NAME d.cad_input_semantics COMMAND d_cad_input_semantics_test)
+
 add_executable(wb02_cad_input_session_test
     wb02_cad_input_session_test.cpp
 )
@@ -1468,6 +1475,13 @@ add_test(
     COMMAND ${CMAKE_COMMAND}
         -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
         -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_cad_input_boundaries.cmake
+)
+
+add_test(
+    NAME d.cad_input_semantic_boundaries
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_cad_input_semantic_boundaries.cmake
 )
 
 add_executable(wb02_global_cad_input_ui_test
@@ -1494,6 +1508,7 @@ set_tests_properties(wb02.global_cad_input_ui PROPERTIES
 
 
 set(_ss2_application_tests
+    d.cad_input_semantics
     wb02.cad_input_session
     ph01.project_workspace_metadata
     ph01.project_session
@@ -1533,6 +1548,7 @@ set(_ss2_persistence_tests
 set_property(TEST ${_ss2_persistence_tests} APPEND PROPERTY LABELS "subsystem-persistence")
 
 set(_ss2_core_tests
+    d.cad_input_semantic_boundaries
     wb02.cad_input_boundaries
     part01.document_primitives
     wb01.builtin_reference

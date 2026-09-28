@@ -244,10 +244,41 @@ Relevant commands are:
 
 Machine-local configuration is written under `.ss2-local/` and is not committed.
 
+<!-- section-id: internal.build-test.core-only -->
+## Core-only semantic build
+
+The default product build remains `SS2_BUILD_DESKTOP=ON` and requires Qt 6 plus OpenCASCADE.
+
+AUDIT-01 Package D adds an explicit verification-only semantic build mode:
+
+```text
+SS2_BUILD_DESKTOP=OFF
+```
+
+In this mode CMake builds the neutral Core, Sketch, Persistence, Part, generic CAD-input transport and Application semantic services, including the neutral Sketch CAD-input endpoint. It does not create the Qt UI, Qt/OCCT Viewer provider or desktop executable targets and it does not execute the desktop/provider test graph.
+
+The Windows FULL gate proves that Qt and OpenCASCADE are not accidentally discovered by configuring with both packages explicitly disabled:
+
+```powershell
+. .\scripts\ss2-common.ps1
+Import-SS2LocalEnvironment
+$cmake = Get-SS2CMakeExe
+
+& $cmake -S . -B build\core-only \
+  -DSS2_BUILD_DESKTOP=OFF \
+  -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE \
+  -DCMAKE_DISABLE_FIND_PACKAGE_OpenCASCADE=TRUE
+
+& $cmake --build build\core-only --config Release
+& $cmake -E chdir build\core-only ctest -C Release --output-on-failure
+```
+
+The current core-only suite contains 13 focused tests covering generic CAD-input transport, neutral D token semantics/boundaries, authored Core/Part/DocumentSession behavior, Line command protocol, MOVE transform semantics, COPY interaction/command semantics and Direct Distance state. This mode is an architecture/test boundary; it is not a separate product distribution and does not declare Linux desktop support.
+
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The repository currently registers **74 CTest tests**.
+The default desktop graph currently registers **76 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
@@ -264,6 +295,8 @@ The current transform/COPY regressions include:
 The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence, active-grip Space CycleEditMode precedence and text-focus keyboard behavior. It also checks that pointer movement preserves a token inside one PointRequest, replacing the request or finishing Sketch clears stale input without authored mutation, and non-empty-buffer Delete cannot fall through to geometry deletion. The existing `sk05a.part_sketch_direct_manipulation` controller regression additionally verifies preview cardinality, no-mutation cycling and atomic commit after Reshape↔Move switching.
 
 `wb02.cad_input_session`, `wb02.cad_input_boundaries` and `wb02.global_cad_input_ui` cover provider-neutral CAD-input transport, dependency boundaries, semantic-generation lifetime, foreign-window/popup ownership, two-visible-shell isolation, ordinary text-editor ownership, application-shortcut preservation and fixed Command Line geometry/diagnostic behavior.
+
+Package D adds `d.cad_input_semantics` and `d.cad_input_semantic_boundaries`. The former verifies neutral command-token mapping, PointRequest precedence, dot/UI-separator numeric parsing and rejection paths without QWidget/OCCT; the latter prevents Qt/OCCT/UI leakage into the Application semantic endpoint and prevents the raw Sketch command parser from returning to `cad_workbench.cpp`. The core-only graph composes these checks with the existing neutral Line commit, MOVE transform, COPY interaction/command and DocumentSession tests; the normal desktop FULL suite remains the integration authority for the production `PartSketchInteractionController` target and GUI adapter.
 
 `b1.save_conflict` covers exact native-file checkpoints, sequential two-session lost-update prevention, cooperative Save guard ownership, content-change/replacement/DocumentId/missing-target conflicts and repeated successful Save.
 
@@ -293,6 +326,8 @@ The canonical test command defaults to FULL; `-NoBuild` remains a bounded CI opt
 ## Windows PR gate
 
 The GitHub workflow is `.github/workflows/windows-pr-gate.yml`. CI-01 exact-head DOCS/CLOSURE behavior remains intact; CI-02 adds a bounded FAST runtime iteration tier.
+
+For Package D and later verification-infrastructure changes, the FULL job also configures, builds and runs the explicit `SS2_BUILD_DESKTOP=OFF` suite with Qt/OpenCASCADE package discovery disabled before running the ordinary unfiltered desktop CTest suite. A core-only PASS therefore supplements rather than replaces the GUI/provider FULL gate.
 
 ```text
 FAST
@@ -475,6 +510,14 @@ Modify
 
 The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit the existing command keywords `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
 
+D makes that ownership explicit in code. `application::CadInputSession` remains transport-only: it owns the live buffer, endpoint attachment/lifetime, context-generation binding and diagnostic transport, but it does not know Sketch tools, PointRequest, command keywords or numeric meaning.
+
+The current Sketch semantic text endpoint is `application::SketchCadInputSemanticEndpoint`. It owns PointRequest-before-command precedence, the exact current Sketch command keyword grammar and bare Direct Distance parsing, then dispatches a typed existing `SketchTool` activation or Direct Distance scalar through `ISketchCadInputSemanticTarget`. `PartSketchInteractionController` implements that target by delegating to the same existing tool activation and `submitDirectDistance()` paths. No second mutation, transaction or history path is introduced.
+
+`CadWorkbench` remains the current `ICadInputEndpoint` lifetime/presentation adapter. It validates the context generation, supplies the current UI decimal separator as a neutral UTF-8 formatting value, delegates submitted text to the Application semantic endpoint and mirrors the returned diagnostic. Raw keyword interpretation and numeric validation no longer live in QWidget code.
+
+For accepted top-level Sketch commands, the Qt adapter preserves the pre-D presentation behavior by returning keyboard focus to the viewport after semantic activation. Direct Distance submissions remain owned by the active PointRequest path and do not introduce an extra top-level focus transfer.
+
 The Command Line is keyboard-first. With a normal CAD surface such as the viewport focused, printable unmodified text is appended to the same runtime buffer and mirrored immediately in Command Line without transferring Qt focus. Clicking Command Line remains an equivalent adapter to the same buffer. Real text editors, editable properties, modal dialogs and application shortcuts keep their own keyboard ownership.
 
 Each live token is bound to an opaque `CadInputContextGeneration` supplied by the active semantic endpoint. The Sketch adapter advances that generation when the owning semantic context/request is replaced — for example tool/stage/base-request replacement, active-grip edit-mode replacement, authored revision change, entering/leaving a Sketch or switching the active endpoint. The live buffer and diagnostic are cleared when the observed generation changes. Pointer-direction movement inside the same PointRequest does not advance the semantic context and therefore does not clear a partially entered value. On submit, the generation that owned the token is passed back to the endpoint and is validated before token interpretation or any domain effect.
@@ -511,6 +554,8 @@ Mirror uses first axis point → second axis point. The two points must be disti
 Pointer movement updates runtime-only preview from the interaction-start geometry snapshot. LMB at the final point stage or Enter commits the current valid transform/placement.
 
 Direct Distance is available at point stages that have an established semantic base: Line next point, grip Reshape/Move, normal MOVE destination and normal COPY placement. The user establishes a free pointer direction, types a bare non-negative distance in Command Line and presses Return. The shared resolver computes `base + normalize(pointer - base) * distance`; the resulting point then enters the same operation path as a clicked point. `.` is always accepted as decimal separator and the current UI-locale decimal separator is accepted as well. Missing/zero pointer direction, malformed text or non-finite values fail closed.
+
+The UI locale is adapter context only: Qt supplies its decimal separator to the neutral Application parser, while `parseBareCadDistance` owns the accepted/rejected numeric grammar without depending on QString or QLocale.
 
 Numeric Rotate angle, Scale factor, Cartesian/polar coordinate entry, unit expressions, Dynamic Input, Ortho/Polar and snapping are not implemented. Viewport printable text may feed the workspace CAD input buffer, while the active semantic request/tool remains the only authority that can interpret or accept the submitted token.
 

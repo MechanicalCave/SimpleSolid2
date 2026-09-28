@@ -12,6 +12,12 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 enable_testing()
 
 option(
+    SS2_BUILD_DESKTOP
+    "Build the Qt/OCCT desktop application and desktop/provider tests"
+    ON
+)
+
+option(
     SS2_ENABLE_C2_HISTORY_BENCHMARK
     "Build the C2 semantic history benchmark evidence target"
     OFF
@@ -21,4 +27,8 @@ add_subdirectory(src)
 if(SS2_ENABLE_C2_HISTORY_BENCHMARK)
     add_subdirectory(benchmarks)
 endif()
-add_subdirectory(tests)
+if(SS2_BUILD_DESKTOP)
+    add_subdirectory(tests)
+else()
+    add_subdirectory(tests/core_only)
+endif()

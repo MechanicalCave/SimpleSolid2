@@ -70,7 +70,7 @@ Default order is strict:
 | 3 | **B1 — save/file conflict protection** | ordinary Save cannot silently overwrite externally changed/replaced/missing file state | **COMPLETED — 2026-09-27** |
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **COMPLETED — 2026-09-27** |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **COMPLETED — KEEP accepted 2026-09-28** |
-| 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | future bounded Work Contract |
+| 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | **COMPLETED — 2026-09-28** |
 | 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | future bounded Work Contract |
 | 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | future bounded Work Contract |
 | 9 | **F — region/profile semantics gate** | accepted exact region/profile semantics required by Part before solid modeling | future bounded Work Contract |
@@ -440,6 +440,15 @@ C2 is **CONFIRMED / MEASURED / DECIDED / VERIFIED**. Package D is next in AUDIT-
 
 ## 10. Package D — semantic input ownership outside QWidget and core-only build
 
+### D activation record
+
+**Owner acceptance:** 2026-09-28  
+**Work Contract:** `work/D_SEMANTIC_INPUT_OWNERSHIP_AND_CORE_ONLY_BUILD.md` — ACCEPTED / ACTIVE  
+**Proposal evidence:** Windows PR gate #695 PASS on `4ad3cc35b0928a1196b8cd65d1923fd970387417`
+
+The accepted D2 authority implements existing ADR-0011 ownership: generic CadInputSession remains transport-only; current Sketch token interpretation and bare Direct Distance parsing move out of QWidget into neutral Application code; current grammar and semantics are preserved; an explicit `SS2_BUILD_DESKTOP=OFF` build/test path must not discover Qt or OpenCASCADE. No speculative future InputRequest hierarchy or user-visible grammar expansion is authorized.
+
+
 Preserve neutral `CadInputSession`.
 
 Required target responsibility split:
@@ -461,6 +470,17 @@ Acceptance:
 - GUI adapter reaches the same semantic result/revision/history;
 - add an explicit CMake configuration that compiles/tests the neutral core without Qt/OCCT/provider targets;
 - full Windows GUI/provider gate remains mandatory.
+
+
+### D completion record
+
+**Final candidate:** `79fcfa1b66182dbf1ddfe19dee6e983e3878d259`  
+**Windows FULL:** #705 — PASS  
+**Owner bounded manual Windows verification:** PASS — 2026-09-28
+
+Package D moved current Sketch command-token meaning and bare Direct Distance parsing out of QWidget into neutral Application code, kept `CadInputSession` transport-only, added a 13-test Qt/OCCT-free semantic build graph, preserved production command/request semantics and verified GUI focus/input parity. No ADR-0011 amendment was required.
+
+D is **CONFIRMED / IMPLEMENTED / VERIFIED / MANUALLY ACCEPTED**. E1 is next in AUDIT-01 but remains inactive until a separate bounded Work Contract is explicitly Owner-accepted.
 
 ## 11. Package E1 — numerical stability of geometric construction
 

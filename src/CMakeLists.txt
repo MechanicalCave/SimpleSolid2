@@ -106,6 +106,7 @@ target_include_directories(simplesolid2_cad_input
 target_compile_features(simplesolid2_cad_input PUBLIC cxx_std_20)
 
 add_library(simplesolid2_application STATIC
+    application/cad_input_semantics.cpp
     application/document_session.cpp
     application/document_workspace.cpp
     application/project_hub_controller.cpp
@@ -125,10 +126,12 @@ target_include_directories(simplesolid2_application
 target_link_libraries(simplesolid2_application
     PUBLIC
         simplesolid2_part
+        simplesolid2_cad_input
 )
 
 target_compile_features(simplesolid2_application PUBLIC cxx_std_20)
 
+if(SS2_BUILD_DESKTOP)
 find_package(Qt6 6 REQUIRED COMPONENTS Widgets)
 find_package(OpenCASCADE CONFIG REQUIRED)
 
@@ -233,3 +236,4 @@ target_compile_features(simplesolid2 PRIVATE cxx_std_20)
 set_target_properties(simplesolid2 PROPERTIES
     OUTPUT_NAME "SimpleSolid2"
 )
+endif()

@@ -150,6 +150,37 @@ bool PartSketchInteractionController::submitDirectDistance(
     return false;
 }
 
+bool PartSketchInteractionController::activateCadInputSemanticTool(
+    sketch::SketchTool tool) {
+    if (!active()) return false;
+
+    switch (tool) {
+    case sketch::SketchTool::select:
+        activateSelect();
+        return this->tool() == tool;
+    case sketch::SketchTool::line:
+        activateLine();
+        return this->tool() == tool;
+    case sketch::SketchTool::circle:
+        activateCircle();
+        return this->tool() == tool;
+    case sketch::SketchTool::arc:
+        activateArc();
+        return this->tool() == tool;
+    case sketch::SketchTool::move:
+        return activateMove();
+    case sketch::SketchTool::copy:
+        return activateCopy();
+    case sketch::SketchTool::rotate:
+        return activateRotate();
+    case sketch::SketchTool::scale:
+        return activateScale();
+    case sketch::SketchTool::mirror:
+        return activateMirror();
+    }
+    return false;
+}
+
 std::size_t
 PartSketchInteractionController::selectedCount() const noexcept {
     return interaction_.selectedEntities().size();

@@ -1,6 +1,6 @@
 version: 1
 status: completed
-active_work: "work/C2_MEASURED_HISTORY_REPRESENTATION_AND_BUDGET.md"
+active_work: "work/D_SEMANTIC_INPUT_OWNERSHIP_AND_CORE_ONLY_BUILD.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
 program_roadmap_version: "1.0"
@@ -19,10 +19,10 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - draft a separate bounded Package D semantic-input-ownership/core-only-build Work Contract under AUDIT-01
-  - require explicit Owner acceptance of Package D before any production refactor
-  - keep E1, E2 and F queued by AUDIT-01 but inactive
-  - preserve completed C1/C2 history semantics and the C2 KEEP decision as the current baseline
+  - draft a separate bounded Package E1 numerical-stability Work Contract under AUDIT-01
+  - require explicit Owner acceptance of Package E1 before any production geometry mutation
+  - keep E2 and F queued by AUDIT-01 but inactive
+  - preserve completed D semantic-input ownership and core-only build boundaries
 
 notes:
   - R0 through R4 are completed.
@@ -238,3 +238,12 @@ notes:
   - C2 decision/internal documentation candidate b865f77e74fcde8e5fa1808a3e6a41436a551328 passed documentation gate #690 after Browser regeneration.
   - C2 completion requires only work-only CLOSURE verification and merge; Package D remains inactive until a separate Work Contract is explicitly Owner-accepted.
   - Final C2 exact-head candidate 2280efa33139a09f24817edf027894e132364245 retired the one-shot proposal benchmark CI job and passed Windows FULL #692.
+  - Owner accepted Package D Work Contract on 2026-09-28.
+  - D is active on proposal-d-semantic-input-ownership-core-only-build; no E1/E2/F work is authorized.
+  - D implementation candidate 96f4fa0e0b70a65a079d744b9464eca27c99634e passed Windows FULL #703.
+  - #703 verified the normal desktop build/test graph plus the 13-test SS2_BUILD_DESKTOP=OFF semantic graph with Qt/OpenCASCADE discovery disabled.
+  - D audit confirmed raw token grammar and bare-distance parsing are outside QWidget; accepted top-level command focus handoff to the viewport is preserved.
+  - Owner manual Windows smoke and final closeout remain pending.
+  - Final D candidate 79fcfa1b66182dbf1ddfe19dee6e983e3878d259 passed Windows FULL #705.
+  - Owner bounded manual Windows verification PASS on 2026-09-28 for viewport LINE input, Direct Distance Line/MOVE/COPY, Command Line parity/focus handoff, text-editor keyboard ownership and rejection-without-authored-mutation.
+  - D is complete pending work-only CLOSURE verification and merge; E1 remains inactive until a separate Work Contract is explicitly Owner-accepted.
