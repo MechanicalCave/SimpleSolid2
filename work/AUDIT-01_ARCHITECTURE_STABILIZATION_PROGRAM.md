@@ -71,7 +71,7 @@ Default order is strict:
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **COMPLETED — 2026-09-27** |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **COMPLETED — KEEP accepted 2026-09-28** |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | **COMPLETED — 2026-09-28** |
-| 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | future bounded Work Contract |
+| 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | **COMPLETED — 2026-09-28** |
 | 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | future bounded Work Contract |
 | 9 | **F — region/profile semantics gate** | accepted exact region/profile semantics required by Part before solid modeling | future bounded Work Contract |
 
@@ -484,6 +484,15 @@ D is **CONFIRMED / IMPLEMENTED / VERIFIED / MANUALLY ACCEPTED**. E1 is next in A
 
 ## 11. Package E1 — numerical stability of geometric construction
 
+### E1 activation record
+
+**Owner acceptance:** 2026-09-28  
+**Work Contract:** `work/E1_GEOMETRY_NUMERICAL_STABILITY.md` — ACCEPTED / ACTIVE  
+**Proposal evidence:** Windows proposal gate #708 PASS on `116cd782cd64445e6dd88c8a99295d917649cc08`
+
+Phase A must add supported-Windows/MSVC characterization before any production numerical correction. The mandatory radius-0.1 / (+1e6,+1e6) translated 3-Point Arc case determines whether the runtime finding is CONFIRMED or NOT REPRODUCED.
+
+
 Before region/profile consumers depend on these constructions:
 
 - reproduce suspected translated/small-scale instability in actual C++/supported toolchain;
@@ -495,6 +504,19 @@ Before region/profile consumers depend on these constructions:
 - finite output alone is insufficient: verify residual error through requested points.
 
 Coordinate limits, units and tolerance policy require explicit contract before rejecting previously legal files.
+
+### E1 completion record
+
+**Phase A:** #711 expected FAIL — finding CONFIRMED  
+**Correction:** #712 PASS  
+**Final runtime candidate:** `1d438235b83d24713679cca4d06c3cf093777564` — Windows FULL #713 PASS  
+**Documentation/evidence:** `ab4978fbe17729bd3ea88c6ca7f47014828ffba2` — #714 PASS
+
+E1 replaced only the private absolute-coordinate 3-Point Arc circumcenter evaluation with Start-local/common-scale-normalized arithmetic. Existing authored Arc semantics, exact duplicate/collinear behavior, persistence, identity/history and user workflow remain unchanged. No Product tolerance or coordinate limit was introduced.
+
+E1 is **CONFIRMED / IMPLEMENTED / VERIFIED / COMPLETED**. E2 is next but remains inactive until a separate Work Contract is explicitly Owner-accepted.
+
+**Final documentation-complete verification:** `68047d4cc460fd3213fb97ad6ca711167fd36875` — Windows FULL #718 PASS, including explicit Arc preview/accepted-intent parity and authored start-angle evidence.
 
 ## 12. Package E2 — presentation update scale and provider failure
 

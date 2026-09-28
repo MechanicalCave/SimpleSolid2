@@ -1044,6 +1044,22 @@ add_test(
     COMMAND sk06a_circle_arc_interaction_state_test
 )
 
+add_executable(e1_arc_numerical_stability_test
+    e1_arc_numerical_stability_test.cpp
+)
+
+target_link_libraries(e1_arc_numerical_stability_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(e1_arc_numerical_stability_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME e1.arc_numerical_stability
+    COMMAND e1_arc_numerical_stability_test
+)
+
 add_executable(sk07a_transform_core_test
     sk07a_transform_core_test.cpp
 )
