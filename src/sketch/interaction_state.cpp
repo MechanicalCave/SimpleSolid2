@@ -104,41 +104,90 @@ arcThroughThreePoints(
         return std::nullopt;
     }
 
-    const double determinant =
-        2.0 *
-        (start.u * (through.v - end.v) +
-         through.u * (end.v - start.v) +
-         end.u * (start.v - through.v));
-    if (!std::isfinite(determinant) ||
-        determinant == 0.0) {
+    // Solve the circumcenter in a local, scale-normalized frame.
+    // This preserves the existing exact duplicate/collinear semantics
+    // without introducing a Product tolerance while avoiding absolute
+    // coordinate squares and their translation-sensitive cancellation.
+    const Point2 local_through{
+        through.u - start.u,
+        through.v - start.v};
+    const Point2 local_end{
+        end.u - start.u,
+        end.v - start.v};
+    if (!local_through.finite() ||
+        !local_end.finite()) {
         return std::nullopt;
     }
 
-    const double start_squared =
-        start.u * start.u +
-        start.v * start.v;
+    const double scale =
+        std::max({
+            std::abs(local_through.u),
+            std::abs(local_through.v),
+            std::abs(local_end.u),
+            std::abs(local_end.v)});
+    if (!std::isfinite(scale) ||
+        scale <= 0.0) {
+        return std::nullopt;
+    }
+
+    const Point2 through_normalized{
+        local_through.u / scale,
+        local_through.v / scale};
+    const Point2 end_normalized{
+        local_end.u / scale,
+        local_end.v / scale};
+
+    const double cross =
+        std::fma(
+            through_normalized.u,
+            end_normalized.v,
+            -through_normalized.v *
+                end_normalized.u);
+    if (!std::isfinite(cross) ||
+        cross == 0.0) {
+        return std::nullopt;
+    }
+
     const double through_squared =
-        through.u * through.u +
-        through.v * through.v;
+        std::fma(
+            through_normalized.u,
+            through_normalized.u,
+            through_normalized.v *
+                through_normalized.v);
     const double end_squared =
-        end.u * end.u +
-        end.v * end.v;
+        std::fma(
+            end_normalized.u,
+            end_normalized.u,
+            end_normalized.v *
+                end_normalized.v);
+    const double determinant =
+        2.0 * cross;
+
+    const double center_u_normalized =
+        std::fma(
+            through_squared,
+            end_normalized.v,
+            -end_squared *
+                through_normalized.v) /
+        determinant;
+    const double center_v_normalized =
+        std::fma(
+            through_normalized.u,
+            end_squared,
+            -end_normalized.u *
+                through_squared) /
+        determinant;
+
+    const Point2 center_offset{
+        center_u_normalized * scale,
+        center_v_normalized * scale};
+    if (!center_offset.finite()) {
+        return std::nullopt;
+    }
 
     Point2 center{
-        (start_squared *
-             (through.v - end.v) +
-         through_squared *
-             (end.v - start.v) +
-         end_squared *
-             (start.v - through.v)) /
-            determinant,
-        (start_squared *
-             (end.u - through.u) +
-         through_squared *
-             (start.u - end.u) +
-         end_squared *
-             (through.u - start.u)) /
-            determinant};
+        start.u + center_offset.u,
+        start.v + center_offset.v};
 
     const double radius =
         distance(center, start);
