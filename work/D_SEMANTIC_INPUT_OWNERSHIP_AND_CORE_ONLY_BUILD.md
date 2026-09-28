@@ -582,3 +582,20 @@ D completes only after:
 - merge to main.
 
 After D completion, AUDIT-01 schedules E1 next. D does not activate E1 automatically.
+
+## 26. Implementation checkpoint
+
+**Candidate:** `96f4fa0e0b70a65a079d744b9464eca27c99634e`  
+**Windows FULL:** #703 — PASS
+
+Verified at this checkpoint:
+
+- raw Sketch command-token interpretation and bare Direct Distance parsing are owned by neutral Application code;
+- `CadInputSession` remains transport-only;
+- `PartSketchInteractionController` implements the bounded typed semantic target and reuses the existing tool activation / Direct Distance commit paths;
+- accepted top-level commands preserve the previous Qt viewport-focus handoff;
+- the explicit `SS2_BUILD_DESKTOP=OFF` graph configures/builds/tests with Qt6 and OpenCASCADE discovery disabled;
+- the core-only graph contains 13 focused tests, including neutral Line commit, MOVE transform, COPY interaction/command and Direct Distance state evidence;
+- the ordinary desktop FULL suite remains green.
+
+This is not D completion. Required internal documentation is being synchronized, a final exact-head FULL remains required, and Owner manual Windows verification is still pending.

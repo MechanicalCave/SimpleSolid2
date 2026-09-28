@@ -74,7 +74,7 @@ $cmake = Get-SS2CMakeExe
 & $cmake -E chdir build\core-only ctest -C Release --output-on-failure
 ```
 
-The current core-only suite contains 11 focused tests covering generic CAD-input transport, neutral D token semantics/boundaries, authored Core/Part/DocumentSession behavior, Line command protocol, geometry update/COPY semantics and Direct Distance state. This mode is an architecture/test boundary; it is not a separate product distribution and does not declare Linux desktop support.
+The current core-only suite contains 13 focused tests covering generic CAD-input transport, neutral D token semantics/boundaries, authored Core/Part/DocumentSession behavior, Line command protocol, MOVE transform semantics, COPY interaction/command semantics and Direct Distance state. This mode is an architecture/test boundary; it is not a separate product distribution and does not declare Linux desktop support.
 
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
@@ -97,7 +97,7 @@ The existing `sk01.workbench_sketch_host` regression covers the grouped Select/C
 
 `wb02.cad_input_session`, `wb02.cad_input_boundaries` and `wb02.global_cad_input_ui` cover provider-neutral CAD-input transport, dependency boundaries, semantic-generation lifetime, foreign-window/popup ownership, two-visible-shell isolation, ordinary text-editor ownership, application-shortcut preservation and fixed Command Line geometry/diagnostic behavior.
 
-Package D adds `d.cad_input_semantics` and `d.cad_input_semantic_boundaries`. The former verifies neutral command-token mapping, PointRequest precedence, dot/UI-separator numeric parsing and rejection paths without QWidget/OCCT; the latter prevents Qt/OCCT/UI leakage into the Application semantic endpoint and prevents the raw Sketch command parser from returning to `cad_workbench.cpp`. The core-only graph composes these checks with the existing neutral Line/geometry/COPY/DocumentSession tests; the normal desktop FULL suite remains the integration authority for the production `PartSketchInteractionController` target and GUI adapter.
+Package D adds `d.cad_input_semantics` and `d.cad_input_semantic_boundaries`. The former verifies neutral command-token mapping, PointRequest precedence, dot/UI-separator numeric parsing and rejection paths without QWidget/OCCT; the latter prevents Qt/OCCT/UI leakage into the Application semantic endpoint and prevents the raw Sketch command parser from returning to `cad_workbench.cpp`. The core-only graph composes these checks with the existing neutral Line commit, MOVE transform, COPY interaction/command and DocumentSession tests; the normal desktop FULL suite remains the integration authority for the production `PartSketchInteractionController` target and GUI adapter.
 
 `b1.save_conflict` covers exact native-file checkpoints, sequential two-session lost-update prevention, cooperative Save guard ownership, content-change/replacement/DocumentId/missing-target conflicts and repeated successful Save.
 
