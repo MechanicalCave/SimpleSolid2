@@ -563,6 +563,69 @@ int main() {
         extended_add_same.status ==
         part::ProfileAreaEditStatus::no_change);
 
+    // Manual-F regression C: one corner is endpoint-on-curve (T). The right
+    // side continues past the top boundary while the top line ends exactly on
+    // its interior. This is a valid Profile vertex and must survive the
+    // RegionCandidate -> RegionIntent -> resolve round-trip.
+    sketch::SketchModel tee_corner_model;
+    (void)tee_corner_model.addLine(
+        {0.0, 0.0},
+        {4.0, 0.0});
+    (void)tee_corner_model.addLine(
+        {4.0, 0.0},
+        {4.0, 3.0});
+    (void)tee_corner_model.addLine(
+        {0.0, 2.0},
+        {4.0, 2.0});
+    (void)tee_corner_model.addLine(
+        {0.0, 2.0},
+        {0.0, 0.0});
+
+    const auto tee_corner_analysis =
+        sketch::analyzeRegions(
+            tee_corner_model);
+    CHECK(tee_corner_analysis.regions.size() == 1U);
+    const auto tee_corner_pick =
+        sketch::pickRegion(
+            tee_corner_model,
+            tee_corner_analysis,
+            {2.0, 1.0});
+    CHECK(tee_corner_pick.region_index.has_value());
+
+    const auto tee_corner_candidate =
+        std::find_if(
+            tee_corner_analysis.regions.begin(),
+            tee_corner_analysis.regions.end(),
+            [&tee_corner_pick](
+                const sketch::RegionCandidate2D& region) {
+                return region.region_index ==
+                       *tee_corner_pick.region_index;
+            });
+    CHECK(
+        tee_corner_candidate !=
+        tee_corner_analysis.regions.end());
+
+    const auto tee_corner_intent =
+        part::makeProfileRegionIntent(
+            *tee_corner_candidate);
+    CHECK(tee_corner_intent.has_value());
+
+    const auto tee_corner_resolved =
+        part::resolveProfileRegionIntent(
+            tee_corner_model,
+            *tee_corner_intent);
+    CHECK(tee_corner_resolved.valid());
+
+    const auto tee_corner_add_same =
+        part::applyProfileAreaEdit(
+            tee_corner_model,
+            *tee_corner_intent,
+            *tee_corner_pick.region_index,
+            part::ProfileAreaEditMode::add_area);
+    CHECK(
+        tee_corner_add_same.status ==
+        part::ProfileAreaEditStatus::no_change);
+
 
     // Package F transient Add/Subtract algebra. These pure draft operations
     // produce RegionIntent only; authored mutation remains a later Finish.
