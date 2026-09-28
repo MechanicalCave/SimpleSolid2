@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/E2_PRESENTATION_SCALE_AND_PROVIDER_FAILURE.md"
+status: active
+active_work: "work/F_REGION_PROFILE_SEMANTICS.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
 program_roadmap_version: "1.0"
@@ -19,9 +19,10 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - prepare a separate bounded Package F Region/Profile Semantics Work Contract under AUDIT-01
-  - require explicit Owner acceptance of Package F before any production region/profile mutation
-  - keep Extrude/Part solid operations inactive until Package F is completed and a separate solid-operation contract is accepted
+  - implement accepted Package F starting with durable Regular/Construction role and provider-neutral Line/Circle/Arc region analysis
+  - then implement Part-owned ProfileId/RegionIntent lifecycle, persistence and Create/Edit/Add/Subtract semantics
+  - integrate Profile hover/Operations/Properties/Tree/Viewport/Command Line through the same semantic authority
+  - keep Extrude and all solid-modeling consumers inactive until F is completed and a separate Owner-accepted solid-operation contract exists
 
 notes:
   - R0 through R4 are completed.
@@ -273,3 +274,7 @@ notes:
   - E2 retained KEEP CURRENT REBUILD, added explicit recoverable presentation-degraded reporting, preserved authored commit/revision/dirty/Undo semantics across provider failure, and documented Viewer tessellation as presentation-only.
   - E2 acceptance conditions are satisfied; this bookkeeping closeout awaits only work-only CLOSURE and merge of PR #85.
   - Package F remains inactive and requires a separate explicit Owner-accepted Work Contract.
+  - E2 merged to main as 07d319b9d72fcad839880317c3b057a8228ce2e8 after final CLOSURE #738/#739.
+  - Owner explicitly accepted Package F Region/Profile Semantics on 2026-09-28 after proposal gate #740 PASS on 4d1acb09aa4406459bbf2a03f00ce6d7ea9d96a9.
+  - F is the only active AUDIT-01 production scope; accepted semantics include durable Part-owned ProfileId/RegionIntent live references, Regular/Construction region participation, fail-closed rebinding, Add/Subtract, hover region-pick, islands/diagnostics and Command Line parity.
+  - Extrude and all solid-modeling consumers remain inactive until F is completed and a separate Owner-accepted Part solid-operation Work Contract is accepted.

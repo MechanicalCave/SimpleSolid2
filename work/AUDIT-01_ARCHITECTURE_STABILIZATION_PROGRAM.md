@@ -73,7 +73,7 @@ Default order is strict:
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | **COMPLETED — 2026-09-28** |
 | 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | **COMPLETED — 2026-09-28** |
 | 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | **COMPLETED — KEEP accepted 2026-09-28** |
-| 9 | **F — region/profile semantics gate** | accepted exact region/profile semantics required by Part before solid modeling | future bounded Work Contract |
+| 9 | **F — region/profile semantics gate** | accepted exact region/profile semantics required by Part before solid modeling | **ACTIVE — accepted 2026-09-28** |
 
 Interleaving feature work with this order requires an explicit Owner scheduling amendment. Context loss is not authorization to skip a package.
 
@@ -551,6 +551,16 @@ Circle/Arc sampling and native presentation segments remain presentation-only an
 E2 is **MEASURED / DECIDED / IMPLEMENTED / VERIFIED / COMPLETED**. Package F is next in AUDIT-01 but remains inactive until a separate bounded Work Contract is explicitly Owner-accepted.
 
 ## 13. Package F — region and profile semantics gate
+
+### F activation record
+
+**Owner acceptance:** 2026-09-28  
+**Work Contract:** `work/F_REGION_PROFILE_SEMANTICS.md` — ACCEPTED / ACTIVE  
+**Proposal evidence:** exact-head `4d1acb09aa4406459bbf2a03f00ce6d7ea9d96a9` — Windows proposal/CLOSURE-class gate #740 PASS
+
+The accepted Package F policy establishes provider-neutral Shared 2D region analysis over current evaluated Regular Line/Circle/Arc geometry and Part-owned durable ProfileId + RegionIntent live-reference semantics. Construction geometry is excluded from material regions, ambiguous topology fails closed, one ProfileId denotes one connected material region with holes, and Create/Edit/Add/Subtract plus hover/diagnostic/Command-Line UX share one semantic authority.
+
+Extrude and every other solid-modeling consumer remain inactive until F completes and a separate Part solid-operation Work Contract is explicitly Owner-accepted.
 
 No solid-modeling consumer such as Extrude is authorized before this package is accepted and completed.
 

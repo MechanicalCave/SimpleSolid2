@@ -1,7 +1,8 @@
 # F — Region and Profile Semantics
 
-**Status:** PROPOSED — INACTIVE  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-28  
+**Owner acceptance:** 2026-09-28  
 **Decision class:** bounded D2 Part/Shared-2D semantics contract under AUDIT-01; durable Profile identity, Profile↔Sketch reference semantics, Construction role persistence, native schema evolution and bounded provider-neutral profile presentation/picking are authorized only after explicit Owner acceptance; detailed numerical algorithms and private implementation remain D1 while this contract is preserved  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package F  
@@ -949,19 +950,15 @@ Stop for explicit Owner review before unapproved expansion if completing F would
 
 ## 34. Activation and completion boundary
 
-Before Owner acceptance:
+**Owner acceptance:** 2026-09-28  
+**Proposal evidence:** exact-head `4d1acb09aa4406459bbf2a03f00ce6d7ea9d96a9` — Windows proposal/CLOSURE-class gate #740 PASS  
+**Activated branch:** `proposal-f-region-profile-semantics`
 
-- this file is proposal-only;
-- Package F remains inactive;
-- `work/ACTIVE.yaml` remains at completed E2;
-- no production code/schema/UI mutation is authorized.
+The Owner explicitly accepted this Work Contract on 2026-09-28. Package F is now the only active AUDIT-01 production scope.
 
-After explicit Owner acceptance, activation must:
+The accepted D2 decisions include durable Part-owned ProfileId/RegionIntent live-reference semantics, authored Regular/Construction role persistence, fail-closed topology rebinding, one-connected-material-region Profile semantics, Add/Subtract editing, provider-neutral Profile presentation/picking, Command Line parity and the native schema evolution described above.
 
-- change this status to ACCEPTED — ACTIVE;
-- update `work/ACTIVE.yaml` to F;
-- record the accepted D2 decisions and exact baseline/proposal gate;
-- keep Extrude and all solid-modeling consumers inactive.
+Extrude and all other solid-modeling consumers remain inactive. F does not authorize a demonstrational/provisional solid operation.
 
 F completion requires:
 
