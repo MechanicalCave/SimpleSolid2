@@ -213,6 +213,8 @@ private:
     QPushButton* line_sketch_button_{};
     QPushButton* circle_sketch_button_{};
     QPushButton* arc_sketch_button_{};
+    QLabel* profile_tools_label_{};
+    QPushButton* profile_sketch_button_{};
     QLabel* modify_tools_label_{};
     QPushButton* move_sketch_button_{};
     QPushButton* copy_sketch_button_{};
@@ -224,6 +226,18 @@ private:
     QPushButton* finish_line_button_{};
     QPushButton* cancel_line_button_{};
     QPushButton* delete_selection_button_{};
+
+    QWidget* profile_operations_widget_{};
+    QPushButton* profile_add_area_button_{};
+    QPushButton* profile_subtract_area_button_{};
+    QPushButton* profile_detect_islands_button_{};
+    QPushButton* profile_highlight_hover_button_{};
+    QPushButton* profile_show_boundaries_button_{};
+    QPushButton* profile_show_problems_button_{};
+    QLabel* profile_result_label_{};
+    QPushButton* profile_find_regions_button_{};
+    QPushButton* profile_finish_button_{};
+    QPushButton* profile_cancel_button_{};
 
     QLabel* status_{};
 };

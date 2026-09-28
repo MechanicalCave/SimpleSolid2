@@ -208,6 +208,37 @@ PartSketchInteractionController::profileHoverPreview()
         ->hover_result->region;
 }
 
+std::optional<sketch::RegionCandidate2D>
+PartSketchInteractionController::profileCurrentResult()
+    const {
+    if (!profile_session_) {
+        return std::nullopt;
+    }
+
+    if (profile_session_->hover_result &&
+        profile_session_->hover_result->region) {
+        return profile_session_
+            ->hover_result->region;
+    }
+
+    if (!profile_session_->draft_intent) {
+        return std::nullopt;
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto resolved =
+        part::resolveProfileRegionIntent(
+            hosted->model,
+            *profile_session_->draft_intent);
+    return resolved.valid()
+        ? resolved.region
+        : std::nullopt;
+}
+
 bool PartSketchInteractionController::submitDirectDistance(
     double distance) {
     if (!active() || profile_session_) {

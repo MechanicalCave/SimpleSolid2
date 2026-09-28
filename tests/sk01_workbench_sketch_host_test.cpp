@@ -431,6 +431,39 @@ int main(int argc, char* argv[]) {
     auto* arc_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("arcSketchToolButton"));
+    auto* profile_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileSketchToolButton"));
+    auto* profile_operations =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("profileOperationsWidget"));
+    auto* profile_add_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileAddAreaButton"));
+    auto* profile_subtract_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileSubtractAreaButton"));
+    auto* profile_detect_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileDetectIslandsButton"));
+    auto* profile_highlight_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileHighlightHoverButton"));
+    auto* profile_boundaries_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileShowBoundariesButton"));
+    auto* profile_problems_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileShowProblemsButton"));
+    auto* profile_find_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileFindRegionsButton"));
+    auto* profile_finish_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileFinishButton"));
+    auto* profile_cancel_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileCancelButton"));
     auto* move_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("moveSketchToolButton"));
@@ -473,6 +506,17 @@ int main(int argc, char* argv[]) {
     CHECK(line_button != nullptr);
     CHECK(circle_button != nullptr);
     CHECK(arc_button != nullptr);
+    CHECK(profile_button != nullptr);
+    CHECK(profile_operations != nullptr);
+    CHECK(profile_add_button != nullptr);
+    CHECK(profile_subtract_button != nullptr);
+    CHECK(profile_detect_button != nullptr);
+    CHECK(profile_highlight_button != nullptr);
+    CHECK(profile_boundaries_button != nullptr);
+    CHECK(profile_problems_button != nullptr);
+    CHECK(profile_find_button != nullptr);
+    CHECK(profile_finish_button != nullptr);
+    CHECK(profile_cancel_button != nullptr);
     CHECK(move_button != nullptr);
     CHECK(copy_button != nullptr);
     CHECK(create_tools_label != nullptr);
@@ -563,6 +607,118 @@ int main(int argc, char* argv[]) {
     CHECK(!rotate_button->isHidden());
     CHECK(!scale_button->isHidden());
     CHECK(!mirror_button->isHidden());
+
+    // Package F: toolbar, Operations and Command Line are adapters to one
+    // controller-owned transient Profile session.
+    CHECK(!profile_button->isHidden());
+    CHECK(profile_operations->isHidden());
+
+    const auto profile_ui_state_before =
+        session->document().state();
+    const auto profile_ui_revision_before =
+        session->document().revision();
+    const auto profile_ui_undo_before =
+        session->undoDepth();
+
+    profile_button->click();
+    QApplication::processEvents();
+    CHECK(profile_button->isChecked());
+    CHECK(!profile_operations->isHidden());
+    CHECK(profile_add_button->isChecked());
+    CHECK(!profile_subtract_button->isChecked());
+    CHECK(profile_detect_button->isChecked());
+    CHECK(profile_highlight_button->isChecked());
+    CHECK(!profile_boundaries_button->isChecked());
+    CHECK(profile_problems_button->isChecked());
+    CHECK(profile_finish_button->isEnabled() == false);
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Profile — Create"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: PROFILE — Add Area — Hover/click bounded region"));
+
+    command_input->setText(
+        QStringLiteral("SUBTRACT"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(profile_subtract_button->isChecked());
+    CHECK(!profile_add_button->isChecked());
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: PROFILE — Subtract Area — Hover/click bounded region"));
+
+    profile_add_button->click();
+    QApplication::processEvents();
+    CHECK(profile_add_button->isChecked());
+    CHECK(!profile_subtract_button->isChecked());
+
+    profile_boundaries_button->click();
+    QApplication::processEvents();
+    CHECK(profile_boundaries_button->isChecked());
+
+    command_input->setText(
+        QStringLiteral("BOUNDARIES OFF"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(!profile_boundaries_button->isChecked());
+
+    profile_detect_button->click();
+    QApplication::processEvents();
+    CHECK(!profile_detect_button->isChecked());
+    command_input->setText(
+        QStringLiteral("ISLANDS ON"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(profile_detect_button->isChecked());
+
+    profile_find_button->click();
+    QApplication::processEvents();
+
+    profile_cancel_button->click();
+    QApplication::processEvents();
+    CHECK(!profile_button->isChecked());
+    CHECK(profile_operations->isHidden());
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral("Command: SELECT"));
+
+    CHECK(
+        session->document().state() ==
+        profile_ui_state_before);
+    CHECK(
+        session->document().revision() ==
+        profile_ui_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        profile_ui_undo_before);
+
+    command_input->setText(
+        QStringLiteral("PROFILE"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(profile_button->isChecked());
+    CHECK(!profile_operations->isHidden());
+    CHECK(profile_add_button->isChecked());
+
+    command_input->setText(
+        QStringLiteral("CANCEL"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(!profile_button->isChecked());
+    CHECK(profile_operations->isHidden());
 
     // SK-07D: a fresh Sketch edit session has no repeat target.
     QTest::keyClick(viewport, Qt::Key_Return);

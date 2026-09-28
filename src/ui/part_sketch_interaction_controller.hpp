@@ -120,6 +120,8 @@ public:
     profileHoverStatus() const noexcept;
     [[nodiscard]] std::optional<sketch::RegionCandidate2D>
     profileHoverPreview() const;
+    [[nodiscard]] std::optional<sketch::RegionCandidate2D>
+    profileCurrentResult() const;
     [[nodiscard]] std::size_t
     profileAnalysisBuildCount() const noexcept {
         return profile_analysis_build_count_;
