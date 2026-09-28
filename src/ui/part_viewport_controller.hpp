@@ -128,7 +128,9 @@ public:
         const std::optional<sketch::RegionCandidate2D>& region,
         bool show_boundary = false,
         viewer::ProfilePreviewTone tone =
-            viewer::ProfilePreviewTone::additive);
+            viewer::ProfilePreviewTone::additive,
+        const std::optional<sketch::RegionCandidate2D>&
+            emphasis_region = std::nullopt);
     void clearProfileDraftPreview();
 
     [[nodiscard]] bool setSketchPrimaryPointerRouting(

@@ -65,9 +65,12 @@ struct ProfilePreviewScene final {
     std::optional<ProfileRegionPresentation> region;
     bool show_boundary{false};
     ProfilePreviewTone tone{ProfilePreviewTone::additive};
+    std::optional<ProfileRegionPresentation> emphasis_region;
 
     [[nodiscard]] bool valid() const noexcept {
-        return !region || region->valid();
+        return (!region || region->valid()) &&
+               (!emphasis_region ||
+                emphasis_region->valid());
     }
 };
 

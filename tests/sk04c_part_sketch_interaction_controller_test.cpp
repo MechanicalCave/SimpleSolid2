@@ -597,6 +597,9 @@ int main(int argc, char* argv[]) {
     CHECK(
         viewport.profile_preview_scene_.tone ==
         viewer::ProfilePreviewTone::subtractive);
+    CHECK(
+        viewport.profile_preview_scene_
+            .emphasis_region.has_value());
 
     interaction.onPointer(pointer(
         sketch_id,

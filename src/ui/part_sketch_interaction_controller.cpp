@@ -2659,6 +2659,34 @@ void PartSketchInteractionController::notifyStateChanged() {
                 }
             }
 
+            std::optional<sketch::RegionCandidate2D>
+                emphasis_region;
+            if (profile_session_->area_mode ==
+                    part::ProfileAreaEditMode::
+                        subtract_area &&
+                profile_session_->hovered_region &&
+                profile_analysis_cache_) {
+                const auto found =
+                    std::find_if(
+                        profile_analysis_cache_->
+                            analysis.regions.begin(),
+                        profile_analysis_cache_->
+                            analysis.regions.end(),
+                        [this](
+                            const sketch::
+                                RegionCandidate2D&
+                                candidate) {
+                            return candidate.region_index ==
+                                   *profile_session_->
+                                       hovered_region;
+                        });
+                if (found !=
+                    profile_analysis_cache_->
+                        analysis.regions.end()) {
+                    emphasis_region = *found;
+                }
+            }
+
             static_cast<void>(
                 viewport_controller_->setProfileDraftPreview(
                     preview,
@@ -2670,7 +2698,8 @@ void PartSketchInteractionController::notifyStateChanged() {
                         ? viewer::ProfilePreviewTone::
                               subtractive
                         : viewer::ProfilePreviewTone::
-                              additive));
+                              additive,
+                    emphasis_region));
         }
     }
 

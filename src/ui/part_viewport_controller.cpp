@@ -695,25 +695,39 @@ void PartViewportController::clearSketchPreview() {
 bool PartViewportController::setProfileDraftPreview(
     const std::optional<sketch::RegionCandidate2D>& region,
     bool show_boundary,
-    viewer::ProfilePreviewTone tone) {
+    viewer::ProfilePreviewTone tone,
+    const std::optional<sketch::RegionCandidate2D>&
+        emphasis_region) {
     if (viewport_ == nullptr) return false;
-    if (!region) {
+    if (!region && !emphasis_region) {
         return viewport_->setProfilePreviewScene(
             viewer::ProfilePreviewScene{});
     }
+
     const auto* hosted = activeSketch();
     if (hosted == nullptr) return false;
 
-    const auto presentation =
-        buildProfileRegionPresentation(
-            *hosted,
-            *region);
-    return presentation &&
-           viewport_->setProfilePreviewScene(
-               viewer::ProfilePreviewScene{
-                   *presentation,
-                   show_boundary,
-                   tone});
+    viewer::ProfilePreviewScene scene;
+    scene.show_boundary = show_boundary;
+    scene.tone = tone;
+
+    if (region) {
+        scene.region =
+            buildProfileRegionPresentation(
+                *hosted,
+                *region);
+        if (!scene.region) return false;
+    }
+
+    if (emphasis_region) {
+        scene.emphasis_region =
+            buildProfileRegionPresentation(
+                *hosted,
+                *emphasis_region);
+        if (!scene.emphasis_region) return false;
+    }
+
+    return viewport_->setProfilePreviewScene(scene);
 }
 
 void PartViewportController::clearProfileDraftPreview() {

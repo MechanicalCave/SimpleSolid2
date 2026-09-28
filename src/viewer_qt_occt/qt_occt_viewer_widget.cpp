@@ -1136,7 +1136,8 @@ public:
 
         clearProfilePreviewScene();
 
-        if (!scene.region) {
+        if (!scene.region &&
+            !scene.emphasis_region) {
             profile_preview_scene_ = scene;
             context_->UpdateCurrentViewer();
             view_->Redraw();
@@ -1144,46 +1145,80 @@ public:
         }
 
         try {
-            auto object =
-                makeProfileObject(
-                    *scene.region,
-                    scene.show_boundary);
-            if (object.IsNull()) {
-                return false;
+            if (scene.region) {
+                auto object =
+                    makeProfileObject(
+                        *scene.region,
+                        scene.show_boundary);
+                if (object.IsNull()) {
+                    return false;
+                }
+
+                context_->Display(object, false);
+                context_->SetDisplayMode(
+                    object,
+                    AIS_Shaded,
+                    false);
+                object->SetPolygonOffsets(
+                    Aspect_POM_Fill,
+                    -1.0F,
+                    -1.0F);
+                context_->SetColor(
+                    object,
+                    Quantity_Color{
+                        0.22, 0.82, 0.96,
+                        Quantity_TOC_RGB},
+                    false);
+                context_->SetTransparency(
+                    object,
+                    0.58,
+                    false);
+                context_->SetWidth(
+                    object,
+                    2.0,
+                    false);
+                context_->Deactivate(object);
+                profile_preview_object_ = object;
             }
 
-            context_->Display(object, false);
-            context_->SetDisplayMode(
-                object,
-                AIS_Shaded,
-                false);
-            object->SetPolygonOffsets(
-                Aspect_POM_Fill,
-                -1.0F,
-                -1.0F);
-            context_->SetColor(
-                object,
-                scene.tone ==
-                        viewer::ProfilePreviewTone::
-                            subtractive
-                    ? Quantity_Color{
-                          0.98, 0.33, 0.16,
-                          Quantity_TOC_RGB}
-                    : Quantity_Color{
-                          0.22, 0.82, 0.96,
-                          Quantity_TOC_RGB},
-                false);
-            context_->SetTransparency(
-                object,
-                0.58,
-                false);
-            context_->SetWidth(
-                object,
-                2.0,
-                false);
-            context_->Deactivate(object);
+            if (scene.emphasis_region) {
+                auto emphasis =
+                    makeProfileObject(
+                        *scene.emphasis_region,
+                        true);
+                if (emphasis.IsNull()) {
+                    clearProfilePreviewScene();
+                    return false;
+                }
 
-            profile_preview_object_ = object;
+                context_->Display(emphasis, false);
+                context_->SetDisplayMode(
+                    emphasis,
+                    AIS_Shaded,
+                    false);
+                emphasis->SetPolygonOffsets(
+                    Aspect_POM_Fill,
+                    -2.0F,
+                    -2.0F);
+                context_->SetColor(
+                    emphasis,
+                    Quantity_Color{
+                        0.98, 0.33, 0.16,
+                        Quantity_TOC_RGB},
+                    false);
+                context_->SetTransparency(
+                    emphasis,
+                    0.30,
+                    false);
+                context_->SetWidth(
+                    emphasis,
+                    3.0,
+                    false);
+                context_->Deactivate(emphasis);
+                profile_preview_emphasis_object_ =
+                    emphasis;
+            }
+
             profile_preview_scene_ = scene;
             context_->UpdateCurrentViewer();
             view_->Redraw();
@@ -2302,21 +2337,36 @@ public:
     }
 
     void clearProfilePreviewScene() noexcept {
-        if (!context_.IsNull() &&
-            !profile_preview_object_.IsNull()) {
-            const auto retained =
-                profile_preview_object_;
-            guardedVoid(
-                "removeProfilePreviewObject",
-                [this, retained] {
-                    context_->Remove(
-                        retained,
-                        false);
-                });
+        if (!context_.IsNull()) {
+            if (!profile_preview_object_.IsNull()) {
+                const auto retained =
+                    profile_preview_object_;
+                guardedVoid(
+                    "removeProfilePreviewObject",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+
+            if (!profile_preview_emphasis_object_.IsNull()) {
+                const auto retained =
+                    profile_preview_emphasis_object_;
+                guardedVoid(
+                    "removeProfilePreviewEmphasisObject",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
         }
 
         profile_preview_object_.Nullify();
+        profile_preview_emphasis_object_.Nullify();
         profile_preview_scene_.region.reset();
+        profile_preview_scene_.emphasis_region.reset();
     }
 
     void clearSketchScene() noexcept {
@@ -2864,6 +2914,7 @@ private:
     std::vector<ReferenceObject> reference_objects_;
     std::vector<ProfileObject> profile_objects_;
     Handle(AIS_Shape) profile_preview_object_;
+    Handle(AIS_Shape) profile_preview_emphasis_object_;
     std::vector<SketchObject> sketch_objects_;
     std::vector<SketchGripObject>
         sketch_grip_objects_;
