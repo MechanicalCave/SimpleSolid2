@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/E1_GEOMETRY_NUMERICAL_STABILITY.md"
+status: active
+active_work: "work/E2_PRESENTATION_SCALE_AND_PROVIDER_FAILURE.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
 program_roadmap_version: "1.0"
@@ -19,10 +19,10 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - draft a separate bounded Package E2 presentation-scale/provider-failure Work Contract under AUDIT-01
-  - require explicit Owner acceptance of Package E2 before any production presentation mutation
+  - execute E2 Phase A Release measurement and deterministic call-count characterization before optimization
+  - implement provider-failure consistency/recovery only within the accepted existing bool-returning Viewer boundary
+  - stop for a second explicit Owner decision if differential-update or public IDocumentViewport expansion is required
   - keep F queued by AUDIT-01 but inactive
-  - preserve completed E1 numerical Arc semantics and D core-only boundaries
 
 notes:
   - R0 through R4 are completed.
@@ -262,3 +262,6 @@ notes:
   - Final documentation-complete E1 candidate 68047d4cc460fd3213fb97ad6ca711167fd36875 passed Windows FULL #718.
   - #718 includes explicit Arc preview/accepted-intent parity and authored start-angle evidence in addition to the full numerical matrix.
   - E1 is complete pending work-only CLOSURE verification and merge; E2 remains inactive until a separate Owner-accepted Work Contract.
+
+  - Owner explicitly accepted Package E2 on 2026-09-28 and directed verification to be consolidated to the necessary minimum without dropping required evidence.
+  - E2 is active on proposal-e2-presentation-scale-provider-failure; Phase A measurement/call-count characterization must precede optimization.

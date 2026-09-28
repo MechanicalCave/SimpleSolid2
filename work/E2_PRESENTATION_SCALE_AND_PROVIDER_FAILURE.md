@@ -1,7 +1,8 @@
 # E2 — Presentation Scale and Provider Failure
 
-**Status:** PROPOSED — INACTIVE  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-28  
+**Owner acceptance:** 2026-09-28  
 **Decision class:** bounded D2 presentation-consistency contract under AUDIT-01; implementation remains D1 while provider-neutral API/ownership is unchanged; any differential-update protocol or `IDocumentViewport` contract expansion requires a separate Owner decision  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Program authority:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 — Package E2  
@@ -278,19 +279,20 @@ Stop for Owner review before an unapproved production expansion if E2 would requ
 - performance limits presented as Product guarantees;
 - provider-specific types crossing into Core/Sketch/Part/Application.
 
-## 17. Activation gate
+## 17. Activation record
 
-This proposal does **not** activate E2.
+**Owner acceptance:** 2026-09-28
 
-Activation requires explicit Owner acceptance of this Work Contract.
+E2 is active on `proposal-e2-presentation-scale-provider-failure`.
 
-After acceptance:
+The Owner additionally directed that verification be consolidated to the necessary minimum. This permits combining multiple required assertions into the smallest practical number of deterministic test executables/targets, but does **not** remove any evidence required by Section 14 and does not permit weakening existing regressions.
 
-1. `work/ACTIVE.yaml` switches from completed E1 to active E2;
-2. Phase A measurement/call-count characterization runs before optimization;
-3. provider-failure consistency/recovery may be implemented within Sections 3 and 9 using the existing bool-returning provider boundary;
-4. performance result is classified KEEP CURRENT REBUILD or OPTIMIZATION PROPOSAL REQUIRED;
-5. any differential-update/public Viewer API work requires a second explicit Owner decision.
+Active execution order:
+
+1. Phase A measurement/call-count characterization before optimization;
+2. provider-failure consistency/recovery within Sections 3 and 9 using the existing bool-returning provider boundary;
+3. classify performance as KEEP CURRENT REBUILD or OPTIMIZATION PROPOSAL REQUIRED;
+4. stop for a second explicit Owner decision before any differential-update/public Viewer API expansion.
 
 ## 18. Completion boundary
 
