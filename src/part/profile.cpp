@@ -903,17 +903,34 @@ ProfileAreaEditResult applyProfileAreaEdit(
             std::nullopt};
     }
 
+    const auto round_trip =
+        resolveProfileRegionIntent(
+            model,
+            *intent);
+    if (!round_trip.valid()) {
+        return {
+            ProfileAreaEditStatus::
+                ambiguous_topology,
+            std::nullopt,
+            std::nullopt,
+            round_trip.status};
+    }
+
     if (*intent == draft) {
         return {
             ProfileAreaEditStatus::no_change,
             draft,
-            *composition.region};
+            *round_trip.region,
+            part::ProfileIntentResolutionStatus::
+                valid};
     }
 
     return {
         ProfileAreaEditStatus::changed,
         *intent,
-        *composition.region};
+        *round_trip.region,
+        part::ProfileIntentResolutionStatus::
+            valid};
 }
 
 } // namespace simplesolid2::part
