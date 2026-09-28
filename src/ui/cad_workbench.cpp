@@ -2824,7 +2824,8 @@ void CadWorkbench::syncSketchInteractionUi() {
                     "Area: %1\n"
                     "Perimeter: %2\n"
                     "Holes: %3\n"
-                    "Islands: 1")
+                    "Islands: %4\n"
+                    "Problems: %5")
                     .arg(
                         QString::number(
                             current->area,
@@ -2836,7 +2837,15 @@ void CadWorkbench::syncSketchInteractionUi() {
                             12))
                     .arg(
                         static_cast<qulonglong>(
-                            current->holes.size()));
+                            current->holes.size()))
+                    .arg(
+                        static_cast<qulonglong>(
+                            sketch_interaction_controller_->
+                                profileIslandCount()))
+                    .arg(
+                        static_cast<qulonglong>(
+                            sketch_interaction_controller_->
+                                profileProblemCount()));
         } else {
             QString status =
                 QStringLiteral("Ready");
@@ -2888,8 +2897,17 @@ void CadWorkbench::syncSketchInteractionUi() {
                     "Area: —\n"
                     "Perimeter: —\n"
                     "Holes: —\n"
-                    "Islands: —")
-                    .arg(status);
+                    "Islands: %2\n"
+                    "Problems: %3")
+                    .arg(status)
+                    .arg(
+                        static_cast<qulonglong>(
+                            sketch_interaction_controller_->
+                                profileIslandCount()))
+                    .arg(
+                        static_cast<qulonglong>(
+                            sketch_interaction_controller_->
+                                profileProblemCount()));
         }
         profile_result_label_->setText(
             status_text);
