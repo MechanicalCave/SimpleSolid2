@@ -17,7 +17,9 @@ The target currently contains:
 - opaque model-local `EntityId`;
 - canonical decimal identity transport for `EntityId` and `EntityIdCursor`;
 - canonical authored primitives `Line`, `Circle` and `Arc`;
+- authored per-entity `Regular` / `Construction` role;
 - the value-semantic mixed-primitive `SketchModel` plus validated state/restore transfer;
+- provider-neutral Line/Circle/Arc curve-relation and bounded-region analysis, point-in-region picking, exact region composition and nested-island discovery;
 - host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips, bounded direct manipulation and common Move/Copy/Rotate/Scale/Mirror command stages;
 - a provider-independent mixed-primitive transform core for translation, rotation, positive uniform scale and reflection.
 
@@ -99,6 +101,7 @@ The current `SketchModel` owns typed Line/Circle/Arc collections behind one sema
 addLine / findLine / updateLine
 addCircle / findCircle / updateCircle
 addArc / findArc / updateArc
+setEntityRole(EntityId, EntityRole)
 erase(EntityId)
 contains(EntityId)
 entityCount()
@@ -188,7 +191,20 @@ After a Line segment or COPY placement completes, stale pointer direction is not
 
 Accepted non-no-op edit transforms/reshape commit through the host semantic geometry-update command and Part transaction and preserve EntityIds. Each accepted COPY placement instead executes one atomic semantic duplication command, allocates a fresh ID for each copied entity and creates one revision/Undo entry. Multiple repeated placements are independent Undo steps.
 
-Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/session.
+Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/se<!-- section-id: internal.shared-2d.regions -->
+## Construction and region analysis
+
+Every authored Line/Circle/Arc has an `EntityRole`. `Regular` geometry participates in region topology. `Construction` geometry remains authored, selectable and editable, but it is excluded from bounded-region formation and therefore cannot close or split a Profile region.
+
+The neutral region layer operates on current authored/evaluated 2D geometry, never on Viewer tessellation or provider topology. It provides canonical Line/Circle/Arc pair relations, deterministic fragmentation at accepted intersections, bounded loop/holes construction, point-in-region picking, exact connected cell composition for transient Add/Subtract, and nested-island discovery.
+
+Analysis returns bounded `RegionCandidate2D` values plus structured diagnostics. Open connected geometry with no bounded loop reports `open_boundary`; coincident/overlap ambiguity and invalid topology fail closed for the affected connected component while unrelated valid components remain usable.
+
+There is no Product gap tolerance or auto-close policy. A small geometric gap remains a gap. Tangency and point-only contact do not silently merge disconnected material, and a point on a region boundary is never assigned arbitrarily to one adjacent candidate.
+
+All derived region candidates, relation intersections, sampled interior points and analysis caches are runtime-only. Durable Profile identity is owned by Part through semantic RegionIntent references to source Sketch EntityIds and anchors.
+
+ssion.
 
 Numeric angles, scale factors, absolute/relative coordinates, polar coordinates, unit expressions and Dynamic Input are still not implemented. Direct Distance is the only numeric precision-input capability in the current interaction state.
 
@@ -209,7 +225,7 @@ The product still does not implement:
 - numeric Rotate/Scale values, absolute/relative coordinate entry, polar syntax, unit expressions or Dynamic Input;
 - authored dimensions, constraints or solver evaluation;
 - Rectangle/Polyline durable semantics;
-- intersections, profiles/regions or projected/reference geometry;
+- projected/reference geometry;
 - planar-face Sketch support.
 
 Those capabilities remain governed by later accepted Work Contracts.
@@ -217,11 +233,11 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Part hosting, schema-v4 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, Copy identity, Repeat Last Command, Space CycleEditMode and precision input.
+The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, Copy identity, Repeat Last Command, Space CycleEditMode and precision input.
 
 Key registered tests include:
 
-- `sk02a.shared_2d_core` / `sk02a.shared_2d_boundaries` — neutral model and dependency boundaries;
+- `sk02a.shared_2d_core` / `sk02a.shared_2d_boundaries` — neutral model/dependency boundaries plus curve relations, regions, Construction exclusion, open/overlap diagnostics, holes/islands, point picking and region composition;
 - `sk06a.circle_arc_model_persistence` / `sk06a.circle_arc_interaction_state` — mixed Line/Circle/Arc authored and interaction semantics;
 - `e1.arc_numerical_stability` — 3-Point Arc translation/scale conditioning, radial residual through all requested points, CW/CCW/long branch preservation, ±1e6 translation, 1e-200/1e200 scale, near-collinear acceptance and fail-closed exact/invalid extremes;
 - `sk07a.transform_core`, `sk07b.transform_core`, `sk07b.common_transform_state`, `sk07b.transform_controller` — mixed transforms and atomic controller behavior;
