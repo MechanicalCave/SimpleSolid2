@@ -86,6 +86,12 @@ public:
             command) override;
 
     [[nodiscard]] std::size_t selectedCount() const noexcept;
+    [[nodiscard]] std::optional<sketch::EntityRole>
+    selectedEntityRole() const noexcept;
+    [[nodiscard]] bool setSelectedEntityRole(
+        sketch::EntityRole role);
+    [[nodiscard]] std::size_t profileIslandCount();
+    [[nodiscard]] std::size_t profileProblemCount();
     [[nodiscard]] bool directManipulationActive()
         const noexcept;
     [[nodiscard]] std::optional<sketch::DirectEditMode>

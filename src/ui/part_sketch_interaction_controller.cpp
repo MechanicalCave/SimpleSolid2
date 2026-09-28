@@ -461,6 +461,115 @@ PartSketchInteractionController::selectedCount() const noexcept {
     return interaction_.selectedEntities().size();
 }
 
+std::optional<sketch::EntityRole>
+PartSketchInteractionController::selectedEntityRole()
+    const noexcept {
+    const auto* hosted = activeSketch();
+    const auto& selected =
+        interaction_.selectedEntities();
+    if (hosted == nullptr || selected.empty()) {
+        return std::nullopt;
+    }
+
+    const auto roleFor =
+        [hosted](sketch::EntityId id)
+            -> std::optional<sketch::EntityRole> {
+            if (const auto* line =
+                    hosted->model.findLine(id)) {
+                return line->role();
+            }
+            if (const auto* circle =
+                    hosted->model.findCircle(id)) {
+                return circle->role();
+            }
+            if (const auto* arc =
+                    hosted->model.findArc(id)) {
+                return arc->role();
+            }
+            return std::nullopt;
+        };
+
+    const auto first = roleFor(selected.front());
+    if (!first) {
+        return std::nullopt;
+    }
+    for (const auto id : selected) {
+        if (roleFor(id) != first) {
+            return std::nullopt;
+        }
+    }
+    return first;
+}
+
+bool PartSketchInteractionController::setSelectedEntityRole(
+    sketch::EntityRole role) {
+    if (!active() ||
+        profile_session_ ||
+        interaction_.tool() != sketch::SketchTool::select ||
+        interaction_.directManipulationActive() ||
+        interaction_.selectedEntities().empty() ||
+        (role != sketch::EntityRole::regular &&
+         role != sketch::EntityRole::construction)) {
+        return false;
+    }
+
+    const auto result =
+        session_->execute(
+            application::SetSketchEntityRoleCommand{
+                *sketch_id_,
+                session_->document().revision(),
+                interaction_.selectedEntities(),
+                role});
+    if (!result.ok()) {
+        reportStatus(
+            result.diagnostic.message.empty()
+                ? std::string{
+                      "Sketch entity role change failed."}
+                : result.diagnostic.message);
+        return false;
+    }
+
+    viewport_controller_->refreshPresentation();
+    projectSelection();
+    projectInteraction();
+    notifyStateChanged();
+    return true;
+}
+
+std::size_t
+PartSketchInteractionController::profileIslandCount() {
+    if (!profile_session_ ||
+        !profile_session_->options.detect_islands ||
+        !ensureProfileAnalysis() ||
+        !profile_analysis_cache_) {
+        return 0U;
+    }
+
+    const auto current = profileCurrentResult();
+    const auto* hosted = activeSketch();
+    if (!current || hosted == nullptr) {
+        return 0U;
+    }
+
+    return sketch::nestedIslandRegions(
+               hosted->model,
+               profile_analysis_cache_->analysis,
+               *current)
+        .size();
+}
+
+std::size_t
+PartSketchInteractionController::profileProblemCount() {
+    if (!profile_session_ ||
+        !profile_session_->options.show_problems ||
+        !ensureProfileAnalysis() ||
+        !profile_analysis_cache_) {
+        return 0U;
+    }
+    return profile_analysis_cache_
+        ->analysis.diagnostics.size();
+}
+
 bool PartSketchInteractionController::
 directManipulationActive() const noexcept {
     return interaction_.directManipulationActive();
