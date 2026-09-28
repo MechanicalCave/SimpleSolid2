@@ -1508,6 +1508,7 @@ set_tests_properties(wb02.global_cad_input_ui PROPERTIES
 
 
 set(_ss2_application_tests
+    d.cad_input_semantics
     wb02.cad_input_session
     ph01.project_workspace_metadata
     ph01.project_session
@@ -1547,6 +1548,7 @@ set(_ss2_persistence_tests
 set_property(TEST ${_ss2_persistence_tests} APPEND PROPERTY LABELS "subsystem-persistence")
 
 set(_ss2_core_tests
+    d.cad_input_semantic_boundaries
     wb02.cad_input_boundaries
     part01.document_primitives
     wb01.builtin_reference

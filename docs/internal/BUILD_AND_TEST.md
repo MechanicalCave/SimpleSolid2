@@ -45,10 +45,41 @@ Relevant commands are:
 
 Machine-local configuration is written under `.ss2-local/` and is not committed.
 
+<!-- section-id: internal.build-test.core-only -->
+## Core-only semantic build
+
+The default product build remains `SS2_BUILD_DESKTOP=ON` and requires Qt 6 plus OpenCASCADE.
+
+AUDIT-01 Package D adds an explicit verification-only semantic build mode:
+
+```text
+SS2_BUILD_DESKTOP=OFF
+```
+
+In this mode CMake builds the neutral Core, Sketch, Persistence, Part, generic CAD-input transport and Application semantic services, including the neutral Sketch CAD-input endpoint. It does not create the Qt UI, Qt/OCCT Viewer provider or desktop executable targets and it does not execute the desktop/provider test graph.
+
+The Windows FULL gate proves that Qt and OpenCASCADE are not accidentally discovered by configuring with both packages explicitly disabled:
+
+```powershell
+. .\scripts\ss2-common.ps1
+Import-SS2LocalEnvironment
+$cmake = Get-SS2CMakeExe
+
+& $cmake -S . -B build\core-only \
+  -DSS2_BUILD_DESKTOP=OFF \
+  -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE \
+  -DCMAKE_DISABLE_FIND_PACKAGE_OpenCASCADE=TRUE
+
+& $cmake --build build\core-only --config Release
+& $cmake -E chdir build\core-only ctest -C Release --output-on-failure
+```
+
+The current core-only suite contains 11 focused tests covering generic CAD-input transport, neutral D token semantics/boundaries, authored Core/Part/DocumentSession behavior, Line command protocol, geometry update/COPY semantics and Direct Distance state. This mode is an architecture/test boundary; it is not a separate product distribution and does not declare Linux desktop support.
+
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The repository currently registers **74 CTest tests**.
+The default desktop graph currently registers **76 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
@@ -65,6 +96,8 @@ The current transform/COPY regressions include:
 The existing `sk01.workbench_sketch_host` regression covers the grouped Select/Create/Modify surface, toolbar/Command-Line adapters including COPY, viewport Enter/Space Repeat Last Command routing, active-transform precedence, active-grip Space CycleEditMode precedence and text-focus keyboard behavior. It also checks that pointer movement preserves a token inside one PointRequest, replacing the request or finishing Sketch clears stale input without authored mutation, and non-empty-buffer Delete cannot fall through to geometry deletion. The existing `sk05a.part_sketch_direct_manipulation` controller regression additionally verifies preview cardinality, no-mutation cycling and atomic commit after Reshape↔Move switching.
 
 `wb02.cad_input_session`, `wb02.cad_input_boundaries` and `wb02.global_cad_input_ui` cover provider-neutral CAD-input transport, dependency boundaries, semantic-generation lifetime, foreign-window/popup ownership, two-visible-shell isolation, ordinary text-editor ownership, application-shortcut preservation and fixed Command Line geometry/diagnostic behavior.
+
+Package D adds `d.cad_input_semantics` and `d.cad_input_semantic_boundaries`. The former verifies neutral command-token mapping, PointRequest precedence, dot/UI-separator numeric parsing and rejection paths without QWidget/OCCT; the latter prevents Qt/OCCT/UI leakage into the Application semantic endpoint and prevents the raw Sketch command parser from returning to `cad_workbench.cpp`. The core-only graph composes these checks with the existing neutral Line/geometry/COPY/DocumentSession tests; the normal desktop FULL suite remains the integration authority for the production `PartSketchInteractionController` target and GUI adapter.
 
 `b1.save_conflict` covers exact native-file checkpoints, sequential two-session lost-update prevention, cooperative Save guard ownership, content-change/replacement/DocumentId/missing-target conflicts and repeated successful Save.
 
@@ -94,6 +127,8 @@ The canonical test command defaults to FULL; `-NoBuild` remains a bounded CI opt
 ## Windows PR gate
 
 The GitHub workflow is `.github/workflows/windows-pr-gate.yml`. CI-01 exact-head DOCS/CLOSURE behavior remains intact; CI-02 adds a bounded FAST runtime iteration tier.
+
+For Package D and later verification-infrastructure changes, the FULL job also configures, builds and runs the explicit `SS2_BUILD_DESKTOP=OFF` suite with Qt/OpenCASCADE package discovery disabled before running the ordinary unfiltered desktop CTest suite. A core-only PASS therefore supplements rather than replaces the GUI/provider FULL gate.
 
 ```text
 FAST
