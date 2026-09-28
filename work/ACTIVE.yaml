@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/E1_GEOMETRY_NUMERICAL_STABILITY.md"
 foundation_version: "1.0"
 program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
@@ -19,10 +19,10 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - run E1 Phase A supported-MSVC Arc 3-Point numerical characterization before any production fix
-  - classify the translated/small-scale finding as CONFIRMED or NOT REPRODUCED from evidence
-  - if CONFIRMED, apply only the accepted translation-local / scale-normalized private numerical correction
-  - keep E2 and F queued by AUDIT-01 but inactive
+  - draft a separate bounded Package E2 presentation-scale/provider-failure Work Contract under AUDIT-01
+  - require explicit Owner acceptance of Package E2 before any production presentation mutation
+  - keep F queued by AUDIT-01 but inactive
+  - preserve completed E1 numerical Arc semantics and D core-only boundaries
 
 notes:
   - R0 through R4 are completed.
@@ -254,3 +254,6 @@ notes:
   - Translation-local/common-scale-normalized correction dc6b6128a4cb74a983035e2c25c649677502c711 passed FULL #712.
   - Expanded matrix 1d438235b83d24713679cca4d06c3cf093777564 passed FULL #713: +/-1e6, CW/CCW/long, 1e-200, 1e200, near-collinear, exact collinear, duplicate, non-finite and unrepresentable-intermediate cases.
   - No Product tolerance, coordinate/radius limit, persistence, identity, history or visible Arc workflow change was introduced.
+  - E1 final runtime candidate 1d438235b83d24713679cca4d06c3cf093777564 passed Windows FULL #713.
+  - E1 documentation/evidence head ab4978fbe17729bd3ea88c6ca7f47014828ffba2 passed documentation gate #714.
+  - E1 is complete pending work-only CLOSURE verification and merge; E2 remains inactive until a separate Work Contract is explicitly Owner-accepted.

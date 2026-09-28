@@ -1,6 +1,6 @@
 # E1 — Geometry Numerical Stability
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-28  
 **Owner acceptance:** 2026-09-28  
 **Decision class:** D1 numerical implementation within existing Sketch semantics; stop for Owner D2/D3 amendment if tolerance/coordinate/product validity semantics must change  
@@ -299,19 +299,11 @@ Stop for Owner review before production mutation if evidence requires:
 - OCCT as semantic construction authority;
 - broader transform rewrite without reproduction.
 
-## 18. Activation gate
+## 18. Activation record
 
-This proposal does **not** activate E1.
+Package E1 was explicitly Owner-accepted on 2026-09-28 and activated on the proposal branch.
 
-Activation requires explicit Owner acceptance of this Work Contract.
-
-After acceptance:
-
-1. `work/ACTIVE.yaml` switches from completed D to active E1;
-2. Phase A characterization/reproducer test is added first;
-3. the finding is classified from actual Windows/MSVC evidence;
-4. only if CONFIRMED may the bounded private numerical fix proceed automatically;
-5. any stop condition requires a new Owner decision.
+Phase A characterization was added before production mutation. The supported Windows/MSVC finding was classified CONFIRMED by #711, after which the already-authorized private translation-local/common-scale-normalized correction proceeded. No stop condition requiring a new Owner decision was reached.
 
 ## 19. Completion boundary
 
@@ -364,3 +356,29 @@ The mandatory reproducer that failed #711 passed unchanged after the correction.
 The E1 regression covers radius 0.1 at origin and ±1e6 translation, short CCW/CW and long branch semantics, radii `1e-200` and `1e200`, near-collinear finite input, exact collinear/duplicate/non-finite rejection, unrepresentable local subtraction failure, radial residual through all three requested points and signed-path ordering.
 
 No E1 evidence required a Product tolerance, coordinate limit, minimum feature size, persistence/public-API change or visible interaction change. Manual GUI verification remains not required.
+
+## 23. Completion record
+
+**Final runtime candidate:** `1d438235b83d24713679cca4d06c3cf093777564`  
+**Final runtime Windows FULL:** #713 — PASS  
+**Documentation/evidence head:** `ab4978fbe17729bd3ea88c6ca7f47014828ffba2`  
+**Documentation gate:** #714 — PASS  
+**Manual GUI verification:** not required by the accepted E1 contract; no visible Arc workflow/acceptance semantics changed
+
+Completion evidence:
+
+- supported MSVC Phase A reproduced the original translation defect before any production fix (#711 expected FAIL);
+- mandatory radius 0.1 / (+1e6,+1e6) case showed material center/radius/sweep degradation and residual failure;
+- the private 3-Point Arc circumcenter now evaluates in a Start-local, common-scale-normalized frame;
+- no Product epsilon, coordinate/radius limit or minimum feature size was introduced;
+- the unchanged reproducer passed after the correction (#712);
+- the expanded matrix passed in the final runtime FULL #713, including ±1e6 translation, short CW/CCW, long branch, 1e-200, 1e200, near-collinear, exact collinear, duplicate, non-finite and unrepresentable-intermediate cases;
+- radial residual and signed-path evidence cover all three requested points;
+- existing SK-06A semantics remain green;
+- core-only and normal desktop Windows suites are green;
+- required internal documentation and generated Browser are current (#714);
+- persistence, identity, history, public API, UI, Viewer and OCCT semantic ownership were unchanged.
+
+E1 is **CONFIRMED / IMPLEMENTED / VERIFIED / COMPLETED**. Remaining lifecycle work is work-only CLOSURE verification and merge.
+
+After merge, AUDIT-01 schedules E2 next. E1 completion does not activate E2 or F.

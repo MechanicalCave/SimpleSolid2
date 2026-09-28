@@ -71,7 +71,7 @@ Default order is strict:
 | 4 | **C1 — history-copy cost removal** | remove deep copy of all previous history while preserving strong consistency | **COMPLETED — 2026-09-27** |
 | 5 | **C2 — measured history representation/budget** | choose any deeper history redesign only from Release measurements | **COMPLETED — KEEP accepted 2026-09-28** |
 | 6 | **D — semantic input endpoint outside QWidget + core-only build** | current semantic Line/Move/Copy input testable without Qt/OCCT and neutral core independently compilable | **COMPLETED — 2026-09-28** |
-| 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | **ACTIVE — accepted 2026-09-28** |
+| 7 | **E1 — geometry numerical stability** | reproduce/fix translation/scale sensitivity with explicit validation evidence | **COMPLETED — 2026-09-28** |
 | 8 | **E2 — presentation scale/failure behavior** | measure refresh/preview cost; define provider-failure consistency before optimization | future bounded Work Contract |
 | 9 | **F — region/profile semantics gate** | accepted exact region/profile semantics required by Part before solid modeling | future bounded Work Contract |
 
@@ -504,6 +504,17 @@ Before region/profile consumers depend on these constructions:
 - finite output alone is insufficient: verify residual error through requested points.
 
 Coordinate limits, units and tolerance policy require explicit contract before rejecting previously legal files.
+
+### E1 completion record
+
+**Phase A:** #711 expected FAIL — finding CONFIRMED  
+**Correction:** #712 PASS  
+**Final runtime candidate:** `1d438235b83d24713679cca4d06c3cf093777564` — Windows FULL #713 PASS  
+**Documentation/evidence:** `ab4978fbe17729bd3ea88c6ca7f47014828ffba2` — #714 PASS
+
+E1 replaced only the private absolute-coordinate 3-Point Arc circumcenter evaluation with Start-local/common-scale-normalized arithmetic. Existing authored Arc semantics, exact duplicate/collinear behavior, persistence, identity/history and user workflow remain unchanged. No Product tolerance or coordinate limit was introduced.
+
+E1 is **CONFIRMED / IMPLEMENTED / VERIFIED / COMPLETED**. E2 is next but remains inactive until a separate Work Contract is explicitly Owner-accepted.
 
 ## 12. Package E2 — presentation update scale and provider failure
 
