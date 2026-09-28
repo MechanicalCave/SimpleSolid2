@@ -901,7 +901,7 @@ Because F introduces substantial new user-visible workflow, final completion req
 - Save/Close/Reopen;
 - Command Line parity.
 
-## 32. Documentation impact
+## Documentation impact
 
 Internal docs: required.
 
