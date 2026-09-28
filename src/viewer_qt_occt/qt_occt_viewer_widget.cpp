@@ -3,6 +3,7 @@
 #include "navigation_mapping.hpp"
 
 #include <AIS_AnimationCamera.hxx>
+#include <AIS_DisplayMode.hxx>
 #include <AIS_InteractiveContext.hxx>
 #include <AIS_InteractiveObject.hxx>
 #include <AIS_Line.hxx>
@@ -15,6 +16,7 @@
 #include <Aspect_TypeOfLine.hxx>
 #include <Aspect_TypeOfTriedronPosition.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepBuilderAPI_MakePolygon.hxx>
 #include <Geom_CartesianPoint.hxx>
 #include <Graphic3d_Camera.hxx>
 #include <Graphic3d_HorizontalTextAlignment.hxx>
@@ -28,6 +30,7 @@
 #include <Quantity_Color.hxx>
 #include <Standard_Failure.hxx>
 #include <TCollection_ExtendedString.hxx>
+#include <TopoDS_Wire.hxx>
 #include <V3d_TypeOfOrientation.hxx>
 #include <V3d_View.hxx>
 #include <V3d_Viewer.hxx>
@@ -1072,6 +1075,105 @@ public:
         }
     }
 
+    bool setProfileScene(
+        const viewer::ProfileScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearProfileScene();
+
+        try {
+            for (const auto& profile : scene.profiles) {
+                auto object =
+                    makeProfileObject(profile.region);
+                if (object.IsNull()) {
+                    clearProfileScene();
+                    return false;
+                }
+
+                profile_objects_.push_back(
+                    ProfileObject{
+                        profile.token,
+                        object});
+                context_->Display(object, false);
+                context_->SetDisplayMode(
+                    object,
+                    AIS_Shaded,
+                    false);
+            }
+
+            profile_scene_ = scene;
+            applySelectionStyles();
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearProfileScene();
+            throw;
+        }
+    }
+
+    bool setProfilePreviewScene(
+        const viewer::ProfilePreviewScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearProfilePreviewScene();
+
+        if (!scene.region) {
+            profile_preview_scene_ = scene;
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        }
+
+        try {
+            auto object =
+                makeProfileObject(*scene.region);
+            if (object.IsNull()) {
+                return false;
+            }
+
+            context_->Display(object, false);
+            context_->SetDisplayMode(
+                object,
+                AIS_Shaded,
+                false);
+            context_->SetColor(
+                object,
+                Quantity_Color{
+                    0.22, 0.82, 0.96,
+                    Quantity_TOC_RGB},
+                false);
+            context_->SetTransparency(
+                object,
+                0.58,
+                false);
+            context_->SetWidth(
+                object,
+                2.0,
+                false);
+            context_->Deactivate(object);
+
+            profile_preview_object_ = object;
+            profile_preview_scene_ = scene;
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearProfilePreviewScene();
+            throw;
+        }
+    }
+
     bool setSketchPreviewScene(
         const viewer::SketchPreviewScene& scene) {
         if (!scene.valid()) return false;
@@ -1838,6 +1940,15 @@ public:
                 }
 
                 if (!detected_token) {
+                    for (const auto& entry : profile_objects_) {
+                        if (entry.object == detected) {
+                            detected_token = entry.token;
+                            break;
+                        }
+                    }
+                }
+
+                if (!detected_token) {
                     for (const auto& entry : sketch_objects_) {
                         if (entry.object == detected) {
                             detected_token = entry.token;
@@ -1940,6 +2051,11 @@ public:
         Handle(AIS_InteractiveObject) object;
     };
 
+    struct ProfileObject final {
+        viewer::PresentationToken token;
+        Handle(AIS_Shape) object;
+    };
+
     enum class SketchGripVisualState
         : std::uint8_t {
         idle,
@@ -1962,6 +2078,105 @@ public:
     [[nodiscard]] static gp_Dir toDirection(
         const viewer::Vec3& vector) {
         return gp_Dir{vector.x, vector.y, vector.z};
+    }
+
+    [[nodiscard]] static std::size_t profileLoopSize(
+        const std::vector<viewer::Point3>& loop) noexcept {
+        if (loop.size() > 3U &&
+            loop.front() == loop.back()) {
+            return loop.size() - 1U;
+        }
+        return loop.size();
+    }
+
+    [[nodiscard]] static std::optional<viewer::Vec3>
+    profileLoopNormal(
+        const std::vector<viewer::Point3>& loop) noexcept {
+        const auto count = profileLoopSize(loop);
+        if (count < 3U) return std::nullopt;
+
+        viewer::Vec3 normal{};
+        for (std::size_t index = 0U;
+             index < count;
+             ++index) {
+            const auto& current = loop[index];
+            const auto& next =
+                loop[(index + 1U) % count];
+            normal.x +=
+                (current.y - next.y) *
+                (current.z + next.z);
+            normal.y +=
+                (current.z - next.z) *
+                (current.x + next.x);
+            normal.z +=
+                (current.x - next.x) *
+                (current.y + next.y);
+        }
+        return viewer::normalized(normal);
+    }
+
+    [[nodiscard]] static std::optional<TopoDS_Wire>
+    makeProfileWire(
+        const std::vector<viewer::Point3>& loop) {
+        const auto count = profileLoopSize(loop);
+        if (count < 3U) return std::nullopt;
+
+        BRepBuilderAPI_MakePolygon polygon;
+        for (std::size_t index = 0U;
+             index < count;
+             ++index) {
+            polygon.Add(toPoint(loop[index]));
+        }
+        polygon.Close();
+        if (!polygon.IsDone()) {
+            return std::nullopt;
+        }
+        return polygon.Wire();
+    }
+
+    [[nodiscard]] static Handle(AIS_Shape)
+    makeProfileObject(
+        const viewer::ProfileRegionPresentation& region) {
+        const auto outer_wire =
+            makeProfileWire(region.outer);
+        const auto outer_normal =
+            profileLoopNormal(region.outer);
+        if (!outer_wire || !outer_normal) {
+            return {};
+        }
+
+        BRepBuilderAPI_MakeFace face{
+            *outer_wire,
+            Standard_True};
+        if (!face.IsDone()) {
+            return {};
+        }
+
+        for (const auto& hole : region.holes) {
+            auto hole_wire = makeProfileWire(hole);
+            const auto hole_normal =
+                profileLoopNormal(hole);
+            if (!hole_wire || !hole_normal) {
+                return {};
+            }
+
+            if (viewer::dot(
+                    *outer_normal,
+                    *hole_normal) > 0.0) {
+                hole_wire->Reverse();
+            }
+            face.Add(*hole_wire);
+        }
+
+        if (!face.IsDone()) {
+            return {};
+        }
+
+        Handle(AIS_Shape) object =
+            new AIS_Shape(face.Face());
+        object->Attributes()->SetFaceBoundaryDraw(
+            Standard_True);
+        return object;
     }
 
     [[nodiscard]] static Quantity_Color baseColor(
@@ -2034,6 +2249,50 @@ public:
         Handle(AIS_Shape) object =
             new AIS_Shape(face.Shape());
         return object;
+    }
+
+    void clearProfileScene() noexcept {
+        if (!context_.IsNull()) {
+            guardedVoid(
+                "clearProfileDetected",
+                [this] {
+                    context_->ClearDetected(false);
+                });
+
+            for (const auto& entry :
+                 profile_objects_) {
+                if (entry.object.IsNull()) continue;
+                const auto retained = entry.object;
+                guardedVoid(
+                    "removeProfileObject",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+
+        profile_objects_.clear();
+        profile_scene_.profiles.clear();
+    }
+
+    void clearProfilePreviewScene() noexcept {
+        if (!context_.IsNull() &&
+            !profile_preview_object_.IsNull()) {
+            const auto retained =
+                profile_preview_object_;
+            guardedVoid(
+                "removeProfilePreviewObject",
+                [this, retained] {
+                    context_->Remove(
+                        retained,
+                        false);
+                });
+        }
+
+        profile_preview_object_.Nullify();
+        profile_preview_scene_.region.reset();
     }
 
     void clearSketchScene() noexcept {
@@ -2278,6 +2537,43 @@ public:
             }
         }
 
+        for (const auto& entry : profile_objects_) {
+            if (entry.object.IsNull()) continue;
+
+            const bool selected =
+                isSelected(entry.token);
+            const bool primary =
+                selection_.primary &&
+                *selection_.primary == entry.token;
+
+            context_->SetColor(
+                entry.object,
+                primary
+                    ? Quantity_Color{
+                          1.0, 0.90, 0.25,
+                          Quantity_TOC_RGB}
+                    : selected
+                        ? Quantity_Color{
+                              1.0, 0.63, 0.18,
+                              Quantity_TOC_RGB}
+                        : Quantity_Color{
+                              0.30, 0.66, 0.88,
+                              Quantity_TOC_RGB},
+                false);
+            context_->SetTransparency(
+                entry.object,
+                primary
+                    ? 0.36
+                    : (selected ? 0.48 : 0.68),
+                false);
+            context_->SetWidth(
+                entry.object,
+                primary
+                    ? 3.5
+                    : (selected ? 2.8 : 1.6),
+                false);
+        }
+
         for (const auto& entry : sketch_objects_) {
             if (entry.object.IsNull()) continue;
 
@@ -2505,6 +2801,8 @@ private:
     int last_mouse_y_{};
 
     viewer::ReferenceScene reference_scene_;
+    viewer::ProfileScene profile_scene_;
+    viewer::ProfilePreviewScene profile_preview_scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene sketch_preview_scene_;
     viewer::SketchGripScene sketch_grip_scene_;
@@ -2536,6 +2834,8 @@ private:
     std::vector<NavigationControl>
         navigation_controls_;
     std::vector<ReferenceObject> reference_objects_;
+    std::vector<ProfileObject> profile_objects_;
+    Handle(AIS_Shape) profile_preview_object_;
     std::vector<SketchObject> sketch_objects_;
     std::vector<SketchGripObject>
         sketch_grip_objects_;
@@ -2650,6 +2950,24 @@ bool QtOcctViewerWidget::setSketchScene(
         "setSketchScene",
         [this, &scene] {
             return impl_->setSketchScene(scene);
+        });
+}
+
+bool QtOcctViewerWidget::setProfileScene(
+    const viewer::ProfileScene& scene) {
+    return guardedBool(
+        "setProfileScene",
+        [this, &scene] {
+            return impl_->setProfileScene(scene);
+        });
+}
+
+bool QtOcctViewerWidget::setProfilePreviewScene(
+    const viewer::ProfilePreviewScene& scene) {
+    return guardedBool(
+        "setProfilePreviewScene",
+        [this, &scene] {
+            return impl_->setProfilePreviewScene(scene);
         });
 }
 

@@ -1,6 +1,7 @@
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
 #include <QApplication>
+#include <QTest>
 #include <QWidget>
 
 #include <algorithm>
@@ -129,10 +130,14 @@ int main(int argc, char* argv[]) {
     CHECK(widget.setSketchPreviewScene(preview));
 
     int selection_intents = 0;
+    std::optional<viewer::SelectionIntent>
+        last_selection_intent;
     widget.setSelectionIntentHandler(
-        [&selection_intents](
-            const viewer::SelectionIntent&) {
+        [&selection_intents,
+         &last_selection_intent](
+            const viewer::SelectionIntent& intent) {
             ++selection_intents;
+            last_selection_intent = intent;
         });
 
     CHECK(widget.setPresentationSelection(
@@ -315,6 +320,90 @@ int main(int argc, char* argv[]) {
     CHECK(contains(after_orbit.tokens, short_token));
     CHECK(contains(after_orbit.tokens, long_token));
     CHECK(selection_intents == 0);
+
+    // Package F: the native provider renders Profile regions as shaded
+    // planar faces, preserves holes, and maps native detection back to
+    // the neutral presentation token. The provider token remains runtime
+    // presentation identity only; Part maps it immediately to ProfileId.
+    CHECK(widget.setCameraState(camera));
+    CHECK(widget.setReferenceScene(
+        viewer::ReferenceScene{}));
+    CHECK(widget.setSketchScene(
+        viewer::SketchScene{}));
+
+    const viewer::PresentationToken
+        profile_token{0x5101U};
+    viewer::ProfileRegionPresentation
+        profile_region;
+    profile_region.outer = {
+        {-20.0, -20.0, 0.0},
+        {20.0, -20.0, 0.0},
+        {20.0, 20.0, 0.0},
+        {-20.0, 20.0, 0.0},
+    };
+    profile_region.holes.push_back({
+        {-4.0, -4.0, 0.0},
+        {-4.0, 4.0, 0.0},
+        {4.0, 4.0, 0.0},
+        {4.0, -4.0, 0.0},
+    });
+
+    viewer::ProfileScene profile_scene;
+    profile_scene.profiles.push_back(
+        viewer::ProfilePresentation{
+            profile_token,
+            profile_region});
+    CHECK(widget.setProfileScene(profile_scene));
+    CHECK(widget.setPresentationSelection(
+        viewer::PresentationSelection{
+            {profile_token},
+            profile_token}));
+
+    viewer::ProfilePreviewScene
+        profile_preview;
+    profile_preview.region = profile_region;
+    CHECK(widget.setProfilePreviewScene(
+        profile_preview));
+    CHECK(widget.setProfilePreviewScene(
+        viewer::ProfilePreviewScene{}));
+
+    const QPoint center_point{
+        widget.width() / 2,
+        widget.height() / 2};
+    QTest::mouseClick(
+        &widget,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        center_point);
+    QApplication::processEvents();
+    CHECK(selection_intents == 1);
+    CHECK(last_selection_intent.has_value());
+    CHECK(
+        last_selection_intent->mode ==
+        viewer::SelectionIntentMode::clear);
+
+    last_selection_intent.reset();
+    QTest::mouseClick(
+        &widget,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        QPoint{
+            center_point.x() + 60,
+            center_point.y()});
+    QApplication::processEvents();
+    CHECK(selection_intents == 2);
+    CHECK(last_selection_intent.has_value());
+    CHECK(
+        last_selection_intent->mode ==
+        viewer::SelectionIntentMode::replace);
+    CHECK(
+        last_selection_intent->token ==
+        profile_token);
+
+    CHECK(widget.setProfileScene(
+        viewer::ProfileScene{}));
+    CHECK(widget.setProfilePreviewScene(
+        viewer::ProfilePreviewScene{}));
 
     return EXIT_SUCCESS;
 }
