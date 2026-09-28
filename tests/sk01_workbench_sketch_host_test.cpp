@@ -953,6 +953,13 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(construction_role_button->isChecked());
     CHECK(
+        std::any_of(
+            viewport->sketchScene().curves.begin(),
+            viewport->sketchScene().curves.end(),
+            [](const viewer::SketchCurvePresentation& curve) {
+                return curve.construction;
+            }));
+    CHECK(
         session->document()
             .findSketch(sketch_id)
             ->model.findCircle(*tree_circle.entity_id)
@@ -1001,6 +1008,13 @@ int main(int argc, char* argv[]) {
     regular_role_button->click();
     QApplication::processEvents();
     CHECK(regular_role_button->isChecked());
+    CHECK(
+        std::none_of(
+            viewport->sketchScene().curves.begin(),
+            viewport->sketchScene().curves.end(),
+            [](const viewer::SketchCurvePresentation& curve) {
+                return curve.construction;
+            }));
     CHECK(
         session->document()
             .findSketch(sketch_id)

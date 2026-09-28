@@ -1457,14 +1457,20 @@ PartViewportController::buildSketchScene() {
             sketch_entity_bindings_.clear();
             return std::nullopt;
         }
-        scene.lines.push_back({*token, *start, *end});
+        scene.lines.push_back(
+            {*token,
+             *start,
+             *end,
+             line.role ==
+                 sketch::EntityRole::construction});
     }
 
     const auto add_curve = [&](sketch::EntityId id,
                                sketch::Point2 center,
                                double radius,
                                double start_angle,
-                               double sweep_angle) {
+                               double sweep_angle,
+                               sketch::EntityRole role) {
         const auto token = allocatePresentationToken();
         const auto segments =
             curveSegments(center, radius, start_angle, sweep_angle);
@@ -1474,6 +1480,8 @@ PartViewportController::buildSketchScene() {
 
         viewer::SketchCurvePresentation curve;
         curve.token = *token;
+        curve.construction =
+            role == sketch::EntityRole::construction;
         curve.points.reserve(segments.size() + 1U);
 
         const auto first = detail::sketchPointToWorld(
@@ -1499,7 +1507,8 @@ PartViewportController::buildSketchScene() {
     for (const auto& circle : model_state.circles) {
         if (!add_curve(
                 circle.id, circle.center, circle.radius, 0.0,
-                2.0 * std::numbers::pi_v<double>)) {
+                2.0 * std::numbers::pi_v<double>,
+                circle.role)) {
             sketch_entity_bindings_.clear();
             return std::nullopt;
         }
@@ -1507,7 +1516,8 @@ PartViewportController::buildSketchScene() {
     for (const auto& arc : model_state.arcs) {
         if (!add_curve(
                 arc.id, arc.center, arc.radius,
-                arc.start_angle, arc.sweep_angle)) {
+                arc.start_angle, arc.sweep_angle,
+                arc.role)) {
             sketch_entity_bindings_.clear();
             return std::nullopt;
         }

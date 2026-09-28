@@ -26,6 +26,7 @@
 #include <Graphic3d_ZLayerId.hxx>
 #include <NCollection_HArray1.hxx>
 #include <OpenGl_GraphicDriver.hxx>
+#include <Prs3d_LineAspect.hxx>
 #include <Prs3d_PointAspect.hxx>
 #include <Quantity_Color.hxx>
 #include <Standard_Failure.hxx>
@@ -1018,7 +1019,8 @@ public:
                 sketch_objects_.push_back(
                     SketchObject{
                         line.token,
-                        object});
+                        object,
+                        line.construction});
                 context_->Display(object, false);
             }
 
@@ -1039,7 +1041,8 @@ public:
                     sketch_objects_.push_back(
                         SketchObject{
                             curve.token,
-                            object});
+                            object,
+                            curve.construction});
                     context_->Display(object, false);
                 }
             }
@@ -2051,6 +2054,7 @@ public:
     struct SketchObject final {
         viewer::PresentationToken token;
         Handle(AIS_InteractiveObject) object;
+        bool construction{false};
     };
 
     struct ProfileObject final {
@@ -2593,8 +2597,7 @@ public:
                 *sketch_interaction_presentation_.
                     hovered_entity == entry.token;
 
-            context_->SetColor(
-                entry.object,
+            const auto color =
                 primary
                     ? Quantity_Color{
                           1.0, 0.90, 0.25,
@@ -2609,16 +2612,21 @@ public:
                                   Quantity_TOC_RGB}
                             : Quantity_Color{
                                   0.92, 0.92, 0.94,
-                                  Quantity_TOC_RGB},
-                false);
-            context_->SetWidth(
-                entry.object,
+                                  Quantity_TOC_RGB};
+            const double width =
                 primary
                     ? 4.0
                     : (selected
                            ? 3.0
-                           : (hovered ? 3.0 : 2.0)),
-                false);
+                           : (hovered ? 3.0 : 2.0));
+
+            entry.object->Attributes()->SetLineAspect(
+                new Prs3d_LineAspect(
+                    color,
+                    entry.construction
+                        ? Aspect_TOL_DASH
+                        : Aspect_TOL_SOLID,
+                    width));
         }
     }
 

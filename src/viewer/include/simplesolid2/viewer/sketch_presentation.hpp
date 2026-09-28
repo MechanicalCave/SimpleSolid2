@@ -13,6 +13,7 @@ struct SketchLinePresentation final {
     PresentationToken token;
     Point3 start{};
     Point3 end{};
+    bool construction{false};
 
     [[nodiscard]] bool valid() const noexcept {
         return token.valid() &&
@@ -25,6 +26,7 @@ struct SketchLinePresentation final {
 struct SketchCurvePresentation final {
     PresentationToken token;
     std::vector<Point3> points;
+    bool construction{false};
 
     [[nodiscard]] bool valid() const noexcept {
         if (!token.valid() || points.size() < 2U) {
