@@ -321,6 +321,34 @@ int main(int argc, char* argv[]) {
     CHECK(contains(after_orbit.tokens, long_token));
     CHECK(selection_intents == 0);
 
+    // Package F: Construction is provider presentation only but must be
+    // visibly distinct even when nothing is selected. Replacing the drawer
+    // aspect after Display() requires Redisplay() for AIS_Line.
+    viewer::SketchScene role_scene;
+    role_scene.lines.push_back(
+        viewer::SketchLinePresentation{
+            viewer::PresentationToken{0x4101U},
+            {-12.0, -4.0, 0.0},
+            {12.0, -4.0, 0.0},
+            false});
+    role_scene.lines.push_back(
+        viewer::SketchLinePresentation{
+            viewer::PresentationToken{0x4102U},
+            {-12.0, 4.0, 0.0},
+            {12.0, 4.0, 0.0},
+            true});
+    CHECK(widget.setSketchScene(role_scene));
+    CHECK(widget.setPresentationSelection(
+        viewer::PresentationSelection{}));
+    QApplication::processEvents();
+
+    // Re-apply an empty interaction presentation to exercise the same style
+    // path used after hover/selection clears; it must preserve construction
+    // semantics and remain a valid native provider update.
+    CHECK(widget.setSketchInteractionPresentation(
+        viewer::SketchInteractionPresentation{}));
+    QApplication::processEvents();
+
     // Package F: the native provider renders Profile regions as shaded
     // planar faces, preserves holes, and maps native detection back to
     // the neutral presentation token. The provider token remains runtime

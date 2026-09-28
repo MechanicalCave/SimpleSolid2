@@ -2695,6 +2695,13 @@ public:
                         ? Aspect_TOL_DASH
                         : Aspect_TOL_SOLID,
                     width));
+
+            // AIS_Line presentation is already computed by Display().
+            // Direct drawer replacement does not rebuild that presentation,
+            // so force a provider-local redisplay for line type/width/color.
+            context_->Redisplay(
+                entry.object,
+                false);
         }
     }
 
