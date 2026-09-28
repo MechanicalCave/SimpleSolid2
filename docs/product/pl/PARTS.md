@@ -258,6 +258,15 @@ Projekcja jest niezależna od orientacji Cube. Kontrolka `ORTHO/PERSP` obok Cube
 
 Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, nie wymagają Save i nie tworzą wpisów CAD Undo.
 
+<!-- section-id: product.parts.presentation-recovery -->
+## Awaria prezentacji 3D i ponowienie
+
+Jeżeli operacja CAD zostanie poprawnie zatwierdzona w modelu, ale Viewer 3D nie zdoła odświeżyć prezentacji, zmiana modelu pozostaje zatwierdzona. Revision, stan wymagający Save oraz historia Undo/Redo nie są cofane z powodu błędu wyświetlania.
+
+Workbench pokazuje wtedy komunikat o nieudanym odświeżeniu prezentacji 3D. Podczas tego komunikatu widocznej sceny nie należy traktować jako zsynchronizowanej z bieżącym modelem.
+
+Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę prezentacji z aktualnego authored state. Po poprawnym odświeżeniu stan błędu i komunikat znikają. Recovery nie odtwarza modelu z obiektów Viewera i nie tworzy dodatkowego wpisu Undo.
+
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 

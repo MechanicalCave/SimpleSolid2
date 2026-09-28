@@ -396,6 +396,15 @@ Canonical Release evidence is run with:
 The runner executes semantic `DocumentSession` operations without Qt/Viewer/OCCT rendering in the timed path. It uses a working-set ceiling of the minimum of 25% physical RAM and 4 GiB, a five-minute per-cell timeout and BelowNormal child-process priority. These are benchmark-machine safety controls, not Product history limits.
 
 Current C2 evidence is summarized in [History Performance](HISTORY_PERFORMANCE.md) and in the [C2 benchmark decision record](../../work/C2_HISTORY_BENCHMARK_RESULTS.md).
+<!-- section-id: internal.build-test.e2-presentation-benchmark -->
+## E2 presentation benchmark
+
+The E2 presentation benchmark is maintainer evidence tooling and is opt-in. `SS2_ENABLE_E2_PRESENTATION_BENCHMARK` defaults to `OFF`, so ordinary product builds and the normal CTest graph do not include the benchmark executable.
+
+The retained Release harness is configured with `SS2_BUILD_DESKTOP=ON` and `SS2_ENABLE_E2_PRESENTATION_BENCHMARK=ON`, then built as target `e2_presentation_benchmark`. It records authored-refresh, native scene-replacement, single-line preview and transform-preview timings together with semantic/native object counts. Timing is observational evidence only; it is not a machine-independent pass/fail Product requirement.
+
+The one-shot PR benchmark gate used to collect E2 evidence was retired after measurement. Durable environment/results and the KEEP CURRENT REBUILD decision are recorded in [E2 Presentation Benchmark Results](../../work/E2_PRESENTATION_BENCHMARK_RESULTS.md). Windows FULL #727 collected the accepted Release evidence while the ordinary regression graph remained at 77 CTest tests.
+
 <!-- section-id: internal.build-test.docs-validation -->
 ## Documentation validation
 
@@ -596,6 +605,19 @@ Sketch grips are provider-only `AIS_Point` presentations deactivated from native
 The Sketch selection box remains OCCT `AIS_RubberBand` in the same native graphics surface. Principal reference planes remain finite provider presentation geometry. No native provider object is durable CAD identity.
 
 There is still no modeled Part B-Rep at this milestone; the OCCT provider remains presentation/navigation infrastructure.
+
+<!-- section-id: internal.cad-workbench-viewer.presentation-recovery -->
+## Presentation failure and recovery
+
+Authored CAD state remains authoritative when provider presentation fails. A semantic command commits through the existing validation/transaction/history path first; rebuilding reference/Sketch presentation is a later runtime operation and cannot roll that successful command back.
+
+`PartViewportController` records a runtime-only degraded-presentation state when the full authored/reference refresh cannot be applied by the bool-returning Viewer boundary. `CadWorkbench` surfaces that state in Status/Diagnostics with the bounded message `3D presentation update failed. Authored CAD state remains authoritative; the next full refresh will retry.`
+
+The next normal full refresh reconstructs reference and authored Sketch presentation from the current `DocumentSession`. Only a complete successful refresh clears the degraded state and diagnostic. Failure and recovery do not change DocumentRevision, dirty state, Undo/Redo depth or durable identity. Transient preview failure likewise creates no authored mutation.
+
+E2 Release evidence retained the current full authored-scene replacement strategy. The measured runner showed an approximately 33 ms native presentation floor through roughly 1,000 line objects and approximately 83 ms around 4,000–5,000 native presentation objects; a 5,000-line accepted mutation plus full authored refresh measured about 150 ms median. These values are engineering evidence, not Product latency guarantees. Large/highly segmented Sketches remain a documented scale risk; no differential-update or public `IDocumentViewport` expansion was introduced.
+
+Circle/Arc sampled point chains and native line segments remain presentation-only derived data. They never define closure, intersections, loops, regions or profiles; later Package F region/profile analysis must operate on exact accepted authored/evaluated 2D geometry outside the Viewer.
 
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
@@ -1795,6 +1817,15 @@ Projection is independent from Cube orientation. The `ORTHO/PERSP` control next 
 
 Navigation and camera changes are temporary view state. They do not dirty the Part, do not require Save and do not create CAD Undo entries.
 
+<!-- section-id: product.parts.presentation-recovery -->
+## 3D presentation failure and retry
+
+If a CAD operation is committed successfully in the authored model but the 3D Viewer cannot refresh its presentation, the model change remains committed. Document revision, Save/dirty state and Undo/Redo history are not rolled back because of a display failure.
+
+The Workbench then shows a diagnostic that the 3D presentation update failed. While that diagnostic is present, the visible scene must not be treated as synchronized with the current model.
+
+The next normal full Viewer refresh automatically retries presentation from the current authored state. After a complete successful refresh, the degraded state and diagnostic clear. Recovery never reconstructs the model from Viewer objects and does not create an extra Undo entry.
+
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
@@ -2271,6 +2302,15 @@ Gdy widok jest wyrównany do ściany, kontrolki wokół Cube umożliwiają dokł
 Projekcja jest niezależna od orientacji Cube. Kontrolka `ORTHO/PERSP` obok Cube przełącza wyłącznie Orthographic/Perspective. Jeśli model jest w Perspective, kliknięcie ściany, krawędzi, narożnika albo Home zachowuje Perspective; analogicznie akcje te zachowują Orthographic, gdy jest ono aktywne.
 
 Zmiany nawigacji i kamery są tymczasowym stanem widoku. Nie dirty'ują Parta, nie wymagają Save i nie tworzą wpisów CAD Undo.
+
+<!-- section-id: product.parts.presentation-recovery -->
+## Awaria prezentacji 3D i ponowienie
+
+Jeżeli operacja CAD zostanie poprawnie zatwierdzona w modelu, ale Viewer 3D nie zdoła odświeżyć prezentacji, zmiana modelu pozostaje zatwierdzona. Revision, stan wymagający Save oraz historia Undo/Redo nie są cofane z powodu błędu wyświetlania.
+
+Workbench pokazuje wtedy komunikat o nieudanym odświeżeniu prezentacji 3D. Podczas tego komunikatu widocznej sceny nie należy traktować jako zsynchronizowanej z bieżącym modelem.
+
+Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę prezentacji z aktualnego authored state. Po poprawnym odświeżeniu stan błędu i komunikat znikają. Recovery nie odtwarza modelu z obiektów Viewera i nie tworzy dodatkowego wpisu Undo.
 
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie

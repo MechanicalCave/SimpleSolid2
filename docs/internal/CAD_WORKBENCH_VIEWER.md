@@ -189,6 +189,19 @@ The Sketch selection box remains OCCT `AIS_RubberBand` in the same native graphi
 
 There is still no modeled Part B-Rep at this milestone; the OCCT provider remains presentation/navigation infrastructure.
 
+<!-- section-id: internal.cad-workbench-viewer.presentation-recovery -->
+## Presentation failure and recovery
+
+Authored CAD state remains authoritative when provider presentation fails. A semantic command commits through the existing validation/transaction/history path first; rebuilding reference/Sketch presentation is a later runtime operation and cannot roll that successful command back.
+
+`PartViewportController` records a runtime-only degraded-presentation state when the full authored/reference refresh cannot be applied by the bool-returning Viewer boundary. `CadWorkbench` surfaces that state in Status/Diagnostics with the bounded message `3D presentation update failed. Authored CAD state remains authoritative; the next full refresh will retry.`
+
+The next normal full refresh reconstructs reference and authored Sketch presentation from the current `DocumentSession`. Only a complete successful refresh clears the degraded state and diagnostic. Failure and recovery do not change DocumentRevision, dirty state, Undo/Redo depth or durable identity. Transient preview failure likewise creates no authored mutation.
+
+E2 Release evidence retained the current full authored-scene replacement strategy. The measured runner showed an approximately 33 ms native presentation floor through roughly 1,000 line objects and approximately 83 ms around 4,000–5,000 native presentation objects; a 5,000-line accepted mutation plus full authored refresh measured about 150 ms median. These values are engineering evidence, not Product latency guarantees. Large/highly segmented Sketches remain a documented scale risk; no differential-update or public `IDocumentViewport` expansion was introduced.
+
+Circle/Arc sampled point chains and native line segments remain presentation-only derived data. They never define closure, intersections, loops, regions or profiles; later Package F region/profile analysis must operate on exact accepted authored/evaluated 2D geometry outside the Viewer.
+
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
