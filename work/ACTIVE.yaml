@@ -281,6 +281,6 @@ notes:
 
   - Package F final exact-head runtime candidate c76676350426dc5e81abd60d10246ff8c6f507be passed Windows FULL #818 with 77/77 desktop CTest, 14/14 core-only CTest and stable windows-msvc.
   - Owner manual Windows verification PASS on 2026-09-28 on the same exact candidate, including the required Profile workflow plus exact shared-endpoint Profile creation and TOP/oblique Profile fill consistency.
-  - Package F acceptance conditions are satisfied; F is completed pending only work-only CLOSURE verification and merge of PR #86.
+  - Package F acceptance conditions are satisfied; final closeout CLOSURE #821/#823 passed and PR #86 was squash-merged to main as 26483c5d318af00ea0f82e7e901827a77c74b90a on 2026-09-28.
   - AUDIT-01 packages A through F are completed by this closeout candidate; after merge no production Work Contract is active.
   - Completion of F/AUDIT-01 does not authorize Extrude or another solid operation; a separate Owner-accepted Part solid-operation Work Contract remains mandatory.
