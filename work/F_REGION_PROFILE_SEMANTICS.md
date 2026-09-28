@@ -903,7 +903,9 @@ Because F introduces substantial new user-visible workflow, final completion req
 
 ## Documentation impact
 
-Internal docs: required.
+Internal docs: required  
+User/Product docs: required  
+Reason: F introduces durable Construction/Profile semantics, a new region-analysis boundary, persistence/schema changes and user-visible Profile creation/editing/diagnostics that require current internal and paired Product PL/EN documentation.
 
 At minimum document:
 
@@ -914,9 +916,8 @@ At minimum document:
 - Viewer presentation-only boundary;
 - Profile tool/input architecture.
 
-User/Product PL/EN docs: required.
+Product PL/EN documentation must cover:
 
-Document:
 
 - Create/Edit Profile;
 - hover region pick;
