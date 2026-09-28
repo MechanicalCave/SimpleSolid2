@@ -408,5 +408,247 @@ int main() {
             .status ==
         CurveRelationStatus::invalid);
 
+
+    // F bounded-region analysis. Construction geometry does not participate.
+    SketchModel rectangle;
+    const auto bottom =
+        rectangle.addLine(
+            Point2{0.0, 0.0},
+            Point2{4.0, 0.0});
+    const auto right =
+        rectangle.addLine(
+            Point2{4.0, 0.0},
+            Point2{4.0, 2.0});
+    const auto top =
+        rectangle.addLine(
+            Point2{4.0, 2.0},
+            Point2{0.0, 2.0});
+    const auto left =
+        rectangle.addLine(
+            Point2{0.0, 2.0},
+            Point2{0.0, 0.0});
+    (void)bottom;
+    (void)right;
+    (void)top;
+    (void)left;
+
+    const auto construction_diagonal =
+        rectangle.addLine(
+            Point2{0.0, 0.0},
+            Point2{4.0, 2.0},
+            EntityRole::construction);
+    (void)construction_diagonal;
+
+    const auto rectangle_regions =
+        analyzeRegions(rectangle);
+    CHECK(rectangle_regions.complete());
+    CHECK(rectangle_regions.regions.size() == 1U);
+    CHECK(
+        std::abs(
+            rectangle_regions.regions.front().area -
+            8.0) < 1.0e-12);
+    CHECK(
+        rectangle_regions.regions.front()
+            .holes.empty());
+
+    const auto rectangle_inside =
+        pickRegion(
+            rectangle,
+            rectangle_regions,
+            Point2{1.0, 1.0});
+    CHECK(
+        rectangle_inside.location ==
+        RegionPointLocation::inside);
+    CHECK(
+        rectangle_inside.region_index.has_value());
+    CHECK(
+        *rectangle_inside.region_index == 0U);
+
+    CHECK(
+        pickRegion(
+            rectangle,
+            rectangle_regions,
+            Point2{5.0, 1.0})
+            .location ==
+        RegionPointLocation::outside);
+    CHECK(
+        pickRegion(
+            rectangle,
+            rectangle_regions,
+            Point2{0.0, 1.0})
+            .location ==
+        RegionPointLocation::boundary);
+
+    // A blind T-branch does not divide the bounded material region.
+    SketchModel tee = rectangle;
+    (void)tee.addLine(
+        Point2{2.0, 0.0},
+        Point2{2.0, 1.0});
+    const auto tee_regions =
+        analyzeRegions(tee);
+    CHECK(tee_regions.complete());
+    CHECK(tee_regions.regions.size() == 1U);
+    CHECK(
+        std::abs(
+            tee_regions.regions.front().area -
+            8.0) < 1.0e-12);
+
+    // Two through-lines create four independent bounded arrangement cells.
+    SketchModel grid = rectangle;
+    (void)grid.addLine(
+        Point2{2.0, 0.0},
+        Point2{2.0, 2.0});
+    (void)grid.addLine(
+        Point2{0.0, 1.0},
+        Point2{4.0, 1.0});
+    const auto grid_regions =
+        analyzeRegions(grid);
+    CHECK(grid_regions.complete());
+    CHECK(grid_regions.regions.size() == 4U);
+    for (const auto& region :
+         grid_regions.regions) {
+        CHECK(
+            std::abs(region.area - 2.0) <
+            1.0e-12);
+    }
+
+    // A standalone Circle is a bounded region without authored endpoints.
+    SketchModel circle_region_model;
+    (void)circle_region_model.addCircle(
+        Point2{0.0, 0.0},
+        2.0);
+    const auto circle_regions =
+        analyzeRegions(circle_region_model);
+    CHECK(circle_regions.complete());
+    CHECK(circle_regions.regions.size() == 1U);
+    CHECK(
+        std::abs(
+            circle_regions.regions.front().area -
+            4.0 * pi) < 1.0e-12);
+    CHECK(
+        pickRegion(
+            circle_region_model,
+            circle_regions,
+            Point2{0.0, 0.0})
+            .location ==
+        RegionPointLocation::inside);
+
+    // Arc + Line may form a closed exact bounded region.
+    SketchModel arc_region_model;
+    (void)arc_region_model.addArc(
+        Point2{0.0, 0.0},
+        1.0,
+        0.0,
+        pi);
+    (void)arc_region_model.addLine(
+        Point2{-1.0, 0.0},
+        Point2{1.0, 0.0});
+    const auto arc_regions =
+        analyzeRegions(arc_region_model);
+    CHECK(arc_regions.complete());
+    CHECK(arc_regions.regions.size() == 1U);
+    CHECK(
+        std::abs(
+            arc_regions.regions.front().area -
+            pi * 0.5) < 1.0e-12);
+    CHECK(
+        pickRegion(
+            arc_region_model,
+            arc_regions,
+            Point2{0.0, 0.5})
+            .location ==
+        RegionPointLocation::inside);
+
+    // Disconnected nested loops form an annular candidate plus the inner disk.
+    SketchModel nested;
+    (void)nested.addLine(
+        Point2{-3.0, -3.0},
+        Point2{3.0, -3.0});
+    (void)nested.addLine(
+        Point2{3.0, -3.0},
+        Point2{3.0, 3.0});
+    (void)nested.addLine(
+        Point2{3.0, 3.0},
+        Point2{-3.0, 3.0});
+    (void)nested.addLine(
+        Point2{-3.0, 3.0},
+        Point2{-3.0, -3.0});
+    (void)nested.addCircle(
+        Point2{0.0, 0.0},
+        1.0);
+    const auto nested_regions =
+        analyzeRegions(nested);
+    CHECK(nested_regions.complete());
+    CHECK(nested_regions.regions.size() == 2U);
+
+    std::size_t regions_with_holes = 0U;
+    for (const auto& region :
+         nested_regions.regions) {
+        if (!region.holes.empty()) {
+            ++regions_with_holes;
+            CHECK(region.holes.size() == 1U);
+            CHECK(
+                std::abs(
+                    region.area -
+                    (36.0 - pi)) <
+                1.0e-12);
+        }
+    }
+    CHECK(regions_with_holes == 1U);
+    CHECK(
+        pickRegion(
+            nested,
+            nested_regions,
+            Point2{2.0, 0.0})
+            .location ==
+        RegionPointLocation::inside);
+    CHECK(
+        pickRegion(
+            nested,
+            nested_regions,
+            Point2{0.0, 0.0})
+            .location ==
+        RegionPointLocation::inside);
+
+    // Point-only tangent contact does not combine two material regions.
+    SketchModel tangent_regions_model;
+    (void)tangent_regions_model.addCircle(
+        Point2{-1.0, 0.0},
+        1.0);
+    (void)tangent_regions_model.addCircle(
+        Point2{1.0, 0.0},
+        1.0);
+    const auto tangent_regions =
+        analyzeRegions(
+            tangent_regions_model);
+    CHECK(tangent_regions.complete());
+    CHECK(tangent_regions.regions.size() == 2U);
+
+    // Overlap invalidates only its connected component; unrelated valid
+    // regions remain available.
+    SketchModel local_overlap = rectangle;
+    (void)local_overlap.addLine(
+        Point2{10.0, 0.0},
+        Point2{14.0, 0.0});
+    (void)local_overlap.addLine(
+        Point2{11.0, 0.0},
+        Point2{13.0, 0.0});
+    const auto overlap_regions =
+        analyzeRegions(local_overlap);
+    CHECK(!overlap_regions.complete());
+    CHECK(overlap_regions.diagnostics.size() == 1U);
+    CHECK(
+        overlap_regions.diagnostics.front().kind ==
+        RegionAnalysisDiagnosticKind::
+            ambiguous_overlap);
+    CHECK(overlap_regions.regions.size() == 1U);
+    CHECK(
+        pickRegion(
+            local_overlap,
+            overlap_regions,
+            Point2{1.0, 1.0})
+            .location ==
+        RegionPointLocation::inside);
+
     return 0;
 }

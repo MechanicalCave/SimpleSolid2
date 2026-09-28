@@ -5,6 +5,7 @@
 #include <simplesolid2/sketch/sketch_model.hpp>
 
 #include <cstdint>
+#include <optional>
 #include <vector>
 
 namespace simplesolid2::sketch {
@@ -64,5 +65,80 @@ struct CurveRelation2D final {
     const SketchModel& model,
     EntityId first,
     EntityId second);
+
+enum class RegionAnalysisDiagnosticKind {
+    ambiguous_overlap,
+    invalid_topology,
+};
+
+struct RegionAnalysisDiagnostic2D final {
+    RegionAnalysisDiagnosticKind kind{
+        RegionAnalysisDiagnosticKind::invalid_topology};
+    std::vector<EntityId> entities;
+};
+
+struct RegionBoundaryUse2D final {
+    EntityId source_entity;
+    double start_parameter{};
+    double end_parameter{};
+    bool follows_source_direction{true};
+    bool crosses_closed_seam{false};
+    bool whole_closed_curve{false};
+
+    friend bool operator==(
+        const RegionBoundaryUse2D&,
+        const RegionBoundaryUse2D&) = default;
+};
+
+struct RegionLoop2D final {
+    std::vector<RegionBoundaryUse2D> boundary;
+    double signed_area{};
+    double perimeter{};
+};
+
+struct RegionCandidate2D final {
+    std::uint32_t region_index{};
+    RegionLoop2D outer;
+    std::vector<RegionLoop2D> holes;
+    double area{};
+    double perimeter{};
+};
+
+struct RegionAnalysis2D final {
+    std::vector<RegionCandidate2D> regions;
+    std::vector<RegionAnalysisDiagnostic2D> diagnostics;
+
+    [[nodiscard]] bool complete() const noexcept {
+        return diagnostics.empty();
+    }
+};
+
+enum class RegionPointLocation {
+    outside,
+    inside,
+    boundary,
+    ambiguous,
+};
+
+struct RegionPick2D final {
+    RegionPointLocation location{
+        RegionPointLocation::outside};
+    std::optional<std::uint32_t> region_index;
+};
+
+// Builds bounded faces only from current Regular geometry. Construction
+// entities never split/close a region. Ambiguous overlap invalidates only the
+// connected topology component that contains it; unrelated components remain
+// available for region picking.
+[[nodiscard]] RegionAnalysis2D analyzeRegions(
+    const SketchModel& model);
+
+// Runtime point-pick against a previously built analysis. A point on any
+// profile boundary is reported as boundary, never assigned arbitrarily to an
+// adjacent region.
+[[nodiscard]] RegionPick2D pickRegion(
+    const SketchModel& model,
+    const RegionAnalysis2D& analysis,
+    Point2 point);
 
 } // namespace simplesolid2::sketch
