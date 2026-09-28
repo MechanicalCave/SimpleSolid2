@@ -248,6 +248,23 @@ jobs:
           .\ss2.ps1 test -Tier full -NoBuild
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+  docs:
+    name: windows-docs
+    needs: classify
+    if: needs.classify.outputs.mode == 'docs'
+    runs-on:
+      - self-hosted
+      - windows
+      - x64
+      - simplesolid2-native
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: >-
+          C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe
+          -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -Command "& ([scriptblock]::Create((Get-Content -Raw -LiteralPath '{0}')))"
+    steps:
       - name: Checkout exact documentation revision
         uses: actions/checkout@v4
         with:
