@@ -13,6 +13,7 @@
 #include <AIS_TextLabel.hxx>
 #include <AIS_ViewCube.hxx>
 #include <Aspect_DisplayConnection.hxx>
+#include <Aspect_PolygonOffsetMode.hxx>
 #include <Aspect_TypeOfLine.hxx>
 #include <Aspect_TypeOfTriedronPosition.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -1107,6 +1108,10 @@ public:
                     object,
                     AIS_Shaded,
                     false);
+                object->SetPolygonOffsets(
+                    Aspect_POM_Fill,
+                    -1.0F,
+                    -1.0F);
             }
 
             profile_scene_ = scene;
@@ -1152,6 +1157,10 @@ public:
                 object,
                 AIS_Shaded,
                 false);
+            object->SetPolygonOffsets(
+                Aspect_POM_Fill,
+                -1.0F,
+                -1.0F);
             context_->SetColor(
                 object,
                 scene.tone ==
