@@ -2948,8 +2948,7 @@ void CadWorkbench::syncSketchInteractionUi() {
             status_text);
         profile_finish_button_->setEnabled(
             sketch_interaction_controller_->
-                profileDraftIntent()
-                .has_value());
+                profileDraftValid());
         return;
     }
 
