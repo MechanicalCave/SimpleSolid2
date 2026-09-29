@@ -48,6 +48,7 @@ int main(int argc, char* argv[]) {
     widget.resize(801, 601);
     widget.show();
     QApplication::processEvents();
+    CHECK(widget.hasMouseTracking());
 
     const viewer::CameraState camera{
         viewer::Point3{0.0, 0.0, 100.0},
@@ -180,6 +181,11 @@ int main(int argc, char* argv[]) {
     CHECK(hidden_measure.completed);
     CHECK(hidden_measure.markers.empty());
 
+    // QTest uses the OS cursor. In a suite the cursor may already be at the
+    // target pixel after a previous executable, so force a distinct movement
+    // first; reveal semantics must not depend on suite-global cursor history.
+    QTest::mouseMove(&widget, QPoint{5, 5});
+    QApplication::processEvents();
     QTest::mouseMove(
         &widget,
         QPoint{
