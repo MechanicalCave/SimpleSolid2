@@ -419,6 +419,9 @@ public:
         DirectManipulationGeometry>
     directManipulationGeometryState() const;
 
+    [[nodiscard]] bool
+    continueDirectManipulationCopyPlacement() noexcept;
+
     // R5 source compatibility for Line-only callers.
     [[nodiscard]] std::optional<
         std::vector<SketchLineState>>

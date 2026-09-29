@@ -1797,6 +1797,20 @@ SketchInteractionState::directManipulationGeometryState()
     return std::nullopt;
 }
 
+bool SketchInteractionState::
+continueDirectManipulationCopyPlacement() noexcept {
+    if (!manipulation_ ||
+        !manipulation_->copy_enabled) {
+        return false;
+    }
+
+    manipulation_->current_input =
+        ResolvedSketchInput{manipulation_->pivot};
+    point_pointer_candidate_.reset();
+    clearHover();
+    return true;
+}
+
 std::optional<std::vector<SketchLineState>>
 SketchInteractionState::directManipulationGeometry()
     const {

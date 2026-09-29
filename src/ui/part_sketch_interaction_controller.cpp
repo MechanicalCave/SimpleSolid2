@@ -638,6 +638,24 @@ PartSketchInteractionController::directEditMode() const noexcept {
     return interaction_.directEditMode();
 }
 
+bool PartSketchInteractionController::
+directManipulationCopyEnabled() const noexcept {
+    return interaction_.directManipulationCopyEnabled();
+}
+
+bool PartSketchInteractionController::enableGripCopy() {
+    if (!active() ||
+        profile_session_ ||
+        !interaction_.directManipulationActive() ||
+        !interaction_.enableDirectManipulationCopy()) {
+        return false;
+    }
+
+    notifyStateChanged();
+    reportStatus("Grip Copy: ON.");
+    return true;
+}
+
 bool PartSketchInteractionController::cycleDirectEditMode() {
     if (!active() ||
         !interaction_.directManipulationActive()) {
@@ -1289,6 +1307,124 @@ commitDirectManipulation() {
         reportStatus(
             "Direct manipulation has no valid commit geometry.");
         return false;
+    }
+
+    if (interaction_.directManipulationCopyEnabled()) {
+        if (session_ == nullptr ||
+            !sketch_id_ ||
+            session_->document().revision() !=
+                *manipulation_revision_) {
+            interaction_.cancelDirectManipulation();
+            manipulation_revision_.reset();
+            viewport_controller_->clearSketchPreview();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus(
+                "Grip Copy was started from a stale DocumentRevision.");
+            return false;
+        }
+
+        const auto* hosted = activeSketch();
+        if (hosted == nullptr) {
+            interaction_.cancelDirectManipulation();
+            manipulation_revision_.reset();
+            viewport_controller_->clearSketchPreview();
+            notifyStateChanged();
+            reportStatus(
+                "Grip Copy source Sketch is not available.");
+            return false;
+        }
+
+        std::vector<sketch::EntityId> source_ids;
+        source_ids.reserve(
+            geometry->lines.size() +
+            geometry->circles.size() +
+            geometry->arcs.size());
+        for (const auto& line : geometry->lines) {
+            source_ids.push_back(line.id);
+        }
+        for (const auto& circle : geometry->circles) {
+            source_ids.push_back(circle.id);
+        }
+        for (const auto& arc : geometry->arcs) {
+            source_ids.push_back(arc.id);
+        }
+
+        const auto source =
+            sketch::captureSketchTransformGeometry(
+                hosted->model,
+                source_ids);
+        if (!source) {
+            interaction_.cancelDirectManipulation();
+            manipulation_revision_.reset();
+            viewport_controller_->clearSketchPreview();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus(
+                "Grip Copy source geometry is no longer valid.");
+            return false;
+        }
+
+        if (*geometry == *source) {
+            viewport_controller_->clearSketchPreview();
+            notifyStateChanged();
+            reportStatus(
+                "Grip Copy requires a changed placement.");
+            return false;
+        }
+
+        const auto result =
+            session_->execute(
+                application::DuplicateSketchGeometryCommand{
+                    *sketch_id_,
+                    *manipulation_revision_,
+                    *geometry});
+
+        viewport_controller_->clearSketchPreview();
+
+        if (!result.ok() || !result.changed) {
+            interaction_.cancelDirectManipulation();
+            manipulation_revision_.reset();
+            viewport_controller_->refreshPresentation();
+            const auto* current = activeSketch();
+            if (current != nullptr) {
+                interaction_.reconcileSelection(
+                    current->model);
+            }
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus(
+                result.diagnostic.message.empty()
+                    ? std::string{
+                          "Grip Copy commit failed."}
+                    : result.diagnostic.message);
+            return false;
+        }
+
+        viewport_controller_->refreshPresentation();
+
+        if (!interaction_.
+                continueDirectManipulationCopyPlacement()) {
+            interaction_.finishDirectManipulation();
+            manipulation_revision_.reset();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus(
+                "Grip Copy committed; repeated placement session ended unexpectedly.");
+            return true;
+        }
+
+        manipulation_revision_ =
+            session_->document().revision();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        reportStatus("Grip Copy placement committed.");
+        return true;
     }
 
     const auto result =
