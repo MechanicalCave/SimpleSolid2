@@ -9,6 +9,7 @@
 **Program roadmap:** `work/SKETCH_ROADMAP.md` v1.6  
 **Predecessor:** R9 Rectangle + Construction Authoring Surface — completed  
 **Milestone:** R10 — Precision Input / Units / Polar / Dynamic Input
+**Roadmap amendment proposed by this contract:** replace the v1.6 R10 separate-Ortho/Polar direction with the accepted Polar-only directional-assistance model; materialize that amendment in the accepted roadmap before production activation.
 
 ## 1. Context
 
@@ -29,6 +30,8 @@ The current product already has the correct transport and semantic seams for a p
 The current precision capability is intentionally narrow. A submitted scalar can mean Direct Distance only where the active PointRequest explicitly allows it. Circle radius, Rotate angle, Scale factor, absolute/relative coordinates, polar coordinates, unit suffixes, Polar direction assistance and Dynamic Input are not yet implemented.
 
 R10 must extend that one existing input architecture. It must not create per-tool parsers, a second command buffer, a second point resolver or a Dynamic-Input-only state machine.
+
+Roadmap v1.6 is currently still authoritative and contains the older R10 wording with a separate Ortho mode and Ortho/Polar mutual exclusion. This proposal does not silently override that higher-authority roadmap. Final Owner acceptance of this contract includes a bounded roadmap amendment to remove separate Ortho from R10 and use Polar as the sole directional magnet. The roadmap/version and `work/ACTIVE.yaml` must be updated as part of activation before any R10 production mutation.
 
 ## 2. Goal
 
@@ -1117,6 +1120,43 @@ Examples:
 - Polar Reference Absolute/Relative changes only how pointer-assistance tracks are oriented; it never changes the interpretation of an explicit textual/locked angle;
 - with no locks, Polar may capture pointer direction while pointer magnitude remains pointer-derived.
 
+## 20. Runtime CAD aids and shortcuts
+
+Polar and Dynamic Input configuration belong to one in-memory application-session interaction-settings state.
+
+Application-session initialization defaults are:
+
+```text
+Polar       ON
+Step        360/8 = 45°
+Reference   Absolute
+Additional  none
+DYN         OFF
+```
+
+These settings:
+
+- survive tool changes;
+- survive leaving one Sketch edit and entering another while the application process remains alive;
+- create no DocumentRevision, dirty state or Undo entry;
+- are not stored in Part/Sketch authored state;
+- are not serialized into the native document;
+- are not written as disk/user-profile preferences in R10;
+- reset to the defaults above after application restart.
+
+Keyboard affordances are:
+
+```text
+F10  Polar ON/OFF
+F12  Dynamic Input ON/OFF
+```
+
+The shortcut and visible UI affordance mutate the same runtime setting.
+
+Existing ADR-0011 focus arbitration remains authoritative. A real text editor retains keyboard ownership; R10 must not introduce an application-global key path that steals F10/F12 or printable input from an editor that owns focus.
+
+Circle `Diameter | Radius` is intentionally **not** part of these application-session CAD aids. It is a Circle-creation-local mode that defaults to Diameter for each new Sketch edit and uses the context-local `D` / `R` setters defined in section 11.
+
 ## 21. Dynamic Input
 
 Dynamic Input is a runtime presentation/input adapter to the same active semantic request, the same request-local numeric locks and the same workspace-global CAD input session.
@@ -1705,7 +1745,7 @@ Minimum checklist:
 - LINE: type `100`, Tab, `30`, Enter and verify exact Distance=100 / Angle=30° independent of pointer;
 - with an empty buffer, Tab through based-point fields and verify no numeric lock is created;
 - use Shift+Tab and verify deterministic reverse traversal;
-- RECTANGLE Opposite Corner: type `50`, Tab, `30`, Enter and verify exact dU/W=50 and dV/H=30 without durable rectangle parameters;
+- RECTANGLE Size: type `50`, Tab, `30`, Enter and verify exact Width=50 / Height=30 with pointer-derived quadrant and no durable rectangle parameters;
 - Rotate/grip Rotate: verify single Angle field; Scale/grip Scale: single Factor field; grip Mirror: single Axis Angle field;
 - verify Command Line and Dynamic Input resolve through the same request/live token and produce identical geometry for equivalent values;
 - verify Esc clears live text, then numeric locks, then normal tool stage;
@@ -1728,6 +1768,7 @@ Stop for Owner review if implementation requires or attempts:
 - persisting Polar/Dynamic Input runtime state;
 - OSNAP/tracking/inference;
 - Grid Snap;
+- production mutation before the accepted roadmap/ACTIVE state has been updated for the Polar-only R10 amendment;
 - authored dimensions/constraints/solver;
 - durable Rectangle parameters;
 - new Circle/Arc construction methods;
@@ -1750,6 +1791,15 @@ R11 must consume the accepted R10 resolver priority and numeric locks. It must n
 ## 33. Activation and completion boundary
 
 R10 may become ACTIVE only after explicit Owner acceptance of this Work Contract.
+
+That acceptance also approves the bounded program-roadmap amendment described above: R10 no longer contains a separate Ortho mode; Polar is the sole directional-assistance mode and `360/4` provides orthogonal-only attraction. Before the first R10 production mutation, activation must:
+
+- materialize the amendment as the next accepted Sketcher Roadmap version (expected v1.7);
+- update `work/ACTIVE.yaml` to that roadmap version and this R10 Work Contract;
+- remove stale R10/forward-looking separate-Ortho wording where it would contradict the accepted Polar-only resolver;
+- preserve R11 sequencing and all other unaffected roadmap boundaries.
+
+The proposal PR itself remains Work-Contract-only and does not perform that activation bookkeeping before Owner acceptance.
 
 Completion requires:
 
