@@ -1,6 +1,6 @@
 # R8B — Relational Measure + Runtime Semantic Targets
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** ACCEPTED — COMPLETED  
 **Proposed:** 2026-09-29  
 **Proposal revision:** 2026-09-29 — dynamic proximity-reveal markers + lightweight transient relation cues  
 **Owner acceptance:** 2026-09-29  
@@ -853,3 +853,28 @@ Completion requires:
 - work-only CLOSURE closeout.
 
 R8C and R9+ remain inactive after R8B completion unless separately accepted.
+
+
+## 30. Completion evidence
+
+R8B completion evidence on 2026-09-29:
+
+- final implementation/documentation candidate `3f1e0103e26bce49d075b5899cc3931f982f8320`;
+- core/relation CI-03 FOCUSED #875/#876 PASS;
+- Viewer contract #877 PASS;
+- Part viewport semantic bridge #878 PASS;
+- native Qt/OCCT marker reveal/query/cue #879 PASS;
+- interaction-controller/CAD-input #880 PASS;
+- real Workbench integration #881 PASS;
+- native fixture stabilization #884 PASS;
+- seven-target affected checkpoint #885 PASS;
+- final Windows FULL #889 PASS on exact head `3f1e0103e26bce49d075b5899cc3931f982f8320`;
+- documentation/bootstrap/dispatcher verification, desktop Build, FAST/SUBSYSTEM selector checks and stable `windows-msvc` PASS;
+- core-only semantic suite 14/14 PASS with the desktop-disabled semantic graph;
+- unfiltered desktop FULL suite 77/77 PASS, including native measurement marker reveal/query coverage;
+- required internal and PL/EN Product documentation plus generated Product Browser freshness PASS;
+- Owner manual Windows verification PASS on 2026-09-29 on the same exact candidate, covering R8A regression, toolbar and Command Line Between entry, dynamic proximity marker visibility without snapping, point↔point, point↔Line including outside-segment supporting-line continuation, Line↔Line, Circle/Arc explicit semantic-marker targeting, selection/history/Esc invariants, Construction geometry and final grips/COPY/Grip Copy/Profile smoke;
+- visual manual review accepted marker aperture/readability and distinction from edit grips, plus the temporary point↔point and point↔Line representative cues;
+- no persistence/schema change, durable sub-element identity, OSNAP/inference engine, unit-system architecture, generic minimum-distance engine, general-purpose dimension-overlay expansion, authored dimensions/constraints/solver or solid-modeling scope was introduced.
+
+All R8B acceptance conditions are satisfied. R8B is complete. R8C Show Dimensions remains inactive and requires a separate Owner-accepted Work Contract before production implementation; R9 remains inactive until the complete R8 milestone is closed or the Owner explicitly amends sequencing.
