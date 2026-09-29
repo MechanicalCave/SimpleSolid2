@@ -87,6 +87,7 @@ struct PointLineMeasurement final {
     Point2 line_start;
     Point2 line_end;
     Point2 perpendicular_foot;
+    double projection_parameter{};
     bool foot_on_segment{};
     double distance{};
 
@@ -110,6 +111,59 @@ using RelationalMeasurement =
         PointPointMeasurement,
         PointLineMeasurement,
         LineLineAngleMeasurement>;
+
+enum class MeasureCueSegmentKind : std::uint8_t {
+    relation,
+    supporting_line_continuation,
+};
+
+struct MeasureCueSegment2 final {
+    Point2 start;
+    Point2 end;
+    MeasureCueSegmentKind kind{
+        MeasureCueSegmentKind::relation};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return start.finite() &&
+               end.finite() &&
+               start != end;
+    }
+
+    friend bool operator==(
+        const MeasureCueSegment2&,
+        const MeasureCueSegment2&) = default;
+};
+
+struct RelationalMeasurementCue final {
+    std::vector<MeasureCueSegment2> segments;
+    std::vector<EntityId> highlighted_lines;
+    std::optional<Point2> cue_point;
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (cue_point && !cue_point->finite()) {
+            return false;
+        }
+        for (const auto& segment : segments) {
+            if (!segment.valid()) return false;
+        }
+        for (const auto id : highlighted_lines) {
+            if (!id.valid()) return false;
+        }
+        for (std::size_t left = 0U;
+             left < highlighted_lines.size();
+             ++left) {
+            for (std::size_t right = left + 1U;
+                 right < highlighted_lines.size();
+                 ++right) {
+                if (highlighted_lines[left] ==
+                    highlighted_lines[right]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+};
 
 [[nodiscard]] inline std::optional<ResolvedMeasurePoint>
 resolveMeasurePoint(
@@ -335,6 +389,7 @@ measureRelation(
                 line->start(),
                 line->end(),
                 foot,
+                t,
                 t >= 0.0 && t <= 1.0,
                 distance}};
     };
@@ -532,6 +587,82 @@ measureEntity(
     }
 
     return std::nullopt;
+}
+
+[[nodiscard]] inline std::optional<RelationalMeasurementCue>
+makeRelationalMeasurementCue(
+    const RelationalMeasurement& measurement) noexcept {
+    RelationalMeasurementCue cue;
+
+    if (const auto* value =
+            std::get_if<PointPointMeasurement>(
+                &measurement)) {
+        if (value->first_point !=
+            value->second_point) {
+            cue.segments.push_back(
+                MeasureCueSegment2{
+                    value->first_point,
+                    value->second_point,
+                    MeasureCueSegmentKind::relation});
+        }
+        return cue.valid()
+            ? std::optional<RelationalMeasurementCue>{
+                  std::move(cue)}
+            : std::nullopt;
+    }
+
+    if (const auto* value =
+            std::get_if<PointLineMeasurement>(
+                &measurement)) {
+        cue.highlighted_lines.push_back(
+            value->line.entity_id);
+        cue.cue_point =
+            value->perpendicular_foot;
+
+        if (value->point_position !=
+            value->perpendicular_foot) {
+            cue.segments.push_back(
+                MeasureCueSegment2{
+                    value->point_position,
+                    value->perpendicular_foot,
+                    MeasureCueSegmentKind::relation});
+        }
+
+        if (!value->foot_on_segment) {
+            const Point2 extension_start =
+                value->projection_parameter < 0.0
+                    ? value->line_start
+                    : value->line_end;
+            if (extension_start !=
+                value->perpendicular_foot) {
+                cue.segments.push_back(
+                    MeasureCueSegment2{
+                        extension_start,
+                        value->perpendicular_foot,
+                        MeasureCueSegmentKind::
+                            supporting_line_continuation});
+            }
+        }
+
+        return cue.valid()
+            ? std::optional<RelationalMeasurementCue>{
+                  std::move(cue)}
+            : std::nullopt;
+    }
+
+    const auto* value =
+        std::get_if<LineLineAngleMeasurement>(
+            &measurement);
+    if (value == nullptr) {
+        return std::nullopt;
+    }
+    cue.highlighted_lines = {
+        value->first.entity_id,
+        value->second.entity_id};
+    return cue.valid()
+        ? std::optional<RelationalMeasurementCue>{
+              std::move(cue)}
+        : std::nullopt;
 }
 
 } // namespace simplesolid2::sketch

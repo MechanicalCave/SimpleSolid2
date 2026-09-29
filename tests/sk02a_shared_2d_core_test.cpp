@@ -1124,6 +1124,51 @@ int main() {
         std::get<PointLineMeasurement>(*line_point)
             .perpendicular_foot ==
         point_line_value.perpendicular_foot);
+    CHECK(
+        std::abs(
+            point_line_value.projection_parameter -
+            2.0) < 1e-12);
+
+    const auto point_line_cue =
+        makeRelationalMeasurementCue(*point_line);
+    CHECK(point_line_cue.has_value());
+    CHECK(point_line_cue->highlighted_lines.size() == 1U);
+    CHECK(
+        point_line_cue->highlighted_lines.front() ==
+        relation_line);
+    CHECK(point_line_cue->cue_point.has_value());
+    CHECK(
+        *point_line_cue->cue_point ==
+        expected_perpendicular_foot);
+    CHECK(point_line_cue->segments.size() == 2U);
+    CHECK(
+        point_line_cue->segments[0].kind ==
+        MeasureCueSegmentKind::relation);
+    CHECK(
+        point_line_cue->segments[1].kind ==
+        MeasureCueSegmentKind::
+            supporting_line_continuation);
+    CHECK(
+        point_line_cue->segments[1].start ==
+        expected_line_end);
+    CHECK(
+        point_line_cue->segments[1].end ==
+        expected_perpendicular_foot);
+
+    const auto point_point_cue =
+        makeRelationalMeasurementCue(*pp);
+    CHECK(point_point_cue.has_value());
+    CHECK(point_point_cue->segments.size() == 1U);
+    CHECK(
+        point_point_cue->segments.front().kind ==
+        MeasureCueSegmentKind::relation);
+    CHECK(
+        point_point_cue->highlighted_lines.empty());
+
+    const auto same_point_cue =
+        makeRelationalMeasurementCue(*same_point);
+    CHECK(same_point_cue.has_value());
+    CHECK(same_point_cue->segments.empty());
 
     const auto line_line =
         measureRelation(
@@ -1137,6 +1182,17 @@ int main() {
         std::get<LineLineAngleMeasurement>(*line_line)
             .smaller_undirected_angle -
         std::numbers::pi_v<double> * 0.25) < 1e-12);
+    const auto line_line_cue =
+        makeRelationalMeasurementCue(*line_line);
+    CHECK(line_line_cue.has_value());
+    CHECK(line_line_cue->segments.empty());
+    CHECK(line_line_cue->highlighted_lines.size() == 2U);
+    CHECK(
+        line_line_cue->highlighted_lines[0] ==
+        relation_line);
+    CHECK(
+        line_line_cue->highlighted_lines[1] ==
+        relation_oblique);
 
     const auto perpendicular_lines =
         measureRelation(
