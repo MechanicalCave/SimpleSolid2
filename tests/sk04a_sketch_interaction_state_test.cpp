@@ -345,6 +345,26 @@ int main() {
     CHECK(
         state.rectangleStage() ==
         sketch::RectangleStage::await_opposite_corner);
+    CHECK(
+        state.acceptRectanglePoint(
+                 {rectangle_opposite.u, a.v})
+                .outcome ==
+        sketch::RectanglePointOutcome::
+            degenerate_ignored);
+    CHECK(
+        state.rectangleStage() ==
+        sketch::RectangleStage::await_opposite_corner);
+
+    const auto rectangle_non_finite =
+        state.acceptRectanglePoint(
+            {std::numeric_limits<double>::infinity(),
+             rectangle_opposite.v});
+    CHECK(
+        rectangle_non_finite.outcome ==
+        sketch::RectanglePointOutcome::invalid_point);
+    CHECK(
+        state.rectangleStage() ==
+        sketch::RectangleStage::await_opposite_corner);
 
     CHECK(
         state.acceptRectanglePoint(

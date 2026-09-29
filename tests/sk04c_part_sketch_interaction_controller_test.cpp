@@ -1141,6 +1141,28 @@ int main(int argc, char* argv[]) {
         const auto option_undo =
             rectangle_session.undoDepth();
         CHECK(
+            rectangle_interaction.setCreationRole(
+                sketch::EntityRole::construction));
+        CHECK(
+            rectangle_interaction.creationRole() ==
+            sketch::EntityRole::construction);
+        CHECK(
+            rectangle_session.document().revision() ==
+            option_revision);
+        CHECK(
+            rectangle_session.undoDepth() ==
+            option_undo);
+        CHECK(
+            rectangle_interaction.setCreationRole(
+                sketch::EntityRole::regular));
+        CHECK(
+            rectangle_session.document().revision() ==
+            option_revision);
+        CHECK(
+            rectangle_session.undoDepth() ==
+            option_undo);
+
+        CHECK(
             rectangle_interaction
                 .setRectangleDrawDiagonals(true));
         CHECK(
