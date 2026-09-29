@@ -81,11 +81,13 @@ Subject to explicit Owner acceptance, R10 adopts these bounded decisions:
 23. Rotate final placement accepts an explicit Angle value as a numeric lock/commit path while pointer placement remains valid.
 24. Rotate typed-angle sign is explicit and pointer-independent: bare/positive `30` means +30° counter-clockwise and `-30` means 30° clockwise. Pointer drives Rotate preview only while no explicit angle value owns the request.
 25. Scale final placement accepts an explicit positive dimensionless Scalar factor while pointer placement remains valid.
-26. Move/Copy/grip point requests accept coordinate/polar/direct-distance forms through the same resolver.
-27. Non-center grip Space CycleEditMode expands to `Reshape → Move → Rotate → Scale → Mirror → Reshape`.
+26. Grip Scale captures the current pivot→pointer radius as factor 1.0 on mode entry (or the first later valid radius), and explicit Factor input fully overrides subsequent pointer motion.
+27. Move/Copy/grip point requests accept coordinate/polar/direct-distance forms through the same resolver.
+28. Non-center grip Space CycleEditMode expands to `Reshape → Move → Rotate → Scale → Mirror → Reshape`.
 28. Center grips, which have no meaningful Reshape mode, cycle `Move → Rotate → Scale → Mirror → Move`.
 29. Grip mode cycling preserves the active grip, interaction-start pivot, frozen semantic selection/source geometry and current pointer candidate where meaningful, and recomputes every preview from frozen authored inputs rather than compounding prior preview.
-30. Mirror remains two point requests; its axis can be placed precisely through coordinate/polar input.
+31. Ordinary Mirror remains two point requests; its axis can be placed precisely through coordinate/polar input.
+32. Grip Mirror fixes Axis Start at the active grip/pivot and additionally accepts a typed Axis Angle measured from Sketch +U; explicit angle input is pointer-independent and defines the semantic infinite mirror axis.
 27. Explicit numeric locks outrank Ortho/Polar and raw pointer.
 28. Ortho and Polar are mutually exclusive runtime Sketch modes.
 29. Ortho constrains a based point direction to Sketch-local ±U or ±V.
@@ -604,19 +606,48 @@ Factor must be finite and strictly positive.
 
 Factor 1 follows existing no-op behavior.
 
+For grip Scale entered through Space CycleEditMode:
+
+- the active grip remains the scale pivot;
+- on entry to Scale, the current finite non-zero pointer radius from pivot is captured as the reference radius representing factor 1.0;
+- later pointer motion previews `current_radius / reference_radius`;
+- pointer direction does not affect the scale factor;
+- if no finite non-zero pointer radius exists on entry, Scale waits for the first valid non-zero radius and captures that as factor 1.0;
+- cycling away from Scale discards that runtime reference radius;
+- cycling back to Scale captures a fresh reference radius from the current pointer candidate;
+- every preview is recomputed from the interaction-start frozen authored geometry rather than compounded from a previous mode/preview.
+
+Once an explicit Factor owns the request, preview and final commit use that exact factor and subsequent pointer motion no longer changes it.
+
 Dynamic Input shows Factor at the final stage.
 
-R10 does not add non-uniform scale or Scale+Copy.
+R10 does not add negative Scale as hidden Mirror, non-uniform scale or Scale+Copy.
 
 ## 18. Mirror
 
-Mirror remains a two-point axis workflow.
+Ordinary Mirror remains a two-point axis workflow.
 
 Axis Start and Axis End are precision-capable point requests.
 
 Axis End may use relative Cartesian, relative polar and Ortho/Polar.
 
-No Mirror angle-only shortcut or Mirror+Copy is introduced.
+Grip Mirror entered through Space CycleEditMode has a bounded shorthand:
+
+- the active grip/pivot is the Mirror Axis Start;
+- pointer position supplies the live Axis End and therefore immediate mirror preview;
+- the user may instead submit a typed Axis Angle;
+- typed Axis Angle is measured from Sketch +U through the grip/pivot;
+- bare/positive `45` means an axis at +45°;
+- `-30` means an axis at -30°;
+- pointer side/radius never changes an explicit typed Axis Angle;
+- once an explicit Axis Angle owns the request, any finite non-zero axis length is presentation/runtime-only; the semantic mirror axis is the infinite line through the pivot at that exact angle;
+- a zero-length pointer vector cannot define pointer preview but does not invalidate an already explicit Axis Angle;
+- cycling away from Mirror clears the runtime mirror-axis angle/reference state;
+- cycling back to Mirror starts from the current pointer candidate, without reusing a previous Mirror mode reference.
+
+The typed angle shortcut is specific to grip Mirror because the first axis point is already semantically fixed by the active grip. Ordinary toolbar/Command-Line Mirror keeps its explicit two-point axis grammar.
+
+No Mirror+Copy is introduced.
 
 ## 19. Ortho
 
@@ -902,8 +933,10 @@ At minimum verify:
 38. re-entering grip Rotate captures a fresh zero/reference direction rather than reusing a prior one;
 39. Rotate accepts explicit signed Angle;
 40. Rotate positive/negative direction is deterministic and pointer-independent after explicit input;
-38. Scale accepts explicit positive Factor;
-39. Mirror axis accepts precision point input;
+41. Scale accepts explicit positive Factor;
+42. grip Scale captures/re-captures factor-1 reference radius deterministically and explicit Factor overrides pointer;
+43. ordinary Mirror axis accepts precision point input;
+44. grip Mirror accepts exact signed Axis Angle through the pivot, measured from Sketch +U and independent of pointer after explicit input;
 37. Ortho default is OFF;
 38. Ortho constrains to Sketch U/V axes deterministically;
 39. Polar default is OFF;
@@ -967,8 +1000,13 @@ Minimum checklist:
 - cycle away from Rotate and back, then verify a fresh current pointer direction becomes the new 0° reference;
 - Rotate typed `30` and verify exact +30° CCW regardless of which side the pointer currently occupies;
 - Rotate typed `-30` and verify exact 30° CW regardless of pointer side;
-- Scale typed Factor;
-- Mirror precise axis points;
+- enter grip Scale at a known pointer radius, confirm that radius is factor 1.0, then verify doubled/halved radius previews factor 2/0.5;
+- type Scale factor `2` and `0.5` and verify pointer motion no longer changes the exact factor;
+- cycle away from grip Scale and back and verify a fresh current radius becomes factor 1.0;
+- ordinary Mirror precise axis points;
+- grip Mirror pointer preview with pivot as Axis Start;
+- grip Mirror typed `45` and verify exact +45° axis through the pivot regardless of pointer position;
+- grip Mirror typed `-30` and verify exact -30° axis through the pivot regardless of pointer position;
 - enable Ortho and verify pointer direction locks to U/V without creating constraints;
 - enable Polar and verify Ortho turns off;
 - verify primary 45-degree tracks;
