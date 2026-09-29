@@ -111,11 +111,14 @@ Modify
   Rotate
   Scale
   Mirror
+
+Inspect
+  Measure
 ```
 
 Command Line jest wspólną powierzchnią Workspace i nie wymaga kliknięcia przed normalnym wprowadzaniem CAD. Gdy focus ma viewport lub inna zwykła powierzchnia CAD, możesz od razu pisać — znaki pojawią się w Command Line, ale focus pozostanie w viewport. Enter wysyła wpisany token do aktywnego kontekstu. Kliknięcie Command Line nadal działa i edytuje dokładnie ten sam bufor.
 
-W aktywnym Sketchu obsługiwane są słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`. Command Line jest kontekstowy: jeżeli aktywny etap oczekuje punktu, bieżący semantic PointRequest ma pierwszeństwo przed uruchomieniem nowej komendy. W etapach obsługujących Direct Distance samodzielna wartość liczbowa jest interpretowana jako odległość. Podczas aktywnej manipulacji gripem `C` + Enter jest lokalnym słowem kluczowym włączającym Grip Copy; poza aktywnym gripem `C` nie staje się globalnym aliasem komendy. Enter konsumuje wpisany token także wtedy, gdy jest błędny: model oraz aktywne narzędzie/etap pozostają bez zmian, edytowane pole jest czyszczone, a diagnostic informuje o błędzie bez zmuszania użytkownika do ręcznego kasowania odrzuconego tekstu.
+W aktywnym Sketchu obsługiwane są słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`. Command Line jest kontekstowy: jeżeli aktywny etap oczekuje punktu, bieżący semantic PointRequest ma pierwszeństwo przed uruchomieniem nowej komendy. W etapach obsługujących Direct Distance samodzielna wartość liczbowa jest interpretowana jako odległość. Podczas aktywnej manipulacji gripem `C` + Enter jest lokalnym słowem kluczowym włączającym Grip Copy; poza aktywnym gripem `C` nie staje się globalnym aliasem komendy. Enter konsumuje wpisany token także wtedy, gdy jest błędny: model oraz aktywne narzędzie/etap pozostają bez zmian, edytowane pole jest czyszczone, a diagnostic informuje o błędzie bez zmuszania użytkownika do ręcznego kasowania odrzuconego tekstu.
 
 Prawdziwe pola tekstowe — np. edycja właściwości — zachowują własny focus i wpisywanie do nich nie zasila Command Line. Skróty aplikacji z Ctrl/Alt/Meta również nie są zamieniane na tekst CAD. Menu, popup, okno modalne, inne okno aplikacji oraz drugi widoczny Workspace SS2 zachowują własność klawiatury i nie zasilają Command Line działającego w tle.
 
@@ -255,6 +258,29 @@ Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywu
 
 Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeryczne Rotate/Scale, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
 
+<!-- section-id: product.parts.measure -->
+## Inspect — Measure
+
+Podczas edycji Sketchu użyj **Inspect → Measure**, aby sprawdzić jedną linię, okrąg albo łuk bez zmiany modelu.
+
+Jeżeli w chwili uruchomienia Measure dokładnie jedna encja Sketchu jest już zaznaczona, od razu staje się początkowym celem pomiaru. Przy pustym zaznaczeniu kliknij encję. Przy zaznaczeniu wielu encji Measure celowo nie zgaduje, którą masz na myśli — kliknij obiekt, który chcesz sprawdzić. Cel Measure jest oddzielony od zwykłego selection, więc pomiar innej encji nie zastępuje istniejącego zaznaczenia.
+
+Operations pokazuje:
+
+- **Line:** Length, Delta U, Delta V oraz skierowany Angle +U od Start do End;
+- **Circle:** Radius, Diameter, Circumference i Area;
+- **Arc:** Radius, Start Angle, End Angle, Signed Sweep i Arc Length.
+
+Można mierzyć zarówno geometrię Regular, jak i Construction. Pomiar korzysta z semantycznej geometrii Sketchu, a nie z widocznej tessellacji Viewera.
+
+Measure możesz także uruchomić wpisując `MEASURE` w Command Line. Narzędzie pozostaje aktywne, więc można kolejno klikać różne encje. Kliknięcie pustego tła czyści bieżący wynik pomiaru, ale nie zmienia normalnego zaznaczenia. **Esc** kończy Measure i wraca do Select.
+
+Measure jest read-only: samo uruchomienie ani zmiana celu nie powodują dirty Dokumentu, nie zmieniają revision, nie zużywają identyfikatorów i nie tworzą kroku Undo. Measure nie wchodzi do Repeat Last Command.
+
+Obecne wartości liniowe i pola są pokazywane w skali współrzędnych Sketchu bez etykiety jednostki fizycznej. Kąty są prezentowane w stopniach. Jawne jednostki Dokumentu i konwersja należą do późniejszego etapu Precision/Units.
+
+R8A mierzy tylko całe encje. Pomiar relacyjny point-to-point/perpendicular/line-to-line, trwałe referencje do sub-elementów, viewportowe overlaye wymiarowe oraz authored dimensions/constraints nie należą do bieżącego narzędzia.
+
 <!-- section-id: product.parts.profiles -->
 ## Construction i Profile
 
@@ -338,7 +364,7 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 
 Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, fundament Workbench/Viewer 3D oraz trwałe Sketche na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
 
-Bieżący Sketch UI zapewnia Select oraz grupy Create i Modify z Line/Circle/Arc oraz Move/Copy/Rotate/Scale/Mirror, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Grip Copy przez aktywne `C` dla owner-only Reshape albo frozen-selection Move, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz keyboard-first Command Line.
+Bieżący Sketch UI zapewnia Select oraz grupy Create, Modify i Inspect z Line/Circle/Arc, Move/Copy/Rotate/Scale/Mirror oraz read-only Measure, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Grip Copy przez aktywne `C` dla owner-only Reshape albo frozen-selection Move, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz keyboard-first Command Line.
 
 Direct Distance jest dostępny dla obsługiwanych etapów PointRequest opisanych wyżej, również dla placementów gripu po włączeniu Grip Copy. Profile nie jest operacją bryłową. Nadal brakuje Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego kąta Rotate i współczynnika Scale, współrzędnych absolutnych/względnych/polarnych, unit expressions i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features/Extrude, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 

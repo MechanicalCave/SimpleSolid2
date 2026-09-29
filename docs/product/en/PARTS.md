@@ -111,11 +111,14 @@ Modify
   Rotate
   Scale
   Mirror
+
+Inspect
+  Measure
 ```
 
 Command Line is a shared Workspace surface and no longer requires a click before ordinary CAD entry. While the viewport or another normal CAD surface has focus, you can start typing immediately: the characters appear in Command Line while focus remains in the viewport. Enter submits the token to the active context. Clicking Command Line still works and edits the very same live buffer.
 
-Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. During active grip manipulation, `C` + Enter is a local keyword that enables Grip Copy; outside an active grip it is not a global command alias. Enter consumes the submitted token even when it is invalid: the model and active tool/stage stay unchanged, the editable field is cleared and a diagnostic reports the error instead of forcing you to delete the rejected text manually.
+Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. During active grip manipulation, `C` + Enter is a local keyword that enables Grip Copy; outside an active grip it is not a global command alias. Enter consumes the submitted token even when it is invalid: the model and active tool/stage stay unchanged, the editable field is cleared and a diagnostic reports the error instead of forcing you to delete the rejected text manually.
 
 Real text-entry fields — for example property editors — keep keyboard ownership and do not feed Command Line. Application shortcuts using Ctrl/Alt/Meta are also not converted into CAD text. Menus, popups, modal dialogs, another application window and another visible SS2 Workspace keep their own keyboard ownership; they do not feed a background Command Line.
 
@@ -255,6 +258,29 @@ Creation tools preserve pre-existing selection but hide/deactivate grips while a
 
 Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeric Rotate/Scale, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages.
 
+<!-- section-id: product.parts.measure -->
+## Inspect — Measure
+
+Use **Inspect → Measure** while editing a Sketch to inspect one Line, Circle or Arc without changing the model.
+
+If exactly one Sketch entity is already selected when you activate Measure, it becomes the initial measurement target immediately. If nothing is selected, click an entity. If several entities are selected, Measure deliberately does not guess which one you mean; click the entity you want to inspect. The Measure target is separate from ordinary selection, so inspecting another entity does not replace your existing selection.
+
+Operations shows:
+
+- **Line:** Length, Delta U, Delta V and directed Angle +U from Start to End;
+- **Circle:** Radius, Diameter, Circumference and Area;
+- **Arc:** Radius, Start Angle, End Angle, Signed Sweep and Arc Length.
+
+Regular and Construction geometry can both be measured. Measurement uses semantic Sketch geometry, not the visible tessellation of the Viewer.
+
+You can also type `MEASURE` in Command Line. Measure stays active so you can click different entities repeatedly. Clicking blank space clears the current measurement result but leaves ordinary selection unchanged. Press **Esc** to leave Measure and return to Select.
+
+Measure is read-only: activating it or changing its target does not dirty the Document, change revision, allocate identities or create an Undo step. It is not included in Repeat Last Command.
+
+Current linear and area values are shown in the Sketch coordinate scale without a physical unit label. Angles are displayed in degrees. Explicit document units and conversion belong to later Precision/Units work.
+
+R8A measures whole entities only. Point-to-point/perpendicular/line-to-line relational measurement, persistent sub-element references, viewport dimension overlays and authored dimensions/constraints are not part of the current tool.
+
 <!-- section-id: product.parts.profiles -->
 ## Construction and Profile
 
@@ -338,7 +364,7 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 
 The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, and Part-owned Profiles with live RegionIntent semantics.
 
-The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Grip Copy through active-grip `C` for owner-only Reshape or frozen-selection Move, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
+The current Sketch UI provides Select plus Create, Modify and Inspect groups with Line/Circle/Arc, Move/Copy/Rotate/Scale/Mirror and read-only Measure, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Grip Copy through active-grip `C` for owner-only Reshape or frozen-selection Move, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
 
 Direct Distance is available for the supported PointRequest stages documented above, including grip placements while Grip Copy is enabled. Profile is not a solid operation. The product still lacks Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
 

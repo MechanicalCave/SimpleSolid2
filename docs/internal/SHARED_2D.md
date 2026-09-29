@@ -20,6 +20,7 @@ The target currently contains:
 - authored per-entity `Regular` / `Construction` role;
 - the value-semantic mixed-primitive `SketchModel` plus validated state/restore transfer;
 - provider-neutral Line/Circle/Arc curve-relation and bounded-region analysis, point-in-region picking, exact region composition and nested-island discovery;
+- provider-neutral read-only whole-entity measurement for Line/Circle/Arc;
 - host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips, bounded direct manipulation and common Move/Copy/Rotate/Scale/Mirror command stages;
 - a provider-independent mixed-primitive transform core for translation, rotation, positive uniform scale and reflection.
 
@@ -195,7 +196,26 @@ After a Line segment, normal COPY placement or Grip Copy placement completes, st
 
 Accepted non-no-op edit transforms/reshape commit through the host semantic geometry-update command and Part transaction and preserve EntityIds. Each accepted normal COPY or Grip Copy placement instead executes the existing atomic semantic duplication command, allocates a fresh ID for each copied entity and creates one revision/Undo entry. Multiple repeated placements are independent Undo steps.
 
-Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation, including Grip Copy, before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/se<!-- section-id: internal.shared-2d.regions -->
+Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation, including Grip Copy, before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/se<!-- section-id: internal.shared-2d.measurement -->
+## Read-only whole-entity measurement
+
+R8A adds provider-neutral measurement in `measurement.hpp`. Measurement consumes the authoritative semantic `SketchModel` geometry by `EntityId`; it does not consume Viewer tessellation, presentation tokens, pixels or sampled display chords.
+
+The current result is a value-semantic `EntityMeasurement` variant with one of:
+
+- `LineMeasurement` — EntityId, Regular/Construction role, Length, DeltaU, DeltaV and directed angle from Sketch +U for Start → End;
+- `CircleMeasurement` — EntityId, role, Radius, Diameter, Circumference and Area;
+- `ArcMeasurement` — EntityId, role, Radius, canonical Start Angle, derived End Angle, signed Sweep Angle and positive Arc Length.
+
+Line length uses `hypot(DeltaU, DeltaV)` and angle uses `atan2(DeltaV, DeltaU)`. Circle circumference/area use the semantic radius. Arc end is `start + signed sweep`; arc length is `radius * abs(sweep)`. No Viewer approximation participates in those values.
+
+`measureEntity(model, id)` is read-only. Invalid/missing identity or a non-finite derived value returns no result rather than stale/partial data. It does not mutate `SketchModel`, allocate EntityIds, create history or introduce a Product tolerance.
+
+Regular and Construction geometry use the same formulas. Construction remains excluded from material-region formation but is fully available for engineering inspection.
+
+R8A deliberately measures whole entities only. No durable `SubElementId`, midpoint/quadrant identity, authored dimension, relation or solver state is introduced. The UI may present angular values in degrees, while the neutral semantic result remains radians. Linear/area results remain in the current Sketch coordinate scale; R8A does not define document-unit labels or unit conversion.
+
+<!-- section-id: internal.shared-2d.regions -->
 ## Construction and region analysis
 
 Every authored Line/Circle/Arc has an `EntityRole`. `Regular` geometry participates in region topology. `Construction` geometry remains authored, selectable and editable, but it is excluded from bounded-region formation and therefore cannot close or split a Profile region.
@@ -237,11 +257,11 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, normal/Grip Copy identity behavior, Repeat Last Command, Space CycleEditMode and precision input.
+The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, read-only whole-entity measurement, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, normal/Grip Copy identity behavior, Repeat Last Command, Space CycleEditMode and precision input.
 
 Key registered tests include:
 
-- `sk02a.shared_2d_core` / `sk02a.shared_2d_boundaries` — neutral model/dependency boundaries plus curve relations, regions, Construction exclusion, open/overlap diagnostics, holes/islands, point picking and region composition;
+- `sk02a.shared_2d_core` / `sk02a.shared_2d_boundaries` — neutral model/dependency boundaries plus whole-entity measurement, curve relations, regions, Construction exclusion, open/overlap diagnostics, holes/islands, point picking and region composition;
 - `sk06a.circle_arc_model_persistence` / `sk06a.circle_arc_interaction_state` — mixed Line/Circle/Arc authored and interaction semantics;
 - `e1.arc_numerical_stability` — 3-Point Arc translation/scale conditioning, radial residual through all requested points, CW/CCW/long branch preservation, ±1e6 translation, 1e-200/1e200 scale, near-collinear acceptance and fail-closed exact/invalid extremes;
 - `sk07a.transform_core`, `sk07b.transform_core`, `sk07b.common_transform_state`, `sk07b.transform_controller` — mixed transforms and atomic controller behavior;
