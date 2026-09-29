@@ -2455,14 +2455,14 @@ QString CadWorkbench::cadInputPromptText() const {
     const auto stage =
         sketch_interaction_controller_->arcStage();
     if (stage &&
-        *stage == sketch::ArcStage::await_through) {
-        return QStringLiteral(
-            "Command: ARC — Specify through point");
-    }
-    if (stage &&
         *stage == sketch::ArcStage::await_end) {
         return QStringLiteral(
             "Command: ARC — Specify end point");
+    }
+    if (stage &&
+        *stage == sketch::ArcStage::await_arc_point) {
+        return QStringLiteral(
+            "Command: ARC — Specify arc point");
     }
     return QStringLiteral(
         "Command: ARC — Specify start point");
@@ -3740,18 +3740,18 @@ void CadWorkbench::syncSketchInteractionUi() {
     const auto stage =
         sketch_interaction_controller_->arcStage();
     if (stage &&
-        *stage == sketch::ArcStage::await_through) {
-        operations_placeholder_->setText(
-            QStringLiteral("Arc — Specify through point"));
-            } else if (
-        stage &&
         *stage == sketch::ArcStage::await_end) {
         operations_placeholder_->setText(
             QStringLiteral("Arc — Specify end point"));
-            } else {
+    } else if (
+        stage &&
+        *stage == sketch::ArcStage::await_arc_point) {
+        operations_placeholder_->setText(
+            QStringLiteral("Arc — Specify arc point"));
+    } else {
         operations_placeholder_->setText(
             QStringLiteral("Arc — Specify start point"));
-            }
+    }
 }
 
 void CadWorkbench::syncActionState() {
