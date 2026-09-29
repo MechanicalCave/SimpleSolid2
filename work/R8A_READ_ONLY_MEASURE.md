@@ -406,6 +406,10 @@ Final candidate requires bounded Owner verification:
 
 ## Documentation impact
 
+Internal docs: required
+User/Product docs: required
+Reason: R8A introduces a new user-visible read-only Measure tool and provider-neutral measurement semantics that require as-built and PL/EN workflow documentation.
+
 Internal documentation must explain:
 
 - provider-neutral measurement ownership;
