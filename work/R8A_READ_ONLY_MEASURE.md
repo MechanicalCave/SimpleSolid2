@@ -404,7 +404,7 @@ Final candidate requires bounded Owner verification:
 - confirm no dirty marker/Undo entry appears from measuring;
 - quick regression smoke for normal selection/grips, COPY/Grip Copy and Profile presentation.
 
-## 17. Documentation impact
+## Documentation impact
 
 Internal documentation must explain:
 
