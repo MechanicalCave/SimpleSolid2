@@ -814,14 +814,14 @@ Precision modes/options belong to a contextual right-panel surface.
 Expected bounded UI:
 
 - current Part display/input unit selector;
-- Ortho toggle;
-- Polar toggle;
-- Dynamic Input toggle;
-- Polar increment;
+- clearly visible Polar ON/OFF state while Sketch edit is active;
+- clearly visible current Polar spacing/result, for example `360/8 = 45°`;
+- editable Polar spacing expression;
 - Polar Absolute/Relative choice;
-- additional Polar angles entry/configuration.
+- additional Polar angles entry/configuration;
+- Dynamic Input toggle.
 
-The exact widget composition is D1, but Polar mutual exclusion and current active state must be visually obvious.
+Polar is a Sketch-session interaction mode, not a geometry tool. It must not masquerade as another Create/Modify tool button. Exact placement remains D1 for UI review. A compact persistent affordance near the Command Line/status area, with fuller configuration in a contextual panel or popover, is explicitly allowed.
 
 Changing runtime Polar/Dynamic Input configuration creates no CAD history.
 
@@ -976,39 +976,42 @@ At minimum verify:
 42. grip Scale captures/re-captures factor-1 reference radius deterministically and explicit Factor overrides pointer;
 43. ordinary Mirror axis accepts precision point input;
 44. grip Mirror accepts exact signed Axis Angle through the pivot, measured from Sketch +U and independent of pointer after explicit input;
-37. Ortho default is OFF;
-38. Ortho constrains to Sketch U/V axes deterministically;
-39. Polar default is OFF;
-40. enabling Ortho disables Polar;
-41. enabling Polar disables Ortho;
-42. Polar primary increment defaults to 45 degrees;
-43. additional Polar angles affect pointer resolution deterministically;
-44. Absolute Polar uses Sketch +U;
-45. Relative Polar uses only a valid semantic reference direction;
-46. explicit complete point input outranks Polar;
-47. locked Distance outranks pointer magnitude;
-48. locked Angle outranks Polar direction;
-49. conflicting locks fail closed;
-50. Dynamic Input default is OFF per Sketch edit;
-51. Dynamic Input has no authored state/history impact;
-52. Dynamic Input and Command Line feed the same request;
-53. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
-54. Tab cycles available fields deterministically;
-55. request acceptance clears request-local locks;
-56. Esc follows buffer → locks → tool hierarchy;
-57. Sketch/tool/Document teardown clears precision runtime state;
-58. Measure displays correct current units without changing measurement semantics;
-59. changing units updates Measure presentation without geometry mutation;
-60. Construction dash-gap cadence is independent of entity length;
-61. Construction preview and committed geometry use the same cadence policy;
-62. Construction dash polish introduces no authored/persistent style state;
-63. R8 Measure/Between regressions remain green;
-64. R9 Rectangle/Construction/Profile regressions remain green;
-65. selection/grips/transforms/COPY/Grip Copy regressions remain green;
-66. global keyboard-first CAD input/focus arbitration regressions remain green;
-67. persistence backward-read coverage remains green;
-68. exact-head Windows FULL passes;
-69. required internal + PL/EN docs and Product Browser freshness pass.
+45. no separate Ortho runtime mode/control exists;
+46. Polar default is OFF;
+47. Polar default spacing is `360/8 = 45°`;
+48. `360/4 = 90°` reproduces orthogonal-only directional attraction without a separate resolver;
+49. Polar spacing expressions such as `360/8`, `360/12` and `360/7` resolve deterministically;
+50. Polar captures only inside its attraction neighborhood;
+51. Polar releases outside the attraction neighborhood and free pointer direction returns;
+52. Polar capture/release is stable and does not flicker at the threshold;
+53. Polar does not hard-quantize every pointer direction while enabled;
+54. additional Polar angles affect pointer resolution deterministically;
+55. Absolute Polar uses Sketch +U;
+56. Relative Polar uses only a valid semantic reference direction;
+57. explicit complete point input outranks Polar;
+58. locked Distance may combine with captured Polar direction;
+59. locked Angle outranks Polar direction;
+60. conflicting locks fail closed;
+61. Dynamic Input default is OFF per Sketch edit;
+62. Dynamic Input has no authored state/history impact;
+63. Dynamic Input and Command Line feed the same request;
+64. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
+65. Tab cycles available fields deterministically;
+66. request acceptance clears request-local locks;
+67. Esc follows buffer → locks → tool hierarchy;
+68. Sketch/tool/Document teardown clears precision runtime state;
+69. Measure displays correct current units without changing measurement semantics;
+70. changing units updates Measure presentation without geometry mutation;
+71. Construction dash-gap cadence is independent of entity length;
+72. Construction preview and committed geometry use the same cadence policy;
+73. Construction dash polish introduces no authored/persistent style state;
+74. R8 Measure/Between regressions remain green;
+75. R9 Rectangle/Construction/Profile regressions remain green;
+76. selection/grips/transforms/COPY/Grip Copy regressions remain green;
+77. global keyboard-first CAD input/focus arbitration regressions remain green;
+78. persistence backward-read coverage remains green;
+79. exact-head Windows FULL passes;
+80. required internal + PL/EN docs and Product Browser freshness pass.
 
 ## 30. Manual Windows verification
 
