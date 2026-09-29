@@ -2,6 +2,7 @@
 
 **Status:** PROPOSED — INACTIVE  
 **Proposed:** 2026-09-29  
+**Proposal revision:** 2026-09-29 — dynamic proximity-reveal markers + lightweight transient relation cues  
 **Owner acceptance:** pending  
 **Decision class:** D2 measurement target/interaction grammar + provider-neutral runtime marker/query contract; bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -33,20 +34,25 @@ Extend the existing Measure tool with an explicit relational mode that can inspe
 2. point ↔ Line;
 3. Line ↔ Line.
 
-The user must be able to choose semantic points explicitly without OSNAP, provider tessellation or hidden nearest-candidate inference.
+The user must be able to choose semantic points quickly without first selecting an owning entity, while still avoiding OSNAP, provider tessellation or hidden nearest-candidate inference.
 
 The target workflow is:
 
 ```text
 Inspect → Measure
 → activate Between
-→ choose first explicit runtime target
-→ choose second compatible runtime target
+→ move pointer near a semantic point
+→ that point's runtime marker is revealed dynamically
+→ click the visible marker, or click a Line body
+→ choose second compatible target the same way
 → show read-only relational result
+→ show one lightweight transient geometric cue explaining what was measured
 → next explicit target starts the next relation
 → Esc returns to ordinary R8A Measure
 → Esc again returns to Select
 ```
+
+**Proximity controls visibility, not geometric acquisition.** Moving near Start/Midpoint/Center/etc. may reveal its marker, but it does not select, snap, magnetize or resolve the pointer to that point. Only an explicit click on a visible marker accepts the exact semantic point target.
 
 R8B must remain runtime-only, read-only and provider-neutral.
 
@@ -63,10 +69,11 @@ R8B includes:
 - provider-neutral Line↔Line angle measurement;
 - an explicit **Between** mode inside the existing Measure tool;
 - active-Measure Command Line keyword `BETWEEN`;
-- provider-neutral Viewer contracts for runtime measurement point-marker presentation/query;
+- provider-neutral Viewer contracts for latent runtime measurement point-marker presentation, screen-space proximity reveal and explicit marker query;
 - mapping Viewer marker owner tokens back to stable Sketch `EntityId`;
 - marker-before-entity hit priority while Between is active;
 - fail-closed handling of ambiguous marker hits;
+- lightweight, single-relation transient representative geometry in the viewport;
 - bounded Operations/status presentation;
 - Regular and Construction geometry;
 - automated and manual Windows verification;
@@ -81,7 +88,9 @@ R8B does not authorize:
 - authored dimensions or driving/reference dimensions;
 - constraints, solver or Auto-Constraint;
 - OSNAP, Object Snap Tracking, inference or candidate cycling;
-- implicit nearest Endpoint/Midpoint/Center selection from raw pointer position;
+- implicit nearest Endpoint/Midpoint/Center acquisition from raw pointer position;
+- cursor magnetization or pointer-coordinate replacement;
+- hidden-marker click acquisition;
 - intersection/tangent/perpendicular snap targets;
 - free runtime point input;
 - intrinsic Sketch Origin as a selectable Measure target;
@@ -89,7 +98,9 @@ R8B does not authorize:
 - closest-point-on-curve computation for arbitrary curve pairs;
 - segment↔segment minimum distance;
 - intersection-point measurement targets;
-- Viewer dimension lines, extension lines, leaders, arrows or measurement text overlays;
+- full dimension annotation graphics: offset dimension lines, witness/extension-line systems, arrows/grotes, leaders or numeric measurement text inside the viewport;
+- multiple simultaneous measurement overlays;
+- persistent or whole-Sketch diagnostic overlays;
 - R8C Show Dimensions;
 - document-unit architecture or unit conversion;
 - R9+ features;
@@ -307,9 +318,9 @@ Entering Between:
 
 Ordinary selection is never automatically converted into relational targets.
 
-## 12. Explicit marker presentation and query
+## 12. Dynamic measurement-marker presentation and query
 
-### 12.1 Separate from edit grips
+### 12.1 Separate from edit grips and OSNAP
 
 R8B introduces a provider-neutral runtime **measurement marker** presentation/query contract.
 
@@ -324,20 +335,48 @@ Measurement markers are not:
 
 They exist only while Measure Between mode is active.
 
-### 12.2 Marker availability
+The semantic point catalogue may contain all supported runtime points for the active Sketch, but those points are **latent**. Their markers are not all continuously drawn.
 
-While Between is active, supported semantic point markers for current Line/Circle/Arc entities in the active Sketch are visibly available for explicit picking.
+### 12.2 Proximity-reveal behavior
 
-Exact marker size, shape and color are D1, but they must be visually distinguishable from ordinary edit grips.
+While Between is active:
 
-Construction geometry exposes the same semantic marker roles as Regular geometry.
+1. semantic point locations are derived exactly from current semantic/evaluated Sketch geometry;
+2. their world/screen projection is presentation state only;
+3. when the pointer enters a bounded screen-space **reveal aperture** around one or more projected semantic points, the corresponding marker(s) become visible;
+4. moving out of the reveal aperture hides unaccepted markers again;
+5. clicking a visible marker performs an explicit marker hit query and may accept that exact semantic point target.
 
-### 12.3 Viewer identity boundary
+The reveal aperture is a presentation/interaction value only. It is **not**:
+
+- CAD geometric tolerance;
+- coincident tolerance;
+- snap tolerance;
+- solver tolerance;
+- a reason to alter the pointer's semantic U/V position.
+
+Exact aperture size, marker size, color and styling are D1.
+
+**Proximity reveals; it never acquires.** A hidden marker cannot be accepted merely because the pointer is close to its semantic point.
+
+### 12.3 Accepted-target persistence
+
+After a target is accepted:
+
+- a point target remains visibly pinned using a selected-target marker style even after the pointer moves away;
+- a Line target remains visibly highlighted;
+- this visualization is runtime-only and belongs to the active Between relation state;
+- accepting the first target must not reveal every point on its owner permanently;
+- unaccepted semantic points continue to follow proximity-reveal behavior.
+
+Construction geometry exposes the same semantic point roles and reveal behavior as Regular geometry.
+
+### 12.4 Viewer identity boundary
 
 At the Viewer boundary a marker key may contain:
 
 - owner presentation token;
-- runtime marker role.
+- runtime measurement-marker role.
 
 It must not carry durable CAD identity.
 
@@ -351,26 +390,34 @@ before accepting a semantic target.
 
 Provider token order or provider object address must never define target meaning.
 
-### 12.4 Hit priority
+### 12.5 Hit priority
 
 While Between is active:
 
-1. explicit measurement marker query has priority;
-2. if no marker is hit, whole-Line entity query may produce a `MeasureLineRef`;
-3. whole Circle/Arc body hits are not valid relational targets and produce a bounded hint to choose one of their semantic markers;
+1. a **visible** measurement-marker query has priority;
+2. if no visible marker is hit, whole-Line entity query may produce a `MeasureLineRef`;
+3. whole Circle/Arc body hits are not valid relational targets and produce a bounded hint to move near and choose one of their semantic markers;
 4. blank hit follows the relational-stage clear rules below.
 
 No nearest semantic point is inferred from an ordinary curve-body click.
 
-## 13. Ambiguous marker hits
+A marker that is latent but not currently revealed is not a valid click target.
 
-The Viewer marker query must be capable of reporting all marker keys hit by the explicit marker aperture; ordering carries no semantic meaning.
+## 13. Multiple nearby and overlapping markers
 
-After mapping candidates back to semantic references:
+The proximity-reveal path may reveal several semantic markers in the local screen neighborhood. It must not rank them as OSNAP candidates.
 
-- if all valid hit markers resolve to one exact semantic point coordinate, R8B may choose a deterministic semantic identity/role only for runtime labeling because the geometric target is equivalent;
-- if hit markers resolve to more than one distinct semantic point coordinate, R8B rejects the click as ambiguous and asks the user to zoom/retry;
-- R8B does not cycle candidates and does not choose the nearest semantic point.
+If the markers are visually separable, the user chooses one explicitly by clicking its visible hit area.
+
+The Viewer marker query must be capable of reporting all visible marker keys hit by the click aperture; ordering carries no semantic meaning.
+
+After mapping hit candidates back to semantic references:
+
+- if all valid hit markers resolve to one exact semantic point coordinate, R8B may choose a deterministic semantic identity/role only for runtime labeling because the measured geometry is equivalent;
+- if the click aperture contains markers resolving to more than one distinct semantic point coordinate, R8B rejects the click as ambiguous and asks the user to zoom/retry;
+- R8B does not cycle candidates;
+- R8B does not choose a nearest semantic point;
+- merely entering the reveal aperture never chooses a candidate.
 
 This is deliberate fail-closed behavior and must not become an early implementation of R11 OSNAP resolution.
 
@@ -503,21 +550,96 @@ Operations must identify enough about Target A / Target B for the user to unders
 
 Exact wording/precision/layout is D1.
 
-## 19. Viewer scope boundary versus R8C
+## 19. Lightweight transient representative geometry
 
-R8B's Viewer extension is limited to **explicit runtime point-marker presentation and hit query** required to choose semantic measurement targets.
+R8B adds one bounded viewport cue for the **current active relation only**. Its purpose is to answer visually: “what geometry did Measure just evaluate?”
 
-R8B does not authorize:
+The cue is:
 
-- dimension/extension lines;
-- arrows;
-- leader geometry;
-- numeric labels inside the viewport;
-- persistent graphics;
-- selectable diagnostic geometry;
-- snap targets.
+- runtime-only;
+- derived from the same provider-neutral semantic targets/result as the numeric measurement;
+- non-selectable;
+- non-editable;
+- non-snappable;
+- without EntityId or persistence;
+- cleared/replaced when the current relation state is cleared or a new relation begins;
+- visually distinguishable from authored Sketch geometry by D1 presentation styling.
 
-Those remain R8C or later work.
+Qt/Viewer must not recompute the CAD measurement formula independently. The semantic/application layer supplies the exact cue geometry required for presentation.
+
+### 19.1 Point ↔ Point cue
+
+After a valid point↔point result:
+
+- keep both accepted point markers visibly pinned;
+- draw one transient straight segment from exact Point A to exact Point B.
+
+This segment is representative geometry only. It is not an authored Line and not a dimension line with text/arrows.
+
+### 19.2 Point ↔ Line cue
+
+For Point `P` and Line Start `S`, End `E`, the provider-neutral relation result must also expose the exact perpendicular foot `F` on the **infinite supporting line**.
+
+After a valid point↔Line result:
+
+- keep the accepted point marker pinned;
+- highlight the target Line;
+- draw the transient perpendicular segment `P→F`;
+- mark `F` with a small runtime cue point if useful for readability.
+
+If `F` lies outside the finite authored Line segment, the viewport additionally shows a visually distinct **supporting-line continuation cue** from the appropriate Line endpoint to `F`.
+
+That continuation exists only to make the accepted infinite-line semantics visually honest. It is not authored geometry, not a snap target and not a classical dimension witness/extension-line system.
+
+Whether `F` lies within the finite segment must be determined from semantic geometry, not screen-space approximation.
+
+### 19.3 Line ↔ Line angle cue
+
+R8B does **not** draw a classical angular-dimension arc.
+
+After a valid Line↔Line angle result:
+
+- both accepted Line targets remain visibly highlighted;
+- the numeric smaller undirected angle remains in Operations.
+
+This is sufficient for R8B because the exact angle branch is intentionally `0°..90°` and independent of a chosen intersection-side annotation.
+
+A viewport angle arc, arrows and numeric angular label belong to R8C or later authored-dimension work.
+
+### 19.4 Partial relation state
+
+Before a compatible second target exists:
+
+- accepted Target A remains pinned/highlighted;
+- no invented connection segment or angle cue is drawn.
+
+Representative geometry appears only when a valid relation result exists.
+
+## 20. R8B Viewer boundary versus R8C
+
+R8B may extend the provider-neutral Viewer boundary only for:
+
+- latent semantic measurement-marker presentation;
+- proximity reveal;
+- explicit visible-marker hit query;
+- selected target marker/highlight state;
+- one lightweight transient representative cue for the current Between relation.
+
+R8B does not authorize the general diagnostic-dimension overlay system.
+
+R8C remains responsible for capabilities such as:
+
+- current-selection and whole-Sketch dimension overlay generation;
+- multiple simultaneous diagnostic overlays;
+- classical dimension annotation layout;
+- offset dimension lines;
+- witness/extension-line systems;
+- arrowheads/grotes and leaders;
+- numeric labels positioned inside the viewport;
+- overlap/layout management for many annotations;
+- persistent runtime display preferences for Show Dimensions if later accepted.
+
+R8B's temporary segment/highlight/continuation cue is therefore a **tool-local interaction visualization**, not an early general-purpose dimension-overlay engine.
 
 ## 20. Minimum-distance operations deliberately deferred
 
@@ -575,36 +697,47 @@ At minimum verify:
 7. reversed point target order preserves Distance and reverses directed deltas/direction;
 8. same-coordinate point↔point returns valid zero distance;
 9. Center↔Center works through ordinary point roles;
-10. point↔Line uses the infinite supporting line and does not clamp to segment endpoints;
-11. Point+Line and Line+Point produce the same perpendicular distance;
+10. point↔Line uses the infinite supporting line, exposes exact perpendicular foot and does not clamp to segment endpoints;
+11. Point+Line and Line+Point produce the same perpendicular distance/foot;
 12. Line↔Line angle is order-independent and Start/End-reversal-independent;
 13. parallel/anti-parallel → 0° and perpendicular → 90°;
 14. numeric domain clamp is bounded to floating-point safety only;
-15. marker scene contains only runtime semantic measurement markers;
+15. measurement point catalogue/scene contains only runtime semantic measurement markers;
 16. marker keys never expose EntityId to Viewer;
-17. marker query supports multiple hits without assigning ordering meaning;
-18. same-coordinate overlapping marker candidates are measurement-equivalent;
-19. distinct-coordinate ambiguous marker candidates reject/no target mutation;
-20. marker hit has priority over entity-body hit in Between;
-21. Line-body hit creates only a Line target;
-22. Circle/Arc body hit does not silently infer Center/Quadrant/endpoint;
-23. entering Between preserves ordinary selection and clears only Measure quick target/result;
-24. first target → second compatible target produces one read-only result;
-25. incompatible second target preserves first target;
-26. next accepted target after result starts the next relation;
-27. blank click clears pending/result but remains Between;
-28. first Esc leaves Between and returns to ordinary Measure;
-29. second Esc returns Measure to Select;
-30. tool/history/context replacement clears R8B runtime state;
-31. no revision/dirty/history/identity/persistence mutation occurs;
-32. active Measure `BETWEEN` is case-insensitive and context-local;
-33. `BETWEEN` outside active Measure remains unknown;
-34. Measure/Between do not replace Repeat Last Command identity;
-35. no OSNAP/tracking/inference code path is introduced;
-36. existing R8A quick Measure remains unchanged;
-37. existing selection/grip/transform/Profile/CAD-input regressions remain green;
-38. exact-head Windows FULL passes;
-39. required docs and Product Browser freshness pass.
+17. markers are latent by default and reveal only inside the bounded screen-space reveal aperture;
+18. entering/leaving reveal aperture causes presentation change only — no semantic target acquisition or pointer U/V replacement;
+19. hidden markers cannot be accepted by click;
+20. several nearby markers may reveal simultaneously without candidate ranking;
+21. visible-marker query supports multiple hits without assigning ordering meaning;
+22. same-coordinate overlapping marker hits are measurement-equivalent;
+23. distinct-coordinate overlapping marker hits reject/no target mutation;
+24. visible marker hit has priority over entity-body hit in Between;
+25. Line-body hit creates only a Line target;
+26. Circle/Arc body hit does not silently infer Center/Quadrant/endpoint;
+27. accepted point target remains pinned after pointer leaves its reveal aperture;
+28. accepted Line target remains highlighted;
+29. entering Between preserves ordinary selection and clears only Measure quick target/result;
+30. first target → second compatible target produces one read-only result;
+31. incompatible second target preserves first target;
+32. point↔point result supplies one exact transient A→B representative segment;
+33. point↔Line result supplies exact P→F perpendicular cue;
+34. point↔Line with foot outside finite segment supplies a distinct supporting-line continuation cue to F;
+35. Line↔Line result highlights both Lines but creates no angular-dimension arc/text;
+36. representative cues are non-selectable, non-editable, non-snappable and identity-free;
+37. next accepted target after result clears/replaces previous representative cue and starts the next relation;
+38. blank click clears pending/result/cue but remains Between;
+39. first Esc leaves Between and returns to ordinary Measure;
+40. second Esc returns Measure to Select;
+41. tool/history/context replacement clears R8B marker/target/cue runtime state;
+42. no revision/dirty/history/identity/persistence mutation occurs;
+43. active Measure `BETWEEN` is case-insensitive and context-local;
+44. `BETWEEN` outside active Measure remains unknown;
+45. Measure/Between do not replace Repeat Last Command identity;
+46. no OSNAP/tracking/inference candidate-resolution code path is introduced;
+47. existing R8A quick Measure remains unchanged;
+48. existing selection/grip/transform/Profile/CAD-input regressions remain green;
+49. exact-head Windows FULL passes;
+50. required docs and Product Browser freshness pass.
 
 ## 24. Manual Windows verification
 
@@ -612,18 +745,25 @@ Final candidate requires Owner verification:
 
 - Measure one entity normally and confirm R8A behavior is unchanged;
 - activate **Between**;
-- verify Start/Mid/End markers on a Line;
-- verify Center/Quadrant markers on a Circle;
-- verify Center/Start/End/Mid markers on an Arc;
-- point→point: choose two explicit markers and confirm Distance/DeltaU/DeltaV/Angle +U;
+- move near Line Start/Midpoint/End and verify the relevant marker appears dynamically without first clicking/selecting the Line;
+- move away and verify an unaccepted marker disappears;
+- move near Circle Center/Quadrants and Arc Center/Start/End/Mid and verify the same proximity-reveal behavior;
+- verify pointer proximity alone never accepts a target, changes selection or creates a snap-like pointer jump;
+- point→point: reveal/click two explicit markers and confirm Distance/DeltaU/DeltaV/Angle +U;
+- confirm both accepted point markers remain pinned and a temporary segment visually connects them;
 - reverse the point order and confirm Distance stays equal while direction/deltas reverse;
-- point→Line: choose a point marker plus a Line body and verify perpendicular distance;
-- use a point whose perpendicular foot lies outside the finite segment and verify the infinite-line distance semantics;
+- point→Line: choose a revealed point marker plus a Line body and verify perpendicular distance;
+- verify the temporary P→F perpendicular segment explains the measured distance;
+- use a point whose perpendicular foot lies outside the finite segment and verify the distinct supporting-line continuation makes the infinite-line semantics visible;
 - Line→Line: verify parallel ≈ 0°, perpendicular ≈ 90° and a simple oblique case;
+- verify both target Lines are highlighted but no full angular dimension arc/text appears;
 - verify Construction points/lines behave the same;
 - verify Circle/Arc body does not silently become Center;
+- verify two nearby but visually separable markers can be chosen explicitly;
+- where distinct marker hit areas genuinely overlap, verify fail-closed ambiguity rather than nearest/cycling behavior;
 - verify ordinary selection is unchanged throughout;
-- blank click clears relation state but remains Between;
+- verify representative cue geometry is not selectable or snappable;
+- blank click clears relation/cue state but remains Between;
 - Esc once → normal Measure; Esc again → Select;
 - activate `BETWEEN` through Command Line while Measure is active;
 - verify `BETWEEN` outside Measure is rejected;
@@ -634,16 +774,18 @@ Final candidate requires Owner verification:
 
 Internal docs: required
 User/Product docs: required
-Reason: R8B adds user-visible relational Measure semantics, runtime semantic point markers and a new provider-neutral Viewer marker/query boundary that require as-built architecture and PL/EN workflow documentation.
+Reason: R8B adds user-visible relational Measure semantics, proximity-revealed runtime semantic point markers, lightweight transient representative geometry and new provider-neutral Viewer marker/query/cue boundaries that require as-built architecture and PL/EN workflow documentation.
 
 Internal documentation must explain:
 
 - runtime measurement point references versus edit grips and durable references;
-- marker scene/query ownership and token→EntityId mapping;
+- latent marker catalogue, screen-space proximity reveal and token→EntityId mapping;
+- proximity-reveal versus OSNAP acquisition;
 - explicit fail-closed ambiguity behavior;
 - three relational formulas and infinite-line / smaller-angle semantics;
+- provider-neutral representative cue geometry, including point↔point and point↔Line foot/continuation;
 - read-only lifecycle/history boundary;
-- separation from R8C and R11.
+- separation of tool-local R8B cues from full R8C overlays and from R11 OSNAP.
 
 Product PL/EN documentation must explain the Between workflow, target roles, supported relation pairs and current limitations.
 
@@ -656,8 +798,9 @@ Stop for Owner review if implementation requires:
 - durable/persisted sub-element identity;
 - persistence/schema changes;
 - generic snap/inference candidate resolver;
-- nearest semantic point inference from raw curve click;
-- candidate cycling;
+- nearest semantic point acquisition from raw curve click or reveal proximity;
+- pointer magnetization/resolution to a measurement point;
+- candidate ranking/cycling;
 - intrinsic Origin target architecture;
 - free-point input;
 - generic curve↔curve minimum distance;
@@ -665,7 +808,7 @@ Stop for Owner review if implementation requires:
 - new Product geometric tolerance;
 - unit-system/document-unit architecture;
 - Viewer-derived geometric measurement;
-- viewport dimension overlays;
+- general-purpose viewport dimension overlay/layout engine beyond the single current-relation cues explicitly authorized by R8B;
 - authored dimensions/constraints/solver;
 - changing EntityId lifecycle;
 - changing normal semantic selection grammar;
@@ -686,8 +829,12 @@ Expected scope:
 
 - read-only current-selection and whole-Sketch dimension overlays;
 - provider-neutral diagnostic presentation data;
-- bounded Viewer presentation implementation;
+- multiple simultaneous annotations;
+- classical dimension-line / witness-line / arrow / leader / numeric-label presentation as accepted;
+- bounded Viewer presentation/layout implementation;
 - overlays non-selectable, non-editable, non-snappable, without EntityId/persistence/Undo.
+
+R8B's single active-relation marker/highlight/segment/continuation cue is explicitly not the R8C general overlay system.
 
 R9 remains inactive until R8 is completed or the Owner explicitly amends sequencing.
 
