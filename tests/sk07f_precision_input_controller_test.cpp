@@ -242,6 +242,9 @@ int main(int argc, char* argv[]) {
     ui::PartSketchInteractionController interaction{
         viewport_controller};
     interaction.begin(session, sketch_id);
+    application::SketchCadInputSemanticEndpoint semantic_input{
+        interaction,
+        application::CadInputNumberFormat{"."}};
 
     // LINE: pointer supplies direction, numeric scalar supplies exact distance.
     interaction.activateLine();
@@ -383,6 +386,112 @@ int main(int argc, char* argv[]) {
     CHECK(near(moved_source->start().v, 50.0));
     CHECK(near(moved_source->end().u, 70.0));
     CHECK(near(moved_source->end().v, 80.0));
+
+    // SK-07G Grip Copy: tool-local C enables Copy without authored mutation.
+    // Reshape+Copy duplicates only the grip owner and remains active for
+    // repeated placement through the existing Direct Distance resolver.
+    CHECK(viewport.selection_.primary.has_value());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            *viewport.selection_.primary,
+            viewer::SketchGripRole::line_start}};
+    click(interaction, sketch_id, 120.0, 120.0, 40.0, 50.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(!interaction.directManipulationCopyEnabled());
+
+    const auto grip_copy_revision_before =
+        session.document().revision();
+    const auto grip_copy_undo_before =
+        session.undoDepth();
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    const auto grip_copy_count_before =
+        hosted->model.entityCount();
+    const auto source_before_grip_copy =
+        *hosted->model.findLine(source_id);
+
+    movePointer(
+        interaction,
+        sketch_id,
+        120.0,
+        130.0,
+        40.0,
+        51.0);
+    auto semantic_result =
+        semantic_input.submit(" c ");
+    CHECK(semantic_result.accepted);
+    CHECK(interaction.directManipulationCopyEnabled());
+    CHECK(
+        session.document().revision() ==
+        grip_copy_revision_before);
+    CHECK(
+        session.undoDepth() ==
+        grip_copy_undo_before);
+
+    semantic_result = semantic_input.submit("10");
+    CHECK(semantic_result.accepted);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.directManipulationCopyEnabled());
+    CHECK(
+        session.document().revision().value() ==
+        grip_copy_revision_before.value() + 1U);
+    CHECK(
+        session.undoDepth() ==
+        grip_copy_undo_before + 1U);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    CHECK(
+        hosted->model.entityCount() ==
+        grip_copy_count_before + 1U);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(*moved_source == source_before_grip_copy);
+
+    // Repeated Grip Copy requires a fresh pointer direction, mirroring
+    // normal repeated COPY.
+    const auto first_grip_copy_revision =
+        session.document().revision();
+    semantic_result = semantic_input.submit("5");
+    CHECK(!semantic_result.accepted);
+    CHECK(
+        session.document().revision() ==
+        first_grip_copy_revision);
+
+    movePointer(
+        interaction,
+        sketch_id,
+        130.0,
+        120.0,
+        41.0,
+        50.0);
+    semantic_result = semantic_input.submit("5");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        session.undoDepth() ==
+        grip_copy_undo_before + 2U);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    CHECK(
+        hosted->model.entityCount() ==
+        grip_copy_count_before + 2U);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(*moved_source == source_before_grip_copy);
+
+    // Space changes the DirectEditMode and turns Copy OFF.
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::move);
+    CHECK(!interaction.directManipulationCopyEnabled());
+    CHECK(interaction.escape());
+
+    // Outside an active grip, C remains an unknown Sketch command.
+    semantic_result = semantic_input.submit("C");
+    CHECK(!semantic_result.accepted);
+    CHECK(semantic_result.diagnostic ==
+          "Unknown Sketch command.");
 
     // Esc clears transient precision-input state with no authored commit.
     CHECK(interaction.activateMove());

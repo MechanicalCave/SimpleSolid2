@@ -48,6 +48,12 @@ public:
     [[nodiscard]] virtual bool submitCadInputSemanticDirectDistance(
         double distance) = 0;
 
+    [[nodiscard]] virtual bool
+    cadInputSemanticGripCopyAvailable() const noexcept = 0;
+
+    [[nodiscard]] virtual bool
+    submitCadInputSemanticGripCopy() = 0;
+
     [[nodiscard]] virtual CadInputSubmitResult
     submitCadInputSemanticProfileCommand(
         const ProfileCadInputCommand& command) = 0;

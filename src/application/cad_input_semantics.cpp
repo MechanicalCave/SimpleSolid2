@@ -123,8 +123,22 @@ SketchCadInputSemanticEndpoint::submit(
         return {false, "No active CAD command context."};
     }
 
+    const auto upper = upperAscii(submitted);
+
     if (const auto request =
             target_->cadInputSemanticPointRequest()) {
+        if (upper == "C" &&
+            target_->
+                cadInputSemanticGripCopyAvailable()) {
+            if (!target_->
+                    submitCadInputSemanticGripCopy()) {
+                return {
+                    false,
+                    "Grip Copy could not be enabled."};
+            }
+            return {true, {}};
+        }
+
         const auto distance =
             parseBareCadDistance(submitted, number_format_);
         if (!distance) {
@@ -145,7 +159,6 @@ SketchCadInputSemanticEndpoint::submit(
         return {true, {}};
     }
 
-    const auto upper = upperAscii(submitted);
     if (const auto profile =
             profileCommand(upper)) {
         return target_->

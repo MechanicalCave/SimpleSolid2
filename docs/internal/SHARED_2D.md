@@ -164,6 +164,10 @@ Center grips perform the same mixed Line/Circle/Arc semantic translation as norm
 
 Line Start/End, Circle quadrant and Arc Start/End/Mid default to owner-only Reshape. During an active direct-manipulation session, viewport Space cycles those non-center grips between `Reshape` and `Move`. The active grip, interaction-start pivot, frozen semantic selection and current resolved pointer are preserved across the cycle. Reshape derives preview from the interaction-start owner geometry; Move derives translation from the interaction-start complete selection geometry. Switching mode therefore recomputes preview from frozen authored inputs rather than compounding a previous preview. Mode cycling is runtime-only and creates no authored mutation, revision, dirty state or history entry.
 
+SK-07G adds one runtime-only **Grip Copy** modifier orthogonal to `DirectEditMode`. While direct manipulation is active, the tool-local token `C` submitted through the existing Sketch semantic CAD-input endpoint enables Copy without changing authored state, identity, revision or history. `C` is not a top-level command alias and the workspace-global input router remains domain-neutral.
+
+With Grip Copy enabled, Move duplicates the complete frozen selection while Reshape duplicates only the entity that owns the active grip. Originals remain unchanged and selected/reference entities. Every accepted placement uses the existing semantic duplication command and SK-07C fresh-EntityId/high-water lifecycle. Repeated placements remain in the same direct-manipulation session and are always recomputed from the interaction-start source geometry and pivot. A successful placement clears the prior pointer candidate so a later Direct Distance requires a fresh direction. Space changing Reshape↔Move turns Grip Copy OFF; Esc/tool/history/context termination also ends the modifier with the owning manipulation session. Construction/Regular role remains part of the frozen owner geometry so exact no-change detection is role-correct.
+
 Pointer and text-derived point values flow through the shared `ResolvedSketchInput` seam. A semantic `PointRequest` view is derived from the existing interaction stage rather than creating a second tool state machine. The request exposes an optional semantic base, one shared runtime pointer candidate and whether Direct Distance is legal at that stage.
 
 The current Direct Distance resolver is deliberately minimal:
@@ -183,15 +187,15 @@ Direct Distance is currently enabled only for:
 - normal MOVE destination after Base Point;
 - normal COPY placement after Base Point.
 
-Command submission is context-first. While a semantic PointRequest is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. The workspace-global text transport and live buffer do not know `PointRequest`, Line, Move or Copy. The current Part/Sketch adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only the parsed scalar and remains Qt/locale independent.
+Command submission is context-first. While a semantic PointRequest is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. During active direct manipulation that semantic layer additionally recognizes the bounded tool-local token `C` for Grip Copy before attempting bare-distance parsing. Outside active direct manipulation, `C` remains an unknown top-level Sketch command. The workspace-global text transport and live buffer do not know `PointRequest`, Grip Copy, Line, Move or Copy. The current Part/Sketch adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only typed/parsed semantic input and remains Qt/locale independent.
 
 Printable text typed while the normal CAD viewport has focus now reaches the same global buffer as directly editing Command Line; no focus transfer is required. Real text editors retain their keyboard ownership. This changes only the input adapter path, not Direct Distance semantics or mutation authority.
 
-After a Line segment or COPY placement completes, stale pointer direction is not reused silently. The continuous Line anchor becomes the new base with no non-zero direction, and repeated COPY clears its pointer candidate; the pointer must establish a new direction before another numeric Direct Distance can resolve.
+After a Line segment, normal COPY placement or Grip Copy placement completes, stale pointer direction is not reused silently. The continuous Line anchor becomes the new base with no non-zero direction; repeated normal COPY and repeated Grip Copy clear their pointer candidate, so the pointer must establish a new direction before another numeric Direct Distance can resolve.
 
-Accepted non-no-op edit transforms/reshape commit through the host semantic geometry-update command and Part transaction and preserve EntityIds. Each accepted COPY placement instead executes one atomic semantic duplication command, allocates a fresh ID for each copied entity and creates one revision/Undo entry. Multiple repeated placements are independent Undo steps.
+Accepted non-no-op edit transforms/reshape commit through the host semantic geometry-update command and Part transaction and preserve EntityIds. Each accepted normal COPY or Grip Copy placement instead executes the existing atomic semantic duplication command, allocates a fresh ID for each copied entity and creates one revision/Undo entry. Multiple repeated placements are independent Undo steps.
 
-Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/se<!-- section-id: internal.shared-2d.regions -->
+Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation, including Grip Copy, before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/se<!-- section-id: internal.shared-2d.regions -->
 ## Construction and region analysis
 
 Every authored Line/Circle/Arc has an `EntityRole`. `Regular` geometry participates in region topology. `Construction` geometry remains authored, selectable and editable, but it is excluded from bounded-region formation and therefore cannot close or split a Profile region.
@@ -217,7 +221,7 @@ The current normal Modify command set is Move, Copy, Rotate, positive uniform Sc
 
 The product still does not implement:
 
-- Copy modifier for grip-started manipulation, owner-only Reshape or Rotate/Scale/Mirror;
+- Copy modifier combined with Rotate/Scale/Mirror or other future edit modes beyond the implemented grip Reshape/Move paths;
 - ordinary-Select RMB context;
 - clipboard Copy/Paste or cross-Sketch/cross-Document duplication;
 - intrinsic Origin snapping;
@@ -233,7 +237,7 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, Copy identity, Repeat Last Command, Space CycleEditMode and precision input.
+The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, normal/Grip Copy identity behavior, Repeat Last Command, Space CycleEditMode and precision input.
 
 Key registered tests include:
 

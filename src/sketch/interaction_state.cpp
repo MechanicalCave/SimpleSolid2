@@ -1461,6 +1461,21 @@ SketchInteractionState::directEditMode() const noexcept {
     return manipulation_->mode;
 }
 
+bool SketchInteractionState::directManipulationCopyEnabled()
+    const noexcept {
+    return manipulation_.has_value() &&
+           manipulation_->copy_enabled;
+}
+
+bool SketchInteractionState::enableDirectManipulationCopy()
+    noexcept {
+    if (!manipulation_) {
+        return false;
+    }
+    manipulation_->copy_enabled = true;
+    return true;
+}
+
 bool SketchInteractionState::cycleDirectEditMode() noexcept {
     if (!manipulation_) {
         return false;
@@ -1485,6 +1500,7 @@ bool SketchInteractionState::cycleDirectEditMode() noexcept {
             manipulation_->mode == DirectEditMode::reshape
                 ? DirectEditMode::move
                 : DirectEditMode::reshape;
+        manipulation_->copy_enabled = false;
         return true;
     }
 
@@ -1525,7 +1541,11 @@ bool SketchInteractionState::beginDirectManipulation(
         session.mode = DirectEditMode::reshape;
         session.pivot = owner->start();
         session.owner_geometry.lines.push_back(
-            {owner->id(), owner->start(), owner->end()});
+            {
+                owner->id(),
+                owner->start(),
+                owner->end(),
+                owner->role()});
         break;
     }
     case SketchGripRole::line_end: {
@@ -1563,7 +1583,11 @@ bool SketchInteractionState::beginDirectManipulation(
         if (owner == nullptr) return false;
         session.mode = DirectEditMode::reshape;
         session.owner_geometry.circles.push_back(
-            {owner->id(), owner->center(), owner->radius()});
+            {
+                owner->id(),
+                owner->center(),
+                owner->radius(),
+                owner->role()});
 
         Point2 direction_vector{};
         if (grip.role ==
@@ -1604,7 +1628,8 @@ bool SketchInteractionState::beginDirectManipulation(
                 owner->center(),
                 owner->radius(),
                 owner->startAngle(),
-                owner->sweepAngle()});
+                owner->sweepAngle(),
+                owner->role()});
 
         double angle = owner->startAngle();
         if (grip.role == SketchGripRole::arc_end) {
@@ -1779,6 +1804,20 @@ SketchInteractionState::directManipulationGeometryState()
     }
 
     return std::nullopt;
+}
+
+bool SketchInteractionState::
+continueDirectManipulationCopyPlacement() noexcept {
+    if (!manipulation_ ||
+        !manipulation_->copy_enabled) {
+        return false;
+    }
+
+    manipulation_->current_input =
+        ResolvedSketchInput{manipulation_->pivot};
+    point_pointer_candidate_.reset();
+    clearHover();
+    return true;
 }
 
 std::optional<std::vector<SketchLineState>>

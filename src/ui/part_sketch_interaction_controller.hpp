@@ -80,6 +80,16 @@ public:
         double distance) override {
         return submitDirectDistance(distance);
     }
+    [[nodiscard]] bool
+    cadInputSemanticGripCopyAvailable() const noexcept override {
+        return active() &&
+               !profile_session_ &&
+               directManipulationActive();
+    }
+    [[nodiscard]] bool
+    submitCadInputSemanticGripCopy() override {
+        return enableGripCopy();
+    }
     [[nodiscard]] application::CadInputSubmitResult
     submitCadInputSemanticProfileCommand(
         const application::ProfileCadInputCommand&
@@ -96,6 +106,9 @@ public:
         const noexcept;
     [[nodiscard]] std::optional<sketch::DirectEditMode>
     directEditMode() const noexcept;
+    [[nodiscard]] bool directManipulationCopyEnabled()
+        const noexcept;
+    [[nodiscard]] bool enableGripCopy();
     [[nodiscard]] bool cycleDirectEditMode();
     [[nodiscard]] std::optional<sketch::SketchTool>
     lastRepeatableCommand() const noexcept {

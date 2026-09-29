@@ -23,6 +23,9 @@ public:
     bool active{true};
     bool activation_result{true};
     bool direct_result{true};
+    bool grip_copy_available{};
+    bool grip_copy_result{true};
+    unsigned grip_copy_submit_count{};
     std::optional<sketch::PointRequest> request;
     std::optional<sketch::SketchTool> activated;
     std::optional<double> submitted_distance;
@@ -41,6 +44,14 @@ public:
     bool submitCadInputSemanticDirectDistance(double distance) override {
         submitted_distance = distance;
         return direct_result;
+    }
+    bool cadInputSemanticGripCopyAvailable()
+        const noexcept override {
+        return grip_copy_available;
+    }
+    bool submitCadInputSemanticGripCopy() override {
+        ++grip_copy_submit_count;
+        return grip_copy_result;
     }
 
     application::CadInputSubmitResult
@@ -129,6 +140,26 @@ int main() {
         sketch::Point2{3.0, 4.0},
         true};
     target.submitted_distance.reset();
+    result = dot.submit("C");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic ==
+          "Active point input expects a bare finite distance.");
+    CHECK(target.grip_copy_submit_count == 0U);
+
+    target.grip_copy_available = true;
+    result = dot.submit(" c ");
+    CHECK(result.accepted);
+    CHECK(target.grip_copy_submit_count == 1U);
+    CHECK(!target.submitted_distance.has_value());
+
+    target.grip_copy_result = false;
+    result = dot.submit("C");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic ==
+          "Grip Copy could not be enabled.");
+    CHECK(target.grip_copy_submit_count == 2U);
+    target.grip_copy_result = true;
+
     result = dot.submit("12.5");
     CHECK(result.accepted);
     CHECK(target.submitted_distance.has_value());
@@ -176,6 +207,11 @@ int main() {
           "Direct Distance could not be resolved.");
 
     target.request.reset();
+    target.grip_copy_available = false;
+    result = dot.submit("C");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic == "Unknown Sketch command.");
+
     target.active = false;
     result = dot.submit("LINE");
     CHECK(!result.accepted);

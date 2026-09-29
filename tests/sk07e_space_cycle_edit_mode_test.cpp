@@ -66,6 +66,10 @@ int main() {
             10.0,
             0.0,
             pi * 0.5);
+    CHECK(
+        model.setEntityRole(
+            line_id,
+            sketch::EntityRole::construction));
 
     // Detailed endpoint cycle: one current pointer position must be
     // interpreted from the same interaction-start geometry in both modes.
@@ -90,6 +94,11 @@ int main() {
     CHECK(
         state.directEditMode() ==
         sketch::DirectEditMode::reshape);
+    CHECK(!state.directManipulationCopyEnabled());
+    CHECK(state.enableDirectManipulationCopy());
+    CHECK(state.directManipulationCopyEnabled());
+    CHECK(state.enableDirectManipulationCopy());
+    CHECK(state.directManipulationCopyEnabled());
 
     CHECK(
         state.updateDirectManipulation(
@@ -100,6 +109,9 @@ int main() {
         state.directManipulationGeometryState();
     CHECK(reshape.has_value());
     CHECK(reshape->lines.size() == 1U);
+    CHECK(
+        reshape->lines.front().role ==
+        sketch::EntityRole::construction);
     CHECK(reshape->circles.empty());
     CHECK(reshape->arcs.empty());
     CHECK(
@@ -114,6 +126,7 @@ int main() {
     CHECK(
         state.directEditMode() ==
         sketch::DirectEditMode::move);
+    CHECK(!state.directManipulationCopyEnabled());
     CHECK(
         state.selectedEntities() ==
         frozen_selection);
@@ -275,8 +288,12 @@ int main() {
         CHECK(
             move_only.directEditMode() ==
             sketch::DirectEditMode::move);
+        CHECK(!move_only.directManipulationCopyEnabled());
+        CHECK(move_only.enableDirectManipulationCopy());
+        CHECK(move_only.directManipulationCopyEnabled());
 
         CHECK(!move_only.cycleDirectEditMode());
+        CHECK(move_only.directManipulationCopyEnabled());
         CHECK(move_only.activeGrip() == grip);
         CHECK(
             move_only.directEditMode() ==
@@ -295,6 +312,8 @@ int main() {
     }
 
     CHECK(!state.directManipulationActive());
+    CHECK(!state.directManipulationCopyEnabled());
+    CHECK(!state.enableDirectManipulationCopy());
     CHECK(!state.cycleDirectEditMode());
 
     return EXIT_SUCCESS;
