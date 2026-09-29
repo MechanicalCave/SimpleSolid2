@@ -534,8 +534,6 @@ Create
   Circle
   Arc
   Rectangle
-  Construction
-  Draw Diagonals
 
 Profile
   Profile
@@ -551,7 +549,7 @@ Inspect
   Measure
 ```
 
-The Create strip's **Construction** button is the runtime Creation Role for future Line/Circle/Arc and Rectangle-perimeter commits; it is deliberately separate from the Operations Regular/Construction controls that mutate already-selected authored geometry. **Draw Diagonals** is a Rectangle-only runtime option. Both reset with Sketch-edit teardown, create no history by themselves and never become persistent preferences.
+The top Create strip contains creation tools only. The right **Operations** panel exposes the runtime **Construction** Creation Role while Line/Circle/Arc/Rectangle is active, and additionally exposes **Draw Diagonals** while Rectangle is active. These creation options are context controls for the active tool; they remain semantically distinct from the selected-geometry Regular/Construction controls shown in Operations during ordinary Select. Both runtime options reset with Sketch-edit teardown, create no history by themselves and never become persistent preferences.
 
 Rectangle is activated by the toolbar or the top-level `RECTANGLE` token and uses the same controller/interaction state. First Corner captures the current DocumentRevision; Opposite Corner commits four ordinary perimeter Lines, plus two ordinary Construction diagonals when enabled, through one atomic application command. Stale revision fails closed instead of silently rebasing the second click. No Rectangle/group/center identity enters the Viewer or authored model.
 
@@ -1810,8 +1808,6 @@ Create
   Circle
   Arc
   Rectangle
-  Construction
-  Draw Diagonals
 
 Modify
   Move
@@ -1855,7 +1851,7 @@ Existing key meaning keeps priority: Enter still commits active manipulation/tra
 
 Rectangle is not a persistent special primitive. After creation its four perimeter Lines are independent ordinary Lines with independent EntityIds. Editing one edge can open or distort the rectangle; SimpleSolid does not add hidden Coincident, Horizontal/Vertical or rectangularity constraints.
 
-The checkable **Construction** control in the Create strip sets the role of geometry created **from now on**. It applies to Line, Circle, Arc and Rectangle perimeter edges. Turning it on or off does not modify already selected geometry and creates no Undo step. To change existing geometry, use the separate Regular/Construction controls in Operations while ordinary Select is active. Creation Role starts as Regular for each new Sketch Edit session and is not persisted.
+The right **Operations** panel shows a checkable **Construction** option whenever Line, Circle, Arc or Rectangle is active. It sets the role of geometry created **from now on**. Turning it on or off does not modify already selected geometry and creates no Undo step. During Rectangle, the same Operations panel also shows **Draw Diagonals**; that option is hidden for the other creation tools. To change existing geometry, use the separate Regular/Construction controls that Operations shows during ordinary Select. Creation Role starts as Regular for each new Sketch Edit session and is not persisted.
 
 **Draw Diagonals** is a Rectangle-only runtime option and starts OFF for each new Sketch Edit session. When ON, the same Rectangle commit adds both diagonals as ordinary **Construction** Lines. A Regular rectangle therefore creates four Regular perimeter Lines plus two Construction diagonals; a Construction rectangle creates six Construction Lines. The intersection does not create a center point, Rectangle identity, group or constraint.
 
@@ -2390,8 +2386,6 @@ Create
   Circle
   Arc
   Rectangle
-  Construction
-  Draw Diagonals
 
 Modify
   Move
@@ -2435,7 +2429,7 @@ Istniejące znaczenie klawiszy ma pierwszeństwo: Enter nadal zatwierdza aktywn�
 
 Rectangle nie jest trwałym specjalnym prymitywem. Po utworzeniu jego cztery krawędzie są niezależnymi zwykłymi Lines z niezależnymi EntityId. Edycja jednej krawędzi może otworzyć albo zdeformować prostokąt; SimpleSolid nie dodaje ukrytych constraintów Coincident, Horizontal/Vertical ani zachowania prostokątności.
 
-Checkowalna kontrolka **Construction** w grupie Create ustawia rolę geometrii tworzonej **od tego momentu**. Dotyczy Line, Circle, Arc oraz krawędzi Rectangle. Jej przełączenie nie modyfikuje już zaznaczonej geometrii i nie tworzy kroku Undo. Do zmiany istniejącej geometrii służą osobne kontrolki Regular/Construction w Operations podczas zwykłego Select. Creation Role zaczyna każdą nową sesję Sketch Edit jako Regular i nie jest zapisywana.
+Prawy panel **Operations** pokazuje checkowalną opcję **Construction**, gdy aktywne jest Line, Circle, Arc albo Rectangle. Ustawia ona rolę geometrii tworzonej **od tego momentu**. Jej przełączenie nie modyfikuje już zaznaczonej geometrii i nie tworzy kroku Undo. Dla Rectangle ten sam panel Operations pokazuje dodatkowo **Draw Diagonals**; opcja ta jest ukryta dla pozostałych narzędzi tworzenia. Do zmiany istniejącej geometrii służą osobne kontrolki Regular/Construction pokazywane przez Operations podczas zwykłego Select. Creation Role zaczyna każdą nową sesję Sketch Edit jako Regular i nie jest zapisywana.
 
 **Draw Diagonals** jest runtime-only opcją Rectangle i w każdej nowej sesji Sketch Edit zaczyna jako OFF. Gdy jest ON, ten sam commit Rectangle dodaje obie przekątne jako zwykłe linie **Construction**. Regular Rectangle tworzy więc cztery Regular krawędzie i dwie Construction przekątne; Construction Rectangle tworzy sześć Construction Lines. Punkt przecięcia nie tworzy center point, RectangleId, grupy ani constraintu.
 
