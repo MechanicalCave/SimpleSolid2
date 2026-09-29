@@ -1,8 +1,8 @@
 # R9 — Rectangle + Construction Authoring Surface
 
-**Status:** PROPOSED — INACTIVE  
+**Status:** ACTIVE  
 **Proposed:** 2026-09-29  
-**Owner acceptance:** pending  
+**Owner acceptance:** 2026-09-29  
 **Decision class:** D2 Sketch creation/role interaction grammar + atomic multi-Line creation semantics; bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  
@@ -30,7 +30,8 @@ What is still missing is a coherent authoring surface:
 
 1. Rectangle creation as one logical CAD action that authors four ordinary Lines;
 2. a deliberate runtime creation-role choice so Line/Circle/Arc/Rectangle can be created directly as Regular or Construction;
-3. clear separation between "role for future creation" and "change role of existing selected geometry".
+3. clear separation between "role for future creation" and "change role of existing selected geometry";
+4. an optional runtime **Draw Diagonals** Rectangle mode that adds two ordinary Construction Lines across the accepted rectangle in the same atomic creation operation.
 
 R9 must remain non-parametric. A created Rectangle is not a durable Rectangle object and receives no hidden horizontal/vertical/perpendicular/coincident constraints.
 
@@ -49,7 +50,7 @@ Create:
 
 Rectangle uses two opposite corners in the current Sketch U/V frame.
 
-One accepted Rectangle placement creates exactly four ordinary authored Lines in one semantic command/transaction/Undo step.
+One accepted Rectangle placement creates exactly four ordinary authored perimeter Lines in one semantic command/transaction/Undo step. When **Draw Diagonals** is enabled, that same logical operation additionally creates the two diagonals as ordinary Construction Lines, for six Lines total in the same transaction/Undo step.
 
 Construction creation uses the exact same geometry tools and command path, differing only in the authored `EntityRole` assigned at commit.
 
@@ -76,7 +77,12 @@ Subject to explicit Owner acceptance, R9 adopts these bounded decisions:
 15. R9 introduces no Command Line aliases for changing Creation Role.
 16. R9 introduces no solver, dimensional, OSNAP, Ortho/Polar or Dynamic Input behavior.
 17. Rectangle's second corner is pointer-resolved through the existing provider-neutral Sketch point-input path; R9 adds no new numeric grammar.
-18. A Regular rectangle participates in existing region/Profile analysis through its four Lines; a Construction rectangle is excluded through existing role semantics.
+18. A Regular rectangle participates in existing region/Profile analysis through its four perimeter Lines; a Construction rectangle is excluded through existing role semantics.
+19. Rectangle exposes a runtime **Draw Diagonals** option, default OFF for a new Sketch edit session.
+20. When Draw Diagonals is ON, the same Rectangle commit additionally creates `A→C` and `B→D` as ordinary `EntityRole::Construction` Lines.
+21. Diagonals never inherit Regular role: a Regular rectangle yields four Regular perimeter Lines + two Construction diagonals; a Construction rectangle yields six Construction Lines.
+22. Draw Diagonals is runtime-only, retained within the active Sketch edit session, non-persistent and non-authoritative for any later grouping.
+23. The diagonal intersection does not create a center Point, RectangleCenter identity, constraint or durable relation; future OSNAP/Intersection may derive the center from ordinary geometry.
 
 ## 4. Scope IN
 
@@ -85,15 +91,17 @@ R9 includes:
 - `SketchTool::rectangle` or equivalent finite semantic tool identity;
 - two-corner axis-aligned Rectangle interaction state;
 - provider-independent Rectangle preview intent;
-- exact four-Line decomposition;
+- exact four-Line perimeter decomposition;
+- optional two-diagonal Construction-Line decomposition controlled by runtime Draw Diagonals;
 - one semantic/application Rectangle creation command or equivalent atomic batch command;
 - one Part transaction / one revision / one Undo entry per accepted Rectangle;
-- fresh EntityId allocation for all four Lines;
+- fresh EntityId allocation for all four perimeter Lines and, when enabled, both diagonal Lines;
 - Rectangle toolbar action under Create;
 - top-level `RECTANGLE` Command Line activation;
 - Repeat Last Command support for Rectangle;
 - runtime Creation Role `Regular | Construction`;
 - visible Creation Role UI in Sketch edit;
+- visible Rectangle **Draw Diagonals** option, default OFF, runtime-only and retained within the same edit session;
 - direct Construction creation for Line/Circle/Arc/Rectangle;
 - preservation of the existing selected-geometry role conversion UI/command;
 - Regular/Construction visual distinction through the existing presentation policy;
@@ -115,6 +123,9 @@ R9 does not authorize:
 - authored dimensions or solver state;
 - editable width/height parameters;
 - a parametric Rectangle feature;
+- a durable Rectangle center point or RectangleCenter identity;
+- durable grouping/membership tying diagonal Lines back to a Rectangle;
+- automatic midpoint/intersection constraints for Rectangle diagonals;
 - rotated Rectangle;
 - center-based Rectangle;
 - 3-point Rectangle;
@@ -233,6 +244,33 @@ A two-button Regular/Construction creation selector is also acceptable if the di
 
 R9 does not require a new global application preference.
 
+### 8.1 Rectangle Draw Diagonals option
+
+The Rectangle creation surface also exposes a checkable **Draw Diagonals** option (`Rysuj przekątne` in Polish UI).
+
+Properties:
+
+- runtime-only;
+- default OFF on entry to a new Sketch edit session;
+- retained across Rectangle repetitions and ordinary tool switches while that edit session survives;
+- reset to OFF when Sketch edit ends, the active Sketch/Document changes or the owning runtime is destroyed;
+- never persisted;
+- never dirties the Document and never creates an Undo entry by itself;
+- may be changed while a Rectangle is pending; preview and final commit use the current visible option at commit time.
+
+When OFF, Rectangle creates only the four perimeter Lines.
+
+When ON, Rectangle additionally creates the two exact diagonals:
+
+```text
+A → C
+B → D
+```
+
+Both diagonals are ordinary authored Lines with `EntityRole::Construction`, regardless of the current Creation Role for the perimeter.
+
+This option creates no durable Rectangle membership, center point, relation or constraint. The intersection of the two independent Construction Lines is ordinary derived geometry that a future OSNAP/Intersection capability may use without any special Rectangle-center model.
+
 ## 9. Creation Role and active tools
 
 Creation Role is orthogonal to the active creation tool.
@@ -244,9 +282,10 @@ Each logical authored creation samples the current Creation Role at commit:
 - Line — each accepted segment receives the role current for that segment's commit;
 - Circle — each accepted Circle receives the role current at commit;
 - Arc — each accepted Arc receives the role current at commit;
-- Rectangle — all four Lines in one accepted Rectangle receive one identical role current for that Rectangle commit.
+- Rectangle perimeter — all four perimeter Lines in one accepted Rectangle receive one identical role current for that Rectangle commit;
+- Rectangle diagonals, when enabled — both receive `Construction` regardless of perimeter Creation Role.
 
-The implementation must not produce a mixed-role Rectangle from one logical commit.
+The implementation must not produce mixed roles among the four perimeter Lines. The only intentional role difference inside one Rectangle operation is the explicit Construction role of enabled diagonals.
 
 If the Creation Role UI can be changed while a Rectangle is between first and second corner, the role used at the final commit is the current explicit Creation Role shown to the user.
 
@@ -261,7 +300,7 @@ await_first_corner
   ↓ valid point A
 await_opposite_corner(A)
   ↓ valid non-degenerate point B
-atomic four-Line commit
+atomic Rectangle commit (four perimeter Lines, plus two Construction diagonals when enabled)
   ↓
 await_first_corner
 ```
@@ -304,6 +343,15 @@ D → A
 
 Each edge is an ordinary Line.
 
+When Draw Diagonals is enabled, the authored diagonal geometry is exactly:
+
+```text
+A → C
+B → D
+```
+
+Those two Lines are ordinary Construction geometry. Their intersection is not authored as a Point and receives no special persistent identity.
+
 No Viewer projection or screen-axis geometry defines these points. They are computed in the current authoritative Sketch U/V frame after pointer resolution.
 
 The first-corner/input order determines the authored Start/End orientation of the four resulting Lines. R9 does not canonicalize edge directions by world coordinates because there is no durable Rectangle identity whose orientation needs separate semantics.
@@ -334,7 +382,7 @@ Non-finite input fails closed.
 
 ## 13. Rectangle preview
 
-After First Corner and before commit, pointer movement may produce one runtime Rectangle preview made from four derived Line segments.
+After First Corner and before commit, pointer movement may produce one runtime Rectangle preview made from four derived perimeter Line segments and, when Draw Diagonals is enabled, two derived diagonal Line segments.
 
 Preview:
 
@@ -367,31 +415,33 @@ The implementation shape is D1, but externally visible semantics are fixed:
 
 - validate active Sketch identity/context;
 - validate expected DocumentRevision according to current mutation rules;
-- validate all four exact Lines;
-- assign the same accepted Creation Role to all four;
-- allocate four fresh EntityIds only inside the accepted transaction;
-- apply all four Lines to the same transaction candidate;
+- validate all four exact perimeter Lines and, when enabled, both exact diagonal Lines;
+- assign the same accepted Creation Role to all four perimeter Lines;
+- assign `EntityRole::Construction` to both enabled diagonals;
+- allocate four fresh EntityIds when Draw Diagonals is OFF, or six fresh EntityIds when it is ON, only inside the accepted transaction;
+- apply the complete four-Line or six-Line creation to the same transaction candidate;
 - validate the complete resulting Part/Sketch state;
-- commit all four or none;
+- commit the complete four-Line or six-Line Rectangle operation or none;
 - create one DocumentRevision increment;
 - create one Undo entry;
 - mark dirty exactly once according to normal Document semantics.
 
-Executing four independent user-visible Line commands/transactions is not acceptable.
+Executing independent user-visible Line commands/transactions for the perimeter or diagonals is not acceptable.
 
 ## 15. EntityId semantics
 
-One Rectangle commit creates four distinct ordinary Line identities.
+One Rectangle commit creates four distinct ordinary perimeter Line identities, plus two distinct ordinary diagonal Line identities when Draw Diagonals is enabled.
 
 Required properties:
 
-- exactly four fresh EntityIds;
+- exactly four fresh EntityIds with Draw Diagonals OFF;
+- exactly six fresh EntityIds with Draw Diagonals ON;
 - no ID allocation during preview;
 - no ID allocation when only First Corner is accepted;
 - no ID allocation for degenerate/rejected/cancelled Rectangle;
 - no partial identity consumption from a failed atomic commit;
-- Undo restores pre-Rectangle geometry;
-- Redo restores the same four committed EntityIds;
+- Undo restores pre-Rectangle geometry by removing the complete four-Line or six-Line logical creation;
+- Redo restores the same four or six committed EntityIds;
 - identity high-water follows the existing non-aliasing rules;
 - later new geometry must not reuse identities that existing history semantics reserve against reuse.
 
@@ -420,9 +470,9 @@ That behavior is intentional until future authored constraints/parametric dimens
 
 ## 17. Regular Rectangle and Profile behavior
 
-A Rectangle created with Creation Role = Regular creates four Regular Lines.
+A Rectangle created with Creation Role = Regular creates four Regular perimeter Lines. If Draw Diagonals is enabled, it also creates two Construction diagonal Lines.
 
-Those Lines participate in the existing Package-F region/Profile analysis exactly as any four ordinary Regular Lines with exact shared coordinates.
+The four Regular perimeter Lines participate in the existing Package-F region/Profile analysis exactly as any four ordinary Regular Lines with exact shared coordinates. Enabled Construction diagonals remain excluded from material-region formation and therefore do not split or redefine the intended material region merely by crossing it.
 
 R9 does not create a Profile automatically.
 
@@ -432,7 +482,7 @@ R9 must not add gap healing or special "rectangle closes regardless" logic.
 
 ## 18. Construction Rectangle and Profile behavior
 
-A Rectangle created with Creation Role = Construction creates four Construction Lines.
+A Rectangle created with Creation Role = Construction creates four Construction perimeter Lines and, when Draw Diagonals is enabled, two additional Construction diagonal Lines.
 
 Those Lines:
 
@@ -441,7 +491,7 @@ Those Lines:
 - are excluded from material-region formation;
 - do not create or split Profile material regions merely because they geometrically close.
 
-Converting those four Lines later to Regular uses the existing selected-role mutation path and existing region/Profile evaluation behavior.
+Converting any of those ordinary Lines later to Regular uses the existing selected-role mutation path and existing region/Profile evaluation behavior. No durable membership causes the diagonals to follow perimeter role changes automatically.
 
 No special Rectangle-specific Profile rule exists.
 
@@ -629,17 +679,17 @@ R9 does not require a new Viewer public identity concept.
 R9 is expected to require **no persistence schema change** because:
 
 - Line/Circle/Arc roles already persist;
-- Rectangle persists as four existing Lines;
-- Creation Role is runtime-only.
+- Rectangle persists as four existing perimeter Lines plus, when enabled at creation, two existing Construction diagonal Lines;
+- Creation Role and Draw Diagonals are runtime-only.
 
 Save/Close/Reopen must preserve:
 
-- the four created Line entities and their EntityIds;
+- the four created perimeter Line entities and, when present, both diagonal Line entities and their EntityIds;
 - their Regular/Construction roles;
 - existing next-EntityId high-water semantics;
 - existing Profile/RegionIntent behavior.
 
-Save/Close/Reopen must **not** preserve Creation Role; a new Sketch edit starts Regular.
+Save/Close/Reopen must **not** preserve Creation Role or the Draw Diagonals runtime toggle; a new Sketch edit starts Regular with Draw Diagonals OFF.
 
 If implementation discovers that a schema change is required solely to implement R9 as specified, stop for Owner review.
 
@@ -648,13 +698,14 @@ If implementation discovers that a schema change is required solely to implement
 Internal docs: required  
 User/Product docs: required  
 
-Reason: R9 adds a user-visible Rectangle command and a direct Construction creation mode while clarifying the distinction between runtime Creation Role and authored selected-geometry role conversion.
+Reason: R9 adds a user-visible Rectangle command, optional Construction diagonals and a direct Construction creation mode while clarifying the distinction between runtime Creation Role and authored selected-geometry role conversion.
 
 Internal documentation must explain:
 
 - Rectangle is an atomic four-Line command, not a durable primitive;
 - exact U/V two-corner decomposition;
-- identity allocation/Undo semantics;
+- identity allocation/Undo semantics for four-Line and optional six-Line Rectangle commits;
+- Draw Diagonals runtime lifecycle, exact A→C/B→D geometry, always-Construction role and absence of center/group identity;
 - no hidden endpoint relation or constraints;
 - runtime Creation Role lifecycle;
 - direct Construction creation for Line/Circle/Arc/Rectangle;
@@ -673,6 +724,7 @@ Product PL/EN documentation must explain:
 - difference between creating as Construction and converting selected geometry;
 - Construction exclusion from material Profiles;
 - lack of automatic rectangular constraints;
+- Draw Diagonals behavior and its Construction semantics;
 - current pointer-only rectangle precision limitation.
 
 Generated Product Browser must be regenerated and deterministic.
@@ -683,12 +735,12 @@ Prefer existing test executables and CI-03 FOCUSED iteration.
 
 Expected affected surfaces include:
 
-- Shared 2D interaction-state tests — Rectangle stages, preview/decomposition, degeneracy and creation-role runtime state;
+- Shared 2D interaction-state tests — Rectangle stages, preview/decomposition, optional diagonals, degeneracy and creation-role/runtime-option state;
 - Shared 2D/model tests — role correctness and four ordinary Line semantics where appropriate;
-- Part/application command tests — one atomic four-Line Rectangle command, fresh identities, stale revision, Undo/Redo and no partial commit;
+- Part/application command tests — one atomic four-Line/six-Line Rectangle command, fresh identities, diagonal Construction role, stale revision, Undo/Redo and no partial commit;
 - Part Sketch interaction controller tests — toolbar/semantic activation, preview/commit, role propagation, selection/lifecycle;
 - CAD input semantic tests — `RECTANGLE` activation and context precedence;
-- real Workbench Sketch-host tests — Rectangle button, Construction creation control, selected-role distinction and Repeat Last Command;
+- real Workbench Sketch-host tests — Rectangle button, Construction creation control, Draw Diagonals control, selected-role distinction and Repeat Last Command;
 - persistence/history regressions — save/reopen and identity high-water;
 - Package-F/Profile regressions — Regular rectangle can participate; Construction rectangle is excluded;
 - existing Viewer/native regression — preview/presentation/selection remains stable.
@@ -714,55 +766,64 @@ At minimum verify:
 9. no new Product geometric tolerance is introduced;
 10. valid Rectangle decomposes exactly to A→B, B→C, C→D, D→A;
 11. the four results are ordinary Lines and there is no durable Rectangle entity;
-12. one Rectangle commit creates exactly four fresh EntityIds;
-13. preview/reject/cancel consume no EntityIds;
-14. all four Lines commit atomically or none do;
-15. one Rectangle commit creates one DocumentRevision increment;
-16. one Rectangle commit creates one Undo entry;
-17. Undo removes the complete four-Line logical creation;
-18. Redo restores the same four EntityIds;
-19. identity high-water obeys existing non-reuse semantics;
-20. created endpoints may share exact coordinates without shared endpoint identity;
-21. later independent Line edit can break rectangularity without hidden solver behavior;
-22. Rectangle remains active after successful commit;
-23. first Esc from pending opposite corner cancels pending Rectangle but keeps Rectangle active;
-24. next Esc from empty Rectangle returns to Select;
-25. tool/history/context replacement clears pending Rectangle preview;
-26. pre-existing selection survives Rectangle activation/commit;
-27. created Rectangle edges are not automatically selected;
-28. `RECTANGLE` Command Line activates the same semantic tool;
-29. `RECTANGLE` follows active PointRequest/context precedence;
-30. Rectangle becomes Repeat Last Command identity;
-31. repeated Rectangle starts with fresh First Corner;
-32. Creation Role starts Regular for a new Sketch edit session;
-33. Creation Role survives ordinary tool switches in the same edit session;
-34. Creation Role resets across Sketch edit teardown/re-entry;
-35. Creation Role changes create no revision/dirty/Undo state;
-36. Creation Role changes do not mutate selected geometry;
-37. selected-geometry role mutation does not change Creation Role;
-38. Line commit uses current Creation Role;
-39. Circle commit uses current Creation Role;
-40. Arc commit uses current Creation Role;
-41. all four Rectangle Lines receive one identical current Creation Role;
-42. Regular and Construction use identical geometry validation;
-43. selected role conversion preserves EntityId/geometry;
-44. mixed selected roles can be atomically normalized by the existing role command;
-45. Regular Rectangle participates in region analysis through ordinary Lines;
-46. Construction Rectangle contributes no material boundary;
-47. Construction remains selectable/editable/measurable;
-48. no automatic Profile is created;
-49. no constraints/dimensions/solver state is created;
-50. no Command Line Regular/Construction mode grammar is introduced;
-51. Rectangle adds no new numeric/coordinate/unit grammar;
-52. Rectangle adds no OSNAP/Ortho/Polar/inference behavior;
-53. persistence schema remains unchanged;
-54. save/reopen preserves created Lines/roles/IDs but not runtime Creation Role;
-55. existing Line/Circle/Arc creation regressions remain green;
-56. existing selection/grip/transform/COPY/Grip Copy regressions remain green;
-57. existing R8 Measure/Between regressions remain green;
-58. existing Profile/RegionIntent regressions remain green;
-59. exact-head Windows FULL passes;
-60. required internal + PL/EN docs and generated Browser freshness pass.
+12. Draw Diagonals OFF creates exactly four fresh EntityIds;
+13. Draw Diagonals ON creates exactly six fresh EntityIds;
+14. enabled diagonals are exactly A→C and B→D;
+15. both enabled diagonals are always Construction regardless of perimeter Creation Role;
+16. Regular perimeter + enabled diagonals yields exactly four Regular + two Construction Lines;
+17. Construction perimeter + enabled diagonals yields exactly six Construction Lines;
+18. Draw Diagonals defaults OFF on a new Sketch edit and is retained only within the active edit session;
+19. changing Draw Diagonals creates no revision/dirty/Undo state;
+20. Draw Diagonals creates no center Point, group identity, constraint or durable Rectangle membership;
+21. preview/reject/cancel consume no EntityIds;
+22. the complete four-Line or six-Line operation commits atomically or none do;
+23. one Rectangle commit creates one DocumentRevision increment;
+24. one Rectangle commit creates one Undo entry;
+25. Undo removes the complete four-Line or six-Line logical creation;
+26. Redo restores the same four or six EntityIds;
+27. identity high-water obeys existing non-reuse semantics;
+28. created endpoints may share exact coordinates without shared endpoint identity;
+29. later independent Line edit can break rectangularity without hidden solver behavior;
+30. Rectangle remains active after successful commit;
+31. first Esc from pending opposite corner cancels pending Rectangle but keeps Rectangle active;
+32. next Esc from empty Rectangle returns to Select;
+33. tool/history/context replacement clears pending Rectangle preview;
+34. pre-existing selection survives Rectangle activation/commit;
+35. created Rectangle edges/diagonals are not automatically selected;
+36. `RECTANGLE` Command Line activates the same semantic tool;
+37. `RECTANGLE` follows active PointRequest/context precedence;
+38. Rectangle becomes Repeat Last Command identity;
+39. repeated Rectangle starts with fresh First Corner and uses current Draw Diagonals state;
+40. Creation Role starts Regular for a new Sketch edit session;
+41. Creation Role survives ordinary tool switches in the same edit session;
+42. Creation Role resets across Sketch edit teardown/re-entry;
+43. Creation Role changes create no revision/dirty/Undo state;
+44. Creation Role changes do not mutate selected geometry;
+45. selected-geometry role mutation does not change Creation Role;
+46. Line commit uses current Creation Role;
+47. Circle commit uses current Creation Role;
+48. Arc commit uses current Creation Role;
+49. all four Rectangle perimeter Lines receive one identical current Creation Role;
+50. Regular and Construction use identical geometry validation;
+51. selected role conversion preserves EntityId/geometry;
+52. mixed selected roles can be atomically normalized by the existing role command;
+53. Regular Rectangle participates in region analysis through ordinary perimeter Lines;
+54. enabled Construction diagonals do not create/split material regions;
+55. Construction Rectangle contributes no material boundary;
+56. Construction remains selectable/editable/measurable;
+57. no automatic Profile is created;
+58. no constraints/dimensions/solver state is created;
+59. no Command Line Regular/Construction mode grammar is introduced;
+60. Rectangle adds no new numeric/coordinate/unit grammar;
+61. Rectangle adds no OSNAP/Ortho/Polar/inference behavior;
+62. persistence schema remains unchanged;
+63. save/reopen preserves created Lines/roles/IDs but not runtime Creation Role or Draw Diagonals toggle;
+64. existing Line/Circle/Arc creation regressions remain green;
+65. existing selection/grip/transform/COPY/Grip Copy regressions remain green;
+66. existing R8 Measure/Between regressions remain green;
+67. existing Profile/RegionIntent regressions remain green;
+68. exact-head Windows FULL passes;
+69. required internal + PL/EN docs and generated Browser freshness pass.
 
 ## 33. Manual Windows verification
 
@@ -781,7 +842,12 @@ Minimum checklist:
 - switch between Line/Circle/Arc tools and verify Creation Role is retained;
 - activate Rectangle from toolbar;
 - click First Corner and move across each quadrant to inspect preview;
-- click a valid Opposite Corner and verify exactly four visible Line edges are created together;
+- click a valid Opposite Corner with Draw Diagonals OFF and verify exactly four visible Line edges are created together;
+- enable Draw Diagonals and verify preview adds both diagonals;
+- commit a Regular rectangle with Draw Diagonals ON and verify four Regular perimeter Lines + two Construction diagonals are created together;
+- verify both diagonals are ordinary selectable/editable/measurable Construction Lines and no center Point is authored;
+- switch Creation Role to Construction with Draw Diagonals ON and verify all six resulting Lines are Construction;
+- toggle Draw Diagonals while a Rectangle is pending and verify preview/final commit follow the current visible option without creating history;
 - verify Rectangle remains active and create a second rectangle;
 - verify zero-width and zero-height attempts do not commit;
 - verify Esc from pending second corner cancels only that pending rectangle; next Esc returns Select;
@@ -791,8 +857,8 @@ Minimum checklist:
 - verify a Construction rectangle does not create a material region/Profile candidate by itself;
 - with Creation Role = Regular, create Rectangle and verify existing region/Profile workflow recognizes the ordinary closed four-Line boundary;
 - select one Rectangle edge and move/reshape it; verify the other edges do not follow as a hidden parametric rectangle;
-- Undo immediately after a Rectangle commit and verify all four edges disappear together;
-- Redo and verify the complete Rectangle returns;
+- Undo immediately after a Rectangle-with-diagonals commit and verify all six Lines disappear together;
+- Redo and verify the complete six-Line creation returns;
 - Save/Close/Reopen and verify rectangle edges, roles and ordinary editability persist;
 - re-enter Sketch edit and verify Creation Role starts Regular rather than persisting;
 - regression smoke Measure/Between, selection/grips, Move/Copy/Rotate/Scale/Mirror, Grip Copy and Profile.
@@ -809,6 +875,8 @@ Manual visual review must also confirm:
 Stop for Owner review if implementation requires or attempts:
 
 - a durable Rectangle/compound identity;
+- a durable Rectangle-center identity or authored center Point created solely by Draw Diagonals;
+- durable membership/grouping that binds the two diagonal Lines to the Rectangle after creation;
 - a new persistent endpoint-sharing model;
 - implicit constraints or solver behavior;
 - keeping Rectangle rectangular after independent edits;
@@ -816,7 +884,7 @@ Stop for Owner review if implementation requires or attempts:
 - new Product geometric tolerance;
 - new durable sub-element identity;
 - changes to existing EntityId lifecycle rules;
-- multiple user-visible transactions/Undo entries for one Rectangle;
+- multiple user-visible transactions/Undo entries for one Rectangle, including separate diagonal commits;
 - automatic Profile creation from Rectangle;
 - special Profile semantics that bypass ordinary Regular/Construction region analysis;
 - Command Line role-mode grammar beyond `RECTANGLE`;
@@ -849,7 +917,7 @@ R9 may become ACTIVE only after explicit Owner acceptance of this Work Contract.
 Completion requires:
 
 - accepted two-corner U/V Rectangle semantics preserved;
-- Rectangle remains four ordinary Lines with no hidden parametric identity;
+- Rectangle remains four ordinary perimeter Lines, with optional two ordinary Construction diagonals, and no hidden parametric/group identity;
 - accepted runtime Creation Role semantics preserved;
 - existing selected-role mutation remains distinct;
 - no R10 precision/OSNAP/constraint creep;
