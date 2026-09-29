@@ -1,3 +1,4 @@
+#include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
 
@@ -765,6 +766,153 @@ int main() {
             Point2{0.0, 0.0});
     CHECK(island_pick.region_index.has_value());
     CHECK(islands.front() == *island_pick.region_index);
+
+
+    // R8A: read-only single-entity measurement consumes semantic Sketch
+    // geometry directly and remains independent from Viewer sampling.
+    SketchModel measurement_model;
+    const auto measured_line =
+        measurement_model.addLine(
+            Point2{1.0, 2.0},
+            Point2{4.0, 6.0});
+    const auto measured_construction =
+        measurement_model.addLine(
+            Point2{0.0, 0.0},
+            Point2{0.0, 5.0},
+            EntityRole::construction);
+    const auto measured_circle =
+        measurement_model.addCircle(
+            Point2{10.0, 20.0},
+            2.0);
+    const auto measured_arc_ccw =
+        measurement_model.addArc(
+            Point2{0.0, 0.0},
+            4.0,
+            0.25,
+            std::numbers::pi_v<double> * 0.5);
+    const auto measured_arc_cw =
+        measurement_model.addArc(
+            Point2{0.0, 0.0},
+            3.0,
+            1.0,
+            -std::numbers::pi_v<double> * 0.25);
+
+    const auto line_measurement =
+        measureEntity(measurement_model, measured_line);
+    CHECK(line_measurement.has_value());
+    CHECK(std::holds_alternative<LineMeasurement>(
+        *line_measurement));
+    const auto& line_result =
+        std::get<LineMeasurement>(*line_measurement);
+    CHECK(line_result.entity_id == measured_line);
+    CHECK(line_result.role == EntityRole::regular);
+    CHECK(std::abs(line_result.length - 5.0) < 1e-12);
+    CHECK(std::abs(line_result.delta_u - 3.0) < 1e-12);
+    CHECK(std::abs(line_result.delta_v - 4.0) < 1e-12);
+    CHECK(
+        std::abs(
+            line_result.angle_from_positive_u -
+            std::atan2(4.0, 3.0)) < 1e-12);
+
+    const auto construction_measurement =
+        measureEntity(
+            measurement_model,
+            measured_construction);
+    CHECK(construction_measurement.has_value());
+    CHECK(std::holds_alternative<LineMeasurement>(
+        *construction_measurement));
+    const auto& construction_result =
+        std::get<LineMeasurement>(
+            *construction_measurement);
+    CHECK(
+        construction_result.role ==
+        EntityRole::construction);
+    CHECK(
+        std::abs(
+            construction_result.length - 5.0) <
+        1e-12);
+    CHECK(
+        std::abs(
+            construction_result.angle_from_positive_u -
+            std::numbers::pi_v<double> * 0.5) <
+        1e-12);
+
+    const auto circle_measurement =
+        measureEntity(measurement_model, measured_circle);
+    CHECK(circle_measurement.has_value());
+    CHECK(std::holds_alternative<CircleMeasurement>(
+        *circle_measurement));
+    const auto& circle_result =
+        std::get<CircleMeasurement>(*circle_measurement);
+    CHECK(std::abs(circle_result.radius - 2.0) < 1e-12);
+    CHECK(std::abs(circle_result.diameter - 4.0) < 1e-12);
+    CHECK(
+        std::abs(
+            circle_result.circumference -
+            4.0 * std::numbers::pi_v<double>) <
+        1e-12);
+    CHECK(
+        std::abs(
+            circle_result.area -
+            4.0 * std::numbers::pi_v<double>) <
+        1e-12);
+
+    const auto arc_ccw_measurement =
+        measureEntity(measurement_model, measured_arc_ccw);
+    CHECK(arc_ccw_measurement.has_value());
+    CHECK(std::holds_alternative<ArcMeasurement>(
+        *arc_ccw_measurement));
+    const auto& arc_ccw_result =
+        std::get<ArcMeasurement>(*arc_ccw_measurement);
+    CHECK(std::abs(arc_ccw_result.radius - 4.0) < 1e-12);
+    CHECK(std::abs(arc_ccw_result.start_angle - 0.25) < 1e-12);
+    CHECK(
+        std::abs(
+            arc_ccw_result.end_angle -
+            (0.25 + std::numbers::pi_v<double> * 0.5)) <
+        1e-12);
+    CHECK(
+        std::abs(
+            arc_ccw_result.signed_sweep_angle -
+            std::numbers::pi_v<double> * 0.5) <
+        1e-12);
+    CHECK(
+        std::abs(
+            arc_ccw_result.arc_length -
+            2.0 * std::numbers::pi_v<double>) <
+        1e-12);
+
+    const auto arc_cw_measurement =
+        measureEntity(measurement_model, measured_arc_cw);
+    CHECK(arc_cw_measurement.has_value());
+    const auto& arc_cw_result =
+        std::get<ArcMeasurement>(*arc_cw_measurement);
+    CHECK(arc_cw_result.signed_sweep_angle < 0.0);
+    CHECK(arc_cw_result.arc_length > 0.0);
+
+    CHECK(!measureEntity(
+        measurement_model,
+        EntityId{}).has_value());
+
+    SketchModel overflow_measurement_model;
+    const auto huge_circle =
+        overflow_measurement_model.addCircle(
+            Point2{0.0, 0.0},
+            1e308);
+    const auto huge_arc =
+        overflow_measurement_model.addArc(
+            Point2{0.0, 0.0},
+            1e308,
+            0.0,
+            3.0);
+    CHECK(
+        !measureEntity(
+            overflow_measurement_model,
+            huge_circle).has_value());
+    CHECK(
+        !measureEntity(
+            overflow_measurement_model,
+            huge_arc).has_value());
 
     return 0;
 }
