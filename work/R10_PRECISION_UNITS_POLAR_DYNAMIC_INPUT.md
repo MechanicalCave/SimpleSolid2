@@ -236,10 +236,14 @@ Changing the Part unit:
 
 The unit property affects:
 
-- unitless length input;
+- every unitless Length value accepted by precision input, including Direct Distance, point-coordinate components, dU/dV locks, Circle Radius and other Length requests;
 - Dynamic Input length formatting;
 - Measure linear/area presentation;
 - precision prompts/diagnostics where a unit label is shown.
+
+An explicit length suffix always overrides the current Part display/input unit for that quantity. For example, in an mm document `2in` resolves to canonical 50.8 mm; in an inch document `25mm` resolves to canonical 25 mm.
+
+After parsing/locking, normal presentation formats the canonical value in the current Part display/input unit. The live token may still show exactly what the user is typing, but accepted/locked presentation is normalized to the document unit.
 
 It does not affect:
 
@@ -279,6 +283,27 @@ Accepted examples:
 
 A number without a suffix uses the current Part display/input length unit.
 
+An explicit suffix overrides the document unit for that quantity.
+
+Examples in an mm document:
+
+```text
+25      -> 25 mm
+25mm    -> 25 mm
+2cm     -> 20 mm
+1in     -> 25.4 mm
+0.1m    -> 100 mm
+```
+
+Examples in an inch document:
+
+```text
+2       -> 2 in
+25mm    -> 25 mm
+```
+
+The accepted suffix vocabulary in R10 is exactly `mm`, `cm`, `m`, `in`, `ft`. Quote/apostrophe feet-inch notation such as `1'-2 1/2"` is not part of R10.
+
 ### 7.2 Angle quantities
 
 Accepted examples:
@@ -289,7 +314,9 @@ Accepted examples:
 0.785398rad
 ```
 
-A bare angle uses degrees.
+A bare angle uses degrees, independent of the Part length unit.
+
+This same rule applies wherever an Angle request/expression is accepted, including Rotate, grip Rotate, grip Mirror Axis Angle, Polar spacing and the Angle component of point-polar grammar.
 
 ### 7.3 Scalar quantities
 
@@ -303,26 +330,43 @@ R10 supports a deliberately small arithmetic grammar:
 
 - parentheses;
 - unary + / -;
-- +;
-- -;
-- *;
-- /.
+- binary +;
+- binary -;
+- binary *;
+- binary /.
 
-Dimension rules are enforced.
+Standard arithmetic precedence applies: parentheses, then unary sign, then multiplication/division, then addition/subtraction. Evaluation is deterministic and bounded.
 
 Required examples include:
 
 ```text
 25mm + 1in
 2 * 12.5mm
+1in / 2
 (50 + 25)mm
 90deg / 2
 1 + 0.25
 ```
 
-Invalid dimension combinations fail closed, for example adding an angle to a length or multiplying two lengths when the active request expects a length.
+A unit suffix may bind to a numeric literal or to one parenthesized dimensionless subexpression, so `(50 + 25)mm` means 75 mm.
 
-No variables, functions, document parameters, named dimensions or external expression engine are introduced.
+Supported dimensional combinations are deliberately small:
+
+- Length ± Length -> Length;
+- Angle ± Angle -> Angle;
+- Scalar ± Scalar -> Scalar;
+- Scalar * Length or Length * Scalar -> Length;
+- Scalar * Angle or Angle * Scalar -> Angle;
+- Scalar * Scalar -> Scalar;
+- Length / Scalar -> Length;
+- Angle / Scalar -> Angle;
+- Scalar / Scalar -> Scalar.
+
+Other combinations fail closed in R10. In particular, Length * Length, Angle * Angle, Length / Length, Angle / Angle, and mixed Length/Angle arithmetic are not used to infer new dimensions.
+
+The active semantic request supplies the expected result dimension. A final expression whose dimension does not match that request is rejected without mutation.
+
+No variables, functions, constants such as `pi`, trigonometry, square roots, document parameters, named dimensions or external expression engine are introduced.
 
 ## 8. Point grammar
 
@@ -343,6 +387,8 @@ Example:
 
 The values are absolute Sketch-local coordinates.
 
+Each unitless coordinate component uses the current Part display/input length unit independently. Explicit suffixes may override per component, for example `100mm;2in`.
+
 ### 8.2 Relative Cartesian
 
 ```text
@@ -350,6 +396,8 @@ The values are absolute Sketch-local coordinates.
 ```
 
 The active request must provide a semantic base point.
+
+Unitless dU/dV components use the current Part display/input length unit; explicit suffixes override per component.
 
 Example:
 
@@ -373,6 +421,8 @@ Examples:
 @2in<30deg
 @25mm<0.5rad
 ```
+
+The Distance component uses the current Part length unit when unitless; an explicit length suffix overrides it. The Angle component is degrees when unitless; `deg` and `rad` override explicitly.
 
 ### 8.4 Direct Distance
 
@@ -986,6 +1036,15 @@ A  30°             LOCK
 
 Exact typography/icons are D1. The semantic distinction Free / Assisted / Locked is not optional.
 
+During live editing, the active field may display the literal token exactly as typed, for example `2in`. After a valid value is locked/accepted, Length presentation is normalized to the current Part display/input unit. Example in an mm document:
+
+```text
+typing:  [2in]
+locked:  D 50.8 mm   LOCK
+```
+
+The preserved semantic value is canonical; the original spelling is not durable CAD state.
+
 ## 22. Precision mode UI
 
 R10 does not add more tool buttons to the top Create/Modify strip.
@@ -994,7 +1053,7 @@ Precision modes/options belong to a contextual right-panel surface.
 
 Expected bounded UI:
 
-- current Part display/input unit selector;
+- current Part display/input unit selector, clearly separated conceptually from runtime Polar/DYN controls because Units is durable document state;
 - clearly visible Polar ON/OFF state while Sketch edit is active;
 - clearly visible current Polar spacing/result, for example `360/8 = 45°`;
 - editable Polar spacing expression;
@@ -1130,91 +1189,97 @@ At minimum verify:
 9. both decimal dot and decimal comma parse;
 10. grouping separators fail closed;
 11. mm/cm/m/in/ft conversions are exact within accepted numeric precision;
-12. deg/rad conversion is correct;
-13. bounded arithmetic respects dimensions;
-14. invalid dimensional arithmetic fails closed;
-15. absolute Cartesian uses semicolon component separator;
-16. relative Cartesian requires a valid semantic base;
-17. relative polar requires a valid semantic base;
-18. Direct Distance remains request-gated;
-19. PointRequest still outranks top-level command activation;
-20. Line first/next points accept the specified coordinate grammar;
-21. continuous Line advances the relative base and clears stale locks;
-22. Circle center accepts point precision;
-23. Circle radius accepts typed Length;
-24. invalid/zero Circle radius fails closed;
-25. Arc Start/Through/End accept point precision without changing Arc construction method;
-26. Rectangle First Corner accepts absolute Cartesian;
-27. Rectangle Opposite Corner accepts `@Width;Height`;
-28. Rectangle bare scalar remains rejected;
-29. Rectangle atomic 4/6-Line R9 semantics do not regress;
-30. Move Base/Destination accept precision input;
-31. Copy repeated placements accept precision input and retain fresh-ID/high-water semantics;
-32. grip Reshape/Move/Copy accept precision point input without changing affected-set rules;
-33. non-center grip Space cycle is `Reshape → Move → Rotate → Scale → Mirror → Reshape`;
-34. center grip Space cycle is `Move → Rotate → Scale → Mirror → Move`;
-35. grip mode cycling preserves pivot/selection/source state and never compounds preview;
-36. grip Rotate captures the current pivot→pointer direction as its zero/reference direction on entry, or the first later valid direction if none exists;
-37. grip Rotate pointer preview is the signed angle from the frozen zero/reference direction and is independent of pointer radius;
-38. re-entering grip Rotate captures a fresh zero/reference direction rather than reusing a prior one;
-39. Rotate accepts explicit signed Angle;
-40. Rotate positive/negative direction is deterministic and pointer-independent after explicit input;
-41. Scale accepts explicit positive Factor;
-42. grip Scale captures/re-captures factor-1 reference radius deterministically and explicit Factor overrides pointer;
-43. ordinary Mirror axis accepts precision point input;
-44. grip Mirror accepts exact signed Axis Angle through the pivot, measured from Sketch +U and independent of pointer after explicit input;
-45. no separate Ortho runtime mode/control exists;
-46. Polar default is OFF;
-47. Polar default spacing is `360/8 = 45°`;
-48. `360/4 = 90°` reproduces orthogonal-only directional attraction without a separate resolver;
-49. Polar spacing expressions such as `360/8`, `360/12` and `360/7` resolve deterministically;
-50. Polar capture is based on logical screen-space distance to the projected track, not on entity length or a global nearest-angle quantizer;
-51. initial capture/release tuning targets are approximately 9/15 logical pixels with a small base-point dead-zone around 12 logical pixels;
-52. Polar releases outside the release neighborhood and free pointer direction returns;
-53. Polar capture/release hysteresis is stable and does not flicker at the threshold;
-54. Polar does not jump directly between neighboring captured tracks without first releasing;
-55. Polar does not hard-quantize every pointer direction while enabled;
-56. captured Polar constrains direction only; pointer radius/magnitude remains free unless an explicit numeric lock owns it;
-57. pixel tolerances/guide state never enter authored CAD state, Commands or persistence;
-58. additional Polar angles affect pointer resolution deterministically;
-59. Polar Reference defaults to Absolute for each new Sketch edit;
-60. Absolute uses Sketch +U and is independent of previous geometry;
-61. Relative uses only a valid semantic reference direction explicitly supplied by the active interaction context;
-62. Relative with no valid reference performs no Polar capture and does not silently fall back to Absolute;
-63. switching Absolute/Relative is runtime-only and has no revision/dirty/Undo effect;
-64. explicit complete point input outranks Polar;
-65. locked Distance may combine with captured Polar direction;
-66. locked Angle outranks Polar direction;
-67. conflicting locks fail closed;
-68. Dynamic Input default is OFF per Sketch edit;
-69. DYN OFF hides only overlay/field navigation and does not disable keyboard-first precision input;
-70. Dynamic Input has no authored state/history impact;
-71. Dynamic Input and Command Line feed the same request and same live CAD token;
-72. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
-73. Free / Assisted / Locked value states are semantically distinguishable in presentation;
-74. unbased point field order is U → V;
-75. normal based-point field order is Distance → Angle → dU → dV;
-76. Rectangle Opposite Corner field order is dU → dV and does not create durable Width/Height parameters;
-77. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
-78. valid token + Tab locks current field and advances;
-79. empty-buffer Tab advances without creating a lock;
-80. Shift+Tab moves backward deterministically;
-81. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
-82. request acceptance clears request-local locks;
-83. Esc follows buffer → locks → tool hierarchy;
-84. Sketch/tool/Document teardown clears precision runtime state;
-85. Measure displays correct current units without changing measurement semantics;
-86. changing units updates Measure presentation without geometry mutation;
-87. Construction dash-gap cadence is independent of entity length;
-88. Construction preview and committed geometry use the same cadence policy;
-89. Construction dash polish introduces no authored/persistent style state;
-90. R8 Measure/Between regressions remain green;
-91. R9 Rectangle/Construction/Profile regressions remain green;
-92. selection/grips/transforms/COPY/Grip Copy regressions remain green;
-93. global keyboard-first CAD input/focus arbitration regressions remain green;
-94. persistence backward-read coverage remains green;
-95. exact-head Windows FULL passes;
-96. required internal + PL/EN docs and Product Browser freshness pass.
+12. explicit length suffix overrides the current Part display/input unit;
+13. unitless coordinate components and Length fields use the current Part display/input unit;
+14. locked/accepted Dynamic Input Length values normalize presentation to the current Part unit while live token may retain typed spelling;
+15. feet/inches quote/apostrophe notation is rejected in R10;
+16. deg/rad conversion is correct and bare Angle remains degrees regardless of Part length unit;
+17. bounded arithmetic obeys standard precedence and respects the accepted dimensional operation table;
+18. postfix unit on a parenthesized dimensionless expression, e.g. `(50+25)mm`, resolves correctly;
+19. unsupported dimensional arithmetic fails closed;
+20. variables/functions/constants/named parameters are rejected;
+21. absolute Cartesian uses semicolon component separator;
+22. relative Cartesian requires a valid semantic base;
+23. relative polar requires a valid semantic base;
+24. Direct Distance remains request-gated;
+25. PointRequest still outranks top-level command activation;
+26. Line first/next points accept the specified coordinate grammar;
+27. continuous Line advances the relative base and clears stale locks;
+28. Circle center accepts point precision;
+29. Circle radius accepts typed Length;
+30. invalid/zero Circle radius fails closed;
+31. Arc Start/Through/End accept point precision without changing Arc construction method;
+32. Rectangle First Corner accepts absolute Cartesian;
+33. Rectangle Opposite Corner accepts `@Width;Height`;
+34. Rectangle bare scalar remains rejected;
+35. Rectangle atomic 4/6-Line R9 semantics do not regress;
+36. Move Base/Destination accept precision input;
+37. Copy repeated placements accept precision input and retain fresh-ID/high-water semantics;
+38. grip Reshape/Move/Copy accept precision point input without changing affected-set rules;
+39. non-center grip Space cycle is `Reshape → Move → Rotate → Scale → Mirror → Reshape`;
+40. center grip Space cycle is `Move → Rotate → Scale → Mirror → Move`;
+41. grip mode cycling preserves pivot/selection/source state and never compounds preview;
+42. grip Rotate captures the current pivot→pointer direction as its zero/reference direction on entry, or the first later valid direction if none exists;
+43. grip Rotate pointer preview is the signed angle from the frozen zero/reference direction and is independent of pointer radius;
+44. re-entering grip Rotate captures a fresh zero/reference direction rather than reusing a prior one;
+45. Rotate accepts explicit signed Angle;
+46. Rotate positive/negative direction is deterministic and pointer-independent after explicit input;
+47. Scale accepts explicit positive Factor;
+48. grip Scale captures/re-captures factor-1 reference radius deterministically and explicit Factor overrides pointer;
+49. ordinary Mirror axis accepts precision point input;
+50. grip Mirror accepts exact signed Axis Angle through the pivot, measured from Sketch +U and independent of pointer after explicit input;
+51. no separate Ortho runtime mode/control exists;
+52. Polar default is OFF;
+53. Polar default spacing is `360/8 = 45°`;
+54. `360/4 = 90°` reproduces orthogonal-only directional attraction without a separate resolver;
+55. Polar spacing expressions such as `360/8`, `360/12` and `360/7` resolve deterministically;
+56. Polar capture is based on logical screen-space distance to the projected track, not on entity length or a global nearest-angle quantizer;
+57. initial capture/release tuning targets are approximately 9/15 logical pixels with a small base-point dead-zone around 12 logical pixels;
+58. Polar releases outside the release neighborhood and free pointer direction returns;
+59. Polar capture/release hysteresis is stable and does not flicker at the threshold;
+60. Polar does not jump directly between neighboring captured tracks without first releasing;
+61. Polar does not hard-quantize every pointer direction while enabled;
+62. captured Polar constrains direction only; pointer radius/magnitude remains free unless an explicit numeric lock owns it;
+63. pixel tolerances/guide state never enter authored CAD state, Commands or persistence;
+64. additional Polar angles affect pointer resolution deterministically;
+65. Polar Reference defaults to Absolute for each new Sketch edit;
+66. Absolute uses Sketch +U and is independent of previous geometry;
+67. Relative uses only a valid semantic reference direction explicitly supplied by the active interaction context;
+68. Relative with no valid reference performs no Polar capture and does not silently fall back to Absolute;
+69. switching Absolute/Relative is runtime-only and has no revision/dirty/Undo effect;
+70. explicit complete point input outranks Polar;
+71. locked Distance may combine with captured Polar direction;
+72. locked Angle outranks Polar direction;
+73. conflicting locks fail closed;
+74. Dynamic Input default is OFF per Sketch edit;
+75. DYN OFF hides only overlay/field navigation and does not disable keyboard-first precision input;
+76. Dynamic Input has no authored state/history impact;
+77. Dynamic Input and Command Line feed the same request and same live CAD token;
+78. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
+79. Free / Assisted / Locked value states are semantically distinguishable in presentation;
+80. unbased point field order is U → V;
+81. normal based-point field order is Distance → Angle → dU → dV;
+82. Rectangle Opposite Corner field order is dU → dV and does not create durable Width/Height parameters;
+83. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
+84. valid token + Tab locks current field and advances;
+85. empty-buffer Tab advances without creating a lock;
+86. Shift+Tab moves backward deterministically;
+87. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
+88. request acceptance clears request-local locks;
+89. Esc follows buffer → locks → tool hierarchy;
+90. Sketch/tool/Document teardown clears precision runtime state;
+91. Measure displays correct current units without changing measurement semantics;
+92. changing units updates Measure presentation without geometry mutation;
+93. Construction dash-gap cadence is independent of entity length;
+94. Construction preview and committed geometry use the same cadence policy;
+95. Construction dash polish introduces no authored/persistent style state;
+96. R8 Measure/Between regressions remain green;
+97. R9 Rectangle/Construction/Profile regressions remain green;
+98. selection/grips/transforms/COPY/Grip Copy regressions remain green;
+99. global keyboard-first CAD input/focus arbitration regressions remain green;
+100. persistence backward-read coverage remains green;
+101. exact-head Windows FULL passes;
+102. required internal + PL/EN docs and Product Browser freshness pass.
 
 ## 30. Manual Windows verification
 
@@ -1225,6 +1290,13 @@ Minimum checklist:
 - verify an existing pre-R10 Part opens as mm without geometry rescale;
 - switch document display/input unit and verify geometry does not move;
 - Save/Close/Reopen and verify selected document unit persists;
+- in mm mode verify `25`, `2cm`, `1in` resolve to the expected physical lengths;
+- switch to inch mode and verify unitless `2` means 2 in while explicit `25mm` remains 25 mm;
+- verify mixed expression `25mm + 1in`, scalar multiplication/division and `(50 + 25)mm`;
+- verify invalid dimensional expressions fail closed;
+- verify bare Angle remains degrees after changing document length unit;
+- with DYN in mm mode type `2in` and verify the live token can show `2in` while the locked presentation normalizes to 50.8 mm;
+- verify feet/inch quote notation is rejected rather than guessed;
 - LINE first point by absolute Cartesian;
 - LINE next point by `@dU;dV`;
 - LINE next point by `@Distance<Angle`;
