@@ -88,6 +88,9 @@ int main() {
     CHECK(result.accepted);
     CHECK(target.activated == sketch::SketchTool::measure);
 
+    // BETWEEN is tool-local; clear the previous top-level activation
+    // observation before asserting that BETWEEN does not activate a new tool.
+    target.activated.reset();
     target.measure_between_available = true;
     result = dot.submit(" BeTwEeN ");
     CHECK(result.accepted);
