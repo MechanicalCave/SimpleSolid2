@@ -1,4 +1,4 @@
-# R10 — Precision Input / Units / Ortho / Polar / Dynamic Input
+# R10 — Precision Input / Units / Polar / Dynamic Input
 
 **Status:** PROPOSED — INACTIVE  
 **Proposed:** 2026-09-29  
@@ -8,7 +8,7 @@
 **Architecture:** ADR-0008, ADR-0009, ADR-0010, ADR-0011  
 **Program roadmap:** `work/SKETCH_ROADMAP.md` v1.6  
 **Predecessor:** R9 Rectangle + Construction Authoring Surface — completed  
-**Milestone:** R10 — Precision Input / Units / Ortho / Polar / Dynamic Input
+**Milestone:** R10 — Precision Input / Units / Polar / Dynamic Input
 
 ## 1. Context
 
@@ -26,7 +26,7 @@ The current product already has the correct transport and semantic seams for a p
 - existing Rotate and Scale semantic transform stages;
 - no OSNAP/tracking/inference yet.
 
-The current precision capability is intentionally narrow. A submitted scalar can mean Direct Distance only where the active PointRequest explicitly allows it. Circle radius, Rotate angle, Scale factor, absolute/relative coordinates, polar coordinates, unit suffixes, Ortho/Polar and Dynamic Input are not yet implemented.
+The current precision capability is intentionally narrow. A submitted scalar can mean Direct Distance only where the active PointRequest explicitly allows it. Circle radius, Rotate angle, Scale factor, absolute/relative coordinates, polar coordinates, unit suffixes, Polar direction assistance and Dynamic Input are not yet implemented.
 
 R10 must extend that one existing input architecture. It must not create per-tool parsers, a second command buffer, a second point resolver or a Dynamic-Input-only state machine.
 
@@ -41,7 +41,7 @@ active semantic request
         ↓
 pointer + explicit numeric locks / typed quantity
         ↓
-Ortho / Polar direction assistance where applicable
+Polar directional magnet where applicable
         ↓
 one provider-neutral resolved semantic value
         ↓
@@ -79,34 +79,36 @@ Subject to explicit Owner acceptance, R10 adopts these bounded decisions:
 21. Circle Center is a point request; Circle Radius becomes a typed positive Length request.
 22. Arc Start / Through / End become precision-capable point requests; no new Arc construction method is introduced.
 23. Rotate final placement accepts an explicit Angle value as a numeric lock/commit path while pointer placement remains valid.
-24. Rotate typed-angle sign is explicit and pointer-independent: bare/positive `30` means +30° counter-clockwise and `-30` means 30° clockwise. Pointer drives Rotate preview only while no explicit angle value owns the request.
+24. Rotate typed-angle sign is explicit and pointer-independent: bare/positive `30` means +30° counter-clockwise and `-30` means 30° clockwise.
 25. Scale final placement accepts an explicit positive dimensionless Scalar factor while pointer placement remains valid.
 26. Grip Scale captures the current pivot→pointer radius as factor 1.0 on mode entry (or the first later valid radius), and explicit Factor input fully overrides subsequent pointer motion.
 27. Move/Copy/grip point requests accept coordinate/polar/direct-distance forms through the same resolver.
-28. Non-center grip Space CycleEditMode expands to `Reshape → Move → Rotate → Scale → Mirror → Reshape`.
-28. Center grips, which have no meaningful Reshape mode, cycle `Move → Rotate → Scale → Mirror → Move`.
-29. Grip mode cycling preserves the active grip, interaction-start pivot, frozen semantic selection/source geometry and current pointer candidate where meaningful, and recomputes every preview from frozen authored inputs rather than compounding prior preview.
-31. Ordinary Mirror remains two point requests; its axis can be placed precisely through coordinate/polar input.
-32. Grip Mirror fixes Axis Start at the active grip/pivot and additionally accepts a typed Axis Angle measured from Sketch +U; explicit angle input is pointer-independent and defines the semantic infinite mirror axis.
-27. Explicit numeric locks outrank Ortho/Polar and raw pointer.
-28. Ortho and Polar are mutually exclusive runtime Sketch modes.
-29. Ortho constrains a based point direction to Sketch-local ±U or ±V.
-30. Polar constrains a based point direction to configured angular tracks.
-31. Polar default primary increment is 45 degrees; additional angles are initially empty.
-32. Polar supports Absolute reference from Sketch +U and Relative reference from the current operation reference direction.
-33. Ortho/Polar/Dynamic Input mode state is runtime-only in R10 and retained across tool changes within one active Sketch edit session.
-34. These runtime modes reset when Sketch edit ends; R10 does not yet create application-wide preference persistence for them.
-35. Dynamic Input is a runtime UI adapter to the same semantic request and CAD input buffer; it owns no CAD meaning.
-36. Dynamic Input is OFF by default at the start of a Sketch edit session in R10.
-37. Dynamic Input may show lockable point fields such as dU, dV, Distance and Angle, and typed Radius/Angle/Factor fields for concrete non-point requests.
-38. Tab cycles the currently available Dynamic Input fields.
-39. Locking a field constrains the existing semantic resolver; it does not create authored dimensions or constraints.
-40. Esc first clears the current non-empty CAD token per ADR-0011; with an empty token it may clear active numeric locks before existing tool-stage Esc behavior.
-41. Accepted point/value submission clears locks belonging to that request.
-42. R10 introduces no OSNAP, Object Snap Tracking, geometric inference, Grid Snap or candidate cycling.
-43. R10 introduces no authored dimension/constraint/solver state.
-44. Construction dash-gap cadence becomes fixed in screen/presentation space and independent of entity length; committed and preview Construction geometry must use the same visual cadence policy.
-45. Construction dash styling remains Viewer presentation only and never becomes authored geometry or persistence state.
+28. Non-center grip Space CycleEditMode is `Reshape → Move → Rotate → Scale → Mirror → Reshape`.
+29. Center grip Space CycleEditMode is `Move → Rotate → Scale → Mirror → Move`.
+30. Grip mode cycling preserves active grip, interaction-start pivot and frozen semantic source geometry and never compounds preview.
+31. Ordinary Mirror remains a two-point axis workflow.
+32. Grip Mirror fixes Axis Start at the active grip/pivot and additionally accepts a typed Axis Angle measured from Sketch +U.
+33. R10 has no separate Ortho mode. Polar is the single runtime directional-attraction mechanism; classic Ortho behavior is represented by a Polar full-turn subdivision of four directions, i.e. `360/4 = 90°`.
+34. Polar is a magnet, not a hard angular quantizer: it captures pointer direction only inside a bounded attraction neighborhood of a configured track; outside that neighborhood raw pointer direction remains free.
+35. Polar primary spacing is an Angle expression. The shared arithmetic parser therefore accepts forms such as `45`, `90/2`, `360/8`, `360/12` or `360/7`.
+36. Polar default primary spacing is `360/8 = 45°`.
+37. Polar spacing must be finite, positive and no greater than 180°. Track generation is bounded to one full turn around the selected reference so arbitrary valid positive spacing never creates an unbounded/dense track set.
+38. Polar supports Absolute reference from Sketch +U and Relative reference from the current operation reference direction.
+39. Additional Polar angles remain available as runtime offsets augmenting the primary family.
+40. Explicit complete coordinates / numeric locks outrank Polar capture; Polar capture outranks raw pointer only while the pointer is inside the attraction neighborhood.
+41. Polar and Dynamic Input mode/configuration state is runtime-only in R10 and retained across tool changes within one active Sketch edit session.
+42. Polar and Dynamic Input runtime state resets when Sketch edit ends; R10 does not create application-wide preference persistence for them.
+43. Dynamic Input is a runtime UI adapter to the same semantic request and CAD input buffer; it owns no CAD meaning.
+44. Dynamic Input is OFF by default at the start of a Sketch edit session in R10.
+45. Dynamic Input may show lockable point fields such as dU, dV, Distance and Angle, and typed Radius/Angle/Factor fields for concrete non-point requests.
+46. Tab cycles the currently available Dynamic Input fields.
+47. Locking a field constrains the existing semantic resolver; it does not create authored dimensions or constraints.
+48. Esc first clears the current non-empty CAD token per ADR-0011; with an empty token it may clear active numeric locks before existing tool-stage Esc behavior.
+49. Accepted point/value submission clears locks belonging to that request.
+50. R10 introduces no OSNAP, Object Snap Tracking, geometric inference, Grid Snap or candidate cycling.
+51. R10 introduces no authored dimension/constraint/solver state.
+52. Construction dash-gap cadence becomes fixed in screen/presentation space and independent of entity length; committed and preview Construction geometry use the same visual cadence policy.
+53. Construction dash styling remains Viewer presentation only and never becomes authored geometry or persistence state.
 
 ## 4. Scope IN
 
@@ -128,8 +130,7 @@ R10 includes:
 - typed Scale Factor input;
 - precision Arc point stages;
 - precision Rectangle opposite-corner input including `@Width;Height`;
-- Ortho;
-- Polar;
+- Polar directional magnet;
 - primary polar increment;
 - additional polar angles;
 - Absolute/Relative Polar reference mode;
@@ -159,7 +160,7 @@ R10 does not authorize:
 - Auto-Constraint;
 - Trim/Split/Join;
 - persistent Dynamic Input field locks;
-- persistence of Ortho/Polar/Dynamic Input mode state;
+- persistence of Polar/Dynamic Input mode state;
 - application-wide/user-profile CAD preferences;
 - custom linetype editor or Construction linetype persistence;
 - width/height authored Rectangle parameters;
@@ -376,7 +377,7 @@ Examples:
 
 A single length expression is Direct Distance only when the active PointRequest explicitly enables it.
 
-Direction comes from the current highest-priority free direction after numeric locks and Ortho/Polar resolution.
+Direction comes from the current highest-priority free direction after numeric locks and Polar attraction resolution.
 
 PointRequest ownership remains context-first. While a PointRequest is active, a token that is not valid for that request does not silently activate a top-level command.
 
@@ -388,7 +389,7 @@ Priority during R10 is:
 
 ```text
 1. complete explicit point coordinate / locked numeric fields
-2. Ortho or Polar
+2. captured Polar track
 3. raw pointer
 ```
 
@@ -424,7 +425,7 @@ After the first point:
 - relative polar is based at the current Line anchor;
 - Direct Distance remains available;
 - Dynamic Input exposes the current point fields;
-- Ortho/Polar may constrain pointer-derived direction.
+- Polar may attract pointer-derived direction to a configured track.
 
 Continuous Line advances its base to the newly committed endpoint.
 
@@ -519,7 +520,7 @@ Destination/placement supports:
 - relative polar from Base Point;
 - Direct Distance;
 - Dynamic Input locks;
-- Ortho/Polar pointer direction.
+- Polar pointer direction.
 
 COPY repeated placement clears request-local locks/candidate direction after each accepted placement and keeps the existing frozen source snapshot.
 
@@ -629,7 +630,7 @@ Ordinary Mirror remains a two-point axis workflow.
 
 Axis Start and Axis End are precision-capable point requests.
 
-Axis End may use relative Cartesian, relative polar and Ortho/Polar.
+Axis End may use relative Cartesian, relative polar and Polar.
 
 Grip Mirror entered through Space CycleEditMode has a bounded shorthand:
 
@@ -649,60 +650,98 @@ The typed angle shortcut is specific to grip Mirror because the first axis point
 
 No Mirror+Copy is introduced.
 
-## 19. Ortho
+## 19. Polar directional magnet
 
-Ortho is a runtime Sketch mode.
+Polar is the only runtime directional-assistance mode in R10.
 
-Default: OFF.
+There is no separate Ortho toggle or resolver path. A classic orthogonal-only setup is simply:
 
-Enabling Ortho disables Polar.
+```text
+Polar spacing = 360/4 = 90°
+```
 
-For a based point request without a fully explicit coordinate:
+Default per Sketch edit: OFF.
 
-- resolve raw pointer vector in Sketch U/V;
-- choose the nearest of ±U / ±V;
-- exact angular ties choose the U-axis family deterministically;
-- magnitude remains pointer-derived unless a numeric Distance lock supplies it.
+When OFF, pointer direction remains raw unless explicit numeric locks fully determine it.
 
-Ortho does not author Horizontal/Vertical constraints.
+When ON, Polar behaves as an angular **magnet**, not a global quantizer:
 
-## 20. Polar
+- configured tracks are derived from the current Polar reference and primary spacing;
+- the raw pointer is compared with the nearby tracks;
+- if pointer direction enters the bounded attraction neighborhood of one track, that track becomes captured;
+- while captured, direction is exactly that track angle;
+- leaving the attraction neighborhood releases capture and raw pointer direction becomes free again;
+- the resolver must provide deterministic hysteresis/capture behavior so the preview does not flicker at the boundary;
+- exact capture/release tolerance is D1 tuning, but it must leave free-direction regions between neighboring tracks and must never make Polar equivalent to unconditional nearest-angle rounding.
 
-Polar is a runtime Sketch mode.
+A captured track may be indicated by a transient provider-neutral guide/cue. That cue is runtime presentation only and has no CAD identity.
 
-Default: OFF.
+### 19.1 Primary spacing expression
 
-Enabling Polar disables Ortho.
+The primary spacing is an Angle expression parsed by the same provider-neutral arithmetic/quantity parser used by R10.
 
-Initial configuration:
+Examples:
 
-- primary increment: 45 degrees;
-- additional angles: none;
-- reference mode: Absolute.
+```text
+45
+360/8
+360/12
+90/2
+360/7
+```
 
-### 20.1 Absolute Polar
+A bare expression in this field is interpreted in degrees.
+
+Required validation:
+
+- finite;
+- strictly positive;
+- no greater than 180°.
+
+Track generation is bounded to one full turn around the selected reference. For a spacing that does not divide 360° exactly, generate integer multiples within that one-turn bound only; do not continue modulo 360 into an unbounded/dense sequence.
+
+The visible UI should show both the entered expression/result where practical, for example:
+
+```text
+Polar: ON   Step: 360/8 = 45°
+```
+
+The default primary spacing is `360/8 = 45°`.
+
+### 19.2 Absolute Polar
 
 Tracks are measured from Sketch +U.
 
-### 20.2 Relative Polar
+### 19.3 Relative Polar
 
 Tracks are measured from the active operation reference direction.
 
 Examples:
 
 - continuous Line: previous committed segment direction when available;
-- Rotate/Mirror/reference stages: the operation's accepted semantic reference direction when defined;
-- otherwise Relative mode has no valid reference and fails back to raw pointer rather than inventing one.
+- grip/transform/reference stages: the accepted semantic reference direction when defined;
+- otherwise Relative mode has no valid reference and Polar does not capture rather than inventing one.
 
-### 20.3 Additional angles
+### 19.4 Additional angles
 
-Additional angles are runtime-only values in R10.
+Additional angles are runtime-only offsets in R10.
 
-They augment the primary increment.
+They augment the primary track family without creating authored constraints.
 
 Duplicate/equivalent normalized angles are collapsed deterministically.
 
-Invalid/non-finite angle configuration is rejected without changing the previous valid mode configuration.
+Invalid/non-finite configuration is rejected without changing the previous valid configuration.
+
+### 19.5 Priority with numeric input
+
+Polar assists only degrees of freedom that remain unspecified.
+
+Examples:
+
+- complete `@100<30` supplies both magnitude and direction, so Polar is ignored;
+- locked Distance = 100 leaves direction free, so captured Polar direction may supply it;
+- locked Angle = 30 supplies direction exactly, so Polar is ignored;
+- with no locks, Polar may capture pointer direction while pointer magnitude remains pointer-derived.
 
 ## 21. Dynamic Input
 
@@ -782,9 +821,9 @@ Expected bounded UI:
 - Polar Absolute/Relative choice;
 - additional Polar angles entry/configuration.
 
-The exact widget composition is D1, but Ortho/Polar mutual exclusion and current active state must be visually obvious.
+The exact widget composition is D1, but Polar mutual exclusion and current active state must be visually obvious.
 
-Changing runtime Ortho/Polar/Dynamic Input configuration creates no CAD history.
+Changing runtime Polar/Dynamic Input configuration creates no CAD history.
 
 Changing the durable Part display/input unit follows the document-property mutation semantics defined in section 6.
 
@@ -833,7 +872,7 @@ Migration rules:
 - current writer emits the new unit property;
 - geometry values are not rescaled during load/save migration;
 - unknown/malformed unit values fail closed;
-- runtime Ortho/Polar/Dynamic Input modes and numeric locks are never serialized.
+- runtime Polar/Dynamic Input modes and numeric locks are never serialized.
 
 No other R10 state requires persistence.
 
@@ -878,7 +917,7 @@ Expected bounded production changes after Owner acceptance may include:
 
 - `src/core/**` for shared physical unit/value primitives;
 - `src/application/**` for reusable quantity/coordinate grammar and typed semantic input transport;
-- `src/sketch/**` for expanded PointRequest resolution / numeric locks / Ortho-Polar direction resolution;
+- `src/sketch/**` for expanded PointRequest resolution / numeric locks / Polar direction attraction;
 - `src/part/**` for durable display/input unit property and validated persistence state;
 - `src/persistence/**` for Part schema migration;
 - `src/ui/**` for Operations precision controls and Dynamic Input adapter;
@@ -946,9 +985,9 @@ At minimum verify:
 43. additional Polar angles affect pointer resolution deterministically;
 44. Absolute Polar uses Sketch +U;
 45. Relative Polar uses only a valid semantic reference direction;
-46. explicit complete point input outranks Ortho/Polar;
+46. explicit complete point input outranks Polar;
 47. locked Distance outranks pointer magnitude;
-48. locked Angle outranks Ortho/Polar direction;
+48. locked Angle outranks Polar direction;
 49. conflicting locks fail closed;
 50. Dynamic Input default is OFF per Sketch edit;
 51. Dynamic Input has no authored state/history impact;
@@ -1007,9 +1046,11 @@ Minimum checklist:
 - grip Mirror pointer preview with pivot as Axis Start;
 - grip Mirror typed `45` and verify exact +45° axis through the pivot regardless of pointer position;
 - grip Mirror typed `-30` and verify exact -30° axis through the pivot regardless of pointer position;
-- enable Ortho and verify pointer direction locks to U/V without creating constraints;
-- enable Polar and verify Ortho turns off;
-- verify primary 45-degree tracks;
+- enable Polar and verify it behaves as an attraction magnet rather than unconditional angular quantization;
+- set Polar spacing to `360/4` and verify orthogonal-only attraction at 0/90/180/270 without any separate Ortho mode;
+- set Polar spacing to `360/8` and verify 45-degree family;
+- set at least one nontrivial expression such as `360/7` and verify deterministic bounded tracks;
+- move just outside the attraction neighborhood and verify direction becomes free again;
 - test at least one additional Polar angle;
 - verify Absolute versus Relative Polar reference;
 - enable Dynamic Input and verify the overlay follows active semantic request;
@@ -1031,7 +1072,7 @@ Stop for Owner review if implementation requires or attempts:
 - Qt/Viewer types in shared quantity/unit parser contracts;
 - re-scaling existing geometry when document display unit changes;
 - changing EntityId/reference semantics;
-- persisting Ortho/Polar/Dynamic Input runtime state;
+- persisting Polar/Dynamic Input runtime state;
 - OSNAP/tracking/inference;
 - Grid Snap;
 - authored dimensions/constraints/solver;
@@ -1062,7 +1103,7 @@ Completion requires:
 - accepted canonical unit/conversion semantics;
 - accepted quantity and coordinate grammar;
 - one shared semantic precision-input path;
-- accepted Ortho/Polar mode semantics;
+- accepted Polar mode semantics;
 - accepted Dynamic Input adapter semantics;
 - Construction dash-gap carry-over completed without authored-style creep;
 - no R11 OSNAP/inference or R12 structural-edit creep;
