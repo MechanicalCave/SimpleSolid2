@@ -470,7 +470,13 @@ int main() {
             sketch::mirrorSketchGeometry(
                 *source,
                 {0.0, 0.0},
-                {0.0, 1.0});
+                {
+                    std::cos(
+                        std::numbers::pi_v<double> /
+                        2.0),
+                    std::sin(
+                        std::numbers::pi_v<double> /
+                        2.0)});
         CHECK(mirrored.has_value());
         CHECK(expected_mirrored.has_value());
         CHECK(*mirrored == *expected_mirrored);
