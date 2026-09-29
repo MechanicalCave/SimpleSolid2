@@ -115,7 +115,7 @@ Modify
 
 Command Line is a shared Workspace surface and no longer requires a click before ordinary CAD entry. While the viewport or another normal CAD surface has focus, you can start typing immediately: the characters appear in Command Line while focus remains in the viewport. Enter submits the token to the active context. Clicking Command Line still works and edits the very same live buffer.
 
-Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. Enter consumes the submitted token even when it is invalid: the model and active tool/stage stay unchanged, the editable field is cleared and a diagnostic reports the error instead of forcing you to delete the rejected text manually.
+Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. During active grip manipulation, `C` + Enter is a local keyword that enables Grip Copy; outside an active grip it is not a global command alias. Enter consumes the submitted token even when it is invalid: the model and active tool/stage stay unchanged, the editable field is cleared and a diagnostic reports the error instead of forcing you to delete the rejected text manually.
 
 Real text-entry fields — for example property editors — keep keyboard ownership and do not feed Command Line. Application shortcuts using Ctrl/Alt/Meta are also not converted into CAD text. Menus, popups, modal dialogs, another application window and another visible SS2 Workspace keep their own keyboard ownership; they do not feed a background Command Line.
 
@@ -159,6 +159,16 @@ LMB or Enter commits the current mode. Esc cancels the complete uncommitted mani
 Space during active grip manipulation has precedence over Repeat Last Command. Space while Command Line or another text-entry field has focus remains a literal text space.
 
 During grip Reshape or grip Move you can also use Direct Distance: point the cursor in a direction from the grip's interaction-start position, type a distance in Command Line and press Enter. For Move this resolves a destination exactly that distance from the pivot; for Reshape the same resolved point is passed to the normal primitive-specific reshape semantics.
+
+### Grip Copy
+
+While a grip manipulation is active, type `C` and press Enter to enable **Grip Copy**. Copy is a modifier of the current Reshape/Move mode, not a third edit mode.
+
+In **Reshape + Copy**, each accepted placement creates one fresh-ID copy of only the primitive that owns the active grip; the original owner and every other selected entity remain unchanged. In **Move + Copy**, each placement duplicates the complete selection that was frozen when the grip interaction started. The originals remain the selected/reference set and created copies do not take over selection.
+
+LMB can accept a placement, and the existing Direct Distance path can also accept it: enable Copy, establish a pointer direction, type the distance and press Enter. After a successful placement Grip Copy stays active for another copy from the same interaction-start source and pivot, but the previous pointer direction is cleared; move the pointer again before another numeric placement.
+
+An exact no-change placement is a clean no-op. Pressing Space changes Reshape↔Move where supported and turns Grip Copy OFF, so `C` must be submitted again for the new mode. Esc ends the transient grip session while keeping already committed copies. Undo while Grip Copy is active first ends the transient session and then undoes only the latest committed history step.
 
 ### Selecting objects for Modify
 
@@ -233,7 +243,7 @@ Move/Copy/Rotate/Scale/Mirror preview is runtime-only. Move/Rotate/Scale/Mirror 
 
 LMB at the final point stage or Enter commits the current valid preview/placement. Esc cancels uncommitted transient state and preserves the relevant selection.
 
-The current version supports **Direct Distance** at five point-input locations: the second/next LINE point, grip Reshape, grip Move, normal MOVE destination and normal COPY placement. A base/pivot must already exist; then establish a non-zero direction with the cursor, type a finite non-negative distance in Command Line and press Enter. `.` is always accepted as a decimal separator, and the current locale decimal separator is accepted as well.
+The current version supports **Direct Distance** at five point-input classes: the second/next LINE point, grip Reshape, grip Move, normal MOVE destination and normal COPY placement. Grip Copy reuses the existing grip Reshape/Move PointRequest rather than adding another numeric path; when Copy is ON, the resolved grip point commits a duplicate instead of editing the original. A base/pivot must already exist; then establish a non-zero direction with the cursor, type a finite non-negative distance in Command Line and press Enter. `.` is always accepted as a decimal separator, and the current locale decimal separator is accepted as well.
 
 After a numeric COPY placement, COPY remains active for another placement, but the previous direction is not silently reused — move the pointer to establish the direction for the next Direct Distance. Continuous LINE behaves the same way from its new endpoint. A value of `0` can be resolved, after which normal tool semantics decide the no-op/rejection: LINE creates no zero-length segment, MOVE is a no-op, and COPY creates no coincident copy.
 
@@ -243,7 +253,7 @@ Space typed while a text-entry field has focus remains text input; it does not t
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeric Rotate/Scale, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages.
+Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeric Rotate/Scale, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages.
 
 <!-- section-id: product.parts.profiles -->
 ## Construction and Profile
@@ -328,9 +338,9 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 
 The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, and Part-owned Profiles with live RegionIntent semantics.
 
-The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
+The current Sketch UI provides Select plus Create and Modify groups with Line/Circle/Arc and Move/Copy/Rotate/Scale/Mirror, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Grip Copy through active-grip `C` for owner-only Reshape or frozen-selection Move, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
 
-Direct Distance is available for the supported PointRequest stages documented above. Profile is not a solid operation. The product still lacks grip Copy modifier, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
+Direct Distance is available for the supported PointRequest stages documented above, including grip placements while Grip Copy is enabled. Profile is not a solid operation. The product still lacks Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
 
