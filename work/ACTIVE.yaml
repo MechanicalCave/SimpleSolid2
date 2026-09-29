@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/R8B_RELATIONAL_MEASURE_RUNTIME_TARGETS.md"
+status: active
+active_work: "work/R9_RECTANGLE_CONSTRUCTION_AUTHORING.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.6"
@@ -19,12 +19,17 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after R8 completion
-  - prepare a separate Owner-reviewed R9 Rectangle + Construction authoring Work Contract before any production implementation
+  - implement only the accepted R9 Rectangle + Construction authoring Work Contract
+  - preserve the accepted optional Rectangle Draw Diagonals mode as two ordinary Construction Lines in the same atomic Rectangle commit
+  - obtain focused/affected evidence, exact-head Windows FULL, Owner manual Windows PASS, required documentation/Product Browser and work-only CLOSURE before R9 completion
   - keep R10+, ordinary RMB context, authored dimensions/constraints/solver and solid modeling inactive until separately accepted
   - preserve Roadmap v1.6 sequencing: R9 -> R10 -> R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - Owner explicitly accepted R9 Rectangle + Construction Authoring Surface on 2026-09-29, including the optional Draw Diagonals behavior discussed before acceptance.
+  - R9 is ACTIVE only through `work/R9_RECTANGLE_CONSTRUCTION_AUTHORING.md`; R10+ remain inactive.
+  - Draw Diagonals defaults OFF per Sketch edit, is runtime-only, and when enabled adds A→C and B→D as ordinary Construction Lines in the same atomic Rectangle transaction/Undo step; it creates no Rectangle center/group identity or constraint.
+  - Rectangle remains a creation tool producing ordinary independent Lines, not a durable parametric Rectangle primitive.
   - Owner accepted Sketcher Roadmap v1.6 sequencing amendment on 2026-09-29: R8 is complete through R8A + R8B; standalone R8C Show Dimensions is deferred.
   - The unmerged R8C proposal PR #94 was closed as superseded without activation or production implementation.
   - Show Dimensions should be reconsidered with future authored/parametric dimensions and constraints so diagnostic presentation follows the eventual durable reference/dimension architecture instead of defining a temporary parallel overlay system.
