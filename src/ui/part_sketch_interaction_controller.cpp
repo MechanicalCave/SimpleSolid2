@@ -532,14 +532,37 @@ cadInputSemanticValueRequest() const noexcept {
             true};
     }
 
+    if (interaction_.commonTransformStage() ==
+            sketch::CommonTransformStage::
+                await_destination &&
+        interaction_.tool() ==
+            sketch::SketchTool::rotate) {
+        return application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                rotate_angle,
+            application::CadQuantityDimension::angle,
+            false};
+    }
+
+    if (interaction_.commonTransformStage() ==
+            sketch::CommonTransformStage::
+                await_destination &&
+        interaction_.tool() ==
+            sketch::SketchTool::scale) {
+        return application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                scale_factor,
+            application::CadQuantityDimension::scalar,
+            true};
+    }
+
     return std::nullopt;
 }
 
 bool PartSketchInteractionController::
 submitCadInputSemanticValue(double value) {
     if (!active() || profile_session_ ||
-        !std::isfinite(value) ||
-        value <= 0.0) {
+        !std::isfinite(value)) {
         return false;
     }
 
@@ -547,6 +570,9 @@ submitCadInputSemanticValue(double value) {
             sketch::SketchTool::circle &&
         interaction_.circleStage() ==
             sketch::CircleStage::await_radius) {
+        if (value <= 0.0) {
+            return false;
+        }
         const double radius =
             circle_size_input_mode_ ==
                     application::CircleSizeInputMode::
@@ -597,6 +623,9 @@ submitCadInputSemanticValue(double value) {
             sketch::SketchTool::arc &&
         interaction_.arcStage() ==
             sketch::ArcStage::await_arc_point) {
+        if (value <= 0.0) {
+            return false;
+        }
         const auto accepted =
             interaction_.acceptArcRadius(value);
         if (accepted.outcome ==
@@ -643,6 +672,22 @@ submitCadInputSemanticValue(double value) {
         projectInteraction();
         notifyStateChanged();
         return true;
+    }
+
+    const auto transform_stage =
+        interaction_.commonTransformStage();
+    if (transform_stage &&
+        *transform_stage ==
+            sketch::CommonTransformStage::
+                await_destination &&
+        (interaction_.tool() ==
+             sketch::SketchTool::rotate ||
+         interaction_.tool() ==
+             sketch::SketchTool::scale)) {
+        if (!interaction_.acceptTransformValue(value)) {
+            return false;
+        }
+        return commitTransform();
     }
 
     return false;

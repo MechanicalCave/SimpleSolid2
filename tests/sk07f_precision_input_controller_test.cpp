@@ -662,6 +662,53 @@ int main(int argc, char* argv[]) {
     CHECK(near(rectangle_first_edge.end.u, 203.2));
     CHECK(near(rectangle_first_edge.end.v, 254.0));
 
+    // ROTATE final stage owns an Angle request; bare values are degrees.
+    CHECK(interaction.selectedCount() == 1U);
+    CHECK(interaction.activateRotate());
+    semantic_result = inch_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("1;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("90");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(near(moved_source->start().u, -50.0));
+    CHECK(near(moved_source->start().v, 40.0));
+    CHECK(near(moved_source->end().u, -80.0));
+    CHECK(near(moved_source->end().v, 70.0));
+
+    // SCALE final stage owns a positive dimensionless Factor. Invalid zero
+    // fails closed without ending the transform; 0.5 then commits exactly.
+    CHECK(interaction.activateScale());
+    semantic_result = inch_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("1;0");
+    CHECK(semantic_result.accepted);
+    const auto revision_before_bad_factor =
+        session.document().revision();
+    semantic_result = inch_input.submit("0");
+    CHECK(!semantic_result.accepted);
+    CHECK(
+        session.document().revision() ==
+        revision_before_bad_factor);
+    CHECK(
+        interaction.commonTransformStage() ==
+        sketch::CommonTransformStage::
+            await_destination);
+    semantic_result = inch_input.submit("0.5");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(near(moved_source->start().u, -25.0));
+    CHECK(near(moved_source->start().v, 20.0));
+    CHECK(near(moved_source->end().u, -40.0));
+    CHECK(near(moved_source->end().v, 35.0));
+
     std::cout
         << "SK-07F precision input controller PASS\n";
     return EXIT_SUCCESS;

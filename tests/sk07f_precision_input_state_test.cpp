@@ -319,6 +319,73 @@ int main() {
         CHECK(rectangle.resolveRectangleRequest(true));
     }
 
+    // Exact Rotate Angle and Scale Factor are runtime locks. Once set,
+    // later pointer motion cannot alter the exact numeric result.
+    {
+        sketch::SketchInteractionState rotate;
+        CHECK(rotate.addSelection(line_id));
+        CHECK(rotate.activateRotate(model));
+        CHECK(
+            rotate.acceptTransformPoint(
+                sketch::ResolvedSketchInput{{0.0, 0.0}}));
+        CHECK(
+            rotate.acceptTransformPoint(
+                sketch::ResolvedSketchInput{{1.0, 0.0}}));
+        CHECK(
+            rotate.acceptTransformValue(
+                std::numbers::pi_v<double> / 2.0));
+        CHECK(
+            rotate.updateTransformPreview(
+                sketch::ResolvedSketchInput{{-1.0, 0.0}}));
+
+        const auto source =
+            sketch::captureSketchTransformGeometry(
+                model, {line_id});
+        CHECK(source.has_value());
+        const auto exact_rotate =
+            rotate.transformGeometryState();
+        const auto expected_rotate =
+            sketch::rotateSketchGeometry(
+                *source,
+                {0.0, 0.0},
+                std::numbers::pi_v<double> / 2.0);
+        CHECK(exact_rotate.has_value());
+        CHECK(expected_rotate.has_value());
+        CHECK(*exact_rotate == *expected_rotate);
+    }
+
+    {
+        sketch::SketchInteractionState scale;
+        CHECK(scale.addSelection(line_id));
+        CHECK(scale.activateScale(model));
+        CHECK(
+            scale.acceptTransformPoint(
+                sketch::ResolvedSketchInput{{0.0, 0.0}}));
+        CHECK(
+            scale.acceptTransformPoint(
+                sketch::ResolvedSketchInput{{1.0, 0.0}}));
+        CHECK(!scale.acceptTransformValue(0.0));
+        CHECK(scale.acceptTransformValue(2.5));
+        CHECK(
+            scale.updateTransformPreview(
+                sketch::ResolvedSketchInput{{10.0, 0.0}}));
+
+        const auto source =
+            sketch::captureSketchTransformGeometry(
+                model, {line_id});
+        CHECK(source.has_value());
+        const auto exact_scale =
+            scale.transformGeometryState();
+        const auto expected_scale =
+            sketch::scaleSketchGeometry(
+                *source,
+                {0.0, 0.0},
+                2.5);
+        CHECK(exact_scale.has_value());
+        CHECK(expected_scale.has_value());
+        CHECK(*exact_scale == *expected_scale);
+    }
+
     std::cout << "SK-07F precision input state PASS\n";
     return EXIT_SUCCESS;
 }

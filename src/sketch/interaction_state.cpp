@@ -1098,6 +1098,7 @@ bool SketchInteractionState::completeTransformSelection(
     transform_session_->base_point.reset();
     transform_session_->reference_point.reset();
     transform_session_->current_preview.reset();
+    transform_session_->explicit_value.reset();
     point_pointer_candidate_.reset();
     transform_session_->stage =
         tool_ == SketchTool::mirror
@@ -1129,6 +1130,7 @@ bool SketchInteractionState::acceptTransformPoint(
         point_pointer_candidate_ = input.position;
         transform_session_->reference_point.reset();
         transform_session_->current_preview.reset();
+        transform_session_->explicit_value.reset();
         transform_session_->stage =
             (tool_ == SketchTool::move ||
              tool_ == SketchTool::copy)
@@ -1153,6 +1155,7 @@ bool SketchInteractionState::acceptTransformPoint(
             input.position;
         point_pointer_candidate_ = input.position;
         transform_session_->current_preview = input;
+        transform_session_->explicit_value.reset();
         transform_session_->stage =
             CommonTransformStage::await_destination;
         clearHover();
@@ -1204,6 +1207,31 @@ bool SketchInteractionState::updateTransformPreview(
     return true;
 }
 
+bool SketchInteractionState::acceptTransformValue(
+    double value) noexcept {
+    if (!transform_session_ ||
+        transform_session_->stage !=
+            CommonTransformStage::await_destination ||
+        !transform_session_->base_point ||
+        !transform_session_->reference_point ||
+        !std::isfinite(value)) {
+        return false;
+    }
+
+    if (tool_ == SketchTool::rotate) {
+        transform_session_->explicit_value = value;
+        return true;
+    }
+
+    if (tool_ == SketchTool::scale &&
+        value > 0.0) {
+        transform_session_->explicit_value = value;
+        return true;
+    }
+
+    return false;
+}
+
 std::optional<SketchTransformGeometry>
 SketchInteractionState::transformGeometryState() const {
     if (!commonTransformTool() ||
@@ -1238,6 +1266,13 @@ SketchInteractionState::transformGeometryState() const {
             *transform_session_->reference_point;
 
         if (tool_ == SketchTool::rotate) {
+            if (transform_session_->explicit_value) {
+                return rotateSketchGeometry(
+                    transform_session_->initial_geometry,
+                    base,
+                    *transform_session_->explicit_value);
+            }
+
             const auto angle =
                 signedAngle(
                     base,
@@ -1249,6 +1284,15 @@ SketchInteractionState::transformGeometryState() const {
                           initial_geometry,
                       base,
                       *angle)
+                : std::nullopt;
+        }
+
+        if (transform_session_->explicit_value) {
+            return *transform_session_->explicit_value > 0.0
+                ? scaleSketchGeometry(
+                      transform_session_->initial_geometry,
+                      base,
+                      *transform_session_->explicit_value)
                 : std::nullopt;
         }
 

@@ -414,6 +414,8 @@ public:
         ResolvedSketchInput input) noexcept;
     [[nodiscard]] bool updateTransformPreview(
         ResolvedSketchInput input) noexcept;
+    [[nodiscard]] bool acceptTransformValue(
+        double value) noexcept;
     [[nodiscard]] std::optional<SketchTransformGeometry>
     transformGeometryState() const;
     [[nodiscard]] bool continueCopyPlacement() noexcept;
@@ -587,6 +589,7 @@ private:
         std::optional<Point2> base_point;
         std::optional<Point2> reference_point;
         std::optional<ResolvedSketchInput> current_preview;
+        std::optional<double> explicit_value;
     };
 
     struct DirectManipulationSession final {

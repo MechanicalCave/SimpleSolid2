@@ -2388,8 +2388,14 @@ QString CadWorkbench::cadInputPromptText() const {
                     tool == sketch::SketchTool::copy
                         ? QStringLiteral(
                               "Specify copy placement point")
-                        : QStringLiteral(
-                              "Specify destination point");
+                        : tool == sketch::SketchTool::rotate
+                            ? QStringLiteral(
+                                  "Specify destination point or Angle")
+                            : tool == sketch::SketchTool::scale
+                                ? QStringLiteral(
+                                      "Specify destination point or Factor")
+                                : QStringLiteral(
+                                      "Specify destination point");
                 break;
             case sketch::CommonTransformStage::await_axis_start:
                 instruction =
@@ -3621,7 +3627,14 @@ void CadWorkbench::syncSketchInteractionUi() {
                 instruction =
                     tool == sketch::SketchTool::copy
                         ? QStringLiteral("Specify copy placement point")
-                        : QStringLiteral("Specify destination point");
+                        : tool == sketch::SketchTool::rotate
+                            ? QStringLiteral(
+                                  "Specify destination point or Angle")
+                            : tool == sketch::SketchTool::scale
+                                ? QStringLiteral(
+                                      "Specify destination point or Factor")
+                                : QStringLiteral(
+                                      "Specify destination point");
                 break;
             case sketch::CommonTransformStage::await_axis_start:
                 instruction =
