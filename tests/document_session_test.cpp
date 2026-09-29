@@ -319,6 +319,282 @@ int main() {
         CHECK(exhausted_session.redoDepth() == 0U);
     }
 
+    {
+        auto rectangle_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession
+            rectangle_session{
+                {},
+                std::move(rectangle_document)};
+
+        const auto sketch_created =
+            rectangle_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            sketch_created.ok() &&
+            sketch_created.sketch_id.has_value());
+        const auto rectangle_sketch_id =
+            *sketch_created.sketch_id;
+
+        const auto before_rectangle_revision =
+            rectangle_session.document().revision();
+        const auto before_rectangle_undo =
+            rectangle_session.undoDepth();
+
+        const auto rectangle =
+            rectangle_session.execute(
+                application::AddSketchRectangleCommand{
+                    rectangle_sketch_id,
+                    before_rectangle_revision,
+                    {0.0, 0.0},
+                    {10.0, 5.0},
+                    sketch::EntityRole::regular,
+                    true});
+        CHECK(rectangle.ok());
+        CHECK(rectangle.changed);
+        CHECK(rectangle.entity_ids.size() == 6U);
+        CHECK(
+            rectangle_session.document().revision().value() ==
+            before_rectangle_revision.value() + 1U);
+        CHECK(
+            rectangle_session.undoDepth() ==
+            before_rectangle_undo + 1U);
+
+        const auto* rectangle_sketch =
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id);
+        CHECK(rectangle_sketch != nullptr);
+        CHECK(
+            rectangle_sketch->model.entityCount() ==
+            6U);
+
+        for (std::size_t index = 0U;
+             index < 4U;
+             ++index) {
+            const auto* line =
+                rectangle_sketch->model.findLine(
+                    rectangle.entity_ids[index]);
+            CHECK(line != nullptr);
+            CHECK(
+                line->role() ==
+                sketch::EntityRole::regular);
+        }
+        for (std::size_t index = 4U;
+             index < 6U;
+             ++index) {
+            const auto* line =
+                rectangle_sketch->model.findLine(
+                    rectangle.entity_ids[index]);
+            CHECK(line != nullptr);
+            CHECK(
+                line->role() ==
+                sketch::EntityRole::construction);
+        }
+
+        const auto* first_diagonal =
+            rectangle_sketch->model.findLine(
+                rectangle.entity_ids[4]);
+        const auto* second_diagonal =
+            rectangle_sketch->model.findLine(
+                rectangle.entity_ids[5]);
+        CHECK(first_diagonal != nullptr);
+        CHECK(second_diagonal != nullptr);
+        CHECK(
+            first_diagonal->start() ==
+            sketch::Point2{0.0, 0.0});
+        CHECK(
+            first_diagonal->end() ==
+            sketch::Point2{10.0, 5.0});
+        CHECK(
+            second_diagonal->start() ==
+            sketch::Point2{10.0, 0.0});
+        CHECK(
+            second_diagonal->end() ==
+            sketch::Point2{0.0, 5.0});
+
+        const auto rectangle_ids =
+            rectangle.entity_ids;
+        CHECK(rectangle_session.undo().changed);
+        CHECK(
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.entityCount() == 0U);
+        CHECK(rectangle_session.redo().changed);
+        const auto* redone_sketch =
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id);
+        CHECK(redone_sketch != nullptr);
+        for (const auto id : rectangle_ids) {
+            CHECK(
+                redone_sketch->model.findLine(id) !=
+                nullptr);
+        }
+
+        const auto construction_line =
+            rectangle_session.execute(
+                application::AddSketchLineCommand{
+                    rectangle_sketch_id,
+                    {20.0, 0.0},
+                    {21.0, 0.0},
+                    sketch::EntityRole::construction});
+        CHECK(
+            construction_line.ok() &&
+            construction_line.entity_id.has_value());
+        CHECK(
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.findLine(
+                    *construction_line.entity_id)
+                ->role() ==
+            sketch::EntityRole::construction);
+
+        const auto construction_circle =
+            rectangle_session.execute(
+                application::AddSketchCircleCommand{
+                    rectangle_sketch_id,
+                    {24.0, 2.0},
+                    1.0,
+                    sketch::EntityRole::construction});
+        CHECK(
+            construction_circle.ok() &&
+            construction_circle.entity_id.has_value());
+        CHECK(
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.findCircle(
+                    *construction_circle.entity_id)
+                ->role() ==
+            sketch::EntityRole::construction);
+
+        const auto construction_arc =
+            rectangle_session.execute(
+                application::AddSketchArcCommand{
+                    rectangle_sketch_id,
+                    {28.0, 2.0},
+                    1.0,
+                    0.0,
+                    1.0,
+                    sketch::EntityRole::construction});
+        CHECK(
+            construction_arc.ok() &&
+            construction_arc.entity_id.has_value());
+        CHECK(
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.findArc(
+                    *construction_arc.entity_id)
+                ->role() ==
+            sketch::EntityRole::construction);
+
+        const auto stale_revision =
+            rectangle_session.document().revision();
+        const auto advance =
+            rectangle_session.execute(
+                application::AddSketchLineCommand{
+                    rectangle_sketch_id,
+                    {30.0, 0.0},
+                    {31.0, 0.0},
+                    sketch::EntityRole::regular});
+        CHECK(advance.ok() && advance.changed);
+
+        const auto count_before_stale =
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.entityCount();
+        const auto undo_before_stale =
+            rectangle_session.undoDepth();
+        const auto revision_before_stale =
+            rectangle_session.document().revision();
+        const auto stale_rectangle =
+            rectangle_session.execute(
+                application::AddSketchRectangleCommand{
+                    rectangle_sketch_id,
+                    stale_revision,
+                    {40.0, 0.0},
+                    {45.0, 5.0},
+                    sketch::EntityRole::regular,
+                    false});
+        CHECK(!stale_rectangle.ok());
+        CHECK(
+            stale_rectangle.diagnostic.code ==
+            application::DocumentSessionErrorCode::
+                revision_diverged);
+        CHECK(
+            rectangle_session.document().revision() ==
+            revision_before_stale);
+        CHECK(
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.entityCount() ==
+            count_before_stale);
+        CHECK(
+            rectangle_session.undoDepth() ==
+            undo_before_stale);
+
+        const auto before_degenerate_revision =
+            rectangle_session.document().revision();
+        const auto before_degenerate_undo =
+            rectangle_session.undoDepth();
+        const auto count_before_degenerate =
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.entityCount();
+        const auto degenerate =
+            rectangle_session.execute(
+                application::AddSketchRectangleCommand{
+                    rectangle_sketch_id,
+                    before_degenerate_revision,
+                    {50.0, 0.0},
+                    {50.0, 5.0},
+                    sketch::EntityRole::regular,
+                    false});
+        CHECK(!degenerate.ok());
+        CHECK(
+            degenerate.diagnostic.code ==
+            application::DocumentSessionErrorCode::
+                invalid_command);
+        CHECK(
+            rectangle_session.document().revision() ==
+            before_degenerate_revision);
+        CHECK(
+            rectangle_session.undoDepth() ==
+            before_degenerate_undo);
+        CHECK(
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.entityCount() ==
+            count_before_degenerate);
+
+        const auto construction_rectangle =
+            rectangle_session.execute(
+                application::AddSketchRectangleCommand{
+                    rectangle_sketch_id,
+                    rectangle_session.document()
+                        .revision(),
+                    {60.0, 0.0},
+                    {65.0, 5.0},
+                    sketch::EntityRole::construction,
+                    true});
+        CHECK(construction_rectangle.ok());
+        CHECK(
+            construction_rectangle.entity_ids.size() ==
+            6U);
+        for (const auto id :
+             construction_rectangle.entity_ids) {
+            const auto* line =
+                rectangle_session.document()
+                    .findSketch(rectangle_sketch_id)
+                    ->model.findLine(id);
+            CHECK(line != nullptr);
+            CHECK(
+                line->role() ==
+                sketch::EntityRole::construction);
+        }
+    }
+
 #if defined(_WIN32)
     const auto durable_before_failed_save = readText(path);
 
