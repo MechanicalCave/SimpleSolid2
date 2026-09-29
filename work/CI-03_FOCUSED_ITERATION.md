@@ -1,6 +1,6 @@
 # CI-03 — Focused Iteration
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Owner acceptance:** 2026-09-29  
 **Decision class:** D1 repository workflow / build implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -231,3 +231,21 @@ CI-03 is complete only when:
 - no CAD/product semantics changed.
 
 After completion, feature development still requires its own accepted Work Contract. CI-03 changes only how approved implementation work is verified during iteration.
+
+
+## 11. Completion record
+
+CI-03 implementation is complete.
+
+- final implementation/documentation candidate `2b207feabe0469694efc37b3b1641e96c597c8d7` passed Windows FULL #828;
+- FULL #828 passed exact checkout, documentation Browser freshness, setup, `ss2 verify`, the existing tier-dispatcher self-test, the new focused-dispatcher self-test, the complete desktop Build, the 14/14 core-only suite, FAST/SUBSYSTEM selector checks and the unfiltered 77/77 desktop CTest suite;
+- pure-Sketch focused probe `d3ae0a8d6be2b9a0180486df7fb02f57a20f4deb` passed FOCUSED #829 using only `e1_arc_numerical_stability_test` / `e1.arc_numerical_stability`;
+- FOCUSED #829 completed in 34 seconds end-to-end on the self-hosted Windows runner; the focused configure/target-build/exact-test step took 9 seconds;
+- cross-layer controller focused probe `89fcadb02fa1fa76203b1d2f324495a0f6fe8309` passed FOCUSED #830 using only `sk07f_precision_input_controller_test` / `sk07f.precision_input_controller`;
+- FOCUSED #830 completed in 93 seconds end-to-end; the focused configure/target-build/exact-test step took 69 seconds;
+- both probe-only test comments were removed after measurement; comparison from FULL #828 candidate `2b207fea...` to post-probe head `a2541e76...` reports no changed files;
+- ordinary root-level `tests/*_test.cpp` content can now use FOCUSED/FAST during draft iteration, while test/build/workflow infrastructure remains fail-closed to FULL;
+- FOCUSED and FAST are never trusted FULL evidence; ready runtime changes and runtime merge evidence retain CI-01/CI-02 FULL rules;
+- no CAD/domain source, product semantics, persistence, identity or ownership changed.
+
+All CI-03 acceptance conditions are satisfied. This completion record and ACTIVE bookkeeping require only exact-head CLOSURE verification before merge.

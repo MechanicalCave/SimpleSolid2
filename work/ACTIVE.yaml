@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/CI-03_FOCUSED_ITERATION.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -19,15 +19,18 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - implement accepted CI-03 focused targeted-build and exact-test iteration path
-  - preserve CI-01 trusted-FULL DOCS/CLOSURE semantics and CI-02 FAST/SUBSYSTEM/FULL meanings
-  - keep FOCUSED draft-only and never accept it as merge evidence
-  - fail closed to FAST or FULL when focused metadata is missing, invalid or verification-sensitive
-  - prove CI-03 itself with exact-head Windows FULL before completion
-  - update internal build/test documentation and Product Browser
-  - keep CAD/product mutation inactive while CI-03 is active
+  - keep production mutation inactive after CI-03 completion
+  - use CI-03 FOCUSED for bounded draft iteration when an accepted future Work Contract identifies direct target/test evidence
+  - use FAST or SUBSYSTEM for wider checkpoints and retain FULL as runtime merge evidence
+  - before resuming Sketcher product work, activate the next separately bounded Owner-accepted Sketcher Work Contract
+  - synchronize Sketcher roadmap current-status wording when that feature program resumes
 
 notes:
+  - CI-03 final implementation/documentation candidate 2b207feabe0469694efc37b3b1641e96c597c8d7 passed Windows FULL #828.
+  - CI-03 pure-Sketch FOCUSED #829 passed in 34 s end-to-end with 9 s focused target build/exact test.
+  - CI-03 cross-layer controller FOCUSED #830 passed in 93 s end-to-end with 69 s focused target build/exact test.
+  - Probe-only test changes were fully removed; post-probe tree has no changed files relative to the FULL #828 candidate.
+  - CI-03 is completed pending only work-only CLOSURE verification and merge; no CAD/product scope is active.
   - Owner accepted CI-03 Focused Iteration on 2026-09-29 after pipeline cost audit.
   - CI-03 is D1 repository workflow/build tooling only; it does not authorize Sketcher, Part or other CAD product mutation.
   - FOCUSED is iteration evidence only; final runtime merge evidence remains exact-head FULL under CI-01/CI-02.
