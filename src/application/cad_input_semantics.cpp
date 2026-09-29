@@ -104,6 +104,36 @@ commandTool(std::string_view token) noexcept {
     return std::nullopt;
 }
 
+std::optional<sketch::ExplicitPointInput>
+explicitPointInput(const CadPointToken& token) noexcept {
+    sketch::ExplicitPointInputKind kind{};
+    switch (token.kind) {
+    case CadPointTokenKind::absolute_cartesian:
+        kind =
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian;
+        break;
+    case CadPointTokenKind::relative_cartesian:
+        kind =
+            sketch::ExplicitPointInputKind::
+                relative_cartesian;
+        break;
+    case CadPointTokenKind::relative_polar:
+        kind =
+            sketch::ExplicitPointInputKind::
+                relative_polar;
+        break;
+    }
+
+    sketch::ExplicitPointInput input{
+        kind,
+        token.first,
+        token.second};
+    return input.valid()
+        ? std::optional<sketch::ExplicitPointInput>{input}
+        : std::nullopt;
+}
+
 } // namespace
 
 SketchCadInputSemanticEndpoint::SketchCadInputSemanticEndpoint(
@@ -140,12 +170,29 @@ SketchCadInputSemanticEndpoint::submit(
             return {true, {}};
         }
 
+        if (const auto point =
+                parseCadPointToken(
+                    submitted,
+                    number_format_.length_unit)) {
+            const auto input =
+                explicitPointInput(*point);
+            if (!input ||
+                !target_->
+                    submitCadInputSemanticExplicitPoint(
+                        *input)) {
+                return {
+                    false,
+                    "Explicit point input is not available for the active point stage."};
+            }
+            return {true, {}};
+        }
+
         const auto distance =
             parseBareCadDistance(submitted, number_format_);
         if (!distance) {
             return {
                 false,
-                "Active point input expects a valid non-negative Length expression."};
+                "Active point input expects supported point coordinates or a valid non-negative Length expression."};
         }
         if (!request->direct_distance_enabled) {
             return {

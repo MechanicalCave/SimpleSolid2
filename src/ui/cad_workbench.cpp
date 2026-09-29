@@ -2240,10 +2240,16 @@ CadWorkbench::submitCadInput(
              activePointRequest()
              .has_value();
 
+    const auto length_unit =
+        document_session_ != nullptr
+            ? document_session_->document().lengthUnit()
+            : core::LengthUnit::millimetre;
+
     application::SketchCadInputSemanticEndpoint endpoint{
         *sketch_interaction_controller_,
         application::CadInputNumberFormat{
-            toUtf8(QLocale{}.decimalPoint())}};
+            toUtf8(QLocale{}.decimalPoint()),
+            length_unit}};
 
     auto result = endpoint.submit(text);
     if (result.accepted &&

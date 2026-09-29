@@ -349,6 +349,85 @@ bool PartSketchInteractionController::submitDirectDistance(
     return false;
 }
 
+bool PartSketchInteractionController::submitExplicitPoint(
+    sketch::ExplicitPointInput input) {
+    if (!active() || profile_session_) {
+        return false;
+    }
+
+    const auto resolved =
+        interaction_.resolveExplicitPoint(input);
+    if (!resolved) {
+        reportStatus(
+            "Explicit point input is not available for the active point stage.");
+        return false;
+    }
+
+    if (interaction_.directManipulationActive()) {
+        if (!interaction_.updateDirectManipulation(*resolved)) {
+            return false;
+        }
+        return commitDirectManipulation();
+    }
+
+    if (interaction_.tool() == sketch::SketchTool::line) {
+        return acceptLineResolvedPoint(*resolved);
+    }
+
+    if (interaction_.tool() ==
+        sketch::SketchTool::rectangle) {
+        const auto accepted =
+            interaction_.acceptRectanglePoint(
+                resolved->position);
+        if (accepted.outcome !=
+            sketch::RectanglePointOutcome::
+                first_corner_accepted) {
+            return false;
+        }
+
+        rectangle_revision_ =
+            session_->document().revision();
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+        return true;
+    }
+
+    const auto stage =
+        interaction_.commonTransformStage();
+    if (!stage) {
+        return false;
+    }
+
+    const bool reference_stage =
+        *stage ==
+            sketch::CommonTransformStage::await_base_point ||
+        *stage ==
+            sketch::CommonTransformStage::await_reference_point ||
+        *stage ==
+            sketch::CommonTransformStage::await_axis_start;
+    if (reference_stage) {
+        if (!interaction_.acceptTransformPoint(*resolved)) {
+            return false;
+        }
+        viewport_controller_->clearSketchPreview();
+        configureForCurrentTool();
+        projectInteraction();
+        notifyStateChanged();
+        return true;
+    }
+
+    const bool commit_stage =
+        *stage ==
+            sketch::CommonTransformStage::await_destination ||
+        *stage ==
+            sketch::CommonTransformStage::await_axis_end;
+    if (!commit_stage ||
+        !interaction_.updateTransformPreview(*resolved)) {
+        return false;
+    }
+    return commitTransform();
+}
+
 bool PartSketchInteractionController::activateCadInputSemanticTool(
     sketch::SketchTool tool) {
     if (!active()) return false;

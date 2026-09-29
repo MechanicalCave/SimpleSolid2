@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <numbers>
 #include <optional>
 
 using namespace simplesolid2;
@@ -32,6 +33,9 @@ public:
     std::optional<sketch::PointRequest> request;
     std::optional<sketch::SketchTool> activated;
     std::optional<double> submitted_distance;
+    std::optional<sketch::ExplicitPointInput>
+        submitted_point;
+    bool explicit_point_result{true};
     std::optional<application::ProfileCadInputCommand>
         profile_command;
     application::CadInputSubmitResult
@@ -43,6 +47,11 @@ public:
     bool activateCadInputSemanticTool(sketch::SketchTool tool) override {
         activated = tool;
         return activation_result;
+    }
+    bool submitCadInputSemanticExplicitPoint(
+        sketch::ExplicitPointInput input) override {
+        submitted_point = input;
+        return explicit_point_result;
     }
     bool submitCadInputSemanticDirectDistance(double distance) override {
         submitted_distance = distance;
@@ -182,12 +191,15 @@ int main() {
     target.request = sketch::PointRequest{
         sketch::Point2{0.0, 0.0},
         sketch::Point2{3.0, 4.0},
+        true,
+        true,
+        true,
         true};
     target.submitted_distance.reset();
     result = dot.submit("C");
     CHECK(!result.accepted);
     CHECK(result.diagnostic ==
-          "Active point input expects a valid non-negative Length expression.");
+          "Active point input expects supported point coordinates or a valid non-negative Length expression.");
     CHECK(target.grip_copy_submit_count == 0U);
 
     target.grip_copy_available = true;
@@ -203,6 +215,48 @@ int main() {
           "Grip Copy could not be enabled.");
     CHECK(target.grip_copy_submit_count == 2U);
     target.grip_copy_result = true;
+
+    target.submitted_point.reset();
+    result = dot.submit("25;10");
+    CHECK(result.accepted);
+    CHECK(target.submitted_point.has_value());
+    CHECK(
+        target.submitted_point->kind ==
+        sketch::ExplicitPointInputKind::
+            absolute_cartesian);
+    CHECK(near(target.submitted_point->first, 25.0));
+    CHECK(near(target.submitted_point->second, 10.0));
+
+    target.submitted_point.reset();
+    result = dot.submit("@2in;10mm");
+    CHECK(result.accepted);
+    CHECK(target.submitted_point.has_value());
+    CHECK(
+        target.submitted_point->kind ==
+        sketch::ExplicitPointInputKind::
+            relative_cartesian);
+    CHECK(near(target.submitted_point->first, 50.8));
+    CHECK(near(target.submitted_point->second, 10.0));
+
+    target.submitted_point.reset();
+    result = dot.submit("@50<90");
+    CHECK(result.accepted);
+    CHECK(target.submitted_point.has_value());
+    CHECK(
+        target.submitted_point->kind ==
+        sketch::ExplicitPointInputKind::
+            relative_polar);
+    CHECK(near(target.submitted_point->first, 50.0));
+    CHECK(near(
+        target.submitted_point->second,
+        std::numbers::pi_v<double> / 2.0));
+
+    target.explicit_point_result = false;
+    result = dot.submit("1;2");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic ==
+          "Explicit point input is not available for the active point stage.");
+    target.explicit_point_result = true;
 
     result = dot.submit("12.5");
     CHECK(result.accepted);
@@ -233,20 +287,20 @@ int main() {
     result = dot.submit("PROFILE");
     CHECK(!result.accepted);
     CHECK(result.diagnostic ==
-          "Active point input expects a valid non-negative Length expression.");
+          "Active point input expects supported point coordinates or a valid non-negative Length expression.");
     CHECK(!target.profile_command.has_value());
 
     result = dot.submit("LINE");
     CHECK(!result.accepted);
     CHECK(result.diagnostic ==
-          "Active point input expects a valid non-negative Length expression.");
+          "Active point input expects supported point coordinates or a valid non-negative Length expression.");
     CHECK(!target.activated.has_value());
     CHECK(!target.submitted_distance.has_value());
 
     result = dot.submit("RECTANGLE");
     CHECK(!result.accepted);
     CHECK(result.diagnostic ==
-          "Active point input expects a valid non-negative Length expression.");
+          "Active point input expects supported point coordinates or a valid non-negative Length expression.");
     CHECK(!target.activated.has_value());
 
     application::SketchCadInputSemanticEndpoint comma{

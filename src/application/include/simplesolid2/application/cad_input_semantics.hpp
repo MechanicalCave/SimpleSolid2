@@ -50,6 +50,10 @@ public:
     [[nodiscard]] virtual bool activateCadInputSemanticTool(
         sketch::SketchTool tool) = 0;
 
+    [[nodiscard]] virtual bool
+    submitCadInputSemanticExplicitPoint(
+        sketch::ExplicitPointInput input) = 0;
+
     [[nodiscard]] virtual bool submitCadInputSemanticDirectDistance(
         double distance) = 0;
 

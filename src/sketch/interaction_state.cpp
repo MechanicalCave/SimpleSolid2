@@ -405,6 +405,9 @@ SketchInteractionState::activePointRequest() const noexcept {
         PointRequest request{
             manipulation_->pivot,
             point_pointer_candidate_,
+            true,
+            true,
+            true,
             true};
         return request.valid()
             ? std::optional<PointRequest>{request}
@@ -413,13 +416,16 @@ SketchInteractionState::activePointRequest() const noexcept {
 
     if (tool_ == SketchTool::line &&
         !pending_line_request_) {
-        PointRequest request{
-            line_stage_ == LineStage::await_next_point
-                ? line_anchor_
-                : std::nullopt,
-            point_pointer_candidate_,
+        const bool based =
             line_stage_ == LineStage::await_next_point &&
-                line_anchor_.has_value()};
+            line_anchor_.has_value();
+        PointRequest request{
+            based ? line_anchor_ : std::nullopt,
+            point_pointer_candidate_,
+            based,
+            true,
+            based,
+            based};
         return request.valid()
             ? std::optional<PointRequest>{request}
             : std::nullopt;
@@ -427,12 +433,17 @@ SketchInteractionState::activePointRequest() const noexcept {
 
     if (tool_ == SketchTool::rectangle &&
         !pending_rectangle_request_) {
-        PointRequest request{
+        const bool first_corner =
             rectangle_stage_ ==
-                    RectangleStage::await_opposite_corner
-                ? rectangle_first_corner_
-                : std::nullopt,
+            RectangleStage::await_first_corner;
+        PointRequest request{
+            first_corner
+                ? std::nullopt
+                : rectangle_first_corner_,
             point_pointer_candidate_,
+            false,
+            first_corner,
+            false,
             false};
         return request.valid()
             ? std::optional<PointRequest>{request}
@@ -449,6 +460,9 @@ SketchInteractionState::activePointRequest() const noexcept {
     PointRequest request{
         transform_session_->base_point,
         point_pointer_candidate_,
+        false,
+        true,
+        false,
         false};
 
     switch (transform_session_->stage) {
@@ -461,9 +475,17 @@ SketchInteractionState::activePointRequest() const noexcept {
             (tool_ == SketchTool::move ||
              tool_ == SketchTool::copy) &&
             request.base.has_value();
+        request.relative_cartesian_enabled =
+            request.base.has_value();
+        request.relative_polar_enabled =
+            request.base.has_value();
         break;
     case CommonTransformStage::await_reference_point:
     case CommonTransformStage::await_axis_end:
+        request.relative_cartesian_enabled =
+            request.base.has_value();
+        request.relative_polar_enabled =
+            request.base.has_value();
         break;
     case CommonTransformStage::select_objects:
         return std::nullopt;
@@ -471,6 +493,56 @@ SketchInteractionState::activePointRequest() const noexcept {
 
     return request.valid()
         ? std::optional<PointRequest>{request}
+        : std::nullopt;
+}
+
+std::optional<ResolvedSketchInput>
+SketchInteractionState::resolveExplicitPoint(
+    ExplicitPointInput input) const noexcept {
+    if (!input.valid()) {
+        return std::nullopt;
+    }
+
+    const auto request = activePointRequest();
+    if (!request) {
+        return std::nullopt;
+    }
+
+    Point2 resolved;
+    switch (input.kind) {
+    case ExplicitPointInputKind::absolute_cartesian:
+        if (!request->absolute_cartesian_enabled) {
+            return std::nullopt;
+        }
+        resolved = {input.first, input.second};
+        break;
+
+    case ExplicitPointInputKind::relative_cartesian:
+        if (!request->relative_cartesian_enabled ||
+            !request->base) {
+            return std::nullopt;
+        }
+        resolved = {
+            request->base->u + input.first,
+            request->base->v + input.second};
+        break;
+
+    case ExplicitPointInputKind::relative_polar:
+        if (!request->relative_polar_enabled ||
+            !request->base) {
+            return std::nullopt;
+        }
+        resolved = {
+            request->base->u +
+                input.first * std::cos(input.second),
+            request->base->v +
+                input.first * std::sin(input.second)};
+        break;
+    }
+
+    return resolved.finite()
+        ? std::optional<ResolvedSketchInput>{
+              ResolvedSketchInput{resolved}}
         : std::nullopt;
 }
 

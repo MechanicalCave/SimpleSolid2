@@ -7,6 +7,7 @@
 #include <simplesolid2/sketch/transform.hpp>
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <vector>
@@ -245,15 +246,47 @@ struct ResolvedSketchInput final {
         const ResolvedSketchInput&) = default;
 };
 
+enum class ExplicitPointInputKind : std::uint8_t {
+    absolute_cartesian,
+    relative_cartesian,
+    relative_polar,
+};
+
+struct ExplicitPointInput final {
+    ExplicitPointInputKind kind{
+        ExplicitPointInputKind::absolute_cartesian};
+    double first{};
+    double second{};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return std::isfinite(first) &&
+               std::isfinite(second) &&
+               (kind != ExplicitPointInputKind::relative_polar ||
+                first >= 0.0);
+    }
+
+    friend bool operator==(
+        const ExplicitPointInput&,
+        const ExplicitPointInput&) = default;
+};
+
 struct PointRequest final {
     std::optional<Point2> base;
     std::optional<Point2> pointer_candidate;
     bool direct_distance_enabled{};
+    bool absolute_cartesian_enabled{};
+    bool relative_cartesian_enabled{};
+    bool relative_polar_enabled{};
 
     [[nodiscard]] bool valid() const noexcept {
+        const bool requires_base =
+            direct_distance_enabled ||
+            relative_cartesian_enabled ||
+            relative_polar_enabled;
         return (!base || base->finite()) &&
                (!pointer_candidate ||
-                pointer_candidate->finite());
+                pointer_candidate->finite()) &&
+               (!requires_base || base.has_value());
     }
 
     friend bool operator==(
@@ -301,6 +334,10 @@ public:
 
     [[nodiscard]] std::optional<ResolvedSketchInput>
     resolvePointerInput(Point2 raw) noexcept;
+
+    [[nodiscard]] std::optional<ResolvedSketchInput>
+    resolveExplicitPoint(
+        ExplicitPointInput input) const noexcept;
 
     [[nodiscard]] std::optional<ResolvedSketchInput>
     resolveDirectDistance(double distance) const noexcept;

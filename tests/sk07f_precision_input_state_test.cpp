@@ -3,6 +3,7 @@
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
+#include <numbers>
 
 using namespace simplesolid2;
 
@@ -30,10 +31,17 @@ int main() {
     CHECK(request.has_value());
     CHECK(!request->base.has_value());
     CHECK(!request->direct_distance_enabled);
+    CHECK(request->absolute_cartesian_enabled);
+    CHECK(!request->relative_cartesian_enabled);
+    CHECK(!request->relative_polar_enabled);
     CHECK(!state.resolveDirectDistance(50.0).has_value());
 
     const auto first =
-        state.resolvePointerInput({10.0, 20.0});
+        state.resolveExplicitPoint(
+            {sketch::ExplicitPointInputKind::
+                 absolute_cartesian,
+             10.0,
+             20.0});
     CHECK(first.has_value());
     CHECK(
         state.acceptLinePoint(first->position).outcome ==
@@ -43,7 +51,32 @@ int main() {
     CHECK(request.has_value());
     CHECK(request->base == sketch::Point2{10.0, 20.0});
     CHECK(request->direct_distance_enabled);
+    CHECK(request->absolute_cartesian_enabled);
+    CHECK(request->relative_cartesian_enabled);
+    CHECK(request->relative_polar_enabled);
     CHECK(!state.resolveDirectDistance(50.0).has_value());
+
+    const auto relative_cartesian =
+        state.resolveExplicitPoint(
+            {sketch::ExplicitPointInputKind::
+                 relative_cartesian,
+             5.0,
+             -2.0});
+    CHECK(relative_cartesian.has_value());
+    CHECK(
+        relative_cartesian->position ==
+        sketch::Point2{15.0, 18.0});
+
+    const auto relative_polar =
+        state.resolveExplicitPoint(
+            {sketch::ExplicitPointInputKind::
+                 relative_polar,
+             10.0,
+             std::numbers::pi_v<double> / 2.0});
+    CHECK(relative_polar.has_value());
+    CHECK(near(relative_polar->position.u, 10.0));
+    CHECK(near(relative_polar->position.v, 30.0));
+
     CHECK(state.resolvePointerInput({13.0, 24.0}).has_value());
 
     const auto direct = state.resolveDirectDistance(50.0);
@@ -84,6 +117,9 @@ int main() {
     request = state.activePointRequest();
     CHECK(request.has_value());
     CHECK(!request->direct_distance_enabled);
+    CHECK(request->absolute_cartesian_enabled);
+    CHECK(!request->relative_cartesian_enabled);
+    CHECK(!request->relative_polar_enabled);
 
     const auto base =
         state.resolvePointerInput({5.0, 5.0});
@@ -93,6 +129,21 @@ int main() {
     CHECK(request.has_value());
     CHECK(request->base == sketch::Point2{5.0, 5.0});
     CHECK(request->direct_distance_enabled);
+    CHECK(request->absolute_cartesian_enabled);
+    CHECK(request->relative_cartesian_enabled);
+    CHECK(request->relative_polar_enabled);
+
+    const auto move_relative =
+        state.resolveExplicitPoint(
+            {sketch::ExplicitPointInputKind::
+                 relative_cartesian,
+             3.0,
+             4.0});
+    CHECK(move_relative.has_value());
+    CHECK(
+        move_relative->position ==
+        sketch::Point2{8.0, 9.0});
+
     CHECK(state.resolvePointerInput({8.0, 9.0}).has_value());
 
     const auto move50 = state.resolveDirectDistance(50.0);

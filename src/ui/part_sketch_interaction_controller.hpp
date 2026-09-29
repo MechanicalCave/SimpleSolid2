@@ -69,6 +69,8 @@ public:
         return cad_input_context_generation_;
     }
     [[nodiscard]] bool submitDirectDistance(double distance);
+    [[nodiscard]] bool submitExplicitPoint(
+        sketch::ExplicitPointInput input);
 
     [[nodiscard]] bool cadInputSemanticActive() const noexcept override {
         return active();
@@ -79,6 +81,10 @@ public:
     }
     [[nodiscard]] bool activateCadInputSemanticTool(
         sketch::SketchTool tool) override;
+    [[nodiscard]] bool submitCadInputSemanticExplicitPoint(
+        sketch::ExplicitPointInput input) override {
+        return submitExplicitPoint(input);
+    }
     [[nodiscard]] bool submitCadInputSemanticDirectDistance(
         double distance) override {
         return submitDirectDistance(distance);

@@ -504,6 +504,55 @@ int main(int argc, char* argv[]) {
     CHECK(!interaction.activePointRequest().has_value());
     CHECK(session.document().state() == before_escape);
 
+    // R10 point grammar uses the same semantic endpoint and PointRequest.
+    // Unitless coordinates follow the durable Part display/input length unit.
+    const auto set_inches =
+        session.execute(
+            application::SetPartLengthUnitCommand{
+                core::LengthUnit::inch});
+    CHECK(set_inches.ok());
+    CHECK(set_inches.changed);
+
+    application::SketchCadInputSemanticEndpoint inch_input{
+        interaction,
+        application::CadInputNumberFormat{
+            ".",
+            core::LengthUnit::inch}};
+
+    interaction.activateLine();
+    semantic_result = inch_input.submit("1;2");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.lineStage() ==
+        sketch::LineStage::await_next_point);
+
+    semantic_result = inch_input.submit("@1;0.5");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(!model_state.lines.empty());
+    const auto& exact_cartesian =
+        model_state.lines.back();
+    CHECK(near(exact_cartesian.start.u, 25.4));
+    CHECK(near(exact_cartesian.start.v, 50.8));
+    CHECK(near(exact_cartesian.end.u, 50.8));
+    CHECK(near(exact_cartesian.end.v, 63.5));
+
+    semantic_result = inch_input.submit("@1<90");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(model_state.lines.size() >= 2U);
+    const auto& exact_polar =
+        model_state.lines.back();
+    CHECK(near(exact_polar.start.u, 50.8));
+    CHECK(near(exact_polar.start.v, 63.5));
+    CHECK(near(exact_polar.end.u, 50.8));
+    CHECK(near(exact_polar.end.v, 88.9));
+    CHECK(interaction.escape());
+
     std::cout
         << "SK-07F precision input controller PASS\n";
     return EXIT_SUCCESS;
