@@ -171,25 +171,62 @@ LMB or Enter commits the geometry for the currently active direct-edit mode thro
 Switching tools or Documents clears uncommitted transform/COPY/direct-manipulation state safely. Space inside text-entry focus remains text input.
 
 <!-- section-id: internal.cad-workbench-viewer.measure -->
-## R8A Measure adapter and runtime target
+## R8 Measure — quick inspection and relational runtime targets
 
-`CadWorkbench` exposes an **Inspect → Measure** tool and the top-level Sketch command `MEASURE`. Both are thin adapters to the same `PartSketchInteractionController::activateMeasure()` semantic path.
+`CadWorkbench` exposes **Inspect → Measure** and the top-level Sketch command `MEASURE`. R8A quick inspection remains the default mode. R8B adds **Between** as a submode of the same `SketchTool::measure`, not as a new top-level tool.
 
-Measure owns one runtime-only semantic target `EntityId`; it does not own or rewrite ordinary Sketch selection. Selection-first activation uses the target immediately only when ordinary selection contains exactly one supported Line/Circle/Arc. Empty or multi-selection enters Measure without a target. A later LMB entity hit replaces only the Measure target. Blank LMB clears the current Measure target/result. The existing semantic point-query bridge converts any Viewer presentation hit back to `SketchId + EntityId` before the target is accepted; provider tokens never become measurement identity.
+### Quick whole-entity inspection
 
-The controller derives the current value on demand through provider-neutral `sketch::measureEntity(model, EntityId)`. It does not cache a second geometric result. If the target disappears or a derived value is non-finite, no stale result is presented.
+Quick Measure owns one runtime-only `EntityId` target and never rewrites ordinary Sketch selection. Selection-first activation uses exactly one selected Line/Circle/Arc; empty or multi-selection enters Measure without a target. LMB on an entity replaces only the Measure target, blank LMB clears it, and `measureEntity(model, EntityId)` derives the current value on demand. Provider presentation tokens are mapped back to `SketchId + EntityId` before semantic acceptance and never become measurement identity.
 
-The Qt layer performs presentation only. `Operations` formats the already-computed semantic result:
+Operations presents Line Length/Delta U/Delta V/Angle +U, Circle Radius/Diameter/Circumference/Area and Arc Radius/Start/End Angle/Signed Sweep/Arc Length.
 
-- Line — Length, Delta U, Delta V, Angle +U;
-- Circle — Radius, Diameter, Circumference, Area;
-- Arc — Radius, Start/End Angle, Signed Sweep, Arc Length.
+### Between runtime relation mode
 
-Angles are formatted in degrees for readability; neutral geometry remains radians. Linear/area values are deliberately unlabeled by physical unit because explicit Units belong to later R10 work.
+While Measure is active, Operations exposes **Between** and the active semantic grammar accepts case-insensitive `BETWEEN`. The workspace/global CAD-input transport stays domain-neutral; outside active Measure, `BETWEEN` remains unknown. Entering Between clears only the quick Measure target/result and preserves ordinary Sketch selection.
 
-Measure uses the existing crosshair spatial-tool routing. It adds no Viewer dimension objects, leaders/arrows/text overlays or selectable/snappable diagnostic geometry. Those are outside R8A.
+R8B uses runtime-only measurement references:
 
-Measure activation, retargeting, blank-target clear and Esc create no Document mutation, revision, dirty state, identity allocation, Undo entry or persistence. Existing selection remains intact. Undo/Redo cancels the transient tool through the existing history boundary before ordinary global history. Tool/Sketch/Document replacement likewise clears Measure runtime state.
+```text
+MeasurePointRef { EntityId owner, MeasurePointRole role }
+MeasureLineRef  { EntityId }
+```
+
+They are deliberately separate from edit-grip identity, are not authored Points, are not OSNAP candidates and are never persisted. Supported point roles are Line Start/Midpoint/End, Circle Center and four ±U/±V Quadrants, and Arc Center/Start/End/Midpoint along the authored signed sweep.
+
+A whole Circle or Arc is not a relational target. A Line body may be selected directly as an infinite supporting-line target. Supported relations are exactly:
+
+- Point ↔ Point — Distance, Delta U, Delta V and directed Angle +U from Target A to Target B;
+- Point ↔ Line — perpendicular distance to the infinite supporting Line plus exact perpendicular foot;
+- Line ↔ Line — smaller undirected angle in `0..pi/2`.
+
+No Product geometric tolerance, nearest-point healing or endpoint clamping is introduced.
+
+### Latent markers and Viewer identity boundary
+
+`measurePointCatalog(model)` derives semantic runtime points. `PartViewportController` maps `EntityId` to `PresentationToken` and projects exact positions. Viewer marker keys contain only presentation token + runtime marker role; no `EntityId` crosses the Viewer boundary.
+
+Markers are latent. Qt/OCCT uses a bounded screen-space aperture only to reveal them. **Proximity reveals; it never acquires.** Hidden markers cannot be clicked semantically and pointer proximity never snaps or changes CAD coordinates.
+
+Visible-marker query has priority over entity-body query. Accepted marker tokens are immediately mapped back to `SketchId + EntityId + MeasurePointRole` and revalidated. Provider order has no semantic priority. Same-coordinate overlapping hits are measurement-equivalent; distinct-coordinate overlapping hits fail closed instead of nearest-wins or cycling. If no visible marker is hit, only a Line body can become a relational whole-entity target.
+
+Accepted point targets stay pinned; accepted Lines stay highlighted. Construction geometry participates with the same roles and formulas as Regular geometry.
+
+### State, lifecycle and representative cue
+
+The runtime flow is `await_first → await_second(first) → result(first, second)`. Interaction state stores target references, not a cached relational result; the current result is recomputed from the current model. After a result, the next accepted target starts the next relation. Blank click clears pending/result state but remains in Between.
+
+Esc is hierarchical: **Between → ordinary Measure → Select**. Tool switch, history boundary and Sketch/Document replacement clear R8B runtime targets, markers and cues. No R8B action changes DocumentRevision, dirty state, identity allocation, Undo or persistence.
+
+The semantic layer also derives one provider-neutral `RelationalMeasurementCue`; Qt/OCCT only maps and draws it:
+
+- Point ↔ Point — one transient segment between exact targets;
+- Point ↔ Line — P→F perpendicular segment, plus a distinct dashed supporting-line continuation when F lies outside the finite authored segment;
+- Line ↔ Line — both Lines highlighted, without angular-dimension arc/text.
+
+Cue objects are runtime-only, non-selectable, non-editable, non-snappable and identity-free. This single-current-relation visualization is not the R8C general dimension-overlay system.
+
+Angles are formatted in degrees for readability while neutral geometry remains radians. Linear and area values stay unlabeled by physical unit until later Precision/Units work.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and provider-surface Navigation Cube
