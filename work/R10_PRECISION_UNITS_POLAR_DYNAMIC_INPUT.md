@@ -1,15 +1,15 @@
 # R10 — Precision Input / Units / Polar / Dynamic Input
 
-**Status:** PROPOSED — INACTIVE  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-29  
-**Owner acceptance:** pending  
+**Owner acceptance:** 2026-09-29  
 **Decision class:** D2 shared semantic precision-input / units / runtime mode grammar + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0010, ADR-0011  
-**Program roadmap:** `work/SKETCH_ROADMAP.md` v1.6  
+**Program roadmap:** `work/SKETCH_ROADMAP.md` v1.7  
 **Predecessor:** R9 Rectangle + Construction Authoring Surface — completed  
 **Milestone:** R10 — Precision Input / Units / Polar / Dynamic Input
-**Roadmap amendment proposed by this contract:** replace the v1.6 R10 separate-Ortho/Polar direction with the accepted Polar-only directional-assistance model; materialize that amendment in the accepted roadmap before production activation.
+**Accepted roadmap amendment:** v1.7 replaces the prior separate-Ortho/Polar R10 direction with the Polar-only directional-assistance model accepted by this contract.
 
 ## 1. Context
 
@@ -31,7 +31,7 @@ The current precision capability is intentionally narrow. A submitted scalar can
 
 R10 must extend that one existing input architecture. It must not create per-tool parsers, a second command buffer, a second point resolver or a Dynamic-Input-only state machine.
 
-Roadmap v1.6 is currently still authoritative and contains the older R10 wording with a separate Ortho mode and Ortho/Polar mutual exclusion. This proposal does not silently override that higher-authority roadmap. Final Owner acceptance of this contract includes a bounded roadmap amendment to remove separate Ortho from R10 and use Polar as the sole directional magnet. The roadmap/version and `work/ACTIVE.yaml` must be updated as part of activation before any R10 production mutation.
+Roadmap v1.7 is authoritative for this active R10 scope. It materializes the Owner-accepted amendment that removes separate Ortho from R10 and uses Polar as the sole directional magnet. `work/ACTIVE.yaml` points to this contract and roadmap version; no production scope outside this contract is authorized.
 
 ## 2. Goal
 
@@ -57,7 +57,7 @@ R10 additionally absorbs the previously accepted non-blocking Construction prese
 
 ## 3. Decision summary
 
-Subject to explicit Owner acceptance, R10 adopts these bounded decisions:
+Owner acceptance on 2026-09-29 activates these bounded R10 decisions:
 
 1. Existing workspace CAD input transport and ADR-0011 context-first routing remain authoritative.
 2. Existing `PointRequest` remains the point-acquisition semantic owner and is expanded rather than replaced.
@@ -1511,7 +1511,7 @@ Undo/Redo cancels transient precision input first according to existing interact
 
 ## 28. Expected implementation surface
 
-Expected bounded production changes after Owner acceptance may include:
+Expected bounded production changes under this active contract may include:
 
 - `src/core/**` for shared physical unit/value primitives;
 - `src/application/**` for reusable quantity/coordinate grammar and typed semantic input transport;
@@ -1803,16 +1803,16 @@ R11 must consume the accepted R10 resolver priority and numeric locks. It must n
 
 ## 33. Activation and completion boundary
 
-R10 may become ACTIVE only after explicit Owner acceptance of this Work Contract.
+R10 is ACTIVE after explicit Owner acceptance on 2026-09-29.
 
-That acceptance also approves the bounded program-roadmap amendment described above: R10 no longer contains a separate Ortho mode; Polar is the sole directional-assistance mode and `360/4` provides orthogonal-only attraction. Before the first R10 production mutation, activation must:
+Activation materializes the bounded program-roadmap amendment described above:
 
-- materialize the amendment as the next accepted Sketcher Roadmap version (expected v1.7);
-- update `work/ACTIVE.yaml` to that roadmap version and this R10 Work Contract;
-- remove stale R10/forward-looking separate-Ortho wording where it would contradict the accepted Polar-only resolver;
-- preserve R11 sequencing and all other unaffected roadmap boundaries.
+- Sketcher Roadmap v1.7 removes separate Ortho from R10;
+- Polar is the sole directional-assistance mode and `360/4` provides orthogonal-only attraction;
+- `work/ACTIVE.yaml` points to Roadmap v1.7 and this R10 Work Contract;
+- R11 sequencing and all other unaffected roadmap boundaries remain unchanged.
 
-The proposal PR itself remains Work-Contract-only and does not perform that activation bookkeeping before Owner acceptance.
+This activation authorizes production mutation only inside the scope and file surfaces of this contract. It does not activate R11+, authored dimensions/constraints/solver, ordinary Select RMB context or solid modeling.
 
 Completion requires:
 

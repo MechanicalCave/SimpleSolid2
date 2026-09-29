@@ -1,29 +1,27 @@
 # Sketcher Program Roadmap
 
 **Status:** ACCEPTED  
-**Version:** 1.6  
+**Version:** 1.7  
 **Owner acceptance:** 2026-09-29  
-**Previous accepted version:** 1.5 — 2026-09-29  
+**Previous accepted version:** 1.6 — 2026-09-29  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Current scheduling:** R0–R9, WB-02 and AUDIT-01 A–F are completed. Standalone R8C Show Dimensions is deferred to future authored/parametric dimension and constraint architecture. The next planned Sketcher sequence is R10 Precision → R11 OSNAP/Inference → R12 Trim/Split/Join, followed by a profile-authoring readiness checkpoint. Solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
+**Current scheduling:** R0–R9, WB-02 and AUDIT-01 A–F are completed. R10 Precision Input / Units / Polar / Dynamic Input is ACTIVE through its Owner-accepted Work Contract. R11 OSNAP/Inference and R12 Trim/Split/Join remain inactive, followed by the profile-authoring readiness checkpoint. Solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
 
-## 1. Why v1.6 changes the sequence
+## 1. Why v1.7 changes R10 directional assistance
 
-Roadmap v1.5 correctly placed read-only measurement before the authoring/precision/snap/editing milestones. R8A and R8B have now completed with provider-neutral quick Measure, explicit runtime semantic targets and bounded relational diagnostics.
+Roadmap v1.6 established the current sequence, closed R8 through R8A + R8B, deferred standalone Show Dimensions, and placed R10 Precision before R11 OSNAP/Inference and R12 structural editing.
 
-A standalone R8C Show Dimensions proposal was then reviewed. The Owner decided not to create a temporary viewport-dimension subsystem whose presentation resembles authored CAD dimensions but has no durable dimension/reference semantics, no parameter editing and no solver relationship.
+During Owner review of the R10 Work Contract, the separate Ortho + Polar model was deliberately simplified. R10 now has one directional-assistance mechanism: **Polar**. Classic orthogonal-only behavior is represented by Polar spacing `360/4 = 90°`; there is no second Ortho toggle or resolver path.
 
-Roadmap v1.6 therefore closes R8 through R8A + R8B and defers standalone Show Dimensions. Future viewport dimension presentation should be reconsidered together with authored/parametric dimensions and constraints, after structural-edit identity/reference semantics are stable enough to support that architecture deliberately.
-
-The accepted sequence is now:
+This is a bounded R10 interaction amendment, not a sequencing change. The accepted sequence is:
 
 ```text
 R8  Measure / relational diagnostics — completed
-→ R9  Rectangle + Construction UI
-→ R10 Precision Input / Units / Ortho / Polar / Dynamic Input
+→ R9  Rectangle + Construction UI — completed
+→ R10 Precision Input / Units / Polar / Dynamic Input — ACTIVE
 → R11 OSNAP / Tracking / Inference
 → R12 Trim / Split / Join with explicit identity outcomes
 → Sketcher profile-authoring readiness checkpoint
@@ -31,9 +29,9 @@ R8  Measure / relational diagnostics — completed
 → only then may a first solid-operation contract be considered
 ```
 
-This sequence continues to optimize for **conscious profile authoring** before solid modeling. Technical readiness to consume a Profile is not treated as product readiness to model solids.
+Roadmap v1.6's Show Dimensions decision remains unchanged: standalone Show Dimensions stays deferred until future authored/parametric dimension and constraint architecture is ready.
 
-Four guardrails are explicit:
+Four guardrails remain explicit:
 
 1. R8A/R8B runtime measurement references remain diagnostic and do not become durable dimension/sub-element identity by implication.
 2. Standalone Show Dimensions is not a prerequisite for profile-authoring readiness; future viewport dimensions should follow the eventual authored/reference dimension architecture rather than pre-empt it.
@@ -42,7 +40,7 @@ Four guardrails are explicit:
 
 Ordinary RMB context remains deferred as a later UX-convergence item after the command set is broad enough to design the menu from stable operations. Existing already-accepted RMB semantics in command-first object collection remain unchanged.
 
-Roadmap v1.6 changes scheduling and future milestone boundaries only. It activates no production implementation by itself. R9 still requires its own explicit Owner-accepted Work Contract.
+Roadmap v1.7 activates no scope beyond the separately Owner-accepted R10 Work Contract. R11+ remain inactive.
 
 ## 2. Preserved accepted invariants
 
@@ -381,7 +379,7 @@ The priority is:
 1. explicit numeric input / locked numeric fields;
 2. Temporary Snap Override;
 3. Object Snap / Object Snap Tracking;
-4. Ortho / Polar / geometric inference;
+4. Polar / geometric inference;
 5. Grid Snap;
 6. raw pointer.
 
@@ -389,21 +387,27 @@ A higher-priority explicit constraint is never violated to satisfy a lower-prior
 
 Example: if Distance=50 is explicitly locked, an Endpoint at distance 48 is rejected. Snap/inference may only resolve remaining free parameters compatible with the locked value.
 
-### 5.3 Ortho and Polar
+### 5.3 Polar directional assistance
 
-Ortho and Polar Tracking are mutually exclusive.
+R10 defines Polar as the sole angular directional-assistance mode. There is no separate Ortho runtime mode or resolver.
 
-Enabling one disables the other.
+Classic orthogonal-only behavior is represented by:
 
-Object Snap remains higher priority than either.
+```text
+Polar spacing = 360/4 = 90°
+```
 
-Polar Tracking supports:
+Object Snap remains higher priority than Polar.
 
-- user-configurable primary angle increment;
-- additional user angles;
-- Absolute mode relative to +U;
-- Relative mode relative to the current operation's reference direction, such as the preceding segment;
-- Absolute/Relative choice as user preference.
+Polar supports:
+
+- a user-configurable primary angle increment;
+- individual additional user-angle tracks;
+- Absolute reference relative to Sketch +U;
+- Relative reference relative to the current operation's explicit semantic reference direction;
+- magnetic screen-space capture/release rather than unconditional nearest-angle quantization.
+
+The accepted R10 Work Contract owns exact defaults, runtime lifetime, shortcut and capture-hysteresis semantics.
 
 ### 5.4 Object Snap and tracking
 
@@ -435,7 +439,7 @@ Object Snap Tracking:
 
 - acquires tracking points through hover plus a short dwell, without a click;
 - may hold several acquired points for the current point request;
-- uses the same active Ortho/Polar/inference direction rules as the rest of Input Resolution;
+- uses the same active Polar/inference direction rules as the rest of Input Resolution;
 - may expose intersections of tracking guides;
 - acquired points are runtime-only;
 - the acquired set clears when the current point is accepted or Esc cancels that point/request.
@@ -465,7 +469,7 @@ Grid Snap is a separate optional input aid.
 
 They can be enabled independently.
 
-Grid Snap is lower priority than Object Snap and Ortho/Polar/inference.
+Grid Snap is lower priority than Object Snap and Polar/inference.
 
 ### 5.7 Dynamic Input and Command Line
 
@@ -680,22 +684,23 @@ Delivered:
 
 Owner accepted one non-blocking visual follow-up for a later suitable Sketcher milestone: Construction dash-gap cadence should not stretch/normalize with entity length. The exact screen-space versus model-space cadence policy remains a later bounded presentation decision and does not reopen R9.
 
-### R10 — Precision input expansion, Units, Ortho, Polar and Dynamic Input
-**Status:** next planned milestone; inactive until a separate Owner-accepted Work Contract
+### R10 — Precision input expansion, Units, Polar and Dynamic Input
+**Status:** ACTIVE through `work/R10_PRECISION_UNITS_POLAR_DYNAMIC_INPUT.md`; Owner accepted 2026-09-29
 
 Goal:
 
 - extend the workspace-global CAD input transport established by WB-02;
 - extend the shared semantic Input Resolution path established by SK-07F rather than replace it;
-- absolute/relative Cartesian input;
-- relative polar input;
+- absolute/relative Cartesian and relative polar input;
 - explicit unit-aware quantity/expression grammar beyond the bare scalar foundation;
-- comma/dot decimal and accepted Cartesian component grammar under a bounded contract;
-- Dynamic Input fields and Tab locking/cycling;
-- Ortho/Polar mutual exclusion;
-- configurable polar increments/additional angles;
-- Absolute/Relative Polar preference;
+- comma/dot decimal and semicolon Cartesian component grammar;
+- Dynamic Input fields and deterministic lock/cycle behavior over the same CAD buffer/request;
+- one Polar magnetic directional-assistance mode with configurable primary spacing, individual additional angles and Absolute/Relative reference;
+- no separate Ortho mode; `360/4 = 90°` provides orthogonal-only attraction;
+- accepted precision workflows for current creation tools, transforms and grip manipulation;
 - Command Line and Dynamic Input feed the same semantic request.
+
+Exact R10 semantics, defaults, scope exclusions, persistence behavior and completion evidence are owned by the active Work Contract.
 
 ### R11 — Object Snap, Object Snap Tracking and inference
 **Status:** planned; inactive
@@ -706,7 +711,7 @@ Goal:
 - Temporary Snap Override;
 - deterministic no-cycling candidate resolution;
 - Object Snap Tracking hover acquisition with multiple temporary acquired points;
-- shared tracking directions with Ortho/Polar/inference;
+- shared tracking directions with Polar/inference;
 - endpoint/midpoint/center/quadrant/intersection/perpendicular/tangent/nearest/origin and justified extension modes;
 - inference guides;
 - no silent authored constraints.
@@ -736,7 +741,7 @@ Minimum checkpoint evidence must demonstrate, on supported Windows:
 - usable Regular/Construction workflow;
 - read-only geometric inspection/measurement;
 - precise numeric/unit-aware point entry;
-- Ortho/Polar and Dynamic Input;
+- Polar and Dynamic Input;
 - OSNAP/Tracking/Inference sufficient for deliberate geometric placement;
 - Trim/Split/Join with accepted stable identity/history behavior;
 - Undo/Redo and Save/Close/Reopen across representative workflows;
@@ -848,17 +853,17 @@ R7 completed — SK-07A through SK-07G plus WB-02; ordinary RMB menu deferred by
 AUDIT-01 A–F completed — Package F already supplies the region/Profile foundation previously scheduled later  
 R8 completed — R8A completed after exact-head FULL #867 and Owner manual PASS; R8B completed after exact-head FULL #889 and Owner manual PASS; standalone R8C Show Dimensions deferred by v1.6  
 R9 completed — exact-head FULL #912 and Owner manual Windows PASS on bfe36544d71593a407bada63c07ae0e4b912808f  
-R10 next planned milestone — inactive until a separate Owner-accepted Work Contract  
+R10 ACTIVE — Owner-accepted `work/R10_PRECISION_UNITS_POLAR_DYNAMIC_INPUT.md`; Roadmap v1.7 uses Polar-only directional assistance  
 R11–R15 inactive  
 Sketcher profile-authoring readiness checkpoint not yet reached  
 Part Feature Tree architecture gate inactive  
 Solid modeling / Extrude inactive  
 Ordinary Select RMB context menu deferred as a later UX-convergence slice
 
-Roadmap v1.6 is authoritative for Sketcher feature sequencing. The v1.5 expectation that R8C precede R9 is superseded. R9 is completed; R10 is next in sequence, but no R10 production scope is active until a separate Owner-accepted Work Contract.
+Roadmap v1.7 is authoritative for Sketcher feature sequencing. The v1.5 expectation that R8C precede R9 remains superseded by v1.6. R9 is completed. R10 is now active only through its Owner-accepted Work Contract; R11+ remain inactive.
 
 ## AUDIT-01 program interlock — completed
 
 AUDIT-01 A-F is completed and no longer has scheduling precedence over Sketcher feature work.
 
-The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29, and SK-07G is completed after FULL #849 and Owner manual PASS. Roadmap v1.6 keeps ordinary RMB context deferred, records R8 complete through R8A/R8B, and places R9–R12 before the explicit profile-authoring readiness checkpoint. Package F technical readiness does not activate solid modeling; a separate Part Feature Tree architecture gate and later solid-operation Work Contract remain mandatory.
+The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29, and SK-07G is completed after FULL #849 and Owner manual PASS. Roadmap v1.7 keeps ordinary RMB context deferred, retains R8 complete through R8A/R8B, and places R9–R12 before the explicit profile-authoring readiness checkpoint. Package F technical readiness does not activate solid modeling; a separate Part Feature Tree architecture gate and later solid-operation Work Contract remain mandatory.
