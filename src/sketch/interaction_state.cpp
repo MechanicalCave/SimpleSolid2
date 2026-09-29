@@ -1224,7 +1224,6 @@ SketchInteractionState::acceptArcPoint(
     }
     if (!arc_start_ || !arc_through_) {
         resetArcStage();
-    resetRectangleStage();
         return {
             ArcPointOutcome::invalid_point,
             std::nullopt};
@@ -1347,7 +1346,6 @@ bool SketchInteractionState::resolveArcRequest(
     pending_arc_request_.reset();
     if (committed) {
         resetArcStage();
-    resetRectangleStage();
     }
     return true;
 }
@@ -1499,7 +1497,6 @@ bool SketchInteractionState::escape() noexcept {
     if (tool_ == SketchTool::arc) {
         if (arc_stage_ != ArcStage::await_start) {
             resetArcStage();
-    resetRectangleStage();
             return true;
         }
         resetToSelect();
