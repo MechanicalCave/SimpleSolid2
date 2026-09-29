@@ -31,7 +31,7 @@ notes:
   - R8A completion conditions are satisfied; no production scope is active after R8A.
   - R8B Relational Measure and R8C Show Dimensions remain inactive and require separate accepted scope.
   - Owner explicitly accepted R8A Read-only Measure Core + Single-Selection Diagnostics on 2026-09-29.
-  - R8A is the only active production scope.
+  - R8A is completed; no production scope is active.
   - Measure remains read-only, whole-entity only, provider-neutral and non-persistent; no durable sub-element identity is authorized.
   - R8B relational Measure and R8C Show Dimensions overlays remain inactive.
   - Owner accepted Sketcher Roadmap v1.5 sequencing on 2026-09-29.
@@ -45,7 +45,7 @@ notes:
   - Owner manual Windows verification passed on 2026-09-29 for the accepted Grip Copy workflow.
   - SK-07G completion conditions are satisfied; Roadmap v1.5 treats R7 as completed and defers ordinary RMB context to later UX convergence.
   - Owner explicitly accepted SK-07G Grip Copy Modifier on 2026-09-29.
-  - No production scope is active after SK-07G; R8 is only the next planned milestone and requires a separate accepted Work Contract.
+  - Historical note: after SK-07G no production scope was active; R8A was later separately accepted, implemented and completed.
   - Grip Copy is an orthogonal runtime modifier: Move+Copy duplicates the frozen selection; Reshape+Copy duplicates only the active-grip owner.
   - Active-grip tool-local "C" enables Copy through the existing semantic CAD input path; it is not a global command alias.
   - CI-03 FOCUSED is the default iteration evidence; FULL remains mandatory merge evidence.
