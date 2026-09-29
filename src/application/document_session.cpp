@@ -316,7 +316,8 @@ AddSketchLineResult DocumentSession::execute(
         entity_id =
             target->model.addLine(
                 command.start,
-                command.end);
+                command.end,
+                command.role);
     } catch (const std::invalid_argument&) {
         const auto failed = failure(
             DocumentSessionErrorCode::invalid_command,
@@ -375,7 +376,8 @@ AddSketchCircleResult DocumentSession::execute(
         entity_id =
             target->model.addCircle(
                 command.center,
-                command.radius);
+                command.radius,
+                command.role);
     } catch (const std::invalid_argument&) {
         const auto failed = failure(
             DocumentSessionErrorCode::invalid_command,
@@ -436,7 +438,8 @@ AddSketchArcResult DocumentSession::execute(
                 command.center,
                 command.radius,
                 command.start_angle,
-                command.sweep_angle);
+                command.sweep_angle,
+                command.role);
     } catch (const std::invalid_argument&) {
         const auto failed = failure(
             DocumentSessionErrorCode::invalid_command,
@@ -474,6 +477,125 @@ AddSketchArcResult DocumentSession::execute(
         DocumentSessionDiagnostic{}};
 }
 
+
+AddSketchRectangleResult DocumentSession::execute(
+    const AddSketchRectangleCommand& command) {
+    if (document_.revision() != command.expected_revision) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Add Sketch Rectangle was started from a stale DocumentRevision",
+            path_);
+        return {
+            false,
+            {},
+            failed.diagnostic};
+    }
+
+    if (!command.first_corner.finite() ||
+        !command.opposite_corner.finite() ||
+        command.first_corner.u ==
+            command.opposite_corner.u ||
+        command.first_corner.v ==
+            command.opposite_corner.v ||
+        (command.perimeter_role !=
+             sketch::EntityRole::regular &&
+         command.perimeter_role !=
+             sketch::EntityRole::construction)) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Add Sketch Rectangle contains invalid authored geometry or role",
+            path_);
+        return {
+            false,
+            {},
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Add Sketch Rectangle target SketchId does not exist",
+            path_);
+        return {
+            false,
+            {},
+            failed.diagnostic};
+    }
+
+    const auto a = command.first_corner;
+    const auto c = command.opposite_corner;
+    const sketch::Point2 b{c.u, a.v};
+    const sketch::Point2 d{a.u, c.v};
+
+    std::vector<sketch::EntityId> created;
+    created.reserve(
+        command.draw_diagonals ? 6U : 4U);
+
+    try {
+        created.push_back(
+            target->model.addLine(
+                a, b, command.perimeter_role));
+        created.push_back(
+            target->model.addLine(
+                b, c, command.perimeter_role));
+        created.push_back(
+            target->model.addLine(
+                c, d, command.perimeter_role));
+        created.push_back(
+            target->model.addLine(
+                d, a, command.perimeter_role));
+
+        if (command.draw_diagonals) {
+            created.push_back(
+                target->model.addLine(
+                    a,
+                    c,
+                    sketch::EntityRole::construction));
+            created.push_back(
+                target->model.addLine(
+                    b,
+                    d,
+                    sketch::EntityRole::construction));
+        }
+    } catch (const std::invalid_argument&) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Add Sketch Rectangle contains invalid authored geometry",
+            path_);
+        return {
+            false,
+            {},
+            failed.diagnostic};
+    } catch (const std::overflow_error&) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::transaction_failure,
+            "Sketch EntityId allocation space is exhausted",
+            path_);
+        return {
+            false,
+            {},
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while adding Sketch Rectangle");
+    if (!committed.ok() || !committed.changed) {
+        return {
+            committed.changed,
+            {},
+            committed.diagnostic};
+    }
+
+    return {
+        true,
+        std::move(created),
+        DocumentSessionDiagnostic{}};
+}
 
 DocumentSessionResult DocumentSession::execute(
     const EraseSketchEntityCommand& command) {

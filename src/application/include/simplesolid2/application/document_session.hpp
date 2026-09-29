@@ -33,12 +33,14 @@ struct AddSketchLineCommand final {
     sketch::SketchId sketch_id;
     sketch::Point2 start;
     sketch::Point2 end;
+    sketch::EntityRole role{sketch::EntityRole::regular};
 };
 
 struct AddSketchCircleCommand final {
     sketch::SketchId sketch_id;
     sketch::Point2 center;
     double radius{};
+    sketch::EntityRole role{sketch::EntityRole::regular};
 };
 
 struct AddSketchArcCommand final {
@@ -47,6 +49,17 @@ struct AddSketchArcCommand final {
     double radius{};
     double start_angle{};
     double sweep_angle{};
+    sketch::EntityRole role{sketch::EntityRole::regular};
+};
+
+struct AddSketchRectangleCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    sketch::Point2 first_corner;
+    sketch::Point2 opposite_corner;
+    sketch::EntityRole perimeter_role{
+        sketch::EntityRole::regular};
+    bool draw_diagonals{};
 };
 
 struct EraseSketchEntityCommand final {
@@ -197,6 +210,16 @@ struct AddSketchArcResult final {
     }
 };
 
+struct AddSketchRectangleResult final {
+    bool changed{false};
+    std::vector<sketch::EntityId> entity_ids;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code == DocumentSessionErrorCode::none;
+    }
+};
+
 struct DuplicateSketchGeometryResult final {
     bool changed{false};
     std::vector<sketch::EntityId> entity_ids;
@@ -267,6 +290,8 @@ public:
         const AddSketchCircleCommand& command);
     [[nodiscard]] AddSketchArcResult execute(
         const AddSketchArcCommand& command);
+    [[nodiscard]] AddSketchRectangleResult execute(
+        const AddSketchRectangleCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const EraseSketchEntityCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
