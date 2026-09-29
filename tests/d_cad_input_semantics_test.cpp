@@ -36,6 +36,18 @@ public:
     std::optional<sketch::ExplicitPointInput>
         submitted_point;
     bool explicit_point_result{true};
+    std::optional<application::CadInputValueRequest>
+        value_request;
+    std::optional<double> submitted_value;
+    bool value_result{true};
+    std::optional<application::CadInputPairRequest>
+        pair_request;
+    std::optional<std::pair<double, double>>
+        submitted_pair;
+    bool pair_result{true};
+    std::optional<application::CircleSizeInputMode>
+        circle_size_mode;
+    bool circle_size_mode_result{true};
     std::optional<application::ProfileCadInputCommand>
         profile_command;
     application::CadInputSubmitResult
@@ -52,6 +64,29 @@ public:
         sketch::ExplicitPointInput input) override {
         submitted_point = input;
         return explicit_point_result;
+    }
+    std::optional<application::CadInputValueRequest>
+    cadInputSemanticValueRequest() const noexcept override {
+        return value_request;
+    }
+    bool submitCadInputSemanticValue(double value) override {
+        submitted_value = value;
+        return value_result;
+    }
+    std::optional<application::CadInputPairRequest>
+    cadInputSemanticPairRequest() const noexcept override {
+        return pair_request;
+    }
+    bool submitCadInputSemanticPair(
+        double first,
+        double second) override {
+        submitted_pair = std::pair{first, second};
+        return pair_result;
+    }
+    bool submitCadInputSemanticCircleSizeMode(
+        application::CircleSizeInputMode mode) override {
+        circle_size_mode = mode;
+        return circle_size_mode_result;
     }
     bool submitCadInputSemanticDirectDistance(double distance) override {
         submitted_distance = distance;
@@ -328,6 +363,111 @@ int main() {
     CHECK(result.diagnostic ==
           "Direct Distance could not be resolved.");
 
+    // Context-specific pair grammar owns Width;Height and never falls
+    // through to U;V point parsing or top-level command activation.
+    target.request.reset();
+    target.pair_request =
+        application::CadInputPairRequest{
+            application::CadInputPairRequestSemantic::
+                rectangle_size,
+            application::CadQuantityDimension::length,
+            application::CadQuantityDimension::length,
+            true};
+    target.submitted_pair.reset();
+    result = dot.submit("2;1in");
+    CHECK(result.accepted);
+    CHECK(target.submitted_pair.has_value());
+    CHECK(near(target.submitted_pair->first, 2.0));
+    CHECK(near(target.submitted_pair->second, 25.4));
+
+    target.submitted_pair.reset();
+    result = dot.submit("0;1");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic ==
+          "Rectangle size expects positive Width;Height Length expressions.");
+    CHECK(!target.submitted_pair.has_value());
+
+    target.activated.reset();
+    result = dot.submit("LINE");
+    CHECK(!result.accepted);
+    CHECK(!target.activated.has_value());
+    target.pair_request.reset();
+
+    // Circle Size owns D/R setters and positive Length input.
+    target.value_request =
+        application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                circle_size,
+            application::CadQuantityDimension::length,
+            true};
+    target.circle_size_mode.reset();
+    result = dot.submit(" d ");
+    CHECK(result.accepted);
+    CHECK(
+        target.circle_size_mode ==
+        application::CircleSizeInputMode::diameter);
+    result = dot.submit("R");
+    CHECK(result.accepted);
+    CHECK(
+        target.circle_size_mode ==
+        application::CircleSizeInputMode::radius);
+
+    target.submitted_value.reset();
+    result = dot.submit("2in");
+    CHECK(result.accepted);
+    CHECK(target.submitted_value.has_value());
+    CHECK(near(*target.submitted_value, 50.8));
+
+    target.submitted_value.reset();
+    result = dot.submit("0");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic ==
+          "Circle Size expects a positive Length expression.");
+    CHECK(!target.submitted_value.has_value());
+    target.value_request.reset();
+
+    // Arc third stage may expose point and Radius simultaneously. A complete
+    // point token wins; a scalar Length is routed to Radius, not Direct
+    // Distance.
+    target.request = sketch::PointRequest{
+        std::nullopt,
+        std::nullopt,
+        false,
+        true,
+        false,
+        false};
+    target.value_request =
+        application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                arc_radius,
+            application::CadQuantityDimension::length,
+            true};
+    target.submitted_point.reset();
+    target.submitted_value.reset();
+    target.submitted_distance.reset();
+
+    result = dot.submit("25;10");
+    CHECK(result.accepted);
+    CHECK(target.submitted_point.has_value());
+    CHECK(!target.submitted_value.has_value());
+    CHECK(!target.submitted_distance.has_value());
+
+    target.submitted_point.reset();
+    result = dot.submit("50");
+    CHECK(result.accepted);
+    CHECK(target.submitted_value.has_value());
+    CHECK(near(*target.submitted_value, 50.0));
+    CHECK(!target.submitted_point.has_value());
+    CHECK(!target.submitted_distance.has_value());
+
+    target.activated.reset();
+    result = dot.submit("LINE");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic ==
+          "Arc Radius expects a positive Length expression.");
+    CHECK(!target.activated.has_value());
+
+    target.value_request.reset();
     target.request.reset();
     target.grip_copy_available = false;
     result = dot.submit("C");

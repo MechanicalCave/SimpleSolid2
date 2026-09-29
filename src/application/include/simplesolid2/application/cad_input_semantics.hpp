@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/application/cad_input.hpp>
+#include <simplesolid2/application/precision_input.hpp>
 #include <simplesolid2/core/units.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 
@@ -37,6 +38,40 @@ struct ProfileCadInputCommand final {
     std::optional<bool> enabled;
 };
 
+enum class CadInputValueRequestSemantic {
+    circle_size,
+    arc_radius,
+    rotate_angle,
+    scale_factor,
+};
+
+struct CadInputValueRequest final {
+    CadInputValueRequestSemantic semantic{
+        CadInputValueRequestSemantic::circle_size};
+    CadQuantityDimension dimension{
+        CadQuantityDimension::length};
+    bool strictly_positive{};
+};
+
+enum class CadInputPairRequestSemantic {
+    rectangle_size,
+};
+
+struct CadInputPairRequest final {
+    CadInputPairRequestSemantic semantic{
+        CadInputPairRequestSemantic::rectangle_size};
+    CadQuantityDimension first_dimension{
+        CadQuantityDimension::length};
+    CadQuantityDimension second_dimension{
+        CadQuantityDimension::length};
+    bool strictly_positive{};
+};
+
+enum class CircleSizeInputMode {
+    diameter,
+    radius,
+};
+
 class ISketchCadInputSemanticTarget {
 public:
     virtual ~ISketchCadInputSemanticTarget() = default;
@@ -53,6 +88,32 @@ public:
     [[nodiscard]] virtual bool
     submitCadInputSemanticExplicitPoint(
         sketch::ExplicitPointInput input) = 0;
+
+    [[nodiscard]] virtual std::optional<CadInputValueRequest>
+    cadInputSemanticValueRequest() const noexcept {
+        return std::nullopt;
+    }
+
+    [[nodiscard]] virtual bool
+    submitCadInputSemanticValue(double) {
+        return false;
+    }
+
+    [[nodiscard]] virtual std::optional<CadInputPairRequest>
+    cadInputSemanticPairRequest() const noexcept {
+        return std::nullopt;
+    }
+
+    [[nodiscard]] virtual bool
+    submitCadInputSemanticPair(double, double) {
+        return false;
+    }
+
+    [[nodiscard]] virtual bool
+    submitCadInputSemanticCircleSizeMode(
+        CircleSizeInputMode) {
+        return false;
+    }
 
     [[nodiscard]] virtual bool submitCadInputSemanticDirectDistance(
         double distance) = 0;

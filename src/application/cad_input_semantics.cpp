@@ -104,6 +104,46 @@ commandTool(std::string_view token) noexcept {
     return std::nullopt;
 }
 
+std::optional<std::pair<double, double>>
+parseSemanticPair(
+    std::string_view text,
+    const CadInputPairRequest& request,
+    core::LengthUnit length_unit) {
+    const auto delimiter = text.find(';');
+    if (delimiter == std::string_view::npos ||
+        text.find(';', delimiter + 1U) !=
+            std::string_view::npos) {
+        return std::nullopt;
+    }
+
+    const auto first_text =
+        trimAscii(text.substr(0U, delimiter));
+    const auto second_text =
+        trimAscii(text.substr(delimiter + 1U));
+    if (first_text.empty() || second_text.empty()) {
+        return std::nullopt;
+    }
+
+    const auto first = parseCadQuantity(
+        first_text,
+        {request.first_dimension, length_unit});
+    const auto second = parseCadQuantity(
+        second_text,
+        {request.second_dimension, length_unit});
+    if (!first || !second) {
+        return std::nullopt;
+    }
+    if (request.strictly_positive &&
+        (first->canonical_value <= 0.0 ||
+         second->canonical_value <= 0.0)) {
+        return std::nullopt;
+    }
+
+    return std::pair{
+        first->canonical_value,
+        second->canonical_value};
+}
+
 std::optional<sketch::ExplicitPointInput>
 explicitPointInput(const CadPointToken& token) noexcept {
     sketch::ExplicitPointInputKind kind{};
@@ -155,9 +195,41 @@ SketchCadInputSemanticEndpoint::submit(
     }
 
     const auto upper = upperAscii(submitted);
+    const auto pair_request =
+        target_->cadInputSemanticPairRequest();
+    const auto point_request =
+        target_->cadInputSemanticPointRequest();
+    const auto value_request =
+        target_->cadInputSemanticValueRequest();
 
-    if (const auto request =
-            target_->cadInputSemanticPointRequest()) {
+    // A pair request owns its grammar completely. Rectangle Width;Height
+    // must not fall through to the generic U;V point grammar.
+    if (pair_request) {
+        const auto values =
+            parseSemanticPair(
+                submitted,
+                *pair_request,
+                number_format_.length_unit);
+        if (!values) {
+            return {
+                false,
+                pair_request->semantic ==
+                        CadInputPairRequestSemantic::
+                            rectangle_size
+                    ? "Rectangle size expects positive Width;Height Length expressions."
+                    : "Active pair input is invalid."};
+        }
+        if (!target_->submitCadInputSemanticPair(
+                values->first,
+                values->second)) {
+            return {
+                false,
+                "Active pair input could not be resolved."};
+        }
+        return {true, {}};
+    }
+
+    if (point_request) {
         if (upper == "C" &&
             target_->
                 cadInputSemanticGripCopyAvailable()) {
@@ -170,6 +242,8 @@ SketchCadInputSemanticEndpoint::submit(
             return {true, {}};
         }
 
+        // Complete point input outranks a numeric value request. This is
+        // required by Arc's third-stage Arc Point / Radius grammar.
         if (const auto point =
                 parseCadPointToken(
                     submitted,
@@ -186,7 +260,66 @@ SketchCadInputSemanticEndpoint::submit(
             }
             return {true, {}};
         }
+    }
 
+    if (value_request) {
+        if (value_request->semantic ==
+            CadInputValueRequestSemantic::circle_size) {
+            if (upper == "D" || upper == "R") {
+                const auto mode =
+                    upper == "D"
+                        ? CircleSizeInputMode::diameter
+                        : CircleSizeInputMode::radius;
+                if (!target_->
+                        submitCadInputSemanticCircleSizeMode(
+                            mode)) {
+                    return {
+                        false,
+                        "Circle Size mode could not be changed."};
+                }
+                return {true, {}};
+            }
+        }
+
+        const auto quantity =
+            parseCadQuantity(
+                submitted,
+                {
+                    value_request->dimension,
+                    number_format_.length_unit});
+        if (!quantity ||
+            (value_request->strictly_positive &&
+             quantity->canonical_value <= 0.0)) {
+            switch (value_request->semantic) {
+            case CadInputValueRequestSemantic::circle_size:
+                return {
+                    false,
+                    "Circle Size expects a positive Length expression."};
+            case CadInputValueRequestSemantic::arc_radius:
+                return {
+                    false,
+                    "Arc Radius expects a positive Length expression."};
+            case CadInputValueRequestSemantic::rotate_angle:
+                return {
+                    false,
+                    "Rotate Angle expects a valid Angle expression."};
+            case CadInputValueRequestSemantic::scale_factor:
+                return {
+                    false,
+                    "Scale Factor expects a positive Scalar expression."};
+            }
+        }
+
+        if (!target_->submitCadInputSemanticValue(
+                quantity->canonical_value)) {
+            return {
+                false,
+                "Active numeric input could not be resolved."};
+        }
+        return {true, {}};
+    }
+
+    if (point_request) {
         const auto distance =
             parseBareCadDistance(submitted, number_format_);
         if (!distance) {
@@ -194,7 +327,7 @@ SketchCadInputSemanticEndpoint::submit(
                 false,
                 "Active point input expects supported point coordinates or a valid non-negative Length expression."};
         }
-        if (!request->direct_distance_enabled) {
+        if (!point_request->direct_distance_enabled) {
             return {
                 false,
                 "Direct Distance is not available at this point stage."};
