@@ -402,18 +402,18 @@ int main() {
                 rectangle.entity_ids[5]);
         CHECK(first_diagonal != nullptr);
         CHECK(second_diagonal != nullptr);
-        CHECK(
+        CHECK((
             first_diagonal->start() ==
-            sketch::Point2{0.0, 0.0});
-        CHECK(
+            sketch::Point2{0.0, 0.0}));
+        CHECK((
             first_diagonal->end() ==
-            sketch::Point2{10.0, 5.0});
-        CHECK(
+            sketch::Point2{10.0, 5.0}));
+        CHECK((
             second_diagonal->start() ==
-            sketch::Point2{10.0, 0.0});
-        CHECK(
+            sketch::Point2{10.0, 0.0}));
+        CHECK((
             second_diagonal->end() ==
-            sketch::Point2{0.0, 5.0});
+            sketch::Point2{0.0, 5.0}));
 
         const auto rectangle_ids =
             rectangle.entity_ids;
