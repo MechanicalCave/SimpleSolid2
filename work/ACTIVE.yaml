@@ -36,9 +36,9 @@ notes:
   - Ordinary RMB context is deferred until the Sketcher command set is broad enough for stable context-menu design.
   - SK-07G final implementation/documentation candidate aefbedadbb7395ece3eb73c7f360518f54ed8928 passed Windows FULL #849 with documentation, Build, core-only 14/14 and desktop 77/77.
   - Owner manual Windows verification passed on 2026-09-29 for the accepted Grip Copy workflow.
-  - SK-07G completion conditions are satisfied; ordinary RMB context remains the only separately bounded remaining R7 interaction slice and is inactive.
+  - SK-07G completion conditions are satisfied; Roadmap v1.5 treats R7 as completed and defers ordinary RMB context to later UX convergence.
   - Owner explicitly accepted SK-07G Grip Copy Modifier on 2026-09-29.
-  - SK-07G is the only active production scope; ordinary RMB context and R8+ remain inactive.
+  - No production scope is active after SK-07G; R8 is only the next planned milestone and requires a separate accepted Work Contract.
   - Grip Copy is an orthogonal runtime modifier: Move+Copy duplicates the frozen selection; Reshape+Copy duplicates only the active-grip owner.
   - Active-grip tool-local "C" enables Copy through the existing semantic CAD input path; it is not a global command alias.
   - CI-03 FOCUSED is the default iteration evidence; FULL remains mandatory merge evidence.
