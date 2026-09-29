@@ -1,5 +1,7 @@
 #include <simplesolid2/sketch/interaction_state.hpp>
 
+// CI-03 focused iteration probe: no semantic effect.
+
 #include <algorithm>
 #include <array>
 #include <cmath>
