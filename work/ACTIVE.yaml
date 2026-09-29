@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SK-07G_GRIP_COPY_MODIFIER.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -19,14 +19,16 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - implement accepted SK-07G Grip Copy modifier only within the bounded contract
-  - use CI-03 FOCUSED target/test evidence for ordinary implementation iterations
-  - preserve SK-07C fresh-identity lifecycle, SK-07E direct-manipulation semantics, SK-07F Direct Distance and WB-02 global CAD input ownership
-  - stop for Owner review on any SK-07G D2/D3 stop condition or scope expansion
-  - obtain affected checkpoint evidence, exact-head FULL, Owner manual Windows PASS and CLOSURE before completion
-  - keep ordinary RMB context and R8+ inactive
+  - keep production mutation inactive after SK-07G completion
+  - retain CI-03 FOCUSED for future bounded implementation slices
+  - preserve completed Grip Copy semantics and exact-head FULL #849 as final runtime evidence
+  - define ordinary RMB context as a separate Owner-reviewed Work Contract before implementation
+  - keep R8+ inactive until separately accepted
 
 notes:
+  - SK-07G final implementation/documentation candidate aefbedadbb7395ece3eb73c7f360518f54ed8928 passed Windows FULL #849 with documentation, Build, core-only 14/14 and desktop 77/77.
+  - Owner manual Windows verification passed on 2026-09-29 for the accepted Grip Copy workflow.
+  - SK-07G completion conditions are satisfied; ordinary RMB context remains the only separately bounded remaining R7 interaction slice and is inactive.
   - Owner explicitly accepted SK-07G Grip Copy Modifier on 2026-09-29.
   - SK-07G is the only active production scope; ordinary RMB context and R8+ remain inactive.
   - Grip Copy is an orthogonal runtime modifier: Move+Copy duplicates the frozen selection; Reshape+Copy duplicates only the active-grip owner.

@@ -1,6 +1,6 @@
 # SK-07G — Grip Copy Modifier
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** ACCEPTED — COMPLETED  
 **Proposed:** 2026-09-29  
 **Owner acceptance:** 2026-09-29  
 **Decision class:** D2 direct-manipulation command grammar already bounded by Sketcher Roadmap v1.4 + D1 implementation  
@@ -625,3 +625,21 @@ Completion requires:
 - completion bookkeeping passes CLOSURE.
 
 After SK-07G, R7 still has ordinary RMB context behavior as a separately bounded remaining slice. R8+ remains inactive.
+
+
+## 24. Completion evidence
+
+SK-07G completion evidence on 2026-09-29:
+
+- final implementation/documentation candidate `aefbedadbb7395ece3eb73c7f360518f54ed8928`;
+- Windows FULL #849 PASS;
+- documentation verification PASS;
+- bootstrap verification PASS;
+- full desktop Build PASS;
+- core-only 14/14 PASS;
+- desktop 77/77 PASS, including the SK-07C/SK-07E/SK-07F/CAD-input regressions covering Grip Copy;
+- preceding CI-03 FOCUSED development/checkpoint runs #840, #842, #843, #844, #845 and #846 PASS;
+- Owner manual Windows verification PASS on 2026-09-29 for the accepted SK-07G workflow;
+- no persistence schema, durable identity model, global CAD-input routing or Viewer/OCCT semantics changed.
+
+SK-07G is complete. Ordinary RMB context remains a separately bounded inactive R7 slice. R8+ remains inactive.

@@ -8,7 +8,7 @@
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Current scheduling:** AUDIT-01 A-F and WB-02 are completed; R7 resumed through Owner-accepted SK-07G on 2026-09-29  
+**Current scheduling:** AUDIT-01 A-F, WB-02 and SK-07G are completed; ordinary RMB context remains the final separately bounded inactive R7 interaction slice  
 
 ## 1. Why v1.4 changes the sequence
 
@@ -26,7 +26,7 @@ Roadmap v1.4 therefore proposes:
 - keep semantic InputRequest ownership in the active tool/domain, with existing Sketch PointRequest as the first production client;
 - prevent Part/Sketch semantics from leaking into Project Workspace Shell;
 - leave new quantity request types, coordinates/units, Dynamic Input, Ortho/Polar and snapping for their later concrete contracts;
-- leave Grip Copy and RMB context unauthorized until separately accepted.
+- Grip Copy was later activated and completed through Owner-accepted SK-07G; ordinary RMB context remains separately unauthorized until accepted.
 
 Roadmap v1.4 is authoritative. ADR-0011 and WB-02 were explicitly Owner-accepted on 2026-09-27.
 
@@ -737,14 +737,14 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7 active through Owner-accepted SK-07G Grip Copy Modifier — SK-07A through SK-07F and WB-02 are completed; ordinary RMB context remains separately unauthorized  
+R7 completed through SK-07G Grip Copy Modifier — SK-07A through SK-07G and WB-02 are completed; ordinary RMB context remains the final separately bounded inactive R7 interaction slice  
 R8+ not started
 
-Roadmap v1.4 remains authoritative. SK-07G activates only the bounded Grip Copy modifier slice; ordinary RMB context, R8, R9 and R10 remain inactive.
+Roadmap v1.4 remains authoritative. SK-07G is completed; ordinary RMB context, R8, R9 and R10 remain inactive.
 
 
 ## AUDIT-01 program interlock — completed
 
 AUDIT-01 A-F is completed and no longer has scheduling precedence over Sketcher feature work.
 
-The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29. Ordinary RMB context and R8+ remain separately bounded future work.
+The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29, and SK-07G is now completed after FULL #849 and Owner manual PASS. Ordinary RMB context and R8+ remain separately bounded future work.
