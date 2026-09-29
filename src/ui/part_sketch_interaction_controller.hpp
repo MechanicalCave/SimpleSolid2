@@ -7,6 +7,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
+#include <simplesolid2/sketch/measurement.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -116,6 +117,14 @@ public:
     }
     [[nodiscard]] bool repeatLastCommand();
 
+    [[nodiscard]] bool activateMeasure();
+    [[nodiscard]] std::optional<sketch::EntityId>
+    measureTarget() const noexcept {
+        return interaction_.measureTarget();
+    }
+    [[nodiscard]] std::optional<sketch::EntityMeasurement>
+    measureResult() const;
+
     [[nodiscard]] bool profileToolActive() const noexcept {
         return profile_session_.has_value();
     }
@@ -209,6 +218,7 @@ private:
     void handleLinePointer(const SketchPointerInput& input);
     void handleCirclePointer(const SketchPointerInput& input);
     void handleArcPointer(const SketchPointerInput& input);
+    void handleMeasurePointer(const SketchPointerInput& input);
     void handleCommonTransformPointer(
         const SketchPointerInput& input);
     void handleProfilePointer(

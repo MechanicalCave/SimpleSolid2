@@ -5,6 +5,7 @@
 #include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/profile.hpp>
+#include <simplesolid2/sketch/measurement.hpp>
 
 #include <QApplication>
 #include <QTreeWidget>
@@ -286,6 +287,64 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.selectedCount() == 1U);
     CHECK(viewport.selection_.primary.has_value());
 
+    // R8A Measure is read-only and owns a runtime target separate from
+    // ordinary semantic selection.
+    const auto measure_state =
+        session.document().state();
+    const auto measure_revision =
+        session.document().revision();
+    const auto measure_undo =
+        session.undoDepth();
+    CHECK(
+        interaction.lastRepeatableCommand() ==
+        sketch::SketchTool::line);
+    CHECK(interaction.activateMeasure());
+    CHECK(interaction.tool() == sketch::SketchTool::measure);
+    CHECK(interaction.measureTarget().has_value());
+    CHECK(interaction.measureResult().has_value());
+    CHECK(std::holds_alternative<sketch::LineMeasurement>(
+        *interaction.measureResult()));
+    const auto initial_measure_target =
+        interaction.measureTarget();
+
+    const auto second_measure_token =
+        viewport.sketch_scene_.lines[1].token;
+    viewport.point_query_ = {true, second_measure_token};
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        80.0, 50.0,
+        10.0, 5.0));
+    CHECK(interaction.measureTarget().has_value());
+    CHECK(
+        interaction.measureTarget() !=
+        initial_measure_target);
+    CHECK(interaction.selectedCount() == 1U);
+    CHECK(session.document().state() == measure_state);
+    CHECK(session.document().revision() == measure_revision);
+    CHECK(session.undoDepth() == measure_undo);
+    CHECK(
+        interaction.lastRepeatableCommand() ==
+        sketch::SketchTool::line);
+
+    viewport.point_query_ = {true, std::nullopt};
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        150.0, 150.0,
+        20.0, 20.0));
+    CHECK(!interaction.measureTarget().has_value());
+    CHECK(interaction.selectedCount() == 1U);
+
+    CHECK(interaction.escape());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(interaction.selectedCount() == 1U);
+    CHECK(session.document().state() == measure_state);
+    CHECK(session.document().revision() == measure_revision);
+    CHECK(session.undoDepth() == measure_undo);
+
+    viewport.point_query_ = {true, first_token};
+
     CHECK(interaction.deleteSelection());
     CHECK(
         session.document()
@@ -335,6 +394,22 @@ int main(int argc, char* argv[]) {
     CHECK(
         viewport.last_rectangle_rule_ ==
         viewer::SketchRectangleSelectionRule::crossing);
+
+    // Multi-selection does not silently choose primary/storage order.
+    CHECK(interaction.activateMeasure());
+    CHECK(!interaction.measureTarget().has_value());
+    CHECK(interaction.selectedCount() == 2U);
+    viewport.point_query_ = {true, rect_first};
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        60.0, 20.0,
+        6.0, 0.0));
+    CHECK(interaction.measureTarget().has_value());
+    CHECK(interaction.selectedCount() == 2U);
+    CHECK(interaction.escape());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(interaction.selectedCount() == 2U);
 
     viewport.point_query_ = {true, rect_first};
     interaction.onPointer(pointer(

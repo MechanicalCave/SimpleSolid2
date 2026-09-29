@@ -468,6 +468,7 @@ SketchInteractionState::resolveDirectDistance(
 }
 
 void SketchInteractionState::activateLine() noexcept {
+    measure_target_.reset();
     manipulation_.reset();
     point_pointer_candidate_.reset();
     resetCommonTransform();
@@ -479,6 +480,7 @@ void SketchInteractionState::activateLine() noexcept {
 }
 
 void SketchInteractionState::activateCircle() noexcept {
+    measure_target_.reset();
     manipulation_.reset();
     point_pointer_candidate_.reset();
     resetCommonTransform();
@@ -490,6 +492,7 @@ void SketchInteractionState::activateCircle() noexcept {
 }
 
 void SketchInteractionState::activateArc() noexcept {
+    measure_target_.reset();
     manipulation_.reset();
     point_pointer_candidate_.reset();
     resetCommonTransform();
@@ -498,6 +501,39 @@ void SketchInteractionState::activateArc() noexcept {
     resetLineStage();
     resetCircleStage();
     resetArcStage();
+}
+
+void SketchInteractionState::activateMeasure(
+    const SketchModel& model) noexcept {
+    manipulation_.reset();
+    point_pointer_candidate_.reset();
+    resetCommonTransform();
+    clearHover();
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+    tool_ = SketchTool::measure;
+    measure_target_.reset();
+
+    if (selected_.size() == 1U &&
+        model.contains(selected_.front())) {
+        measure_target_ = selected_.front();
+    }
+}
+
+bool SketchInteractionState::setMeasureTarget(
+    const SketchModel& model,
+    std::optional<EntityId> target) noexcept {
+    if (tool_ != SketchTool::measure) {
+        return false;
+    }
+    if (target &&
+        (!target->valid() || !model.contains(*target))) {
+        return false;
+    }
+    measure_target_ = target;
+    clearHover();
+    return true;
 }
 
 bool SketchInteractionState::activateCommonTransform(
@@ -1203,6 +1239,12 @@ bool SketchInteractionState::escape() noexcept {
         return true;
     }
 
+    if (tool_ == SketchTool::measure) {
+        resetToSelect();
+        clearHover();
+        return true;
+    }
+
     return false;
 }
 
@@ -1860,6 +1902,7 @@ SketchInteractionState::deterministicPrimary()
 }
 
 void SketchInteractionState::resetToSelect() noexcept {
+    measure_target_.reset();
     tool_ = SketchTool::select;
     resetLineStage();
     resetCircleStage();

@@ -353,6 +353,8 @@ bool PartSketchInteractionController::activateCadInputSemanticTool(
     case sketch::SketchTool::arc:
         activateArc();
         return this->tool() == tool;
+    case sketch::SketchTool::measure:
+        return activateMeasure();
     case sketch::SketchTool::move:
         return activateMove();
     case sketch::SketchTool::copy:
@@ -719,6 +721,7 @@ bool PartSketchInteractionController::repeatLastCommand() {
         return activateScale();
     case sketch::SketchTool::mirror:
         return activateMirror();
+    case sketch::SketchTool::measure:
     case sketch::SketchTool::select:
         return false;
     }
@@ -1009,6 +1012,46 @@ void PartSketchInteractionController::activateArc() {
     last_repeatable_command_ =
         sketch::SketchTool::arc;
     notifyStateChanged();
+}
+
+bool PartSketchInteractionController::activateMeasure() {
+    resetProfileRuntime();
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return false;
+    }
+
+    interaction_.activateMeasure(hosted->model);
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_.reset();
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+
+    if (interaction_.selectedEntities().size() > 1U) {
+        reportStatus(
+            "Measure requires one target; click an entity to inspect it.");
+    }
+    return true;
+}
+
+std::optional<sketch::EntityMeasurement>
+PartSketchInteractionController::measureResult() const {
+    if (!active() ||
+        interaction_.tool() != sketch::SketchTool::measure) {
+        return std::nullopt;
+    }
+    const auto target = interaction_.measureTarget();
+    const auto* hosted = activeSketch();
+    if (!target || hosted == nullptr) {
+        return std::nullopt;
+    }
+    return sketch::measureEntity(hosted->model, *target);
 }
 
 bool PartSketchInteractionController::activateMove() {
@@ -1709,6 +1752,9 @@ void PartSketchInteractionController::onPointer(
     case sketch::SketchTool::arc:
         handleArcPointer(input);
         return;
+    case sketch::SketchTool::measure:
+        handleMeasurePointer(input);
+        return;
     case sketch::SketchTool::move:
     case sketch::SketchTool::copy:
     case sketch::SketchTool::rotate:
@@ -2143,6 +2189,60 @@ void PartSketchInteractionController::handleSelectPointer(
 
     projectSelection();
     projectInteraction();
+    notifyStateChanged();
+}
+
+void PartSketchInteractionController::handleMeasurePointer(
+    const SketchPointerInput& input) {
+    if (input.phase !=
+        viewer::SpatialPointerPhase::primary_press) {
+        return;
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return;
+    }
+
+    const auto queried =
+        viewport_controller_->querySketchEntityAt(
+            input.viewport_position);
+    if (!queried.completed) {
+        reportStatus("Measure target query failed.");
+        return;
+    }
+
+    if (!queried.hit) {
+        static_cast<void>(
+            interaction_.setMeasureTarget(
+                hosted->model,
+                std::nullopt));
+        notifyStateChanged();
+        return;
+    }
+
+    if (!sketch_id_ ||
+        queried.hit->sketch_id != *sketch_id_) {
+        reportStatus(
+            "Measure target query returned stale context.");
+        return;
+    }
+
+    if (!interaction_.setMeasureTarget(
+            hosted->model,
+            queried.hit->entity_id)) {
+        reportStatus("Measure target was rejected.");
+        return;
+    }
+
+    if (!measureResult()) {
+        static_cast<void>(
+            interaction_.setMeasureTarget(
+                hosted->model,
+                std::nullopt));
+        reportStatus(
+            "Measure result is not finite for the selected geometry.");
+    }
     notifyStateChanged();
 }
 
