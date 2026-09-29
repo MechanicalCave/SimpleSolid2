@@ -512,6 +512,10 @@ AddSketchRectangleResult DocumentSession::execute(
     }
 
     auto after = document_.state();
+    // Preserve the session-local non-reuse high-water before allocating the
+    // Rectangle's fresh identities, matching semantic duplication/history.
+    applySketchEntityIdCursors(after);
+
     auto* target =
         findSketch(after, command.sketch_id);
     if (target == nullptr) {

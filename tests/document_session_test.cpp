@@ -433,6 +433,33 @@ int main() {
                 nullptr);
         }
 
+        // Undo preserves the session-local high-water. A new Rectangle on
+        // the branched history must allocate above all previously committed
+        // Rectangle IDs instead of reusing the abandoned identities.
+        CHECK(rectangle_session.undo().changed);
+        CHECK(
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.entityCount() == 0U);
+        const auto replacement_rectangle =
+            rectangle_session.execute(
+                application::AddSketchRectangleCommand{
+                    rectangle_sketch_id,
+                    rectangle_session.document()
+                        .revision(),
+                    {12.0, 0.0},
+                    {18.0, 4.0},
+                    sketch::EntityRole::regular,
+                    false});
+        CHECK(replacement_rectangle.ok());
+        CHECK(
+            replacement_rectangle.entity_ids.size() ==
+            4U);
+        for (const auto id :
+             replacement_rectangle.entity_ids) {
+            CHECK(id > rectangle_ids.back());
+        }
+
         const auto construction_line =
             rectangle_session.execute(
                 application::AddSketchLineCommand{
