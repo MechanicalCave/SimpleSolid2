@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/CI-03_FOCUSED_ITERATION.md"
+status: active
+active_work: "work/SK-07G_GRIP_COPY_MODIFIER.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.4"
@@ -19,13 +19,19 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after CI-03 completion
-  - use CI-03 FOCUSED for bounded draft iteration when an accepted future Work Contract identifies direct target/test evidence
-  - use FAST or SUBSYSTEM for wider checkpoints and retain FULL as runtime merge evidence
-  - before resuming Sketcher product work, activate the next separately bounded Owner-accepted Sketcher Work Contract
-  - synchronize Sketcher roadmap current-status wording when that feature program resumes
+  - implement accepted SK-07G Grip Copy modifier only within the bounded contract
+  - use CI-03 FOCUSED target/test evidence for ordinary implementation iterations
+  - preserve SK-07C fresh-identity lifecycle, SK-07E direct-manipulation semantics, SK-07F Direct Distance and WB-02 global CAD input ownership
+  - stop for Owner review on any SK-07G D2/D3 stop condition or scope expansion
+  - obtain affected checkpoint evidence, exact-head FULL, Owner manual Windows PASS and CLOSURE before completion
+  - keep ordinary RMB context and R8+ inactive
 
 notes:
+  - Owner explicitly accepted SK-07G Grip Copy Modifier on 2026-09-29.
+  - SK-07G is the only active production scope; ordinary RMB context and R8+ remain inactive.
+  - Grip Copy is an orthogonal runtime modifier: Move+Copy duplicates the frozen selection; Reshape+Copy duplicates only the active-grip owner.
+  - Active-grip tool-local "C" enables Copy through the existing semantic CAD input path; it is not a global command alias.
+  - CI-03 FOCUSED is the default iteration evidence; FULL remains mandatory merge evidence.
   - CI-03 final implementation/documentation candidate 2b207feabe0469694efc37b3b1641e96c597c8d7 passed Windows FULL #828.
   - CI-03 pure-Sketch FOCUSED #829 passed in 34 s end-to-end with 9 s focused target build/exact test.
   - CI-03 cross-layer controller FOCUSED #830 passed in 93 s end-to-end with 69 s focused target build/exact test.
