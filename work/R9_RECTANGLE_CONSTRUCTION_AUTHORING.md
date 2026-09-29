@@ -693,7 +693,7 @@ Save/Close/Reopen must **not** preserve Creation Role or the Draw Diagonals runt
 
 If implementation discovers that a schema change is required solely to implement R9 as specified, stop for Owner review.
 
-## 30. Documentation impact
+## Documentation impact
 
 Internal docs: required  
 User/Product docs: required  
