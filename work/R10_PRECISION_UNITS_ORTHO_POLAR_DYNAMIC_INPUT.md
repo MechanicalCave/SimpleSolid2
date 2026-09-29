@@ -79,9 +79,13 @@ Subject to explicit Owner acceptance, R10 adopts these bounded decisions:
 21. Circle Center is a point request; Circle Radius becomes a typed positive Length request.
 22. Arc Start / Through / End become precision-capable point requests; no new Arc construction method is introduced.
 23. Rotate final placement accepts an explicit Angle value as a numeric lock/commit path while pointer placement remains valid.
-24. Scale final placement accepts an explicit positive dimensionless Scalar factor while pointer placement remains valid.
-25. Move/Copy/grip point requests accept coordinate/polar/direct-distance forms through the same resolver.
-26. Mirror remains two point requests; its axis can be placed precisely through coordinate/polar input.
+24. Rotate typed-angle sign is explicit and pointer-independent: bare/positive `30` means +30° counter-clockwise and `-30` means 30° clockwise. Pointer drives Rotate preview only while no explicit angle value owns the request.
+25. Scale final placement accepts an explicit positive dimensionless Scalar factor while pointer placement remains valid.
+26. Move/Copy/grip point requests accept coordinate/polar/direct-distance forms through the same resolver.
+27. Non-center grip Space CycleEditMode expands to `Reshape → Move → Rotate → Scale → Mirror → Reshape`.
+28. Center grips, which have no meaningful Reshape mode, cycle `Move → Rotate → Scale → Mirror → Move`.
+29. Grip mode cycling preserves the active grip, interaction-start pivot, frozen semantic selection/source geometry and current pointer candidate where meaningful, and recomputes every preview from frozen authored inputs rather than compounding prior preview.
+30. Mirror remains two point requests; its axis can be placed precisely through coordinate/polar input.
 27. Explicit numeric locks outrank Ortho/Polar and raw pointer.
 28. Ortho and Polar are mutually exclusive runtime Sketch modes.
 29. Ortho constrains a based point direction to Sketch-local ±U or ±V.
@@ -527,7 +531,23 @@ The interaction-start grip/pivot remains the semantic relative base.
 
 R10 adds coordinate/polar/unit-aware input and Dynamic Input to that same request.
 
-Space CycleEditMode and Grip Copy `C` keyword remain authoritative.
+R10 also completes the intended CAD-style Space CycleEditMode grammar that earlier milestones deliberately left partial.
+
+For non-center grips:
+
+```text
+Reshape → Move → Rotate → Scale → Mirror → Reshape
+```
+
+For center grips:
+
+```text
+Move → Rotate → Scale → Mirror → Move
+```
+
+Mode cycling is runtime-only. It must preserve the same active grip, interaction-start pivot and frozen semantic selection/source geometry. Pointer candidate may remain where meaningful, but every mode recomputes preview from the interaction-start frozen authored geometry; cycling must never compound the previous preview.
+
+The existing Grip Copy `C` keyword remains authoritative. R10 does not silently invent Rotate+Copy, Scale+Copy or Mirror+Copy semantics.
 
 Numeric precision input must not change the affected-set rules or duplication identity semantics.
 
@@ -539,15 +559,17 @@ The final Rotate stage gains an explicit Angle input path.
 
 Angle semantics:
 
-- positive = counter-clockwise in Sketch U/V;
-- negative = clockwise;
+- bare positive value, for example `30`, means +30° counter-clockwise in Sketch U/V;
+- explicit `+30` has the same meaning;
+- negative value, for example `-30`, means 30° clockwise;
+- pointer side never changes the sign of an explicit typed angle;
 - zero follows existing no-op behavior;
 - bare value = degrees;
 - `deg` and `rad` accepted.
 
-Pointer destination remains a valid adapter to the same Rotate semantic result.
+Before an explicit Angle value is entered, pointer destination remains a valid adapter for live Rotate preview. Once an explicit Angle owns the request, preview and final commit use that exact signed angle and subsequent pointer motion does not alter its sign or magnitude.
 
-Dynamic Input shows Angle at the final stage.
+Dynamic Input shows Angle at the final stage and uses the same sign rule.
 
 R10 does not add Rotate+Copy.
 
@@ -859,10 +881,13 @@ At minimum verify:
 30. Move Base/Destination accept precision input;
 31. Copy repeated placements accept precision input and retain fresh-ID/high-water semantics;
 32. grip Reshape/Move/Copy accept precision point input without changing affected-set rules;
-33. Rotate accepts explicit signed Angle;
-34. Rotate positive/negative direction is deterministic;
-35. Scale accepts explicit positive Factor;
-36. Mirror axis accepts precision point input;
+33. non-center grip Space cycle is `Reshape → Move → Rotate → Scale → Mirror → Reshape`;
+34. center grip Space cycle is `Move → Rotate → Scale → Mirror → Move`;
+35. grip mode cycling preserves pivot/selection/source state and never compounds preview;
+36. Rotate accepts explicit signed Angle;
+37. Rotate positive/negative direction is deterministic and pointer-independent after explicit input;
+38. Scale accepts explicit positive Factor;
+39. Mirror axis accepts precision point input;
 37. Ortho default is OFF;
 38. Ortho constrains to Sketch U/V axes deterministically;
 39. Polar default is OFF;
@@ -918,7 +943,11 @@ Minimum checklist:
 - MOVE/COPY by relative Cartesian and polar input;
 - verify repeated COPY retains correct fresh-ID behavior;
 - grip Reshape and grip Move precision input;
-- Rotate typed positive and negative Angle;
+- non-center grip: cycle through Reshape → Move → Rotate → Scale → Mirror and back to Reshape;
+- center grip: cycle Move → Rotate → Scale → Mirror and back to Move;
+- verify grip cycling preserves the same pivot/selection/source geometry and does not compound preview;
+- Rotate typed `30` and verify exact +30° CCW regardless of which side the pointer currently occupies;
+- Rotate typed `-30` and verify exact 30° CW regardless of pointer side;
 - Scale typed Factor;
 - Mirror precise axis points;
 - enable Ortho and verify pointer direction locks to U/V without creating constraints;
