@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SK-07G_GRIP_COPY_MODIFIER.md"
+status: active
+active_work: "work/R8A_READ_ONLY_MEASURE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.5"
@@ -19,14 +19,18 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after SK-07G completion and Roadmap v1.5 sequencing acceptance
-  - prepare a separate Owner-reviewed R8 Measure / diagnostic dimensions Work Contract before any production implementation
-  - follow the accepted sequence R8 Measure -> R9 Rectangle/Construction -> R10 Precision -> R11 OSNAP/Inference -> R12 Trim/Split/Join
-  - stop after R12 for the explicit Sketcher profile-authoring readiness checkpoint
-  - do not activate solid modeling before both the profile-authoring checkpoint and a separate Owner-accepted Part Feature Tree architecture gate
-  - keep ordinary RMB context, authored constraints/solver, broader editing and planar-face Sketch inactive until separately accepted
+  - implement accepted R8A read-only Measure scope only
+  - use CI-03 FOCUSED evidence for ordinary implementation iterations
+  - preserve normal Sketch selection while Measure owns only a runtime target
+  - keep R8B relational Measure, R8C Show Dimensions, R9+, RMB, constraints/solver and solid modeling inactive
+  - stop for Owner review on any durable sub-element identity, persistence, unit-system, Viewer-overlay or other D2/D3 expansion
+  - obtain affected checkpoint evidence, exact-head FULL, Owner manual Windows PASS and CLOSURE before completion
 
 notes:
+  - Owner explicitly accepted R8A Read-only Measure Core + Single-Selection Diagnostics on 2026-09-29.
+  - R8A is the only active production scope.
+  - Measure remains read-only, whole-entity only, provider-neutral and non-persistent; no durable sub-element identity is authorized.
+  - R8B relational Measure and R8C Show Dimensions overlays remain inactive.
   - Owner accepted Sketcher Roadmap v1.5 sequencing on 2026-09-29.
   - Roadmap v1.5 prioritizes conscious profile authoring: Measure -> Rectangle/Construction -> Precision/Units/Ortho/Polar/Dynamic Input -> OSNAP/Tracking/Inference -> Trim/Split/Join -> explicit profile-authoring readiness checkpoint.
   - Measure must remain read-only and must not prematurely freeze durable sub-element identity.
