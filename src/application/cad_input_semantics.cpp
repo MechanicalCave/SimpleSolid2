@@ -307,6 +307,10 @@ SketchCadInputSemanticEndpoint::submit(
                 return {
                     false,
                     "Scale Factor expects a positive Scalar expression."};
+            case CadInputValueRequestSemantic::mirror_axis_angle:
+                return {
+                    false,
+                    "Mirror Axis Angle expects a valid Angle expression."};
             }
         }
 

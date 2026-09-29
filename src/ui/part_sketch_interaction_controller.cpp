@@ -510,6 +510,41 @@ cadInputSemanticValueRequest() const noexcept {
         return std::nullopt;
     }
 
+    if (interaction_.directManipulationActive()) {
+        const auto mode =
+            interaction_.directEditMode();
+        if (!mode) {
+            return std::nullopt;
+        }
+
+        switch (*mode) {
+        case sketch::DirectEditMode::rotate:
+            return application::CadInputValueRequest{
+                application::CadInputValueRequestSemantic::
+                    rotate_angle,
+                application::CadQuantityDimension::angle,
+                false};
+
+        case sketch::DirectEditMode::scale:
+            return application::CadInputValueRequest{
+                application::CadInputValueRequestSemantic::
+                    scale_factor,
+                application::CadQuantityDimension::scalar,
+                true};
+
+        case sketch::DirectEditMode::mirror:
+            return application::CadInputValueRequest{
+                application::CadInputValueRequestSemantic::
+                    mirror_axis_angle,
+                application::CadQuantityDimension::angle,
+                false};
+
+        case sketch::DirectEditMode::reshape:
+        case sketch::DirectEditMode::move:
+            break;
+        }
+    }
+
     if (interaction_.tool() ==
             sketch::SketchTool::circle &&
         interaction_.circleStage() ==
@@ -672,6 +707,21 @@ submitCadInputSemanticValue(double value) {
         projectInteraction();
         notifyStateChanged();
         return true;
+    }
+
+    if (interaction_.directManipulationActive()) {
+        const auto mode =
+            interaction_.directEditMode();
+        if (mode &&
+            (*mode == sketch::DirectEditMode::rotate ||
+             *mode == sketch::DirectEditMode::scale ||
+             *mode == sketch::DirectEditMode::mirror)) {
+            if (!interaction_.
+                    acceptDirectManipulationValue(value)) {
+                return false;
+            }
+            return commitDirectManipulation();
+        }
     }
 
     const auto transform_stage =

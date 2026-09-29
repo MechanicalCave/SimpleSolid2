@@ -709,6 +709,110 @@ int main(int argc, char* argv[]) {
     CHECK(near(moved_source->end().u, -40.0));
     CHECK(near(moved_source->end().v, 35.0));
 
+    // Grip Rotate: exact Angle is signed and pointer-independent.
+    CHECK(viewport.selection_.primary.has_value());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            *viewport.selection_.primary,
+            viewer::SketchGripRole::line_start}};
+    click(
+        interaction,
+        sketch_id,
+        210.0,
+        210.0,
+        -25.0,
+        20.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::rotate);
+    semantic_result = semantic_input.submit("90");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(near(moved_source->start().u, -25.0));
+    CHECK(near(moved_source->start().v, 20.0));
+    CHECK(near(moved_source->end().u, -40.0));
+    CHECK(near(moved_source->end().v, 5.0));
+
+    // Grip Scale: exact positive Factor owns the final geometry.
+    CHECK(viewport.selection_.primary.has_value());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            *viewport.selection_.primary,
+            viewer::SketchGripRole::line_start}};
+    click(
+        interaction,
+        sketch_id,
+        220.0,
+        220.0,
+        -25.0,
+        20.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::scale);
+    const auto revision_before_bad_grip_factor =
+        session.document().revision();
+    semantic_result = semantic_input.submit("0");
+    CHECK(!semantic_result.accepted);
+    CHECK(
+        session.document().revision() ==
+        revision_before_bad_grip_factor);
+    CHECK(interaction.directManipulationActive());
+    semantic_result = semantic_input.submit("2");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(near(moved_source->start().u, -25.0));
+    CHECK(near(moved_source->start().v, 20.0));
+    CHECK(near(moved_source->end().u, -55.0));
+    CHECK(near(moved_source->end().v, -10.0));
+
+    // Grip Mirror: typed Axis Angle is absolute from Sketch +U.
+    CHECK(viewport.selection_.primary.has_value());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            *viewport.selection_.primary,
+            viewer::SketchGripRole::line_start}};
+    click(
+        interaction,
+        sketch_id,
+        230.0,
+        230.0,
+        -25.0,
+        20.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::mirror);
+    semantic_result = semantic_input.submit("90");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(near(moved_source->start().u, -25.0));
+    CHECK(near(moved_source->start().v, 20.0));
+    CHECK(near(moved_source->end().u, 5.0));
+    CHECK(near(moved_source->end().v, -10.0));
+
     std::cout
         << "SK-07F precision input controller PASS\n";
     return EXIT_SUCCESS;

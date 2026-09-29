@@ -2396,6 +2396,7 @@ bool SketchInteractionState::cycleDirectEditMode() noexcept {
     manipulation_->copy_enabled = false;
     manipulation_->rotate_reference_point.reset();
     manipulation_->scale_reference_radius.reset();
+    manipulation_->explicit_value.reset();
 
     const auto current =
         manipulation_->current_input.position;
@@ -2600,6 +2601,34 @@ bool SketchInteractionState::updateDirectManipulation(
     return true;
 }
 
+bool SketchInteractionState::acceptDirectManipulationValue(
+    double value) noexcept {
+    if (!manipulation_ ||
+        !std::isfinite(value)) {
+        return false;
+    }
+
+    switch (manipulation_->mode) {
+    case DirectEditMode::rotate:
+    case DirectEditMode::mirror:
+        manipulation_->explicit_value = value;
+        return true;
+
+    case DirectEditMode::scale:
+        if (value <= 0.0) {
+            return false;
+        }
+        manipulation_->explicit_value = value;
+        return true;
+
+    case DirectEditMode::reshape:
+    case DirectEditMode::move:
+        return false;
+    }
+
+    return false;
+}
+
 std::optional<DirectManipulationGeometry>
 SketchInteractionState::directManipulationGeometryState()
     const {
@@ -2620,6 +2649,12 @@ SketchInteractionState::directManipulationGeometryState()
                 current.v - manipulation_->pivot.v});
 
     case DirectEditMode::rotate:
+        if (manipulation_->explicit_value) {
+            return rotateSketchGeometry(
+                manipulation_->selection_geometry,
+                manipulation_->pivot,
+                *manipulation_->explicit_value);
+        }
         if (!manipulation_->rotate_reference_point) {
             return std::nullopt;
         }
@@ -2637,6 +2672,14 @@ SketchInteractionState::directManipulationGeometryState()
         return std::nullopt;
 
     case DirectEditMode::scale:
+        if (manipulation_->explicit_value) {
+            return *manipulation_->explicit_value > 0.0
+                ? scaleSketchGeometry(
+                      manipulation_->selection_geometry,
+                      manipulation_->pivot,
+                      *manipulation_->explicit_value)
+                : std::nullopt;
+        }
         if (!manipulation_->scale_reference_radius) {
             return std::nullopt;
         } else {
@@ -2662,6 +2705,15 @@ SketchInteractionState::directManipulationGeometryState()
         }
 
     case DirectEditMode::mirror:
+        if (manipulation_->explicit_value) {
+            return mirrorSketchGeometry(
+                manipulation_->selection_geometry,
+                manipulation_->pivot,
+                pointOnCircle(
+                    manipulation_->pivot,
+                    1.0,
+                    *manipulation_->explicit_value));
+        }
         return mirrorSketchGeometry(
             manipulation_->selection_geometry,
             manipulation_->pivot,

@@ -43,6 +43,7 @@ enum class CadInputValueRequestSemantic {
     arc_radius,
     rotate_angle,
     scale_factor,
+    mirror_axis_angle,
 };
 
 struct CadInputValueRequest final {

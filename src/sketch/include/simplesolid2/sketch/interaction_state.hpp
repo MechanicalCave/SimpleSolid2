@@ -567,6 +567,8 @@ public:
 
     [[nodiscard]] bool updateDirectManipulation(
         ResolvedSketchInput input) noexcept;
+    [[nodiscard]] bool acceptDirectManipulationValue(
+        double value) noexcept;
 
     [[nodiscard]] std::optional<
         DirectManipulationGeometry>
@@ -605,6 +607,7 @@ private:
         ResolvedSketchInput current_input;
         std::optional<Point2> rotate_reference_point;
         std::optional<double> scale_reference_radius;
+        std::optional<double> explicit_value;
         bool copy_enabled{};
     };
 

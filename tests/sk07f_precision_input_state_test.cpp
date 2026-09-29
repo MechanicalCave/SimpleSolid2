@@ -386,6 +386,96 @@ int main() {
         CHECK(*exact_scale == *expected_scale);
     }
 
+    // Grip Rotate/Scale/Mirror exact values are request-local locks over
+    // the same frozen interaction-start selection geometry.
+    {
+        sketch::SketchInteractionState grip;
+        CHECK(grip.addSelection(line_id));
+        CHECK(
+            grip.beginDirectManipulation(
+                model,
+                {line_id,
+                 sketch::SketchGripRole::line_start}));
+        const auto pointer =
+            grip.resolvePointerInput({1.0, 0.0});
+        CHECK(pointer.has_value());
+        CHECK(grip.updateDirectManipulation(*pointer));
+
+        CHECK(grip.cycleDirectEditMode());
+        CHECK(
+            grip.directEditMode() ==
+            sketch::DirectEditMode::move);
+        CHECK(grip.cycleDirectEditMode());
+        CHECK(
+            grip.directEditMode() ==
+            sketch::DirectEditMode::rotate);
+        CHECK(
+            grip.acceptDirectManipulationValue(
+                std::numbers::pi_v<double> / 2.0));
+        CHECK(
+            grip.updateDirectManipulation(
+                sketch::ResolvedSketchInput{
+                    {-1.0, 0.0}}));
+
+        const auto source =
+            sketch::captureSketchTransformGeometry(
+                model, {line_id});
+        CHECK(source.has_value());
+        const auto rotated =
+            grip.directManipulationGeometryState();
+        const auto expected_rotated =
+            sketch::rotateSketchGeometry(
+                *source,
+                {0.0, 0.0},
+                std::numbers::pi_v<double> / 2.0);
+        CHECK(rotated.has_value());
+        CHECK(expected_rotated.has_value());
+        CHECK(*rotated == *expected_rotated);
+
+        CHECK(grip.cycleDirectEditMode());
+        CHECK(
+            grip.directEditMode() ==
+            sketch::DirectEditMode::scale);
+        CHECK(!grip.acceptDirectManipulationValue(0.0));
+        CHECK(grip.acceptDirectManipulationValue(2.0));
+        CHECK(
+            grip.updateDirectManipulation(
+                sketch::ResolvedSketchInput{
+                    {10.0, 0.0}}));
+        const auto scaled =
+            grip.directManipulationGeometryState();
+        const auto expected_scaled =
+            sketch::scaleSketchGeometry(
+                *source,
+                {0.0, 0.0},
+                2.0);
+        CHECK(scaled.has_value());
+        CHECK(expected_scaled.has_value());
+        CHECK(*scaled == *expected_scaled);
+
+        CHECK(grip.cycleDirectEditMode());
+        CHECK(
+            grip.directEditMode() ==
+            sketch::DirectEditMode::mirror);
+        CHECK(
+            grip.acceptDirectManipulationValue(
+                std::numbers::pi_v<double> / 2.0));
+        CHECK(
+            grip.updateDirectManipulation(
+                sketch::ResolvedSketchInput{
+                    {1.0, 0.0}}));
+        const auto mirrored =
+            grip.directManipulationGeometryState();
+        const auto expected_mirrored =
+            sketch::mirrorSketchGeometry(
+                *source,
+                {0.0, 0.0},
+                {0.0, 1.0});
+        CHECK(mirrored.has_value());
+        CHECK(expected_mirrored.has_value());
+        CHECK(*mirrored == *expected_mirrored);
+    }
+
     std::cout << "SK-07F precision input state PASS\n";
     return EXIT_SUCCESS;
 }
