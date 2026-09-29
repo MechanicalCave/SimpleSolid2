@@ -98,13 +98,14 @@ Subject to explicit Owner acceptance, R10 adopts these bounded decisions:
 40. Explicit complete coordinates / numeric locks outrank Polar capture; Polar capture outranks raw pointer only while the pointer is inside the attraction neighborhood.
 41. Polar and Dynamic Input mode/configuration state is runtime-only in R10 and retained across tool changes within one active Sketch edit session.
 42. Polar and Dynamic Input runtime state resets when Sketch edit ends; R10 does not create application-wide preference persistence for them.
-43. Dynamic Input is a runtime UI adapter to the same semantic request and CAD input buffer; it owns no CAD meaning.
-44. Dynamic Input is OFF by default at the start of a Sketch edit session in R10.
-45. Dynamic Input may show lockable point fields such as dU, dV, Distance and Angle, and typed Radius/Angle/Factor fields for concrete non-point requests.
-46. Tab cycles the currently available Dynamic Input fields.
-47. Locking a field constrains the existing semantic resolver; it does not create authored dimensions or constraints.
-48. Esc first clears the current non-empty CAD token per ADR-0011; with an empty token it may clear active numeric locks before existing tool-stage Esc behavior.
-49. Accepted point/value submission clears locks belonging to that request.
+43. Dynamic Input is a runtime UI adapter to the same semantic request, field-selection state and CAD input buffer; it owns no CAD meaning and never creates a second parser/buffer.
+44. Dynamic Input is OFF by default at the start of a Sketch edit session in R10. DYN OFF hides the overlay/field-navigation UI only; keyboard-first precision input and Command Line syntax remain fully active.
+45. Dynamic Input presents request values in three semantic states where applicable: Free (pointer-derived), Assisted (for example Polar-captured) and Locked (explicit numeric field value).
+46. Typing while DYN is visible does not require clicking the overlay; printable input continues to the one workspace CAD buffer and is interpreted by the request's current Dynamic Input field.
+47. Tab with a valid current token locks that field and advances; Tab with an empty buffer advances field focus without creating a lock; Shift+Tab moves backward. Enter accepts/executes the current semantic request from the available locks plus remaining Polar/pointer degrees of freedom.
+48. Dynamic field locks constrain the existing resolver only and never create authored dimensions/constraints.
+49. Esc order remains live token → request-local numeric locks → existing tool-stage cancellation.
+50. Accepted point/value submission clears locks belonging to that request.
 50. R10 introduces no OSNAP, Object Snap Tracking, geometric inference, Grid Snap or candidate cycling.
 51. R10 introduces no authored dimension/constraint/solver state.
 52. Construction dash-gap cadence becomes fixed in screen/presentation space and independent of entity length; committed and preview Construction geometry use the same visual cadence policy.
@@ -796,58 +797,162 @@ Examples:
 
 ## 21. Dynamic Input
 
-Dynamic Input is a runtime UI adapter to the same semantic input request and global CAD input session.
+Dynamic Input is a runtime presentation/input adapter to the same active semantic request, the same request-local numeric locks and the same workspace-global CAD input session.
 
 Default per Sketch edit: OFF.
 
-When enabled and the current request has precision fields:
+**DYN OFF does not disable precision input.** With the overlay hidden, keyboard-first Command Line input, explicit coordinate/polar syntax, Direct Distance and typed Length/Angle/Factor requests continue to work exactly through the same semantic endpoint. DYN controls only the near-cursor field presentation and field-navigation workflow.
 
-- a compact overlay is displayed near the cursor/current semantic point;
-- it never owns authored state;
-- it never provides Viewer/provider identity;
-- it mirrors the same active semantic values used by Command Line submission;
-- printable keyboard input continues through the shared CAD input buffer;
-- there is no second hidden text buffer.
+Dynamic Input must never own:
 
-### 21.1 Point fields
+- a second text buffer;
+- a second parser;
+- separate tool state;
+- authored dimensions/constraints;
+- Viewer/provider identity.
 
-For based point requests, Dynamic Input must make these semantic fields available where meaningful:
+### 21.1 Visibility and value states
 
-- dU;
-- dV;
-- Distance;
-- Angle.
+When DYN is ON and the current semantic request exposes precision fields, show a compact overlay near the cursor/current semantic point.
 
-Exact visual arrangement is D1, but all lockable fields must be reachable by Tab.
+When no precision-capable request is active, show no floating Dynamic Input overlay.
 
-### 21.2 Typed value fields
+Each displayed value is conceptually one of:
 
-Concrete request fields include:
+- **Free** — currently derived from pointer geometry;
+- **Assisted** — currently supplied by runtime assistance such as a captured Polar direction;
+- **Locked** — explicitly supplied/locked by numeric field input.
 
-- Circle Radius;
-- Rotate Angle;
-- Scale Factor;
-- Polar increment/additional-angle configuration where exposed.
+These states must be visually distinguishable. Exact styling is D1, but an Assisted Polar angle must not look identical to a keyboard Locked angle.
 
-### 21.3 Tab
+The overlay is positioned with a small logical-pixel offset from the cursor so it does not cover the picked point/grip. Initial presentation target is approximately 16 logical pixels diagonally from the cursor, with automatic edge-aware flipping/clamping near viewport boundaries.
 
-Tab cycles the active Dynamic Input field.
+### 21.2 One buffer, keyboard-first
 
-When the current buffer contains a valid value for that field, Tab may lock it and advance.
+The user never has to click the floating field before typing.
 
-If the token is invalid, the field remains active and the request is unchanged.
+Printable keyboard input continues into the one ADR-0011 workspace CAD buffer. When DYN is ON, the active request's current Dynamic Input field provides the explicit semantic field context for that token.
 
-### 21.4 Enter and Esc
+The Command Line may mirror the same live token. There is no duplicate hidden text state.
 
-Enter with a complete valid semantic value submits through the same request path as Command Line.
+This permits field-context workflows that would otherwise be ambiguous in plain Command Line grammar. Example: Rectangle Opposite Corner may accept `50` as the currently focused dU/Width field only because Dynamic Input has explicitly selected that field; with DYN OFF, the existing rule remains that a bare Rectangle scalar is rejected rather than guessed.
+
+### 21.3 Field order by request
+
+Field order is part of the interaction contract.
+
+For an unbased point request:
+
+```text
+U → V
+```
+
+For a normal based point request such as Line next point, Move/Copy destination, grip Reshape/Move and ordinary Mirror Axis End:
+
+```text
+Distance → Angle → dU → dV
+```
+
+Distance is the default field because it preserves the fast CAD workflow: point/base → indicate direction with pointer/Polar → type length → Enter.
+
+Rectangle First Corner:
+
+```text
+U → V
+```
+
+Rectangle Opposite Corner:
+
+```text
+dU → dV
+```
+
+The overlay may present these as `W (dU)` and `H (dV)` for usability, but they remain transient Cartesian deltas and do not create durable Rectangle Width/Height parameters.
+
+Circle:
+
+- Center uses the applicable point-field order;
+- Radius uses one `Radius` field.
+
+Arc Start/Through/End each use their applicable point-field order from the semantic bases defined in section 12.
+
+Rotate and grip Rotate:
+
+```text
+Angle
+```
+
+Scale and grip Scale:
+
+```text
+Factor
+```
+
+Grip Mirror:
+
+```text
+Axis Angle
+```
+
+Ordinary Mirror remains point-based and uses the ordinary point fields.
+
+### 21.4 Tab and Shift+Tab
+
+Tab means **lock current field if a valid token exists, then advance**.
+
+Rules:
+
+- valid non-empty token + Tab parses against the current field type, creates/replaces that request-local lock, clears the live token and advances;
+- empty buffer + Tab advances field focus without creating/changing a lock;
+- invalid token + Tab leaves field/request unchanged and publishes the ordinary bounded diagnostic;
+- Shift+Tab moves to the previous available field;
+- field traversal wraps deterministically within the current request;
+- changing field focus alone creates no authored state and no Undo entry.
+
+Examples:
+
+```text
+Line:
+100  Tab  30  Enter
+=> Distance = 100 [Locked]
+   Angle    = 30° [Locked]
+```
+
+```text
+Rectangle Opposite Corner:
+50  Tab  30  Enter
+=> dU/W = 50 [Locked]
+   dV/H = 30 [Locked]
+```
+
+### 21.5 Enter
+
+Enter means **accept/execute the current semantic request**, not merely "move to the next field".
+
+The request may be completed from a mixture of sources:
+
+- explicit Locked fields;
+- Polar Assisted direction;
+- remaining Free pointer-derived values.
+
+Examples:
+
+- Line with Distance `100` Locked and Angle supplied by captured Polar commits exact length 100 along that Polar track;
+- Line with Distance and Angle both Locked commits independently of pointer position;
+- Rotate with Angle Locked commits that exact signed angle;
+- Scale with Factor Locked commits that exact factor.
+
+If the request is still semantically incomplete or invalid, Enter fails closed with no authored mutation.
+
+### 21.6 Esc and lifecycle
 
 Esc ordering:
 
-1. non-empty CAD buffer clears first;
-2. otherwise active numeric field locks clear;
+1. non-empty live CAD token clears first;
+2. otherwise current request-local numeric locks clear;
 3. otherwise existing tool-stage Esc semantics apply.
 
-Dynamic Input overlay/locks clear on:
+Request-local Dynamic Input field focus/locks clear on:
 
 - request acceptance;
 - tool/stage completion;
@@ -855,6 +960,31 @@ Dynamic Input overlay/locks clear on:
 - tool change;
 - history boundary;
 - Sketch/Document/runtime teardown.
+
+### 21.7 Overlay examples
+
+A based point while Polar supplies the angle may be presented conceptually as:
+
+```text
+D  83.42 mm        Free
+A  45°             POLAR
+```
+
+After typing and locking Distance:
+
+```text
+D  100 mm          LOCK
+A  45°             POLAR
+```
+
+After also locking Angle:
+
+```text
+D  100 mm          LOCK
+A  30°             LOCK
+```
+
+Exact typography/icons are D1. The semantic distinction Free / Assisted / Locked is not optional.
 
 ## 22. Precision mode UI
 
@@ -870,9 +1000,15 @@ Expected bounded UI:
 - editable Polar spacing expression;
 - Polar Reference selector with `Absolute` default and optional `Relative`;
 - additional Polar angles entry/configuration;
-- Dynamic Input toggle.
+- Dynamic Input toggle with visibly discoverable `DYN ON/OFF` state while Sketch edit is active.
 
-Polar is a Sketch-session interaction mode, not a geometry tool. It must not masquerade as another Create/Modify tool button. Exact placement remains D1 for UI review. A compact persistent affordance near the Command Line/status area, with fuller configuration in a contextual panel or popover, is explicitly allowed.
+A compact persistent status affordance may therefore read conceptually:
+
+```text
+POLAR ON   360/8 = 45°   ABS    DYN ON
+```
+
+Polar and DYN are Sketch-session interaction modes, not geometry tools. It must not masquerade as another Create/Modify tool button. Exact placement remains D1 for UI review. A compact persistent affordance near the Command Line/status area, with fuller configuration in a contextual panel or popover, is explicitly allowed.
 
 Changing runtime Polar/Dynamic Input configuration creates no CAD history.
 
@@ -1040,36 +1176,45 @@ At minimum verify:
 55. Polar does not hard-quantize every pointer direction while enabled;
 56. captured Polar constrains direction only; pointer radius/magnitude remains free unless an explicit numeric lock owns it;
 57. pixel tolerances/guide state never enter authored CAD state, Commands or persistence;
-54. additional Polar angles affect pointer resolution deterministically;
-55. Polar Reference defaults to Absolute for each new Sketch edit;
-56. Absolute uses Sketch +U and is independent of previous geometry;
-57. Relative uses only a valid semantic reference direction explicitly supplied by the active interaction context;
-58. Relative with no valid reference performs no Polar capture and does not silently fall back to Absolute;
-59. switching Absolute/Relative is runtime-only and has no revision/dirty/Undo effect;
-60. explicit complete point input outranks Polar;
-58. locked Distance may combine with captured Polar direction;
-59. locked Angle outranks Polar direction;
-60. conflicting locks fail closed;
-61. Dynamic Input default is OFF per Sketch edit;
-62. Dynamic Input has no authored state/history impact;
-63. Dynamic Input and Command Line feed the same request;
-64. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
-65. Tab cycles available fields deterministically;
-66. request acceptance clears request-local locks;
-67. Esc follows buffer → locks → tool hierarchy;
-68. Sketch/tool/Document teardown clears precision runtime state;
-69. Measure displays correct current units without changing measurement semantics;
-70. changing units updates Measure presentation without geometry mutation;
-71. Construction dash-gap cadence is independent of entity length;
-72. Construction preview and committed geometry use the same cadence policy;
-73. Construction dash polish introduces no authored/persistent style state;
-74. R8 Measure/Between regressions remain green;
-75. R9 Rectangle/Construction/Profile regressions remain green;
-76. selection/grips/transforms/COPY/Grip Copy regressions remain green;
-77. global keyboard-first CAD input/focus arbitration regressions remain green;
-78. persistence backward-read coverage remains green;
-79. exact-head Windows FULL passes;
-80. required internal + PL/EN docs and Product Browser freshness pass.
+58. additional Polar angles affect pointer resolution deterministically;
+59. Polar Reference defaults to Absolute for each new Sketch edit;
+60. Absolute uses Sketch +U and is independent of previous geometry;
+61. Relative uses only a valid semantic reference direction explicitly supplied by the active interaction context;
+62. Relative with no valid reference performs no Polar capture and does not silently fall back to Absolute;
+63. switching Absolute/Relative is runtime-only and has no revision/dirty/Undo effect;
+64. explicit complete point input outranks Polar;
+65. locked Distance may combine with captured Polar direction;
+66. locked Angle outranks Polar direction;
+67. conflicting locks fail closed;
+68. Dynamic Input default is OFF per Sketch edit;
+69. DYN OFF hides only overlay/field navigation and does not disable keyboard-first precision input;
+70. Dynamic Input has no authored state/history impact;
+71. Dynamic Input and Command Line feed the same request and same live CAD token;
+72. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
+73. Free / Assisted / Locked value states are semantically distinguishable in presentation;
+74. unbased point field order is U → V;
+75. normal based-point field order is Distance → Angle → dU → dV;
+76. Rectangle Opposite Corner field order is dU → dV and does not create durable Width/Height parameters;
+77. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
+78. valid token + Tab locks current field and advances;
+79. empty-buffer Tab advances without creating a lock;
+80. Shift+Tab moves backward deterministically;
+81. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
+82. request acceptance clears request-local locks;
+83. Esc follows buffer → locks → tool hierarchy;
+84. Sketch/tool/Document teardown clears precision runtime state;
+85. Measure displays correct current units without changing measurement semantics;
+86. changing units updates Measure presentation without geometry mutation;
+87. Construction dash-gap cadence is independent of entity length;
+88. Construction preview and committed geometry use the same cadence policy;
+89. Construction dash polish introduces no authored/persistent style state;
+90. R8 Measure/Between regressions remain green;
+91. R9 Rectangle/Construction/Profile regressions remain green;
+92. selection/grips/transforms/COPY/Grip Copy regressions remain green;
+93. global keyboard-first CAD input/focus arbitration regressions remain green;
+94. persistence backward-read coverage remains green;
+95. exact-head Windows FULL passes;
+96. required internal + PL/EN docs and Product Browser freshness pass.
 
 ## 30. Manual Windows verification
 
@@ -1123,10 +1268,18 @@ Minimum checklist:
 - switch to Relative on a continuous Line and verify the previous committed segment becomes the 0° reference;
 - use Relative in a context with no valid semantic reference and verify Polar does not capture and does not silently fall back to Absolute;
 - switch back to Absolute and verify Sketch +U reference is restored without authored/history change;
-- enable Dynamic Input and verify the overlay follows active semantic request;
-- use Tab across Dynamic Input fields and lock at least one field;
-- verify Command Line and Dynamic Input produce the same geometry;
+- with DYN OFF, type precision input from the viewport and verify keyboard-first Command Line behavior remains fully functional;
+- enable DYN and verify overlay appears only for an active precision-capable semantic request;
+- verify Free, Polar-Assisted and keyboard-Locked values are visually distinguishable;
+- LINE: indicate a Polar direction, type `100`, Enter, and verify exact Distance 100 with direction supplied by Polar;
+- LINE: type `100`, Tab, `30`, Enter and verify exact Distance=100 / Angle=30° independent of pointer;
+- with an empty buffer, Tab through based-point fields and verify no numeric lock is created;
+- use Shift+Tab and verify deterministic reverse traversal;
+- RECTANGLE Opposite Corner: type `50`, Tab, `30`, Enter and verify exact dU/W=50 and dV/H=30 without durable rectangle parameters;
+- Rotate/grip Rotate: verify single Angle field; Scale/grip Scale: single Factor field; grip Mirror: single Axis Angle field;
+- verify Command Line and Dynamic Input resolve through the same request/live token and produce identical geometry for equivalent values;
 - verify Esc clears live text, then numeric locks, then normal tool stage;
+- move the cursor near viewport edges and verify overlay stays visible without covering the semantic point/grip unnecessarily;
 - Measure values show current physical unit labels;
 - inspect short and long Construction Lines and confirm equal visual dash-gap cadence;
 - zoom in/out and verify Construction pattern remains a presentation effect rather than geometry;
