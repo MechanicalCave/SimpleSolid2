@@ -1,7 +1,8 @@
 # SK-07G — Grip Copy Modifier
 
-**Status:** PROPOSED — OWNER REVIEW  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-29  
+**Owner acceptance:** 2026-09-29  
 **Decision class:** D2 direct-manipulation command grammar already bounded by Sketcher Roadmap v1.4 + D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0008, ADR-0009, ADR-0011, ADR-0012  
