@@ -953,35 +953,58 @@ int main() {
         resolveMeasurePoint(
             relational_model,
             {relation_line, MeasurePointRole::line_end});
-    CHECK(line_start && line_start->point == Point2{0.0, 0.0});
-    CHECK(line_mid && line_mid->point == Point2{5.0, 0.0});
-    CHECK(line_end && line_end->point == Point2{10.0, 0.0});
+    const Point2 expected_line_start{0.0, 0.0};
+    const Point2 expected_line_mid{5.0, 0.0};
+    const Point2 expected_line_end{10.0, 0.0};
+    CHECK(line_start && line_start->point == expected_line_start);
+    CHECK(line_mid && line_mid->point == expected_line_mid);
+    CHECK(line_end && line_end->point == expected_line_end);
 
-    CHECK(
+    const auto circle_center_point =
         resolveMeasurePoint(
             relational_model,
-            {relation_circle, MeasurePointRole::circle_center})
-            ->point == Point2{20.0, 10.0});
-    CHECK(
+            MeasurePointRef{
+                relation_circle,
+                MeasurePointRole::circle_center});
+    const auto circle_pos_u_point =
         resolveMeasurePoint(
             relational_model,
-            {relation_circle, MeasurePointRole::circle_quadrant_pos_u})
-            ->point == Point2{24.0, 10.0});
-    CHECK(
+            MeasurePointRef{
+                relation_circle,
+                MeasurePointRole::circle_quadrant_pos_u});
+    const auto circle_pos_v_point =
         resolveMeasurePoint(
             relational_model,
-            {relation_circle, MeasurePointRole::circle_quadrant_pos_v})
-            ->point == Point2{20.0, 14.0});
-    CHECK(
+            MeasurePointRef{
+                relation_circle,
+                MeasurePointRole::circle_quadrant_pos_v});
+    const auto circle_neg_u_point =
         resolveMeasurePoint(
             relational_model,
-            {relation_circle, MeasurePointRole::circle_quadrant_neg_u})
-            ->point == Point2{16.0, 10.0});
-    CHECK(
+            MeasurePointRef{
+                relation_circle,
+                MeasurePointRole::circle_quadrant_neg_u});
+    const auto circle_neg_v_point =
         resolveMeasurePoint(
             relational_model,
-            {relation_circle, MeasurePointRole::circle_quadrant_neg_v})
-            ->point == Point2{20.0, 6.0});
+            MeasurePointRef{
+                relation_circle,
+                MeasurePointRole::circle_quadrant_neg_v});
+    const Point2 expected_circle_center{20.0, 10.0};
+    const Point2 expected_circle_pos_u{24.0, 10.0};
+    const Point2 expected_circle_pos_v{20.0, 14.0};
+    const Point2 expected_circle_neg_u{16.0, 10.0};
+    const Point2 expected_circle_neg_v{20.0, 6.0};
+    CHECK(circle_center_point.has_value());
+    CHECK(circle_pos_u_point.has_value());
+    CHECK(circle_pos_v_point.has_value());
+    CHECK(circle_neg_u_point.has_value());
+    CHECK(circle_neg_v_point.has_value());
+    CHECK(circle_center_point->point == expected_circle_center);
+    CHECK(circle_pos_u_point->point == expected_circle_pos_u);
+    CHECK(circle_pos_v_point->point == expected_circle_pos_v);
+    CHECK(circle_neg_u_point->point == expected_circle_neg_u);
+    CHECK(circle_neg_v_point->point == expected_circle_neg_v);
 
     const auto arc_start =
         resolveMeasurePoint(
@@ -1005,11 +1028,13 @@ int main() {
     CHECK(std::abs(arc_mid->point.u - (-10.0)) < 1e-12);
     CHECK(std::abs(arc_mid->point.v - (-3.0)) < 1e-12);
 
-    CHECK(
-        !resolveMeasurePoint(
+    const auto invalid_line_role =
+        resolveMeasurePoint(
             relational_model,
-            {relation_line, MeasurePointRole::circle_center})
-             .has_value());
+            MeasurePointRef{
+                relation_line,
+                MeasurePointRole::circle_center});
+    CHECK(!invalid_line_role.has_value());
 
     const auto catalog =
         measurePointCatalog(relational_model);
@@ -1078,9 +1103,10 @@ int main() {
     const auto& point_line_value =
         std::get<PointLineMeasurement>(*point_line);
     CHECK(std::abs(point_line_value.distance - 10.0) < 1e-12);
+    const Point2 expected_perpendicular_foot{20.0, 0.0};
     CHECK(
         point_line_value.perpendicular_foot ==
-        Point2{20.0, 0.0});
+        expected_perpendicular_foot);
     CHECK(!point_line_value.foot_on_segment);
 
     const auto line_point =
