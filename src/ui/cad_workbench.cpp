@@ -150,6 +150,138 @@ QString formatMeasurement(
         measurement);
 }
 
+QString measurePointRoleText(
+    sketch::MeasurePointRole role) {
+    switch (role) {
+    case sketch::MeasurePointRole::line_start:
+        return QStringLiteral("Line Start");
+    case sketch::MeasurePointRole::line_midpoint:
+        return QStringLiteral("Line Midpoint");
+    case sketch::MeasurePointRole::line_end:
+        return QStringLiteral("Line End");
+    case sketch::MeasurePointRole::circle_center:
+        return QStringLiteral("Circle Center");
+    case sketch::MeasurePointRole::circle_quadrant_pos_u:
+        return QStringLiteral("Circle +U Quadrant");
+    case sketch::MeasurePointRole::circle_quadrant_pos_v:
+        return QStringLiteral("Circle +V Quadrant");
+    case sketch::MeasurePointRole::circle_quadrant_neg_u:
+        return QStringLiteral("Circle -U Quadrant");
+    case sketch::MeasurePointRole::circle_quadrant_neg_v:
+        return QStringLiteral("Circle -V Quadrant");
+    case sketch::MeasurePointRole::arc_center:
+        return QStringLiteral("Arc Center");
+    case sketch::MeasurePointRole::arc_start:
+        return QStringLiteral("Arc Start");
+    case sketch::MeasurePointRole::arc_end:
+        return QStringLiteral("Arc End");
+    case sketch::MeasurePointRole::arc_midpoint:
+        return QStringLiteral("Arc Midpoint");
+    }
+    return QStringLiteral("Point");
+}
+
+QString formatMeasureRelationTarget(
+    const sketch::MeasureRelationTarget& target) {
+    return std::visit(
+        [](const auto& value) -> QString {
+            using Value =
+                std::decay_t<decltype(value)>;
+            if constexpr (
+                std::is_same_v<
+                    Value,
+                    sketch::MeasurePointRef>) {
+                return QStringLiteral("Point [%1] — %2")
+                    .arg(
+                        fromUtf8(
+                            value.entity_id.serialized()),
+                        measurePointRoleText(value.role));
+            } else {
+                return QStringLiteral("Line [%1]")
+                    .arg(
+                        fromUtf8(
+                            value.entity_id.serialized()));
+            }
+        },
+        target);
+}
+
+QString formatRelationalMeasurement(
+    const sketch::RelationalMeasurement& measurement,
+    const sketch::MeasureRelationTarget& first,
+    const sketch::MeasureRelationTarget& second) {
+    const auto number = [](double value) {
+        return QString::number(value, 'g', 12);
+    };
+    const auto degrees = [&number](double radians) {
+        return number(
+            radians * 180.0 /
+            std::numbers::pi_v<double>) +
+            QStringLiteral("°");
+    };
+
+    const auto first_text =
+        formatMeasureRelationTarget(first);
+    const auto second_text =
+        formatMeasureRelationTarget(second);
+
+    return std::visit(
+        [&](const auto& value) -> QString {
+            using Value =
+                std::decay_t<decltype(value)>;
+            if constexpr (
+                std::is_same_v<
+                    Value,
+                    sketch::PointPointMeasurement>) {
+                return QStringLiteral(
+                           "Measure Between\n"
+                           "Target A: %1\n"
+                           "Target B: %2\n"
+                           "Distance: %3\n"
+                           "Delta U: %4\n"
+                           "Delta V: %5\n"
+                           "Angle +U: %6")
+                    .arg(first_text)
+                    .arg(second_text)
+                    .arg(number(value.distance))
+                    .arg(number(value.delta_u))
+                    .arg(number(value.delta_v))
+                    .arg(degrees(
+                        value.angle_from_positive_u));
+            } else if constexpr (
+                std::is_same_v<
+                    Value,
+                    sketch::PointLineMeasurement>) {
+                return QStringLiteral(
+                           "Measure Between\n"
+                           "Target A: %1\n"
+                           "Target B: %2\n"
+                           "Perpendicular distance: %3\n"
+                           "Foot U: %4\n"
+                           "Foot V: %5\n"
+                           "Line semantics: infinite supporting line")
+                    .arg(first_text)
+                    .arg(second_text)
+                    .arg(number(value.distance))
+                    .arg(number(
+                        value.perpendicular_foot.u))
+                    .arg(number(
+                        value.perpendicular_foot.v));
+            } else {
+                return QStringLiteral(
+                           "Measure Between\n"
+                           "Target A: %1\n"
+                           "Target B: %2\n"
+                           "Smaller undirected angle: %3")
+                    .arg(first_text)
+                    .arg(second_text)
+                    .arg(degrees(
+                        value.smaller_undirected_angle));
+            }
+        },
+        measurement);
+}
+
 std::optional<viewer::StandardView>
 standardViewForSketchSupport(
     core::BuiltinReferenceRole role) noexcept {
@@ -850,6 +982,17 @@ void CadWorkbench::buildUi() {
     operations_placeholder_->setWordWrap(true);
     operations_layout->addWidget(operations_placeholder_);
 
+    measure_between_button_ =
+        new QPushButton(
+            QStringLiteral("Between"),
+            operations_content);
+    measure_between_button_->setObjectName(
+        QStringLiteral("measureBetweenButton"));
+    measure_between_button_->setCheckable(true);
+    measure_between_button_->setVisible(false);
+    operations_layout->addWidget(
+        measure_between_button_);
+
     cancel_sketch_button_ =
         new QPushButton(
             QStringLiteral("Cancel"),
@@ -1148,6 +1291,11 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchMeasure(); });
+    QObject::connect(
+        measure_between_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchMeasureBetween(); });
     QObject::connect(
         cancel_sketch_button_,
         &QPushButton::clicked,
@@ -1843,6 +1991,21 @@ void CadWorkbench::activateSketchMeasure() {
     }
 }
 
+void CadWorkbench::activateSketchMeasureBetween() {
+    if (!sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->
+            activateMeasureBetween()) {
+        setStatusText(
+            QStringLiteral(
+                "Measure Between could not be activated."));
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
 void CadWorkbench::finishSketchLine() {
     if (!sketch_interaction_controller_) {
         return;
@@ -2054,8 +2217,23 @@ QString CadWorkbench::cadInputPromptText() const {
     }
 
     if (tool == sketch::SketchTool::measure) {
+        if (sketch_interaction_controller_->
+                measureBetweenActive()) {
+            if (sketch_interaction_controller_->
+                    measureRelationalResult()) {
+                return QStringLiteral(
+                    "Command: MEASURE BETWEEN — Result shown; choose next Target A; Esc returns to Measure");
+            }
+            if (sketch_interaction_controller_->
+                    measureFirstRelationTarget()) {
+                return QStringLiteral(
+                    "Command: MEASURE BETWEEN — Choose Target B; Esc returns to Measure");
+            }
+            return QStringLiteral(
+                "Command: MEASURE BETWEEN — Choose Target A; Esc returns to Measure");
+        }
         return QStringLiteral(
-            "Command: MEASURE — Click Line/Circle/Arc; Esc ends");
+            "Command: MEASURE — Click Line/Circle/Arc; BETWEEN for relational; Esc ends");
     }
 
     const bool common_transform =
@@ -2762,6 +2940,11 @@ bool CadWorkbench::eventFilter(
 void CadWorkbench::syncSketchInteractionUi() {
     notifyCadInputContextChanged();
 
+    if (measure_between_button_ != nullptr) {
+        measure_between_button_->setVisible(false);
+        measure_between_button_->setChecked(false);
+    }
+
     if (entity_role_label_ != nullptr) {
         entity_role_label_->setVisible(false);
     }
@@ -3168,6 +3351,56 @@ void CadWorkbench::syncSketchInteractionUi() {
         finish_line_button_->setVisible(false);
         cancel_line_button_->setVisible(false);
 
+        const bool between =
+            sketch_interaction_controller_->
+                measureBetweenActive();
+        if (measure_between_button_ != nullptr) {
+            measure_between_button_->setVisible(true);
+            measure_between_button_->setChecked(
+                between);
+            measure_between_button_->setEnabled(
+                !between);
+        }
+
+        if (between) {
+            const auto first =
+                sketch_interaction_controller_->
+                    measureFirstRelationTarget();
+            const auto second =
+                sketch_interaction_controller_->
+                    measureSecondRelationTarget();
+            const auto relation =
+                sketch_interaction_controller_->
+                    measureRelationalResult();
+
+            if (relation && first && second) {
+                operations_placeholder_->setText(
+                    formatRelationalMeasurement(
+                        *relation,
+                        *first,
+                        *second));
+            } else if (first) {
+                operations_placeholder_->setText(
+                    QStringLiteral(
+                        "Measure Between\n"
+                        "Target A: %1\n"
+                        "Target B: Choose visible point marker or Line body")
+                        .arg(
+                            formatMeasureRelationTarget(
+                                *first)));
+            } else {
+                operations_placeholder_->setText(
+                    QStringLiteral(
+                        "Measure Between\n"
+                        "Target A: Choose visible point marker or Line body\n"
+                        "Target B: —"));
+            }
+            return;
+        }
+
+        if (measure_between_button_ != nullptr) {
+            measure_between_button_->setEnabled(true);
+        }
         const auto result =
             sketch_interaction_controller_->
                 measureResult();
@@ -3175,7 +3408,7 @@ void CadWorkbench::syncSketchInteractionUi() {
             result
                 ? formatMeasurement(*result)
                 : QStringLiteral(
-                      "Measure — Click Line/Circle/Arc to inspect; Esc ends"));
+                      "Measure — Click Line/Circle/Arc to inspect; Between measures relations; Esc ends"));
         return;
     }
 
@@ -3385,6 +3618,10 @@ void CadWorkbench::syncActionState() {
         editing_sketch);
     measure_sketch_button_->setVisible(
         editing_sketch);
+    if (measure_between_button_ != nullptr &&
+        !editing_sketch) {
+        measure_between_button_->setVisible(false);
+    }
 
     cancel_sketch_button_->setVisible(
         active && sketch_support_pick_active_);
