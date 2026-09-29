@@ -708,21 +708,48 @@ Polar: ON   Step: 360/8 = 45°
 
 The default primary spacing is `360/8 = 45°`.
 
-### 19.2 Absolute Polar
+### 19.2 Polar reference mode
+
+Polar has one runtime reference-mode selector:
+
+```text
+Reference: Absolute | Relative
+```
+
+Default per Sketch edit: **Absolute**.
+
+Changing the reference mode is runtime-only and creates no DocumentRevision, dirty state or Undo entry.
+
+### 19.3 Absolute
+
+Absolute is the default and always has a valid reference.
 
 Tracks are measured from Sketch +U.
 
-### 19.3 Relative Polar
+For example, with spacing `30°`, tracks are `0°`, `30°`, `60°`, `90°`, and so on around one bounded full turn, independent of previously authored geometry.
 
-Tracks are measured from the active operation reference direction.
+### 19.4 Relative
+
+Relative rotates the same Polar track family by one semantic reference direction supplied explicitly by the active interaction context.
 
 Examples:
 
-- continuous Line: previous committed segment direction when available;
-- grip/transform/reference stages: the accepted semantic reference direction when defined;
-- otherwise Relative mode has no valid reference and Polar does not capture rather than inventing one.
+- continuous Line after at least one committed segment: previous committed segment direction;
+- grip/transform/reference stages: the operation's accepted semantic reference direction when that stage defines one;
+- other requests may supply a reference only when their contract defines it explicitly.
 
-### 19.4 Additional angles
+Relative must never search geometry, infer a nearby edge, reuse stale hover state or guess a reference from presentation.
+
+If the active request does not provide a valid finite reference direction:
+
+- Polar does not capture any Relative track;
+- raw pointer direction remains free;
+- UI may show `Relative — no reference`;
+- no fallback to Absolute occurs silently.
+
+Switching back to Absolute immediately restores Sketch +U as the reference without changing authored state.
+
+### 19.5 Additional angles
 
 Additional angles are runtime-only offsets in R10.
 
@@ -732,7 +759,7 @@ Duplicate/equivalent normalized angles are collapsed deterministically.
 
 Invalid/non-finite configuration is rejected without changing the previous valid configuration.
 
-### 19.5 Priority with numeric input
+### 19.6 Priority with numeric input
 
 Polar assists only degrees of freedom that remain unspecified.
 
@@ -817,7 +844,7 @@ Expected bounded UI:
 - clearly visible Polar ON/OFF state while Sketch edit is active;
 - clearly visible current Polar spacing/result, for example `360/8 = 45°`;
 - editable Polar spacing expression;
-- Polar Absolute/Relative choice;
+- Polar Reference selector with `Absolute` default and optional `Relative`;
 - additional Polar angles entry/configuration;
 - Dynamic Input toggle.
 
@@ -986,9 +1013,12 @@ At minimum verify:
 52. Polar capture/release is stable and does not flicker at the threshold;
 53. Polar does not hard-quantize every pointer direction while enabled;
 54. additional Polar angles affect pointer resolution deterministically;
-55. Absolute Polar uses Sketch +U;
-56. Relative Polar uses only a valid semantic reference direction;
-57. explicit complete point input outranks Polar;
+55. Polar Reference defaults to Absolute for each new Sketch edit;
+56. Absolute uses Sketch +U and is independent of previous geometry;
+57. Relative uses only a valid semantic reference direction explicitly supplied by the active interaction context;
+58. Relative with no valid reference performs no Polar capture and does not silently fall back to Absolute;
+59. switching Absolute/Relative is runtime-only and has no revision/dirty/Undo effect;
+60. explicit complete point input outranks Polar;
 58. locked Distance may combine with captured Polar direction;
 59. locked Angle outranks Polar direction;
 60. conflicting locks fail closed;
@@ -1055,7 +1085,11 @@ Minimum checklist:
 - set at least one nontrivial expression such as `360/7` and verify deterministic bounded tracks;
 - move just outside the attraction neighborhood and verify direction becomes free again;
 - test at least one additional Polar angle;
-- verify Absolute versus Relative Polar reference;
+- verify Reference defaults to Absolute on a fresh Sketch edit;
+- verify Absolute tracks stay anchored to Sketch +U regardless of previous segment direction;
+- switch to Relative on a continuous Line and verify the previous committed segment becomes the 0° reference;
+- use Relative in a context with no valid semantic reference and verify Polar does not capture and does not silently fall back to Absolute;
+- switch back to Absolute and verify Sketch +U reference is restored without authored/history change;
 - enable Dynamic Input and verify the overlay follows active semantic request;
 - use Tab across Dynamic Input fields and lock at least one field;
 - verify Command Line and Dynamic Input produce the same geometry;
