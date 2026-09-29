@@ -2428,14 +2428,21 @@ QString CadWorkbench::cadInputPromptText() const {
         const auto stage =
             sketch_interaction_controller_->
                 circleStage();
-        return stage &&
-                       *stage ==
-                           sketch::CircleStage::
-                               await_radius
-                   ? QStringLiteral(
-                         "Command: CIRCLE — Specify radius")
-                   : QStringLiteral(
-                         "Command: CIRCLE — Specify center");
+        if (stage &&
+            *stage ==
+                sketch::CircleStage::await_radius) {
+            return
+                sketch_interaction_controller_->
+                        circleSizeInputMode() ==
+                    application::CircleSizeInputMode::
+                        diameter
+                    ? QStringLiteral(
+                          "Command: CIRCLE — Specify diameter [D]")
+                    : QStringLiteral(
+                          "Command: CIRCLE — Specify radius [R]");
+        }
+        return QStringLiteral(
+            "Command: CIRCLE — Specify center");
     }
 
     if (tool == sketch::SketchTool::rectangle) {
@@ -2462,7 +2469,7 @@ QString CadWorkbench::cadInputPromptText() const {
     if (stage &&
         *stage == sketch::ArcStage::await_arc_point) {
         return QStringLiteral(
-            "Command: ARC — Specify arc point");
+            "Command: ARC — Specify arc point or radius");
     }
     return QStringLiteral(
         "Command: ARC — Specify start point");
@@ -3685,11 +3692,22 @@ void CadWorkbench::syncSketchInteractionUi() {
             *stage ==
                 sketch::CircleStage::await_radius;
 
-        operations_placeholder_->setText(
-            radius
-                ? QStringLiteral("Circle — Specify radius")
-                : QStringLiteral("Circle — Specify center"));
-                return;
+        if (radius) {
+            operations_placeholder_->setText(
+                sketch_interaction_controller_->
+                        circleSizeInputMode() ==
+                    application::CircleSizeInputMode::
+                        diameter
+                    ? QStringLiteral(
+                          "Circle — Diameter mode [D]; specify size")
+                    : QStringLiteral(
+                          "Circle — Radius mode [R]; specify size"));
+        } else {
+            operations_placeholder_->setText(
+                QStringLiteral(
+                    "Circle — Specify center"));
+        }
+        return;
     }
 
     if (tool == sketch::SketchTool::rectangle) {
@@ -3747,7 +3765,8 @@ void CadWorkbench::syncSketchInteractionUi() {
         stage &&
         *stage == sketch::ArcStage::await_arc_point) {
         operations_placeholder_->setText(
-            QStringLiteral("Arc — Specify arc point"));
+            QStringLiteral(
+                "Arc — Specify arc point or radius"));
     } else {
         operations_placeholder_->setText(
             QStringLiteral("Arc — Specify start point"));

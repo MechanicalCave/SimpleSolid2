@@ -26,6 +26,8 @@ void PartSketchInteractionController::begin(
     last_repeatable_command_.reset();
     creation_role_ = sketch::EntityRole::regular;
     rectangle_draw_diagonals_ = false;
+    circle_size_input_mode_ =
+        application::CircleSizeInputMode::diameter;
     resetProfileRuntime();
     selected_profile_id_.reset();
 
@@ -47,6 +49,8 @@ void PartSketchInteractionController::end() {
     last_repeatable_command_.reset();
     creation_role_ = sketch::EntityRole::regular;
     rectangle_draw_diagonals_ = false;
+    circle_size_input_mode_ =
+        application::CircleSizeInputMode::diameter;
     resetProfileRuntime();
     selected_profile_id_.reset();
 
@@ -375,6 +379,77 @@ bool PartSketchInteractionController::submitExplicitPoint(
     }
 
     if (interaction_.tool() ==
+        sketch::SketchTool::circle) {
+        const auto accepted =
+            interaction_.acceptCirclePoint(
+                resolved->position);
+        if (accepted.outcome !=
+            sketch::CirclePointOutcome::
+                center_accepted) {
+            return false;
+        }
+
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+        return true;
+    }
+
+    if (interaction_.tool() ==
+        sketch::SketchTool::arc) {
+        const auto accepted =
+            interaction_.acceptArcPoint(
+                resolved->position);
+        if (accepted.outcome ==
+                sketch::ArcPointOutcome::
+                    arc_requested &&
+            accepted.request) {
+            const auto result =
+                session_->execute(
+                    application::AddSketchArcCommand{
+                        *sketch_id_,
+                        accepted.request->center,
+                        accepted.request->radius,
+                        accepted.request->start_angle,
+                        accepted.request->sweep_angle,
+                        creation_role_});
+            const bool committed =
+                result.ok() && result.changed;
+            static_cast<void>(
+                interaction_.resolveArcRequest(
+                    committed));
+
+            viewport_controller_->clearSketchPreview();
+            if (!committed) {
+                reportStatus(
+                    result.diagnostic.message.empty()
+                        ? std::string{
+                              "Arc commit failed."}
+                        : result.diagnostic.message);
+                notifyStateChanged();
+                return false;
+            }
+
+            viewport_controller_->refreshPresentation();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            return true;
+        }
+
+        if (accepted.outcome ==
+                sketch::ArcPointOutcome::
+                    start_accepted ||
+            accepted.outcome ==
+                sketch::ArcPointOutcome::
+                    end_accepted) {
+            viewport_controller_->clearSketchPreview();
+            notifyStateChanged();
+            return true;
+        }
+        return false;
+    }
+
+    if (interaction_.tool() ==
         sketch::SketchTool::rectangle) {
         const auto accepted =
             interaction_.acceptRectanglePoint(
@@ -426,6 +501,267 @@ bool PartSketchInteractionController::submitExplicitPoint(
         return false;
     }
     return commitTransform();
+}
+
+std::optional<application::CadInputValueRequest>
+PartSketchInteractionController::
+cadInputSemanticValueRequest() const noexcept {
+    if (!active() || profile_session_) {
+        return std::nullopt;
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::circle &&
+        interaction_.circleStage() ==
+            sketch::CircleStage::await_radius) {
+        return application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                circle_size,
+            application::CadQuantityDimension::length,
+            true};
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::arc &&
+        interaction_.arcStage() ==
+            sketch::ArcStage::await_arc_point) {
+        return application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                arc_radius,
+            application::CadQuantityDimension::length,
+            true};
+    }
+
+    return std::nullopt;
+}
+
+bool PartSketchInteractionController::
+submitCadInputSemanticValue(double value) {
+    if (!active() || profile_session_ ||
+        !std::isfinite(value) ||
+        value <= 0.0) {
+        return false;
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::circle &&
+        interaction_.circleStage() ==
+            sketch::CircleStage::await_radius) {
+        const double radius =
+            circle_size_input_mode_ ==
+                    application::CircleSizeInputMode::
+                        diameter
+                ? value * 0.5
+                : value;
+        const auto accepted =
+            interaction_.acceptCircleRadius(radius);
+        if (accepted.outcome !=
+                sketch::CirclePointOutcome::
+                    circle_requested ||
+            !accepted.request) {
+            return false;
+        }
+
+        const auto result =
+            session_->execute(
+                application::AddSketchCircleCommand{
+                    *sketch_id_,
+                    accepted.request->center,
+                    accepted.request->radius,
+                    creation_role_});
+        const bool committed =
+            result.ok() && result.changed;
+        static_cast<void>(
+            interaction_.resolveCircleRequest(
+                committed));
+
+        viewport_controller_->clearSketchPreview();
+        if (!committed) {
+            reportStatus(
+                result.diagnostic.message.empty()
+                    ? std::string{
+                          "Circle commit failed."}
+                    : result.diagnostic.message);
+            notifyStateChanged();
+            return false;
+        }
+
+        viewport_controller_->refreshPresentation();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        return true;
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::arc &&
+        interaction_.arcStage() ==
+            sketch::ArcStage::await_arc_point) {
+        const auto accepted =
+            interaction_.acceptArcRadius(value);
+        if (accepted.outcome ==
+            sketch::ArcPointOutcome::radius_locked) {
+            viewport_controller_->clearSketchPreview();
+            notifyStateChanged();
+            return true;
+        }
+        if (accepted.outcome !=
+                sketch::ArcPointOutcome::
+                    arc_requested ||
+            !accepted.request) {
+            return false;
+        }
+
+        const auto result =
+            session_->execute(
+                application::AddSketchArcCommand{
+                    *sketch_id_,
+                    accepted.request->center,
+                    accepted.request->radius,
+                    accepted.request->start_angle,
+                    accepted.request->sweep_angle,
+                    creation_role_});
+        const bool committed =
+            result.ok() && result.changed;
+        static_cast<void>(
+            interaction_.resolveArcRequest(
+                committed));
+
+        viewport_controller_->clearSketchPreview();
+        if (!committed) {
+            reportStatus(
+                result.diagnostic.message.empty()
+                    ? std::string{
+                          "Arc commit failed."}
+                    : result.diagnostic.message);
+            notifyStateChanged();
+            return false;
+        }
+
+        viewport_controller_->refreshPresentation();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        return true;
+    }
+
+    return false;
+}
+
+std::optional<application::CadInputPairRequest>
+PartSketchInteractionController::
+cadInputSemanticPairRequest() const noexcept {
+    if (!active() || profile_session_ ||
+        interaction_.tool() !=
+            sketch::SketchTool::rectangle ||
+        interaction_.rectangleStage() !=
+            sketch::RectangleStage::
+                await_opposite_corner) {
+        return std::nullopt;
+    }
+
+    return application::CadInputPairRequest{
+        application::CadInputPairRequestSemantic::
+            rectangle_size,
+        application::CadQuantityDimension::length,
+        application::CadQuantityDimension::length,
+        true};
+}
+
+bool PartSketchInteractionController::
+submitCadInputSemanticPair(
+    double first,
+    double second) {
+    if (!active() || profile_session_ ||
+        interaction_.tool() !=
+            sketch::SketchTool::rectangle ||
+        interaction_.rectangleStage() !=
+            sketch::RectangleStage::
+                await_opposite_corner ||
+        !std::isfinite(first) ||
+        !std::isfinite(second) ||
+        first <= 0.0 ||
+        second <= 0.0) {
+        return false;
+    }
+
+    const auto accepted =
+        interaction_.acceptRectangleSize(
+            first,
+            second);
+    if (accepted.outcome ==
+        sketch::RectanglePointOutcome::size_locked) {
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+        return true;
+    }
+    if (accepted.outcome !=
+            sketch::RectanglePointOutcome::
+                rectangle_requested ||
+        !accepted.request ||
+        !rectangle_revision_) {
+        return false;
+    }
+
+    const auto result =
+        session_->execute(
+            application::AddSketchRectangleCommand{
+                *sketch_id_,
+                *rectangle_revision_,
+                accepted.request->first_corner,
+                accepted.request->opposite_corner,
+                creation_role_,
+                rectangle_draw_diagonals_});
+    const bool committed =
+        result.ok() && result.changed;
+    static_cast<void>(
+        interaction_.resolveRectangleRequest(
+            committed));
+
+    viewport_controller_->clearSketchPreview();
+    if (!committed) {
+        if (result.diagnostic.code ==
+            application::DocumentSessionErrorCode::
+                revision_diverged) {
+            static_cast<void>(
+                interaction_.escape());
+            rectangle_revision_.reset();
+        }
+        reportStatus(
+            result.diagnostic.message.empty()
+                ? std::string{
+                      "Rectangle commit failed."}
+                : result.diagnostic.message);
+        notifyStateChanged();
+        return false;
+    }
+
+    rectangle_revision_.reset();
+    viewport_controller_->refreshPresentation();
+    projectSelection();
+    projectInteraction();
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::
+submitCadInputSemanticCircleSizeMode(
+    application::CircleSizeInputMode mode) {
+    if (!active() || profile_session_ ||
+        interaction_.tool() !=
+            sketch::SketchTool::circle ||
+        interaction_.circleStage() !=
+            sketch::CircleStage::await_radius) {
+        return false;
+    }
+
+    if (circle_size_input_mode_ == mode) {
+        return true;
+    }
+
+    circle_size_input_mode_ = mode;
+    notifyStateChanged();
+    return true;
 }
 
 bool PartSketchInteractionController::activateCadInputSemanticTool(
@@ -2774,7 +3110,8 @@ void PartSketchInteractionController::handleCirclePointer(
 void PartSketchInteractionController::handleArcPointer(
     const SketchPointerInput& input) {
     const auto resolved =
-        sketch::resolveSketchInput(input.position);
+        interaction_.resolvePointerInput(
+            input.position);
 
     if (input.phase == viewer::SpatialPointerPhase::move) {
         const auto preview =
@@ -3538,6 +3875,8 @@ currentCadInputContextFingerprint() const noexcept {
         fingerprint.direct_distance_enabled =
             request->direct_distance_enabled;
     }
+    fingerprint.circle_size_input_mode =
+        circle_size_input_mode_;
 
     return fingerprint;
 }

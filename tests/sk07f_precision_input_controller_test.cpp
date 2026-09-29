@@ -553,6 +553,115 @@ int main(int argc, char* argv[]) {
     CHECK(near(exact_polar.end.v, 88.9));
     CHECK(interaction.escape());
 
+    // Circle Center -> Size defaults to Diameter at Sketch-edit entry.
+    interaction.activateCircle();
+    semantic_result = inch_input.submit("1;1");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.circleSizeInputMode() ==
+        application::CircleSizeInputMode::diameter);
+    semantic_result = inch_input.submit("2");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(!model_state.circles.empty());
+    CHECK(near(model_state.circles.back().center.u, 25.4));
+    CHECK(near(model_state.circles.back().center.v, 25.4));
+    CHECK(near(model_state.circles.back().radius, 25.4));
+
+    // R is an explicit runtime setter and persists across Circle
+    // activations within this Sketch edit.
+    interaction.activateCircle();
+    semantic_result = inch_input.submit("2;2");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("R");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.circleSizeInputMode() ==
+        application::CircleSizeInputMode::radius);
+    semantic_result = inch_input.submit("1");
+    CHECK(semantic_result.accepted);
+    interaction.activateCircle();
+    CHECK(
+        interaction.circleSizeInputMode() ==
+        application::CircleSizeInputMode::radius);
+    CHECK(interaction.escape());
+
+    // Arc: Start -> End -> Arc Point / Radius. Pointer side supplies
+    // the typed-Radius bulge, while an explicit Arc Point outranks a
+    // previously locked Radius.
+    interaction.activateArc();
+    semantic_result = inch_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("@4;0");
+    CHECK(semantic_result.accepted);
+    movePointer(
+        interaction,
+        sketch_id,
+        150.0,
+        150.0,
+        50.8,
+        20.0);
+    semantic_result = inch_input.submit("2");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(!model_state.arcs.empty());
+    CHECK(near(model_state.arcs.back().radius, 50.8));
+
+    interaction.activateArc();
+    semantic_result = inch_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("@2;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("2");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.arcStage() ==
+        sketch::ArcStage::await_arc_point);
+    const auto arc_count_before_point =
+        session.document().findSketch(sketch_id)->
+            model.state().arcs.size();
+    semantic_result = inch_input.submit("1;1");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    CHECK(
+        hosted->model.state().arcs.size() ==
+        arc_count_before_point + 1U);
+
+    // Rectangle owns Width;Height at stage two. Pointer supplies left/up
+    // quadrant while the pair supplies exact positive magnitudes.
+    interaction.activateRectangle();
+    semantic_result = inch_input.submit("10;10");
+    CHECK(semantic_result.accepted);
+    movePointer(
+        interaction,
+        sketch_id,
+        160.0,
+        160.0,
+        200.0,
+        300.0);
+    const auto lines_before_rectangle =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    semantic_result = inch_input.submit("2;1");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_rectangle + 4U);
+    const auto& rectangle_first_edge =
+        model_state.lines[lines_before_rectangle];
+    CHECK(near(rectangle_first_edge.start.u, 254.0));
+    CHECK(near(rectangle_first_edge.start.v, 254.0));
+    CHECK(near(rectangle_first_edge.end.u, 203.2));
+    CHECK(near(rectangle_first_edge.end.v, 254.0));
+
     std::cout
         << "SK-07F precision input controller PASS\n";
     return EXIT_SUCCESS;

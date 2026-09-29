@@ -71,6 +71,10 @@ public:
     [[nodiscard]] bool submitDirectDistance(double distance);
     [[nodiscard]] bool submitExplicitPoint(
         sketch::ExplicitPointInput input);
+    [[nodiscard]] application::CircleSizeInputMode
+    circleSizeInputMode() const noexcept {
+        return circle_size_input_mode_;
+    }
 
     [[nodiscard]] bool cadInputSemanticActive() const noexcept override {
         return active();
@@ -85,6 +89,23 @@ public:
         sketch::ExplicitPointInput input) override {
         return submitExplicitPoint(input);
     }
+    [[nodiscard]] std::optional<
+        application::CadInputValueRequest>
+    cadInputSemanticValueRequest()
+        const noexcept override;
+    [[nodiscard]] bool
+    submitCadInputSemanticValue(double value) override;
+    [[nodiscard]] std::optional<
+        application::CadInputPairRequest>
+    cadInputSemanticPairRequest()
+        const noexcept override;
+    [[nodiscard]] bool
+    submitCadInputSemanticPair(
+        double first,
+        double second) override;
+    [[nodiscard]] bool
+    submitCadInputSemanticCircleSizeMode(
+        application::CircleSizeInputMode mode) override;
     [[nodiscard]] bool submitCadInputSemanticDirectDistance(
         double distance) override {
         return submitDirectDistance(distance);
@@ -320,6 +341,10 @@ private:
             selected_profile_id;
         std::optional<sketch::Point2> point_base;
         bool direct_distance_enabled{};
+        application::CircleSizeInputMode
+            circle_size_input_mode{
+                application::CircleSizeInputMode::
+                    diameter};
         std::optional<core::DocumentRevision>
             document_revision;
 
@@ -352,6 +377,9 @@ private:
     sketch::EntityRole creation_role_{
         sketch::EntityRole::regular};
     bool rectangle_draw_diagonals_{};
+    application::CircleSizeInputMode
+        circle_size_input_mode_{
+            application::CircleSizeInputMode::diameter};
 
     struct ProfileToolSession final {
         ProfileToolSessionKind kind{

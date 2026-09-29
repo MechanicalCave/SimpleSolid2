@@ -288,6 +288,37 @@ int main() {
                  .has_value());
     }
 
+    // Rectangle second-stage pair is transient Width;Height. Pointer
+    // supplies only quadrant; exact magnitudes remain locked.
+    {
+        sketch::SketchInteractionState rectangle;
+        rectangle.activateRectangle();
+        CHECK(
+            rectangle.acceptRectanglePoint(
+                         {10.0, 10.0}).outcome ==
+            sketch::RectanglePointOutcome::
+                first_corner_accepted);
+        CHECK(
+            rectangle.acceptRectangleSize(
+                         4.0, 2.0).outcome ==
+            sketch::RectanglePointOutcome::size_locked);
+        CHECK(
+            rectangle.resolvePointerInput(
+                         {9.0, 11.0}).has_value());
+        const auto exact_rectangle =
+            rectangle.acceptRectanglePoint(
+                {9.0, 11.0});
+        CHECK(
+            exact_rectangle.outcome ==
+            sketch::RectanglePointOutcome::
+                rectangle_requested);
+        CHECK(exact_rectangle.request.has_value());
+        CHECK(
+            exact_rectangle.request->opposite_corner ==
+            sketch::Point2{6.0, 12.0});
+        CHECK(rectangle.resolveRectangleRequest(true));
+    }
+
     std::cout << "SK-07F precision input state PASS\n";
     return EXIT_SUCCESS;
 }

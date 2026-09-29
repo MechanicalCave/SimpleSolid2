@@ -353,6 +353,40 @@ arcFromChordRadius(
         : std::nullopt;
 }
 
+[[nodiscard]] std::optional<RectangleIntent>
+rectangleFromSize(
+    Point2 first,
+    Point2 pointer,
+    double width,
+    double height) noexcept {
+    if (!first.finite() ||
+        !pointer.finite() ||
+        !std::isfinite(width) ||
+        !std::isfinite(height) ||
+        width <= 0.0 ||
+        height <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double du = pointer.u - first.u;
+    const double dv = pointer.v - first.v;
+    if (!std::isfinite(du) ||
+        !std::isfinite(dv) ||
+        du == 0.0 ||
+        dv == 0.0) {
+        return std::nullopt;
+    }
+
+    RectangleIntent result{
+        first,
+        {
+            first.u + (du > 0.0 ? width : -width),
+            first.v + (dv > 0.0 ? height : -height)}};
+    return result.valid()
+        ? std::optional<RectangleIntent>{result}
+        : std::nullopt;
+}
+
 [[nodiscard]] std::optional<double>
 sameDirectionSweep(
     double start_angle,
@@ -1659,16 +1693,78 @@ SketchInteractionState::acceptRectanglePoint(
             std::nullopt};
     }
 
-    RectangleIntent request{
-        *rectangle_first_corner_,
-        point};
-    if (!request.valid()) {
+    std::optional<RectangleIntent> request;
+    if (rectangle_size_lock_) {
+        request =
+            rectangleFromSize(
+                *rectangle_first_corner_,
+                point,
+                (*rectangle_size_lock_)[0],
+                (*rectangle_size_lock_)[1]);
+    } else {
+        RectangleIntent candidate{
+            *rectangle_first_corner_,
+            point};
+        if (candidate.valid()) {
+            request = candidate;
+        }
+    }
+    if (!request) {
         return {
             RectanglePointOutcome::degenerate_ignored,
             std::nullopt};
     }
 
-    pending_rectangle_request_ = request;
+    pending_rectangle_request_ = *request;
+    return {
+        RectanglePointOutcome::rectangle_requested,
+        request};
+}
+
+RectanglePointResult
+SketchInteractionState::acceptRectangleSize(
+    double width,
+    double height) noexcept {
+    if (tool_ != SketchTool::rectangle) {
+        return {
+            RectanglePointOutcome::inactive_tool,
+            std::nullopt};
+    }
+    if (rectangle_stage_ !=
+            RectangleStage::await_opposite_corner ||
+        pending_rectangle_request_ ||
+        !rectangle_first_corner_ ||
+        !std::isfinite(width) ||
+        !std::isfinite(height) ||
+        width <= 0.0 ||
+        height <= 0.0) {
+        return {
+            RectanglePointOutcome::invalid_size,
+            std::nullopt};
+    }
+
+    rectangle_size_lock_ =
+        std::array<double, 2>{width, height};
+
+    if (!point_pointer_candidate_) {
+        return {
+            RectanglePointOutcome::size_locked,
+            std::nullopt};
+    }
+
+    const auto request =
+        rectangleFromSize(
+            *rectangle_first_corner_,
+            *point_pointer_candidate_,
+            width,
+            height);
+    if (!request) {
+        return {
+            RectanglePointOutcome::size_locked,
+            std::nullopt};
+    }
+
+    pending_rectangle_request_ = *request;
     return {
         RectanglePointOutcome::rectangle_requested,
         request};
@@ -1821,6 +1917,14 @@ SketchInteractionState::previewRectangle(
         pending_rectangle_request_ ||
         !current.finite()) {
         return std::nullopt;
+    }
+
+    if (rectangle_size_lock_) {
+        return rectangleFromSize(
+            *rectangle_first_corner_,
+            current,
+            (*rectangle_size_lock_)[0],
+            (*rectangle_size_lock_)[1]);
     }
 
     RectangleIntent preview{
@@ -2614,6 +2718,7 @@ void SketchInteractionState::resetRectangleStage()
     rectangle_stage_ =
         RectangleStage::await_first_corner;
     rectangle_first_corner_.reset();
+    rectangle_size_lock_.reset();
     pending_rectangle_request_.reset();
     point_pointer_candidate_.reset();
 }

@@ -180,7 +180,9 @@ struct RectangleIntent final {
 enum class RectanglePointOutcome : std::uint8_t {
     inactive_tool,
     invalid_point,
+    invalid_size,
     first_corner_accepted,
+    size_locked,
     degenerate_ignored,
     rectangle_requested,
     request_pending,
@@ -448,6 +450,9 @@ public:
 
     [[nodiscard]] RectanglePointResult acceptRectanglePoint(
         Point2 point) noexcept;
+    [[nodiscard]] RectanglePointResult acceptRectangleSize(
+        double width,
+        double height) noexcept;
 
     [[nodiscard]] bool resolveLineRequest(
         bool committed) noexcept;
@@ -644,6 +649,8 @@ private:
     RectangleStage rectangle_stage_{
         RectangleStage::await_first_corner};
     std::optional<Point2> rectangle_first_corner_;
+    std::optional<std::array<double, 2>>
+        rectangle_size_lock_;
     std::optional<RectangleIntent>
         pending_rectangle_request_;
 
