@@ -21,7 +21,7 @@ The target currently contains:
 - the value-semantic mixed-primitive `SketchModel` plus validated state/restore transfer;
 - provider-neutral Line/Circle/Arc curve-relation and bounded-region analysis, point-in-region picking, exact region composition and nested-island discovery;
 - provider-neutral read-only whole-entity measurement for Line/Circle/Arc;
-- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips, bounded direct manipulation and common Move/Copy/Rotate/Scale/Mirror command stages;
+- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc/Rectangle creation, semantic selection, hover/grips, bounded direct manipulation and common Move/Copy/Rotate/Scale/Mirror command stages;
 - a provider-independent mixed-primitive transform core for translation, rotation, positive uniform scale and reflection.
 
 Each persistent Part-hosted Sketch embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
@@ -127,6 +127,12 @@ The default tool is Select. Creation tools preserve the existing semantic select
 
 Line keeps the continuous Start/Next-point grammar. Circle uses Center → Radius; exact zero radius produces no commit request. Arc uses Start → Through → End; duplicate accepted points, collinear triples or any invalid circumcircle/sweep fail closed.
 
+Rectangle uses **First Corner → Opposite Corner** in Sketch-local U/V. `RectangleIntent` derives the exact perimeter `A→B`, `B→C`, `C→D`, `D→A` with `B=(u1,v0)` and `D=(u0,v1)`. Zero U or V extent is rejected exactly, with no Product epsilon. Rectangle remains active after a successful commit so another rectangle can start from a fresh First Corner.
+
+Rectangle is creation grammar, not a durable primitive. The neutral interaction state owns only the two-corner stage and exact derived geometry. The Part/UI adapter owns two runtime edit-session options: **Creation Role** (`Regular | Construction`) for future Line/Circle/Arc and Rectangle perimeter commits, and Rectangle **Draw Diagonals**. Draw Diagonals adds the exact `A→C` and `B→D` preview/commit lines as `Construction` regardless of perimeter Creation Role. Neither option is persisted or creates revision/dirty/Undo state by itself.
+
+At First Corner the Part adapter captures the current `DocumentRevision`. Final Rectangle commit uses that captured revision through one atomic application command. A normal Rectangle creates four fresh ordinary Line entities; Draw Diagonals creates six, with the last two Construction. All entities commit together in one transaction, one revision increment and one Undo entry. Stale revision, invalid geometry or transaction failure creates none. Undo removes the whole logical creation and Redo restores the same committed EntityIds. No RectangleId, center point, endpoint-sharing identity, group membership or hidden constraint is created.
+
 The 3-Point Arc circumcenter is evaluated from `Through - Start` and `End - Start` in a translation-local frame. Those local vectors are normalized by one finite common scale before determinant and squared-norm arithmetic, then the center offset is restored to Sketch coordinates. This removes the prior dependence on absolute-coordinate squares and protects representable very small/large constructions from avoidable intermediate underflow/overflow.
 
 This is numerical conditioning, not a Product geometric tolerance. E1 does not introduce an epsilon for coincidence or collinearity, a minimum feature size or a maximum coordinate/radius policy. Exact duplicate points and a zero normalized cross product still fail closed; non-finite or unrepresentable intermediate/output values also fail closed. Near-collinear but representable input is not rejected by a new fixed cutoff.
@@ -188,6 +194,8 @@ Direct Distance is currently enabled only for:
 - normal MOVE destination after Base Point;
 - normal COPY placement after Base Point.
 
+Rectangle PointRequests deliberately keep Direct Distance disabled in R9. A bare scalar at First Corner or Opposite Corner is rejected rather than guessed as width, height, diagonal, square side or a U/V coordinate. Rectangle precision/coordinate grammar remains for the later precision-input milestone.
+
 Command submission is context-first. While a semantic PointRequest is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. During active direct manipulation that semantic layer additionally recognizes the bounded tool-local token `C` for Grip Copy before attempting bare-distance parsing. Outside active direct manipulation, `C` remains an unknown top-level Sketch command. The workspace-global text transport and live buffer do not know `PointRequest`, Grip Copy, Line, Move or Copy. The current Part/Sketch adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only typed/parsed semantic input and remains Qt/locale independent.
 
 Printable text typed while the normal CAD viewport has focus now reaches the same global buffer as directly editing Command Line; no focus transfer is required. Real text editors retain their keyboard ownership. This changes only the input adapter path, not Direct Distance semantics or mutation authority.
@@ -248,7 +256,7 @@ The product still does not implement:
 - snapping/Object Snap, tracking, Ortho/Polar/Grid Snap or geometric inference;
 - numeric Rotate/Scale values, absolute/relative coordinate entry, polar syntax, unit expressions or Dynamic Input;
 - authored dimensions, constraints or solver evaluation;
-- Rectangle/Polyline durable semantics;
+- a durable Rectangle primitive/group/center/constraint model or Polyline semantics;
 - projected/reference geometry;
 - planar-face Sketch support.
 
@@ -257,7 +265,7 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, read-only whole-entity measurement, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, normal/Grip Copy identity behavior, Repeat Last Command, Space CycleEditMode and precision input.
+The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Rectangle two-corner/decomposition state, atomic four/six-Line Rectangle creation, Creation Role and Construction-diagonal behavior, Profile exclusion of Construction geometry, read-only whole-entity measurement, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, normal/Grip Copy identity behavior, Repeat Last Command, Space CycleEditMode and precision input.
 
 Key registered tests include:
 

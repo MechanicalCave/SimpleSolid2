@@ -22,7 +22,10 @@ void PartSketchInteractionController::begin(
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
+    rectangle_revision_.reset();
     last_repeatable_command_.reset();
+    creation_role_ = sketch::EntityRole::regular;
+    rectangle_draw_diagonals_ = false;
     resetProfileRuntime();
     selected_profile_id_.reset();
 
@@ -40,7 +43,10 @@ void PartSketchInteractionController::end() {
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
+    rectangle_revision_.reset();
     last_repeatable_command_.reset();
+    creation_role_ = sketch::EntityRole::regular;
+    rectangle_draw_diagonals_ = false;
     resetProfileRuntime();
     selected_profile_id_.reset();
 
@@ -90,6 +96,11 @@ PartSketchInteractionController::circleStage() const noexcept {
 std::optional<sketch::ArcStage>
 PartSketchInteractionController::arcStage() const noexcept {
     return interaction_.arcStage();
+}
+
+std::optional<sketch::RectangleStage>
+PartSketchInteractionController::rectangleStage() const noexcept {
+    return interaction_.rectangleStage();
 }
 
 std::optional<sketch::MoveStage>
@@ -355,6 +366,9 @@ bool PartSketchInteractionController::activateCadInputSemanticTool(
     case sketch::SketchTool::arc:
         activateArc();
         return this->tool() == tool;
+    case sketch::SketchTool::rectangle:
+        activateRectangle();
+        return this->tool() == tool;
     case sketch::SketchTool::measure:
         return activateMeasure();
     case sketch::SketchTool::move:
@@ -510,6 +524,47 @@ submitCadInputSemanticProfileCommand(
 std::size_t
 PartSketchInteractionController::selectedCount() const noexcept {
     return interaction_.selectedEntities().size();
+}
+
+bool PartSketchInteractionController::setCreationRole(
+    sketch::EntityRole role) {
+    if (!active() ||
+        (role != sketch::EntityRole::regular &&
+         role != sketch::EntityRole::construction)) {
+        return false;
+    }
+    if (creation_role_ == role) {
+        return true;
+    }
+    creation_role_ = role;
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::
+setRectangleDrawDiagonals(bool enabled) {
+    if (!active()) {
+        return false;
+    }
+    if (rectangle_draw_diagonals_ == enabled) {
+        return true;
+    }
+    rectangle_draw_diagonals_ = enabled;
+
+    if (interaction_.tool() ==
+        sketch::SketchTool::rectangle) {
+        const auto request =
+            interaction_.activePointRequest();
+        if (request && request->pointer_candidate) {
+            updateRectanglePreview(
+                *request->pointer_candidate);
+        } else {
+            viewport_controller_->clearSketchPreview();
+        }
+    }
+
+    notifyStateChanged();
+    return true;
 }
 
 std::optional<sketch::EntityRole>
@@ -712,6 +767,9 @@ bool PartSketchInteractionController::repeatLastCommand() {
         return true;
     case sketch::SketchTool::arc:
         activateArc();
+        return true;
+    case sketch::SketchTool::rectangle:
+        activateRectangle();
         return true;
     case sketch::SketchTool::move:
         return activateMove();
@@ -1016,6 +1074,27 @@ void PartSketchInteractionController::activateArc() {
     notifyStateChanged();
 }
 
+void PartSketchInteractionController::activateRectangle() {
+    if (!active()) return;
+
+    resetProfileRuntime();
+
+    interaction_.activateRectangle();
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_.reset();
+    rectangle_revision_.reset();
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    last_repeatable_command_ =
+        sketch::SketchTool::rectangle;
+    notifyStateChanged();
+}
+
 bool PartSketchInteractionController::activateMeasure() {
     resetProfileRuntime();
     const auto* hosted = activeSketch();
@@ -1293,6 +1372,9 @@ bool PartSketchInteractionController::escape() {
         interaction_.directManipulationActive();
     const bool was_transform =
         interaction_.commonTransformStage().has_value();
+    const bool was_rectangle =
+        interaction_.tool() ==
+        sketch::SketchTool::rectangle;
     const bool changed = interaction_.escape();
     if (!changed) return false;
 
@@ -1301,6 +1383,9 @@ bool PartSketchInteractionController::escape() {
     }
     if (was_transform) {
         transform_revision_.reset();
+    }
+    if (was_rectangle) {
+        rectangle_revision_.reset();
     }
 
     press_anchor_.reset();
@@ -1741,6 +1826,7 @@ void PartSketchInteractionController::cancelForHistory() {
     interaction_.cancelForHistory();
     manipulation_revision_.reset();
     transform_revision_.reset();
+    rectangle_revision_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     viewport_controller_->clearSketchPreview();
@@ -1762,6 +1848,7 @@ bool PartSketchInteractionController::reconcileAfterHistory() {
     interaction_.clearHover();
     manipulation_revision_.reset();
     transform_revision_.reset();
+    rectangle_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->refreshPresentation();
     projectSelection();
@@ -1796,6 +1883,9 @@ void PartSketchInteractionController::onPointer(
         return;
     case sketch::SketchTool::arc:
         handleArcPointer(input);
+        return;
+    case sketch::SketchTool::rectangle:
+        handleRectanglePointer(input);
         return;
     case sketch::SketchTool::measure:
         handleMeasurePointer(input);
@@ -2492,7 +2582,8 @@ bool PartSketchInteractionController::acceptLineResolvedPoint(
                 application::AddSketchLineCommand{
                     *sketch_id_,
                     accepted.request->start,
-                    accepted.request->end});
+                    accepted.request->end,
+                    creation_role_});
 
         const bool committed =
             result.ok() && result.changed;
@@ -2568,7 +2659,8 @@ void PartSketchInteractionController::handleCirclePointer(
                 application::AddSketchCircleCommand{
                     *sketch_id_,
                     accepted.request->center,
-                    accepted.request->radius});
+                    accepted.request->radius,
+                    creation_role_});
         const bool committed =
             result.ok() && result.changed;
         static_cast<void>(
@@ -2641,7 +2733,8 @@ void PartSketchInteractionController::handleArcPointer(
                     accepted.request->center,
                     accepted.request->radius,
                     accepted.request->start_angle,
-                    accepted.request->sweep_angle});
+                    accepted.request->sweep_angle,
+                    creation_role_});
         const bool committed =
             result.ok() && result.changed;
         static_cast<void>(
@@ -2671,6 +2764,152 @@ void PartSketchInteractionController::handleArcPointer(
         accepted.outcome ==
             sketch::ArcPointOutcome::degenerate_ignored) {
         viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+    }
+}
+
+void PartSketchInteractionController::
+updateRectanglePreview(sketch::Point2 current) {
+    const auto preview =
+        interaction_.previewRectangle(current);
+    if (!preview) {
+        viewport_controller_->clearSketchPreview();
+        return;
+    }
+
+    std::vector<SketchPreviewLine2D> lines;
+    const auto perimeter = preview->perimeter();
+    lines.reserve(
+        rectangle_draw_diagonals_ ? 6U : 4U);
+    for (const auto& edge : perimeter) {
+        lines.push_back(
+            {
+                edge.start,
+                edge.end,
+                creation_role_ ==
+                    sketch::EntityRole::construction});
+    }
+
+    if (rectangle_draw_diagonals_) {
+        for (const auto& diagonal :
+             preview->diagonals()) {
+            lines.push_back(
+                {
+                    diagonal.start,
+                    diagonal.end,
+                    true});
+        }
+    }
+
+    if (!viewport_controller_->
+            setSketchPreview(lines)) {
+        viewport_controller_->clearSketchPreview();
+    }
+}
+
+void PartSketchInteractionController::
+handleRectanglePointer(
+    const SketchPointerInput& input) {
+    const auto resolved =
+        interaction_.resolvePointerInput(
+            input.position);
+
+    if (input.phase ==
+        viewer::SpatialPointerPhase::move) {
+        if (resolved) {
+            updateRectanglePreview(
+                resolved->position);
+        } else {
+            viewport_controller_->clearSketchPreview();
+        }
+        return;
+    }
+
+    if (input.phase !=
+            viewer::SpatialPointerPhase::primary_press ||
+        !resolved) {
+        return;
+    }
+
+    const auto accepted =
+        interaction_.acceptRectanglePoint(
+            resolved->position);
+
+    if (accepted.outcome ==
+            sketch::RectanglePointOutcome::
+                rectangle_requested &&
+        accepted.request) {
+        if (!rectangle_revision_) {
+            static_cast<void>(
+                interaction_.resolveRectangleRequest(
+                    false));
+            static_cast<void>(interaction_.escape());
+            viewport_controller_->clearSketchPreview();
+            reportStatus(
+                "Rectangle commit has no captured DocumentRevision.");
+            notifyStateChanged();
+            return;
+        }
+
+        const auto result =
+            session_->execute(
+                application::AddSketchRectangleCommand{
+                    *sketch_id_,
+                    *rectangle_revision_,
+                    accepted.request->first_corner,
+                    accepted.request->opposite_corner,
+                    creation_role_,
+                    rectangle_draw_diagonals_});
+
+        const bool committed =
+            result.ok() && result.changed;
+        static_cast<void>(
+            interaction_.resolveRectangleRequest(
+                committed));
+
+        viewport_controller_->clearSketchPreview();
+
+        if (!committed) {
+            if (result.diagnostic.code ==
+                application::DocumentSessionErrorCode::
+                    revision_diverged) {
+                static_cast<void>(
+                    interaction_.escape());
+                rectangle_revision_.reset();
+            }
+            reportStatus(
+                result.diagnostic.message.empty()
+                    ? std::string{
+                          "Rectangle commit failed."}
+                    : result.diagnostic.message);
+            notifyStateChanged();
+            return;
+        }
+
+        rectangle_revision_.reset();
+        viewport_controller_->refreshPresentation();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        return;
+    }
+
+    if (accepted.outcome ==
+            sketch::RectanglePointOutcome::
+                first_corner_accepted) {
+        rectangle_revision_ =
+            session_->document().revision();
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+        return;
+    }
+
+    if (accepted.outcome ==
+            sketch::RectanglePointOutcome::
+                degenerate_ignored) {
+        viewport_controller_->clearSketchPreview();
+        reportStatus(
+            "Rectangle requires non-zero U and V extents.");
         notifyStateChanged();
     }
 }
@@ -3191,6 +3430,8 @@ currentCadInputContextFingerprint() const noexcept {
     fingerprint.line_stage = interaction_.lineStage();
     fingerprint.circle_stage = interaction_.circleStage();
     fingerprint.arc_stage = interaction_.arcStage();
+    fingerprint.rectangle_stage =
+        interaction_.rectangleStage();
     fingerprint.transform_stage =
         interaction_.commonTransformStage();
     fingerprint.direct_manipulation_active =

@@ -1,6 +1,6 @@
 # R9 — Rectangle + Construction Authoring Surface
 
-**Status:** ACTIVE  
+**Status:** ACCEPTED — COMPLETED  
 **Proposed:** 2026-09-29  
 **Owner acceptance:** 2026-09-29  
 **Decision class:** D2 Sketch creation/role interaction grammar + atomic multi-Line creation semantics; bounded D1 implementation  
@@ -223,7 +223,9 @@ Changing Creation Role must not silently rewrite selected geometry.
 
 ## 8. Creation Role UI
 
-The Sketch Create surface exposes the current Creation Role clearly.
+The active creation tool exposes the current Creation Role clearly in the right Operations panel.
+
+Owner manual-review refinement on 2026-09-29: the top Create strip contains **tool choices only**. Runtime options belong to the Operations panel for the currently active creation tool. Construction is visible there for Line/Circle/Arc/Rectangle; Draw Diagonals is additionally visible only for Rectangle.
 
 The preferred bounded interaction is a visible checkable **Construction** creation toggle:
 
@@ -235,10 +237,10 @@ Construction ON  → Creation Role = Construction
 Exact widget placement, iconography and styling are D1 as long as:
 
 - the current creation role is visible before geometry is committed;
-- it is visually associated with Create rather than selected-entity Properties/Operations;
+- it is shown as an option of the active creation tool in the right Operations panel, not as another top-toolbar tool;
 - it does not masquerade as selection state;
 - it remains usable with Line/Circle/Arc/Rectangle;
-- existing selected-geometry Regular/Construction controls remain semantically distinct.
+- existing selected-geometry Regular/Construction controls remain semantically distinct and are shown in the Select context rather than simultaneously as creation options.
 
 A two-button Regular/Construction creation selector is also acceptable if the distinction remains clear.
 
@@ -246,7 +248,7 @@ R9 does not require a new global application preference.
 
 ### 8.1 Rectangle Draw Diagonals option
 
-The Rectangle creation surface also exposes a checkable **Draw Diagonals** option (`Rysuj przekątne` in Polish UI).
+The Rectangle Operations context also exposes a checkable **Draw Diagonals** option (`Rysuj przekątne` in Polish UI), colocated with the Rectangle Construction creation option rather than placed in the top Create toolbar.
 
 Properties:
 
@@ -928,3 +930,26 @@ Completion requires:
 - work-only CLOSURE closeout.
 
 R10+ remain inactive after R9 completion unless separately accepted.
+
+
+## 37. Completion evidence
+
+R9 completion evidence on 2026-09-29:
+
+- final implementation/documentation/manual candidate `bfe36544d71593a407bada63c07ae0e4b912808f`;
+- Rectangle remains a two-corner Sketch-local U/V creation tool that authors four ordinary independent perimeter Lines, with no durable Rectangle/group/center identity or hidden rectangularity constraints;
+- optional Draw Diagonals creates exactly two additional ordinary Construction Lines in the same atomic Rectangle command/transaction/Undo step;
+- runtime Creation Role remains independent from selected-geometry role mutation and applies directly to Line/Circle/Arc/Rectangle perimeter creation;
+- top Create strip contains tool choices only; the right Operations panel exposes Construction for active creation tools and Draw Diagonals additionally for Rectangle, while selected-geometry Regular/Construction remains a distinct Select-context operation;
+- `RECTANGLE` Command Line activation and Repeat Last Command use the same semantic tool;
+- Rectangle identity allocation preserves existing session high-water/non-reuse semantics across Undo/branched history;
+- save/reopen preserves the authored ordinary Lines, EntityIds and roles without introducing Rectangle-specific persistence;
+- affected automated coverage includes four preview quadrants, zero-U/zero-V/non-finite rejection, stale-revision fail-closed behavior, atomic four/six-Line Undo/Redo, Construction/Profile exclusion and six-Line persistence;
+- exact-head Windows FULL #912 PASS on `bfe36544d71593a407bada63c07ae0e4b912808f`;
+- FULL #912 passed documentation verification, desktop Build, core-only 14/14, FAST/SUBSYSTEM selector checks, unfiltered desktop 77/77 and final `windows-msvc` aggregation;
+- required internal and PL/EN Product documentation plus generated Product Browser freshness PASS;
+- Owner manual Windows verification PASS on 2026-09-29 on the same exact candidate, including the corrected UI composition with Construction/Draw Diagonals in the right Operations panel;
+- Owner accepted one non-blocking visual carry-over for a later suitable Sketcher milestone: Construction dashed presentation must not stretch/normalize its dash-gap cadence as a function of entity length; the exact screen-space versus model-space cadence policy is intentionally left for that later bounded presentation decision;
+- no R10 precision/units/coordinate/Dynamic Input, R11 OSNAP/inference, R12 structural editing, authored dimensions/constraints/solver, persistence schema change or solid-modeling scope was introduced.
+
+All R9 acceptance conditions are satisfied. R9 is complete. R10 is the next planned Sketcher milestone and remains inactive until a separate Owner-accepted Work Contract.

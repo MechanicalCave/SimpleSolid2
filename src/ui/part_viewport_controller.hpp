@@ -78,6 +78,7 @@ struct SketchMeasureMarkerPointQueryResult final {
 struct SketchPreviewLine2D final {
     sketch::Point2 start;
     sketch::Point2 end;
+    bool construction{false};
 
     [[nodiscard]] bool valid() const noexcept {
         return start.finite() &&

@@ -513,7 +513,7 @@ Pointer routing and cursor mode remain independent runtime axes. Ordinary Select
 
 `IDocumentViewport` remains provider-neutral. It exposes camera/navigation, reference scene, authored Sketch scene, Profile scene, transient Sketch/Profile preview scenes, presentation selection, neutral pointer transport, primary-pointer routing/cursor mode, Sketch point/rectangle queries, finite Sketch grip scene/query, runtime hover/active-grip presentation and the selection-box overlay channel.
 
-The authored Sketch scene carries one semantic presentation token per entity. Line uses one segment; Circle and Arc use one token plus an ordered finite point chain. It also carries the authored Regular/Construction role as presentation input. Qt/OCCT may display a curve as multiple derived native segments, but all of those segments map back to the single semantic token. Construction uses a dashed native line aspect; dash style is derived presentation only and never semantic identity.
+The authored Sketch scene carries one semantic presentation token per entity. Line uses one segment; Circle and Arc use one token plus an ordered finite point chain. It also carries the authored Regular/Construction role as presentation input. Qt/OCCT may display a curve as multiple derived native segments, but all of those segments map back to the single semantic token. Construction uses a dashed native line aspect; dash style is derived presentation only and never semantic identity. Transient Sketch preview lines also carry only a provider-neutral `construction` presentation flag, so a Construction creation preview or Rectangle diagonal can be dashed without giving the Viewer any role or identity authority.
 
 Grip keys are `PresentationToken + SketchGripRole` only inside the Viewer boundary. PartViewportController immediately maps them back to `SketchId + EntityId + semantic role`. Profile presentation tokens are likewise runtime-only and are mapped immediately to Part-owned `ProfileId`. No Qt/OCCT handle becomes CAD identity.
 
@@ -533,6 +533,7 @@ Create
   Line
   Circle
   Arc
+  Rectangle
 
 Profile
   Profile
@@ -548,7 +549,11 @@ Inspect
   Measure
 ```
 
-The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE`, `MIRROR`, `PROFILE` and `EDITPROFILE`. An active Profile session additionally accepts `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` and the documented option toggles. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar; during active direct grip manipulation it may also consume the tool-local token `C` to enable Grip Copy. `C` is not a top-level command alias. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
+The top Create strip contains creation tools only. The right **Operations** panel exposes the runtime **Construction** Creation Role while Line/Circle/Arc/Rectangle is active, and additionally exposes **Draw Diagonals** while Rectangle is active. These creation options are context controls for the active tool; they remain semantically distinct from the selected-geometry Regular/Construction controls shown in Operations during ordinary Select. Both runtime options reset with Sketch-edit teardown, create no history by themselves and never become persistent preferences.
+
+Rectangle is activated by the toolbar or the top-level `RECTANGLE` token and uses the same controller/interaction state. First Corner captures the current DocumentRevision; Opposite Corner commits four ordinary perimeter Lines, plus two ordinary Construction diagonals when enabled, through one atomic application command. Stale revision fails closed instead of silently rebasing the second click. No Rectangle/group/center identity enters the Viewer or authored model.
+
+The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit `SELECT`, `LINE`, `CIRCLE`, `ARC`, `RECTANGLE`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE`, `MIRROR`, `PROFILE` and `EDITPROFILE`. An active Profile session additionally accepts `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` and the documented option toggles. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar; during active direct grip manipulation it may also consume the tool-local token `C` to enable Grip Copy. `C` is not a top-level command alias. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
 
 D makes that ownership explicit in code. `application::CadInputSession` remains transport-only: it owns the live buffer, endpoint attachment/lifetime, context-generation binding and diagnostic transport, but it does not know Sketch tools, PointRequest, command keywords or numeric meaning.
 
@@ -568,7 +573,7 @@ Delete follows the same precedence rule as the rest of live CAD input. With norm
 
 The Command Line presentation is a geometry-stable single row. Its diagnostic region is permanently reserved and single-line; a long message is elided in place (with the full message available as tooltip) instead of wrapping, changing the input width or shrinking/moving the Viewer above it.
 
-`PartSketchInteractionController` owns one runtime-only **last repeatable command** identity for the active Sketch edit session. Successful explicit activation of Line/Circle/Arc/Move/Copy/Rotate/Scale/Mirror through toolbar or Command Line updates that one value. Measure is intentionally not repeatable and does not replace that remembered identity. Select, Delete, selection changes, grip/direct manipulation, Undo/Redo and Esc do not replace it.
+`PartSketchInteractionController` owns one runtime-only **last repeatable command** identity for the active Sketch edit session. Successful explicit activation of Line/Circle/Arc/Rectangle/Move/Copy/Rotate/Scale/Mirror through toolbar or Command Line updates that one value. Measure is intentionally not repeatable and does not replace that remembered identity. Select, Delete, selection changes, grip/direct manipulation, Undo/Redo and Esc do not replace it.
 
 In ordinary Select with viewport CAD focus, Enter or Space repeats that remembered command through the same existing activation methods. Repeat starts a fresh command invocation: it uses the current semantic selection and does not replay prior Base/Reference/axis/placement points, prior selection snapshots, preview state or copied EntityIds. An empty remembered state is a no-op. The remembered identity is cleared by Sketch edit begin/end, so it does not leak across Sketches, Documents or reopen.
 
@@ -1257,7 +1262,7 @@ The target currently contains:
 - the value-semantic mixed-primitive `SketchModel` plus validated state/restore transfer;
 - provider-neutral Line/Circle/Arc curve-relation and bounded-region analysis, point-in-region picking, exact region composition and nested-island discovery;
 - provider-neutral read-only whole-entity measurement for Line/Circle/Arc;
-- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc creation, semantic selection, hover/grips, bounded direct manipulation and common Move/Copy/Rotate/Scale/Mirror command stages;
+- host-neutral runtime `SketchInteractionState` for Select/Line/Circle/Arc/Rectangle creation, semantic selection, hover/grips, bounded direct manipulation and common Move/Copy/Rotate/Scale/Mirror command stages;
 - a provider-independent mixed-primitive transform core for translation, rotation, positive uniform scale and reflection.
 
 Each persistent Part-hosted Sketch embeds one `SketchModel` by value. That host integration does not reverse the dependency: `simplesolid2_sketch` still has no dependency on Part, Application/DocumentSession, Persistence, Viewer, Qt, OCCT or filesystem paths.
@@ -1363,6 +1368,12 @@ The default tool is Select. Creation tools preserve the existing semantic select
 
 Line keeps the continuous Start/Next-point grammar. Circle uses Center → Radius; exact zero radius produces no commit request. Arc uses Start → Through → End; duplicate accepted points, collinear triples or any invalid circumcircle/sweep fail closed.
 
+Rectangle uses **First Corner → Opposite Corner** in Sketch-local U/V. `RectangleIntent` derives the exact perimeter `A→B`, `B→C`, `C→D`, `D→A` with `B=(u1,v0)` and `D=(u0,v1)`. Zero U or V extent is rejected exactly, with no Product epsilon. Rectangle remains active after a successful commit so another rectangle can start from a fresh First Corner.
+
+Rectangle is creation grammar, not a durable primitive. The neutral interaction state owns only the two-corner stage and exact derived geometry. The Part/UI adapter owns two runtime edit-session options: **Creation Role** (`Regular | Construction`) for future Line/Circle/Arc and Rectangle perimeter commits, and Rectangle **Draw Diagonals**. Draw Diagonals adds the exact `A→C` and `B→D` preview/commit lines as `Construction` regardless of perimeter Creation Role. Neither option is persisted or creates revision/dirty/Undo state by itself.
+
+At First Corner the Part adapter captures the current `DocumentRevision`. Final Rectangle commit uses that captured revision through one atomic application command. A normal Rectangle creates four fresh ordinary Line entities; Draw Diagonals creates six, with the last two Construction. All entities commit together in one transaction, one revision increment and one Undo entry. Stale revision, invalid geometry or transaction failure creates none. Undo removes the whole logical creation and Redo restores the same committed EntityIds. No RectangleId, center point, endpoint-sharing identity, group membership or hidden constraint is created.
+
 The 3-Point Arc circumcenter is evaluated from `Through - Start` and `End - Start` in a translation-local frame. Those local vectors are normalized by one finite common scale before determinant and squared-norm arithmetic, then the center offset is restored to Sketch coordinates. This removes the prior dependence on absolute-coordinate squares and protects representable very small/large constructions from avoidable intermediate underflow/overflow.
 
 This is numerical conditioning, not a Product geometric tolerance. E1 does not introduce an epsilon for coincidence or collinearity, a minimum feature size or a maximum coordinate/radius policy. Exact duplicate points and a zero normalized cross product still fail closed; non-finite or unrepresentable intermediate/output values also fail closed. Near-collinear but representable input is not rejected by a new fixed cutoff.
@@ -1424,6 +1435,8 @@ Direct Distance is currently enabled only for:
 - normal MOVE destination after Base Point;
 - normal COPY placement after Base Point.
 
+Rectangle PointRequests deliberately keep Direct Distance disabled in R9. A bare scalar at First Corner or Opposite Corner is rejected rather than guessed as width, height, diagonal, square side or a U/V coordinate. Rectangle precision/coordinate grammar remains for the later precision-input milestone.
+
 Command submission is context-first. While a semantic PointRequest is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. During active direct manipulation that semantic layer additionally recognizes the bounded tool-local token `C` for Grip Copy before attempting bare-distance parsing. Outside active direct manipulation, `C` remains an unknown top-level Sketch command. The workspace-global text transport and live buffer do not know `PointRequest`, Grip Copy, Line, Move or Copy. The current Part/Sketch adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only typed/parsed semantic input and remains Qt/locale independent.
 
 Printable text typed while the normal CAD viewport has focus now reaches the same global buffer as directly editing Command Line; no focus transfer is required. Real text editors retain their keyboard ownership. This changes only the input adapter path, not Direct Distance semantics or mutation authority.
@@ -1484,7 +1497,7 @@ The product still does not implement:
 - snapping/Object Snap, tracking, Ortho/Polar/Grid Snap or geometric inference;
 - numeric Rotate/Scale values, absolute/relative coordinate entry, polar syntax, unit expressions or Dynamic Input;
 - authored dimensions, constraints or solver evaluation;
-- Rectangle/Polyline durable semantics;
+- a durable Rectangle primitive/group/center/constraint model or Polyline semantics;
 - projected/reference geometry;
 - planar-face Sketch support.
 
@@ -1493,7 +1506,7 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, read-only whole-entity measurement, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, normal/Grip Copy identity behavior, Repeat Last Command, Space CycleEditMode and precision input.
+The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Rectangle two-corner/decomposition state, atomic four/six-Line Rectangle creation, Creation Role and Construction-diagonal behavior, Profile exclusion of Construction geometry, read-only whole-entity measurement, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, normal/Grip Copy identity behavior, Repeat Last Command, Space CycleEditMode and precision input.
 
 Key registered tests include:
 
@@ -1794,6 +1807,7 @@ Create
   Line
   Circle
   Arc
+  Rectangle
 
 Modify
   Move
@@ -1808,7 +1822,7 @@ Inspect
 
 Command Line is a shared Workspace surface and no longer requires a click before ordinary CAD entry. While the viewport or another normal CAD surface has focus, you can start typing immediately: the characters appear in Command Line while focus remains in the viewport. Enter submits the token to the active context. Clicking Command Line still works and edits the very same live buffer.
 
-Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. During active grip manipulation, `C` + Enter is a local keyword that enables Grip Copy; outside an active grip it is not a global command alias. Enter consumes the submitted token even when it is invalid: the model and active tool/stage stay unchanged, the editable field is cleared and a diagnostic reports the error instead of forcing you to delete the rejected text manually.
+Inside an active Sketch, the implemented command words are `SELECT`, `LINE`, `CIRCLE`, `ARC`, `RECTANGLE`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE` and `MIRROR`. Command Line is context-sensitive: when the active stage expects a point, the current semantic PointRequest has precedence over starting a new command. At Direct Distance stages, a bare numeric value is interpreted as a distance. During active grip manipulation, `C` + Enter is a local keyword that enables Grip Copy; outside an active grip it is not a global command alias. Enter consumes the submitted token even when it is invalid: the model and active tool/stage stay unchanged, the editable field is cleared and a diagnostic reports the error instead of forcing you to delete the rejected text manually.
 
 Real text-entry fields — for example property editors — keep keyboard ownership and do not feed Command Line. Application shortcuts using Ctrl/Alt/Meta are also not converted into CAD text. Menus, popups, modal dialogs, another application window and another visible SS2 Workspace keep their own keyboard ownership; they do not feed a background Command Line.
 
@@ -1820,7 +1834,7 @@ The bottom Command Line stays one row high. Its right-side diagnostic area is pe
 
 ### Repeat Last Command
 
-During one active Sketch Edit session, SimpleSolid remembers the last successfully activated command from `Line / Circle / Arc / Move / Copy / Rotate / Scale / Mirror`.
+During one active Sketch Edit session, SimpleSolid remembers the last successfully activated command from `Line / Circle / Arc / Rectangle / Move / Copy / Rotate / Scale / Mirror`.
 
 While ordinary `Select` is active and the viewport has focus, **Enter** or **Space** starts that command again.
 
@@ -1830,6 +1844,20 @@ Repeat starts a fresh command invocation. It does not replay earlier Base/Refere
 
 Existing key meaning keeps priority: Enter still commits active manipulation/transforms, Enter/Space still completes Select objects during an active transform, and Space in text-entry focus remains a literal text space.
 
+
+### Rectangle and creation role
+
+**Rectangle** uses two clicks: **First Corner**, then **Opposite Corner**. The rectangle is axis-aligned to the active Sketch U/V axes. Both U and V extents must be non-zero. A successful placement creates four ordinary Line entities in one atomic operation and one Undo step, then Rectangle stays active for another placement.
+
+Rectangle is not a persistent special primitive. After creation its four perimeter Lines are independent ordinary Lines with independent EntityIds. Editing one edge can open or distort the rectangle; SimpleSolid does not add hidden Coincident, Horizontal/Vertical or rectangularity constraints.
+
+The right **Operations** panel shows a checkable **Construction** option whenever Line, Circle, Arc or Rectangle is active. It sets the role of geometry created **from now on**. Turning it on or off does not modify already selected geometry and creates no Undo step. During Rectangle, the same Operations panel also shows **Draw Diagonals**; that option is hidden for the other creation tools. To change existing geometry, use the separate Regular/Construction controls that Operations shows during ordinary Select. Creation Role starts as Regular for each new Sketch Edit session and is not persisted.
+
+**Draw Diagonals** is a Rectangle-only runtime option and starts OFF for each new Sketch Edit session. When ON, the same Rectangle commit adds both diagonals as ordinary **Construction** Lines. A Regular rectangle therefore creates four Regular perimeter Lines plus two Construction diagonals; a Construction rectangle creates six Construction Lines. The intersection does not create a center point, Rectangle identity, group or constraint.
+
+Rectangle preview follows the same perimeter/diagonal semantics. Construction preview is dashed as a visual cue only. The final commit is bound to the Document revision captured at First Corner; if the Document changes before Opposite Corner, the pending rectangle fails closed instead of being silently rebased.
+
+R9 does not assign a numeric meaning to a bare scalar while Rectangle is asking for a corner. Width/height entry, coordinates, units, Ortho/Polar, Dynamic Input and OSNAP/tracking remain outside the current Rectangle tool.
 
 Line/Circle/Arc creation and ordinary selection retain the existing behavior. Selected editable entities show state-based square grips: hollow idle, cyan hollow hover and filled yellow active/captured.
 
@@ -1987,12 +2015,12 @@ After a result, the next accepted target starts the next relation. Blank click c
 
 Measure and Between are read-only: no dirty state, revision change, identity allocation or Undo step. Runtime measurement references are not persisted and Measure is not Repeat Last Command.
 
-Linear/area values remain in Sketch coordinate scale without a physical unit label; angles are displayed in degrees. General curve-to-curve minimum distance, OSNAP/tracking/inference, persistent sub-element references, multiple dimension overlays, authored dimensions and constraints remain outside R8B. The broader diagnostic dimension display belongs to R8C.
+Linear/area values remain in Sketch coordinate scale without a physical unit label; angles are displayed in degrees. General curve-to-curve minimum distance, OSNAP/tracking/inference, persistent sub-element references, multiple dimension overlays, authored dimensions and constraints remain outside R8B. Broader viewport dimension display is deferred and will be reconsidered with future authored/parametric dimensions and constraints rather than as a separate R8C overlay subsystem.
 
 <!-- section-id: product.parts.profiles -->
 ## Construction and Profile
 
-Every Sketch Line, Circle and Arc can be **Regular** or **Construction**. Select geometry in ordinary Select and use `Regular` or `Construction` in Operations. Construction remains saved helper geometry, but it does not close or split regions used by Profile. The viewport presents Construction geometry with a dashed line; this is only a presentation cue, while the authored entity role remains semantic truth.
+Every Sketch Line, Circle and Arc can be **Regular** or **Construction**. Select geometry in ordinary Select and use `Regular` or `Construction` in Operations. Construction remains saved helper geometry, but it does not close or split regions used by Profile. The viewport presents Construction geometry with a dashed line; this is only a presentation cue, while the authored entity role remains semantic truth. A Regular Rectangle participates in Profile analysis only through its four Regular perimeter Lines; optional Construction diagonals do not split the material region. A Construction Rectangle contributes no material boundary.
 
 The **Profile** tool works inside the active Sketch. Moving the pointer over closed geometry shows a translucent region result; clicking accepts that candidate into the current draft and Status reminds you that **Finish Profile** performs the durable commit. Region truth comes from exact Line/Circle/Arc semantics, not from Viewer tessellation.
 
@@ -2070,9 +2098,9 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, and Part-owned Profiles with live RegionIntent semantics.
+The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, Rectangle authoring that resolves to ordinary Lines, and Part-owned Profiles with live RegionIntent semantics.
 
-The current Sketch UI provides Select plus Create, Modify and Inspect groups with Line/Circle/Arc, Move/Copy/Rotate/Scale/Mirror and read-only quick/Between Measure, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Grip Copy through active-grip `C` for owner-only Reshape or frozen-selection Move, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
+The current Sketch UI provides Select plus Create, Modify and Inspect groups with Line/Circle/Arc/Rectangle, a runtime future-creation Construction toggle, Rectangle Draw Diagonals, Move/Copy/Rotate/Scale/Mirror and read-only quick/Between Measure, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Grip Copy through active-grip `C` for owner-only Reshape or frozen-selection Move, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
 
 Direct Distance is available for the supported PointRequest stages documented above, including grip placements while Grip Copy is enabled. Profile is not a solid operation. The product still lacks Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
 
@@ -2357,6 +2385,7 @@ Create
   Line
   Circle
   Arc
+  Rectangle
 
 Modify
   Move
@@ -2371,7 +2400,7 @@ Inspect
 
 Command Line jest wspólną powierzchnią Workspace i nie wymaga kliknięcia przed normalnym wprowadzaniem CAD. Gdy focus ma viewport lub inna zwykła powierzchnia CAD, możesz od razu pisać — znaki pojawią się w Command Line, ale focus pozostanie w viewport. Enter wysyła wpisany token do aktywnego kontekstu. Kliknięcie Command Line nadal działa i edytuje dokładnie ten sam bufor.
 
-W aktywnym Sketchu obsługiwane są słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`. Command Line jest kontekstowy: jeżeli aktywny etap oczekuje punktu, bieżący semantic PointRequest ma pierwszeństwo przed uruchomieniem nowej komendy. W etapach obsługujących Direct Distance samodzielna wartość liczbowa jest interpretowana jako odległość. Podczas aktywnej manipulacji gripem `C` + Enter jest lokalnym słowem kluczowym włączającym Grip Copy; poza aktywnym gripem `C` nie staje się globalnym aliasem komendy. Enter konsumuje wpisany token także wtedy, gdy jest błędny: model oraz aktywne narzędzie/etap pozostają bez zmian, edytowane pole jest czyszczone, a diagnostic informuje o błędzie bez zmuszania użytkownika do ręcznego kasowania odrzuconego tekstu.
+W aktywnym Sketchu obsługiwane są słowa `SELECT`, `LINE`, `CIRCLE`, `ARC`, `RECTANGLE`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE` i `MIRROR`. Command Line jest kontekstowy: jeżeli aktywny etap oczekuje punktu, bieżący semantic PointRequest ma pierwszeństwo przed uruchomieniem nowej komendy. W etapach obsługujących Direct Distance samodzielna wartość liczbowa jest interpretowana jako odległość. Podczas aktywnej manipulacji gripem `C` + Enter jest lokalnym słowem kluczowym włączającym Grip Copy; poza aktywnym gripem `C` nie staje się globalnym aliasem komendy. Enter konsumuje wpisany token także wtedy, gdy jest błędny: model oraz aktywne narzędzie/etap pozostają bez zmian, edytowane pole jest czyszczone, a diagnostic informuje o błędzie bez zmuszania użytkownika do ręcznego kasowania odrzuconego tekstu.
 
 Prawdziwe pola tekstowe — np. edycja właściwości — zachowują własny focus i wpisywanie do nich nie zasila Command Line. Skróty aplikacji z Ctrl/Alt/Meta również nie są zamieniane na tekst CAD. Menu, popup, okno modalne, inne okno aplikacji oraz drugi widoczny Workspace SS2 zachowują własność klawiatury i nie zasilają Command Line działającego w tle.
 
@@ -2383,7 +2412,7 @@ Dolny Command Line pozostaje zawsze jednym wierszem. Obszar diagnostyczny po pra
 
 ### Powtórzenie ostatniej komendy
 
-Podczas jednego aktywnego Sketch Edit SimpleSolid pamięta ostatnią poprawnie uruchomioną komendę z zestawu `Line / Circle / Arc / Move / Copy / Rotate / Scale / Mirror`.
+Podczas jednego aktywnego Sketch Edit SimpleSolid pamięta ostatnią poprawnie uruchomioną komendę z zestawu `Line / Circle / Arc / Rectangle / Move / Copy / Rotate / Scale / Mirror`.
 
 Gdy jesteś w zwykłym `Select` i focus ma viewport, **Enter** albo **Space** uruchamia tę komendę ponownie.
 
@@ -2393,6 +2422,20 @@ Powtórzenie zaczyna świeżą komendę. Nie odtwarza poprzednich Base/Reference
 
 Istniejące znaczenie klawiszy ma pierwszeństwo: Enter nadal zatwierdza aktywną manipulację/transformację, Enter/Space nadal kończy Select objects w aktywnej transformacji, a Space przy focusie pola tekstowego pozostaje zwykłą spacją.
 
+
+### Rectangle i rola tworzenia
+
+**Rectangle** używa dwóch kliknięć: **First Corner**, a następnie **Opposite Corner**. Prostokąt jest wyrównany do osi U/V aktywnego Sketchu. Oba wymiary U i V muszą być niezerowe. Poprawne zatwierdzenie tworzy cztery zwykłe encje Line w jednej atomowej operacji i jednym kroku Undo, po czym Rectangle pozostaje aktywne dla kolejnego prostokąta.
+
+Rectangle nie jest trwałym specjalnym prymitywem. Po utworzeniu jego cztery krawędzie są niezależnymi zwykłymi Lines z niezależnymi EntityId. Edycja jednej krawędzi może otworzyć albo zdeformować prostokąt; SimpleSolid nie dodaje ukrytych constraintów Coincident, Horizontal/Vertical ani zachowania prostokątności.
+
+Prawy panel **Operations** pokazuje checkowalną opcję **Construction**, gdy aktywne jest Line, Circle, Arc albo Rectangle. Ustawia ona rolę geometrii tworzonej **od tego momentu**. Jej przełączenie nie modyfikuje już zaznaczonej geometrii i nie tworzy kroku Undo. Dla Rectangle ten sam panel Operations pokazuje dodatkowo **Draw Diagonals**; opcja ta jest ukryta dla pozostałych narzędzi tworzenia. Do zmiany istniejącej geometrii służą osobne kontrolki Regular/Construction pokazywane przez Operations podczas zwykłego Select. Creation Role zaczyna każdą nową sesję Sketch Edit jako Regular i nie jest zapisywana.
+
+**Draw Diagonals** jest runtime-only opcją Rectangle i w każdej nowej sesji Sketch Edit zaczyna jako OFF. Gdy jest ON, ten sam commit Rectangle dodaje obie przekątne jako zwykłe linie **Construction**. Regular Rectangle tworzy więc cztery Regular krawędzie i dwie Construction przekątne; Construction Rectangle tworzy sześć Construction Lines. Punkt przecięcia nie tworzy center point, RectangleId, grupy ani constraintu.
+
+Preview Rectangle używa tych samych reguł krawędzi/przekątnych. Preview Construction jest kreskowane wyłącznie jako wskazówka wizualna. Finalny commit jest związany z DocumentRevision zapamiętanym przy First Corner; jeżeli Dokument zmieni się przed Opposite Corner, oczekujący prostokąt zostaje odrzucony fail-closed zamiast zostać po cichu przeliczony na nowy stan.
+
+R9 nie nadaje pojedynczej liczbie wpisanej podczas wyboru narożnika znaczenia width/height/diagonal. Wprowadzanie szerokości/wysokości, współrzędne, jednostki, Ortho/Polar, Dynamic Input oraz OSNAP/tracking pozostają poza bieżącym narzędziem Rectangle.
 
 Tworzenie Line/Circle/Arc i zwykłe selection zachowują dotychczasową gramatykę. Zaznaczone edytowalne entities pokazują grips kodujące stan: pusty kwadrat w idle, pusty cyan na hover i pełny żółty dla aktywnego/captured gripa.
 
@@ -2550,12 +2593,12 @@ Po wyniku kolejny zaakceptowany cel rozpoczyna następną relację. Kliknięcie 
 
 Measure i Between są read-only: nie powodują dirty, nie zmieniają revision, nie zużywają identyfikatorów i nie tworzą Undo. Runtime measurement references nie są zapisywane, a Measure nie wchodzi do Repeat Last Command.
 
-Wartości liniowe/pola pozostają w skali współrzędnych Sketchu bez etykiety jednostki fizycznej; kąty są prezentowane w stopniach. Ogólne minimum distance curve-to-curve, OSNAP/tracking/inference, trwałe referencje sub-elementów, wiele overlayów wymiarowych, authored dimensions i constraints pozostają poza R8B. Szersze diagnostyczne wyświetlanie wymiarów należy do R8C.
+Wartości liniowe/pola pozostają w skali współrzędnych Sketchu bez etykiety jednostki fizycznej; kąty są prezentowane w stopniach. Ogólne minimum distance curve-to-curve, OSNAP/tracking/inference, trwałe referencje sub-elementów, wiele overlayów wymiarowych, authored dimensions i constraints pozostają poza R8B. Szersze wyświetlanie wymiarów w viewporcie jest odłożone i ma zostać rozważone razem z przyszłymi authored/parametric dimensions i constraints, zamiast jako osobny subsystem overlay R8C.
 
 <!-- section-id: product.parts.profiles -->
 ## Construction i Profile
 
-Każda linia, okrąg i łuk w Sketchu może mieć rolę **Regular** albo **Construction**. Zaznacz geometrię w zwykłym Select i użyj `Regular` lub `Construction` w Operations. Construction pozostaje zapisaną geometrią pomocniczą, ale nie zamyka ani nie dzieli regionów używanych przez Profile. W viewporcie geometria Construction jest pokazywana linią przerywaną; jest to wyłącznie wskazówka prezentacyjna, a trwałą prawdą pozostaje authored rola encji.
+Każda linia, okrąg i łuk w Sketchu może mieć rolę **Regular** albo **Construction**. Zaznacz geometrię w zwykłym Select i użyj `Regular` lub `Construction` w Operations. Construction pozostaje zapisaną geometrią pomocniczą, ale nie zamyka ani nie dzieli regionów używanych przez Profile. W viewporcie geometria Construction jest pokazywana linią przerywaną; jest to wyłącznie wskazówka prezentacyjna, a trwałą prawdą pozostaje authored rola encji. Regular Rectangle uczestniczy w analizie Profile tylko przez cztery Regular krawędzie; opcjonalne Construction przekątne nie dzielą regionu materiału. Construction Rectangle nie wnosi żadnej granicy materiału.
 
 Narzędzie **Profile** działa w aktywnym Sketchu. Przesuwanie kursora nad zamkniętą geometrią pokazuje półprzezroczysty wynik regionu; kliknięcie przyjmuje kandydata do bieżącego draftu i Status przypomina, że dopiero **Finish Profile** wykonuje trwały commit. O tym, co jest regionem, decyduje dokładna semantyka Line/Circle/Arc, nie tessellation Viewera.
 
@@ -2633,9 +2676,9 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, fundament Workbench/Viewer 3D oraz trwałe Sketche na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
+Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, fundament Workbench/Viewer 3D, trwałe Sketche na płaszczyznach Origin z authored geometrią Line/Circle/Arc oraz authoring Rectangle rozkładany na zwykłe Lines.
 
-Bieżący Sketch UI zapewnia Select oraz grupy Create, Modify i Inspect z Line/Circle/Arc, Move/Copy/Rotate/Scale/Mirror oraz read-only quick/Between Measure, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Grip Copy przez aktywne `C` dla owner-only Reshape albo frozen-selection Move, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz keyboard-first Command Line.
+Bieżący Sketch UI zapewnia Select oraz grupy Create, Modify i Inspect z Line/Circle/Arc/Rectangle, runtime toggle Construction dla przyszłego tworzenia, Rectangle Draw Diagonals, Move/Copy/Rotate/Scale/Mirror oraz read-only quick/Between Measure, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Grip Copy przez aktywne `C` dla owner-only Reshape albo frozen-selection Move, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz keyboard-first Command Line.
 
 Direct Distance jest dostępny dla obsługiwanych etapów PointRequest opisanych wyżej, również dla placementów gripu po włączeniu Grip Copy. Profile nie jest operacją bryłową. Nadal brakuje Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego kąta Rotate i współczynnika Scale, współrzędnych absolutnych/względnych/polarnych, unit expressions i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features/Extrude, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 

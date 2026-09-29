@@ -6,6 +6,7 @@
 #include <simplesolid2/sketch/sketch_model.hpp>
 #include <simplesolid2/sketch/transform.hpp>
 
+#include <array>
 #include <cstdint>
 #include <optional>
 #include <vector>
@@ -17,6 +18,7 @@ enum class SketchTool : std::uint8_t {
     line,
     circle,
     arc,
+    rectangle,
     measure,
     move,
     copy,
@@ -47,6 +49,11 @@ enum class ArcStage : std::uint8_t {
     await_start,
     await_through,
     await_end,
+};
+
+enum class RectangleStage : std::uint8_t {
+    await_first_corner,
+    await_opposite_corner,
 };
 
 enum class MoveStage : std::uint8_t {
@@ -149,6 +156,38 @@ struct ArcPointResult final {
     std::optional<ArcIntent> request;
 };
 
+struct RectangleIntent final {
+    Point2 first_corner;
+    Point2 opposite_corner;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    [[nodiscard]] std::array<LineSegmentIntent, 4>
+    perimeter() const noexcept;
+
+    [[nodiscard]] std::array<LineSegmentIntent, 2>
+    diagonals() const noexcept;
+
+    friend bool operator==(
+        const RectangleIntent&,
+        const RectangleIntent&) = default;
+};
+
+enum class RectanglePointOutcome : std::uint8_t {
+    inactive_tool,
+    invalid_point,
+    first_corner_accepted,
+    degenerate_ignored,
+    rectangle_requested,
+    request_pending,
+};
+
+struct RectanglePointResult final {
+    RectanglePointOutcome outcome{
+        RectanglePointOutcome::inactive_tool};
+    std::optional<RectangleIntent> request;
+};
+
 enum class SketchGripRole : std::uint8_t {
     line_start,
     line_center,
@@ -248,6 +287,9 @@ public:
     [[nodiscard]] std::optional<ArcStage>
     arcStage() const noexcept;
 
+    [[nodiscard]] std::optional<RectangleStage>
+    rectangleStage() const noexcept;
+
     [[nodiscard]] std::optional<MoveStage>
     moveStage() const noexcept;
 
@@ -280,6 +322,7 @@ public:
     void activateLine() noexcept;
     void activateCircle() noexcept;
     void activateArc() noexcept;
+    void activateRectangle() noexcept;
     void activateMeasure(const SketchModel& model) noexcept;
     [[nodiscard]] std::optional<EntityId>
     measureTarget() const noexcept {
@@ -354,6 +397,9 @@ public:
     [[nodiscard]] ArcPointResult acceptArcPoint(
         Point2 point) noexcept;
 
+    [[nodiscard]] RectanglePointResult acceptRectanglePoint(
+        Point2 point) noexcept;
+
     [[nodiscard]] bool resolveLineRequest(
         bool committed) noexcept;
 
@@ -361,6 +407,9 @@ public:
         bool committed) noexcept;
 
     [[nodiscard]] bool resolveArcRequest(
+        bool committed) noexcept;
+
+    [[nodiscard]] bool resolveRectangleRequest(
         bool committed) noexcept;
 
     [[nodiscard]] std::optional<LineSegmentIntent>
@@ -371,6 +420,9 @@ public:
 
     [[nodiscard]] std::optional<ArcIntent>
     previewArc(Point2 current) const noexcept;
+
+    [[nodiscard]] std::optional<RectangleIntent>
+    previewRectangle(Point2 current) const noexcept;
 
     void finishTool() noexcept;
     void cancelTool() noexcept;
@@ -514,6 +566,7 @@ private:
     void resetLineStage() noexcept;
     void resetCircleStage() noexcept;
     void resetArcStage() noexcept;
+    void resetRectangleStage() noexcept;
     void resetCommonTransform() noexcept;
     void resetMeasure() noexcept;
 
@@ -537,6 +590,12 @@ private:
     std::optional<Point2> arc_through_;
     std::optional<ArcIntent>
         pending_arc_request_;
+
+    RectangleStage rectangle_stage_{
+        RectangleStage::await_first_corner};
+    std::optional<Point2> rectangle_first_corner_;
+    std::optional<RectangleIntent>
+        pending_rectangle_request_;
 
     std::optional<CommonTransformSession>
         transform_session_;

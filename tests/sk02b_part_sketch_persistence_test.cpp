@@ -385,6 +385,97 @@ int main() {
         duplicate_profile.profile_id->serialized() ==
         "2");
 
+    // R9 persistence is ordinary Line/role persistence: a Rectangle with
+    // diagonals must reopen with the same six EntityIds and roles, with no
+    // Rectangle-specific schema or durable membership.
+    const auto rectangle_path =
+        temp.path / "R9RectanglePersistence.ss2part";
+    auto rectangle_document =
+        part::PartDocument::create(
+            core::DocumentId::generate());
+    const auto rectangle_published =
+        store.createNew(
+            rectangle_path,
+            rectangle_document);
+    CHECK(rectangle_published.ok());
+
+    application::DocumentSession rectangle_session{
+        rectangle_path,
+        std::move(rectangle_document),
+        *rectangle_published.checkpoint};
+    const auto rectangle_sketch_created =
+        rectangle_session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+    CHECK(
+        rectangle_sketch_created.ok() &&
+        rectangle_sketch_created.sketch_id.has_value());
+    const auto rectangle_sketch =
+        *rectangle_sketch_created.sketch_id;
+
+    const auto rectangle_created =
+        rectangle_session.execute(
+            application::AddSketchRectangleCommand{
+                rectangle_sketch,
+                rectangle_session.document().revision(),
+                {1.0, 2.0},
+                {6.0, 8.0},
+                sketch::EntityRole::regular,
+                true});
+    CHECK(rectangle_created.ok());
+    CHECK(rectangle_created.changed);
+    CHECK(rectangle_created.entity_ids.size() == 6U);
+    const auto rectangle_ids =
+        rectangle_created.entity_ids;
+
+    CHECK(rectangle_session.save().ok());
+    auto rectangle_loaded =
+        store.load(rectangle_path);
+    CHECK(rectangle_loaded.ok());
+    const auto* reopened_rectangle_sketch =
+        rectangle_loaded.document->findSketch(
+            rectangle_sketch);
+    CHECK(reopened_rectangle_sketch != nullptr);
+    CHECK(
+        reopened_rectangle_sketch->model.entityCount() ==
+        6U);
+    CHECK(
+        reopened_rectangle_sketch->model
+            .entityIdCursor().serialized() ==
+        "7");
+
+    for (std::size_t index = 0U;
+         index < rectangle_ids.size();
+         ++index) {
+        const auto* line =
+            reopened_rectangle_sketch->model.findLine(
+                rectangle_ids[index]);
+        CHECK(line != nullptr);
+        CHECK(
+            line->role() ==
+            (index < 4U
+                 ? sketch::EntityRole::regular
+                 : sketch::EntityRole::construction));
+    }
+
+    application::DocumentSession
+        reopened_rectangle_session{
+            rectangle_path,
+            std::move(*rectangle_loaded.document),
+            *rectangle_loaded.checkpoint};
+    const auto after_rectangle =
+        reopened_rectangle_session.execute(
+            application::AddSketchLineCommand{
+                rectangle_sketch,
+                {10.0, 0.0},
+                {11.0, 0.0}});
+    CHECK(
+        after_rectangle.ok() &&
+        after_rectangle.entity_id.has_value());
+    CHECK(
+        after_rectangle.entity_id->serialized() ==
+        "7");
+
     const auto legacy_v2_path =
         temp.path / "LegacyV2.ss2part";
     const auto legacy_v2_id =

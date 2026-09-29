@@ -644,7 +644,8 @@ bool PartViewportController::setSketchPreview(
         scene.lines.push_back(
             viewer::SketchPreviewLine{
                 *start,
-                *end});
+                *end,
+                line.construction});
     }
 
     if (!scene.valid()) {
@@ -694,7 +695,12 @@ bool PartViewportController::setSketchGeometryPreview(
         geometry.arcs.size() * 48U);
 
     for (const auto& line : geometry.lines) {
-        lines.push_back({line.start, line.end});
+        lines.push_back(
+            {
+                line.start,
+                line.end,
+                line.role ==
+                    sketch::EntityRole::construction});
     }
 
     for (const auto& circle : geometry.circles) {
@@ -705,7 +711,12 @@ bool PartViewportController::setSketchGeometryPreview(
             2.0 * std::numbers::pi_v<double>);
         if (segments.empty()) return false;
         for (const auto& segment : segments) {
-            lines.push_back({segment.start, segment.end});
+            lines.push_back(
+                {
+                    segment.start,
+                    segment.end,
+                    circle.role ==
+                        sketch::EntityRole::construction});
         }
     }
 
@@ -717,7 +728,12 @@ bool PartViewportController::setSketchGeometryPreview(
             arc.sweep_angle);
         if (segments.empty()) return false;
         for (const auto& segment : segments) {
-            lines.push_back({segment.start, segment.end});
+            lines.push_back(
+                {
+                    segment.start,
+                    segment.end,
+                    arc.role ==
+                        sketch::EntityRole::construction});
         }
     }
 

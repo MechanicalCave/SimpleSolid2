@@ -639,6 +639,17 @@ void CadWorkbench::buildUi() {
         15,
         measure_sketch_button_);
 
+    rectangle_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Rectangle"),
+            shell_);
+    rectangle_sketch_button_->setObjectName(
+        QStringLiteral("rectangleSketchToolButton"));
+    rectangle_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        6,
+        rectangle_sketch_button_);
+
     viewport_controller_ =
         new PartViewportController(
             *tree_controller_,
@@ -982,6 +993,34 @@ void CadWorkbench::buildUi() {
     operations_placeholder_->setWordWrap(true);
     operations_layout->addWidget(operations_placeholder_);
 
+    create_construction_button_ =
+        new QPushButton(
+            QStringLiteral("Construction"),
+            operations_content);
+    create_construction_button_->setObjectName(
+        QStringLiteral("sketchCreationConstructionButton"));
+    create_construction_button_->setCheckable(true);
+    create_construction_button_->setVisible(false);
+    create_construction_button_->setToolTip(
+        QStringLiteral(
+            "Creation role for new Line, Circle, Arc and Rectangle geometry."));
+    operations_layout->addWidget(
+        create_construction_button_);
+
+    rectangle_diagonals_button_ =
+        new QPushButton(
+            QStringLiteral("Draw Diagonals"),
+            operations_content);
+    rectangle_diagonals_button_->setObjectName(
+        QStringLiteral("sketchRectangleDiagonalsButton"));
+    rectangle_diagonals_button_->setCheckable(true);
+    rectangle_diagonals_button_->setVisible(false);
+    rectangle_diagonals_button_->setToolTip(
+        QStringLiteral(
+            "Rectangle only: add two Construction diagonals in the same creation step."));
+    operations_layout->addWidget(
+        rectangle_diagonals_button_);
+
     measure_between_button_ =
         new QPushButton(
             QStringLiteral("Between"),
@@ -1243,6 +1282,37 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchArc(); });
+    QObject::connect(
+        rectangle_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchRectangle(); });
+    QObject::connect(
+        create_construction_button_,
+        &QPushButton::clicked,
+        this,
+        [this](bool checked) {
+            if (sketch_interaction_controller_) {
+                static_cast<void>(
+                    sketch_interaction_controller_->
+                        setCreationRole(
+                            checked
+                                ? sketch::EntityRole::construction
+                                : sketch::EntityRole::regular));
+            }
+        });
+    QObject::connect(
+        rectangle_diagonals_button_,
+        &QPushButton::clicked,
+        this,
+        [this](bool checked) {
+            if (sketch_interaction_controller_) {
+                static_cast<void>(
+                    sketch_interaction_controller_->
+                        setRectangleDrawDiagonals(
+                            checked));
+            }
+        });
     QObject::connect(
         profile_sketch_button_,
         &QPushButton::clicked,
@@ -1919,6 +1989,17 @@ void CadWorkbench::activateSketchArc() {
     }
 }
 
+void CadWorkbench::activateSketchRectangle() {
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->
+            activateRectangle();
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
 void CadWorkbench::activateSketchMove() {
     if (sketch_interaction_controller_ &&
         !sketch_interaction_controller_->activateMove()) {
@@ -2028,6 +2109,10 @@ void CadWorkbench::finishSketchLine() {
         setStatusText(
             QStringLiteral("Arc finished — Select active."));
         break;
+    case sketch::SketchTool::rectangle:
+        setStatusText(
+            QStringLiteral("Rectangle finished — Select active."));
+        break;
     case sketch::SketchTool::move:
         setStatusText(
             QStringLiteral("Move finished — Select active."));
@@ -2081,6 +2166,11 @@ void CadWorkbench::cancelSketchLine() {
         setStatusText(
             QStringLiteral(
                 "Arc cancelled — committed arcs preserved."));
+        break;
+    case sketch::SketchTool::rectangle:
+        setStatusText(
+            QStringLiteral(
+                "Rectangle cancelled — committed geometry preserved."));
         break;
     case sketch::SketchTool::move:
         setStatusText(
@@ -2340,6 +2430,20 @@ QString CadWorkbench::cadInputPromptText() const {
                          "Command: CIRCLE — Specify radius")
                    : QStringLiteral(
                          "Command: CIRCLE — Specify center");
+    }
+
+    if (tool == sketch::SketchTool::rectangle) {
+        const auto stage =
+            sketch_interaction_controller_->
+                rectangleStage();
+        return stage &&
+                       *stage ==
+                           sketch::RectangleStage::
+                               await_opposite_corner
+                   ? QStringLiteral(
+                         "Command: RECTANGLE — Specify opposite corner")
+                   : QStringLiteral(
+                         "Command: RECTANGLE — Specify first corner");
     }
 
     const auto stage =
@@ -2954,6 +3058,12 @@ void CadWorkbench::syncSketchInteractionUi() {
     if (construction_role_button_ != nullptr) {
         construction_role_button_->setVisible(false);
     }
+    if (create_construction_button_ != nullptr) {
+        create_construction_button_->setVisible(false);
+    }
+    if (rectangle_diagonals_button_ != nullptr) {
+        rectangle_diagonals_button_->setVisible(false);
+    }
 
     const bool editing =
         sketch_interaction_controller_ &&
@@ -3012,6 +3122,27 @@ void CadWorkbench::syncSketchInteractionUi() {
             editing &&
             sketch_interaction_controller_->tool() ==
                 sketch::SketchTool::arc);
+    }
+
+    if (rectangle_sketch_button_ != nullptr) {
+        rectangle_sketch_button_->setVisible(editing);
+        rectangle_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::rectangle);
+    }
+    if (create_construction_button_ != nullptr) {
+        create_construction_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->
+                creationRole() ==
+                    sketch::EntityRole::construction);
+    }
+    if (rectangle_diagonals_button_ != nullptr) {
+        rectangle_diagonals_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->
+                rectangleDrawDiagonals());
     }
 
     if (move_sketch_button_ != nullptr) {
@@ -3501,6 +3632,20 @@ void CadWorkbench::syncSketchInteractionUi() {
     finish_line_button_->setVisible(true);
     cancel_line_button_->setVisible(true);
 
+    const bool creation_tool =
+        tool == sketch::SketchTool::line ||
+        tool == sketch::SketchTool::circle ||
+        tool == sketch::SketchTool::arc ||
+        tool == sketch::SketchTool::rectangle;
+    if (create_construction_button_ != nullptr) {
+        create_construction_button_->setVisible(
+            creation_tool);
+    }
+    if (rectangle_diagonals_button_ != nullptr) {
+        rectangle_diagonals_button_->setVisible(
+            tool == sketch::SketchTool::rectangle);
+    }
+
     if (tool == sketch::SketchTool::line) {
         finish_line_button_->setText(
             QStringLiteral("Finish Line"));
@@ -3539,6 +3684,46 @@ void CadWorkbench::syncSketchInteractionUi() {
                 ? QStringLiteral("Circle — Specify radius")
                 : QStringLiteral("Circle — Specify center"));
                 return;
+    }
+
+    if (tool == sketch::SketchTool::rectangle) {
+        finish_line_button_->setText(
+            QStringLiteral("Finish Rectangle"));
+        cancel_line_button_->setText(
+            QStringLiteral("Cancel Rectangle"));
+
+        const auto stage =
+            sketch_interaction_controller_->
+                rectangleStage();
+        const bool opposite =
+            stage &&
+            *stage ==
+                sketch::RectangleStage::
+                    await_opposite_corner;
+        const auto role =
+            sketch_interaction_controller_->
+                creationRole() ==
+                    sketch::EntityRole::construction
+                ? QStringLiteral("Construction")
+                : QStringLiteral("Regular");
+        const auto diagonals =
+            sketch_interaction_controller_->
+                rectangleDrawDiagonals()
+                ? QStringLiteral("On")
+                : QStringLiteral("Off");
+
+        operations_placeholder_->setText(
+            QStringLiteral(
+                "Rectangle — %1; Role: %2; Draw Diagonals: %3")
+                .arg(
+                    opposite
+                        ? QStringLiteral(
+                              "Specify opposite corner")
+                        : QStringLiteral(
+                              "Specify first corner"),
+                    role,
+                    diagonals));
+        return;
     }
 
     finish_line_button_->setText(
@@ -3603,6 +3788,8 @@ void CadWorkbench::syncActionState() {
     circle_sketch_button_->setVisible(
         editing_sketch);
     arc_sketch_button_->setVisible(
+        editing_sketch);
+    rectangle_sketch_button_->setVisible(
         editing_sketch);
     modify_tools_label_->setVisible(
         editing_sketch);

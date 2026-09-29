@@ -1345,30 +1345,79 @@ public:
         clearSketchPreviewScene();
 
         try {
-            for (const auto& line : scene.lines) {
-                Handle(Geom_CartesianPoint) start =
-                    new Geom_CartesianPoint(
-                        toPoint(line.start));
-                Handle(Geom_CartesianPoint) end =
-                    new Geom_CartesianPoint(
-                        toPoint(line.end));
-                Handle(AIS_Line) object =
-                    new AIS_Line(start, end);
+            const auto display_preview_segment =
+                [this](
+                    const viewer::Point3& start_point,
+                    const viewer::Point3& end_point) {
+                    Handle(Geom_CartesianPoint) start =
+                        new Geom_CartesianPoint(
+                            toPoint(start_point));
+                    Handle(Geom_CartesianPoint) end =
+                        new Geom_CartesianPoint(
+                            toPoint(end_point));
+                    Handle(AIS_Line) object =
+                        new AIS_Line(start, end);
 
-                context_->Display(object, false);
-                context_->SetColor(
-                    object,
-                    Quantity_Color{
-                        0.22, 0.82, 0.96,
-                        Quantity_TOC_RGB},
-                    false);
-                context_->SetWidth(
-                    object,
-                    1.6,
-                    false);
-                context_->Deactivate(object);
-                sketch_preview_objects_.push_back(
-                    object);
+                    context_->Display(object, false);
+                    context_->SetColor(
+                        object,
+                        Quantity_Color{
+                            0.22, 0.82, 0.96,
+                            Quantity_TOC_RGB},
+                        false);
+                    context_->SetWidth(
+                        object,
+                        1.6,
+                        false);
+                    context_->Deactivate(object);
+                    sketch_preview_objects_.push_back(
+                        object);
+                };
+
+            const auto interpolate =
+                [](const viewer::Point3& first,
+                   const viewer::Point3& second,
+                   double parameter) {
+                    return viewer::Point3{
+                        first.x +
+                            (second.x - first.x) *
+                                parameter,
+                        first.y +
+                            (second.y - first.y) *
+                                parameter,
+                        first.z +
+                            (second.z - first.z) *
+                                parameter};
+                };
+
+            for (const auto& line : scene.lines) {
+                if (!line.construction) {
+                    display_preview_segment(
+                        line.start,
+                        line.end);
+                    continue;
+                }
+
+                constexpr std::size_t kSlices = 24U;
+                for (std::size_t slice = 0U;
+                     slice < kSlices;
+                     slice += 2U) {
+                    const double first =
+                        static_cast<double>(slice) /
+                        static_cast<double>(kSlices);
+                    const double second =
+                        static_cast<double>(slice + 1U) /
+                        static_cast<double>(kSlices);
+                    display_preview_segment(
+                        interpolate(
+                            line.start,
+                            line.end,
+                            first),
+                        interpolate(
+                            line.start,
+                            line.end,
+                            second));
+                }
             }
 
             sketch_preview_scene_ = scene;

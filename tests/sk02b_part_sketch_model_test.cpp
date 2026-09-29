@@ -1248,5 +1248,72 @@ int main() {
             .status ==
         part::ProfileAreaEditStatus::no_change);
 
+    // R9: Regular Rectangle perimeter contributes one ordinary material
+    // region while optional Construction diagonals remain excluded.
+    sketch::SketchModel rectangle_region_model;
+    (void)rectangle_region_model.addLine(
+        {0.0, 0.0},
+        {4.0, 0.0},
+        sketch::EntityRole::regular);
+    (void)rectangle_region_model.addLine(
+        {4.0, 0.0},
+        {4.0, 3.0},
+        sketch::EntityRole::regular);
+    (void)rectangle_region_model.addLine(
+        {4.0, 3.0},
+        {0.0, 3.0},
+        sketch::EntityRole::regular);
+    (void)rectangle_region_model.addLine(
+        {0.0, 3.0},
+        {0.0, 0.0},
+        sketch::EntityRole::regular);
+    (void)rectangle_region_model.addLine(
+        {0.0, 0.0},
+        {4.0, 3.0},
+        sketch::EntityRole::construction);
+    (void)rectangle_region_model.addLine(
+        {4.0, 0.0},
+        {0.0, 3.0},
+        sketch::EntityRole::construction);
+
+    const auto rectangle_region_analysis =
+        sketch::analyzeRegions(
+            rectangle_region_model);
+    CHECK(rectangle_region_analysis.complete());
+    CHECK(
+        rectangle_region_analysis.regions.size() ==
+        1U);
+    CHECK(
+        std::abs(
+            rectangle_region_analysis.regions.front()
+                .area -
+            12.0) <
+        1.0e-12);
+
+    // A Construction Rectangle, including its Construction diagonals,
+    // contributes no material boundary.
+    sketch::SketchModel construction_rectangle_model;
+    for (const auto& edge :
+         std::vector<std::pair<
+             sketch::Point2,
+             sketch::Point2>>{
+             {{10.0, 0.0}, {14.0, 0.0}},
+             {{14.0, 0.0}, {14.0, 3.0}},
+             {{14.0, 3.0}, {10.0, 3.0}},
+             {{10.0, 3.0}, {10.0, 0.0}},
+             {{10.0, 0.0}, {14.0, 3.0}},
+             {{14.0, 0.0}, {10.0, 3.0}}}) {
+        (void)construction_rectangle_model.addLine(
+            edge.first,
+            edge.second,
+            sketch::EntityRole::construction);
+    }
+    const auto construction_rectangle_analysis =
+        sketch::analyzeRegions(
+            construction_rectangle_model);
+    CHECK(construction_rectangle_analysis.complete());
+    CHECK(
+        construction_rectangle_analysis.regions.empty());
+
     return EXIT_SUCCESS;
 }
