@@ -154,5 +154,81 @@ int main() {
         viewer::ViewportCursorMode::
             create_edit_crosshair);
 
+    // R8B provider-neutral measurement marker/cue contracts carry only
+    // presentation tokens and runtime roles, never CAD EntityId.
+    viewer::SketchMeasureMarkerScene marker_scene;
+    marker_scene.markers.push_back(
+        viewer::SketchMeasureMarkerPresentation{
+            {
+                viewer::PresentationToken{11U},
+                viewer::SketchMeasureMarkerRole::line_start},
+            viewer::Point3{1.0, 2.0, 3.0}});
+    marker_scene.markers.push_back(
+        viewer::SketchMeasureMarkerPresentation{
+            {
+                viewer::PresentationToken{11U},
+                viewer::SketchMeasureMarkerRole::line_end},
+            viewer::Point3{4.0, 5.0, 6.0}});
+    marker_scene.selected.push_back(
+        marker_scene.markers.front().key);
+    CHECK(marker_scene.valid());
+    CHECK(!marker_scene.empty());
+
+    auto duplicate_marker = marker_scene;
+    duplicate_marker.markers.push_back(
+        duplicate_marker.markers.front());
+    CHECK(!duplicate_marker.valid());
+
+    auto missing_selected = marker_scene;
+    missing_selected.selected = {
+        viewer::SketchMeasureMarkerKey{
+            viewer::PresentationToken{99U},
+            viewer::SketchMeasureMarkerRole::circle_center}};
+    CHECK(!missing_selected.valid());
+
+    viewer::SketchMeasureMarkerQueryResult marker_query{
+        true,
+        {
+            marker_scene.markers[0].key,
+            marker_scene.markers[1].key}};
+    CHECK(marker_query.valid());
+    auto duplicate_query = marker_query;
+    duplicate_query.markers.push_back(
+        duplicate_query.markers.front());
+    CHECK(!duplicate_query.valid());
+    viewer::SketchMeasureMarkerQueryResult incomplete_query{
+        false,
+        {marker_scene.markers.front().key}};
+    CHECK(!incomplete_query.valid());
+
+    viewer::SketchMeasureCueScene cue_scene;
+    cue_scene.highlighted_entities.push_back(
+        viewer::PresentationToken{11U});
+    cue_scene.segments.push_back(
+        viewer::SketchMeasureCueSegment{
+            viewer::Point3{0.0, 0.0, 0.0},
+            viewer::Point3{5.0, 0.0, 0.0},
+            viewer::SketchMeasureCueSegmentKind::relation});
+    cue_scene.segments.push_back(
+        viewer::SketchMeasureCueSegment{
+            viewer::Point3{5.0, 0.0, 0.0},
+            viewer::Point3{8.0, 0.0, 0.0},
+            viewer::SketchMeasureCueSegmentKind::
+                supporting_line_continuation});
+    cue_scene.cue_point =
+        viewer::Point3{8.0, 0.0, 0.0};
+    CHECK(cue_scene.valid());
+    CHECK(!cue_scene.empty());
+
+    auto duplicate_highlight = cue_scene;
+    duplicate_highlight.highlighted_entities.push_back(
+        duplicate_highlight.highlighted_entities.front());
+    CHECK(!duplicate_highlight.valid());
+
+    auto invalid_cue = cue_scene;
+    invalid_cue.segments.front().end =
+        invalid_cue.segments.front().start;
+    CHECK(!invalid_cue.valid());
+
     return EXIT_SUCCESS;
 }
