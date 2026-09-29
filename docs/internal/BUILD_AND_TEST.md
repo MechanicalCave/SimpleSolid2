@@ -35,6 +35,7 @@ Relevant commands are:
 .\ss2.ps1 build
 .\ss2.ps1 run
 .\ss2.ps1 test
+.\ss2.ps1 check -Target e1_arc_numerical_stability_test -Test e1.arc_numerical_stability
 .\ss2.ps1 test -Tier fast
 .\ss2.ps1 test -Tier subsystem -Subsystem sketch
 .\ss2.ps1 test -Tier subsystem -Subsystem sketch,viewer,ui
@@ -105,9 +106,14 @@ Package E1 adds `e1.arc_numerical_stability` to both the desktop and core-only g
 
 Repository documentation validation runs outside CTest through `ss2 verify`. Tests must not be weakened to obtain a pass.
 
-CI-02 execution tiers remain:
+CI-02 execution tiers remain, with CI-03 adding a cheaper pre-tier iteration command:
 
 ```text
+FOCUSED
+  explicit target(s) + exact CTest name(s)
+  → builds only requested CMake test targets and their dependency closure
+  → iteration evidence only; never merge evidence
+
 FAST
   explicit label: tier-fast
   → broad short-running regression for frequent iteration
@@ -125,16 +131,33 @@ FULL
 
 The canonical test command defaults to FULL; `-NoBuild` remains a bounded CI optimization after an explicit successful Build. Production UI translation units compile once into `simplesolid2_ui`.
 
+The CI-03 focused command is:
+
+```powershell
+.\ss2.ps1 check -Target <cmake-target>[,<target>...] -Test <ctest-name>[,<test>...]
+```
+
+It configures the normal development build, builds only the requested target set, verifies that every requested CTest name is registered, and executes an exact-name CTest selection. FOCUSED is intentionally independent of `tier-fast` labels so a direct regression can be exercised before a wider checkpoint.
+
 <!-- section-id: internal.build-test.ci -->
 ## Windows PR gate
 
-The GitHub workflow is `.github/workflows/windows-pr-gate.yml`. CI-01 exact-head DOCS/CLOSURE behavior remains intact; CI-02 adds a bounded FAST runtime iteration tier.
+The GitHub workflow is `.github/workflows/windows-pr-gate.yml`. CI-01 exact-head DOCS/CLOSURE behavior remains intact; CI-02 provides FAST/SUBSYSTEM/FULL and CI-03 adds a bounded draft-only FOCUSED tier.
 
 For Package D and later verification-infrastructure changes, the FULL job also configures, builds and runs the explicit `SS2_BUILD_DESKTOP=OFF` suite with Qt/OpenCASCADE package discovery disabled before running the ordinary unfiltered desktop CTest suite. A core-only PASS therefore supplements rather than replaces the GUI/provider FULL gate.
 
 ```text
+FOCUSED
+  draft PR with ordinary runtime/test-content changes
+  + valid HEAD commit trailers SS2-Focus-Target / SS2-Focus-Test
+  → exact checkout
+  → machine-local setup + ss2 verify
+  → requested target build only
+  → requested exact CTest names only
+  → never trusted merge evidence
+
 FAST
-  draft PR with runtime source changes only
+  draft PR with runtime source or ordinary test-content changes and no focus request
   → exact checkout
   → machine-local setup
   → ss2 verify
@@ -167,9 +190,9 @@ CLOSURE
 
 Draft status is an iteration signal only. FAST is never accepted as merge evidence. Marking a runtime PR ready for review triggers FULL; every later runtime change on a ready PR also requires FULL.
 
-Changes to `tests/**`, `scripts/**`, any `CMakeLists.txt`, `ss2.ps1`, `ss2.cmd` or `.github/workflows/**` fail closed to FULL even while the PR is draft.
+Ordinary root-level `tests/*_test.cpp` files are product regression content and may participate in FOCUSED/FAST draft iteration. Verification machinery remains FULL-sensitive, including `tests/CMakeLists.txt`, boundary/check scripts, `scripts/**`, any `CMakeLists.txt`, `ss2.ps1`, `ss2.cmd` and `.github/workflows/**`. Malformed focus trailers fail closed to FULL.
 
-For a PR that already has a successful `windows-msvc-full` job on an exact ancestor SHA, the classifier may still examine only the suffix after that trusted FULL SHA for DOCS/CLOSURE. FAST results never become trusted FULL evidence.
+For a PR that already has a successful `windows-msvc-full` job on an exact ancestor SHA, the classifier may still examine only the suffix after that trusted FULL SHA for DOCS/CLOSURE. FOCUSED and FAST results never become trusted FULL evidence.
 
 The classifier remains fail-closed. Unknown/mixed verification-sensitive paths select FULL. A stable final `windows-msvc` summary check succeeds only when the selected tier succeeds.
 

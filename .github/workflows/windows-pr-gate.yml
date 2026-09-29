@@ -44,6 +44,8 @@ jobs:
       trusted_full_sha: ${{ steps.classify.outputs.trusted_full_sha }}
       diff_start_sha: ${{ steps.classify.outputs.diff_start_sha }}
       head_sha: ${{ steps.classify.outputs.head_sha }}
+      focus_targets: ${{ steps.focus.outputs.targets }}
+      focus_tests: ${{ steps.focus.outputs.tests }}
     steps:
       - name: Checkout exact candidate revision with history
         uses: actions/checkout@v4
@@ -67,6 +69,19 @@ jobs:
         shell: pwsh
         run: ./scripts/ci/ss2-pr-gate-classifier.ps1 -SelfTest
 
+      - name: Focus request parser self-test
+        shell: pwsh
+        run: ./scripts/ci/ss2-focus-request.ps1 -SelfTest
+
+      - name: Resolve focused request
+        id: focus
+        shell: pwsh
+        run: |
+          $message = (git log -1 --format=%B) -join "`n"
+          ./scripts/ci/ss2-focus-request.ps1 -CommitMessage $message -OutputPath $env:GITHUB_OUTPUT
+          $code = $LASTEXITCODE
+          if ($code -ne 0 -and $code -ne 2) { exit $code }
+
       - name: Resolve verification tier
         id: classify
         shell: pwsh
@@ -76,6 +91,7 @@ jobs:
           GATE_HEAD_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
           GATE_BASE_SHA: ${{ github.event.pull_request.base.sha || github.sha }}
           GATE_PR_DRAFT: ${{ github.event.pull_request.draft || false }}
+          GATE_FOCUS_STATE: ${{ steps.focus.outputs.state }}
         run: |
           ./scripts/ci/ss2-pr-gate-classifier.ps1 `
             -Repository "${{ github.repository }}" `
@@ -84,8 +100,64 @@ jobs:
             -HeadSha $env:GATE_HEAD_SHA `
             -BaseSha $env:GATE_BASE_SHA `
             -PullRequestDraft $env:GATE_PR_DRAFT `
+            -FocusRequestState $env:GATE_FOCUS_STATE `
             -GitHubToken $env:GITHUB_TOKEN `
             -OutputPath $env:GITHUB_OUTPUT
+
+  focused:
+    name: windows-msvc-focused
+    needs: classify
+    if: needs.classify.outputs.mode == 'focused'
+    runs-on:
+      - self-hosted
+      - windows
+      - x64
+      - simplesolid2-native
+    timeout-minutes: 20
+    defaults:
+      run:
+        shell: >-
+          C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe
+          -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass
+          -Command "& ([scriptblock]::Create((Get-Content -Raw -LiteralPath '{0}')))"
+    steps:
+      - name: Checkout exact focused revision
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.classify.outputs.head_sha }}
+          clean: true
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Verify exact checkout
+        run: |
+          $ErrorActionPreference = "Stop"
+          $expected = "${{ needs.classify.outputs.head_sha }}"
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $expected) {
+              throw "Runner checkout SHA mismatch: expected $expected, got $actual"
+          }
+
+      - name: Configure SS2 machine-local environment
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\ss2.ps1 setup -QtRoot "D:\Qt" -OcctRoot "D:\SimpleSolid2\.simplesolid-env"
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Bootstrap verification
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\ss2.ps1 verify
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Focused target build and exact tests
+        env:
+          FOCUS_TARGETS: ${{ needs.classify.outputs.focus_targets }}
+          FOCUS_TESTS: ${{ needs.classify.outputs.focus_tests }}
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\ss2.ps1 check -Target $env:FOCUS_TARGETS -Test $env:FOCUS_TESTS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   fast:
     name: windows-msvc-fast
@@ -215,6 +287,12 @@ jobs:
           .\ss2.ps1 test -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Focused dispatcher self-test
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\ss2.ps1 check -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build
         run: |
           $ErrorActionPreference = "Stop"
@@ -336,6 +414,7 @@ jobs:
        github.event.pull_request.head.repo.full_name == github.repository)
     needs:
       - classify
+      - focused
       - fast
       - full
       - docs
@@ -347,6 +426,7 @@ jobs:
         env:
           MODE: ${{ needs.classify.outputs.mode }}
           CLASSIFY_RESULT: ${{ needs.classify.result }}
+          FOCUSED_RESULT: ${{ needs.focused.result }}
           FAST_RESULT: ${{ needs.fast.result }}
           FULL_RESULT: ${{ needs.full.result }}
           DOCS_RESULT: ${{ needs.docs.result }}
@@ -356,12 +436,13 @@ jobs:
           set -euo pipefail
           echo "[gate] mode=$MODE"
           echo "[gate] trusted_full_sha=$TRUSTED_FULL_SHA"
-          echo "[gate] classify=$CLASSIFY_RESULT fast=$FAST_RESULT full=$FULL_RESULT docs=$DOCS_RESULT closure=$CLOSURE_RESULT"
+          echo "[gate] classify=$CLASSIFY_RESULT focused=$FOCUSED_RESULT fast=$FAST_RESULT full=$FULL_RESULT docs=$DOCS_RESULT closure=$CLOSURE_RESULT"
           if [[ "$CLASSIFY_RESULT" != "success" ]]; then
             echo "Classifier did not succeed." >&2
             exit 1
           fi
           case "$MODE" in
+            focused) selected="$FOCUSED_RESULT" ;;
             fast) selected="$FAST_RESULT" ;;
             full) selected="$FULL_RESULT" ;;
             docs) selected="$DOCS_RESULT" ;;

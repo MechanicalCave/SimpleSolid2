@@ -6,6 +6,8 @@ param(
     [string]$HeadSha = "",
     [string]$BaseSha = "",
     [string]$PullRequestDraft = "false",
+    [ValidateSet("none","valid","invalid")]
+    [string]$FocusRequestState = "none",
     [string]$GitHubToken = "",
     [string]$OutputPath = ""
 )
@@ -17,8 +19,17 @@ function Normalize-RepoPath {
     return (($Path -replace '\\', '/').Trim())
 }
 
+function Test-SS2OrdinaryTestContentPath {
+    param([Parameter(Mandatory=$true)][string]$Path)
+    return $Path -match '^tests/[^/]+_test\.cpp$'
+}
+
 function Test-SS2VerificationInfrastructurePath {
     param([Parameter(Mandatory=$true)][string]$Path)
+
+    if (Test-SS2OrdinaryTestContentPath $Path) {
+        return $false
+    }
 
     return (
         $Path -match '^tests/' -or
@@ -33,7 +44,9 @@ function Test-SS2VerificationInfrastructurePath {
 function Get-SS2GateModeForPaths {
     param(
         [string[]]$Paths,
-        [bool]$Draft = $false
+        [bool]$Draft = $false,
+        [ValidateSet("none","valid","invalid")]
+        [string]$FocusState = "none"
     )
 
     $normalized = @(
@@ -79,11 +92,15 @@ function Get-SS2GateModeForPaths {
         }
     }
 
+    if ($FocusState -eq "invalid") {
+        return "full"
+    }
+
     if (-not $Draft) {
         return "full"
     }
 
-    $hasRuntimeSource = $false
+    $hasIterationContent = $false
     foreach ($path in $normalized) {
         if (
             $path -match '^work/' -or
@@ -95,15 +112,21 @@ function Get-SS2GateModeForPaths {
             continue
         }
 
-        if ($path -match '^src/') {
-            $hasRuntimeSource = $true
+        if (
+            $path -match '^src/' -or
+            (Test-SS2OrdinaryTestContentPath $path)
+        ) {
+            $hasIterationContent = $true
             continue
         }
 
         return "full"
     }
 
-    if ($hasRuntimeSource) {
+    if ($hasIterationContent) {
+        if ($FocusState -eq "valid") {
+            return "focused"
+        }
         return "fast"
     }
 
@@ -114,12 +137,14 @@ function Assert-GateMode {
     param(
         [string[]]$Paths,
         [string]$Expected,
-        [bool]$Draft = $false
+        [bool]$Draft = $false,
+        [ValidateSet("none","valid","invalid")]
+        [string]$FocusState = "none"
     )
 
-    $actual = Get-SS2GateModeForPaths -Paths $Paths -Draft $Draft
+    $actual = Get-SS2GateModeForPaths -Paths $Paths -Draft $Draft -FocusState $FocusState
     if ($actual -ne $Expected) {
-        throw "Gate classifier self-test failed: expected '$Expected', got '$actual' for draft=$Draft paths=[$($Paths -join ', ')]"
+        throw "Gate classifier self-test failed: expected '$Expected', got '$actual' for draft=$Draft focus=$FocusState paths=[$($Paths -join ', ')]"
     }
 }
 
@@ -131,10 +156,15 @@ function Invoke-ClassifierSelfTest {
     Assert-GateMode -Paths @('README.md', 'AGENTS.md') -Expected 'docs' -Draft $true
 
     Assert-GateMode -Paths @('src/part/part_document.cpp') -Expected 'fast' -Draft $true
+    Assert-GateMode -Paths @('src/sketch/sketch_model.cpp') -Expected 'focused' -Draft $true -FocusState 'valid'
+    Assert-GateMode -Paths @('src/sketch/sketch_model.cpp') -Expected 'full' -Draft $true -FocusState 'invalid'
     Assert-GateMode -Paths @('src/sketch/sketch_model.cpp', 'docs/internal/SHARED_2D.md') -Expected 'fast' -Draft $true
-    Assert-GateMode -Paths @('src/part/part_document.cpp') -Expected 'full' -Draft $false
+    Assert-GateMode -Paths @('src/part/part_document.cpp') -Expected 'full' -Draft $false -FocusState 'valid'
 
-    Assert-GateMode -Paths @('tests/example_test.cpp') -Expected 'full' -Draft $true
+    Assert-GateMode -Paths @('tests/example_test.cpp') -Expected 'fast' -Draft $true
+    Assert-GateMode -Paths @('tests/example_test.cpp') -Expected 'focused' -Draft $true -FocusState 'valid'
+    Assert-GateMode -Paths @('tests/CMakeLists.txt') -Expected 'full' -Draft $true
+    Assert-GateMode -Paths @('tests/verify_viewer_boundaries.cmake') -Expected 'full' -Draft $true
     Assert-GateMode -Paths @('scripts/ss2-build.ps1') -Expected 'full' -Draft $true
     Assert-GateMode -Paths @('src/CMakeLists.txt') -Expected 'full' -Draft $true
     Assert-GateMode -Paths @('.github/workflows/windows-pr-gate.yml') -Expected 'full' -Draft $true
@@ -243,6 +273,7 @@ if ([string]::IsNullOrWhiteSpace($HeadSha) -or
 $draft =
     $PullRequestDraft.Trim().ToLowerInvariant() -eq 'true'
 Write-Host "[gate] pull request draft: $draft"
+Write-Host "[gate] focus request state: $FocusRequestState"
 
 $trustedFullSha = ''
 
@@ -277,7 +308,7 @@ try {
     foreach ($path in $paths) {
         Write-Host "  $path"
     }
-    $mode = Get-SS2GateModeForPaths -Paths $paths -Draft $draft
+    $mode = Get-SS2GateModeForPaths -Paths $paths -Draft $draft -FocusState $FocusRequestState
 } catch {
     Write-Warning "[gate] classification failed; failing closed to FULL: $($_.Exception.Message)"
     $mode = 'full'
