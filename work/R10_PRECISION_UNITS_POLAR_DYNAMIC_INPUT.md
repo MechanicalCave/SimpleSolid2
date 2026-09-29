@@ -664,17 +664,33 @@ Default per Sketch edit: OFF.
 
 When OFF, pointer direction remains raw unless explicit numeric locks fully determine it.
 
-When ON, Polar behaves as an angular **magnet**, not a global quantizer:
+When ON, Polar behaves as an angular **magnet**, not a global quantizer.
 
-- configured tracks are derived from the current Polar reference and primary spacing;
-- the raw pointer is compared with the nearby tracks;
-- if pointer direction enters the bounded attraction neighborhood of one track, that track becomes captured;
-- while captured, direction is exactly that track angle;
-- leaving the attraction neighborhood releases capture and raw pointer direction becomes free again;
-- the resolver must provide deterministic hysteresis/capture behavior so the preview does not flicker at the boundary;
-- exact capture/release tolerance is D1 tuning, but it must leave free-direction regions between neighboring tracks and must never make Polar equivalent to unconditional nearest-angle rounding.
+The accepted R10 capture model is screen/presentation-space based:
 
-A captured track may be indicated by a transient provider-neutral guide/cue. That cue is runtime presentation only and has no CAD identity.
+- configured semantic tracks are derived from the current Polar reference and primary spacing;
+- the pointer adapter measures the screen-space distance from the cursor to nearby projected tracks;
+- Polar may capture only after the pointer is outside a small dead-zone around the semantic base point;
+- initial accepted tuning target: capture at approximately 9 logical/device-independent pixels;
+- initial accepted tuning target: release at approximately 15 logical/device-independent pixels;
+- release tolerance is deliberately larger than capture tolerance to provide hysteresis and prevent flicker;
+- initial accepted base-point dead-zone target is approximately 12 logical/device-independent pixels;
+- an additional bounded angular sanity guard may reject obviously unrelated tracks near the base point; its exact threshold is D1 tuning;
+- if the pointer enters the capture neighborhood of one track, that track becomes captured;
+- while captured, semantic direction is exactly that track angle;
+- pointer radius remains free while captured and therefore continues to control magnitude until an explicit Distance/value lock owns it;
+- leaving the release neighborhood releases capture and raw pointer direction becomes free again;
+- while one track is captured, the resolver does not jump directly to a neighboring track; it releases first, then may capture another track;
+- free-direction regions must remain between neighboring tracks;
+- Polar must never become unconditional nearest-angle rounding.
+
+The screen-space tolerance belongs only to runtime pointer attraction. It must not enter Document state, Commands, persistence, authored geometry, EntityId/reference semantics or provider identity.
+
+Once capture occurs, the semantic resolver receives only the exact captured direction plus ordinary request state. Pixel distances are not CAD semantics.
+
+A captured track is indicated by one transient provider-neutral guide/cue. R10 does not display every configured track simultaneously. The guide begins at the active semantic base/pivot and extends along the captured direction. A compact label may show the captured value, for example `Polar: 45°` or `Polar: +30° rel`.
+
+The guide/cue is runtime presentation only and has no CAD identity.
 
 ### 19.1 Primary spacing expression
 
@@ -703,10 +719,18 @@ Track generation is bounded to one full turn around the selected reference. For 
 The visible UI should show both the entered expression/result where practical, for example:
 
 ```text
-Polar: ON   Step: 360/8 = 45°
+POLAR ON   360/8 = 45°   ABS
+```
+
+or:
+
+```text
+POLAR ON   360/12 = 30°   REL
 ```
 
 The default primary spacing is `360/8 = 45°`.
+
+R10 does not expose user-adjustable magnet-strength/capture-tolerance controls. Capture/release tuning is an implementation/manual-verification concern for this milestone, not a new preference surface.
 
 ### 19.2 Polar reference mode
 
@@ -1008,10 +1032,14 @@ At minimum verify:
 47. Polar default spacing is `360/8 = 45°`;
 48. `360/4 = 90°` reproduces orthogonal-only directional attraction without a separate resolver;
 49. Polar spacing expressions such as `360/8`, `360/12` and `360/7` resolve deterministically;
-50. Polar captures only inside its attraction neighborhood;
-51. Polar releases outside the attraction neighborhood and free pointer direction returns;
-52. Polar capture/release is stable and does not flicker at the threshold;
-53. Polar does not hard-quantize every pointer direction while enabled;
+50. Polar capture is based on logical screen-space distance to the projected track, not on entity length or a global nearest-angle quantizer;
+51. initial capture/release tuning targets are approximately 9/15 logical pixels with a small base-point dead-zone around 12 logical pixels;
+52. Polar releases outside the release neighborhood and free pointer direction returns;
+53. Polar capture/release hysteresis is stable and does not flicker at the threshold;
+54. Polar does not jump directly between neighboring captured tracks without first releasing;
+55. Polar does not hard-quantize every pointer direction while enabled;
+56. captured Polar constrains direction only; pointer radius/magnitude remains free unless an explicit numeric lock owns it;
+57. pixel tolerances/guide state never enter authored CAD state, Commands or persistence;
 54. additional Polar angles affect pointer resolution deterministically;
 55. Polar Reference defaults to Absolute for each new Sketch edit;
 56. Absolute uses Sketch +U and is independent of previous geometry;
@@ -1080,6 +1108,11 @@ Minimum checklist:
 - grip Mirror typed `45` and verify exact +45° axis through the pivot regardless of pointer position;
 - grip Mirror typed `-30` and verify exact -30° axis through the pivot regardless of pointer position;
 - enable Polar and verify it behaves as an attraction magnet rather than unconditional angular quantization;
+- approach one track slowly and verify capture near the accepted screen-space threshold;
+- move away slowly and verify release occurs farther out than capture, without flicker;
+- while captured, move farther/closer along the same guide and verify length remains free;
+- cross toward a neighboring track and verify the current track releases before another track can capture;
+- verify only the currently captured guide is shown rather than all configured tracks;
 - set Polar spacing to `360/4` and verify orthogonal-only attraction at 0/90/180/270 without any separate Ortho mode;
 - set Polar spacing to `360/8` and verify 45-degree family;
 - set at least one nontrivial expression such as `360/7` and verify deterministic bounded tracks;
