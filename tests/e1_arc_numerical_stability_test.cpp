@@ -1,6 +1,5 @@
 #include <simplesolid2/sketch/interaction_state.hpp>
 
-
 #include <algorithm>
 #include <array>
 #include <cmath>
