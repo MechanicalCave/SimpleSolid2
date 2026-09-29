@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/R8A_READ_ONLY_MEASURE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -19,14 +19,17 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - implement accepted R8A read-only Measure scope only
-  - use CI-03 FOCUSED evidence for ordinary implementation iterations
-  - preserve normal Sketch selection while Measure owns only a runtime target
-  - keep R8B relational Measure, R8C Show Dimensions, R9+, RMB, constraints/solver and solid modeling inactive
-  - stop for Owner review on any durable sub-element identity, persistence, unit-system, Viewer-overlay or other D2/D3 expansion
-  - obtain affected checkpoint evidence, exact-head FULL, Owner manual Windows PASS and CLOSURE before completion
+  - keep production mutation inactive after R8A completion
+  - prepare a separate Owner-reviewed R8B Relational Measure / semantic runtime targets Work Contract before any further R8 production implementation
+  - keep R8C Show Dimensions overlays, R9+, ordinary RMB context, authored constraints/solver and solid modeling inactive until separately accepted
+  - preserve the Roadmap v1.5 sequence and complete the whole R8 milestone before R9 unless the Owner explicitly amends sequencing
 
 notes:
+  - R8A final implementation/documentation candidate 9cdc5a5f3a990e83ea4bc90164c9a5c8b01bb1dd passed affected FOCUSED #866 and exact-head Windows FULL #867.
+  - R8A FULL #867 passed documentation/bootstrap/dispatcher checks, desktop Build, core-only 14/14, selector checks and desktop 77/77.
+  - Owner manual Windows verification for R8A passed on 2026-09-29.
+  - R8A completion conditions are satisfied; no production scope is active after R8A.
+  - R8B Relational Measure and R8C Show Dimensions remain inactive and require separate accepted scope.
   - Owner explicitly accepted R8A Read-only Measure Core + Single-Selection Diagnostics on 2026-09-29.
   - R8A is the only active production scope.
   - Measure remains read-only, whole-entity only, provider-neutral and non-persistent; no durable sub-element identity is authorized.

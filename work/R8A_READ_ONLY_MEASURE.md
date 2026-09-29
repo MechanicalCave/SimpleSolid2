@@ -1,6 +1,6 @@
 # R8A — Read-only Measure Core + Single-Selection Diagnostics
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** ACCEPTED — COMPLETED  
 **Proposed:** 2026-09-29  
 **Owner acceptance:** 2026-09-29  
 **Decision class:** D2 Sketch command/tool grammar and public diagnostic semantics + bounded D1 implementation  
@@ -486,3 +486,21 @@ Completion requires:
 - work-only CLOSURE closeout.
 
 R9 remains inactive until the complete R8 milestone is closed or the Owner explicitly amends sequencing.
+
+
+## 21. Completion evidence
+
+R8A completion evidence on 2026-09-29:
+
+- final implementation/documentation candidate `9cdc5a5f3a990e83ea4bc90164c9a5c8b01bb1dd`;
+- affected CI-03 FOCUSED checkpoint #866 PASS on that exact candidate tree for `sk02a.shared_2d_core`, `d.cad_input_semantics`, `sk04c.part_sketch_interaction_controller` and `sk01.workbench_sketch_host`;
+- final Windows FULL #867 PASS on exact head `9cdc5a5f3a990e83ea4bc90164c9a5c8b01bb1dd`;
+- documentation dispatcher, bootstrap verification, tier/focused dispatcher self-tests and desktop Build PASS;
+- core-only semantic suite 14/14 PASS with Qt/OpenCASCADE discovery disabled;
+- FAST/SUBSYSTEM selector verification PASS;
+- unfiltered desktop FULL suite 77/77 PASS;
+- required internal and PL/EN Product documentation plus generated Product Browser freshness PASS;
+- Owner manual Windows verification PASS on 2026-09-29 for Line/Circle/Arc measurement, Construction measurement, selection-preserving retargeting, multi-selection no-guess behavior, `MEASURE` Command Line activation, Esc/read-only history behavior and regression smoke;
+- no persistence/schema change, durable sub-element identity, unit-system architecture, Viewer measurement authority, authored dimensions/constraints or solid-modeling scope was introduced.
+
+All R8A acceptance conditions are satisfied. R8A is complete. R8B Relational Measure and R8C Show Dimensions remain inactive and require separately accepted scope before production implementation.
