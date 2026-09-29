@@ -91,6 +91,18 @@ public:
     submitCadInputSemanticGripCopy() override {
         return enableGripCopy();
     }
+    [[nodiscard]] bool
+    cadInputSemanticMeasureBetweenAvailable()
+        const noexcept override {
+        return active() &&
+               !profile_session_ &&
+               interaction_.tool() ==
+                   sketch::SketchTool::measure;
+    }
+    [[nodiscard]] bool
+    submitCadInputSemanticMeasureBetween() override {
+        return activateMeasureBetween();
+    }
     [[nodiscard]] application::CadInputSubmitResult
     submitCadInputSemanticProfileCommand(
         const application::ProfileCadInputCommand&
@@ -124,6 +136,20 @@ public:
     }
     [[nodiscard]] std::optional<sketch::EntityMeasurement>
     measureResult() const;
+    [[nodiscard]] bool activateMeasureBetween();
+    [[nodiscard]] bool measureBetweenActive() const noexcept {
+        return interaction_.measureBetweenActive();
+    }
+    [[nodiscard]] std::optional<sketch::MeasureRelationTarget>
+    measureFirstRelationTarget() const noexcept {
+        return interaction_.measureFirstRelationTarget();
+    }
+    [[nodiscard]] std::optional<sketch::MeasureRelationTarget>
+    measureSecondRelationTarget() const noexcept {
+        return interaction_.measureSecondRelationTarget();
+    }
+    [[nodiscard]] std::optional<sketch::RelationalMeasurement>
+    measureRelationalResult() const;
 
     [[nodiscard]] bool profileToolActive() const noexcept {
         return profile_session_.has_value();
@@ -243,6 +269,7 @@ private:
 
     void projectSelection();
     void projectInteraction();
+    void projectMeasureInteraction();
     void configureForCurrentTool();
     struct CadInputContextFingerprint final {
         bool active{};
@@ -254,6 +281,7 @@ private:
         std::optional<sketch::CommonTransformStage>
             transform_stage;
         bool direct_manipulation_active{};
+        bool measure_between_active{};
         std::optional<sketch::DirectEditMode>
             direct_edit_mode;
         bool profile_active{};

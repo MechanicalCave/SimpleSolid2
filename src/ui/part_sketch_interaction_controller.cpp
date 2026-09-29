@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -46,6 +47,7 @@ void PartSketchInteractionController::end() {
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clearSketchPreview();
         viewport_controller_->clearSketchSelectionBoxOverlay();
+        viewport_controller_->clearSketchMeasurePresentation();
         if (sketch_id_) {
             static_cast<void>(
                 viewport_controller_->projectSketchEntitySelection(
@@ -1052,7 +1054,8 @@ bool PartSketchInteractionController::activateMeasure() {
 std::optional<sketch::EntityMeasurement>
 PartSketchInteractionController::measureResult() const {
     if (!active() ||
-        interaction_.tool() != sketch::SketchTool::measure) {
+        interaction_.tool() != sketch::SketchTool::measure ||
+        interaction_.measureBetweenActive()) {
         return std::nullopt;
     }
     const auto target = interaction_.measureTarget();
@@ -1061,6 +1064,39 @@ PartSketchInteractionController::measureResult() const {
         return std::nullopt;
     }
     return sketch::measureEntity(hosted->model, *target);
+}
+
+bool PartSketchInteractionController::activateMeasureBetween() {
+    if (!active() ||
+        profile_session_ ||
+        interaction_.tool() != sketch::SketchTool::measure ||
+        !interaction_.enterMeasureBetween()) {
+        return false;
+    }
+
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    reportStatus(
+        "Measure Between: choose Target A from a visible point marker or Line.");
+    return true;
+}
+
+std::optional<sketch::RelationalMeasurement>
+PartSketchInteractionController::measureRelationalResult() const {
+    if (!active() ||
+        !interaction_.measureBetweenActive()) {
+        return std::nullopt;
+    }
+    const auto* hosted = activeSketch();
+    return hosted != nullptr
+        ? interaction_.measureRelationalResult(
+              hosted->model)
+        : std::nullopt;
 }
 
 bool PartSketchInteractionController::activateMove() {
@@ -2213,45 +2249,198 @@ void PartSketchInteractionController::handleMeasurePointer(
         return;
     }
 
-    const auto queried =
-        viewport_controller_->querySketchEntityAt(
-            input.viewport_position);
-    if (!queried.completed) {
-        reportStatus("Measure target query failed.");
-        return;
-    }
+    if (!interaction_.measureBetweenActive()) {
+        const auto queried =
+            viewport_controller_->querySketchEntityAt(
+                input.viewport_position);
+        if (!queried.completed) {
+            reportStatus("Measure target query failed.");
+            return;
+        }
 
-    if (!queried.hit) {
-        static_cast<void>(
-            interaction_.setMeasureTarget(
+        if (!queried.hit) {
+            static_cast<void>(
+                interaction_.setMeasureTarget(
+                    hosted->model,
+                    std::nullopt));
+            notifyStateChanged();
+            return;
+        }
+
+        if (!sketch_id_ ||
+            queried.hit->sketch_id != *sketch_id_) {
+            reportStatus(
+                "Measure target query returned stale context.");
+            return;
+        }
+
+        if (!interaction_.setMeasureTarget(
                 hosted->model,
-                std::nullopt));
+                queried.hit->entity_id)) {
+            reportStatus("Measure target was rejected.");
+            return;
+        }
+
+        if (!measureResult()) {
+            static_cast<void>(
+                interaction_.setMeasureTarget(
+                    hosted->model,
+                    std::nullopt));
+            reportStatus(
+                "Measure result is not finite for the selected geometry.");
+        }
         notifyStateChanged();
         return;
     }
 
-    if (!sketch_id_ ||
-        queried.hit->sketch_id != *sketch_id_) {
-        reportStatus(
-            "Measure target query returned stale context.");
+    const auto marker_query =
+        viewport_controller_->querySketchMeasureMarkersAt(
+            input.viewport_position);
+    if (!marker_query.completed) {
+        reportStatus("Measure marker query failed.");
         return;
     }
 
-    if (!interaction_.setMeasureTarget(
-            hosted->model,
-            queried.hit->entity_id)) {
-        reportStatus("Measure target was rejected.");
-        return;
-    }
+    std::optional<sketch::MeasureRelationTarget>
+        target;
 
-    if (!measureResult()) {
-        static_cast<void>(
-            interaction_.setMeasureTarget(
+    if (!marker_query.hits.empty()) {
+        if (!sketch_id_) {
+            return;
+        }
+
+        auto hits = marker_query.hits;
+        for (const auto& hit : hits) {
+            if (hit.sketch_id != *sketch_id_) {
+                reportStatus(
+                    "Measure marker query returned stale context.");
+                return;
+            }
+        }
+
+        std::sort(
+            hits.begin(),
+            hits.end(),
+            [](const SketchMeasureMarkerAddress& left,
+               const SketchMeasureMarkerAddress& right) {
+                if (left.point.entity_id !=
+                    right.point.entity_id) {
+                    return left.point.entity_id <
+                           right.point.entity_id;
+                }
+                return static_cast<std::uint8_t>(
+                           left.point.role) <
+                       static_cast<std::uint8_t>(
+                           right.point.role);
+            });
+
+        const auto first =
+            sketch::resolveMeasurePoint(
                 hosted->model,
-                std::nullopt));
-        reportStatus(
-            "Measure result is not finite for the selected geometry.");
+                hits.front().point);
+        if (!first) {
+            reportStatus(
+                "Measure marker target is no longer valid.");
+            return;
+        }
+
+        for (std::size_t index = 1U;
+             index < hits.size();
+             ++index) {
+            const auto resolved =
+                sketch::resolveMeasurePoint(
+                    hosted->model,
+                    hits[index].point);
+            if (!resolved) {
+                reportStatus(
+                    "Measure marker target is no longer valid.");
+                return;
+            }
+            if (resolved->point != first->point) {
+                reportStatus(
+                    "Measure marker click is ambiguous; zoom and retry.");
+                return;
+            }
+        }
+
+        target =
+            sketch::MeasureRelationTarget{
+                hits.front().point};
+    } else {
+        const auto entity_query =
+            viewport_controller_->querySketchEntityAt(
+                input.viewport_position);
+        if (!entity_query.completed) {
+            reportStatus("Measure entity query failed.");
+            return;
+        }
+
+        if (!entity_query.hit) {
+            static_cast<void>(
+                interaction_.clearMeasureRelation());
+            projectInteraction();
+            notifyStateChanged();
+            return;
+        }
+
+        if (!sketch_id_ ||
+            entity_query.hit->sketch_id != *sketch_id_) {
+            reportStatus(
+                "Measure entity query returned stale context.");
+            return;
+        }
+
+        if (hosted->model.findLine(
+                entity_query.hit->entity_id) != nullptr) {
+            target =
+                sketch::MeasureRelationTarget{
+                    sketch::MeasureLineRef{
+                        entity_query.hit->entity_id}};
+        } else {
+            reportStatus(
+                "Measure Between: move near a semantic point marker on Circle/Arc.");
+            return;
+        }
     }
+
+    if (!target) {
+        return;
+    }
+
+    const auto outcome =
+        interaction_.acceptMeasureRelationTarget(
+            hosted->model,
+            std::move(*target));
+    switch (outcome) {
+    case sketch::MeasureRelationAcceptOutcome::
+        first_target_accepted:
+        reportStatus(
+            "Measure Between: Target A accepted; choose Target B.");
+        break;
+
+    case sketch::MeasureRelationAcceptOutcome::
+        relation_accepted:
+        reportStatus(
+            "Measure Between: relation measured.");
+        break;
+
+    case sketch::MeasureRelationAcceptOutcome::
+        invalid_target:
+        reportStatus(
+            "Measure Between target is no longer valid.");
+        return;
+
+    case sketch::MeasureRelationAcceptOutcome::
+        relation_rejected:
+        reportStatus(
+            "Measure Between relation could not be resolved.");
+        return;
+
+    case sketch::MeasureRelationAcceptOutcome::inactive:
+        return;
+    }
+
+    projectInteraction();
     notifyStateChanged();
 }
 
@@ -2876,6 +3065,86 @@ void PartSketchInteractionController::projectInteraction() {
             !profile_session_ &&
                 interaction_.tool() ==
                     sketch::SketchTool::select));
+
+    projectMeasureInteraction();
+}
+
+void PartSketchInteractionController::projectMeasureInteraction() {
+    if (!active() ||
+        profile_session_ ||
+        interaction_.tool() != sketch::SketchTool::measure ||
+        !interaction_.measureBetweenActive()) {
+        viewport_controller_->clearSketchMeasurePresentation();
+        return;
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        viewport_controller_->clearSketchMeasurePresentation();
+        return;
+    }
+
+    const auto catalog =
+        sketch::measurePointCatalog(hosted->model);
+
+    std::vector<sketch::MeasurePointRef>
+        selected_points;
+    const auto append_point =
+        [&selected_points](
+            const std::optional<
+                sketch::MeasureRelationTarget>& target) {
+            if (!target) return;
+            if (const auto* point =
+                    std::get_if<
+                        sketch::MeasurePointRef>(
+                        &*target)) {
+                selected_points.push_back(*point);
+            }
+        };
+    append_point(
+        interaction_.measureFirstRelationTarget());
+    append_point(
+        interaction_.measureSecondRelationTarget());
+
+    std::optional<sketch::RelationalMeasurementCue>
+        cue;
+    if (const auto result =
+            interaction_.measureRelationalResult(
+                hosted->model)) {
+        cue =
+            sketch::makeRelationalMeasurementCue(
+                *result);
+        if (!cue) {
+            viewport_controller_->
+                clearSketchMeasurePresentation();
+            return;
+        }
+    } else if (
+        const auto first =
+            interaction_.measureFirstRelationTarget()) {
+        if (const auto* line =
+                std::get_if<sketch::MeasureLineRef>(
+                    &*first)) {
+            sketch::RelationalMeasurementCue
+                pending;
+            pending.highlighted_lines.push_back(
+                line->entity_id);
+            if (!pending.valid()) {
+                viewport_controller_->
+                    clearSketchMeasurePresentation();
+                return;
+            }
+            cue = std::move(pending);
+        }
+    }
+
+    if (!viewport_controller_->
+            projectSketchMeasurePresentation(
+                catalog,
+                selected_points,
+                cue)) {
+        viewport_controller_->clearSketchMeasurePresentation();
+    }
 }
 
 void PartSketchInteractionController::configureForCurrentTool() {
@@ -2926,6 +3195,8 @@ currentCadInputContextFingerprint() const noexcept {
         interaction_.commonTransformStage();
     fingerprint.direct_manipulation_active =
         interaction_.directManipulationActive();
+    fingerprint.measure_between_active =
+        interaction_.measureBetweenActive();
     fingerprint.direct_edit_mode =
         interaction_.directEditMode();
     fingerprint.profile_active =

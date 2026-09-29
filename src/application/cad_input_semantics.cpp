@@ -160,6 +160,18 @@ SketchCadInputSemanticEndpoint::submit(
         return {true, {}};
     }
 
+    if (upper == "BETWEEN" &&
+        target_->
+            cadInputSemanticMeasureBetweenAvailable()) {
+        if (!target_->
+                submitCadInputSemanticMeasureBetween()) {
+            return {
+                false,
+                "Measure Between could not be activated."};
+        }
+        return {true, {}};
+    }
+
     if (const auto profile =
             profileCommand(upper)) {
         return target_->
