@@ -303,6 +303,37 @@ bool ArcIntent::valid() const noexcept {
            std::abs(sweep_angle) < full_turn;
 }
 
+bool RectangleIntent::valid() const noexcept {
+    return first_corner.finite() &&
+           opposite_corner.finite() &&
+           first_corner.u != opposite_corner.u &&
+           first_corner.v != opposite_corner.v;
+}
+
+std::array<LineSegmentIntent, 4>
+RectangleIntent::perimeter() const noexcept {
+    const Point2 a = first_corner;
+    const Point2 c = opposite_corner;
+    const Point2 b{c.u, a.v};
+    const Point2 d{a.u, c.v};
+    return {
+        LineSegmentIntent{a, b},
+        LineSegmentIntent{b, c},
+        LineSegmentIntent{c, d},
+        LineSegmentIntent{d, a}};
+}
+
+std::array<LineSegmentIntent, 2>
+RectangleIntent::diagonals() const noexcept {
+    const Point2 a = first_corner;
+    const Point2 c = opposite_corner;
+    const Point2 b{c.u, a.v};
+    const Point2 d{a.u, c.v};
+    return {
+        LineSegmentIntent{a, c},
+        LineSegmentIntent{b, d}};
+}
+
 std::optional<LineStage>
 SketchInteractionState::lineStage() const noexcept {
     return tool_ == SketchTool::line
@@ -321,6 +352,13 @@ std::optional<ArcStage>
 SketchInteractionState::arcStage() const noexcept {
     return tool_ == SketchTool::arc
         ? std::optional<ArcStage>{arc_stage_}
+        : std::nullopt;
+}
+
+std::optional<RectangleStage>
+SketchInteractionState::rectangleStage() const noexcept {
+    return tool_ == SketchTool::rectangle
+        ? std::optional<RectangleStage>{rectangle_stage_}
         : std::nullopt;
 }
 
@@ -382,6 +420,20 @@ SketchInteractionState::activePointRequest() const noexcept {
             point_pointer_candidate_,
             line_stage_ == LineStage::await_next_point &&
                 line_anchor_.has_value()};
+        return request.valid()
+            ? std::optional<PointRequest>{request}
+            : std::nullopt;
+    }
+
+    if (tool_ == SketchTool::rectangle &&
+        !pending_rectangle_request_) {
+        PointRequest request{
+            rectangle_stage_ ==
+                    RectangleStage::await_opposite_corner
+                ? rectangle_first_corner_
+                : std::nullopt,
+            point_pointer_candidate_,
+            false};
         return request.valid()
             ? std::optional<PointRequest>{request}
             : std::nullopt;
@@ -477,6 +529,7 @@ void SketchInteractionState::activateLine() noexcept {
     resetLineStage();
     resetCircleStage();
     resetArcStage();
+    resetRectangleStage();
 }
 
 void SketchInteractionState::activateCircle() noexcept {
@@ -489,6 +542,7 @@ void SketchInteractionState::activateCircle() noexcept {
     resetLineStage();
     resetCircleStage();
     resetArcStage();
+    resetRectangleStage();
 }
 
 void SketchInteractionState::activateArc() noexcept {
@@ -501,6 +555,20 @@ void SketchInteractionState::activateArc() noexcept {
     resetLineStage();
     resetCircleStage();
     resetArcStage();
+    resetRectangleStage();
+}
+
+void SketchInteractionState::activateRectangle() noexcept {
+    resetMeasure();
+    manipulation_.reset();
+    point_pointer_candidate_.reset();
+    resetCommonTransform();
+    clearHover();
+    tool_ = SketchTool::rectangle;
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+    resetRectangleStage();
 }
 
 void SketchInteractionState::activateMeasure(
@@ -512,6 +580,7 @@ void SketchInteractionState::activateMeasure(
     resetLineStage();
     resetCircleStage();
     resetArcStage();
+    resetRectangleStage();
     tool_ = SketchTool::measure;
     resetMeasure();
 
@@ -667,6 +736,7 @@ bool SketchInteractionState::activateCommonTransform(
     resetLineStage();
     resetCircleStage();
     resetArcStage();
+    resetRectangleStage();
 
     CommonTransformSession session;
     if (selected_.empty()) {
@@ -1154,6 +1224,7 @@ SketchInteractionState::acceptArcPoint(
     }
     if (!arc_start_ || !arc_through_) {
         resetArcStage();
+    resetRectangleStage();
         return {
             ArcPointOutcome::invalid_point,
             std::nullopt};
@@ -1173,6 +1244,58 @@ SketchInteractionState::acceptArcPoint(
     pending_arc_request_ = *request;
     return {
         ArcPointOutcome::arc_requested,
+        request};
+}
+
+RectanglePointResult
+SketchInteractionState::acceptRectanglePoint(
+    Point2 point) noexcept {
+    if (tool_ != SketchTool::rectangle) {
+        return {
+            RectanglePointOutcome::inactive_tool,
+            std::nullopt};
+    }
+    if (!point.finite()) {
+        return {
+            RectanglePointOutcome::invalid_point,
+            std::nullopt};
+    }
+
+    if (rectangle_stage_ ==
+        RectangleStage::await_first_corner) {
+        rectangle_first_corner_ = point;
+        point_pointer_candidate_ = point;
+        rectangle_stage_ =
+            RectangleStage::await_opposite_corner;
+        return {
+            RectanglePointOutcome::first_corner_accepted,
+            std::nullopt};
+    }
+
+    if (pending_rectangle_request_) {
+        return {
+            RectanglePointOutcome::request_pending,
+            std::nullopt};
+    }
+    if (!rectangle_first_corner_) {
+        resetRectangleStage();
+        return {
+            RectanglePointOutcome::invalid_point,
+            std::nullopt};
+    }
+
+    RectangleIntent request{
+        *rectangle_first_corner_,
+        point};
+    if (!request.valid()) {
+        return {
+            RectanglePointOutcome::degenerate_ignored,
+            std::nullopt};
+    }
+
+    pending_rectangle_request_ = request;
+    return {
+        RectanglePointOutcome::rectangle_requested,
         request};
 }
 
@@ -1224,6 +1347,23 @@ bool SketchInteractionState::resolveArcRequest(
     pending_arc_request_.reset();
     if (committed) {
         resetArcStage();
+    resetRectangleStage();
+    }
+    return true;
+}
+
+bool SketchInteractionState::resolveRectangleRequest(
+    bool committed) noexcept {
+    if (tool_ != SketchTool::rectangle ||
+        rectangle_stage_ !=
+            RectangleStage::await_opposite_corner ||
+        !pending_rectangle_request_) {
+        return false;
+    }
+
+    pending_rectangle_request_.reset();
+    if (committed) {
+        resetRectangleStage();
     }
     return true;
 }
@@ -1289,6 +1429,26 @@ SketchInteractionState::previewArc(
         current);
 }
 
+std::optional<RectangleIntent>
+SketchInteractionState::previewRectangle(
+    Point2 current) const noexcept {
+    if (tool_ != SketchTool::rectangle ||
+        rectangle_stage_ !=
+            RectangleStage::await_opposite_corner ||
+        !rectangle_first_corner_ ||
+        pending_rectangle_request_ ||
+        !current.finite()) {
+        return std::nullopt;
+    }
+
+    RectangleIntent preview{
+        *rectangle_first_corner_,
+        current};
+    return preview.valid()
+        ? std::optional<RectangleIntent>{preview}
+        : std::nullopt;
+}
+
 void SketchInteractionState::finishTool() noexcept {
     manipulation_.reset();
     clearHover();
@@ -1339,6 +1499,17 @@ bool SketchInteractionState::escape() noexcept {
     if (tool_ == SketchTool::arc) {
         if (arc_stage_ != ArcStage::await_start) {
             resetArcStage();
+    resetRectangleStage();
+            return true;
+        }
+        resetToSelect();
+        return true;
+    }
+
+    if (tool_ == SketchTool::rectangle) {
+        if (rectangle_stage_ ==
+            RectangleStage::await_opposite_corner) {
+            resetRectangleStage();
             return true;
         }
         resetToSelect();
@@ -2024,6 +2195,7 @@ void SketchInteractionState::resetToSelect() noexcept {
     resetLineStage();
     resetCircleStage();
     resetArcStage();
+    resetRectangleStage();
     resetCommonTransform();
 }
 
@@ -2051,6 +2223,15 @@ void SketchInteractionState::resetArcStage()
     arc_start_.reset();
     arc_through_.reset();
     pending_arc_request_.reset();
+}
+
+void SketchInteractionState::resetRectangleStage()
+    noexcept {
+    rectangle_stage_ =
+        RectangleStage::await_first_corner;
+    rectangle_first_corner_.reset();
+    pending_rectangle_request_.reset();
+    point_pointer_candidate_.reset();
 }
 
 void SketchInteractionState::resetCommonTransform()
