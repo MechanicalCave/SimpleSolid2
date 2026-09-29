@@ -654,7 +654,7 @@ Ordinary RMB context menu is no longer treated as a blocker for R7 completion. T
 No multiple-active-grip feature is planned.
 
 ### R8 — Inspect / Measure / diagnostic dimensions
-**Status:** next planned milestone; inactive until separately accepted
+**Status:** active through Owner-accepted R8A — Read-only Measure Core + Single-Selection Diagnostics
 
 Goal:
 
