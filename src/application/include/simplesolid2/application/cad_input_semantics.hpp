@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/application/cad_input.hpp>
+#include <simplesolid2/core/units.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 
 #include <optional>
@@ -10,7 +11,11 @@
 namespace simplesolid2::application {
 
 struct CadInputNumberFormat final {
+    // Retained for source compatibility with pre-R10 adapters.
+    // R10 precision grammar accepts both '.' and ',' regardless of locale.
     std::string decimal_separator{"."};
+    core::LengthUnit length_unit{
+        core::LengthUnit::millimetre};
 };
 
 enum class ProfileCadInputCommandKind {

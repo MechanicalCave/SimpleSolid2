@@ -187,7 +187,7 @@ int main() {
     result = dot.submit("C");
     CHECK(!result.accepted);
     CHECK(result.diagnostic ==
-          "Active point input expects a bare finite distance.");
+          "Active point input expects a valid non-negative Length expression.");
     CHECK(target.grip_copy_submit_count == 0U);
 
     target.grip_copy_available = true;
@@ -209,26 +209,44 @@ int main() {
     CHECK(target.submitted_distance.has_value());
     CHECK(near(*target.submitted_distance, 12.5));
 
+    target.submitted_distance.reset();
+    result = dot.submit("12,5");
+    CHECK(result.accepted);
+    CHECK(target.submitted_distance.has_value());
+    CHECK(near(*target.submitted_distance, 12.5));
+
+    target.submitted_distance.reset();
+    result = dot.submit("1e3");
+    CHECK(result.accepted);
+    CHECK(target.submitted_distance.has_value());
+    CHECK(near(*target.submitted_distance, 1000.0));
+
+    target.submitted_distance.reset();
+    result = dot.submit("25mm + 1in");
+    CHECK(result.accepted);
+    CHECK(target.submitted_distance.has_value());
+    CHECK(near(*target.submitted_distance, 50.4));
+
     target.activated.reset();
     target.submitted_distance.reset();
     target.profile_command.reset();
     result = dot.submit("PROFILE");
     CHECK(!result.accepted);
     CHECK(result.diagnostic ==
-          "Active point input expects a bare finite distance.");
+          "Active point input expects a valid non-negative Length expression.");
     CHECK(!target.profile_command.has_value());
 
     result = dot.submit("LINE");
     CHECK(!result.accepted);
     CHECK(result.diagnostic ==
-          "Active point input expects a bare finite distance.");
+          "Active point input expects a valid non-negative Length expression.");
     CHECK(!target.activated.has_value());
     CHECK(!target.submitted_distance.has_value());
 
     result = dot.submit("RECTANGLE");
     CHECK(!result.accepted);
     CHECK(result.diagnostic ==
-          "Active point input expects a bare finite distance.");
+          "Active point input expects a valid non-negative Length expression.");
     CHECK(!target.activated.has_value());
 
     application::SketchCadInputSemanticEndpoint comma{
@@ -271,8 +289,27 @@ int main() {
               ".5", application::CadInputNumberFormat{"."}).has_value());
     CHECK(!application::parseBareCadDistance(
                "-1", application::CadInputNumberFormat{"."}).has_value());
+    const auto scientific = application::parseBareCadDistance(
+        "1e3", application::CadInputNumberFormat{"."});
+    CHECK(scientific.has_value());
+    CHECK(near(*scientific, 1000.0));
+
+    const auto explicit_inch = application::parseBareCadDistance(
+        "1in", application::CadInputNumberFormat{"."});
+    CHECK(explicit_inch.has_value());
+    CHECK(near(*explicit_inch, 25.4));
+
+    const auto unitless_inch = application::parseBareCadDistance(
+        "2",
+        application::CadInputNumberFormat{
+            ".",
+            core::LengthUnit::inch});
+    CHECK(unitless_inch.has_value());
+    CHECK(near(*unitless_inch, 50.8));
+
     CHECK(!application::parseBareCadDistance(
-               "1e3", application::CadInputNumberFormat{"."}).has_value());
+               "1mm * 2mm",
+               application::CadInputNumberFormat{"."}).has_value());
 
     std::cout << "D CAD input semantics PASS\n";
     return EXIT_SUCCESS;

@@ -1,10 +1,9 @@
 #include <simplesolid2/application/cad_input_semantics.hpp>
+#include <simplesolid2/application/precision_input.hpp>
 
-#include <charconv>
 #include <cmath>
 #include <cctype>
 #include <string>
-#include <system_error>
 #include <utility>
 
 namespace simplesolid2::application {
@@ -146,7 +145,7 @@ SketchCadInputSemanticEndpoint::submit(
         if (!distance) {
             return {
                 false,
-                "Active point input expects a bare finite distance."};
+                "Active point input expects a valid non-negative Length expression."};
         }
         if (!request->direct_distance_enabled) {
             return {
@@ -194,57 +193,15 @@ std::optional<double>
 parseBareCadDistance(
     std::string_view text,
     const CadInputNumberFormat& number_format) {
-    text = trimAscii(text);
-    if (text.empty()) return std::nullopt;
-
-    const std::string separator =
-        number_format.decimal_separator.empty()
-            ? std::string{"."}
-            : number_format.decimal_separator;
-
-    std::string normalized{text};
-    if (separator != ".") {
-        if (normalized.find('.') != std::string::npos &&
-            normalized.find(separator) != std::string::npos) {
-            return std::nullopt;
-        }
-        std::size_t position = 0U;
-        std::size_t replacements = 0U;
-        while ((position = normalized.find(separator, position)) !=
-               std::string::npos) {
-            if (++replacements > 1U) return std::nullopt;
-            normalized.replace(position, separator.size(), ".");
-            ++position;
-        }
-    }
-
-    bool saw_digit = false;
-    bool saw_decimal = false;
-    for (const char ch : normalized) {
-        if (ch >= '0' && ch <= '9') {
-            saw_digit = true;
-            continue;
-        }
-        if (ch == '.' && !saw_decimal) {
-            saw_decimal = true;
-            continue;
-        }
+    const auto quantity = parseCadQuantity(
+        text,
+        {CadQuantityDimension::length,
+         number_format.length_unit});
+    if (!quantity ||
+        quantity->canonical_value < 0.0) {
         return std::nullopt;
     }
-    if (!saw_digit) return std::nullopt;
-
-    double value{};
-    const char* const first = normalized.data();
-    const char* const last = first + normalized.size();
-    const auto parsed =
-        std::from_chars(first, last, value, std::chars_format::general);
-    if (parsed.ec != std::errc{} ||
-        parsed.ptr != last ||
-        !std::isfinite(value) ||
-        value < 0.0) {
-        return std::nullopt;
-    }
-    return value;
+    return quantity->canonical_value;
 }
 
 } // namespace simplesolid2::application
