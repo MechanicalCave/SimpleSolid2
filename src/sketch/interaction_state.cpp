@@ -1541,7 +1541,11 @@ bool SketchInteractionState::beginDirectManipulation(
         session.mode = DirectEditMode::reshape;
         session.pivot = owner->start();
         session.owner_geometry.lines.push_back(
-            {owner->id(), owner->start(), owner->end()});
+            {
+                owner->id(),
+                owner->start(),
+                owner->end(),
+                owner->role()});
         break;
     }
     case SketchGripRole::line_end: {
@@ -1579,7 +1583,11 @@ bool SketchInteractionState::beginDirectManipulation(
         if (owner == nullptr) return false;
         session.mode = DirectEditMode::reshape;
         session.owner_geometry.circles.push_back(
-            {owner->id(), owner->center(), owner->radius()});
+            {
+                owner->id(),
+                owner->center(),
+                owner->radius(),
+                owner->role()});
 
         Point2 direction_vector{};
         if (grip.role ==
@@ -1620,7 +1628,8 @@ bool SketchInteractionState::beginDirectManipulation(
                 owner->center(),
                 owner->radius(),
                 owner->startAngle(),
-                owner->sweepAngle()});
+                owner->sweepAngle(),
+                owner->role()});
 
         double angle = owner->startAngle();
         if (grip.role == SketchGripRole::arc_end) {

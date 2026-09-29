@@ -66,6 +66,10 @@ int main() {
             10.0,
             0.0,
             pi * 0.5);
+    CHECK(
+        model.setEntityRole(
+            line_id,
+            sketch::EntityRole::construction));
 
     // Detailed endpoint cycle: one current pointer position must be
     // interpreted from the same interaction-start geometry in both modes.
@@ -105,6 +109,9 @@ int main() {
         state.directManipulationGeometryState();
     CHECK(reshape.has_value());
     CHECK(reshape->lines.size() == 1U);
+    CHECK(
+        reshape->lines.front().role ==
+        sketch::EntityRole::construction);
     CHECK(reshape->circles.empty());
     CHECK(reshape->arcs.empty());
     CHECK(

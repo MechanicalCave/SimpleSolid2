@@ -382,6 +382,44 @@ int main(int argc, char* argv[]) {
         session.document().findSketch(sketch_id)->
             model.entityCount() == 9U);
 
+    // SK-07G Move+Copy through a center grip duplicates the complete frozen
+    // mixed selection, not only the active grip owner.
+    const auto grip_copy_count_before =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    const auto grip_copy_undo_before =
+        session.undoDepth();
+
+    CHECK(!viewport.sketch_scene_.lines.empty());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            viewport.sketch_scene_.lines.front().token,
+            viewer::SketchGripRole::line_center}};
+    click(interaction, sketch_id, 95.0, 95.0, 2.0, 0.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::move);
+    CHECK(interaction.enableGripCopy());
+    CHECK(interaction.directManipulationCopyEnabled());
+
+    click(interaction, sketch_id, 105.0, 105.0, 5.0, 3.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.directManipulationCopyEnabled());
+    CHECK(
+        session.document().findSketch(sketch_id)->
+            model.entityCount() ==
+        grip_copy_count_before + source_ids.size());
+    CHECK(
+        session.undoDepth() ==
+        grip_copy_undo_before + 1U);
+    CHECK(capture(session, sketch_id, source_ids) == source);
+
+    CHECK(interaction.escape());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(interaction.selectedCount() == 3U);
+
     // Stale revision fails the pending COPY atomically and ends the
     // transient command while preserving already committed copies.
     CHECK(interaction.activateCopy());
