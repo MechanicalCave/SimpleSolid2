@@ -1055,11 +1055,40 @@ Switching back to Absolute immediately restores Sketch +U as the reference witho
 
 ### 19.5 Additional angles
 
-Additional angles are runtime-only offsets in R10.
+Additional angles are runtime-only **single extra track offsets**, not additional repeating spacing families.
 
-They augment the primary track family without creating authored constraints.
+The primary Step alone creates the regular family:
 
-Duplicate/equivalent normalized angles are collapsed deterministically.
+```text
+reference + n * Step
+```
+
+for bounded integer `n` over one full turn.
+
+Each Additional Angle contributes exactly one extra track relative to the same active Polar reference:
+
+```text
+reference + AdditionalAngle
+```
+
+Example in Absolute mode:
+
+```text
+Step = 45°
+Additional = 17°, 30°
+```
+
+produces the ordinary 45° family plus single tracks at 17° and 30°. It does **not** create repeating families at `17° + n*45°` or `30° + n*45°`.
+
+In Relative mode the same stored runtime offsets are rotated by the current semantic reference. Example: reference = 12° and Additional = 30° yields one extra track at 42°.
+
+Additional Angle input uses the same Angle expression parser as the primary Step, so forms such as `17`, `30deg`, `360/7` and `90/2` are valid when finite.
+
+Angles are normalized to one full turn for comparison. Tracks equivalent to a primary-family track or another Additional track collapse deterministically.
+
+R10 does not implicitly add an opposite `+180°` track. If the user wants both 17° and 197°, both must be entered explicitly.
+
+Additional angles remain runtime-only and create no authored constraints, revision, dirty state or Undo entry.
 
 Invalid/non-finite configuration is rejected without changing the previous valid configuration.
 
@@ -1295,7 +1324,7 @@ Expected bounded UI:
 - clearly visible current Polar spacing/result, for example `360/8 = 45°`;
 - editable Polar spacing expression;
 - Polar Reference selector with `Absolute` default and optional `Relative`;
-- additional Polar angles entry/configuration;
+- additional Polar angles entry/configuration as individual single-track offsets;
 - Dynamic Input toggle with visibly discoverable `DYN ON/OFF` state while Sketch edit is active.
 
 A compact persistent status affordance may therefore read conceptually:
@@ -1498,48 +1527,50 @@ At minimum verify:
 81. Polar does not hard-quantize every pointer direction while enabled;
 82. captured Polar constrains direction only; pointer radius/magnitude remains free unless an explicit numeric lock owns it;
 83. pixel tolerances/guide state never enter authored CAD state, Commands or persistence;
-84. additional Polar angles affect pointer resolution deterministically;
-85. Polar Reference defaults to Absolute for each new Sketch edit;
-86. Absolute uses Sketch +U and is independent of previous geometry;
-87. Relative uses only a valid semantic reference direction explicitly supplied by the active interaction context;
-88. Relative with no valid reference performs no Polar capture and does not silently fall back to Absolute;
-89. switching Absolute/Relative is runtime-only and has no revision/dirty/Undo effect;
-90. explicit complete point input outranks Polar;
-91. `@Distance<Angle` Angle is always absolute from Sketch +U and is independent of Polar Reference mode;
-92. locked point-field Angle is always absolute from Sketch +U and is independent of Polar Reference mode;
-93. locked Distance may combine with captured Polar direction;
-94. locked Angle outranks Polar direction;
-95. conflicting locks fail closed;
-96. Dynamic Input default is OFF per Sketch edit;
-97. DYN OFF hides only overlay/field navigation and does not disable keyboard-first precision input;
-98. Dynamic Input has no authored state/history impact;
-99. Dynamic Input and Command Line feed the same request and same live CAD token;
-100. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
-101. Free / Assisted / Locked value states are semantically distinguishable in presentation;
-102. unbased point field order is U → V;
-103. normal based-point field order is Distance → Angle → dU → dV;
-104. Rectangle second-stage field order is Width → Height and pointer quadrant supplies placement orientation;
-105. Circle Size exposes Diameter or Radius according to the current runtime mode, default Diameter;
-106. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
-107. valid token + Tab locks current field and advances;
-108. empty-buffer Tab advances without creating a lock;
-109. Shift+Tab moves backward deterministically;
-110. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
-111. request acceptance clears request-local locks;
-112. Esc follows buffer → locks → tool hierarchy;
-113. Sketch/tool/Document teardown clears precision runtime state;
-114. Measure displays correct current units without changing measurement semantics;
-115. changing units updates Measure presentation without geometry mutation;
-116. Construction dash-gap cadence is independent of entity length;
-117. Construction preview and committed geometry use the same cadence policy;
-118. Construction dash polish introduces no authored/persistent style state;
-119. R8 Measure/Between regressions remain green;
-120. R9 Rectangle/Construction/Profile regressions remain green;
-121. selection/grips/transforms/COPY/Grip Copy regressions remain green;
-122. global keyboard-first CAD input/focus arbitration regressions remain green;
-123. persistence backward-read coverage remains green;
-124. exact-head Windows FULL passes;
-125. required internal + PL/EN docs and Product Browser freshness pass.
+84. each Additional Polar Angle contributes one single extra track relative to the active reference rather than another repeating family;
+85. Additional Polar Angles use the shared Angle-expression parser, normalize within one turn and collapse duplicates against primary/additional tracks;
+86. Additional Polar Angles do not implicitly create opposite +180° tracks;
+87. Polar Reference defaults to Absolute for each new Sketch edit;
+88. Absolute uses Sketch +U and is independent of previous geometry;
+89. Relative uses only a valid semantic reference direction explicitly supplied by the active interaction context;
+90. Relative with no valid reference performs no Polar capture and does not silently fall back to Absolute;
+91. switching Absolute/Relative is runtime-only and has no revision/dirty/Undo effect;
+92. explicit complete point input outranks Polar;
+93. `@Distance<Angle` Angle is always absolute from Sketch +U and is independent of Polar Reference mode;
+94. locked point-field Angle is always absolute from Sketch +U and is independent of Polar Reference mode;
+95. locked Distance may combine with captured Polar direction;
+96. locked Angle outranks Polar direction;
+97. conflicting locks fail closed;
+98. Dynamic Input default is OFF per Sketch edit;
+99. DYN OFF hides only overlay/field navigation and does not disable keyboard-first precision input;
+100. Dynamic Input has no authored state/history impact;
+101. Dynamic Input and Command Line feed the same request and same live CAD token;
+102. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
+103. Free / Assisted / Locked value states are semantically distinguishable in presentation;
+104. unbased point field order is U → V;
+105. normal based-point field order is Distance → Angle → dU → dV;
+106. Rectangle second-stage field order is Width → Height and pointer quadrant supplies placement orientation;
+107. Circle Size exposes Diameter or Radius according to the current runtime mode, default Diameter;
+108. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
+109. valid token + Tab locks current field and advances;
+110. empty-buffer Tab advances without creating a lock;
+111. Shift+Tab moves backward deterministically;
+112. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
+113. request acceptance clears request-local locks;
+114. Esc follows buffer → locks → tool hierarchy;
+115. Sketch/tool/Document teardown clears precision runtime state;
+116. Measure displays correct current units without changing measurement semantics;
+117. changing units updates Measure presentation without geometry mutation;
+118. Construction dash-gap cadence is independent of entity length;
+119. Construction preview and committed geometry use the same cadence policy;
+120. Construction dash polish introduces no authored/persistent style state;
+121. R8 Measure/Between regressions remain green;
+122. R9 Rectangle/Construction/Profile regressions remain green;
+123. selection/grips/transforms/COPY/Grip Copy regressions remain green;
+124. global keyboard-first CAD input/focus arbitration regressions remain green;
+125. persistence backward-read coverage remains green;
+126. exact-head Windows FULL passes;
+127. required internal + PL/EN docs and Product Browser freshness pass.
 
 ## 30. Manual Windows verification
 
@@ -1609,7 +1640,10 @@ Minimum checklist:
 - set Polar spacing to `360/8` and verify 45-degree family;
 - set at least one nontrivial expression such as `360/7` and verify deterministic bounded tracks;
 - move just outside the attraction neighborhood and verify direction becomes free again;
-- test at least one additional Polar angle;
+- set Step=45° with Additional=17°,30° and verify only single extra tracks at 17° and 30° are added rather than repeating offset families;
+- verify an Additional angle equivalent to a primary-family track collapses deterministically;
+- verify adding 17° does not implicitly add 197°;
+- switch to Relative with a known 12° reference and Additional=30° and verify the extra track is 42°;
 - verify Reference defaults to Absolute on a fresh Sketch edit;
 - verify Absolute tracks stay anchored to Sketch +U regardless of previous segment direction;
 - switch to Relative on a continuous Line and verify the previous committed segment becomes the 0° reference;
