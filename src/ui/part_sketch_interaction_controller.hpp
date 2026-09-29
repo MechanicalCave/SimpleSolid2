@@ -339,6 +339,8 @@ private:
         manipulation_revision_;
     std::optional<core::DocumentRevision>
         transform_revision_;
+    std::optional<core::DocumentRevision>
+        rectangle_revision_;
     std::optional<sketch::SketchTool>
         last_repeatable_command_;
     sketch::EntityRole creation_role_{

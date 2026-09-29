@@ -22,6 +22,7 @@ void PartSketchInteractionController::begin(
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
+    rectangle_revision_.reset();
     last_repeatable_command_.reset();
     creation_role_ = sketch::EntityRole::regular;
     rectangle_draw_diagonals_ = false;
@@ -42,6 +43,7 @@ void PartSketchInteractionController::end() {
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
+    rectangle_revision_.reset();
     last_repeatable_command_.reset();
     creation_role_ = sketch::EntityRole::regular;
     rectangle_draw_diagonals_ = false;
@@ -1082,6 +1084,7 @@ void PartSketchInteractionController::activateRectangle() {
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
     transform_revision_.reset();
+    rectangle_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->clearSketchSelectionBoxOverlay();
     projectSelection();
@@ -1369,6 +1372,9 @@ bool PartSketchInteractionController::escape() {
         interaction_.directManipulationActive();
     const bool was_transform =
         interaction_.commonTransformStage().has_value();
+    const bool was_rectangle =
+        interaction_.tool() ==
+        sketch::SketchTool::rectangle;
     const bool changed = interaction_.escape();
     if (!changed) return false;
 
@@ -1377,6 +1383,9 @@ bool PartSketchInteractionController::escape() {
     }
     if (was_transform) {
         transform_revision_.reset();
+    }
+    if (was_rectangle) {
+        rectangle_revision_.reset();
     }
 
     press_anchor_.reset();
@@ -1817,6 +1826,7 @@ void PartSketchInteractionController::cancelForHistory() {
     interaction_.cancelForHistory();
     manipulation_revision_.reset();
     transform_revision_.reset();
+    rectangle_revision_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     viewport_controller_->clearSketchPreview();
@@ -1838,6 +1848,7 @@ bool PartSketchInteractionController::reconcileAfterHistory() {
     interaction_.clearHover();
     manipulation_revision_.reset();
     transform_revision_.reset();
+    rectangle_revision_.reset();
     viewport_controller_->clearSketchPreview();
     viewport_controller_->refreshPresentation();
     projectSelection();
@@ -2828,11 +2839,23 @@ handleRectanglePointer(
             sketch::RectanglePointOutcome::
                 rectangle_requested &&
         accepted.request) {
+        if (!rectangle_revision_) {
+            static_cast<void>(
+                interaction_.resolveRectangleRequest(
+                    false));
+            static_cast<void>(interaction_.escape());
+            viewport_controller_->clearSketchPreview();
+            reportStatus(
+                "Rectangle commit has no captured DocumentRevision.");
+            notifyStateChanged();
+            return;
+        }
+
         const auto result =
             session_->execute(
                 application::AddSketchRectangleCommand{
                     *sketch_id_,
-                    session_->document().revision(),
+                    *rectangle_revision_,
                     accepted.request->first_corner,
                     accepted.request->opposite_corner,
                     creation_role_,
@@ -2847,6 +2870,13 @@ handleRectanglePointer(
         viewport_controller_->clearSketchPreview();
 
         if (!committed) {
+            if (result.diagnostic.code ==
+                application::DocumentSessionErrorCode::
+                    revision_diverged) {
+                static_cast<void>(
+                    interaction_.escape());
+                rectangle_revision_.reset();
+            }
             reportStatus(
                 result.diagnostic.message.empty()
                     ? std::string{
@@ -2856,6 +2886,7 @@ handleRectanglePointer(
             return;
         }
 
+        rectangle_revision_.reset();
         viewport_controller_->refreshPresentation();
         projectSelection();
         projectInteraction();
@@ -2866,6 +2897,8 @@ handleRectanglePointer(
     if (accepted.outcome ==
             sketch::RectanglePointOutcome::
                 first_corner_accepted) {
+        rectangle_revision_ =
+            session_->document().revision();
         viewport_controller_->clearSketchPreview();
         notifyStateChanged();
         return;

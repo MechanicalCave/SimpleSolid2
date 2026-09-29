@@ -1275,6 +1275,65 @@ int main(int argc, char* argv[]) {
             rectangle_interaction
                 .rectangleDrawDiagonals());
 
+        // First Corner captures DocumentRevision. Any intervening authored
+        // mutation invalidates the pending Rectangle and the second click
+        // must fail closed without adding perimeter geometry.
+        rectangle_interaction.activateSelect();
+        CHECK(
+            rectangle_interaction.setCreationRole(
+                sketch::EntityRole::regular));
+        CHECK(
+            rectangle_interaction
+                .setRectangleDrawDiagonals(false));
+        rectangle_interaction.activateRectangle();
+        rectangle_interaction.onPointer(
+            pointer(
+                rectangle_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                100.0, 100.0,
+                10.0, 10.0));
+        CHECK(
+            rectangle_interaction.rectangleStage() ==
+            sketch::RectangleStage::
+                await_opposite_corner);
+
+        const auto external_mutation =
+            rectangle_session.execute(
+                application::AddSketchLineCommand{
+                    rectangle_sketch_id,
+                    {20.0, 20.0},
+                    {21.0, 20.0}});
+        CHECK(
+            external_mutation.ok() &&
+            external_mutation.changed);
+        const auto stale_entity_count =
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.entityCount();
+        const auto stale_undo_depth =
+            rectangle_session.undoDepth();
+
+        rectangle_interaction.onPointer(
+            pointer(
+                rectangle_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                140.0, 120.0,
+                14.0, 12.0));
+        CHECK(
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id)
+                ->model.entityCount() ==
+            stale_entity_count);
+        CHECK(
+            rectangle_session.undoDepth() ==
+            stale_undo_depth);
+        CHECK(
+            rectangle_interaction.rectangleStage() ==
+            sketch::RectangleStage::
+                await_first_corner);
+
         rectangle_interaction.end();
         rectangle_interaction.begin(
             rectangle_session,
