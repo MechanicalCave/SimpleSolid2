@@ -2,6 +2,7 @@
 
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/core/document_reference.hpp>
+#include <simplesolid2/core/units.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/part/profile.hpp>
 
@@ -25,6 +26,8 @@ struct PartAuthoredState final {
     std::vector<PartSketch> sketches;
     ProfileIdCursor next_profile_id;
     std::vector<PartProfile> profiles;
+    core::LengthUnit length_unit{
+        core::LengthUnit::millimetre};
 
     friend bool operator==(
         const PartAuthoredState&,
@@ -76,6 +79,9 @@ public:
     [[nodiscard]] const PartAuthoredState& state() const noexcept { return state_; }
     [[nodiscard]] const core::DocumentProperties& properties() const noexcept {
         return state_.properties;
+    }
+    [[nodiscard]] core::LengthUnit lengthUnit() const noexcept {
+        return state_.length_unit;
     }
     [[nodiscard]] const PartPresentationState& presentation() const noexcept {
         return state_.presentation;
@@ -157,6 +163,15 @@ public:
 
     void setProperties(core::DocumentProperties properties) {
         staged_.properties = std::move(properties);
+    }
+
+    [[nodiscard]] bool setLengthUnit(
+        core::LengthUnit unit) noexcept {
+        if (!core::isLengthUnit(unit)) {
+            return false;
+        }
+        staged_.length_unit = unit;
+        return true;
     }
 
     [[nodiscard]] bool setBuiltinReferenceVisible(

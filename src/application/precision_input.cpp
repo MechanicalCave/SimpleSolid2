@@ -398,6 +398,12 @@ parseCadQuantity(
     CadQuantityParseContext context) noexcept {
     text = trimAscii(text);
     if (text.empty()) return std::nullopt;
+    if (context.expected_dimension ==
+            CadQuantityDimension::length &&
+        !core::isLengthUnit(
+            context.length_unit)) {
+        return std::nullopt;
+    }
     QuantityParser parser{text, context};
     return parser.parse();
 }

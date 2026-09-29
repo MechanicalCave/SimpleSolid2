@@ -195,6 +195,22 @@ DocumentSessionResult DocumentSession::execute(
 }
 
 DocumentSessionResult DocumentSession::execute(
+    const SetPartLengthUnitCommand& command) {
+    if (!core::isLengthUnit(command.unit)) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Part length-unit command contains an invalid unit",
+            path_);
+    }
+
+    auto after = document_.state();
+    after.length_unit = command.unit;
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while setting Part length unit");
+}
+
+DocumentSessionResult DocumentSession::execute(
     const SetBuiltinReferenceVisibilityCommand& command) {
     for (const auto role : command.targets) {
         if (!core::isBuiltinReferenceRole(role)) {

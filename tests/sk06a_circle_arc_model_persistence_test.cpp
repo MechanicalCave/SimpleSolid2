@@ -308,7 +308,8 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor.domain_schema_version ==
-        6);
+        part::PartDocumentStore::
+            current_schema_version);
     CHECK(
         package.package->authored_json.find(
             "\"kind\": \"circle\"") !=

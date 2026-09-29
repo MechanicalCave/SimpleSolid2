@@ -62,6 +62,9 @@ int main() {
     CHECK(core::millimetresPerUnit(LengthUnit::inch) == 25.4);
     CHECK(core::millimetresPerUnit(LengthUnit::foot) == 304.8);
     CHECK(core::lengthUnitSuffix(LengthUnit::inch) == "in");
+    CHECK(core::isLengthUnit(LengthUnit::millimetre));
+    CHECK(!core::isLengthUnit(
+        static_cast<LengthUnit>(255U)));
 
     auto value = length("25");
     CHECK(value.has_value());
@@ -171,6 +174,11 @@ int main() {
     CHECK(!length("1.2,3").has_value());
     CHECK(!length("1 / 0").has_value());
     CHECK(!length("1e9999").has_value());
+    CHECK(!application::parseCadQuantity(
+        "1",
+        {CadQuantityDimension::length,
+         static_cast<LengthUnit>(255U)})
+        .has_value());
 
     auto point = application::parseCadPointToken(
         "25;10", LengthUnit::millimetre);

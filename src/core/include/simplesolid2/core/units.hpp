@@ -14,6 +14,19 @@ enum class LengthUnit : std::uint8_t {
     foot,
 };
 
+[[nodiscard]] constexpr bool
+isLengthUnit(LengthUnit unit) noexcept {
+    switch (unit) {
+    case LengthUnit::millimetre:
+    case LengthUnit::centimetre:
+    case LengthUnit::metre:
+    case LengthUnit::inch:
+    case LengthUnit::foot:
+        return true;
+    }
+    return false;
+}
+
 struct LengthValue final {
     double millimetres{};
 
