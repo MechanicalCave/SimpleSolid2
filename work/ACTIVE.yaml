@@ -3,7 +3,7 @@ status: completed
 active_work: "work/R8B_RELATIONAL_MEASURE_RUNTIME_TARGETS.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
-program_roadmap_version: "1.5"
+program_roadmap_version: "1.6"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -19,32 +19,37 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after R8B completion
-  - prepare a separate Owner-reviewed R8C Show Dimensions Work Contract before any further R8 production implementation
-  - keep R9+, ordinary RMB context, authored constraints/solver and solid modeling inactive until separately accepted
-  - preserve Roadmap v1.5 sequencing: complete R8 through a separately accepted R8C before R9 unless the Owner explicitly amends sequencing
+  - keep production mutation inactive after R8 completion
+  - prepare a separate Owner-reviewed R9 Rectangle + Construction authoring Work Contract before any production implementation
+  - keep R10+, ordinary RMB context, authored dimensions/constraints/solver and solid modeling inactive until separately accepted
+  - preserve Roadmap v1.6 sequencing: R9 -> R10 -> R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - Owner accepted Sketcher Roadmap v1.6 sequencing amendment on 2026-09-29: R8 is complete through R8A + R8B; standalone R8C Show Dimensions is deferred.
+  - The unmerged R8C proposal PR #94 was closed as superseded without activation or production implementation.
+  - Show Dimensions should be reconsidered with future authored/parametric dimensions and constraints so diagnostic presentation follows the eventual durable reference/dimension architecture instead of defining a temporary parallel overlay system.
+  - R9 Rectangle + Construction UI is now the next planned Sketcher milestone but remains inactive until a separate Owner-accepted Work Contract.
+  - No production scope is active after the Roadmap v1.6 amendment.
   - R8B final implementation/documentation candidate 3f1e0103e26bce49d075b5899cc3931f982f8320 passed the affected R8B checkpoints and exact-head Windows FULL #889.
   - R8B FULL #889 passed documentation/bootstrap/dispatcher checks, desktop Build, core-only 14/14, selector checks, desktop 77/77 and stable windows-msvc.
   - Owner manual Windows verification for R8B passed on 2026-09-29 on exact candidate 3f1e0103e26bce49d075b5899cc3931f982f8320.
   - Manual PASS covered R8A regression, Between toolbar/Command Line routing, dynamic marker reveal/readability/aperture, point↔point, point↔Line including outside-segment continuation, Line↔Line, Circle/Arc explicit-marker semantics, selection/history/Esc behavior, Construction and final grips/COPY/Grip Copy/Profile smoke.
   - R8B completion conditions are satisfied; no production scope is active after R8B.
-  - R8C Show Dimensions remains inactive and requires a separate Owner-accepted Work Contract.
+  - Historical v1.5 state: R8C Show Dimensions was the next separately inactive R8 slice; Roadmap v1.6 supersedes that scheduling and defers the standalone overlay.
   - Owner explicitly accepted R8B Relational Measure + Runtime Semantic Targets on 2026-09-29.
   - R8B is completed; no production scope is active.
   - Dynamic marker proximity reveals visibility only; it does not snap/acquire.
   - R8B authorizes one lightweight current-relation cue, not the R8C general dimension-overlay system.
-  - R8C and R9+ remain inactive.
+  - Historical v1.5 state: R8C and R9+ were inactive; Roadmap v1.6 now closes R8 and makes R9 the next planned but still inactive milestone.
   - R8A final implementation/documentation candidate 9cdc5a5f3a990e83ea4bc90164c9a5c8b01bb1dd passed affected FOCUSED #866 and exact-head Windows FULL #867.
   - R8A FULL #867 passed documentation/bootstrap/dispatcher checks, desktop Build, core-only 14/14, selector checks and desktop 77/77.
   - Owner manual Windows verification for R8A passed on 2026-09-29.
   - R8A completion conditions are satisfied; no production scope is active after R8A.
-  - R8B Relational Measure and R8C Show Dimensions remain inactive and require separate accepted scope.
+  - Historical R8A closeout note: R8B and R8C were then inactive; R8B was later completed and Roadmap v1.6 later deferred standalone R8C.
   - Owner explicitly accepted R8A Read-only Measure Core + Single-Selection Diagnostics on 2026-09-29.
   - R8A is completed; no production scope is active.
   - Measure remains read-only, whole-entity only, provider-neutral and non-persistent; no durable sub-element identity is authorized.
-  - R8B relational Measure and R8C Show Dimensions overlays remain inactive.
+  - Historical R8A boundary: R8B and Show Dimensions were then inactive; R8B was later completed and standalone Show Dimensions is now deferred by Roadmap v1.6.
   - Owner accepted Sketcher Roadmap v1.5 sequencing on 2026-09-29.
   - Roadmap v1.5 prioritizes conscious profile authoring: Measure -> Rectangle/Construction -> Precision/Units/Ortho/Polar/Dynamic Input -> OSNAP/Tracking/Inference -> Trim/Split/Join -> explicit profile-authoring readiness checkpoint.
   - Measure must remain read-only and must not prematurely freeze durable sub-element identity.
@@ -93,7 +98,7 @@ notes:
   - Dynamic Input and Command Line feed one semantic request; Tab may lock/cycle fields.
   - Numeric parsing is planned to accept explicit units, comma or dot decimals, and semicolon-separated Cartesian components.
   - Construction is a durable semantic role excluded from material regions by default but available to selection/snap/measure/inference/future constraints.
-  - Measure and Show Dimensions are read-only runtime diagnostics; authored dimension/constraint architecture remains deliberately deferred.
+  - Measure remains read-only runtime diagnostics; standalone Show Dimensions is deferred by Roadmap v1.6 so future viewport dimensions can be designed with authored/parametric dimension and constraint architecture.
 
   - Exact-head 4cb0c3013603ef2800f7cc5778f313e22107fe3d passed Windows FULL gate #402 with Build and 56/56 CTest tests.
   - Owner manual Windows verification passed on the exact implementation candidate after the native hover leak fix; accepted grip/direct-manipulation behavior is verified.

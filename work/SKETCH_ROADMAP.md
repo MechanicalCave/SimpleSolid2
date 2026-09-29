@@ -1,30 +1,27 @@
 # Sketcher Program Roadmap
 
 **Status:** ACCEPTED  
-**Version:** 1.5  
+**Version:** 1.6  
 **Owner acceptance:** 2026-09-29  
-**Previous accepted version:** 1.4 — 2026-09-27  
+**Previous accepted version:** 1.5 — 2026-09-29  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Current scheduling:** R0–R7, WB-02 and AUDIT-01 A–F are completed; next planned Sketcher sequence is R8 Measure → R9 Rectangle/Construction → R10 Precision → R11 OSNAP/Inference → R12 Trim/Split/Join, followed by a profile-authoring readiness checkpoint. Solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
+**Current scheduling:** R0–R8, WB-02 and AUDIT-01 A–F are completed. Standalone R8C Show Dimensions is deferred to future authored/parametric dimension and constraint architecture. The next planned Sketcher sequence is R9 Rectangle/Construction → R10 Precision → R11 OSNAP/Inference → R12 Trim/Split/Join, followed by a profile-authoring readiness checkpoint. Solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
 
-## 1. Why v1.5 changes the sequence
+## 1. Why v1.6 changes the sequence
 
-Roadmap v1.4 correctly established the shared CAD-input and transform foundations and is preserved for all completed semantics. Since then:
+Roadmap v1.5 correctly placed read-only measurement before the authoring/precision/snap/editing milestones. R8A and R8B have now completed with provider-neutral quick Measure, explicit runtime semantic targets and bounded relational diagnostics.
 
-- R7 has completed through Owner-accepted SK-07G Grip Copy;
-- AUDIT-01 A–F has completed;
-- Package F delivered the provider-neutral Shared 2D region-analysis core plus Part-owned durable ProfileId/RegionIntent semantics that the older roadmap had scheduled much later;
-- Construction is already a durable semantic role and is excluded from material-region analysis while remaining available to selection and future snap/measure/inference;
-- ordinary RMB context remains useful, but its final menu contents depend on a broader, more stable set of Sketcher operations;
-- Package F removed the technical region/profile prerequisite for future solid consumers, but it did not authorize solid modeling and did not define Body/Feature-tree architecture.
+A standalone R8C Show Dimensions proposal was then reviewed. The Owner decided not to create a temporary viewport-dimension subsystem whose presentation resembles authored CAD dimensions but has no durable dimension/reference semantics, no parameter editing and no solver relationship.
 
-The Owner therefore accepts a revised sequencing principle:
+Roadmap v1.6 therefore closes R8 through R8A + R8B and defers standalone Show Dimensions. Future viewport dimension presentation should be reconsidered together with authored/parametric dimensions and constraints, after structural-edit identity/reference semantics are stable enough to support that architecture deliberately.
+
+The accepted sequence is now:
 
 ```text
-R8  Measure / diagnostics
+R8  Measure / relational diagnostics — completed
 → R9  Rectangle + Construction UI
 → R10 Precision Input / Units / Ortho / Polar / Dynamic Input
 → R11 OSNAP / Tracking / Inference
@@ -34,17 +31,18 @@ R8  Measure / diagnostics
 → only then may a first solid-operation contract be considered
 ```
 
-This sequence optimizes for **conscious profile authoring** before solid modeling. Technical readiness to consume a Profile is not treated as product readiness to model solids.
+This sequence continues to optimize for **conscious profile authoring** before solid modeling. Technical readiness to consume a Profile is not treated as product readiness to model solids.
 
-Three guardrails are explicit:
+Four guardrails are explicit:
 
-1. R8 diagnostics must not prematurely freeze a durable sub-element identity model merely to display measurements.
-2. R12 cannot implement Trim/Split/Join until identity/reference outcomes are explicitly accepted; structural editing must be stable before authored relations/solver work depends on it.
-3. The profile-authoring checkpoint must have concrete acceptance evidence; it is not satisfied by a subjective statement that the Sketcher “feels sufficient”.
+1. R8A/R8B runtime measurement references remain diagnostic and do not become durable dimension/sub-element identity by implication.
+2. Standalone Show Dimensions is not a prerequisite for profile-authoring readiness; future viewport dimensions should follow the eventual authored/reference dimension architecture rather than pre-empt it.
+3. R12 cannot implement Trim/Split/Join until identity/reference outcomes are explicitly accepted; structural editing must be stable before authored relations/dimensions/solver work depends on it.
+4. The profile-authoring checkpoint must have concrete acceptance evidence; it is not satisfied by a subjective statement that the Sketcher “feels sufficient”.
 
-Ordinary RMB context is deferred as a later UX-convergence item after the command set is broad enough to design the menu from stable operations. Existing already-accepted RMB semantics in command-first object collection remain unchanged.
+Ordinary RMB context remains deferred as a later UX-convergence item after the command set is broad enough to design the menu from stable operations. Existing already-accepted RMB semantics in command-first object collection remain unchanged.
 
-Roadmap v1.5 changes sequencing and future milestone boundaries only. It activates no production implementation by itself. Every milestone still requires its own accepted Work Contract.
+Roadmap v1.6 changes scheduling and future milestone boundaries only. It activates no production implementation by itself. R9 still requires its own explicit Owner-accepted Work Contract.
 
 ## 2. Preserved accepted invariants
 
@@ -653,22 +651,22 @@ Ordinary RMB context menu is no longer treated as a blocker for R7 completion. T
 
 No multiple-active-grip feature is planned.
 
-### R8 — Inspect / Measure / diagnostic dimensions
-**Status:** in progress — R8A and R8B completed; R8C inactive until separately accepted
+### R8 — Inspect / Measure diagnostics
+**Status:** completed — R8A Read-only Measure + R8B Relational Measure / Runtime Semantic Targets
 
-Goal:
+Delivered:
 
-- implement read-only Measure across Line/Circle/Arc and semantic sub-elements;
-- support context-dependent multi-entity measurements;
-- support Selection and whole-Sketch Show Dimensions runtime overlays;
-- use semantic/runtime references sufficient for diagnostics without prematurely creating a durable authored-dimension or sub-element identity architecture;
-- keep measurement provider-neutral and derived from authoritative geometry;
+- read-only whole-entity Measure across Line/Circle/Arc;
+- explicit runtime semantic point targets without durable sub-element identity;
+- point↔point, point↔Line and Line↔Line relational diagnostics;
+- bounded tool-local marker/relation cues;
+- provider-neutral measurement derived from authoritative semantic geometry;
 - no authored dimensions, constraints or solver.
 
-R8 is intentionally first because it exercises semantic geometry references with low mutation risk and provides immediate engineering feedback for later snapping/editing work.
+Standalone Selection/whole-Sketch **Show Dimensions** viewport overlays are deliberately deferred by Roadmap v1.6. They are not required for R8 completion and should be reconsidered with future authored/parametric dimensions and constraints rather than built as an independent temporary overlay architecture.
 
 ### R9 — Rectangle and Construction authoring surface
-**Status:** planned; inactive
+**Status:** next planned milestone; inactive until a separate Owner-accepted Work Contract
 
 Goal:
 
@@ -767,15 +765,17 @@ Even after the architecture gate passes, the first solid operation still require
 
 ### Later Sketcher evolution — not a prerequisite for the profile-authoring checkpoint
 
-#### R13 — Optional authored relations / local solver
+#### R13 — Authored relations, parametric dimensions and local solver
 Goal:
 
 - introduce explicit durable relation semantics only under later accepted contracts;
-- keep snap/inference distinct from constraints;
+- keep snap/inference distinct from authored constraints;
+- define stable semantic references for authored relations/dimensions only after R12 structural-edit identity outcomes are accepted;
+- decide driving/reference dimension behavior, parameter editing and solver ownership from concrete workflows;
 - optionally support an explicit Auto-Constraint user setting;
-- decide driving/reference dimension architecture only when concrete requirements justify it.
+- reconsider Show Dimensions as a read-only presentation/projection of the accepted dimension/reference architecture rather than a separate runtime-only imitation.
 
-R13 is deliberately after structural-edit identity stabilization. It is not automatically a prerequisite to the first Part architecture gate; the Owner may move it earlier if profile-authoring evidence shows that constraints are required for practical use.
+R13 is deliberately after structural-edit identity stabilization. It is not automatically a prerequisite to the first Part architecture gate; the Owner may move it earlier if profile-authoring evidence shows that constraints or parametric dimensions are required for practical use.
 
 #### R14 — Broader geometry and editing operations
 Goal:
@@ -841,19 +841,20 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7 completed — SK-07A through SK-07G plus WB-02; ordinary RMB menu deferred by v1.5 sequencing decision  
+R7 completed — SK-07A through SK-07G plus WB-02; ordinary RMB menu deferred by roadmap sequencing  
 AUDIT-01 A–F completed — Package F already supplies the region/Profile foundation previously scheduled later  
-R8 in progress — R8A completed after exact-head FULL #867 and Owner manual PASS; R8B completed after exact-head FULL #889 and Owner manual PASS; R8C inactive  
-R9–R15 inactive  
+R8 completed — R8A completed after exact-head FULL #867 and Owner manual PASS; R8B completed after exact-head FULL #889 and Owner manual PASS; standalone R8C Show Dimensions deferred by v1.6  
+R9 next planned milestone — inactive until a separate Owner-accepted Work Contract  
+R10–R15 inactive  
 Sketcher profile-authoring readiness checkpoint not yet reached  
 Part Feature Tree architecture gate inactive  
 Solid modeling / Extrude inactive  
 Ordinary Select RMB context menu deferred as a later UX-convergence slice
 
-Roadmap v1.5 is authoritative for Sketcher feature sequencing. R8B completion does not activate R8C or R9; the next production scope requires a separate Owner-accepted Work Contract.
+Roadmap v1.6 is authoritative for Sketcher feature sequencing. The v1.5 expectation that R8C precede R9 is superseded. R9 is next in sequence but no production scope is active until a separate Owner-accepted Work Contract.
 
 ## AUDIT-01 program interlock — completed
 
 AUDIT-01 A-F is completed and no longer has scheduling precedence over Sketcher feature work.
 
-The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29, and SK-07G is completed after FULL #849 and Owner manual PASS. Roadmap v1.5 now defers ordinary RMB context and places R8–R12 before the explicit profile-authoring readiness checkpoint. Package F technical readiness does not activate solid modeling; a separate Part Feature Tree architecture gate and later solid-operation Work Contract remain mandatory.
+The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29, and SK-07G is completed after FULL #849 and Owner manual PASS. Roadmap v1.6 keeps ordinary RMB context deferred, records R8 complete through R8A/R8B, and places R9–R12 before the explicit profile-authoring readiness checkpoint. Package F technical readiness does not activate solid modeling; a separate Part Feature Tree architecture gate and later solid-operation Work Contract remain mandatory.
