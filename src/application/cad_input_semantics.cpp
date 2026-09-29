@@ -95,6 +95,7 @@ commandTool(std::string_view token) noexcept {
     if (token == "LINE") return sketch::SketchTool::line;
     if (token == "CIRCLE") return sketch::SketchTool::circle;
     if (token == "ARC") return sketch::SketchTool::arc;
+    if (token == "MEASURE") return sketch::SketchTool::measure;
     if (token == "MOVE") return sketch::SketchTool::move;
     if (token == "COPY") return sketch::SketchTool::copy;
     if (token == "ROTATE") return sketch::SketchTool::rotate;

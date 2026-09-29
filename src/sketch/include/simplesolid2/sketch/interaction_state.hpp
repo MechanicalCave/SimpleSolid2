@@ -16,6 +16,7 @@ enum class SketchTool : std::uint8_t {
     line,
     circle,
     arc,
+    measure,
     move,
     copy,
     rotate,
@@ -270,6 +271,14 @@ public:
     void activateLine() noexcept;
     void activateCircle() noexcept;
     void activateArc() noexcept;
+    void activateMeasure(const SketchModel& model) noexcept;
+    [[nodiscard]] std::optional<EntityId>
+    measureTarget() const noexcept {
+        return measure_target_;
+    }
+    [[nodiscard]] bool setMeasureTarget(
+        const SketchModel& model,
+        std::optional<EntityId> target) noexcept;
     [[nodiscard]] bool activateMove(
         const SketchModel& model);
     [[nodiscard]] bool activateCopy(
@@ -502,6 +511,7 @@ private:
     std::optional<EntityId> primary_;
     std::optional<EntityId> hovered_entity_;
     std::optional<SketchGripRef> hovered_grip_;
+    std::optional<EntityId> measure_target_;
     std::optional<DirectManipulationSession> manipulation_;
 
     // One shared runtime pointer candidate feeds the active semantic

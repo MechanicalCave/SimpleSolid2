@@ -73,6 +73,11 @@ int main() {
     CHECK(target.activated == sketch::SketchTool::line);
 
     target.activated.reset();
+    result = dot.submit("measure");
+    CHECK(result.accepted);
+    CHECK(target.activated == sketch::SketchTool::measure);
+
+    target.activated.reset();
     result = dot.submit("MOVE");
     CHECK(result.accepted);
     CHECK(target.activated == sketch::SketchTool::move);

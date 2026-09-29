@@ -103,9 +103,12 @@ Modify
   Rotate
   Scale
   Mirror
+
+Inspect
+  Measure
 ```
 
-The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MOVE`, `COPY`, `ROTATE`, `SCALE`, `MIRROR`, `PROFILE` and `EDITPROFILE`. An active Profile session additionally accepts `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` and the documented option toggles. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar; during active direct grip manipulation it may also consume the tool-local token `C` to enable Grip Copy. `C` is not a top-level command alias. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
+The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE`, `MIRROR`, `PROFILE` and `EDITPROFILE`. An active Profile session additionally accepts `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` and the documented option toggles. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar; during active direct grip manipulation it may also consume the tool-local token `C` to enable Grip Copy. `C` is not a top-level command alias. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
 
 D makes that ownership explicit in code. `application::CadInputSession` remains transport-only: it owns the live buffer, endpoint attachment/lifetime, context-generation binding and diagnostic transport, but it does not know Sketch tools, PointRequest, command keywords or numeric meaning.
 
@@ -125,7 +128,7 @@ Delete follows the same precedence rule as the rest of live CAD input. With norm
 
 The Command Line presentation is a geometry-stable single row. Its diagnostic region is permanently reserved and single-line; a long message is elided in place (with the full message available as tooltip) instead of wrapping, changing the input width or shrinking/moving the Viewer above it.
 
-`PartSketchInteractionController` owns one runtime-only **last repeatable command** identity for the active Sketch edit session. Successful explicit activation of Line/Circle/Arc/Move/Copy/Rotate/Scale/Mirror through toolbar or Command Line updates that one value. Select, Delete, selection changes, grip/direct manipulation, Undo/Redo and Esc do not replace it.
+`PartSketchInteractionController` owns one runtime-only **last repeatable command** identity for the active Sketch edit session. Successful explicit activation of Line/Circle/Arc/Move/Copy/Rotate/Scale/Mirror through toolbar or Command Line updates that one value. Measure is intentionally not repeatable and does not replace that remembered identity. Select, Delete, selection changes, grip/direct manipulation, Undo/Redo and Esc do not replace it.
 
 In ordinary Select with viewport CAD focus, Enter or Space repeats that remembered command through the same existing activation methods. Repeat starts a fresh command invocation: it uses the current semantic selection and does not replay prior Base/Reference/axis/placement points, prior selection snapshots, preview state or copied EntityIds. An empty remembered state is a no-op. The remembered identity is cleared by Sketch edit begin/end, so it does not leak across Sketches, Documents or reopen.
 
@@ -163,9 +166,30 @@ Center grips remain Move-only and translate the complete frozen selection using 
 
 Line Start/End, Circle quadrant and Arc Start/End/Mid grips still default to owner-only Reshape. While one of those grips is active, viewport Space cycles `Reshape ↔ Move` without ending the DirectManipulationSession. The semantic state preserves the same active grip, interaction-start pivot, frozen selection and current resolved pointer. Reshape preview is recomputed from the interaction-start owner geometry; Move preview is recomputed from the interaction-start complete selection geometry. Cycling itself creates no authored mutation, revision, dirty-state or history entry, and Operations presents the active state as `Grip — Reshape` or `Grip — Move`.
 
-LMB or Enter commits the geometry for the currently active direct-edit mode through the existing semantic geometry-update command/Part transaction path. Esc cancels the complete transient manipulation and preserves selection. Grip Copy modifier and Rotate/Scale/Mirror+Copy remain outside the current surface.
+LMB or Enter commits the geometry for the currently active direct-edit mode through the existing semantic geometry-update command/Part transaction path. Esc cancels the complete transient manipulation and preserves selection. Rotate/Scale/Mirror+Copy remain outside the current surface; Grip Copy is implemented through the active direct-manipulation semantic path described above.
 
 Switching tools or Documents clears uncommitted transform/COPY/direct-manipulation state safely. Space inside text-entry focus remains text input.
+
+<!-- section-id: internal.cad-workbench-viewer.measure -->
+## R8A Measure adapter and runtime target
+
+`CadWorkbench` exposes an **Inspect → Measure** tool and the top-level Sketch command `MEASURE`. Both are thin adapters to the same `PartSketchInteractionController::activateMeasure()` semantic path.
+
+Measure owns one runtime-only semantic target `EntityId`; it does not own or rewrite ordinary Sketch selection. Selection-first activation uses the target immediately only when ordinary selection contains exactly one supported Line/Circle/Arc. Empty or multi-selection enters Measure without a target. A later LMB entity hit replaces only the Measure target. Blank LMB clears the current Measure target/result. The existing semantic point-query bridge converts any Viewer presentation hit back to `SketchId + EntityId` before the target is accepted; provider tokens never become measurement identity.
+
+The controller derives the current value on demand through provider-neutral `sketch::measureEntity(model, EntityId)`. It does not cache a second geometric result. If the target disappears or a derived value is non-finite, no stale result is presented.
+
+The Qt layer performs presentation only. `Operations` formats the already-computed semantic result:
+
+- Line — Length, Delta U, Delta V, Angle +U;
+- Circle — Radius, Diameter, Circumference, Area;
+- Arc — Radius, Start/End Angle, Signed Sweep, Arc Length.
+
+Angles are formatted in degrees for readability; neutral geometry remains radians. Linear/area values are deliberately unlabeled by physical unit because explicit Units belong to later R10 work.
+
+Measure uses the existing crosshair spatial-tool routing. It adds no Viewer dimension objects, leaders/arrows/text overlays or selectable/snappable diagnostic geometry. Those are outside R8A.
+
+Measure activation, retargeting, blank-target clear and Esc create no Document mutation, revision, dirty state, identity allocation, Undo entry or persistence. Existing selection remains intact. Undo/Redo cancels the transient tool through the existing history boundary before ordinary global history. Tool/Sketch/Document replacement likewise clears Measure runtime state.
 
 <!-- section-id: internal.cad-workbench-viewer.navigation -->
 ## Navigation and provider-surface Navigation Cube
@@ -209,7 +233,7 @@ Circle/Arc sampled point chains, native line segments and Profile face tessellat
 <!-- section-id: internal.cad-workbench-viewer.runtime -->
 ## Runtime lifetime and stress coverage
 
-Selection, primary selection, hover, active grip, current DirectEditMode, the direct-manipulation interaction-start owner geometry plus complete frozen-selection geometry, common-transform/COPY tool and stage, frozen source selection/geometry snapshot, Base/Reference/axis points, active PointRequest, shared pointer candidate, Direct Distance resolution, current pointer-derived preview, the last repeatable Sketch command identity, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/transform drag state and workspace CAD input buffer/prompt/diagnostic state are runtime-only.
+Selection, primary selection, hover, active grip, current DirectEditMode, the direct-manipulation interaction-start owner geometry plus complete frozen-selection geometry, common-transform/COPY tool and stage, frozen source selection/geometry snapshot, Base/Reference/axis points, active PointRequest, shared pointer candidate, Direct Distance resolution, current pointer-derived preview, the runtime Measure EntityId target, the last repeatable Sketch command identity, camera, projection, transient detection, grid presentation, active-Sketch presentation tokens, Sketch Origin overlay, preview scene, Sketch point/rectangle/grip query results, grip scene, selection-box overlay, pointer routing, cursor mode, the active `SketchInteractionState`, Select/transform drag state and workspace CAD input buffer/prompt/diagnostic state are runtime-only.
 
 Persistent Origin visibility, authored Sketch geometry and entity roles, committed copied entities, model-local identity high-water, Part Profiles/RegionIntent and ProfileId high-water are authored/durable state. COPY and Profile hover/draft preview are never persisted.
 
