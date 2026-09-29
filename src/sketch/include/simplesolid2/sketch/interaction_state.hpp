@@ -48,8 +48,8 @@ enum class CircleStage : std::uint8_t {
 
 enum class ArcStage : std::uint8_t {
     await_start,
-    await_through,
     await_end,
+    await_arc_point,
 };
 
 enum class RectangleStage : std::uint8_t {
@@ -144,8 +144,10 @@ struct CirclePointResult final {
 enum class ArcPointOutcome : std::uint8_t {
     inactive_tool,
     invalid_point,
+    invalid_radius,
     start_accepted,
-    through_accepted,
+    end_accepted,
+    radius_locked,
     degenerate_ignored,
     arc_requested,
     request_pending,
@@ -433,6 +435,13 @@ public:
 
     [[nodiscard]] ArcPointResult acceptArcPoint(
         Point2 point) noexcept;
+    [[nodiscard]] ArcPointResult acceptArcPointer(
+        Point2 point) noexcept;
+    [[nodiscard]] ArcPointResult acceptArcRadius(
+        double radius) noexcept;
+    [[nodiscard]] bool arcRadiusLocked() const noexcept {
+        return arc_radius_lock_.has_value();
+    }
 
     [[nodiscard]] RectanglePointResult acceptRectanglePoint(
         Point2 point) noexcept;
@@ -624,7 +633,8 @@ private:
     ArcStage arc_stage_{
         ArcStage::await_start};
     std::optional<Point2> arc_start_;
-    std::optional<Point2> arc_through_;
+    std::optional<Point2> arc_end_;
+    std::optional<double> arc_radius_lock_;
     std::optional<ArcIntent>
         pending_arc_request_;
 

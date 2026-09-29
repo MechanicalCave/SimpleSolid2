@@ -228,6 +228,131 @@ arcThroughThreePoints(
         : std::nullopt;
 }
 
+[[nodiscard]] int directedChordSide(
+    Point2 start,
+    Point2 end,
+    Point2 point) noexcept {
+    if (!start.finite() ||
+        !end.finite() ||
+        !point.finite()) {
+        return 0;
+    }
+
+    const double du = end.u - start.u;
+    const double dv = end.v - start.v;
+    const double pu = point.u - start.u;
+    const double pv = point.v - start.v;
+    if (!std::isfinite(du) ||
+        !std::isfinite(dv) ||
+        !std::isfinite(pu) ||
+        !std::isfinite(pv)) {
+        return 0;
+    }
+
+    const double chord_scale =
+        std::max(std::abs(du), std::abs(dv));
+    const double point_scale =
+        std::max(std::abs(pu), std::abs(pv));
+    if (chord_scale <= 0.0 ||
+        point_scale <= 0.0) {
+        return 0;
+    }
+
+    const double cross =
+        (du / chord_scale) *
+            (pv / point_scale) -
+        (dv / chord_scale) *
+            (pu / point_scale);
+    if (!std::isfinite(cross) || cross == 0.0) {
+        return 0;
+    }
+    return cross > 0.0 ? 1 : -1;
+}
+
+[[nodiscard]] std::optional<ArcIntent>
+arcFromChordRadius(
+    Point2 start,
+    Point2 end,
+    Point2 side_point,
+    double radius) noexcept {
+    if (!start.finite() ||
+        !end.finite() ||
+        !side_point.finite() ||
+        !std::isfinite(radius) ||
+        radius <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double du = end.u - start.u;
+    const double dv = end.v - start.v;
+    const double chord = std::hypot(du, dv);
+    if (!std::isfinite(chord) || chord <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double half_chord = chord * 0.5;
+    if (radius < half_chord) {
+        return std::nullopt;
+    }
+
+    const int side =
+        directedChordSide(start, end, side_point);
+    if (side == 0) {
+        return std::nullopt;
+    }
+
+    const double ratio = half_chord / radius;
+    if (!std::isfinite(ratio) ||
+        ratio < 0.0 || ratio > 1.0) {
+        return std::nullopt;
+    }
+
+    const double offset =
+        radius *
+        std::sqrt(std::max(
+            0.0,
+            1.0 - ratio * ratio));
+    if (!std::isfinite(offset)) {
+        return std::nullopt;
+    }
+
+    const Point2 midpoint{
+        start.u + du * 0.5,
+        start.v + dv * 0.5};
+    const Point2 left_normal{
+        -dv / chord,
+        du / chord};
+    const Point2 center{
+        midpoint.u -
+            static_cast<double>(side) *
+                offset * left_normal.u,
+        midpoint.v -
+            static_cast<double>(side) *
+                offset * left_normal.v};
+    if (!center.finite()) {
+        return std::nullopt;
+    }
+
+    const double sweep_magnitude =
+        2.0 * std::asin(ratio);
+    if (!std::isfinite(sweep_magnitude) ||
+        sweep_magnitude <= 0.0 ||
+        sweep_magnitude > half_turn) {
+        return std::nullopt;
+    }
+
+    ArcIntent result{
+        center,
+        radius,
+        direction(center, start),
+        side > 0
+            ? -sweep_magnitude
+            : sweep_magnitude};
+    return result.valid()
+        ? std::optional<ArcIntent>{result}
+        : std::nullopt;
+}
+
 [[nodiscard]] std::optional<double>
 sameDirectionSweep(
     double start_angle,
@@ -1270,22 +1395,27 @@ SketchInteractionState::acceptArcPoint(
 
     if (arc_stage_ == ArcStage::await_start) {
         arc_start_ = point;
-        arc_stage_ = ArcStage::await_through;
+        arc_end_.reset();
+        arc_radius_lock_.reset();
+        point_pointer_candidate_ = point;
+        arc_stage_ = ArcStage::await_end;
         return {
             ArcPointOutcome::start_accepted,
             std::nullopt};
     }
 
-    if (arc_stage_ == ArcStage::await_through) {
+    if (arc_stage_ == ArcStage::await_end) {
         if (!arc_start_ || point == *arc_start_) {
             return {
                 ArcPointOutcome::degenerate_ignored,
                 std::nullopt};
         }
-        arc_through_ = point;
-        arc_stage_ = ArcStage::await_end;
+        arc_end_ = point;
+        arc_radius_lock_.reset();
+        point_pointer_candidate_ = point;
+        arc_stage_ = ArcStage::await_arc_point;
         return {
-            ArcPointOutcome::through_accepted,
+            ArcPointOutcome::end_accepted,
             std::nullopt};
     }
 
@@ -1294,21 +1424,121 @@ SketchInteractionState::acceptArcPoint(
             ArcPointOutcome::request_pending,
             std::nullopt};
     }
-    if (!arc_start_ || !arc_through_) {
+    if (!arc_start_ || !arc_end_) {
         resetArcStage();
         return {
             ArcPointOutcome::invalid_point,
             std::nullopt};
     }
 
+    // A complete explicit Arc Point outranks any runtime Radius lock.
+    arc_radius_lock_.reset();
     const auto request =
         arcThroughThreePoints(
             *arc_start_,
-            *arc_through_,
-            point);
+            point,
+            *arc_end_);
     if (!request) {
         return {
             ArcPointOutcome::degenerate_ignored,
+            std::nullopt};
+    }
+
+    pending_arc_request_ = *request;
+    return {
+        ArcPointOutcome::arc_requested,
+        request};
+}
+
+ArcPointResult
+SketchInteractionState::acceptArcPointer(
+    Point2 point) noexcept {
+    if (tool_ != SketchTool::arc ||
+        arc_stage_ != ArcStage::await_arc_point ||
+        !arc_radius_lock_) {
+        return acceptArcPoint(point);
+    }
+    if (!point.finite()) {
+        return {
+            ArcPointOutcome::invalid_point,
+            std::nullopt};
+    }
+    if (pending_arc_request_) {
+        return {
+            ArcPointOutcome::request_pending,
+            std::nullopt};
+    }
+    if (!arc_start_ || !arc_end_) {
+        resetArcStage();
+        return {
+            ArcPointOutcome::invalid_point,
+            std::nullopt};
+    }
+
+    point_pointer_candidate_ = point;
+    const auto request =
+        arcFromChordRadius(
+            *arc_start_,
+            *arc_end_,
+            point,
+            *arc_radius_lock_);
+    if (!request) {
+        return {
+            ArcPointOutcome::radius_locked,
+            std::nullopt};
+    }
+
+    pending_arc_request_ = *request;
+    return {
+        ArcPointOutcome::arc_requested,
+        request};
+}
+
+ArcPointResult
+SketchInteractionState::acceptArcRadius(
+    double radius) noexcept {
+    if (tool_ != SketchTool::arc) {
+        return {
+            ArcPointOutcome::inactive_tool,
+            std::nullopt};
+    }
+    if (arc_stage_ != ArcStage::await_arc_point ||
+        pending_arc_request_ ||
+        !arc_start_ ||
+        !arc_end_ ||
+        !std::isfinite(radius) ||
+        radius <= 0.0) {
+        return {
+            ArcPointOutcome::invalid_radius,
+            std::nullopt};
+    }
+
+    const double chord =
+        distance(*arc_start_, *arc_end_);
+    if (!std::isfinite(chord) ||
+        chord <= 0.0 ||
+        radius < chord * 0.5) {
+        return {
+            ArcPointOutcome::invalid_radius,
+            std::nullopt};
+    }
+
+    arc_radius_lock_ = radius;
+    if (!point_pointer_candidate_) {
+        return {
+            ArcPointOutcome::radius_locked,
+            std::nullopt};
+    }
+
+    const auto request =
+        arcFromChordRadius(
+            *arc_start_,
+            *arc_end_,
+            *point_pointer_candidate_,
+            radius);
+    if (!request) {
+        return {
+            ArcPointOutcome::radius_locked,
             std::nullopt};
     }
 
@@ -1410,7 +1640,7 @@ bool SketchInteractionState::resolveCircleRequest(
 bool SketchInteractionState::resolveArcRequest(
     bool committed) noexcept {
     if (tool_ != SketchTool::arc ||
-        arc_stage_ != ArcStage::await_end ||
+        arc_stage_ != ArcStage::await_arc_point ||
         !pending_arc_request_) {
         return false;
     }
@@ -1485,18 +1715,26 @@ std::optional<ArcIntent>
 SketchInteractionState::previewArc(
     Point2 current) const noexcept {
     if (tool_ != SketchTool::arc ||
-        arc_stage_ != ArcStage::await_end ||
+        arc_stage_ != ArcStage::await_arc_point ||
         !arc_start_ ||
-        !arc_through_ ||
+        !arc_end_ ||
         pending_arc_request_ ||
         !current.finite()) {
         return std::nullopt;
     }
 
+    if (arc_radius_lock_) {
+        return arcFromChordRadius(
+            *arc_start_,
+            *arc_end_,
+            current,
+            *arc_radius_lock_);
+    }
+
     return arcThroughThreePoints(
         *arc_start_,
-        *arc_through_,
-        current);
+        current,
+        *arc_end_);
 }
 
 std::optional<RectangleIntent>
@@ -2290,8 +2528,10 @@ void SketchInteractionState::resetArcStage()
     arc_stage_ =
         ArcStage::await_start;
     arc_start_.reset();
-    arc_through_.reset();
+    arc_end_.reset();
+    arc_radius_lock_.reset();
     pending_arc_request_.reset();
+    point_pointer_candidate_.reset();
 }
 
 void SketchInteractionState::resetRectangleStage()

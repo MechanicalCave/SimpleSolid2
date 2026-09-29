@@ -2799,7 +2799,7 @@ void PartSketchInteractionController::handleArcPointer(
     }
 
     const auto accepted =
-        interaction_.acceptArcPoint(
+        interaction_.acceptArcPointer(
             resolved->position);
 
     if (accepted.outcome ==
@@ -2839,7 +2839,9 @@ void PartSketchInteractionController::handleArcPointer(
     if (accepted.outcome ==
             sketch::ArcPointOutcome::start_accepted ||
         accepted.outcome ==
-            sketch::ArcPointOutcome::through_accepted ||
+            sketch::ArcPointOutcome::end_accepted ||
+        accepted.outcome ==
+            sketch::ArcPointOutcome::radius_locked ||
         accepted.outcome ==
             sketch::ArcPointOutcome::degenerate_ignored) {
         viewport_controller_->clearSketchPreview();
