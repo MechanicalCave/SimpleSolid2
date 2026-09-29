@@ -122,6 +122,55 @@ squareMarkerBitmap(
     return bitmap;
 }
 
+[[nodiscard]] occ::handle<NCollection_HArray1<std::uint8_t>>
+crossMarkerBitmap(
+    int size,
+    bool filled_center) {
+    if (size < 5) {
+        size = 5;
+    }
+    if ((size % 2) == 0) {
+        ++size;
+    }
+
+    const int bytes_per_row =
+        (size + 7) / 8;
+    const int byte_count =
+        bytes_per_row * size;
+    occ::handle<NCollection_HArray1<std::uint8_t>>
+        bitmap =
+            new NCollection_HArray1<std::uint8_t>(
+                0,
+                byte_count - 1);
+    bitmap->Init(0U);
+
+    const int center = size / 2;
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const bool on_cross =
+                x == center ||
+                y == center;
+            const bool on_center =
+                filled_center &&
+                std::abs(x - center) <= 1 &&
+                std::abs(y - center) <= 1;
+            if (!on_cross && !on_center) continue;
+
+            const int index =
+                y * bytes_per_row +
+                x / 8;
+            const auto bit =
+                static_cast<std::uint8_t>(
+                    0x80U >> (x % 8));
+            bitmap->ChangeValue(index) =
+                static_cast<std::uint8_t>(
+                    bitmap->Value(index) |
+                    bit);
+        }
+    }
+    return bitmap;
+}
+
 [[nodiscard]] int gripMarkerPixelSize(
     double logical_size,
     double dpr) noexcept {
@@ -1003,6 +1052,8 @@ public:
             return false;
         }
 
+        clearSketchMeasureMarkerScene();
+        clearSketchMeasureCueScene();
         clearSketchGripScene();
         sketch_interaction_presentation_ = {};
         clearSketchScene();
@@ -1464,6 +1515,291 @@ public:
         return viewer::SketchGripQueryResult{
             true,
             best};
+    }
+
+    bool setSketchMeasureMarkerScene(
+        const viewer::SketchMeasureMarkerScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearSketchMeasureMarkerScene();
+        ensureSketchMeasureMarkerAspects();
+
+        try {
+            for (const auto& marker : scene.markers) {
+                Handle(Geom_CartesianPoint) point =
+                    new Geom_CartesianPoint(
+                        toPoint(marker.position));
+                Handle(AIS_Point) object =
+                    new AIS_Point(point);
+
+                const bool selected =
+                    std::find(
+                        scene.selected.begin(),
+                        scene.selected.end(),
+                        marker.key) !=
+                    scene.selected.end();
+
+                object->Attributes()->SetPointAspect(
+                    selected
+                        ? sketch_measure_marker_selected_aspect_
+                        : sketch_measure_marker_revealed_aspect_);
+
+                if (selected) {
+                    context_->Display(object, false);
+                    context_->Deactivate(object);
+                }
+
+                sketch_measure_marker_objects_.push_back(
+                    SketchMeasureMarkerObject{
+                        marker.key,
+                        marker.position,
+                        object,
+                        selected
+                            ? SketchMeasureMarkerVisualState::selected
+                            : SketchMeasureMarkerVisualState::hidden});
+            }
+
+            sketch_measure_marker_scene_ = scene;
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearSketchMeasureMarkerScene();
+            throw;
+        }
+    }
+
+    bool updateSketchMeasureMarkerReveal(
+        double logical_x,
+        double logical_y) {
+        if (!std::isfinite(logical_x) ||
+            !std::isfinite(logical_y)) {
+            return false;
+        }
+        if (sketch_measure_marker_objects_.empty()) {
+            return true;
+        }
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        double dpr = owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) || dpr <= 0.0) {
+            return false;
+        }
+
+        const bool aspect_changed =
+            ensureSketchMeasureMarkerAspects();
+        const ScreenPoint pointer{
+            logical_x * dpr,
+            logical_y * dpr};
+        const double reveal_radius =
+            11.0 * dpr;
+        const double reveal_radius_sq =
+            reveal_radius * reveal_radius;
+        bool changed = aspect_changed;
+
+        for (auto& entry :
+             sketch_measure_marker_objects_) {
+            const bool selected =
+                std::find(
+                    sketch_measure_marker_scene_.selected.begin(),
+                    sketch_measure_marker_scene_.selected.end(),
+                    entry.key) !=
+                sketch_measure_marker_scene_.selected.end();
+
+            bool near_pointer{};
+            if (!selected) {
+                const auto projected =
+                    projectToScreen(entry.position);
+                if (!projected) {
+                    return false;
+                }
+                const double dx =
+                    pointer.x - projected->x;
+                const double dy =
+                    pointer.y - projected->y;
+                near_pointer =
+                    dx * dx + dy * dy <=
+                    reveal_radius_sq;
+            }
+
+            const auto desired =
+                selected
+                    ? SketchMeasureMarkerVisualState::selected
+                    : near_pointer
+                        ? SketchMeasureMarkerVisualState::revealed
+                        : SketchMeasureMarkerVisualState::hidden;
+
+            if (!aspect_changed &&
+                desired == entry.visual_state) {
+                continue;
+            }
+
+            if (desired ==
+                SketchMeasureMarkerVisualState::hidden) {
+                if (entry.visual_state !=
+                    SketchMeasureMarkerVisualState::hidden) {
+                    context_->Erase(entry.object, false);
+                }
+            } else {
+                entry.object->Attributes()->SetPointAspect(
+                    desired ==
+                            SketchMeasureMarkerVisualState::selected
+                        ? sketch_measure_marker_selected_aspect_
+                        : sketch_measure_marker_revealed_aspect_);
+                if (entry.visual_state ==
+                    SketchMeasureMarkerVisualState::hidden) {
+                    context_->Display(entry.object, false);
+                    context_->Deactivate(entry.object);
+                } else {
+                    context_->Redisplay(entry.object, false);
+                }
+            }
+
+            entry.visual_state = desired;
+            changed = true;
+        }
+
+        if (changed) {
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+        }
+        return true;
+    }
+
+    viewer::SketchMeasureMarkerQueryResult
+    querySketchMeasureMarkers(
+        viewer::ViewportPoint2 point) {
+        if (!point.valid()) {
+            return {};
+        }
+
+        ensureInitialized();
+        if (view_.IsNull()) {
+            return {};
+        }
+
+        const double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            return {};
+        }
+
+        const ScreenPoint query{
+            point.x * dpr,
+            point.y * dpr};
+        const double hit_radius =
+            8.0 * dpr;
+        const double hit_radius_sq =
+            hit_radius * hit_radius;
+
+        viewer::SketchMeasureMarkerQueryResult result;
+        result.completed = true;
+        for (const auto& entry :
+             sketch_measure_marker_objects_) {
+            if (entry.visual_state ==
+                SketchMeasureMarkerVisualState::hidden) {
+                continue;
+            }
+            const auto projected =
+                projectToScreen(entry.position);
+            if (!projected) {
+                return {};
+            }
+            const double dx =
+                query.x - projected->x;
+            const double dy =
+                query.y - projected->y;
+            if (dx * dx + dy * dy <=
+                hit_radius_sq) {
+                result.markers.push_back(entry.key);
+            }
+        }
+
+        return result.valid()
+            ? result
+            : viewer::SketchMeasureMarkerQueryResult{};
+    }
+
+    bool setSketchMeasureCueScene(
+        const viewer::SketchMeasureCueScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearSketchMeasureCueScene();
+
+        try {
+            sketch_measure_cue_scene_ = scene;
+
+            for (const auto& segment : scene.segments) {
+                Handle(Geom_CartesianPoint) start =
+                    new Geom_CartesianPoint(
+                        toPoint(segment.start));
+                Handle(Geom_CartesianPoint) end =
+                    new Geom_CartesianPoint(
+                        toPoint(segment.end));
+                Handle(AIS_Line) object =
+                    new AIS_Line(start, end);
+
+                const bool continuation =
+                    segment.kind ==
+                    viewer::SketchMeasureCueSegmentKind::
+                        supporting_line_continuation;
+                object->Attributes()->SetLineAspect(
+                    new Prs3d_LineAspect(
+                        continuation
+                            ? Quantity_Color{
+                                  0.55, 0.78, 0.96,
+                                  Quantity_TOC_RGB}
+                            : Quantity_Color{
+                                  0.20, 0.90, 0.95,
+                                  Quantity_TOC_RGB},
+                        continuation
+                            ? Aspect_TOL_DASH
+                            : Aspect_TOL_SOLID,
+                        continuation ? 1.4 : 2.2));
+                context_->Display(object, false);
+                context_->Deactivate(object);
+                sketch_measure_cue_objects_.push_back(
+                    object);
+            }
+
+            if (scene.cue_point) {
+                ensureSketchMeasureMarkerAspects();
+                Handle(Geom_CartesianPoint) point =
+                    new Geom_CartesianPoint(
+                        toPoint(*scene.cue_point));
+                Handle(AIS_Point) object =
+                    new AIS_Point(point);
+                object->Attributes()->SetPointAspect(
+                    sketch_measure_marker_revealed_aspect_);
+                context_->Display(object, false);
+                context_->Deactivate(object);
+                sketch_measure_cue_point_object_ =
+                    object;
+            }
+
+            applySelectionStyles();
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearSketchMeasureCueScene();
+            throw;
+        }
     }
 
     bool setPresentationSelection(
@@ -2179,6 +2515,21 @@ public:
             SketchGripVisualState::idle};
     };
 
+    enum class SketchMeasureMarkerVisualState
+        : std::uint8_t {
+        hidden,
+        revealed,
+        selected,
+    };
+
+    struct SketchMeasureMarkerObject final {
+        viewer::SketchMeasureMarkerKey key;
+        viewer::Point3 position;
+        Handle(AIS_Point) object;
+        SketchMeasureMarkerVisualState visual_state{
+            SketchMeasureMarkerVisualState::hidden};
+    };
+
     [[nodiscard]] static gp_Pnt toPoint(
         const viewer::Point3& point) {
         return gp_Pnt{point.x, point.y, point.z};
@@ -2487,6 +2838,63 @@ public:
         sketch_interaction_presentation_ = {};
     }
 
+    void clearSketchMeasureMarkerScene() noexcept {
+        if (!context_.IsNull()) {
+            for (const auto& entry :
+                 sketch_measure_marker_objects_) {
+                if (entry.object.IsNull()) continue;
+                const auto retained = entry.object;
+                guardedVoid(
+                    "removeSketchMeasureMarkerObject",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+
+        sketch_measure_marker_objects_.clear();
+        sketch_measure_marker_scene_.markers.clear();
+        sketch_measure_marker_scene_.selected.clear();
+    }
+
+    void clearSketchMeasureCueScene() noexcept {
+        if (!context_.IsNull()) {
+            for (const auto& object :
+                 sketch_measure_cue_objects_) {
+                if (object.IsNull()) continue;
+                const auto retained = object;
+                guardedVoid(
+                    "removeSketchMeasureCueObject",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+
+            if (!sketch_measure_cue_point_object_.IsNull()) {
+                const auto retained =
+                    sketch_measure_cue_point_object_;
+                guardedVoid(
+                    "removeSketchMeasureCuePoint",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+
+        sketch_measure_cue_objects_.clear();
+        sketch_measure_cue_point_object_.Nullify();
+        sketch_measure_cue_scene_ = {};
+        if (!context_.IsNull()) {
+            applySelectionStyles();
+        }
+    }
+
     void clearSketchPreviewScene() noexcept {
         if (!context_.IsNull()) {
             for (const auto& object :
@@ -2726,6 +3134,15 @@ public:
                     hovered_entity &&
                 *sketch_interaction_presentation_.
                     hovered_entity == entry.token;
+            const bool measure_highlighted =
+                std::find(
+                    sketch_measure_cue_scene_.
+                        highlighted_entities.begin(),
+                    sketch_measure_cue_scene_.
+                        highlighted_entities.end(),
+                    entry.token) !=
+                sketch_measure_cue_scene_.
+                    highlighted_entities.end();
 
             const auto color =
                 primary
@@ -2736,6 +3153,10 @@ public:
                         ? Quantity_Color{
                               1.0, 0.63, 0.18,
                               Quantity_TOC_RGB}
+                        : measure_highlighted
+                            ? Quantity_Color{
+                                  0.20, 0.90, 0.95,
+                                  Quantity_TOC_RGB}
                         : hovered
                             ? Quantity_Color{
                                   0.22, 0.82, 0.96,
@@ -2748,7 +3169,9 @@ public:
                     ? 4.0
                     : (selected
                            ? 3.0
-                           : (hovered ? 3.0 : 2.0));
+                           : (measure_highlighted
+                                  ? 3.2
+                                  : (hovered ? 3.0 : 2.0)));
 
             entry.object->Attributes()->SetLineAspect(
                 new Prs3d_LineAspect(
@@ -2818,6 +3241,50 @@ public:
                     true));
 
         sketch_grip_aspect_dpr_ = dpr;
+        return true;
+    }
+
+    [[nodiscard]] bool ensureSketchMeasureMarkerAspects() {
+        double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            dpr = 1.0;
+        }
+
+        if (sketch_measure_marker_aspect_dpr_ == dpr &&
+            !sketch_measure_marker_revealed_aspect_.IsNull() &&
+            !sketch_measure_marker_selected_aspect_.IsNull()) {
+            return false;
+        }
+
+        const int revealed_size =
+            gripMarkerPixelSize(9.0, dpr);
+        const int selected_size =
+            gripMarkerPixelSize(11.0, dpr);
+
+        sketch_measure_marker_revealed_aspect_ =
+            new Prs3d_PointAspect(
+                Quantity_Color{
+                    0.20, 0.90, 0.95,
+                    Quantity_TOC_RGB},
+                revealed_size,
+                revealed_size,
+                crossMarkerBitmap(
+                    revealed_size,
+                    false));
+        sketch_measure_marker_selected_aspect_ =
+            new Prs3d_PointAspect(
+                Quantity_Color{
+                    0.35, 1.0, 0.62,
+                    Quantity_TOC_RGB},
+                selected_size,
+                selected_size,
+                crossMarkerBitmap(
+                    selected_size,
+                    true));
+
+        sketch_measure_marker_aspect_dpr_ = dpr;
         return true;
     }
 
@@ -2955,6 +3422,10 @@ private:
     viewer::SketchGripScene sketch_grip_scene_;
     viewer::SketchInteractionPresentation
         sketch_interaction_presentation_;
+    viewer::SketchMeasureMarkerScene
+        sketch_measure_marker_scene_;
+    viewer::SketchMeasureCueScene
+        sketch_measure_cue_scene_;
     viewer::PresentationSelection selection_;
     viewer::SelectionIntentHandler selection_intent_handler_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
@@ -2987,6 +3458,17 @@ private:
     std::vector<SketchObject> sketch_objects_;
     std::vector<SketchGripObject>
         sketch_grip_objects_;
+    std::vector<SketchMeasureMarkerObject>
+        sketch_measure_marker_objects_;
+    std::vector<Handle(AIS_InteractiveObject)>
+        sketch_measure_cue_objects_;
+    Handle(AIS_InteractiveObject)
+        sketch_measure_cue_point_object_;
+    double sketch_measure_marker_aspect_dpr_{};
+    occ::handle<Prs3d_PointAspect>
+        sketch_measure_marker_revealed_aspect_;
+    occ::handle<Prs3d_PointAspect>
+        sketch_measure_marker_selected_aspect_;
     double sketch_grip_aspect_dpr_{};
     occ::handle<Prs3d_PointAspect>
         sketch_grip_idle_aspect_;
@@ -3155,6 +3637,35 @@ QtOcctViewerWidget::querySketchGrip(
         "querySketchGrip",
         [this, point] {
             return impl_->querySketchGrip(point);
+        });
+}
+
+bool QtOcctViewerWidget::setSketchMeasureMarkerScene(
+    const viewer::SketchMeasureMarkerScene& scene) {
+    return guardedBool(
+        "setSketchMeasureMarkerScene",
+        [this, &scene] {
+            return impl_->setSketchMeasureMarkerScene(scene);
+        });
+}
+
+viewer::SketchMeasureMarkerQueryResult
+QtOcctViewerWidget::querySketchMeasureMarkers(
+    viewer::ViewportPoint2 point) {
+    return guardedResult<
+        viewer::SketchMeasureMarkerQueryResult>(
+        "querySketchMeasureMarkers",
+        [this, point] {
+            return impl_->querySketchMeasureMarkers(point);
+        });
+}
+
+bool QtOcctViewerWidget::setSketchMeasureCueScene(
+    const viewer::SketchMeasureCueScene& scene) {
+    return guardedBool(
+        "setSketchMeasureCueScene",
+        [this, &scene] {
+            return impl_->setSketchMeasureCueScene(scene);
         });
 }
 
@@ -3424,6 +3935,15 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
         event->accept();
         return;
     }
+
+    guardedVoid(
+        "measureMarkerReveal",
+        [this, point] {
+            static_cast<void>(
+                impl_->updateSketchMeasureMarkerReveal(
+                    point.x(),
+                    point.y()));
+        });
 
     guardedVoid(
         "spatialMove",
