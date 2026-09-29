@@ -424,6 +424,20 @@ Examples:
 
 The Distance component uses the current Part length unit when unitless; an explicit length suffix overrides it. The Angle component is degrees when unitless; `deg` and `rad` override explicitly.
 
+The `@` marker makes the **point position relative to the active semantic base**. It does not make the angle relative.
+
+The Angle in `@Distance<Angle` is always an absolute directed angle in Sketch U/V measured from Sketch +U. Therefore the same textual token always resolves to the same direction for the same base, independent of runtime Polar Reference mode.
+
+Example:
+
+```text
+@100<30
+```
+
+always means "100 current length units from the active base at +30° from Sketch +U", even when Polar Reference is currently Relative.
+
+R10 introduces no alternate textual relative-angle syntax. If such syntax is added later, it must be explicit rather than changing the meaning of `@Distance<Angle` based on runtime UI state.
+
 ### 8.4 Direct Distance
 
 A single length expression is Direct Distance only when the active PointRequest explicitly enables it.
@@ -458,7 +472,8 @@ Rules:
 - two locked Cartesian components fully resolve the point;
 - locked Distance + Angle fully resolve the point;
 - locked Distance alone uses current resolved free direction;
-- locked Angle alone uses current pointer-derived magnitude along that angle;
+- locked Angle alone uses current pointer-derived magnitude along that exact Sketch-frame angle;
+- point-field Angle locks are always absolute from Sketch +U and never inherit Polar Absolute/Relative reference mode;
 - a complete submitted absolute/relative/polar point outranks mode assistance;
 - incompatible/conflicting locks fail closed rather than silently relaxing one;
 - no numeric lock becomes authored CAD state.
@@ -840,9 +855,10 @@ Polar assists only degrees of freedom that remain unspecified.
 
 Examples:
 
-- complete `@100<30` supplies both magnitude and direction, so Polar is ignored;
+- complete `@100<30` supplies both magnitude and absolute Sketch-frame direction, so Polar is ignored even if Polar Reference = Relative;
 - locked Distance = 100 leaves direction free, so captured Polar direction may supply it;
-- locked Angle = 30 supplies direction exactly, so Polar is ignored;
+- locked point-field Angle = 30 means exactly +30° from Sketch +U and therefore Polar is ignored;
+- Polar Reference Absolute/Relative changes only how pointer-assistance tracks are oriented; it never changes the interpretation of an explicit textual/locked angle;
 - with no locks, Polar may capture pointer direction while pointer magnitude remains pointer-derived.
 
 ## 21. Dynamic Input
@@ -965,7 +981,7 @@ Examples:
 Line:
 100  Tab  30  Enter
 => Distance = 100 [Locked]
-   Angle    = 30° [Locked]
+   Angle    = +30° from Sketch +U [Locked]
 ```
 
 ```text
@@ -988,7 +1004,7 @@ The request may be completed from a mixture of sources:
 Examples:
 
 - Line with Distance `100` Locked and Angle supplied by captured Polar commits exact length 100 along that Polar track;
-- Line with Distance and Angle both Locked commits independently of pointer position;
+- Line with Distance and Angle both Locked commits independently of pointer position and Polar Reference mode; the point-field Angle is absolute from Sketch +U;
 - Rotate with Angle Locked commits that exact signed angle;
 - Scale with Factor Locked commits that exact factor.
 
@@ -1248,38 +1264,40 @@ At minimum verify:
 68. Relative with no valid reference performs no Polar capture and does not silently fall back to Absolute;
 69. switching Absolute/Relative is runtime-only and has no revision/dirty/Undo effect;
 70. explicit complete point input outranks Polar;
-71. locked Distance may combine with captured Polar direction;
-72. locked Angle outranks Polar direction;
-73. conflicting locks fail closed;
-74. Dynamic Input default is OFF per Sketch edit;
-75. DYN OFF hides only overlay/field navigation and does not disable keyboard-first precision input;
-76. Dynamic Input has no authored state/history impact;
-77. Dynamic Input and Command Line feed the same request and same live CAD token;
-78. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
-79. Free / Assisted / Locked value states are semantically distinguishable in presentation;
-80. unbased point field order is U → V;
-81. normal based-point field order is Distance → Angle → dU → dV;
-82. Rectangle Opposite Corner field order is dU → dV and does not create durable Width/Height parameters;
-83. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
-84. valid token + Tab locks current field and advances;
-85. empty-buffer Tab advances without creating a lock;
-86. Shift+Tab moves backward deterministically;
-87. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
-88. request acceptance clears request-local locks;
-89. Esc follows buffer → locks → tool hierarchy;
-90. Sketch/tool/Document teardown clears precision runtime state;
-91. Measure displays correct current units without changing measurement semantics;
-92. changing units updates Measure presentation without geometry mutation;
-93. Construction dash-gap cadence is independent of entity length;
-94. Construction preview and committed geometry use the same cadence policy;
-95. Construction dash polish introduces no authored/persistent style state;
-96. R8 Measure/Between regressions remain green;
-97. R9 Rectangle/Construction/Profile regressions remain green;
-98. selection/grips/transforms/COPY/Grip Copy regressions remain green;
-99. global keyboard-first CAD input/focus arbitration regressions remain green;
-100. persistence backward-read coverage remains green;
-101. exact-head Windows FULL passes;
-102. required internal + PL/EN docs and Product Browser freshness pass.
+71. `@Distance<Angle` Angle is always absolute from Sketch +U and is independent of Polar Reference mode;
+72. locked point-field Angle is always absolute from Sketch +U and is independent of Polar Reference mode;
+73. locked Distance may combine with captured Polar direction;
+74. locked Angle outranks Polar direction;
+75. conflicting locks fail closed;
+76. Dynamic Input default is OFF per Sketch edit;
+77. DYN OFF hides only overlay/field navigation and does not disable keyboard-first precision input;
+78. Dynamic Input has no authored state/history impact;
+79. Dynamic Input and Command Line feed the same request and same live CAD token;
+80. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
+81. Free / Assisted / Locked value states are semantically distinguishable in presentation;
+82. unbased point field order is U → V;
+83. normal based-point field order is Distance → Angle → dU → dV;
+84. Rectangle Opposite Corner field order is dU → dV and does not create durable Width/Height parameters;
+85. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
+86. valid token + Tab locks current field and advances;
+87. empty-buffer Tab advances without creating a lock;
+88. Shift+Tab moves backward deterministically;
+89. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
+90. request acceptance clears request-local locks;
+91. Esc follows buffer → locks → tool hierarchy;
+92. Sketch/tool/Document teardown clears precision runtime state;
+93. Measure displays correct current units without changing measurement semantics;
+94. changing units updates Measure presentation without geometry mutation;
+95. Construction dash-gap cadence is independent of entity length;
+96. Construction preview and committed geometry use the same cadence policy;
+97. Construction dash polish introduces no authored/persistent style state;
+98. R8 Measure/Between regressions remain green;
+99. R9 Rectangle/Construction/Profile regressions remain green;
+100. selection/grips/transforms/COPY/Grip Copy regressions remain green;
+101. global keyboard-first CAD input/focus arbitration regressions remain green;
+102. persistence backward-read coverage remains green;
+103. exact-head Windows FULL passes;
+104. required internal + PL/EN docs and Product Browser freshness pass.
 
 ## 30. Manual Windows verification
 
@@ -1340,6 +1358,8 @@ Minimum checklist:
 - switch to Relative on a continuous Line and verify the previous committed segment becomes the 0° reference;
 - use Relative in a context with no valid semantic reference and verify Polar does not capture and does not silently fall back to Absolute;
 - switch back to Absolute and verify Sketch +U reference is restored without authored/history change;
+- with Polar Reference = Relative and a non-zero reference direction, submit `@100<30` and verify the result remains absolute +30° from Sketch +U;
+- with Polar Reference = Relative, lock Dynamic Input Angle = 30 and verify it remains absolute +30° from Sketch +U rather than reference+30°;
 - with DYN OFF, type precision input from the viewport and verify keyboard-first Command Line behavior remains fully functional;
 - enable DYN and verify overlay appears only for an active precision-capable semantic request;
 - verify Free, Polar-Assisted and keyboard-Locked values are visually distinguishable;
