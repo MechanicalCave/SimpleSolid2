@@ -62,6 +62,23 @@ QString fromFilesystemPath(const std::filesystem::path& value) {
 #endif
 }
 
+QString directEditModeText(
+    sketch::DirectEditMode mode) {
+    switch (mode) {
+    case sketch::DirectEditMode::reshape:
+        return QStringLiteral("Reshape");
+    case sketch::DirectEditMode::move:
+        return QStringLiteral("Move");
+    case sketch::DirectEditMode::rotate:
+        return QStringLiteral("Rotate");
+    case sketch::DirectEditMode::scale:
+        return QStringLiteral("Scale");
+    case sketch::DirectEditMode::mirror:
+        return QStringLiteral("Mirror");
+    }
+    return QStringLiteral("Unknown");
+}
+
 QString measurementRoleText(
     sketch::EntityRole role) {
     return role == sketch::EntityRole::construction
@@ -2302,9 +2319,9 @@ QString CadWorkbench::cadInputPromptText() const {
                 sketch_interaction_controller_->
                     directEditMode();
             const auto mode_text =
-                mode == sketch::DirectEditMode::move
-                    ? QStringLiteral("Move")
-                    : QStringLiteral("Reshape");
+                mode
+                    ? directEditModeText(*mode)
+                    : QStringLiteral("Unknown");
             return QStringLiteral(
                        "Command: SELECT — Grip %1")
                 .arg(mode_text);
@@ -3450,9 +3467,9 @@ void CadWorkbench::syncSketchInteractionUi() {
                 sketch_interaction_controller_->
                     directEditMode();
             const auto mode_text =
-                mode == sketch::DirectEditMode::move
-                    ? QStringLiteral("Move")
-                    : QStringLiteral("Reshape");
+                mode
+                    ? directEditModeText(*mode)
+                    : QStringLiteral("Unknown");
             operations_placeholder_->setText(
                 QStringLiteral(
                     "Grip — %1; Space cycles mode; Enter/LMB commits; Esc cancels")

@@ -561,10 +561,15 @@ bool SketchInteractionState::commonTransformTool()
 std::optional<PointRequest>
 SketchInteractionState::activePointRequest() const noexcept {
     if (manipulation_) {
+        const bool distance_enabled =
+            manipulation_->mode ==
+                DirectEditMode::reshape ||
+            manipulation_->mode ==
+                DirectEditMode::move;
         PointRequest request{
             manipulation_->pivot,
             point_pointer_candidate_,
-            true,
+            distance_enabled,
             true,
             true,
             true};
@@ -2328,7 +2333,9 @@ bool SketchInteractionState::directManipulationCopyEnabled()
 
 bool SketchInteractionState::enableDirectManipulationCopy()
     noexcept {
-    if (!manipulation_) {
+    if (!manipulation_ ||
+        (manipulation_->mode != DirectEditMode::reshape &&
+         manipulation_->mode != DirectEditMode::move)) {
         return false;
     }
     manipulation_->copy_enabled = true;
@@ -2340,30 +2347,77 @@ bool SketchInteractionState::cycleDirectEditMode() noexcept {
         return false;
     }
 
-    switch (manipulation_->active_grip.role) {
-    case SketchGripRole::line_center:
-    case SketchGripRole::circle_center:
-    case SketchGripRole::arc_center:
-        return false;
+    const bool center_grip =
+        manipulation_->active_grip.role ==
+            SketchGripRole::line_center ||
+        manipulation_->active_grip.role ==
+            SketchGripRole::circle_center ||
+        manipulation_->active_grip.role ==
+            SketchGripRole::arc_center;
 
-    case SketchGripRole::line_start:
-    case SketchGripRole::line_end:
-    case SketchGripRole::circle_quadrant_pos_u:
-    case SketchGripRole::circle_quadrant_pos_v:
-    case SketchGripRole::circle_quadrant_neg_u:
-    case SketchGripRole::circle_quadrant_neg_v:
-    case SketchGripRole::arc_start:
-    case SketchGripRole::arc_end:
-    case SketchGripRole::arc_mid:
-        manipulation_->mode =
-            manipulation_->mode == DirectEditMode::reshape
-                ? DirectEditMode::move
-                : DirectEditMode::reshape;
-        manipulation_->copy_enabled = false;
-        return true;
+    DirectEditMode next = manipulation_->mode;
+    if (center_grip) {
+        switch (manipulation_->mode) {
+        case DirectEditMode::reshape:
+        case DirectEditMode::mirror:
+            next = DirectEditMode::move;
+            break;
+        case DirectEditMode::move:
+            next = DirectEditMode::rotate;
+            break;
+        case DirectEditMode::rotate:
+            next = DirectEditMode::scale;
+            break;
+        case DirectEditMode::scale:
+            next = DirectEditMode::mirror;
+            break;
+        }
+    } else {
+        switch (manipulation_->mode) {
+        case DirectEditMode::reshape:
+            next = DirectEditMode::move;
+            break;
+        case DirectEditMode::move:
+            next = DirectEditMode::rotate;
+            break;
+        case DirectEditMode::rotate:
+            next = DirectEditMode::scale;
+            break;
+        case DirectEditMode::scale:
+            next = DirectEditMode::mirror;
+            break;
+        case DirectEditMode::mirror:
+            next = DirectEditMode::reshape;
+            break;
+        }
     }
 
-    return false;
+    manipulation_->mode = next;
+    manipulation_->copy_enabled = false;
+    manipulation_->rotate_reference_point.reset();
+    manipulation_->scale_reference_radius.reset();
+
+    const auto current =
+        manipulation_->current_input.position;
+    if (next == DirectEditMode::rotate &&
+        current.finite() &&
+        current != manipulation_->pivot) {
+        manipulation_->rotate_reference_point =
+            current;
+    } else if (next == DirectEditMode::scale &&
+               current.finite()) {
+        const double radius =
+            distance(
+                manipulation_->pivot,
+                current);
+        if (std::isfinite(radius) &&
+            radius > 0.0) {
+            manipulation_->scale_reference_radius =
+                radius;
+        }
+    }
+
+    return true;
 }
 
 bool SketchInteractionState::beginDirectManipulation(
@@ -2520,6 +2574,28 @@ bool SketchInteractionState::updateDirectManipulation(
         return false;
     }
 
+    if (manipulation_->mode ==
+            DirectEditMode::rotate &&
+        !manipulation_->rotate_reference_point &&
+        input.position != manipulation_->pivot) {
+        manipulation_->rotate_reference_point =
+            input.position;
+    }
+
+    if (manipulation_->mode ==
+            DirectEditMode::scale &&
+        !manipulation_->scale_reference_radius) {
+        const double radius =
+            distance(
+                manipulation_->pivot,
+                input.position);
+        if (std::isfinite(radius) &&
+            radius > 0.0) {
+            manipulation_->scale_reference_radius =
+                radius;
+        }
+    }
+
     manipulation_->current_input = input;
     return true;
 }
@@ -2535,13 +2611,64 @@ SketchInteractionState::directManipulationGeometryState()
     const auto current =
         manipulation_->current_input.position;
 
-    if (manipulation_->mode ==
-        DirectEditMode::move) {
+    switch (manipulation_->mode) {
+    case DirectEditMode::move:
         return translateSketchGeometry(
             manipulation_->selection_geometry,
             Point2{
                 current.u - manipulation_->pivot.u,
                 current.v - manipulation_->pivot.v});
+
+    case DirectEditMode::rotate:
+        if (!manipulation_->rotate_reference_point) {
+            return std::nullopt;
+        }
+        if (const auto angle =
+                signedAngle(
+                    manipulation_->pivot,
+                    *manipulation_->
+                        rotate_reference_point,
+                    current)) {
+            return rotateSketchGeometry(
+                manipulation_->selection_geometry,
+                manipulation_->pivot,
+                *angle);
+        }
+        return std::nullopt;
+
+    case DirectEditMode::scale:
+        if (!manipulation_->scale_reference_radius) {
+            return std::nullopt;
+        } else {
+            const double current_radius =
+                distance(
+                    manipulation_->pivot,
+                    current);
+            if (!std::isfinite(current_radius) ||
+                current_radius <= 0.0) {
+                return std::nullopt;
+            }
+            const double factor =
+                current_radius /
+                *manipulation_->
+                    scale_reference_radius;
+            return std::isfinite(factor) &&
+                           factor > 0.0
+                ? scaleSketchGeometry(
+                      manipulation_->selection_geometry,
+                      manipulation_->pivot,
+                      factor)
+                : std::nullopt;
+        }
+
+    case DirectEditMode::mirror:
+        return mirrorSketchGeometry(
+            manipulation_->selection_geometry,
+            manipulation_->pivot,
+            current);
+
+    case DirectEditMode::reshape:
+        break;
     }
 
     auto result =

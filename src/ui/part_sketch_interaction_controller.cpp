@@ -1185,7 +1185,7 @@ bool PartSketchInteractionController::cycleDirectEditMode() {
         interaction_.cycleDirectEditMode();
     if (!changed) {
         reportStatus(
-            "Only Move is available for this grip.");
+            "Grip edit mode could not be cycled.");
         notifyStateChanged();
         return false;
     }
@@ -1201,11 +1201,28 @@ bool PartSketchInteractionController::cycleDirectEditMode() {
     projectInteraction();
     notifyStateChanged();
 
+    const char* mode_name = "Unknown";
+    switch (*interaction_.directEditMode()) {
+    case sketch::DirectEditMode::reshape:
+        mode_name = "Reshape";
+        break;
+    case sketch::DirectEditMode::move:
+        mode_name = "Move";
+        break;
+    case sketch::DirectEditMode::rotate:
+        mode_name = "Rotate";
+        break;
+    case sketch::DirectEditMode::scale:
+        mode_name = "Scale";
+        break;
+    case sketch::DirectEditMode::mirror:
+        mode_name = "Mirror";
+        break;
+    }
+
     reportStatus(
-        interaction_.directEditMode() ==
-                sketch::DirectEditMode::move
-            ? "Grip edit mode: Move."
-            : "Grip edit mode: Reshape.");
+        std::string{"Grip edit mode: "} +
+        mode_name + ".");
     return true;
 }
 

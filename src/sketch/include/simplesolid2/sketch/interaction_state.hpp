@@ -219,6 +219,9 @@ using LineHandleRole = SketchGripRole;
 enum class DirectEditMode : std::uint8_t {
     reshape,
     move,
+    rotate,
+    scale,
+    mirror,
 };
 
 struct SketchGripRef final {
@@ -600,6 +603,8 @@ private:
         DirectManipulationGeometry selection_geometry;
         Point2 pivot;
         ResolvedSketchInput current_input;
+        std::optional<Point2> rotate_reference_point;
+        std::optional<double> scale_reference_radius;
         bool copy_enabled{};
     };
 

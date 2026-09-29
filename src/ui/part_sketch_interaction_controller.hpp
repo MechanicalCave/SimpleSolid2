@@ -112,9 +112,13 @@ public:
     }
     [[nodiscard]] bool
     cadInputSemanticGripCopyAvailable() const noexcept override {
+        const auto mode = directEditMode();
         return active() &&
                !profile_session_ &&
-               directManipulationActive();
+               directManipulationActive() &&
+               mode.has_value() &&
+               (*mode == sketch::DirectEditMode::reshape ||
+                *mode == sketch::DirectEditMode::move);
     }
     [[nodiscard]] bool
     submitCadInputSemanticGripCopy() override {
