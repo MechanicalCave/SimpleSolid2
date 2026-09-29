@@ -556,6 +556,47 @@ SketchInteractionState::activePointRequest() const noexcept {
             : std::nullopt;
     }
 
+    if (tool_ == SketchTool::circle &&
+        circle_stage_ == CircleStage::await_center &&
+        !pending_circle_request_) {
+        PointRequest request{
+            std::nullopt,
+            point_pointer_candidate_,
+            false,
+            true,
+            false,
+            false};
+        return request.valid()
+            ? std::optional<PointRequest>{request}
+            : std::nullopt;
+    }
+
+    if (tool_ == SketchTool::arc &&
+        !pending_arc_request_) {
+        const bool end_stage =
+            arc_stage_ == ArcStage::await_end &&
+            arc_start_.has_value();
+        const bool arc_point_stage =
+            arc_stage_ == ArcStage::await_arc_point &&
+            arc_start_.has_value() &&
+            arc_end_.has_value();
+
+        if (arc_stage_ == ArcStage::await_start ||
+            end_stage ||
+            arc_point_stage) {
+            PointRequest request{
+                end_stage ? arc_start_ : std::nullopt,
+                point_pointer_candidate_,
+                false,
+                true,
+                end_stage,
+                end_stage};
+            return request.valid()
+                ? std::optional<PointRequest>{request}
+                : std::nullopt;
+        }
+    }
+
     if (tool_ == SketchTool::rectangle &&
         !pending_rectangle_request_) {
         const bool first_corner =
@@ -1370,6 +1411,39 @@ SketchInteractionState::acceptCirclePoint(
     if (!request.valid()) {
         return {
             CirclePointOutcome::zero_radius_ignored,
+            std::nullopt};
+    }
+
+    pending_circle_request_ = request;
+    return {
+        CirclePointOutcome::circle_requested,
+        request};
+}
+
+CirclePointResult
+SketchInteractionState::acceptCircleRadius(
+    double radius) noexcept {
+    if (tool_ != SketchTool::circle) {
+        return {
+            CirclePointOutcome::inactive_tool,
+            std::nullopt};
+    }
+    if (circle_stage_ != CircleStage::await_radius ||
+        pending_circle_request_ ||
+        !circle_center_ ||
+        !std::isfinite(radius) ||
+        radius <= 0.0) {
+        return {
+            CirclePointOutcome::invalid_radius,
+            std::nullopt};
+    }
+
+    CircleIntent request{
+        *circle_center_,
+        radius};
+    if (!request.valid()) {
+        return {
+            CirclePointOutcome::invalid_radius,
             std::nullopt};
     }
 
@@ -2521,6 +2595,7 @@ void SketchInteractionState::resetCircleStage()
         CircleStage::await_center;
     circle_center_.reset();
     pending_circle_request_.reset();
+    point_pointer_candidate_.reset();
 }
 
 void SketchInteractionState::resetArcStage()

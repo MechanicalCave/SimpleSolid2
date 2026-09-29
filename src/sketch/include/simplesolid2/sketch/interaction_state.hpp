@@ -129,6 +129,7 @@ struct LinePointResult final {
 enum class CirclePointOutcome : std::uint8_t {
     inactive_tool,
     invalid_point,
+    invalid_radius,
     center_accepted,
     zero_radius_ignored,
     circle_requested,
@@ -432,6 +433,8 @@ public:
 
     [[nodiscard]] CirclePointResult acceptCirclePoint(
         Point2 point) noexcept;
+    [[nodiscard]] CirclePointResult acceptCircleRadius(
+        double radius) noexcept;
 
     [[nodiscard]] ArcPointResult acceptArcPoint(
         Point2 point) noexcept;

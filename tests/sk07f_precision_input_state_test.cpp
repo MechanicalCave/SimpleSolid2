@@ -188,6 +188,106 @@ int main() {
     state.cancelDirectManipulation();
     CHECK(!state.activePointRequest().has_value());
 
+    // Circle Center is an unbased exact point request. Size is a
+    // separate typed Length request, so no generic point request remains
+    // after Center is accepted.
+    {
+        sketch::SketchInteractionState circle;
+        circle.activateCircle();
+        auto circle_request = circle.activePointRequest();
+        CHECK(circle_request.has_value());
+        CHECK(!circle_request->base.has_value());
+        CHECK(circle_request->absolute_cartesian_enabled);
+        CHECK(!circle_request->relative_cartesian_enabled);
+        CHECK(!circle_request->relative_polar_enabled);
+        CHECK(!circle_request->direct_distance_enabled);
+
+        const auto center =
+            circle.resolveExplicitPoint(
+                {sketch::ExplicitPointInputKind::
+                     absolute_cartesian,
+                 5.0,
+                 6.0});
+        CHECK(center.has_value());
+        CHECK(
+            circle.acceptCirclePoint(center->position).outcome ==
+            sketch::CirclePointOutcome::center_accepted);
+        CHECK(!circle.activePointRequest().has_value());
+
+        CHECK(
+            circle.acceptCircleRadius(0.0).outcome ==
+            sketch::CirclePointOutcome::invalid_radius);
+        const auto exact_circle =
+            circle.acceptCircleRadius(7.5);
+        CHECK(
+            exact_circle.outcome ==
+            sketch::CirclePointOutcome::circle_requested);
+        CHECK(exact_circle.request.has_value());
+        CHECK(near(exact_circle.request->radius, 7.5));
+        CHECK(circle.resolveCircleRequest(true));
+    }
+
+    // Arc follows Start -> End -> Arc Point. End alone has Start as the
+    // relative base; the third Arc Point does not invent a relative base.
+    {
+        sketch::SketchInteractionState arc;
+        arc.activateArc();
+
+        auto arc_request = arc.activePointRequest();
+        CHECK(arc_request.has_value());
+        CHECK(!arc_request->base.has_value());
+        CHECK(arc_request->absolute_cartesian_enabled);
+        CHECK(!arc_request->relative_cartesian_enabled);
+        CHECK(!arc_request->relative_polar_enabled);
+        CHECK(!arc_request->direct_distance_enabled);
+
+        const auto start =
+            arc.resolveExplicitPoint(
+                {sketch::ExplicitPointInputKind::
+                     absolute_cartesian,
+                 1.0,
+                 2.0});
+        CHECK(start.has_value());
+        CHECK(
+            arc.acceptArcPoint(start->position).outcome ==
+            sketch::ArcPointOutcome::start_accepted);
+
+        arc_request = arc.activePointRequest();
+        CHECK(arc_request.has_value());
+        CHECK(arc_request->base == sketch::Point2{1.0, 2.0});
+        CHECK(arc_request->absolute_cartesian_enabled);
+        CHECK(arc_request->relative_cartesian_enabled);
+        CHECK(arc_request->relative_polar_enabled);
+        CHECK(!arc_request->direct_distance_enabled);
+
+        const auto end =
+            arc.resolveExplicitPoint(
+                {sketch::ExplicitPointInputKind::
+                     relative_cartesian,
+                 4.0,
+                 0.0});
+        CHECK(end.has_value());
+        CHECK(end->position == sketch::Point2{5.0, 2.0});
+        CHECK(
+            arc.acceptArcPoint(end->position).outcome ==
+            sketch::ArcPointOutcome::end_accepted);
+
+        arc_request = arc.activePointRequest();
+        CHECK(arc_request.has_value());
+        CHECK(!arc_request->base.has_value());
+        CHECK(arc_request->absolute_cartesian_enabled);
+        CHECK(!arc_request->relative_cartesian_enabled);
+        CHECK(!arc_request->relative_polar_enabled);
+        CHECK(!arc_request->direct_distance_enabled);
+        CHECK(
+            !arc.resolveExplicitPoint(
+                    {sketch::ExplicitPointInputKind::
+                         relative_cartesian,
+                     1.0,
+                     1.0})
+                 .has_value());
+    }
+
     std::cout << "SK-07F precision input state PASS\n";
     return EXIT_SUCCESS;
 }
