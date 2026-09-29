@@ -1,9 +1,9 @@
 version: 1
-status: completed
-active_work: "work/F_REGION_PROFILE_SEMANTICS.md"
+status: active
+active_work: "work/CI-03_FOCUSED_ITERATION.md"
 foundation_version: "1.0"
-program_roadmap: "work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md"
-program_roadmap_version: "1.0"
+program_roadmap: "work/SKETCH_ROADMAP.md"
+program_roadmap_version: "1.4"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -19,12 +19,19 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after completion of AUDIT-01 A-F
-  - if solid modeling is to continue, draft a separate bounded Part solid-operation Work Contract
-  - require explicit Owner acceptance of that contract before any Extrude or other solid-operation implementation
-  - preserve Package F exact region/Profile semantics and provider-neutral ownership boundaries
+  - implement accepted CI-03 focused targeted-build and exact-test iteration path
+  - preserve CI-01 trusted-FULL DOCS/CLOSURE semantics and CI-02 FAST/SUBSYSTEM/FULL meanings
+  - keep FOCUSED draft-only and never accept it as merge evidence
+  - fail closed to FAST or FULL when focused metadata is missing, invalid or verification-sensitive
+  - prove CI-03 itself with exact-head Windows FULL before completion
+  - update internal build/test documentation and Product Browser
+  - keep CAD/product mutation inactive while CI-03 is active
 
 notes:
+  - Owner accepted CI-03 Focused Iteration on 2026-09-29 after pipeline cost audit.
+  - CI-03 is D1 repository workflow/build tooling only; it does not authorize Sketcher, Part or other CAD product mutation.
+  - FOCUSED is iteration evidence only; final runtime merge evidence remains exact-head FULL under CI-01/CI-02.
+  - AUDIT-01 A-F is completed; Sketcher roadmap v1.4 is retained only as future feature-direction context while CI-03 optimizes verification tooling.
   - R0 through R4 are completed.
   - WB-01B merged to main as 5d75e561571c83ac50a241a0c4b5cf0e212c05f2 after FULL #381, Owner manual PASS and CLOSURE #382.
   - Owner accepted Sketcher roadmap v1.2 and revised SK-05A on 2026-09-26.
