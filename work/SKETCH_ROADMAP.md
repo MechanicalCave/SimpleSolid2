@@ -8,7 +8,7 @@
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Scheduling authority while stabilization is active:** `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0  
+**Current scheduling:** AUDIT-01 A-F and WB-02 are completed; R7 resumed through Owner-accepted SK-07G on 2026-09-29  
 
 ## 1. Why v1.4 changes the sequence
 
@@ -737,16 +737,14 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7 paused after completed SK-07F — accepted WB-02 global CAD Input foundation is active as the next cross-cutting prerequisite; Grip Copy and RMB context remain unauthorized  
+R7 active through Owner-accepted SK-07G Grip Copy Modifier — SK-07A through SK-07F and WB-02 are completed; ordinary RMB context remains separately unauthorized  
 R8+ not started
 
-Roadmap v1.4 is authoritative. Active WB-02 does not activate Grip Copy, RMB, R8, R9 or R10 and does not authorize any new semantic request type beyond migrating the existing Sketch client.
+Roadmap v1.4 remains authoritative. SK-07G activates only the bounded Grip Copy modifier slice; ordinary RMB context, R8, R9 and R10 remain inactive.
 
 
-## AUDIT-01 program interlock
+## AUDIT-01 program interlock — completed
 
-Owner accepted `work/AUDIT-01_ARCHITECTURE_STABILIZATION_PROGRAM.md` v1.0 on 2026-09-27.
+AUDIT-01 A-F is completed and no longer has scheduling precedence over Sketcher feature work.
 
-This roadmap remains authoritative for Sketch/Shared-2D feature direction, but AUDIT-01 has scheduling precedence while architecture stabilization is active. Feature milestones are not deleted or silently superseded; they resume only according to the accepted audit-program gates and explicit Owner scheduling.
-
-AUDIT-01 does not by itself activate Grip Copy, RMB context, R8+, region/profile implementation or solid modeling.
+The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29. Ordinary RMB context and R8+ remain separately bounded future work.
