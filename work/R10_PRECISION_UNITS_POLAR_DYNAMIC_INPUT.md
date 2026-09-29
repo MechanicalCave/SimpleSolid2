@@ -1201,7 +1201,11 @@ The overlay is positioned with a small logical-pixel offset from the cursor so i
 
 The user never has to click the floating field before typing.
 
-Printable keyboard input continues into the one ADR-0011 workspace CAD buffer. When DYN is ON, the active request's current Dynamic Input field provides the explicit semantic field context for that token.
+Printable keyboard input continues into the one ADR-0011 workspace CAD buffer. When DYN is ON, the active request's current Dynamic Input field provides explicit semantic context only for tokens that require field-local interpretation.
+
+A token that is already a complete request-level form keeps its request-level meaning regardless of which Dynamic Input field currently has focus. For a PointRequest, complete forms such as `U;V`, `@dU;dV` and `@Distance<Angle` are recognized before field-local scalar parsing. Therefore enabling DYN or moving field focus can never change the geometry produced by an explicit complete point token.
+
+Request-specific complete grammars follow the same rule. For example, Rectangle second-stage `Width;Height` and Arc third-stage complete Arc Point syntax are handled by their owning semantic request before a bare scalar is offered to the current Dynamic Input field.
 
 The Command Line may mirror the same live token. There is no duplicate hidden text state.
 
@@ -1632,32 +1636,34 @@ At minimum verify:
 104. F10 toggles Polar and F12 toggles DYN through existing CAD focus arbitration without stealing real text-editor input;
 105. Dynamic Input has no authored state/history impact;
 106. Dynamic Input and Command Line feed the same request and same live CAD token;
-107. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
-108. Free / Assisted / Locked value states are semantically distinguishable in presentation;
-109. unbased point field order is U → V;
-110. normal based-point field order is Distance → Angle → dU → dV;
-111. Rectangle second-stage field order is Width → Height and pointer quadrant supplies placement orientation;
-112. Circle Size exposes Diameter or Radius according to the current runtime mode, default Diameter;
-113. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
-114. valid token + Tab locks current field and advances;
-115. empty-buffer Tab advances without creating a lock;
-116. Shift+Tab moves backward deterministically;
-117. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
-118. request acceptance clears request-local locks;
-119. Esc follows buffer → locks → tool hierarchy;
-120. request-local numeric locks/candidates clear on tool/Sketch/Document teardown while application-session Polar/DYN settings survive Sketch teardown;
-121. Measure displays correct current units without changing measurement semantics;
-122. changing units updates Measure presentation without geometry mutation;
-123. Construction dash-gap cadence is independent of entity length;
-124. Construction preview and committed geometry use the same cadence policy;
-125. Construction dash polish introduces no authored/persistent style state;
-126. R8 Measure/Between regressions remain green;
-127. R9 Rectangle/Construction/Profile regressions remain green;
-128. selection/grips/transforms/COPY/Grip Copy regressions remain green;
-129. global keyboard-first CAD input/focus arbitration regressions remain green;
-130. persistence backward-read coverage remains green;
-131. exact-head Windows FULL passes;
-132. required internal + PL/EN docs and Product Browser freshness pass.
+107. complete request-level point syntax keeps identical meaning regardless of current Dynamic Input field focus;
+108. request-specific complete grammars are resolved by the owning semantic request before bare field-local scalar interpretation;
+109. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
+110. Free / Assisted / Locked value states are semantically distinguishable in presentation;
+111. unbased point field order is U → V;
+112. normal based-point field order is Distance → Angle → dU → dV;
+113. Rectangle second-stage field order is Width → Height and pointer quadrant supplies placement orientation;
+114. Circle Size exposes Diameter or Radius according to the current runtime mode, default Diameter;
+115. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
+116. valid token + Tab locks current field and advances;
+117. empty-buffer Tab advances without creating a lock;
+118. Shift+Tab moves backward deterministically;
+119. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
+120. request acceptance clears request-local locks;
+121. Esc follows buffer → locks → tool hierarchy;
+122. request-local numeric locks/candidates clear on tool/Sketch/Document teardown while application-session Polar/DYN settings survive Sketch teardown;
+123. Measure displays correct current units without changing measurement semantics;
+124. changing units updates Measure presentation without geometry mutation;
+125. Construction dash-gap cadence is independent of entity length;
+126. Construction preview and committed geometry use the same cadence policy;
+127. Construction dash polish introduces no authored/persistent style state;
+128. R8 Measure/Between regressions remain green;
+129. R9 Rectangle/Construction/Profile regressions remain green;
+130. selection/grips/transforms/COPY/Grip Copy regressions remain green;
+131. global keyboard-first CAD input/focus arbitration regressions remain green;
+132. persistence backward-read coverage remains green;
+133. exact-head Windows FULL passes;
+134. required internal + PL/EN docs and Product Browser freshness pass.
 
 ## 30. Manual Windows verification
 
@@ -1753,6 +1759,7 @@ Minimum checklist:
 - use Shift+Tab and verify deterministic reverse traversal;
 - RECTANGLE Size: type `50`, Tab, `30`, Enter and verify exact Width=50 / Height=30 with pointer-derived quadrant and no durable rectangle parameters;
 - Rotate/grip Rotate: verify single Angle field; Scale/grip Scale: single Factor field; grip Mirror: single Axis Angle field;
+- with different Dynamic Input fields focused, submit the same complete point token such as `@100<30` and verify it resolves to identical geometry every time;
 - verify Command Line and Dynamic Input resolve through the same request/live token and produce identical geometry for equivalent values;
 - verify Esc clears live text, then numeric locks, then normal tool stage;
 - move the cursor near viewport edges and verify overlay stays visible without covering the semantic point/grip unnecessarily;
