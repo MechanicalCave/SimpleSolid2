@@ -513,6 +513,15 @@ int main(int argc, char* argv[]) {
     auto* arc_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("arcSketchToolButton"));
+    auto* rectangle_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("rectangleSketchToolButton"));
+    auto* creation_construction_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("sketchCreationConstructionButton"));
+    auto* rectangle_diagonals_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("sketchRectangleDiagonalsButton"));
     auto* profile_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("profileSketchToolButton"));
@@ -615,6 +624,9 @@ int main(int argc, char* argv[]) {
     CHECK(line_button != nullptr);
     CHECK(circle_button != nullptr);
     CHECK(arc_button != nullptr);
+    CHECK(rectangle_button != nullptr);
+    CHECK(creation_construction_button != nullptr);
+    CHECK(rectangle_diagonals_button != nullptr);
     CHECK(profile_button != nullptr);
     CHECK(regular_role_button != nullptr);
     CHECK(construction_role_button != nullptr);
@@ -727,6 +739,67 @@ int main(int argc, char* argv[]) {
     CHECK(!rotate_button->isHidden());
     CHECK(!scale_button->isHidden());
     CHECK(!mirror_button->isHidden());
+
+    // R9: Rectangle and future-creation options live on the Create surface.
+    // They remain visually/semantically distinct from selected-geometry
+    // Regular/Construction mutation controls in Operations.
+    CHECK(!rectangle_button->isHidden());
+    CHECK(!creation_construction_button->isHidden());
+    CHECK(!rectangle_diagonals_button->isHidden());
+    CHECK(!creation_construction_button->isChecked());
+    CHECK(!rectangle_diagonals_button->isChecked());
+    CHECK(construction_role_button->isHidden());
+
+    const auto r9_option_state_before =
+        session->document().state();
+    const auto r9_option_revision_before =
+        session->document().revision();
+    const auto r9_option_undo_before =
+        session->undoDepth();
+
+    creation_construction_button->click();
+    rectangle_diagonals_button->click();
+    QApplication::processEvents();
+    CHECK(creation_construction_button->isChecked());
+    CHECK(rectangle_diagonals_button->isChecked());
+    CHECK(
+        session->document().state() ==
+        r9_option_state_before);
+    CHECK(
+        session->document().revision() ==
+        r9_option_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        r9_option_undo_before);
+
+    rectangle_button->click();
+    QApplication::processEvents();
+    CHECK(rectangle_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Rectangle — Specify first corner; Role: Construction; Draw Diagonals: On"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: RECTANGLE — Specify first corner"));
+
+    // Runtime options can be returned to their defaults without authored
+    // mutation; later tests in this host continue from Regular/OFF.
+    creation_construction_button->click();
+    rectangle_diagonals_button->click();
+    QApplication::processEvents();
+    CHECK(!creation_construction_button->isChecked());
+    CHECK(!rectangle_diagonals_button->isChecked());
+    CHECK(
+        session->document().state() ==
+        r9_option_state_before);
+    CHECK(
+        session->document().revision() ==
+        r9_option_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        r9_option_undo_before);
 
     // Package F: toolbar, Operations and Command Line are adapters to one
     // controller-owned transient Profile session.
