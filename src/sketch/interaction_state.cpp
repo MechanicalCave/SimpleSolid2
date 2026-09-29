@@ -1461,6 +1461,21 @@ SketchInteractionState::directEditMode() const noexcept {
     return manipulation_->mode;
 }
 
+bool SketchInteractionState::directManipulationCopyEnabled()
+    const noexcept {
+    return manipulation_.has_value() &&
+           manipulation_->copy_enabled;
+}
+
+bool SketchInteractionState::enableDirectManipulationCopy()
+    noexcept {
+    if (!manipulation_) {
+        return false;
+    }
+    manipulation_->copy_enabled = true;
+    return true;
+}
+
 bool SketchInteractionState::cycleDirectEditMode() noexcept {
     if (!manipulation_) {
         return false;
@@ -1485,6 +1500,7 @@ bool SketchInteractionState::cycleDirectEditMode() noexcept {
             manipulation_->mode == DirectEditMode::reshape
                 ? DirectEditMode::move
                 : DirectEditMode::reshape;
+        manipulation_->copy_enabled = false;
         return true;
     }
 

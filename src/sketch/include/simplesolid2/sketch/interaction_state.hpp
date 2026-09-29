@@ -400,6 +400,12 @@ public:
     [[nodiscard]] std::optional<DirectEditMode>
     directEditMode() const noexcept;
 
+    [[nodiscard]] bool directManipulationCopyEnabled()
+        const noexcept;
+
+    [[nodiscard]] bool enableDirectManipulationCopy()
+        noexcept;
+
     [[nodiscard]] bool cycleDirectEditMode() noexcept;
 
     [[nodiscard]] bool beginDirectManipulation(
@@ -440,6 +446,7 @@ private:
         DirectManipulationGeometry selection_geometry;
         Point2 pivot;
         ResolvedSketchInput current_input;
+        bool copy_enabled{};
     };
 
     [[nodiscard]] std::optional<EntityId>
