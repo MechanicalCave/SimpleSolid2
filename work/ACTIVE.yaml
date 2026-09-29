@@ -3,7 +3,7 @@ status: completed
 active_work: "work/SK-07G_GRIP_COPY_MODIFIER.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
-program_roadmap_version: "1.4"
+program_roadmap_version: "1.5"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -19,18 +19,26 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after SK-07G completion
-  - retain CI-03 FOCUSED for future bounded implementation slices
-  - preserve completed Grip Copy semantics and exact-head FULL #849 as final runtime evidence
-  - define ordinary RMB context as a separate Owner-reviewed Work Contract before implementation
-  - keep R8+ inactive until separately accepted
+  - keep production mutation inactive after SK-07G completion and Roadmap v1.5 sequencing acceptance
+  - prepare a separate Owner-reviewed R8 Measure / diagnostic dimensions Work Contract before any production implementation
+  - follow the accepted sequence R8 Measure -> R9 Rectangle/Construction -> R10 Precision -> R11 OSNAP/Inference -> R12 Trim/Split/Join
+  - stop after R12 for the explicit Sketcher profile-authoring readiness checkpoint
+  - do not activate solid modeling before both the profile-authoring checkpoint and a separate Owner-accepted Part Feature Tree architecture gate
+  - keep ordinary RMB context, authored constraints/solver, broader editing and planar-face Sketch inactive until separately accepted
 
 notes:
+  - Owner accepted Sketcher Roadmap v1.5 sequencing on 2026-09-29.
+  - Roadmap v1.5 prioritizes conscious profile authoring: Measure -> Rectangle/Construction -> Precision/Units/Ortho/Polar/Dynamic Input -> OSNAP/Tracking/Inference -> Trim/Split/Join -> explicit profile-authoring readiness checkpoint.
+  - Measure must remain read-only and must not prematurely freeze durable sub-element identity.
+  - Trim/Split/Join require an explicit Owner-accepted identity/reference outcome gate before implementation.
+  - Package F already provides provider-neutral region analysis and durable Part ProfileId/RegionIntent semantics; this is technical readiness only, not solid-modeling authorization.
+  - Before any first solid operation, a separate Owner-accepted Part Feature Tree architecture gate is mandatory.
+  - Ordinary RMB context is deferred until the Sketcher command set is broad enough for stable context-menu design.
   - SK-07G final implementation/documentation candidate aefbedadbb7395ece3eb73c7f360518f54ed8928 passed Windows FULL #849 with documentation, Build, core-only 14/14 and desktop 77/77.
   - Owner manual Windows verification passed on 2026-09-29 for the accepted Grip Copy workflow.
-  - SK-07G completion conditions are satisfied; ordinary RMB context remains the only separately bounded remaining R7 interaction slice and is inactive.
+  - SK-07G completion conditions are satisfied; Roadmap v1.5 treats R7 as completed and defers ordinary RMB context to later UX convergence.
   - Owner explicitly accepted SK-07G Grip Copy Modifier on 2026-09-29.
-  - SK-07G is the only active production scope; ordinary RMB context and R8+ remain inactive.
+  - No production scope is active after SK-07G; R8 is only the next planned milestone and requires a separate accepted Work Contract.
   - Grip Copy is an orthogonal runtime modifier: Move+Copy duplicates the frozen selection; Reshape+Copy duplicates only the active-grip owner.
   - Active-grip tool-local "C" enables Copy through the existing semantic CAD input path; it is not a global command alias.
   - CI-03 FOCUSED is the default iteration evidence; FULL remains mandatory merge evidence.

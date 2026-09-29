@@ -1,34 +1,50 @@
 # Sketcher Program Roadmap
 
 **Status:** ACCEPTED  
-**Version:** 1.4  
-**Owner acceptance:** 2026-09-27  
-**Previous accepted version:** 1.3 — 2026-09-27  
+**Version:** 1.5  
+**Owner acceptance:** 2026-09-29  
+**Previous accepted version:** 1.4 — 2026-09-27  
 **Foundation:** 1.0 (foundation-v1.0)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Current scheduling:** AUDIT-01 A-F, WB-02 and SK-07G are completed; ordinary RMB context remains the final separately bounded inactive R7 interaction slice  
+**Current scheduling:** R0–R7, WB-02 and AUDIT-01 A–F are completed; next planned Sketcher sequence is R8 Measure → R9 Rectangle/Construction → R10 Precision → R11 OSNAP/Inference → R12 Trim/Split/Join, followed by a profile-authoring readiness checkpoint. Solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
 
-## 1. Why v1.4 changes the sequence
+## 1. Why v1.5 changes the sequence
 
-Roadmap v1.3 correctly pulled the minimal PointRequest / context-first Command Line / Direct Distance seam into R7 as SK-07F. SK-07F is now completed after exact-head FULL #603, Owner manual PASS and CLOSURE #604.
+Roadmap v1.4 correctly established the shared CAD-input and transform foundations and is preserved for all completed semantics. Since then:
 
-Manual use confirmed the semantic model but exposed the next architectural boundary: the user must not click a Sketch-local text field before every precise keyboard input. The same keyboard/text channel will later be needed by Part modeling, Assembly and Drawing.
+- R7 has completed through Owner-accepted SK-07G Grip Copy;
+- AUDIT-01 A–F has completed;
+- Package F delivered the provider-neutral Shared 2D region-analysis core plus Part-owned durable ProfileId/RegionIntent semantics that the older roadmap had scheduled much later;
+- Construction is already a durable semantic role and is excluded from material-region analysis while remaining available to selection and future snap/measure/inference;
+- ordinary RMB context remains useful, but its final menu contents depend on a broader, more stable set of Sketcher operations;
+- Package F removed the technical region/profile prerequisite for future solid consumers, but it did not authorize solid modeling and did not define Body/Feature-tree architecture.
 
-This is not a reason to move CAD meaning into a global shell. It is a reason to separate global keyboard/text transport from the active tool's semantic InputRequest.
+The Owner therefore accepts a revised sequencing principle:
 
-Roadmap v1.4 therefore proposes:
+```text
+R8  Measure / diagnostics
+→ R9  Rectangle + Construction UI
+→ R10 Precision Input / Units / Ortho / Polar / Dynamic Input
+→ R11 OSNAP / Tracking / Inference
+→ R12 Trim / Split / Join with explicit identity outcomes
+→ Sketcher profile-authoring readiness checkpoint
+→ separate Part Feature Tree architecture gate
+→ only then may a first solid-operation contract be considered
+```
 
-- preserve completed R0–R6 and SK-07A through SK-07F unchanged;
-- add WB-02 as a cross-cutting prerequisite before remaining R7 Grip Copy/RMB work and before later precision-input expansion;
-- establish one workspace-global keyboard-first CAD input router and one global Command Line presentation;
-- keep semantic InputRequest ownership in the active tool/domain, with existing Sketch PointRequest as the first production client;
-- prevent Part/Sketch semantics from leaking into Project Workspace Shell;
-- leave new quantity request types, coordinates/units, Dynamic Input, Ortho/Polar and snapping for their later concrete contracts;
-- Grip Copy was later activated and completed through Owner-accepted SK-07G; ordinary RMB context remains separately unauthorized until accepted.
+This sequence optimizes for **conscious profile authoring** before solid modeling. Technical readiness to consume a Profile is not treated as product readiness to model solids.
 
-Roadmap v1.4 is authoritative. ADR-0011 and WB-02 were explicitly Owner-accepted on 2026-09-27.
+Three guardrails are explicit:
+
+1. R8 diagnostics must not prematurely freeze a durable sub-element identity model merely to display measurements.
+2. R12 cannot implement Trim/Split/Join until identity/reference outcomes are explicitly accepted; structural editing must be stable before authored relations/solver work depends on it.
+3. The profile-authoring checkpoint must have concrete acceptance evidence; it is not satisfied by a subjective statement that the Sketcher “feels sufficient”.
+
+Ordinary RMB context is deferred as a later UX-convergence item after the command set is broad enough to design the menu from stable operations. Existing already-accepted RMB semantics in command-first object collection remain unchanged.
+
+Roadmap v1.5 changes sequencing and future milestone boundaries only. It activates no production implementation by itself. Every milestone still requires its own accepted Work Contract.
 
 ## 2. Preserved accepted invariants
 
@@ -615,9 +631,9 @@ Goal:
 - prove the R5 interaction architecture is not Line-specific.
 
 ### R7 — Common transforms, shared precision foundation, Copy and command grammar
-**Status:** paused at completed SK-07F while accepted cross-cutting WB-02 is active; remaining R7 still requires separate accepted slices
+**Status:** completed — SK-07A through SK-07G plus WB-02
 
-Goal:
+Delivered:
 
 - one shared transform core for grip, toolbar and Command Line entry;
 - Move, Rotate, positive uniform Scale and Mirror;
@@ -625,42 +641,64 @@ Goal:
 - selection-first and command-first workflows;
 - explicit Base Point for normal Move/Copy/Rotate/Scale;
 - two-point mirror axis for normal Mirror;
-- repeated Copy with fresh EntityIds and per-placement Undo;
-- one shared semantic point-input request and context-first Command Line routing;
-- Direct Distance resolved from base + current pointer direction + numeric scalar;
-- first Direct Distance clients: Line second point, grip Reshape, grip Move, normal MOVE destination and normal COPY placement;
-- workspace-global keyboard-first CAD Input routing through proposed WB-02 before further command-grammar expansion;
-- Grip Copy command grammar only after the shared precision and global input foundations exist;
-- context RMB behavior;
+- repeated normal Copy with fresh EntityIds and per-placement Undo;
+- shared semantic PointRequest / context-first Command Line routing;
+- Direct Distance;
+- workspace-global keyboard-first CAD Input through WB-02;
 - Repeat Last Command;
-- common preview/commit/cancel pipeline;
-- organize Sketch toolbar actions into clear **Select / Create / Modify** sections.
+- Grip Copy;
+- common preview/commit/cancel foundations.
+
+Ordinary RMB context menu is no longer treated as a blocker for R7 completion. The already-accepted RMB behavior in command-first Select objects remains unchanged; the ordinary Select context menu is deferred to a later UX-convergence slice when the available operation set is broader.
 
 No multiple-active-grip feature is planned.
 
 ### R8 — Inspect / Measure / diagnostic dimensions
+**Status:** next planned milestone; inactive until separately accepted
+
 Goal:
 
 - implement read-only Measure across Line/Circle/Arc and semantic sub-elements;
-- context-dependent multi-entity measurements;
-- Selection and whole-Sketch Show Dimensions runtime overlays;
-- no authored dimensions or constraints.
+- support context-dependent multi-entity measurements;
+- support Selection and whole-Sketch Show Dimensions runtime overlays;
+- use semantic/runtime references sufficient for diagnostics without prematurely creating a durable authored-dimension or sub-element identity architecture;
+- keep measurement provider-neutral and derived from authoritative geometry;
+- no authored dimensions, constraints or solver.
 
-### R9 — Precision input expansion, Ortho, Polar and Dynamic Input
+R8 is intentionally first because it exercises semantic geometry references with low mutation risk and provides immediate engineering feedback for later snapping/editing work.
+
+### R9 — Rectangle and Construction authoring surface
+**Status:** planned; inactive
+
 Goal:
 
-- extend the workspace-global CAD input transport established by accepted/completed WB-02 when available;
+- implement Rectangle as a creation tool producing four ordinary authored Lines rather than a new durable rectangle primitive;
+- expose the already-established durable `Regular | Construction` role through coherent Sketcher UI/command behavior;
+- allow conscious creation/toggling of Construction geometry while preserving its existing selection/history/persistence semantics;
+- keep Construction excluded from material-region boundaries while available to selection, measure and later snap/inference;
+- preserve one semantic command/transaction boundary for one accepted logical Rectangle creation;
+- avoid introducing solver/constraint semantics merely to maintain rectangularity after later edits.
+
+### R10 — Precision input expansion, Units, Ortho, Polar and Dynamic Input
+**Status:** planned; inactive
+
+Goal:
+
+- extend the workspace-global CAD input transport established by WB-02;
 - extend the shared semantic Input Resolution path established by SK-07F rather than replace it;
 - absolute/relative Cartesian input;
 - relative polar input;
-- unit-aware expression grammar beyond the bare scalar foundation;
-- Dynamic Input fields and Tab locking;
+- explicit unit-aware quantity/expression grammar beyond the bare scalar foundation;
+- comma/dot decimal and accepted Cartesian component grammar under a bounded contract;
+- Dynamic Input fields and Tab locking/cycling;
 - Ortho/Polar mutual exclusion;
 - configurable polar increments/additional angles;
 - Absolute/Relative Polar preference;
-- Command Line and Dynamic Input feed one semantic request.
+- Command Line and Dynamic Input feed the same semantic request.
 
-### R10 — Object Snap, Object Snap Tracking and inference
+### R11 — Object Snap, Object Snap Tracking and inference
+**Status:** planned; inactive
+
 Goal:
 
 - user-configurable OSNAP mode set;
@@ -672,43 +710,106 @@ Goal:
 - inference guides;
 - no silent authored constraints.
 
-### R11 — Optional authored relations / local solver
+R11 depends on the R10 input-resolution foundation rather than creating a second point-resolution system.
+
+### R12 — Structural editing: Trim / Split / Join
+**Status:** planned; inactive
+
+Goal:
+
+- implement the minimum structural editing operations needed for practical profile authoring;
+- define Trim, Split and Join as semantic operations over authored geometry rather than Viewer/provider edits;
+- establish explicit EntityId, sub-element/reference, selection, Profile-reference, Undo/Redo and persistence outcomes before production implementation;
+- fail closed where an operation would make identity/reference meaning ambiguous;
+- preserve atomic Command → Validation → Transaction → owning Document → Evaluation authority;
+- do not introduce authored constraints/solver as an implicit side effect.
+
+**Mandatory gate:** before the first production Trim/Split/Join mutation, an Owner-accepted D2 contract must define identity/reference outcomes. Implementation is not authorized by this roadmap text alone.
+
+### Sketcher profile-authoring readiness checkpoint
+After R8–R12 are completed, the program must stop and verify that Sketcher can be used deliberately to author real Profiles.
+
+Minimum checkpoint evidence must demonstrate, on supported Windows:
+
+- practical creation/editing of Line, Circle, Arc and Rectangle;
+- usable Regular/Construction workflow;
+- read-only geometric inspection/measurement;
+- precise numeric/unit-aware point entry;
+- Ortho/Polar and Dynamic Input;
+- OSNAP/Tracking/Inference sufficient for deliberate geometric placement;
+- Trim/Split/Join with accepted stable identity/history behavior;
+- Undo/Redo and Save/Close/Reopen across representative workflows;
+- deliberate creation of valid Profile geometry without automatic gap healing or Viewer-dependent closure.
+
+This checkpoint does **not** require authored constraints/solver, ordinary RMB context menu, planar-face Sketch support or every future editing tool.
+
+Passing the checkpoint does not activate solid modeling.
+
+### Cross-program gate — Part Feature Tree architecture before solid modeling
+After the Sketcher profile-authoring readiness checkpoint, and before any first solid operation such as Extrude, SS2 requires a separate Owner-accepted Part architecture contract.
+
+That gate must define at least:
+
+- Part Body/Feature ownership and tree structure;
+- durable feature identity;
+- ordered history/dependency/evaluation semantics;
+- references from a feature to Profile/Sketch inputs;
+- edit/recompute/failure behavior;
+- Delete and dependency behavior;
+- visibility and Properties semantics;
+- Undo/Redo and persistence meaning;
+- separation of authored feature identity from derived kernel/provider topology;
+- how future operations compose without relying on OCCT topology ordinals.
+
+Package F provides Profile/Region technical readiness only. It does not satisfy this Part Feature Tree gate.
+
+Even after the architecture gate passes, the first solid operation still requires its own separately accepted Work Contract.
+
+### Later Sketcher evolution — not a prerequisite for the profile-authoring checkpoint
+
+#### R13 — Optional authored relations / local solver
 Goal:
 
 - introduce explicit durable relation semantics only under later accepted contracts;
 - keep snap/inference distinct from constraints;
 - optionally support an explicit Auto-Constraint user setting;
-- do not pre-decide driving/reference dimension architecture here.
+- decide driving/reference dimension architecture only when concrete requirements justify it.
 
-### R12 — Geometry breadth and editing operations
+R13 is deliberately after structural-edit identity stabilization. It is not automatically a prerequisite to the first Part architecture gate; the Owner may move it earlier if profile-authoring evidence shows that constraints are required for practical use.
+
+#### R14 — Broader geometry and editing operations
 Goal:
 
-- Rectangle as a tool creating four ordinary Lines;
-- construction role when concrete UI is delivered;
-- later Polyline decision remains explicit;
-- further primitives/edit operations only as justified;
-- Trim/Split/Join must define identity outcomes before implementation;
-- possible Offset, Fillet, Chamfer and further curve types.
+- add Offset, Fillet, Chamfer and further primitives/curve types only from concrete workflows;
+- make any Polyline decision explicit;
+- extend region analysis for future Regular curve kinds through the existing Package-F evaluated-curve seam;
+- preserve identity/reference rules established by earlier structural editing.
 
-### R13 — Planar region analysis and Sketch diagnostics
-Goal:
-
-- derive intersections/arrangement from evaluated non-construction geometry;
-- detect bounded regions/open chains and diagnostics;
-- preserve distinct region-analysis tolerances;
-- never silently repair gaps.
-
-### R14 — Part consumption of derived Sketch regions
-Goal:
-
-- Part consumes derived regions under an explicit persistence/rebinding contract.
-
-### R15 — Planar-face Sketch support and projected/reference geometry
+#### R15 — Planar-face Sketch support and projected/reference geometry
 Goal:
 
 - stable semantic support identity and frame;
 - provider-neutral exact projected/reference curves;
 - explicit reference/profile participation and associativity policy.
+
+### Deferred UX convergence — ordinary RMB context
+Ordinary Select RMB context remains reserved for a later bounded contract after a sufficiently broad command set exists.
+
+The future menu must adapt existing semantic operations rather than create parallel Move/Copy/Delete/Measure/etc. implementations. Exact menu contents, blank-space behavior, hit-under-cursor behavior and selection interaction remain open until that contract.
+
+### Region/Profile roadmap synchronization
+
+The old v1.4 R13/R14 direction for planar region analysis and Part consumption is no longer future work at its original scope.
+
+AUDIT-01 Package F has already delivered:
+
+- exact provider-neutral Shared 2D region analysis for current Regular Line/Circle/Arc;
+- durable Part-owned ProfileId + RegionIntent live-reference semantics;
+- Construction exclusion from material regions;
+- Profile invalidation/recovery and diagnostics;
+- persistence/lifecycle and common semantic authority across relevant UI/Command Line surfaces.
+
+Future region/profile work is incremental extension of this completed foundation, not a restart of those old milestones.
 
 ## 8. Decisions deliberately still open
 
@@ -719,12 +820,15 @@ The following remain future contract decisions because current evidence does not
 - exact application settings persistence implementation;
 - exact dwell timing for Object Snap Tracking acquisition;
 - exact numeric tolerances for snap/intersection/solver/region analysis;
+- whether future measurement sub-element references ever need durable identity beyond runtime diagnostics;
 - exact Polyline durable semantics;
-- exact Trim/Split/Join identity rules;
+- exact Trim/Split/Join identity rules — these must be decided by the mandatory R12 gate before implementation;
 - exact future constraint vocabulary/solver technology;
-- authored dimension model;
+- authored driving/reference dimension model;
 - exact later curve primitive ordering;
-- exact planar-face/projected-reference rebinding policy.
+- exact planar-face/projected-reference rebinding policy;
+- exact Part Body/Feature-tree architecture — reserved for the mandatory post-checkpoint Part architecture gate;
+- exact future RMB context-menu contents and selection interaction.
 
 These open details must not be guessed by an implementation contract outside its scope.
 
@@ -737,14 +841,19 @@ R3 completed
 R4 completed  
 R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS  
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
-R7 completed through SK-07G Grip Copy Modifier — SK-07A through SK-07G and WB-02 are completed; ordinary RMB context remains the final separately bounded inactive R7 interaction slice  
-R8+ not started
+R7 completed — SK-07A through SK-07G plus WB-02; ordinary RMB menu deferred by v1.5 sequencing decision  
+AUDIT-01 A–F completed — Package F already supplies the region/Profile foundation previously scheduled later  
+R8 next planned milestone — inactive until a separate Owner-accepted Work Contract  
+R9–R15 inactive  
+Sketcher profile-authoring readiness checkpoint not yet reached  
+Part Feature Tree architecture gate inactive  
+Solid modeling / Extrude inactive  
+Ordinary Select RMB context menu deferred as a later UX-convergence slice
 
-Roadmap v1.4 remains authoritative. SK-07G is completed; ordinary RMB context, R8, R9 and R10 remain inactive.
-
+Roadmap v1.5 is authoritative for Sketcher feature sequencing. The next production scope is not activated by this roadmap amendment.
 
 ## AUDIT-01 program interlock — completed
 
 AUDIT-01 A-F is completed and no longer has scheduling precedence over Sketcher feature work.
 
-The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29, and SK-07G is now completed after FULL #849 and Owner manual PASS. Ordinary RMB context and R8+ remain separately bounded future work.
+The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29, and SK-07G is completed after FULL #849 and Owner manual PASS. Roadmap v1.5 now defers ordinary RMB context and places R8–R12 before the explicit profile-authoring readiness checkpoint. Package F technical readiness does not activate solid modeling; a separate Part Feature Tree architecture gate and later solid-operation Work Contract remain mandatory.
