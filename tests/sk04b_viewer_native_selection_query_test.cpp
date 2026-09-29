@@ -1,6 +1,7 @@
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
 #include <QApplication>
+#include <QMouseEvent>
 #include <QTest>
 #include <QWidget>
 
@@ -37,6 +38,21 @@ bool contains(
                tokens.begin(),
                tokens.end(),
                token) != tokens.end();
+}
+
+void sendMouseMove(
+    QWidget& widget,
+    viewer::ViewportPoint2 point) {
+    QMouseEvent event{
+        QEvent::MouseMove,
+        QPointF{point.x, point.y},
+        Qt::NoButton,
+        Qt::NoButton,
+        Qt::NoModifier};
+    CHECK(QApplication::sendEvent(
+        &widget,
+        &event));
+    QApplication::processEvents();
 }
 
 } // namespace
@@ -181,17 +197,12 @@ int main(int argc, char* argv[]) {
     CHECK(hidden_measure.completed);
     CHECK(hidden_measure.markers.empty());
 
-    // QTest uses the OS cursor. In a suite the cursor may already be at the
-    // target pixel after a previous executable, so force a distinct movement
-    // first; reveal semantics must not depend on suite-global cursor history.
-    QTest::mouseMove(&widget, QPoint{5, 5});
-    QApplication::processEvents();
-    QTest::mouseMove(
-        &widget,
-        QPoint{
-            static_cast<int>(center.x),
-            static_cast<int>(center.y)});
-    QApplication::processEvents();
+    // Drive the actual QWidget mouseMoveEvent directly. QTest::mouseMove()
+    // depends on the suite-global OS cursor and is nondeterministic on CI.
+    sendMouseMove(
+        widget,
+        viewer::ViewportPoint2{5.0, 5.0});
+    sendMouseMove(widget, center);
 
     const auto revealed_measure =
         widget.querySketchMeasureMarkers(center);
@@ -211,8 +222,9 @@ int main(int argc, char* argv[]) {
             measure_center_long) !=
         revealed_measure.markers.end());
 
-    QTest::mouseMove(&widget, QPoint{5, 5});
-    QApplication::processEvents();
+    sendMouseMove(
+        widget,
+        viewer::ViewportPoint2{5.0, 5.0});
     const auto hidden_again =
         widget.querySketchMeasureMarkers(center);
     CHECK(hidden_again.completed);
@@ -222,8 +234,9 @@ int main(int argc, char* argv[]) {
         measure_center_short};
     CHECK(widget.setSketchMeasureMarkerScene(
         measure_markers));
-    QTest::mouseMove(&widget, QPoint{5, 5});
-    QApplication::processEvents();
+    sendMouseMove(
+        widget,
+        viewer::ViewportPoint2{5.0, 5.0});
     const auto pinned_measure =
         widget.querySketchMeasureMarkers(center);
     CHECK(pinned_measure.completed);
