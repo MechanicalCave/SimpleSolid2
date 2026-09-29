@@ -1,8 +1,8 @@
 # R8A — Read-only Measure Core + Single-Selection Diagnostics
 
-**Status:** PROPOSED — INACTIVE  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-29  
-**Owner acceptance:** pending  
+**Owner acceptance:** 2026-09-29  
 **Decision class:** D2 Sketch command/tool grammar and public diagnostic semantics + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  
