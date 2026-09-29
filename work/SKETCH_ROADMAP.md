@@ -8,7 +8,7 @@
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Current scheduling:** R0–R8, WB-02 and AUDIT-01 A–F are completed. Standalone R8C Show Dimensions is deferred to future authored/parametric dimension and constraint architecture. The next planned Sketcher sequence is R9 Rectangle/Construction → R10 Precision → R11 OSNAP/Inference → R12 Trim/Split/Join, followed by a profile-authoring readiness checkpoint. Solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
+**Current scheduling:** R0–R9, WB-02 and AUDIT-01 A–F are completed. Standalone R8C Show Dimensions is deferred to future authored/parametric dimension and constraint architecture. The next planned Sketcher sequence is R10 Precision → R11 OSNAP/Inference → R12 Trim/Split/Join, followed by a profile-authoring readiness checkpoint. Solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
 
 ## 1. Why v1.6 changes the sequence
 
@@ -666,19 +666,22 @@ Delivered:
 Standalone Selection/whole-Sketch **Show Dimensions** viewport overlays are deliberately deferred by Roadmap v1.6. They are not required for R8 completion and should be reconsidered with future authored/parametric dimensions and constraints rather than built as an independent temporary overlay architecture.
 
 ### R9 — Rectangle and Construction authoring surface
-**Status:** next planned milestone; inactive until a separate Owner-accepted Work Contract
+**Status:** completed — exact-head Windows FULL #912 + Owner manual Windows PASS
 
-Goal:
+Delivered:
 
-- implement Rectangle as a creation tool producing four ordinary authored Lines rather than a new durable rectangle primitive;
-- expose the already-established durable `Regular | Construction` role through coherent Sketcher UI/command behavior;
-- allow conscious creation/toggling of Construction geometry while preserving its existing selection/history/persistence semantics;
-- keep Construction excluded from material-region boundaries while available to selection, measure and later snap/inference;
-- preserve one semantic command/transaction boundary for one accepted logical Rectangle creation;
-- avoid introducing solver/constraint semantics merely to maintain rectangularity after later edits.
+- Rectangle as First Corner → Opposite Corner creation in Sketch-local U/V, decomposed to four ordinary independent authored Lines;
+- optional Draw Diagonals as two additional ordinary Construction Lines in the same atomic commit/Undo step;
+- runtime Creation Role for direct Regular/Construction Line/Circle/Arc/Rectangle authoring without duplicating the existing durable EntityRole model;
+- distinct selected-geometry role mutation versus future-creation role;
+- tool-only top Create strip with contextual Construction/Draw Diagonals options in the right Operations panel;
+- `RECTANGLE` Command Line activation and Repeat Last Command;
+- ordinary persistence/history/Profile behavior with no Rectangle-specific identity, grouping, center, constraint or schema.
+
+Owner accepted one non-blocking visual follow-up for a later suitable Sketcher milestone: Construction dash-gap cadence should not stretch/normalize with entity length. The exact screen-space versus model-space cadence policy remains a later bounded presentation decision and does not reopen R9.
 
 ### R10 — Precision input expansion, Units, Ortho, Polar and Dynamic Input
-**Status:** planned; inactive
+**Status:** next planned milestone; inactive until a separate Owner-accepted Work Contract
 
 Goal:
 
@@ -844,14 +847,15 @@ R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS
 R7 completed — SK-07A through SK-07G plus WB-02; ordinary RMB menu deferred by roadmap sequencing  
 AUDIT-01 A–F completed — Package F already supplies the region/Profile foundation previously scheduled later  
 R8 completed — R8A completed after exact-head FULL #867 and Owner manual PASS; R8B completed after exact-head FULL #889 and Owner manual PASS; standalone R8C Show Dimensions deferred by v1.6  
-R9 next planned milestone — inactive until a separate Owner-accepted Work Contract  
-R10–R15 inactive  
+R9 completed — exact-head FULL #912 and Owner manual Windows PASS on bfe36544d71593a407bada63c07ae0e4b912808f  
+R10 next planned milestone — inactive until a separate Owner-accepted Work Contract  
+R11–R15 inactive  
 Sketcher profile-authoring readiness checkpoint not yet reached  
 Part Feature Tree architecture gate inactive  
 Solid modeling / Extrude inactive  
 Ordinary Select RMB context menu deferred as a later UX-convergence slice
 
-Roadmap v1.6 is authoritative for Sketcher feature sequencing. The v1.5 expectation that R8C precede R9 is superseded. R9 is next in sequence but no production scope is active until a separate Owner-accepted Work Contract.
+Roadmap v1.6 is authoritative for Sketcher feature sequencing. The v1.5 expectation that R8C precede R9 is superseded. R9 is completed; R10 is next in sequence, but no R10 production scope is active until a separate Owner-accepted Work Contract.
 
 ## AUDIT-01 program interlock — completed
 

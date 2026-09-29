@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/R9_RECTANGLE_CONSTRUCTION_AUTHORING.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -19,13 +19,18 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - implement only the accepted R9 Rectangle + Construction authoring Work Contract
-  - preserve the accepted optional Rectangle Draw Diagonals mode as two ordinary Construction Lines in the same atomic Rectangle commit
-  - obtain focused/affected evidence, exact-head Windows FULL, Owner manual Windows PASS, required documentation/Product Browser and work-only CLOSURE before R9 completion
-  - keep R10+, ordinary RMB context, authored dimensions/constraints/solver and solid modeling inactive until separately accepted
-  - preserve Roadmap v1.6 sequencing: R9 -> R10 -> R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
+  - keep production mutation inactive after R9 completion
+  - prepare a separate Owner-reviewed R10 Precision Input / Units / Ortho / Polar / Dynamic Input Work Contract before any R10 production implementation
+  - carry the deferred Construction dash-gap cadence polish into the next suitable accepted Sketcher milestone without reopening R9 semantics
+  - keep R11+, ordinary RMB context, authored dimensions/constraints/solver and solid modeling inactive until separately accepted
+  - preserve Roadmap v1.6 sequencing: R10 -> R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - R9 final implementation/documentation/manual candidate bfe36544d71593a407bada63c07ae0e4b912808f passed exact-head Windows FULL #912 with documentation verification, desktop Build, core-only 14/14, FAST/SUBSYSTEM selector checks, unfiltered desktop 77/77 and final windows-msvc PASS.
+  - Owner manual Windows verification for R9 passed on 2026-09-29 on exact candidate bfe36544d71593a407bada63c07ae0e4b912808f, including the corrected UI composition with Construction/Draw Diagonals in the right Operations panel.
+  - Owner accepted one non-blocking visual carry-over for a later suitable Sketcher milestone: Construction dash-gap cadence must not stretch/normalize with entity length; exact screen-space versus model-space cadence policy remains intentionally undecided until that bounded presentation work.
+  - R9 completion conditions are satisfied; no production scope is active after R9.
+  - R10 is the next planned Sketcher milestone but remains inactive until a separate Owner-accepted Work Contract.
   - Owner explicitly accepted R9 Rectangle + Construction Authoring Surface on 2026-09-29, including the optional Draw Diagonals behavior discussed before acceptance.
   - R9 is ACTIVE only through `work/R9_RECTANGLE_CONSTRUCTION_AUTHORING.md`; R10+ remain inactive.
   - Draw Diagonals defaults OFF per Sketch edit, is runtime-only, and when enabled adds A→C and B→D as ordinary Construction Lines in the same atomic Rectangle transaction/Undo step; it creates no Rectangle center/group identity or constraint.
