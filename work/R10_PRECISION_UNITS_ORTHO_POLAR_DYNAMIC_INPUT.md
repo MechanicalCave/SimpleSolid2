@@ -567,7 +567,20 @@ Angle semantics:
 - bare value = degrees;
 - `deg` and `rad` accepted.
 
-Before an explicit Angle value is entered, pointer destination remains a valid adapter for live Rotate preview. Once an explicit Angle owns the request, preview and final commit use that exact signed angle and subsequent pointer motion does not alter its sign or magnitude.
+Before an explicit Angle value is entered, pointer destination remains a valid adapter for live Rotate preview.
+
+For grip Rotate entered through Space CycleEditMode:
+
+- the active grip is the pivot;
+- on entry to Rotate, the current finite pointer direction from pivot is captured as the zero/reference direction;
+- later pointer motion previews the signed angle from that frozen reference direction to the current pointer direction;
+- counter-clockwise preview is positive and clockwise preview is negative in Sketch U/V;
+- changing pointer radius does not change the preview angle;
+- if no finite non-zero pointer direction exists at mode entry, Rotate waits for the first valid pointer direction and captures that as the zero/reference direction;
+- cycling away from Rotate discards this runtime reference;
+- cycling back to Rotate captures a new zero/reference direction from the current pointer candidate rather than reusing the previous Rotate session reference.
+
+Once an explicit Angle owns the request, preview and final commit use that exact signed angle and subsequent pointer motion does not alter its sign or magnitude. The pointer reference remains runtime-only and creates no authored state/history.
 
 Dynamic Input shows Angle at the final stage and uses the same sign rule.
 
@@ -884,8 +897,11 @@ At minimum verify:
 33. non-center grip Space cycle is `Reshape → Move → Rotate → Scale → Mirror → Reshape`;
 34. center grip Space cycle is `Move → Rotate → Scale → Mirror → Move`;
 35. grip mode cycling preserves pivot/selection/source state and never compounds preview;
-36. Rotate accepts explicit signed Angle;
-37. Rotate positive/negative direction is deterministic and pointer-independent after explicit input;
+36. grip Rotate captures the current pivot→pointer direction as its zero/reference direction on entry, or the first later valid direction if none exists;
+37. grip Rotate pointer preview is the signed angle from the frozen zero/reference direction and is independent of pointer radius;
+38. re-entering grip Rotate captures a fresh zero/reference direction rather than reusing a prior one;
+39. Rotate accepts explicit signed Angle;
+40. Rotate positive/negative direction is deterministic and pointer-independent after explicit input;
 38. Scale accepts explicit positive Factor;
 39. Mirror axis accepts precision point input;
 37. Ortho default is OFF;
@@ -946,6 +962,9 @@ Minimum checklist:
 - non-center grip: cycle through Reshape → Move → Rotate → Scale → Mirror and back to Reshape;
 - center grip: cycle Move → Rotate → Scale → Mirror and back to Move;
 - verify grip cycling preserves the same pivot/selection/source geometry and does not compound preview;
+- enter grip Rotate with the pointer at a known direction, confirm that direction becomes 0°, then move around the pivot and verify signed preview from that frozen reference;
+- vary pointer radius without changing direction and verify the preview angle is unchanged;
+- cycle away from Rotate and back, then verify a fresh current pointer direction becomes the new 0° reference;
 - Rotate typed `30` and verify exact +30° CCW regardless of which side the pointer currently occupies;
 - Rotate typed `-30` and verify exact 30° CW regardless of pointer side;
 - Scale typed Factor;
