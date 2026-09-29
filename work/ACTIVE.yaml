@@ -33,8 +33,6 @@ notes:
   - Owner accepted Sketcher Roadmap v1.6 sequencing amendment on 2026-09-29: R8 is complete through R8A + R8B; standalone R8C Show Dimensions is deferred.
   - The unmerged R8C proposal PR #94 was closed as superseded without activation or production implementation.
   - Show Dimensions should be reconsidered with future authored/parametric dimensions and constraints so diagnostic presentation follows the eventual durable reference/dimension architecture instead of defining a temporary parallel overlay system.
-  - R9 Rectangle + Construction UI is now the next planned Sketcher milestone but remains inactive until a separate Owner-accepted Work Contract.
-  - No production scope is active after the Roadmap v1.6 amendment.
   - R8B final implementation/documentation candidate 3f1e0103e26bce49d075b5899cc3931f982f8320 passed the affected R8B checkpoints and exact-head Windows FULL #889.
   - R8B FULL #889 passed documentation/bootstrap/dispatcher checks, desktop Build, core-only 14/14, selector checks, desktop 77/77 and stable windows-msvc.
   - Owner manual Windows verification for R8B passed on 2026-09-29 on exact candidate 3f1e0103e26bce49d075b5899cc3931f982f8320.

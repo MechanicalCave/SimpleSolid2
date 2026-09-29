@@ -73,7 +73,7 @@ Pointer routing and cursor mode remain independent runtime axes. Ordinary Select
 
 `IDocumentViewport` remains provider-neutral. It exposes camera/navigation, reference scene, authored Sketch scene, Profile scene, transient Sketch/Profile preview scenes, presentation selection, neutral pointer transport, primary-pointer routing/cursor mode, Sketch point/rectangle queries, finite Sketch grip scene/query, runtime hover/active-grip presentation and the selection-box overlay channel.
 
-The authored Sketch scene carries one semantic presentation token per entity. Line uses one segment; Circle and Arc use one token plus an ordered finite point chain. It also carries the authored Regular/Construction role as presentation input. Qt/OCCT may display a curve as multiple derived native segments, but all of those segments map back to the single semantic token. Construction uses a dashed native line aspect; dash style is derived presentation only and never semantic identity.
+The authored Sketch scene carries one semantic presentation token per entity. Line uses one segment; Circle and Arc use one token plus an ordered finite point chain. It also carries the authored Regular/Construction role as presentation input. Qt/OCCT may display a curve as multiple derived native segments, but all of those segments map back to the single semantic token. Construction uses a dashed native line aspect; dash style is derived presentation only and never semantic identity. Transient Sketch preview lines also carry only a provider-neutral `construction` presentation flag, so a Construction creation preview or Rectangle diagonal can be dashed without giving the Viewer any role or identity authority.
 
 Grip keys are `PresentationToken + SketchGripRole` only inside the Viewer boundary. PartViewportController immediately maps them back to `SketchId + EntityId + semantic role`. Profile presentation tokens are likewise runtime-only and are mapped immediately to Part-owned `ProfileId`. No Qt/OCCT handle becomes CAD identity.
 
@@ -93,6 +93,9 @@ Create
   Line
   Circle
   Arc
+  Rectangle
+  Construction
+  Draw Diagonals
 
 Profile
   Profile
@@ -108,7 +111,11 @@ Inspect
   Measure
 ```
 
-The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit `SELECT`, `LINE`, `CIRCLE`, `ARC`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE`, `MIRROR`, `PROFILE` and `EDITPROFILE`. An active Profile session additionally accepts `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` and the documented option toggles. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar; during active direct grip manipulation it may also consume the tool-local token `C` to enable Grip Copy. `C` is not a top-level command alias. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
+The Create strip's **Construction** button is the runtime Creation Role for future Line/Circle/Arc and Rectangle-perimeter commits; it is deliberately separate from the Operations Regular/Construction controls that mutate already-selected authored geometry. **Draw Diagonals** is a Rectangle-only runtime option. Both reset with Sketch-edit teardown, create no history by themselves and never become persistent preferences.
+
+Rectangle is activated by the toolbar or the top-level `RECTANGLE` token and uses the same controller/interaction state. First Corner captures the current DocumentRevision; Opposite Corner commits four ordinary perimeter Lines, plus two ordinary Construction diagonals when enabled, through one atomic application command. Stale revision fails closed instead of silently rebasing the second click. No Rectangle/group/center identity enters the Viewer or authored model.
+
+The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit `SELECT`, `LINE`, `CIRCLE`, `ARC`, `RECTANGLE`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE`, `MIRROR`, `PROFILE` and `EDITPROFILE`. An active Profile session additionally accepts `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` and the documented option toggles. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar; during active direct grip manipulation it may also consume the tool-local token `C` to enable Grip Copy. `C` is not a top-level command alias. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
 
 D makes that ownership explicit in code. `application::CadInputSession` remains transport-only: it owns the live buffer, endpoint attachment/lifetime, context-generation binding and diagnostic transport, but it does not know Sketch tools, PointRequest, command keywords or numeric meaning.
 
@@ -128,7 +135,7 @@ Delete follows the same precedence rule as the rest of live CAD input. With norm
 
 The Command Line presentation is a geometry-stable single row. Its diagnostic region is permanently reserved and single-line; a long message is elided in place (with the full message available as tooltip) instead of wrapping, changing the input width or shrinking/moving the Viewer above it.
 
-`PartSketchInteractionController` owns one runtime-only **last repeatable command** identity for the active Sketch edit session. Successful explicit activation of Line/Circle/Arc/Move/Copy/Rotate/Scale/Mirror through toolbar or Command Line updates that one value. Measure is intentionally not repeatable and does not replace that remembered identity. Select, Delete, selection changes, grip/direct manipulation, Undo/Redo and Esc do not replace it.
+`PartSketchInteractionController` owns one runtime-only **last repeatable command** identity for the active Sketch edit session. Successful explicit activation of Line/Circle/Arc/Rectangle/Move/Copy/Rotate/Scale/Mirror through toolbar or Command Line updates that one value. Measure is intentionally not repeatable and does not replace that remembered identity. Select, Delete, selection changes, grip/direct manipulation, Undo/Redo and Esc do not replace it.
 
 In ordinary Select with viewport CAD focus, Enter or Space repeats that remembered command through the same existing activation methods. Repeat starts a fresh command invocation: it uses the current semantic selection and does not replay prior Base/Reference/axis/placement points, prior selection snapshots, preview state or copied EntityIds. An empty remembered state is a no-op. The remembered identity is cleared by Sketch edit begin/end, so it does not leak across Sketches, Documents or reopen.
 
