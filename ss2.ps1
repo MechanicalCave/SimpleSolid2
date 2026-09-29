@@ -1,6 +1,6 @@
 param(
     [Parameter(Position=0)]
-    [ValidateSet("setup","verify","configure","build","run","test","docs","clean","status","git-init")]
+    [ValidateSet("setup","verify","configure","build","run","test","check","docs","clean","status","git-init")]
     [string]$Command = "status",
 
     [string]$RemoteUrl = "",
@@ -12,6 +12,8 @@ param(
     [ValidateSet("fast","subsystem","full")]
     [string]$Tier = "full",
     [string[]]$Subsystem = @(),
+    [string[]]$Target = @(),
+    [string[]]$Test = @(),
     [switch]$NoBuild,
     [switch]$ListOnly,
     [switch]$SelfTest
@@ -24,6 +26,7 @@ $map = @{
     "build"     = "scripts\ss2-build.ps1"
     "run"       = "scripts\ss2-run.ps1"
     "test"      = "scripts\ss2-test.ps1"
+    "check"     = "scripts\ss2-check.ps1"
     "docs"      = "scripts\ss2-docs.ps1"
     "clean"     = "scripts\ss2-clean.ps1"
     "status"    = "scripts\ss2-status.ps1"
@@ -46,6 +49,7 @@ switch ($Command) {
     "git-init" { & $script -RemoteUrl $RemoteUrl -CommitGenesis:$CommitGenesis }
     "clean"    { & $script -All:$All }
     "test"     { & $script -Tier $Tier -Subsystem $Subsystem -NoBuild:$NoBuild -ListOnly:$ListOnly -SelfTest:$SelfTest }
+    "check"    { & $script -Target $Target -Test $Test -SelfTest:$SelfTest }
     default    { & $script }
 }
 exit $LASTEXITCODE
