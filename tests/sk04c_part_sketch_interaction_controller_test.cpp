@@ -1084,5 +1084,209 @@ int main(int argc, char* argv[]) {
         exact_interaction.end();
     }
 
+    {
+        auto rectangle_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession
+            rectangle_session{
+                std::filesystem::path{
+                    "sk04c-rectangle.ss2part"},
+                std::move(rectangle_document)};
+
+        const auto created_rectangle_sketch =
+            rectangle_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            created_rectangle_sketch.ok() &&
+            created_rectangle_sketch.sketch_id
+                .has_value());
+        const auto rectangle_sketch_id =
+            *created_rectangle_sketch.sketch_id;
+
+        QTreeWidget rectangle_tree;
+        ui::PartDocumentTreeController
+            rectangle_tree_controller{
+                rectangle_tree};
+        TestViewport rectangle_viewport;
+        ui::PartViewportController
+            rectangle_viewport_controller{
+                rectangle_tree_controller,
+                &rectangle_viewport};
+        rectangle_viewport_controller
+            .setDocumentSession(
+                &rectangle_session);
+        rectangle_viewport_controller
+            .setSketchEditSketch(
+                rectangle_sketch_id);
+
+        ui::PartSketchInteractionController
+            rectangle_interaction{
+                rectangle_viewport_controller};
+        rectangle_interaction.begin(
+            rectangle_session,
+            rectangle_sketch_id);
+
+        CHECK(
+            rectangle_interaction.creationRole() ==
+            sketch::EntityRole::regular);
+        CHECK(
+            !rectangle_interaction
+                 .rectangleDrawDiagonals());
+
+        const auto option_revision =
+            rectangle_session.document().revision();
+        const auto option_undo =
+            rectangle_session.undoDepth();
+        CHECK(
+            rectangle_interaction
+                .setRectangleDrawDiagonals(true));
+        CHECK(
+            rectangle_interaction
+                .rectangleDrawDiagonals());
+        CHECK(
+            rectangle_session.document().revision() ==
+            option_revision);
+        CHECK(
+            rectangle_session.undoDepth() ==
+            option_undo);
+
+        rectangle_interaction.activateRectangle();
+        CHECK(
+            rectangle_interaction.tool() ==
+            sketch::SketchTool::rectangle);
+        CHECK(
+            rectangle_interaction.rectangleStage() ==
+            sketch::RectangleStage::
+                await_first_corner);
+
+        rectangle_interaction.onPointer(
+            pointer(
+                rectangle_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                0.0, 0.0,
+                0.0, 0.0));
+        CHECK(
+            rectangle_interaction.rectangleStage() ==
+            sketch::RectangleStage::
+                await_opposite_corner);
+        const auto rectangle_request =
+            rectangle_interaction.activePointRequest();
+        CHECK(rectangle_request.has_value());
+        CHECK(!rectangle_request->direct_distance_enabled);
+
+        rectangle_interaction.onPointer(
+            pointer(
+                rectangle_sketch_id,
+                viewer::SpatialPointerPhase::move,
+                40.0, 20.0,
+                4.0, 2.0));
+        CHECK(
+            rectangle_viewport.preview_scene_
+                .lines.size() == 6U);
+        for (std::size_t index = 0U;
+             index < 4U;
+             ++index) {
+            CHECK(
+                !rectangle_viewport.preview_scene_
+                     .lines[index].construction);
+        }
+        CHECK(
+            rectangle_viewport.preview_scene_
+                .lines[4].construction);
+        CHECK(
+            rectangle_viewport.preview_scene_
+                .lines[5].construction);
+
+        const auto rectangle_undo =
+            rectangle_session.undoDepth();
+        rectangle_interaction.onPointer(
+            pointer(
+                rectangle_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                40.0, 20.0,
+                4.0, 2.0));
+        CHECK(
+            rectangle_session.undoDepth() ==
+            rectangle_undo + 1U);
+        const auto* authored_rectangle =
+            rectangle_session.document()
+                .findSketch(rectangle_sketch_id);
+        CHECK(authored_rectangle != nullptr);
+        CHECK(
+            authored_rectangle->model.entityCount() ==
+            6U);
+        CHECK(
+            rectangle_interaction.rectangleStage() ==
+            sketch::RectangleStage::
+                await_first_corner);
+        CHECK(
+            rectangle_interaction
+                .lastRepeatableCommand() ==
+            sketch::SketchTool::rectangle);
+
+        const auto& rectangle_lines =
+            authored_rectangle->model.state().lines;
+        CHECK(rectangle_lines.size() == 6U);
+        for (std::size_t index = 0U;
+             index < 4U;
+             ++index) {
+            CHECK(
+                rectangle_lines[index].role ==
+                sketch::EntityRole::regular);
+        }
+        CHECK(
+            rectangle_lines[4].role ==
+            sketch::EntityRole::construction);
+        CHECK(
+            rectangle_lines[5].role ==
+            sketch::EntityRole::construction);
+
+        rectangle_interaction.activateSelect();
+        CHECK(
+            rectangle_interaction.repeatLastCommand());
+        CHECK(
+            rectangle_interaction.tool() ==
+            sketch::SketchTool::rectangle);
+        CHECK(
+            rectangle_interaction
+                .rectangleDrawDiagonals());
+
+        CHECK(
+            rectangle_interaction.setCreationRole(
+                sketch::EntityRole::construction));
+        rectangle_interaction.activateLine();
+        CHECK(
+            rectangle_interaction.creationRole() ==
+            sketch::EntityRole::construction);
+        rectangle_interaction.activateCircle();
+        CHECK(
+            rectangle_interaction.creationRole() ==
+            sketch::EntityRole::construction);
+        rectangle_interaction.activateRectangle();
+        CHECK(
+            rectangle_interaction.creationRole() ==
+            sketch::EntityRole::construction);
+        CHECK(
+            rectangle_interaction
+                .rectangleDrawDiagonals());
+
+        rectangle_interaction.end();
+        rectangle_interaction.begin(
+            rectangle_session,
+            rectangle_sketch_id);
+        CHECK(
+            rectangle_interaction.creationRole() ==
+            sketch::EntityRole::regular);
+        CHECK(
+            !rectangle_interaction
+                 .rectangleDrawDiagonals());
+        rectangle_interaction.end();
+    }
+
     return EXIT_SUCCESS;
 }

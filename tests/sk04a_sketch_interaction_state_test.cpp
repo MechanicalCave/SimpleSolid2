@@ -245,6 +245,133 @@ int main() {
         state.tool() ==
         sketch::SketchTool::select);
 
+    // R9 Rectangle is one semantic two-corner tool with exact U/V
+    // decomposition. One scalar Direct Distance is deliberately disabled.
+    state.activateRectangle();
+    CHECK(
+        state.tool() ==
+        sketch::SketchTool::rectangle);
+    CHECK(
+        state.rectangleStage() ==
+        sketch::RectangleStage::await_first_corner);
+
+    auto rectangle_point_request =
+        state.activePointRequest();
+    CHECK(rectangle_point_request.has_value());
+    CHECK(!rectangle_point_request->base.has_value());
+    CHECK(!rectangle_point_request->direct_distance_enabled);
+
+    CHECK(
+        state.acceptRectanglePoint(a).outcome ==
+        sketch::RectanglePointOutcome::
+            first_corner_accepted);
+    CHECK(
+        state.rectangleStage() ==
+        sketch::RectangleStage::await_opposite_corner);
+
+    rectangle_point_request =
+        state.activePointRequest();
+    CHECK(rectangle_point_request.has_value());
+    CHECK(rectangle_point_request->base == a);
+    CHECK(!rectangle_point_request->direct_distance_enabled);
+
+    const sketch::Point2 rectangle_opposite{5.0, 7.0};
+    const auto rectangle_preview =
+        state.previewRectangle(rectangle_opposite);
+    CHECK(rectangle_preview.has_value());
+    CHECK(rectangle_preview->valid());
+
+    const auto rectangle_perimeter =
+        rectangle_preview->perimeter();
+    CHECK((
+        rectangle_perimeter[0] ==
+        sketch::LineSegmentIntent{
+            a,
+            {rectangle_opposite.u, a.v}}));
+    CHECK((
+        rectangle_perimeter[1] ==
+        sketch::LineSegmentIntent{
+            {rectangle_opposite.u, a.v},
+            rectangle_opposite}));
+    CHECK((
+        rectangle_perimeter[2] ==
+        sketch::LineSegmentIntent{
+            rectangle_opposite,
+            {a.u, rectangle_opposite.v}}));
+    CHECK((
+        rectangle_perimeter[3] ==
+        sketch::LineSegmentIntent{
+            {a.u, rectangle_opposite.v},
+            a}));
+
+    const auto rectangle_diagonals =
+        rectangle_preview->diagonals();
+    CHECK((
+        rectangle_diagonals[0] ==
+        sketch::LineSegmentIntent{
+            a,
+            rectangle_opposite}));
+    CHECK((
+        rectangle_diagonals[1] ==
+        sketch::LineSegmentIntent{
+            {rectangle_opposite.u, a.v},
+            {a.u, rectangle_opposite.v}}));
+
+    CHECK(
+        state.acceptRectanglePoint(
+                 {a.u, rectangle_opposite.v})
+                .outcome ==
+        sketch::RectanglePointOutcome::
+            degenerate_ignored);
+    CHECK(
+        state.rectangleStage() ==
+        sketch::RectangleStage::await_opposite_corner);
+
+    CHECK(
+        state.acceptRectanglePoint(
+                 rectangle_opposite)
+                .outcome ==
+        sketch::RectanglePointOutcome::
+            rectangle_requested);
+    CHECK(
+        !state.previewRectangle({8.0, 8.0})
+             .has_value());
+
+    CHECK(state.resolveRectangleRequest(false));
+    CHECK(
+        state.rectangleStage() ==
+        sketch::RectangleStage::await_opposite_corner);
+
+    CHECK(
+        state.acceptRectanglePoint(
+                 rectangle_opposite)
+                .outcome ==
+        sketch::RectanglePointOutcome::
+            rectangle_requested);
+    CHECK(state.resolveRectangleRequest(true));
+    CHECK(
+        state.rectangleStage() ==
+        sketch::RectangleStage::await_first_corner);
+    CHECK(
+        state.tool() ==
+        sketch::SketchTool::rectangle);
+
+    CHECK(
+        state.acceptRectanglePoint(a).outcome ==
+        sketch::RectanglePointOutcome::
+            first_corner_accepted);
+    CHECK(state.escape());
+    CHECK(
+        state.tool() ==
+        sketch::SketchTool::rectangle);
+    CHECK(
+        state.rectangleStage() ==
+        sketch::RectangleStage::await_first_corner);
+    CHECK(state.escape());
+    CHECK(
+        state.tool() ==
+        sketch::SketchTool::select);
+
     sketch::SketchModel model;
     const auto id1 =
         model.addLine(

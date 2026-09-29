@@ -84,6 +84,13 @@ int main() {
     CHECK(target.activated == sketch::SketchTool::line);
 
     target.activated.reset();
+    result = dot.submit(" rectangle ");
+    CHECK(result.accepted);
+    CHECK(
+        target.activated ==
+        sketch::SketchTool::rectangle);
+
+    target.activated.reset();
     result = dot.submit("measure");
     CHECK(result.accepted);
     CHECK(target.activated == sketch::SketchTool::measure);
@@ -217,6 +224,12 @@ int main() {
           "Active point input expects a bare finite distance.");
     CHECK(!target.activated.has_value());
     CHECK(!target.submitted_distance.has_value());
+
+    result = dot.submit("RECTANGLE");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic ==
+          "Active point input expects a bare finite distance.");
+    CHECK(!target.activated.has_value());
 
     application::SketchCadInputSemanticEndpoint comma{
         target, application::CadInputNumberFormat{","}};
