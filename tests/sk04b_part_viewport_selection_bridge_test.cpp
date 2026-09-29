@@ -102,6 +102,27 @@ public:
         return true;
     }
 
+    bool setSketchMeasureMarkerScene(
+        const viewer::SketchMeasureMarkerScene& scene) override {
+        if (!scene.valid()) return false;
+        measure_marker_scene_ = scene;
+        return true;
+    }
+
+    viewer::SketchMeasureMarkerQueryResult
+    querySketchMeasureMarkers(
+        viewer::ViewportPoint2 point) override {
+        if (!point.valid()) return {};
+        return measure_marker_query_;
+    }
+
+    bool setSketchMeasureCueScene(
+        const viewer::SketchMeasureCueScene& scene) override {
+        if (!scene.valid()) return false;
+        measure_cue_scene_ = scene;
+        return true;
+    }
+
     viewer::SketchPointQueryResult
     querySketchPresentation(
         viewer::ViewportPoint2 point) override {
@@ -166,6 +187,11 @@ public:
     viewer::SketchRectangleQueryResult rectangle_query_{
         true,
         {}};
+    viewer::SketchMeasureMarkerScene measure_marker_scene_;
+    viewer::SketchMeasureMarkerQueryResult measure_marker_query_{
+        true,
+        {}};
+    viewer::SketchMeasureCueScene measure_cue_scene_;
     std::optional<viewer::SketchRectangleSelectionRule>
         last_rule_;
     std::optional<viewer::SketchSelectionBoxOverlay>
@@ -358,6 +384,90 @@ int main(int argc, char* argv[]) {
         controller.querySketchEntityAt(
             viewer::ViewportPoint2{100.0, 100.0});
     CHECK(!point_failed.completed);
+
+    // R8B marker/cue bridge maps semantic runtime references to
+    // provider tokens and back without exposing EntityId to the Viewer.
+    const auto* measure_source =
+        session.document().findSketch(sketch_id);
+    CHECK(measure_source != nullptr);
+    const auto measure_catalog =
+        sketch::measurePointCatalog(
+            measure_source->model);
+    const sketch::MeasurePointRef measure_selected{
+        *first.entity_id,
+        sketch::MeasurePointRole::line_start};
+    const sketch::MeasurePointRef measure_circle_center{
+        *profile_circle.entity_id,
+        sketch::MeasurePointRole::circle_center};
+    const auto measure_relation =
+        sketch::measureRelation(
+            measure_source->model,
+            sketch::MeasureRelationTarget{
+                measure_circle_center},
+            sketch::MeasureRelationTarget{
+                sketch::MeasureLineRef{
+                    *first.entity_id}});
+    CHECK(measure_relation.has_value());
+    const auto measure_cue =
+        sketch::makeRelationalMeasurementCue(
+            *measure_relation);
+    CHECK(measure_cue.has_value());
+    CHECK(controller.projectSketchMeasurePresentation(
+        measure_catalog,
+        {measure_selected},
+        measure_cue));
+    CHECK(viewport.measure_marker_scene_.valid());
+    CHECK(viewport.measure_marker_scene_.markers.size() == 11U);
+    CHECK(viewport.measure_marker_scene_.selected.size() == 1U);
+    CHECK(viewport.measure_cue_scene_.valid());
+    CHECK(viewport.measure_cue_scene_.highlighted_entities.size() == 1U);
+    CHECK(viewport.measure_cue_scene_.segments.size() == 2U);
+    CHECK(viewport.measure_cue_scene_.cue_point.has_value());
+
+    const auto selected_marker_key =
+        viewport.measure_marker_scene_.selected.front();
+    const auto circle_center_key =
+        std::find_if(
+            viewport.measure_marker_scene_.markers.begin(),
+            viewport.measure_marker_scene_.markers.end(),
+            [profile_circle](
+                const viewer::SketchMeasureMarkerPresentation& marker) {
+                return marker.key.role ==
+                    viewer::SketchMeasureMarkerRole::circle_center;
+            });
+    CHECK(
+        circle_center_key !=
+        viewport.measure_marker_scene_.markers.end());
+
+    viewport.measure_marker_query_ = {
+        true,
+        {
+            selected_marker_key,
+            circle_center_key->key}};
+    const auto measure_hits =
+        controller.querySketchMeasureMarkersAt(
+            viewer::ViewportPoint2{100.0, 100.0});
+    CHECK(measure_hits.completed);
+    CHECK(measure_hits.hits.size() == 2U);
+    CHECK(
+        measure_hits.hits[0].sketch_id ==
+        sketch_id);
+    CHECK(
+        measure_hits.hits[0].point ==
+        measure_selected);
+    CHECK(
+        measure_hits.hits[1].point ==
+        measure_circle_center);
+
+    viewport.measure_marker_query_ = {};
+    CHECK(
+        !controller.querySketchMeasureMarkersAt(
+            viewer::ViewportPoint2{100.0, 100.0})
+             .completed);
+
+    controller.clearSketchMeasurePresentation();
+    CHECK(viewport.measure_marker_scene_.empty());
+    CHECK(viewport.measure_cue_scene_.empty());
 
     const auto rectangle =
         viewer::normalizedViewportRect(

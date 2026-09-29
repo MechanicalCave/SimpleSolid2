@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/sketch/entity_id.hpp>
+#include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/sketch/point2.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
 #include <simplesolid2/sketch/transform.hpp>
@@ -22,6 +23,14 @@ enum class SketchTool : std::uint8_t {
     rotate,
     scale,
     mirror,
+};
+
+enum class MeasureRelationAcceptOutcome : std::uint8_t {
+    inactive,
+    invalid_target,
+    first_target_accepted,
+    relation_accepted,
+    relation_rejected,
 };
 
 enum class LineStage : std::uint8_t {
@@ -279,6 +288,30 @@ public:
     [[nodiscard]] bool setMeasureTarget(
         const SketchModel& model,
         std::optional<EntityId> target) noexcept;
+
+    [[nodiscard]] bool measureBetweenActive()
+        const noexcept {
+        return measure_between_active_;
+    }
+    [[nodiscard]] bool enterMeasureBetween() noexcept;
+    void leaveMeasureBetween() noexcept;
+    [[nodiscard]] std::optional<MeasureRelationTarget>
+    measureFirstRelationTarget() const noexcept {
+        return measure_first_target_;
+    }
+    [[nodiscard]] std::optional<MeasureRelationTarget>
+    measureSecondRelationTarget() const noexcept {
+        return measure_second_target_;
+    }
+    [[nodiscard]] MeasureRelationAcceptOutcome
+    acceptMeasureRelationTarget(
+        const SketchModel& model,
+        MeasureRelationTarget target) noexcept;
+    [[nodiscard]] bool clearMeasureRelation() noexcept;
+    [[nodiscard]] std::optional<RelationalMeasurement>
+    measureRelationalResult(
+        const SketchModel& model) const noexcept;
+
     [[nodiscard]] bool activateMove(
         const SketchModel& model);
     [[nodiscard]] bool activateCopy(
@@ -482,6 +515,7 @@ private:
     void resetCircleStage() noexcept;
     void resetArcStage() noexcept;
     void resetCommonTransform() noexcept;
+    void resetMeasure() noexcept;
 
     SketchTool tool_{SketchTool::select};
 
@@ -512,6 +546,11 @@ private:
     std::optional<EntityId> hovered_entity_;
     std::optional<SketchGripRef> hovered_grip_;
     std::optional<EntityId> measure_target_;
+    bool measure_between_active_{};
+    std::optional<MeasureRelationTarget>
+        measure_first_target_;
+    std::optional<MeasureRelationTarget>
+        measure_second_target_;
     std::optional<DirectManipulationSession> manipulation_;
 
     // One shared runtime pointer candidate feeds the active semantic

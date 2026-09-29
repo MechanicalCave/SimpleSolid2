@@ -93,6 +93,25 @@ public:
         return {};
     }
 
+    virtual bool setSketchMeasureMarkerScene(
+        const SketchMeasureMarkerScene& scene) {
+        return scene.valid() &&
+               scene.empty();
+    }
+
+    [[nodiscard]] virtual SketchMeasureMarkerQueryResult
+    querySketchMeasureMarkers(
+        ViewportPoint2 point) {
+        (void)point;
+        return {};
+    }
+
+    virtual bool setSketchMeasureCueScene(
+        const SketchMeasureCueScene& scene) {
+        return scene.valid() &&
+               scene.empty();
+    }
+
     virtual bool setPresentationSelection(
         const PresentationSelection& selection) = 0;
 

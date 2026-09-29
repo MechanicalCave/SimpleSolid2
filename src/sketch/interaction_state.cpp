@@ -468,7 +468,7 @@ SketchInteractionState::resolveDirectDistance(
 }
 
 void SketchInteractionState::activateLine() noexcept {
-    measure_target_.reset();
+    resetMeasure();
     manipulation_.reset();
     point_pointer_candidate_.reset();
     resetCommonTransform();
@@ -480,7 +480,7 @@ void SketchInteractionState::activateLine() noexcept {
 }
 
 void SketchInteractionState::activateCircle() noexcept {
-    measure_target_.reset();
+    resetMeasure();
     manipulation_.reset();
     point_pointer_candidate_.reset();
     resetCommonTransform();
@@ -492,7 +492,7 @@ void SketchInteractionState::activateCircle() noexcept {
 }
 
 void SketchInteractionState::activateArc() noexcept {
-    measure_target_.reset();
+    resetMeasure();
     manipulation_.reset();
     point_pointer_candidate_.reset();
     resetCommonTransform();
@@ -513,7 +513,7 @@ void SketchInteractionState::activateMeasure(
     resetCircleStage();
     resetArcStage();
     tool_ = SketchTool::measure;
-    measure_target_.reset();
+    resetMeasure();
 
     if (selected_.size() == 1U &&
         model.contains(selected_.front())) {
@@ -524,7 +524,8 @@ void SketchInteractionState::activateMeasure(
 bool SketchInteractionState::setMeasureTarget(
     const SketchModel& model,
     std::optional<EntityId> target) noexcept {
-    if (tool_ != SketchTool::measure) {
+    if (tool_ != SketchTool::measure ||
+        measure_between_active_) {
         return false;
     }
     if (target &&
@@ -534,6 +535,117 @@ bool SketchInteractionState::setMeasureTarget(
     measure_target_ = target;
     clearHover();
     return true;
+}
+
+bool SketchInteractionState::enterMeasureBetween() noexcept {
+    if (tool_ != SketchTool::measure) {
+        return false;
+    }
+    if (measure_between_active_) {
+        return true;
+    }
+
+    measure_target_.reset();
+    measure_between_active_ = true;
+    measure_first_target_.reset();
+    measure_second_target_.reset();
+    clearHover();
+    return true;
+}
+
+void SketchInteractionState::leaveMeasureBetween() noexcept {
+    measure_between_active_ = false;
+    measure_first_target_.reset();
+    measure_second_target_.reset();
+    clearHover();
+}
+
+MeasureRelationAcceptOutcome
+SketchInteractionState::acceptMeasureRelationTarget(
+    const SketchModel& model,
+    MeasureRelationTarget target) noexcept {
+    if (tool_ != SketchTool::measure ||
+        !measure_between_active_) {
+        return MeasureRelationAcceptOutcome::inactive;
+    }
+
+    const bool valid_target =
+        std::visit(
+            [&model](const auto& value) {
+                using Value =
+                    std::decay_t<decltype(value)>;
+                if constexpr (
+                    std::is_same_v<
+                        Value,
+                        MeasurePointRef>) {
+                    return resolveMeasurePoint(
+                               model,
+                               value)
+                        .has_value();
+                } else {
+                    return value.valid() &&
+                           model.findLine(
+                               value.entity_id) !=
+                               nullptr;
+                }
+            },
+            target);
+    if (!valid_target) {
+        return MeasureRelationAcceptOutcome::
+            invalid_target;
+    }
+
+    if (measure_second_target_) {
+        measure_first_target_ = std::move(target);
+        measure_second_target_.reset();
+        return MeasureRelationAcceptOutcome::
+            first_target_accepted;
+    }
+
+    if (!measure_first_target_) {
+        measure_first_target_ = std::move(target);
+        return MeasureRelationAcceptOutcome::
+            first_target_accepted;
+    }
+
+    if (!measureRelation(
+            model,
+            *measure_first_target_,
+            target)) {
+        return MeasureRelationAcceptOutcome::
+            relation_rejected;
+    }
+
+    measure_second_target_ = std::move(target);
+    return MeasureRelationAcceptOutcome::
+        relation_accepted;
+}
+
+bool SketchInteractionState::clearMeasureRelation() noexcept {
+    if (!measure_between_active_) {
+        return false;
+    }
+    const bool changed =
+        measure_first_target_.has_value() ||
+        measure_second_target_.has_value();
+    measure_first_target_.reset();
+    measure_second_target_.reset();
+    return changed;
+}
+
+std::optional<RelationalMeasurement>
+SketchInteractionState::measureRelationalResult(
+    const SketchModel& model) const noexcept {
+    if (tool_ != SketchTool::measure ||
+        !measure_between_active_ ||
+        !measure_first_target_ ||
+        !measure_second_target_) {
+        return std::nullopt;
+    }
+    return measureRelation(
+        model,
+        *measure_first_target_,
+        *measure_second_target_);
 }
 
 bool SketchInteractionState::activateCommonTransform(
@@ -547,7 +659,7 @@ bool SketchInteractionState::activateCommonTransform(
         return false;
     }
 
-    measure_target_.reset();
+    resetMeasure();
     manipulation_.reset();
     point_pointer_candidate_.reset();
     resetCommonTransform();
@@ -1241,6 +1353,10 @@ bool SketchInteractionState::escape() noexcept {
     }
 
     if (tool_ == SketchTool::measure) {
+        if (measure_between_active_) {
+            leaveMeasureBetween();
+            return true;
+        }
         resetToSelect();
         clearHover();
         return true;
@@ -1903,7 +2019,7 @@ SketchInteractionState::deterministicPrimary()
 }
 
 void SketchInteractionState::resetToSelect() noexcept {
-    measure_target_.reset();
+    resetMeasure();
     tool_ = SketchTool::select;
     resetLineStage();
     resetCircleStage();
@@ -1941,6 +2057,13 @@ void SketchInteractionState::resetCommonTransform()
     noexcept {
     transform_session_.reset();
     point_pointer_candidate_.reset();
+}
+
+void SketchInteractionState::resetMeasure() noexcept {
+    measure_target_.reset();
+    measure_between_active_ = false;
+    measure_first_target_.reset();
+    measure_second_target_.reset();
 }
 
 } // namespace simplesolid2::sketch

@@ -134,6 +134,46 @@ semanticGripRole(
     return sketch::SketchGripRole::line_center;
 }
 
+[[nodiscard]] viewer::SketchMeasureMarkerRole
+viewerMeasureMarkerRole(
+    sketch::MeasurePointRole role) noexcept {
+    switch (role) {
+    case sketch::MeasurePointRole::line_start: return viewer::SketchMeasureMarkerRole::line_start;
+    case sketch::MeasurePointRole::line_midpoint: return viewer::SketchMeasureMarkerRole::line_midpoint;
+    case sketch::MeasurePointRole::line_end: return viewer::SketchMeasureMarkerRole::line_end;
+    case sketch::MeasurePointRole::circle_center: return viewer::SketchMeasureMarkerRole::circle_center;
+    case sketch::MeasurePointRole::circle_quadrant_pos_u: return viewer::SketchMeasureMarkerRole::circle_quadrant_pos_u;
+    case sketch::MeasurePointRole::circle_quadrant_pos_v: return viewer::SketchMeasureMarkerRole::circle_quadrant_pos_v;
+    case sketch::MeasurePointRole::circle_quadrant_neg_u: return viewer::SketchMeasureMarkerRole::circle_quadrant_neg_u;
+    case sketch::MeasurePointRole::circle_quadrant_neg_v: return viewer::SketchMeasureMarkerRole::circle_quadrant_neg_v;
+    case sketch::MeasurePointRole::arc_center: return viewer::SketchMeasureMarkerRole::arc_center;
+    case sketch::MeasurePointRole::arc_start: return viewer::SketchMeasureMarkerRole::arc_start;
+    case sketch::MeasurePointRole::arc_end: return viewer::SketchMeasureMarkerRole::arc_end;
+    case sketch::MeasurePointRole::arc_midpoint: return viewer::SketchMeasureMarkerRole::arc_midpoint;
+    }
+    return viewer::SketchMeasureMarkerRole::line_midpoint;
+}
+
+[[nodiscard]] sketch::MeasurePointRole
+semanticMeasurePointRole(
+    viewer::SketchMeasureMarkerRole role) noexcept {
+    switch (role) {
+    case viewer::SketchMeasureMarkerRole::line_start: return sketch::MeasurePointRole::line_start;
+    case viewer::SketchMeasureMarkerRole::line_midpoint: return sketch::MeasurePointRole::line_midpoint;
+    case viewer::SketchMeasureMarkerRole::line_end: return sketch::MeasurePointRole::line_end;
+    case viewer::SketchMeasureMarkerRole::circle_center: return sketch::MeasurePointRole::circle_center;
+    case viewer::SketchMeasureMarkerRole::circle_quadrant_pos_u: return sketch::MeasurePointRole::circle_quadrant_pos_u;
+    case viewer::SketchMeasureMarkerRole::circle_quadrant_pos_v: return sketch::MeasurePointRole::circle_quadrant_pos_v;
+    case viewer::SketchMeasureMarkerRole::circle_quadrant_neg_u: return sketch::MeasurePointRole::circle_quadrant_neg_u;
+    case viewer::SketchMeasureMarkerRole::circle_quadrant_neg_v: return sketch::MeasurePointRole::circle_quadrant_neg_v;
+    case viewer::SketchMeasureMarkerRole::arc_center: return sketch::MeasurePointRole::arc_center;
+    case viewer::SketchMeasureMarkerRole::arc_start: return sketch::MeasurePointRole::arc_start;
+    case viewer::SketchMeasureMarkerRole::arc_end: return sketch::MeasurePointRole::arc_end;
+    case viewer::SketchMeasureMarkerRole::arc_midpoint: return sketch::MeasurePointRole::arc_midpoint;
+    }
+    return sketch::MeasurePointRole::line_midpoint;
+}
+
 struct CurveSegment2D final {
     sketch::Point2 start;
     sketch::Point2 end;
@@ -828,6 +868,197 @@ PartViewportController::querySketchGripAt(
                 owner->entity_id,
                 semanticGripRole(
                     queried.grip->role)}}};
+}
+
+SketchMeasureMarkerPointQueryResult
+PartViewportController::querySketchMeasureMarkersAt(
+    viewer::ViewportPoint2 point) {
+    if (viewport_ == nullptr ||
+        activeSketch() == nullptr ||
+        !point.valid()) {
+        return {};
+    }
+
+    const auto queried =
+        viewport_->querySketchMeasureMarkers(point);
+    if (!queried.valid() ||
+        !queried.completed) {
+        return {};
+    }
+
+    SketchMeasureMarkerPointQueryResult result;
+    result.completed = true;
+    result.hits.reserve(queried.markers.size());
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr || !sketch_edit_id_) {
+        return {};
+    }
+
+    for (const auto& marker : queried.markers) {
+        const auto owner =
+            sketchEntityFor(marker.owner);
+        if (!owner ||
+            owner->sketch_id != *sketch_edit_id_) {
+            return {};
+        }
+
+        const sketch::MeasurePointRef ref{
+            owner->entity_id,
+            semanticMeasurePointRole(marker.role)};
+        if (!sketch::resolveMeasurePoint(
+                hosted->model,
+                ref)) {
+            return {};
+        }
+
+        result.hits.push_back(
+            SketchMeasureMarkerAddress{
+                owner->sketch_id,
+                ref});
+    }
+
+    return result;
+}
+
+bool PartViewportController::projectSketchMeasurePresentation(
+    const std::vector<sketch::ResolvedMeasurePoint>& catalog,
+    const std::vector<sketch::MeasurePointRef>& selected,
+    const std::optional<sketch::RelationalMeasurementCue>& cue) {
+    if (viewport_ == nullptr) {
+        return false;
+    }
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return false;
+    }
+
+    viewer::SketchMeasureMarkerScene marker_scene;
+    marker_scene.markers.reserve(catalog.size());
+    for (const auto& point : catalog) {
+        const auto token =
+            sketchPresentationFor(
+                point.ref.entity_id);
+        const auto world =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                point.point);
+        if (!token || !world) {
+            return false;
+        }
+        marker_scene.markers.push_back(
+            viewer::SketchMeasureMarkerPresentation{
+                {
+                    *token,
+                    viewerMeasureMarkerRole(
+                        point.ref.role)},
+                *world});
+    }
+
+    marker_scene.selected.reserve(selected.size());
+    for (const auto& ref : selected) {
+        const auto token =
+            sketchPresentationFor(ref.entity_id);
+        if (!token) {
+            return false;
+        }
+        marker_scene.selected.push_back(
+            viewer::SketchMeasureMarkerKey{
+                *token,
+                viewerMeasureMarkerRole(ref.role)});
+    }
+
+    if (!marker_scene.valid()) {
+        return false;
+    }
+
+    viewer::SketchMeasureCueScene cue_scene;
+    if (cue) {
+        if (!cue->valid()) {
+            return false;
+        }
+
+        cue_scene.highlighted_entities.reserve(
+            cue->highlighted_lines.size());
+        for (const auto id :
+             cue->highlighted_lines) {
+            const auto token =
+                sketchPresentationFor(id);
+            if (!token) {
+                return false;
+            }
+            cue_scene.highlighted_entities.push_back(
+                *token);
+        }
+
+        cue_scene.segments.reserve(
+            cue->segments.size());
+        for (const auto& segment :
+             cue->segments) {
+            const auto start =
+                detail::sketchPointToWorld(
+                    hosted->placement,
+                    segment.start);
+            const auto end =
+                detail::sketchPointToWorld(
+                    hosted->placement,
+                    segment.end);
+            if (!start || !end) {
+                return false;
+            }
+            cue_scene.segments.push_back(
+                viewer::SketchMeasureCueSegment{
+                    *start,
+                    *end,
+                    segment.kind ==
+                            sketch::MeasureCueSegmentKind::
+                                supporting_line_continuation
+                        ? viewer::SketchMeasureCueSegmentKind::
+                              supporting_line_continuation
+                        : viewer::SketchMeasureCueSegmentKind::
+                              relation});
+        }
+
+        if (cue->cue_point) {
+            const auto world =
+                detail::sketchPointToWorld(
+                    hosted->placement,
+                    *cue->cue_point);
+            if (!world) {
+                return false;
+            }
+            cue_scene.cue_point = *world;
+        }
+    }
+
+    if (!cue_scene.valid()) {
+        return false;
+    }
+
+    if (!viewport_->setSketchMeasureMarkerScene(
+            marker_scene)) {
+        return false;
+    }
+    if (!viewport_->setSketchMeasureCueScene(
+            cue_scene)) {
+        static_cast<void>(
+            viewport_->setSketchMeasureMarkerScene(
+                viewer::SketchMeasureMarkerScene{}));
+        return false;
+    }
+    return true;
+}
+
+void PartViewportController::clearSketchMeasurePresentation() {
+    if (viewport_ == nullptr) {
+        return;
+    }
+    static_cast<void>(
+        viewport_->setSketchMeasureMarkerScene(
+            viewer::SketchMeasureMarkerScene{}));
+    static_cast<void>(
+        viewport_->setSketchMeasureCueScene(
+            viewer::SketchMeasureCueScene{}));
 }
 
 SketchEntityRectangleQueryResult

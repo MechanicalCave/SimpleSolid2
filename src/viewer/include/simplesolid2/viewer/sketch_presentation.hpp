@@ -221,4 +221,193 @@ struct SketchGripQueryResult final {
     }
 };
 
+enum class SketchMeasureMarkerRole : std::uint8_t {
+    line_start,
+    line_midpoint,
+    line_end,
+    circle_center,
+    circle_quadrant_pos_u,
+    circle_quadrant_pos_v,
+    circle_quadrant_neg_u,
+    circle_quadrant_neg_v,
+    arc_center,
+    arc_start,
+    arc_end,
+    arc_midpoint,
+};
+
+struct SketchMeasureMarkerKey final {
+    PresentationToken owner;
+    SketchMeasureMarkerRole role{
+        SketchMeasureMarkerRole::line_midpoint};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return owner.valid();
+    }
+
+    friend bool operator==(
+        const SketchMeasureMarkerKey&,
+        const SketchMeasureMarkerKey&) = default;
+};
+
+struct SketchMeasureMarkerPresentation final {
+    SketchMeasureMarkerKey key;
+    Point3 position{};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return key.valid() &&
+               finite(position);
+    }
+};
+
+struct SketchMeasureMarkerScene final {
+    std::vector<SketchMeasureMarkerPresentation> markers;
+    std::vector<SketchMeasureMarkerKey> selected;
+
+    [[nodiscard]] bool empty() const noexcept {
+        return markers.empty() &&
+               selected.empty();
+    }
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (selected.size() > 2U) {
+            return false;
+        }
+
+        for (std::size_t left = 0U;
+             left < markers.size();
+             ++left) {
+            if (!markers[left].valid()) {
+                return false;
+            }
+            for (std::size_t right = left + 1U;
+                 right < markers.size();
+                 ++right) {
+                if (markers[left].key ==
+                    markers[right].key) {
+                    return false;
+                }
+            }
+        }
+
+        for (std::size_t left = 0U;
+             left < selected.size();
+             ++left) {
+            if (!selected[left].valid()) {
+                return false;
+            }
+
+            bool found{};
+            for (const auto& marker : markers) {
+                if (marker.key == selected[left]) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+
+            for (std::size_t right = left + 1U;
+                 right < selected.size();
+                 ++right) {
+                if (selected[left] ==
+                    selected[right]) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+};
+
+struct SketchMeasureMarkerQueryResult final {
+    bool completed{};
+    std::vector<SketchMeasureMarkerKey> markers;
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (!completed) {
+            return markers.empty();
+        }
+
+        for (std::size_t left = 0U;
+             left < markers.size();
+             ++left) {
+            if (!markers[left].valid()) {
+                return false;
+            }
+            for (std::size_t right = left + 1U;
+                 right < markers.size();
+                 ++right) {
+                if (markers[left] ==
+                    markers[right]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+};
+
+enum class SketchMeasureCueSegmentKind : std::uint8_t {
+    relation,
+    supporting_line_continuation,
+};
+
+struct SketchMeasureCueSegment final {
+    Point3 start{};
+    Point3 end{};
+    SketchMeasureCueSegmentKind kind{
+        SketchMeasureCueSegmentKind::relation};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return finite(start) &&
+               finite(end) &&
+               start != end;
+    }
+};
+
+struct SketchMeasureCueScene final {
+    std::vector<PresentationToken> highlighted_entities;
+    std::vector<SketchMeasureCueSegment> segments;
+    std::optional<Point3> cue_point;
+
+    [[nodiscard]] bool empty() const noexcept {
+        return highlighted_entities.empty() &&
+               segments.empty() &&
+               !cue_point.has_value();
+    }
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (cue_point &&
+            !finite(*cue_point)) {
+            return false;
+        }
+
+        for (std::size_t left = 0U;
+             left < highlighted_entities.size();
+             ++left) {
+            if (!highlighted_entities[left].valid()) {
+                return false;
+            }
+            for (std::size_t right = left + 1U;
+                 right < highlighted_entities.size();
+                 ++right) {
+                if (highlighted_entities[left] ==
+                    highlighted_entities[right]) {
+                    return false;
+                }
+            }
+        }
+
+        for (const auto& segment : segments) {
+            if (!segment.valid()) {
+                return false;
+            }
+        }
+        return true;
+    }
+};
+
 } // namespace simplesolid2::viewer

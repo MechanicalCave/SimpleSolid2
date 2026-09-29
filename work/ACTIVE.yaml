@@ -1,6 +1,6 @@
 version: 1
 status: completed
-active_work: "work/R8A_READ_ONLY_MEASURE.md"
+active_work: "work/R8B_RELATIONAL_MEASURE_RUNTIME_TARGETS.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.5"
@@ -19,12 +19,23 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after R8A completion
-  - prepare a separate Owner-reviewed R8B Relational Measure / semantic runtime targets Work Contract before any further R8 production implementation
-  - keep R8C Show Dimensions overlays, R9+, ordinary RMB context, authored constraints/solver and solid modeling inactive until separately accepted
-  - preserve the Roadmap v1.5 sequence and complete the whole R8 milestone before R9 unless the Owner explicitly amends sequencing
+  - keep production mutation inactive after R8B completion
+  - prepare a separate Owner-reviewed R8C Show Dimensions Work Contract before any further R8 production implementation
+  - keep R9+, ordinary RMB context, authored constraints/solver and solid modeling inactive until separately accepted
+  - preserve Roadmap v1.5 sequencing: complete R8 through a separately accepted R8C before R9 unless the Owner explicitly amends sequencing
 
 notes:
+  - R8B final implementation/documentation candidate 3f1e0103e26bce49d075b5899cc3931f982f8320 passed the affected R8B checkpoints and exact-head Windows FULL #889.
+  - R8B FULL #889 passed documentation/bootstrap/dispatcher checks, desktop Build, core-only 14/14, selector checks, desktop 77/77 and stable windows-msvc.
+  - Owner manual Windows verification for R8B passed on 2026-09-29 on exact candidate 3f1e0103e26bce49d075b5899cc3931f982f8320.
+  - Manual PASS covered R8A regression, Between toolbar/Command Line routing, dynamic marker reveal/readability/aperture, point↔point, point↔Line including outside-segment continuation, Line↔Line, Circle/Arc explicit-marker semantics, selection/history/Esc behavior, Construction and final grips/COPY/Grip Copy/Profile smoke.
+  - R8B completion conditions are satisfied; no production scope is active after R8B.
+  - R8C Show Dimensions remains inactive and requires a separate Owner-accepted Work Contract.
+  - Owner explicitly accepted R8B Relational Measure + Runtime Semantic Targets on 2026-09-29.
+  - R8B is completed; no production scope is active.
+  - Dynamic marker proximity reveals visibility only; it does not snap/acquire.
+  - R8B authorizes one lightweight current-relation cue, not the R8C general dimension-overlay system.
+  - R8C and R9+ remain inactive.
   - R8A final implementation/documentation candidate 9cdc5a5f3a990e83ea4bc90164c9a5c8b01bb1dd passed affected FOCUSED #866 and exact-head Windows FULL #867.
   - R8A FULL #867 passed documentation/bootstrap/dispatcher checks, desktop Build, core-only 14/14, selector checks and desktop 77/77.
   - Owner manual Windows verification for R8A passed on 2026-09-29.

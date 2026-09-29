@@ -1,6 +1,7 @@
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
 #include <QApplication>
+#include <QMouseEvent>
 #include <QTest>
 #include <QWidget>
 
@@ -39,6 +40,21 @@ bool contains(
                token) != tokens.end();
 }
 
+void sendMouseMove(
+    QWidget& widget,
+    viewer::ViewportPoint2 point) {
+    QMouseEvent event{
+        QEvent::MouseMove,
+        QPointF{point.x, point.y},
+        Qt::NoButton,
+        Qt::NoButton,
+        Qt::NoModifier};
+    CHECK(QApplication::sendEvent(
+        &widget,
+        &event));
+    QApplication::processEvents();
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -48,6 +64,7 @@ int main(int argc, char* argv[]) {
     widget.resize(801, 601);
     widget.show();
     QApplication::processEvents();
+    CHECK(widget.hasMouseTracking());
 
     const viewer::CameraState camera{
         viewer::Point3{0.0, 0.0, 100.0},
@@ -148,6 +165,106 @@ int main(int argc, char* argv[]) {
     const viewer::ViewportPoint2 center{
         static_cast<double>(widget.width()) / 2.0,
         static_cast<double>(widget.height()) / 2.0};
+
+    // R8B native measurement markers are latent until pointer proximity
+    // reveals them. Query only considers currently revealed/selected markers.
+    const viewer::SketchMeasureMarkerKey measure_center_short{
+        short_token,
+        viewer::SketchMeasureMarkerRole::line_midpoint};
+    const viewer::SketchMeasureMarkerKey measure_center_long{
+        long_token,
+        viewer::SketchMeasureMarkerRole::line_midpoint};
+    viewer::SketchMeasureMarkerScene measure_markers;
+    measure_markers.markers = {
+        viewer::SketchMeasureMarkerPresentation{
+            measure_center_short,
+            viewer::Point3{0.0, 0.0, 0.0}},
+        viewer::SketchMeasureMarkerPresentation{
+            measure_center_long,
+            viewer::Point3{0.0, 0.0, 0.0}},
+        viewer::SketchMeasureMarkerPresentation{
+            {
+                short_token,
+                viewer::SketchMeasureMarkerRole::line_end},
+            viewer::Point3{20.0, 0.0, 0.0}},
+    };
+    CHECK(widget.setSketchMeasureMarkerScene(
+        measure_markers));
+
+    const auto hidden_measure =
+        widget.querySketchMeasureMarkers(center);
+    CHECK(hidden_measure.valid());
+    CHECK(hidden_measure.completed);
+    CHECK(hidden_measure.markers.empty());
+
+    // Drive the actual QWidget mouseMoveEvent directly. QTest::mouseMove()
+    // depends on the suite-global OS cursor and is nondeterministic on CI.
+    sendMouseMove(
+        widget,
+        viewer::ViewportPoint2{5.0, 5.0});
+    sendMouseMove(widget, center);
+
+    const auto revealed_measure =
+        widget.querySketchMeasureMarkers(center);
+    CHECK(revealed_measure.valid());
+    CHECK(revealed_measure.completed);
+    CHECK(revealed_measure.markers.size() == 2U);
+    CHECK(
+        std::find(
+            revealed_measure.markers.begin(),
+            revealed_measure.markers.end(),
+            measure_center_short) !=
+        revealed_measure.markers.end());
+    CHECK(
+        std::find(
+            revealed_measure.markers.begin(),
+            revealed_measure.markers.end(),
+            measure_center_long) !=
+        revealed_measure.markers.end());
+
+    sendMouseMove(
+        widget,
+        viewer::ViewportPoint2{5.0, 5.0});
+    const auto hidden_again =
+        widget.querySketchMeasureMarkers(center);
+    CHECK(hidden_again.completed);
+    CHECK(hidden_again.markers.empty());
+
+    measure_markers.selected = {
+        measure_center_short};
+    CHECK(widget.setSketchMeasureMarkerScene(
+        measure_markers));
+    sendMouseMove(
+        widget,
+        viewer::ViewportPoint2{5.0, 5.0});
+    const auto pinned_measure =
+        widget.querySketchMeasureMarkers(center);
+    CHECK(pinned_measure.completed);
+    CHECK(pinned_measure.markers.size() == 1U);
+    CHECK(
+        pinned_measure.markers.front() ==
+        measure_center_short);
+
+    viewer::SketchMeasureCueScene measure_cue;
+    measure_cue.highlighted_entities = {
+        short_token};
+    measure_cue.segments = {
+        viewer::SketchMeasureCueSegment{
+            viewer::Point3{0.0, 0.0, 0.0},
+            viewer::Point3{10.0, 10.0, 0.0},
+            viewer::SketchMeasureCueSegmentKind::relation},
+        viewer::SketchMeasureCueSegment{
+            viewer::Point3{10.0, 10.0, 0.0},
+            viewer::Point3{15.0, 15.0, 0.0},
+            viewer::SketchMeasureCueSegmentKind::
+                supporting_line_continuation}};
+    measure_cue.cue_point =
+        viewer::Point3{10.0, 10.0, 0.0};
+    CHECK(widget.setSketchMeasureCueScene(measure_cue));
+    CHECK(widget.setSketchMeasureCueScene(
+        viewer::SketchMeasureCueScene{}));
+    CHECK(widget.setSketchMeasureMarkerScene(
+        viewer::SketchMeasureMarkerScene{}));
 
     const auto grip_hit =
         widget.querySketchGrip(center);

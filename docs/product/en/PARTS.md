@@ -261,25 +261,43 @@ Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Co
 <!-- section-id: product.parts.measure -->
 ## Inspect — Measure
 
-Use **Inspect → Measure** while editing a Sketch to inspect one Line, Circle or Arc without changing the model.
+Use **Inspect → Measure** while editing a Sketch to inspect geometry without changing the model. Measure has two read-only modes: default whole-entity inspection and relational **Between**.
 
-If exactly one Sketch entity is already selected when you activate Measure, it becomes the initial measurement target immediately. If nothing is selected, click an entity. If several entities are selected, Measure deliberately does not guess which one you mean; click the entity you want to inspect. The Measure target is separate from ordinary selection, so inspecting another entity does not replace your existing selection.
+### Quick Measure
 
-Operations shows:
+If exactly one Line, Circle or Arc is selected when Measure starts, it becomes the initial target. With no selection, click an entity. With several selected entities, Measure does not guess. The Measure target is separate from ordinary selection.
 
-- **Line:** Length, Delta U, Delta V and directed Angle +U from Start to End;
-- **Circle:** Radius, Diameter, Circumference and Area;
-- **Arc:** Radius, Start Angle, End Angle, Signed Sweep and Arc Length.
+Operations shows Line Length/Delta U/Delta V/Angle +U, Circle Radius/Diameter/Circumference/Area and Arc Radius/Start Angle/End Angle/Signed Sweep/Arc Length. Regular and Construction geometry are both measurable. You may also type `MEASURE` in Command Line.
 
-Regular and Construction geometry can both be measured. Measurement uses semantic Sketch geometry, not the visible tessellation of the Viewer.
+### Measure Between
 
-You can also type `MEASURE` in Command Line. Measure stays active so you can click different entities repeatedly. Clicking blank space clears the current measurement result but leaves ordinary selection unchanged. Press **Esc** to leave Measure and return to Select.
+While Measure is active, click **Between** in Operations or type `BETWEEN`. Between asks for **Target A** and **Target B** while preserving ordinary Sketch selection.
 
-Measure is read-only: activating it or changing its target does not dirty the Document, change revision, allocate identities or create an Undo step. It is not included in Repeat Last Command.
+Semantic point markers are normally hidden. Move the pointer near a supported point and its runtime marker appears. Moving away hides an unaccepted marker. Pointer proximity never selects, snaps or moves the CAD pointer: **proximity reveals; it does not acquire**. Click a visible marker explicitly. Accepted point markers remain pinned until the relation is replaced or cleared.
 
-Current linear and area values are shown in the Sketch coordinate scale without a physical unit label. Angles are displayed in degrees. Explicit document units and conversion belong to later Precision/Units work.
+Available point roles are:
 
-R8A measures whole entities only. Point-to-point/perpendicular/line-to-line relational measurement, persistent sub-element references, viewport dimension overlays and authored dimensions/constraints are not part of the current tool.
+- **Line:** Start, Midpoint, End;
+- **Circle:** Center and four ±U/±V Quadrants;
+- **Arc:** Center, Start, End, Midpoint along the authored sweep.
+
+A **Line body** can also be a target. A whole Circle or Arc body cannot; choose one of its semantic point markers.
+
+Between supports exactly:
+
+- **Point ↔ Point:** Distance, Delta U, Delta V and directed Angle +U from A to B;
+- **Point ↔ Line:** perpendicular distance to the Line's **infinite supporting line**;
+- **Line ↔ Line:** smaller undirected angle from 0° to 90°.
+
+For Point↔Line, the perpendicular foot is not clamped to the finite segment. When it lies beyond Start/End, the viewport shows a distinct supporting-line continuation. Point↔Point shows one temporary connecting segment. Line↔Line highlights both Lines but does not draw a classical angular dimension arc or text.
+
+Overlapping markers at different semantic coordinates fail closed rather than using nearest-wins or candidate cycling. Same-coordinate markers are measurement-equivalent. This is not OSNAP and creates no constraints.
+
+After a result, the next accepted target starts the next relation. Blank click clears the current relational state but stays in Between. **Esc** once returns to ordinary Measure; **Esc** again returns to Select.
+
+Measure and Between are read-only: no dirty state, revision change, identity allocation or Undo step. Runtime measurement references are not persisted and Measure is not Repeat Last Command.
+
+Linear/area values remain in Sketch coordinate scale without a physical unit label; angles are displayed in degrees. General curve-to-curve minimum distance, OSNAP/tracking/inference, persistent sub-element references, multiple dimension overlays, authored dimensions and constraints remain outside R8B. The broader diagnostic dimension display belongs to R8C.
 
 <!-- section-id: product.parts.profiles -->
 ## Construction and Profile
@@ -364,7 +382,7 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 
 The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, and Part-owned Profiles with live RegionIntent semantics.
 
-The current Sketch UI provides Select plus Create, Modify and Inspect groups with Line/Circle/Arc, Move/Copy/Rotate/Scale/Mirror and read-only Measure, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Grip Copy through active-grip `C` for owner-only Reshape or frozen-selection Move, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
+The current Sketch UI provides Select plus Create, Modify and Inspect groups with Line/Circle/Arc, Move/Copy/Rotate/Scale/Mirror and read-only quick/Between Measure, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Grip Copy through active-grip `C` for owner-only Reshape or frozen-selection Move, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
 
 Direct Distance is available for the supported PointRequest stages documented above, including grip placements while Grip Copy is enabled. Profile is not a solid operation. The product still lacks Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
 

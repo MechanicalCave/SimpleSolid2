@@ -914,5 +914,318 @@ int main() {
             overflow_measurement_model,
             huge_arc).has_value());
 
+    // R8B: runtime semantic point roles and relational measurement stay
+    // provider-neutral and independent from edit-grip identity.
+    SketchModel relational_model;
+    const auto relation_line =
+        relational_model.addLine(
+            Point2{0.0, 0.0},
+            Point2{10.0, 0.0});
+    const auto relation_vertical =
+        relational_model.addLine(
+            Point2{5.0, -5.0},
+            Point2{5.0, 5.0},
+            EntityRole::construction);
+    const auto relation_oblique =
+        relational_model.addLine(
+            Point2{0.0, 0.0},
+            Point2{10.0, 10.0});
+    const auto relation_circle =
+        relational_model.addCircle(
+            Point2{20.0, 10.0},
+            4.0);
+    const auto relation_arc =
+        relational_model.addArc(
+            Point2{-10.0, 3.0},
+            6.0,
+            0.0,
+            -std::numbers::pi_v<double>);
+
+    const auto line_start =
+        resolveMeasurePoint(
+            relational_model,
+            {relation_line, MeasurePointRole::line_start});
+    const auto line_mid =
+        resolveMeasurePoint(
+            relational_model,
+            {relation_line, MeasurePointRole::line_midpoint});
+    const auto line_end =
+        resolveMeasurePoint(
+            relational_model,
+            {relation_line, MeasurePointRole::line_end});
+    const Point2 expected_line_start{0.0, 0.0};
+    const Point2 expected_line_mid{5.0, 0.0};
+    const Point2 expected_line_end{10.0, 0.0};
+    CHECK(line_start && line_start->point == expected_line_start);
+    CHECK(line_mid && line_mid->point == expected_line_mid);
+    CHECK(line_end && line_end->point == expected_line_end);
+
+    const auto circle_center_point =
+        resolveMeasurePoint(
+            relational_model,
+            MeasurePointRef{
+                relation_circle,
+                MeasurePointRole::circle_center});
+    const auto circle_pos_u_point =
+        resolveMeasurePoint(
+            relational_model,
+            MeasurePointRef{
+                relation_circle,
+                MeasurePointRole::circle_quadrant_pos_u});
+    const auto circle_pos_v_point =
+        resolveMeasurePoint(
+            relational_model,
+            MeasurePointRef{
+                relation_circle,
+                MeasurePointRole::circle_quadrant_pos_v});
+    const auto circle_neg_u_point =
+        resolveMeasurePoint(
+            relational_model,
+            MeasurePointRef{
+                relation_circle,
+                MeasurePointRole::circle_quadrant_neg_u});
+    const auto circle_neg_v_point =
+        resolveMeasurePoint(
+            relational_model,
+            MeasurePointRef{
+                relation_circle,
+                MeasurePointRole::circle_quadrant_neg_v});
+    const Point2 expected_circle_center{20.0, 10.0};
+    const Point2 expected_circle_pos_u{24.0, 10.0};
+    const Point2 expected_circle_pos_v{20.0, 14.0};
+    const Point2 expected_circle_neg_u{16.0, 10.0};
+    const Point2 expected_circle_neg_v{20.0, 6.0};
+    CHECK(circle_center_point.has_value());
+    CHECK(circle_pos_u_point.has_value());
+    CHECK(circle_pos_v_point.has_value());
+    CHECK(circle_neg_u_point.has_value());
+    CHECK(circle_neg_v_point.has_value());
+    CHECK(circle_center_point->point == expected_circle_center);
+    CHECK(circle_pos_u_point->point == expected_circle_pos_u);
+    CHECK(circle_pos_v_point->point == expected_circle_pos_v);
+    CHECK(circle_neg_u_point->point == expected_circle_neg_u);
+    CHECK(circle_neg_v_point->point == expected_circle_neg_v);
+
+    const auto arc_start =
+        resolveMeasurePoint(
+            relational_model,
+            {relation_arc, MeasurePointRole::arc_start});
+    const auto arc_end =
+        resolveMeasurePoint(
+            relational_model,
+            {relation_arc, MeasurePointRole::arc_end});
+    const auto arc_mid =
+        resolveMeasurePoint(
+            relational_model,
+            {relation_arc, MeasurePointRole::arc_midpoint});
+    CHECK(arc_start.has_value());
+    CHECK(arc_end.has_value());
+    CHECK(arc_mid.has_value());
+    CHECK(std::abs(arc_start->point.u - (-4.0)) < 1e-12);
+    CHECK(std::abs(arc_start->point.v - 3.0) < 1e-12);
+    CHECK(std::abs(arc_end->point.u - (-16.0)) < 1e-12);
+    CHECK(std::abs(arc_end->point.v - 3.0) < 1e-12);
+    CHECK(std::abs(arc_mid->point.u - (-10.0)) < 1e-12);
+    CHECK(std::abs(arc_mid->point.v - (-3.0)) < 1e-12);
+
+    const auto invalid_line_role =
+        resolveMeasurePoint(
+            relational_model,
+            MeasurePointRef{
+                relation_line,
+                MeasurePointRole::circle_center});
+    CHECK(!invalid_line_role.has_value());
+
+    const auto catalog =
+        measurePointCatalog(relational_model);
+    CHECK(catalog.size() == 18U);
+
+    const MeasurePointRef p0{
+        relation_line,
+        MeasurePointRole::line_start};
+    const MeasurePointRef p1{
+        relation_vertical,
+        MeasurePointRole::line_end};
+    const auto pp =
+        measureRelation(
+            relational_model,
+            MeasureRelationTarget{p0},
+            MeasureRelationTarget{p1});
+    CHECK(pp.has_value());
+    CHECK(std::holds_alternative<PointPointMeasurement>(*pp));
+    const auto& pp_value =
+        std::get<PointPointMeasurement>(*pp);
+    CHECK(std::abs(pp_value.distance - std::sqrt(50.0)) < 1e-12);
+    CHECK(std::abs(pp_value.delta_u - 5.0) < 1e-12);
+    CHECK(std::abs(pp_value.delta_v - 5.0) < 1e-12);
+    CHECK(std::abs(
+        pp_value.angle_from_positive_u -
+        std::numbers::pi_v<double> * 0.25) < 1e-12);
+
+    const auto pp_reverse =
+        measureRelation(
+            relational_model,
+            MeasureRelationTarget{p1},
+            MeasureRelationTarget{p0});
+    CHECK(pp_reverse.has_value());
+    const auto& pp_reverse_value =
+        std::get<PointPointMeasurement>(*pp_reverse);
+    CHECK(std::abs(
+        pp_reverse_value.distance -
+        pp_value.distance) < 1e-12);
+    CHECK(std::abs(
+        pp_reverse_value.delta_u +
+        pp_value.delta_u) < 1e-12);
+    CHECK(std::abs(
+        pp_reverse_value.delta_v +
+        pp_value.delta_v) < 1e-12);
+
+    const auto same_point =
+        measureRelation(
+            relational_model,
+            MeasureRelationTarget{p0},
+            MeasureRelationTarget{p0});
+    CHECK(same_point.has_value());
+    CHECK(
+        std::get<PointPointMeasurement>(*same_point)
+            .distance == 0.0);
+
+    const MeasurePointRef circle_center{
+        relation_circle,
+        MeasurePointRole::circle_center};
+    const auto point_line =
+        measureRelation(
+            relational_model,
+            MeasureRelationTarget{circle_center},
+            MeasureRelationTarget{
+                MeasureLineRef{relation_line}});
+    CHECK(point_line.has_value());
+    const auto& point_line_value =
+        std::get<PointLineMeasurement>(*point_line);
+    CHECK(std::abs(point_line_value.distance - 10.0) < 1e-12);
+    const Point2 expected_perpendicular_foot{20.0, 0.0};
+    CHECK(
+        point_line_value.perpendicular_foot ==
+        expected_perpendicular_foot);
+    CHECK(!point_line_value.foot_on_segment);
+
+    const auto line_point =
+        measureRelation(
+            relational_model,
+            MeasureRelationTarget{
+                MeasureLineRef{relation_line}},
+            MeasureRelationTarget{circle_center});
+    CHECK(line_point.has_value());
+    CHECK(
+        std::get<PointLineMeasurement>(*line_point)
+            .distance ==
+        point_line_value.distance);
+    CHECK(
+        std::get<PointLineMeasurement>(*line_point)
+            .perpendicular_foot ==
+        point_line_value.perpendicular_foot);
+    CHECK(
+        std::abs(
+            point_line_value.projection_parameter -
+            2.0) < 1e-12);
+
+    const auto point_line_cue =
+        makeRelationalMeasurementCue(*point_line);
+    CHECK(point_line_cue.has_value());
+    CHECK(point_line_cue->highlighted_lines.size() == 1U);
+    CHECK(
+        point_line_cue->highlighted_lines.front() ==
+        relation_line);
+    CHECK(point_line_cue->cue_point.has_value());
+    CHECK(
+        *point_line_cue->cue_point ==
+        expected_perpendicular_foot);
+    CHECK(point_line_cue->segments.size() == 2U);
+    CHECK(
+        point_line_cue->segments[0].kind ==
+        MeasureCueSegmentKind::relation);
+    CHECK(
+        point_line_cue->segments[1].kind ==
+        MeasureCueSegmentKind::
+            supporting_line_continuation);
+    CHECK(
+        point_line_cue->segments[1].start ==
+        expected_line_end);
+    CHECK(
+        point_line_cue->segments[1].end ==
+        expected_perpendicular_foot);
+
+    const auto point_point_cue =
+        makeRelationalMeasurementCue(*pp);
+    CHECK(point_point_cue.has_value());
+    CHECK(point_point_cue->segments.size() == 1U);
+    CHECK(
+        point_point_cue->segments.front().kind ==
+        MeasureCueSegmentKind::relation);
+    CHECK(
+        point_point_cue->highlighted_lines.empty());
+
+    const auto same_point_cue =
+        makeRelationalMeasurementCue(*same_point);
+    CHECK(same_point_cue.has_value());
+    CHECK(same_point_cue->segments.empty());
+
+    const auto line_line =
+        measureRelation(
+            relational_model,
+            MeasureRelationTarget{
+                MeasureLineRef{relation_line}},
+            MeasureRelationTarget{
+                MeasureLineRef{relation_oblique}});
+    CHECK(line_line.has_value());
+    CHECK(std::abs(
+        std::get<LineLineAngleMeasurement>(*line_line)
+            .smaller_undirected_angle -
+        std::numbers::pi_v<double> * 0.25) < 1e-12);
+    const auto line_line_cue =
+        makeRelationalMeasurementCue(*line_line);
+    CHECK(line_line_cue.has_value());
+    CHECK(line_line_cue->segments.empty());
+    CHECK(line_line_cue->highlighted_lines.size() == 2U);
+    CHECK(
+        line_line_cue->highlighted_lines[0] ==
+        relation_line);
+    CHECK(
+        line_line_cue->highlighted_lines[1] ==
+        relation_oblique);
+
+    const auto perpendicular_lines =
+        measureRelation(
+            relational_model,
+            MeasureRelationTarget{
+                MeasureLineRef{relation_line}},
+            MeasureRelationTarget{
+                MeasureLineRef{relation_vertical}});
+    CHECK(perpendicular_lines.has_value());
+    CHECK(std::abs(
+        std::get<LineLineAngleMeasurement>(*perpendicular_lines)
+            .smaller_undirected_angle -
+        std::numbers::pi_v<double> * 0.5) < 1e-12);
+
+    SketchModel reversed_lines;
+    const auto reversed_a =
+        reversed_lines.addLine(
+            Point2{10.0, 0.0},
+            Point2{0.0, 0.0});
+    const auto reversed_b =
+        reversed_lines.addLine(
+            Point2{10.0, 10.0},
+            Point2{0.0, 0.0});
+    const auto reversed_angle =
+        measureRelation(
+            reversed_lines,
+            MeasureRelationTarget{MeasureLineRef{reversed_a}},
+            MeasureRelationTarget{MeasureLineRef{reversed_b}});
+    CHECK(reversed_angle.has_value());
+    CHECK(std::abs(
+        std::get<LineLineAngleMeasurement>(*reversed_angle)
+            .smaller_undirected_angle -
+        std::numbers::pi_v<double> * 0.25) < 1e-12);
+
     return 0;
 }

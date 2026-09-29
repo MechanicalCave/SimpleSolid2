@@ -149,6 +149,27 @@ public:
         return grip_query_;
     }
 
+    bool setSketchMeasureMarkerScene(
+        const viewer::SketchMeasureMarkerScene& scene) override {
+        if (!scene.valid()) return false;
+        measure_marker_scene_ = scene;
+        return true;
+    }
+
+    viewer::SketchMeasureMarkerQueryResult
+    querySketchMeasureMarkers(
+        viewer::ViewportPoint2 point) override {
+        if (!point.valid()) return {};
+        return measure_marker_query_;
+    }
+
+    bool setSketchMeasureCueScene(
+        const viewer::SketchMeasureCueScene& scene) override {
+        if (!scene.valid()) return false;
+        measure_cue_scene_ = scene;
+        return true;
+    }
+
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override {
         if (!selection.valid()) return false;
@@ -223,6 +244,23 @@ public:
         grip_query_ = {true, grip};
     }
 
+    void setSketchMeasureMarkerHits(
+        std::vector<viewer::SketchMeasureMarkerKey> markers) {
+        measure_marker_query_ = {
+            true,
+            std::move(markers)};
+    }
+
+    [[nodiscard]] const viewer::SketchMeasureMarkerScene&
+    measureMarkerScene() const noexcept {
+        return measure_marker_scene_;
+    }
+
+    [[nodiscard]] const viewer::SketchMeasureCueScene&
+    measureCueScene() const noexcept {
+        return measure_cue_scene_;
+    }
+
     void emitSketchPointerXZ(
         viewer::SpatialPointerPhase phase,
         double sx,
@@ -283,6 +321,12 @@ private:
     viewer::SketchGripQueryResult grip_query_{
         true,
         std::nullopt};
+    viewer::SketchMeasureMarkerScene
+        measure_marker_scene_;
+    viewer::SketchMeasureMarkerQueryResult
+        measure_marker_query_{true, {}};
+    viewer::SketchMeasureCueScene
+        measure_cue_scene_;
     viewer::PresentationSelection selection_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
     viewer::PrimaryPointerRouting routing_{
@@ -535,6 +579,9 @@ int main(int argc, char* argv[]) {
     auto* measure_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("measureSketchToolButton"));
+    auto* measure_between_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("measureBetweenButton"));
     auto* command_input =
         workspace_shell.findChild<QLineEdit*>(
             QStringLiteral("cadCommandInput"));
@@ -590,6 +637,7 @@ int main(int argc, char* argv[]) {
     CHECK(mirror_button != nullptr);
     CHECK(inspect_tools_label != nullptr);
     CHECK(measure_button != nullptr);
+    CHECK(measure_between_button != nullptr);
     CHECK(command_input != nullptr);
     CHECK(command_prompt != nullptr);
     CHECK(editor_host->isAncestorOf(sketch_button));
@@ -597,6 +645,7 @@ int main(int argc, char* argv[]) {
     CHECK(sketch_button->isEnabled());
     CHECK(cancel_button->isHidden());
     CHECK(finish_button->isHidden());
+    CHECK(measure_between_button->isHidden());
     CHECK(
         operations_label->text() ==
         QStringLiteral("Part modeling context."));
@@ -1001,7 +1050,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         command_prompt->text() ==
         QStringLiteral(
-            "Command: MEASURE — Click Line/Circle/Arc; Esc ends"));
+            "Command: MEASURE — Click Line/Circle/Arc; BETWEEN for relational; Esc ends"));
     CHECK(
         session->document().state() ==
         construction_measure_state);
@@ -1524,10 +1573,106 @@ int main(int argc, char* argv[]) {
     CHECK(
         command_prompt->text() ==
         QStringLiteral(
-            "Command: MEASURE — Click Line/Circle/Arc; Esc ends"));
+            "Command: MEASURE — Click Line/Circle/Arc; BETWEEN for relational; Esc ends"));
     CHECK(session->document().state() == measure_ui_state);
     CHECK(session->document().revision() == measure_ui_revision);
     CHECK(session->undoDepth() == measure_ui_undo);
+    CHECK(!measure_between_button->isHidden());
+    CHECK(!measure_between_button->isChecked());
+
+    // R8B Operations action enters the same semantic Between state used by
+    // Command Line. Runtime marker/cue presentation remains read-only.
+    measure_between_button->click();
+    QApplication::processEvents();
+    CHECK(measure_between_button->isChecked());
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral("Measure Between")));
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral("Target A: Choose")));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: MEASURE BETWEEN — Choose Target A; Esc returns to Measure"));
+    CHECK(!viewport->measureMarkerScene().markers.empty());
+
+    const auto point_marker =
+        viewport->measureMarkerScene().markers.front().key;
+    viewport->setSketchMeasureMarkerHits(
+        {point_marker});
+    viewport->setSketchPointHit(
+        viewport->sketchScene().lines.back().token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        120.0, 100.0,
+        0.0, 0.0);
+    QApplication::processEvents();
+
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral("Target A: Point [")));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: MEASURE BETWEEN — Choose Target B; Esc returns to Measure"));
+    CHECK(
+        viewport->measureMarkerScene().selected.size() == 1U);
+
+    viewport->setSketchMeasureMarkerHits({});
+    viewport->setSketchPointHit(
+        viewport->sketchScene().lines.back().token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        140.0, 120.0,
+        10.5, 1.0);
+    QApplication::processEvents();
+
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral("Perpendicular distance:")));
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral(
+                "Line semantics: infinite supporting line")));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: MEASURE BETWEEN — Result shown; choose next Target A; Esc returns to Measure"));
+    CHECK(!viewport->measureCueScene().empty());
+    CHECK(session->document().state() == measure_ui_state);
+    CHECK(session->document().revision() == measure_ui_revision);
+    CHECK(session->undoDepth() == measure_ui_undo);
+
+    // First Esc returns only to ordinary Measure and clears R8B presentation.
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(measure_button->isChecked());
+    CHECK(!measure_between_button->isChecked());
+    CHECK(viewport->measureMarkerScene().empty());
+    CHECK(viewport->measureCueScene().empty());
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: MEASURE — Click Line/Circle/Arc; BETWEEN for relational; Esc ends"));
+
+    // Command Line BETWEEN re-enters the same tool-local semantic state.
+    command_input->setText(QStringLiteral("BETWEEN"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(measure_between_button->isChecked());
+    CHECK(command_input->text().isEmpty());
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: MEASURE BETWEEN — Choose Target A; Esc returns to Measure"));
+
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(measure_button->isChecked());
+    CHECK(!measure_between_button->isChecked());
 
     QTest::keyClick(viewport, Qt::Key_Escape);
     QApplication::processEvents();

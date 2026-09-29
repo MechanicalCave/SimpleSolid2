@@ -54,6 +54,17 @@ public:
     [[nodiscard]] virtual bool
     submitCadInputSemanticGripCopy() = 0;
 
+    [[nodiscard]] virtual bool
+    cadInputSemanticMeasureBetweenAvailable()
+        const noexcept {
+        return false;
+    }
+
+    [[nodiscard]] virtual bool
+    submitCadInputSemanticMeasureBetween() {
+        return false;
+    }
+
     [[nodiscard]] virtual CadInputSubmitResult
     submitCadInputSemanticProfileCommand(
         const ProfileCadInputCommand& command) = 0;

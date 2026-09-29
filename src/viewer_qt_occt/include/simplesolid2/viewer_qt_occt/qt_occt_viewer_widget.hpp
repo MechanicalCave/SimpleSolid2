@@ -74,6 +74,16 @@ public:
     querySketchGrip(
         viewer::ViewportPoint2 point) override;
 
+    [[nodiscard]] bool setSketchMeasureMarkerScene(
+        const viewer::SketchMeasureMarkerScene& scene) override;
+
+    [[nodiscard]] viewer::SketchMeasureMarkerQueryResult
+    querySketchMeasureMarkers(
+        viewer::ViewportPoint2 point) override;
+
+    [[nodiscard]] bool setSketchMeasureCueScene(
+        const viewer::SketchMeasureCueScene& scene) override;
+
     [[nodiscard]] bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override;
 

@@ -92,6 +92,24 @@ public:
         if (!point.valid()) return {};
         return grip_query_;
     }
+    bool setSketchMeasureMarkerScene(
+        const viewer::SketchMeasureMarkerScene& scene) override {
+        if (!scene.valid()) return false;
+        measure_marker_scene_ = scene;
+        return true;
+    }
+    viewer::SketchMeasureMarkerQueryResult
+    querySketchMeasureMarkers(
+        viewer::ViewportPoint2 point) override {
+        if (!point.valid()) return {};
+        return measure_marker_query_;
+    }
+    bool setSketchMeasureCueScene(
+        const viewer::SketchMeasureCueScene& scene) override {
+        if (!scene.valid()) return false;
+        measure_cue_scene_ = scene;
+        return true;
+    }
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override {
         if (!selection.valid()) return false;
@@ -151,6 +169,12 @@ public:
     viewer::SketchGripQueryResult grip_query_{
         true,
         std::nullopt};
+    viewer::SketchMeasureMarkerScene
+        measure_marker_scene_;
+    viewer::SketchMeasureMarkerQueryResult
+        measure_marker_query_{true, {}};
+    viewer::SketchMeasureCueScene
+        measure_cue_scene_;
     viewer::PresentationSelection selection_;
     viewer::SketchPointQueryResult point_query_{true, std::nullopt};
     viewer::SketchRectangleQueryResult rectangle_query_{true, {}};
@@ -334,6 +358,163 @@ int main(int argc, char* argv[]) {
         150.0, 150.0,
         20.0, 20.0));
     CHECK(!interaction.measureTarget().has_value());
+    CHECK(interaction.selectedCount() == 1U);
+
+    // R8B: Between is a read-only submode of Measure. Marker query has
+    // priority over entity body query and normal Sketch selection is stable.
+    CHECK(interaction.activateMeasureBetween());
+    CHECK(interaction.measureBetweenActive());
+    CHECK(!interaction.measureTarget().has_value());
+    CHECK(viewport.measure_marker_scene_.valid());
+    CHECK(viewport.measure_marker_scene_.markers.size() == 6U);
+    CHECK(viewport.measure_marker_scene_.selected.empty());
+
+    const auto first_line_start_marker =
+        std::find_if(
+            viewport.measure_marker_scene_.markers.begin(),
+            viewport.measure_marker_scene_.markers.end(),
+            [first_token](
+                const viewer::SketchMeasureMarkerPresentation& marker) {
+                return marker.key.owner == first_token &&
+                       marker.key.role ==
+                           viewer::SketchMeasureMarkerRole::line_start;
+            });
+    const auto first_line_end_marker =
+        std::find_if(
+            viewport.measure_marker_scene_.markers.begin(),
+            viewport.measure_marker_scene_.markers.end(),
+            [first_token](
+                const viewer::SketchMeasureMarkerPresentation& marker) {
+                return marker.key.owner == first_token &&
+                       marker.key.role ==
+                           viewer::SketchMeasureMarkerRole::line_end;
+            });
+    CHECK(
+        first_line_start_marker !=
+        viewport.measure_marker_scene_.markers.end());
+    CHECK(
+        first_line_end_marker !=
+        viewport.measure_marker_scene_.markers.end());
+
+    // Distinct-coordinate overlap must fail closed rather than rank.
+    viewport.measure_marker_query_ = {
+        true,
+        {
+            first_line_start_marker->key,
+            first_line_end_marker->key}};
+    viewport.point_query_ = {true, second_measure_token};
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        50.0, 20.0,
+        5.0, 0.0));
+    CHECK(
+        !interaction.measureFirstRelationTarget()
+             .has_value());
+    CHECK(interaction.selectedCount() == 1U);
+
+    // Explicit visible semantic point becomes Target A.
+    viewport.measure_marker_query_ = {
+        true,
+        {first_line_start_marker->key}};
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        20.0, 20.0,
+        0.0, 0.0));
+    CHECK(
+        interaction.measureFirstRelationTarget()
+            .has_value());
+    CHECK(
+        !interaction.measureSecondRelationTarget()
+             .has_value());
+    CHECK(viewport.measure_marker_scene_.selected.size() == 1U);
+    CHECK(viewport.measure_cue_scene_.empty());
+
+    // No marker hit: Line body is Target B. This produces point↔Line
+    // perpendicular cue while normal selection remains unchanged.
+    viewport.measure_marker_query_ = {true, {}};
+    viewport.point_query_ = {true, second_measure_token};
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        80.0, 50.0,
+        10.0, 5.0));
+    CHECK(
+        interaction.measureSecondRelationTarget()
+            .has_value());
+    const auto between_point_line =
+        interaction.measureRelationalResult();
+    CHECK(between_point_line.has_value());
+    CHECK(
+        std::holds_alternative<
+            sketch::PointLineMeasurement>(
+            *between_point_line));
+    CHECK(viewport.measure_cue_scene_.segments.size() == 1U);
+    CHECK(
+        viewport.measure_cue_scene_.
+            highlighted_entities.size() == 1U);
+    CHECK(interaction.selectedCount() == 1U);
+    CHECK(session.document().state() == measure_state);
+    CHECK(session.document().revision() == measure_revision);
+    CHECK(session.undoDepth() == measure_undo);
+
+    // After a result, the next accepted target becomes the next Target A.
+    viewport.point_query_ = {true, first_token};
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        50.0, 20.0,
+        5.0, 0.0));
+    CHECK(
+        interaction.measureFirstRelationTarget()
+            .has_value());
+    CHECK(
+        !interaction.measureSecondRelationTarget()
+             .has_value());
+    CHECK(!interaction.measureRelationalResult().has_value());
+    CHECK(
+        viewport.measure_cue_scene_.
+            highlighted_entities.size() == 1U);
+    CHECK(viewport.measure_cue_scene_.segments.empty());
+
+    viewport.point_query_ = {true, second_measure_token};
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        80.0, 50.0,
+        10.0, 5.0));
+    const auto between_lines =
+        interaction.measureRelationalResult();
+    CHECK(between_lines.has_value());
+    CHECK(
+        std::holds_alternative<
+            sketch::LineLineAngleMeasurement>(
+            *between_lines));
+    CHECK(viewport.measure_cue_scene_.segments.empty());
+    CHECK(
+        viewport.measure_cue_scene_.
+            highlighted_entities.size() == 2U);
+
+    // Blank clears only relation state and stays in Between.
+    viewport.point_query_ = {true, std::nullopt};
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::primary_press,
+        150.0, 150.0,
+        20.0, 20.0));
+    CHECK(interaction.measureBetweenActive());
+    CHECK(
+        !interaction.measureFirstRelationTarget()
+             .has_value());
+    CHECK(viewport.measure_cue_scene_.empty());
+
+    // Esc is hierarchical: Between -> quick Measure -> Select.
+    CHECK(interaction.escape());
+    CHECK(interaction.tool() == sketch::SketchTool::measure);
+    CHECK(!interaction.measureBetweenActive());
+    CHECK(viewport.measure_marker_scene_.empty());
+    CHECK(viewport.measure_cue_scene_.empty());
     CHECK(interaction.selectedCount() == 1U);
 
     CHECK(interaction.escape());

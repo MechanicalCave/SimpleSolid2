@@ -261,25 +261,43 @@ Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/c
 <!-- section-id: product.parts.measure -->
 ## Inspect — Measure
 
-Podczas edycji Sketchu użyj **Inspect → Measure**, aby sprawdzić jedną linię, okrąg albo łuk bez zmiany modelu.
+Podczas edycji Sketchu użyj **Inspect → Measure**, aby sprawdzać geometrię bez zmiany modelu. Measure ma dwa tryby read-only: domyślną inspekcję całej encji oraz relacyjny **Between**.
 
-Jeżeli w chwili uruchomienia Measure dokładnie jedna encja Sketchu jest już zaznaczona, od razu staje się początkowym celem pomiaru. Przy pustym zaznaczeniu kliknij encję. Przy zaznaczeniu wielu encji Measure celowo nie zgaduje, którą masz na myśli — kliknij obiekt, który chcesz sprawdzić. Cel Measure jest oddzielony od zwykłego selection, więc pomiar innej encji nie zastępuje istniejącego zaznaczenia.
+### Quick Measure
 
-Operations pokazuje:
+Jeżeli przy uruchomieniu Measure zaznaczona jest dokładnie jedna Line, Circle albo Arc, staje się początkowym celem. Przy pustym selection kliknij encję. Przy wielu zaznaczonych encjach Measure nie zgaduje. Cel Measure jest oddzielony od zwykłego selection.
 
-- **Line:** Length, Delta U, Delta V oraz skierowany Angle +U od Start do End;
-- **Circle:** Radius, Diameter, Circumference i Area;
-- **Arc:** Radius, Start Angle, End Angle, Signed Sweep i Arc Length.
+Operations pokazuje dla Line Length/Delta U/Delta V/Angle +U, dla Circle Radius/Diameter/Circumference/Area, a dla Arc Radius/Start Angle/End Angle/Signed Sweep/Arc Length. Można mierzyć geometrię Regular i Construction. Measure można też uruchomić przez `MEASURE` w Command Line.
 
-Można mierzyć zarówno geometrię Regular, jak i Construction. Pomiar korzysta z semantycznej geometrii Sketchu, a nie z widocznej tessellacji Viewera.
+### Measure Between
 
-Measure możesz także uruchomić wpisując `MEASURE` w Command Line. Narzędzie pozostaje aktywne, więc można kolejno klikać różne encje. Kliknięcie pustego tła czyści bieżący wynik pomiaru, ale nie zmienia normalnego zaznaczenia. **Esc** kończy Measure i wraca do Select.
+Gdy Measure jest aktywne, kliknij **Between** w Operations albo wpisz `BETWEEN`. Between prosi o **Target A** i **Target B**, zachowując zwykłe selection Sketchu.
 
-Measure jest read-only: samo uruchomienie ani zmiana celu nie powodują dirty Dokumentu, nie zmieniają revision, nie zużywają identyfikatorów i nie tworzą kroku Undo. Measure nie wchodzi do Repeat Last Command.
+Semantyczne markery punktów są normalnie ukryte. Zbliż kursor do obsługiwanego punktu, a jego runtime marker się ujawni. Po odsunięciu kursora niezaakceptowany marker znika. Sama bliskość nigdy nie wybiera celu, nie snapuje i nie przesuwa punktu CAD: **proximity tylko ujawnia; nie przechwytuje celu**. Punkt wybierasz klikając widoczny marker. Zaakceptowany marker pozostaje przypięty do czasu zastąpienia lub wyczyszczenia relacji.
 
-Obecne wartości liniowe i pola są pokazywane w skali współrzędnych Sketchu bez etykiety jednostki fizycznej. Kąty są prezentowane w stopniach. Jawne jednostki Dokumentu i konwersja należą do późniejszego etapu Precision/Units.
+Dostępne role punktów:
 
-R8A mierzy tylko całe encje. Pomiar relacyjny point-to-point/perpendicular/line-to-line, trwałe referencje do sub-elementów, viewportowe overlaye wymiarowe oraz authored dimensions/constraints nie należą do bieżącego narzędzia.
+- **Line:** Start, Midpoint, End;
+- **Circle:** Center i cztery Quadrants ±U/±V;
+- **Arc:** Center, Start, End, Midpoint wzdłuż authored sweep.
+
+Można też wskazać **Line body**. Cały Circle ani Arc nie jest celem relacyjnym; trzeba wybrać jego jawny marker punktu.
+
+Between obsługuje dokładnie:
+
+- **Point ↔ Point:** Distance, Delta U, Delta V i skierowany Angle +U od A do B;
+- **Point ↔ Line:** odległość prostopadłą do **nieskończonej prostej nośnej** Line;
+- **Line ↔ Line:** mniejszy nieskierowany kąt od 0° do 90°.
+
+Dla Point↔Line stopa prostopadłej nie jest ograniczana do skończonego odcinka. Gdy wypada poza Start/End, viewport pokazuje odrębne przedłużenie prostej nośnej. Point↔Point pokazuje tymczasowy segment łączący cele. Line↔Line podświetla obie Lines, ale nie rysuje klasycznego łuku ani tekstu wymiaru kątowego.
+
+Nakładające się markery o różnych współrzędnych semantycznych są odrzucane fail-closed zamiast nearest-wins lub candidate cycling. Markery o tych samych współrzędnych są równoważne pomiarowo. To nie jest OSNAP i nie tworzy constraints.
+
+Po wyniku kolejny zaakceptowany cel rozpoczyna następną relację. Kliknięcie pustego tła czyści bieżący stan relacyjny, ale pozostaje w Between. **Esc** raz wraca do zwykłego Measure; **Esc** drugi raz wraca do Select.
+
+Measure i Between są read-only: nie powodują dirty, nie zmieniają revision, nie zużywają identyfikatorów i nie tworzą Undo. Runtime measurement references nie są zapisywane, a Measure nie wchodzi do Repeat Last Command.
+
+Wartości liniowe/pola pozostają w skali współrzędnych Sketchu bez etykiety jednostki fizycznej; kąty są prezentowane w stopniach. Ogólne minimum distance curve-to-curve, OSNAP/tracking/inference, trwałe referencje sub-elementów, wiele overlayów wymiarowych, authored dimensions i constraints pozostają poza R8B. Szersze diagnostyczne wyświetlanie wymiarów należy do R8C.
 
 <!-- section-id: product.parts.profiles -->
 ## Construction i Profile
@@ -364,7 +382,7 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 
 Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, fundament Workbench/Viewer 3D oraz trwałe Sketche na płaszczyznach Origin z authored geometrią Line/Circle/Arc.
 
-Bieżący Sketch UI zapewnia Select oraz grupy Create, Modify i Inspect z Line/Circle/Arc, Move/Copy/Rotate/Scale/Mirror oraz read-only Measure, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Grip Copy przez aktywne `C` dla owner-only Reshape albo frozen-selection Move, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz keyboard-first Command Line.
+Bieżący Sketch UI zapewnia Select oraz grupy Create, Modify i Inspect z Line/Circle/Arc, Move/Copy/Rotate/Scale/Mirror oraz read-only quick/Between Measure, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Grip Copy przez aktywne `C` dla owner-only Reshape albo frozen-selection Move, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz keyboard-first Command Line.
 
 Direct Distance jest dostępny dla obsługiwanych etapów PointRequest opisanych wyżej, również dla placementów gripu po włączeniu Grip Copy. Profile nie jest operacją bryłową. Nadal brakuje Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego kąta Rotate i współczynnika Scale, współrzędnych absolutnych/względnych/polarnych, unit expressions i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features/Extrude, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 

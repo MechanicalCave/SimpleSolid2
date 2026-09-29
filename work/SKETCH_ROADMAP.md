@@ -654,7 +654,7 @@ Ordinary RMB context menu is no longer treated as a blocker for R7 completion. T
 No multiple-active-grip feature is planned.
 
 ### R8 — Inspect / Measure / diagnostic dimensions
-**Status:** in progress — R8A completed; R8B/R8C inactive until separately accepted
+**Status:** in progress — R8A and R8B completed; R8C inactive until separately accepted
 
 Goal:
 
@@ -843,14 +843,14 @@ R5 completed — SK-05A closed after exact-head FULL #402 and Owner manual PASS
 R6 completed — SK-06A closed after exact-head FULL #443 and Owner manual PASS  
 R7 completed — SK-07A through SK-07G plus WB-02; ordinary RMB menu deferred by v1.5 sequencing decision  
 AUDIT-01 A–F completed — Package F already supplies the region/Profile foundation previously scheduled later  
-R8 in progress — R8A completed after exact-head FULL #867 and Owner manual PASS; R8B/R8C inactive until separately accepted  
+R8 in progress — R8A completed after exact-head FULL #867 and Owner manual PASS; R8B completed after exact-head FULL #889 and Owner manual PASS; R8C inactive  
 R9–R15 inactive  
 Sketcher profile-authoring readiness checkpoint not yet reached  
 Part Feature Tree architecture gate inactive  
 Solid modeling / Extrude inactive  
 Ordinary Select RMB context menu deferred as a later UX-convergence slice
 
-Roadmap v1.5 is authoritative for Sketcher feature sequencing. R8A completion does not activate R8B, R8C or R9; the next production scope requires a separate Owner-accepted Work Contract.
+Roadmap v1.5 is authoritative for Sketcher feature sequencing. R8B completion does not activate R8C or R9; the next production scope requires a separate Owner-accepted Work Contract.
 
 ## AUDIT-01 program interlock — completed
 

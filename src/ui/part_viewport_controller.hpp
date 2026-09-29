@@ -3,6 +3,7 @@
 #include "part_document_tree_controller.hpp"
 
 #include <simplesolid2/sketch/interaction_state.hpp>
+#include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
@@ -58,6 +59,20 @@ struct SketchGripPointQueryResult final {
 struct SketchEntityRectangleQueryResult final {
     bool completed{};
     std::vector<SketchEntityAddress> hits;
+};
+
+struct SketchMeasureMarkerAddress final {
+    sketch::SketchId sketch_id;
+    sketch::MeasurePointRef point;
+
+    friend bool operator==(
+        const SketchMeasureMarkerAddress&,
+        const SketchMeasureMarkerAddress&) = default;
+};
+
+struct SketchMeasureMarkerPointQueryResult final {
+    bool completed{};
+    std::vector<SketchMeasureMarkerAddress> hits;
 };
 
 struct SketchPreviewLine2D final {
@@ -146,6 +161,17 @@ public:
     [[nodiscard]] SketchGripPointQueryResult
     querySketchGripAt(
         viewer::ViewportPoint2 point);
+
+    [[nodiscard]] SketchMeasureMarkerPointQueryResult
+    querySketchMeasureMarkersAt(
+        viewer::ViewportPoint2 point);
+
+    [[nodiscard]] bool projectSketchMeasurePresentation(
+        const std::vector<sketch::ResolvedMeasurePoint>& catalog,
+        const std::vector<sketch::MeasurePointRef>& selected,
+        const std::optional<sketch::RelationalMeasurementCue>& cue);
+
+    void clearSketchMeasurePresentation();
 
     [[nodiscard]] SketchEntityRectangleQueryResult
     querySketchEntities(

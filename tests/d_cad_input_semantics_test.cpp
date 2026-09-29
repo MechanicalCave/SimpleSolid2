@@ -26,6 +26,9 @@ public:
     bool grip_copy_available{};
     bool grip_copy_result{true};
     unsigned grip_copy_submit_count{};
+    bool measure_between_available{};
+    bool measure_between_result{true};
+    unsigned measure_between_submit_count{};
     std::optional<sketch::PointRequest> request;
     std::optional<sketch::SketchTool> activated;
     std::optional<double> submitted_distance;
@@ -53,6 +56,14 @@ public:
         ++grip_copy_submit_count;
         return grip_copy_result;
     }
+    bool cadInputSemanticMeasureBetweenAvailable()
+        const noexcept override {
+        return measure_between_available;
+    }
+    bool submitCadInputSemanticMeasureBetween() override {
+        ++measure_between_submit_count;
+        return measure_between_result;
+    }
 
     application::CadInputSubmitResult
     submitCadInputSemanticProfileCommand(
@@ -76,6 +87,27 @@ int main() {
     result = dot.submit("measure");
     CHECK(result.accepted);
     CHECK(target.activated == sketch::SketchTool::measure);
+
+    // BETWEEN is tool-local; clear the previous top-level activation
+    // observation before asserting that BETWEEN does not activate a new tool.
+    target.activated.reset();
+    target.measure_between_available = true;
+    result = dot.submit(" BeTwEeN ");
+    CHECK(result.accepted);
+    CHECK(target.measure_between_submit_count == 1U);
+    CHECK(!target.activated.has_value());
+
+    target.measure_between_result = false;
+    result = dot.submit("BETWEEN");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic ==
+          "Measure Between could not be activated.");
+    CHECK(target.measure_between_submit_count == 2U);
+    target.measure_between_result = true;
+    target.measure_between_available = false;
+    result = dot.submit("BETWEEN");
+    CHECK(!result.accepted);
+    CHECK(result.diagnostic == "Unknown Sketch command.");
 
     target.activated.reset();
     result = dot.submit("MOVE");
