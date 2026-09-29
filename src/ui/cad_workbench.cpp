@@ -650,34 +650,6 @@ void CadWorkbench::buildUi() {
         6,
         rectangle_sketch_button_);
 
-    create_construction_button_ =
-        new QPushButton(
-            QStringLiteral("Construction"),
-            shell_);
-    create_construction_button_->setObjectName(
-        QStringLiteral("sketchCreationConstructionButton"));
-    create_construction_button_->setCheckable(true);
-    create_construction_button_->setToolTip(
-        QStringLiteral(
-            "Creation role for new Line, Circle, Arc and Rectangle geometry."));
-    shell_->editorToolsLayout().insertWidget(
-        7,
-        create_construction_button_);
-
-    rectangle_diagonals_button_ =
-        new QPushButton(
-            QStringLiteral("Draw Diagonals"),
-            shell_);
-    rectangle_diagonals_button_->setObjectName(
-        QStringLiteral("sketchRectangleDiagonalsButton"));
-    rectangle_diagonals_button_->setCheckable(true);
-    rectangle_diagonals_button_->setToolTip(
-        QStringLiteral(
-            "Rectangle only: add two Construction diagonals in the same creation step."));
-    shell_->editorToolsLayout().insertWidget(
-        8,
-        rectangle_diagonals_button_);
-
     viewport_controller_ =
         new PartViewportController(
             *tree_controller_,
@@ -1020,6 +992,34 @@ void CadWorkbench::buildUi() {
         QStringLiteral("operationsPlaceholder"));
     operations_placeholder_->setWordWrap(true);
     operations_layout->addWidget(operations_placeholder_);
+
+    create_construction_button_ =
+        new QPushButton(
+            QStringLiteral("Construction"),
+            operations_content);
+    create_construction_button_->setObjectName(
+        QStringLiteral("sketchCreationConstructionButton"));
+    create_construction_button_->setCheckable(true);
+    create_construction_button_->setVisible(false);
+    create_construction_button_->setToolTip(
+        QStringLiteral(
+            "Creation role for new Line, Circle, Arc and Rectangle geometry."));
+    operations_layout->addWidget(
+        create_construction_button_);
+
+    rectangle_diagonals_button_ =
+        new QPushButton(
+            QStringLiteral("Draw Diagonals"),
+            operations_content);
+    rectangle_diagonals_button_->setObjectName(
+        QStringLiteral("sketchRectangleDiagonalsButton"));
+    rectangle_diagonals_button_->setCheckable(true);
+    rectangle_diagonals_button_->setVisible(false);
+    rectangle_diagonals_button_->setToolTip(
+        QStringLiteral(
+            "Rectangle only: add two Construction diagonals in the same creation step."));
+    operations_layout->addWidget(
+        rectangle_diagonals_button_);
 
     measure_between_button_ =
         new QPushButton(
@@ -3058,6 +3058,12 @@ void CadWorkbench::syncSketchInteractionUi() {
     if (construction_role_button_ != nullptr) {
         construction_role_button_->setVisible(false);
     }
+    if (create_construction_button_ != nullptr) {
+        create_construction_button_->setVisible(false);
+    }
+    if (rectangle_diagonals_button_ != nullptr) {
+        rectangle_diagonals_button_->setVisible(false);
+    }
 
     const bool editing =
         sketch_interaction_controller_ &&
@@ -3126,7 +3132,6 @@ void CadWorkbench::syncSketchInteractionUi() {
                 sketch::SketchTool::rectangle);
     }
     if (create_construction_button_ != nullptr) {
-        create_construction_button_->setVisible(editing);
         create_construction_button_->setChecked(
             editing &&
             sketch_interaction_controller_->
@@ -3134,7 +3139,6 @@ void CadWorkbench::syncSketchInteractionUi() {
                     sketch::EntityRole::construction);
     }
     if (rectangle_diagonals_button_ != nullptr) {
-        rectangle_diagonals_button_->setVisible(editing);
         rectangle_diagonals_button_->setChecked(
             editing &&
             sketch_interaction_controller_->
@@ -3628,6 +3632,20 @@ void CadWorkbench::syncSketchInteractionUi() {
     finish_line_button_->setVisible(true);
     cancel_line_button_->setVisible(true);
 
+    const bool creation_tool =
+        tool == sketch::SketchTool::line ||
+        tool == sketch::SketchTool::circle ||
+        tool == sketch::SketchTool::arc ||
+        tool == sketch::SketchTool::rectangle;
+    if (create_construction_button_ != nullptr) {
+        create_construction_button_->setVisible(
+            creation_tool);
+    }
+    if (rectangle_diagonals_button_ != nullptr) {
+        rectangle_diagonals_button_->setVisible(
+            tool == sketch::SketchTool::rectangle);
+    }
+
     if (tool == sketch::SketchTool::line) {
         finish_line_button_->setText(
             QStringLiteral("Finish Line"));
@@ -3772,10 +3790,6 @@ void CadWorkbench::syncActionState() {
     arc_sketch_button_->setVisible(
         editing_sketch);
     rectangle_sketch_button_->setVisible(
-        editing_sketch);
-    create_construction_button_->setVisible(
-        editing_sketch);
-    rectangle_diagonals_button_->setVisible(
         editing_sketch);
     modify_tools_label_->setVisible(
         editing_sketch);
