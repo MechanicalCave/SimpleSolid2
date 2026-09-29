@@ -1,8 +1,209 @@
 #include <simplesolid2/application/cad_input.hpp>
 
+#include <algorithm>
+#include <cmath>
+#include <numbers>
 #include <utility>
 
 namespace simplesolid2::application {
+namespace {
+
+constexpr double full_turn =
+    2.0 * std::numbers::pi_v<double>;
+constexpr double polar_angle_epsilon = 1.0e-12;
+constexpr std::size_t max_polar_tracks = 4096U;
+
+double normalizeAngle(double angle) noexcept {
+    double result = std::fmod(angle, full_turn);
+    if (result < 0.0) {
+        result += full_turn;
+    }
+    return result == full_turn ? 0.0 : result;
+}
+
+bool equivalentAngle(
+    double left,
+    double right) noexcept {
+    const double delta =
+        std::abs(normalizeAngle(left - right));
+    const double wrapped =
+        std::min(delta, full_turn - delta);
+    return wrapped <= polar_angle_epsilon;
+}
+
+} // namespace
+
+bool PolarInputSettings::valid() const noexcept {
+    if (!std::isfinite(primary_spacing) ||
+        primary_spacing <= 0.0 ||
+        primary_spacing >
+            std::numbers::pi_v<double>) {
+        return false;
+    }
+    return std::all_of(
+        additional_angles.begin(),
+        additional_angles.end(),
+        [](double angle) {
+            return std::isfinite(angle);
+        });
+}
+
+bool PolarTrackScreenDistance::valid() const noexcept {
+    return std::isfinite(angle) &&
+           std::isfinite(distance) &&
+           distance >= 0.0;
+}
+
+bool PolarCaptureState::valid() const noexcept {
+    return !captured_angle ||
+           std::isfinite(*captured_angle);
+}
+
+std::vector<double> generatePolarTrackAngles(
+    const PolarInputSettings& settings,
+    std::optional<double> relative_reference) {
+    if (!settings.valid() ||
+        !settings.enabled) {
+        return {};
+    }
+
+    double reference = 0.0;
+    if (settings.reference_mode ==
+        PolarReferenceMode::relative) {
+        if (!relative_reference ||
+            !std::isfinite(*relative_reference)) {
+            return {};
+        }
+        reference = *relative_reference;
+    }
+
+    std::vector<double> tracks;
+    tracks.reserve(std::min<std::size_t>(
+        max_polar_tracks,
+        static_cast<std::size_t>(
+            std::ceil(
+                full_turn /
+                settings.primary_spacing)) +
+            settings.additional_angles.size()));
+
+    for (std::size_t index = 0U;
+         index < max_polar_tracks;
+         ++index) {
+        const double offset =
+            static_cast<double>(index) *
+            settings.primary_spacing;
+        if (!std::isfinite(offset) ||
+            offset >= full_turn) {
+            break;
+        }
+        tracks.push_back(
+            normalizeAngle(reference + offset));
+    }
+
+    for (const double additional :
+         settings.additional_angles) {
+        if (tracks.size() >= max_polar_tracks) {
+            break;
+        }
+        tracks.push_back(
+            normalizeAngle(
+                reference + additional));
+    }
+
+    std::sort(tracks.begin(), tracks.end());
+    tracks.erase(
+        std::unique(
+            tracks.begin(),
+            tracks.end(),
+            [](double left, double right) {
+                return equivalentAngle(left, right);
+            }),
+        tracks.end());
+
+    if (tracks.size() > 1U &&
+        equivalentAngle(
+            tracks.front(),
+            tracks.back())) {
+        tracks.pop_back();
+    }
+
+    return tracks;
+}
+
+std::optional<double> resolvePolarCapture(
+    PolarCaptureState& state,
+    bool enabled,
+    double base_screen_distance,
+    const std::vector<PolarTrackScreenDistance>&
+        track_distances) noexcept {
+    if (!state.valid() ||
+        !std::isfinite(base_screen_distance) ||
+        base_screen_distance < 0.0) {
+        state.captured_angle.reset();
+        return std::nullopt;
+    }
+
+    if (!enabled ||
+        base_screen_distance <=
+            polar_base_dead_zone) {
+        state.captured_angle.reset();
+        return std::nullopt;
+    }
+
+    if (state.captured_angle) {
+        const auto captured =
+            std::find_if(
+                track_distances.begin(),
+                track_distances.end(),
+                [&state](
+                    const PolarTrackScreenDistance&
+                        candidate) {
+                    return candidate.valid() &&
+                           equivalentAngle(
+                               candidate.angle,
+                               *state.captured_angle);
+                });
+
+        if (captured != track_distances.end() &&
+            captured->distance <=
+                polar_release_distance) {
+            state.captured_angle =
+                normalizeAngle(
+                    *state.captured_angle);
+            return state.captured_angle;
+        }
+
+        // Hysteresis rule: release first. A neighboring track may only
+        // capture on a later pointer sample.
+        state.captured_angle.reset();
+        return std::nullopt;
+    }
+
+    const PolarTrackScreenDistance* best = nullptr;
+    for (const auto& candidate :
+         track_distances) {
+        if (!candidate.valid() ||
+            candidate.distance >
+                polar_capture_distance) {
+            continue;
+        }
+        if (best == nullptr ||
+            candidate.distance < best->distance ||
+            (candidate.distance == best->distance &&
+             normalizeAngle(candidate.angle) <
+                 normalizeAngle(best->angle))) {
+            best = &candidate;
+        }
+    }
+
+    if (best == nullptr) {
+        return std::nullopt;
+    }
+
+    state.captured_angle =
+        normalizeAngle(best->angle);
+    return state.captured_angle;
+}
 
 void CadInputSession::attachEndpoint(
     ICadInputEndpoint* endpoint) {
@@ -126,6 +327,15 @@ std::string CadInputSession::prompt() const {
 const std::string&
 CadInputSession::diagnostic() const noexcept {
     return diagnostic_;
+}
+
+bool CadInputSession::setInteractionSettings(
+    CadInteractionSettings settings) noexcept {
+    if (!settings.valid()) {
+        return false;
+    }
+    interaction_settings_ = std::move(settings);
+    return true;
 }
 
 CadInputSubmitResult CadInputSession::submit() {
