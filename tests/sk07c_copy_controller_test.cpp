@@ -457,6 +457,44 @@ int main(int argc, char* argv[]) {
         grip_copy_count_before + source_ids.size());
     CHECK(capture(session, sketch_id, source_ids) == source);
 
+    // SK-07G Reshape+Copy with a mixed multi-selection duplicates only
+    // the active-grip owner. The other selected entities stay references.
+    const auto reshape_copy_count_before =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+    const auto reshape_copy_undo_before =
+        session.undoDepth();
+
+    CHECK(!viewport.sketch_scene_.lines.empty());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            viewport.sketch_scene_.lines.front().token,
+            viewer::SketchGripRole::line_start}};
+    click(interaction, sketch_id, 125.0, 125.0, 1.0, 0.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::reshape);
+    CHECK(interaction.selectedCount() == 3U);
+    CHECK(interaction.enableGripCopy());
+
+    click(interaction, sketch_id, 130.0, 130.0, -1.0, 2.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.directManipulationCopyEnabled());
+    CHECK(interaction.selectedCount() == 3U);
+    CHECK(
+        session.document().findSketch(sketch_id)->
+            model.entityCount() ==
+        reshape_copy_count_before + 1U);
+    CHECK(
+        session.undoDepth() ==
+        reshape_copy_undo_before + 1U);
+    CHECK(capture(session, sketch_id, source_ids) == source);
+    CHECK(interaction.escape());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    CHECK(interaction.selectedCount() == 3U);
+
     // A stale DocumentRevision fails Grip Copy atomically and ends only
     // the transient direct-manipulation session.
     CHECK(!viewport.sketch_scene_.lines.empty());
