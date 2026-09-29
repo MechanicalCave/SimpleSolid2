@@ -317,6 +317,25 @@ int main() {
             {rectangle_opposite.u, a.v},
             {a.u, rectangle_opposite.v}}));
 
+    const sketch::Point2 rectangle_quadrants[] = {
+        {5.0, 7.0},
+        {-3.0, 7.0},
+        {-3.0, -4.0},
+        {5.0, -4.0},
+    };
+    for (const auto opposite :
+         rectangle_quadrants) {
+        const auto quadrant_preview =
+            state.previewRectangle(opposite);
+        CHECK(quadrant_preview.has_value());
+        CHECK(quadrant_preview->valid());
+        const auto quadrant_perimeter =
+            quadrant_preview->perimeter();
+        CHECK(quadrant_perimeter[0].start == a);
+        CHECK(quadrant_perimeter[1].end == opposite);
+        CHECK(quadrant_perimeter[3].end == a);
+    }
+
     CHECK(
         state.acceptRectanglePoint(
                  {a.u, rectangle_opposite.v})
