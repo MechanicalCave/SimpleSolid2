@@ -1,3 +1,4 @@
+// CI-03 cross-layer focused-gate probe; no regression semantics are changed.
 #include "part_document_tree_controller.hpp"
 #include "part_sketch_interaction_controller.hpp"
 #include "part_viewport_controller.hpp"

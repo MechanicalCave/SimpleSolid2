@@ -1,7 +1,5 @@
 #include <simplesolid2/sketch/interaction_state.hpp>
 
-// CI-03 focused-gate probe; no regression semantics are changed.
-
 #include <algorithm>
 #include <array>
 #include <cmath>
