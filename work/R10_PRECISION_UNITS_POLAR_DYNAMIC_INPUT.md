@@ -187,6 +187,12 @@ R10 does not authorize:
 
 R11+ remain inactive.
 
+## Documentation impact
+
+Internal docs: required
+User/Product docs: required
+Reason: R10 changes shared precision-input ownership/grammar, document unit persistence, creation-tool interaction semantics, runtime Polar/Dynamic Input behavior, engineering-value presentation and keyboard workflows. Completion must update current-state internal documentation and peer PL/EN product documentation, then regenerate/verify the Product Browser. Proposal review does not rewrite current-state as-built/product docs before the behavior is implemented and accepted.
+
 ## 6. Units architecture
 
 Foundation 1.0 requires units to be shared platform semantics.
