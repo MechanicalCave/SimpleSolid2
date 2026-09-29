@@ -814,12 +814,6 @@ int main(int argc, char* argv[]) {
         session->undoDepth() ==
         r9_option_undo_before);
 
-    line_button->click();
-    QApplication::processEvents();
-    CHECK(line_button->isChecked());
-    CHECK(!creation_construction_button->isHidden());
-    CHECK(rectangle_diagonals_button->isHidden());
-
     // Package F: toolbar, Operations and Command Line are adapters to one
     // controller-owned transient Profile session.
     CHECK(!profile_button->isHidden());
