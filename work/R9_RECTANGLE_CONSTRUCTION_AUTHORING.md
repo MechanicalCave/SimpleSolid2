@@ -223,7 +223,9 @@ Changing Creation Role must not silently rewrite selected geometry.
 
 ## 8. Creation Role UI
 
-The Sketch Create surface exposes the current Creation Role clearly.
+The active creation tool exposes the current Creation Role clearly in the right Operations panel.
+
+Owner manual-review refinement on 2026-09-29: the top Create strip contains **tool choices only**. Runtime options belong to the Operations panel for the currently active creation tool. Construction is visible there for Line/Circle/Arc/Rectangle; Draw Diagonals is additionally visible only for Rectangle.
 
 The preferred bounded interaction is a visible checkable **Construction** creation toggle:
 
@@ -235,10 +237,10 @@ Construction ON  → Creation Role = Construction
 Exact widget placement, iconography and styling are D1 as long as:
 
 - the current creation role is visible before geometry is committed;
-- it is visually associated with Create rather than selected-entity Properties/Operations;
+- it is shown as an option of the active creation tool in the right Operations panel, not as another top-toolbar tool;
 - it does not masquerade as selection state;
 - it remains usable with Line/Circle/Arc/Rectangle;
-- existing selected-geometry Regular/Construction controls remain semantically distinct.
+- existing selected-geometry Regular/Construction controls remain semantically distinct and are shown in the Select context rather than simultaneously as creation options.
 
 A two-button Regular/Construction creation selector is also acceptable if the distinction remains clear.
 
@@ -246,7 +248,7 @@ R9 does not require a new global application preference.
 
 ### 8.1 Rectangle Draw Diagonals option
 
-The Rectangle creation surface also exposes a checkable **Draw Diagonals** option (`Rysuj przekątne` in Polish UI).
+The Rectangle Operations context also exposes a checkable **Draw Diagonals** option (`Rysuj przekątne` in Polish UI), colocated with the Rectangle Construction creation option rather than placed in the top Create toolbar.
 
 Properties:
 

@@ -94,8 +94,6 @@ Create
   Circle
   Arc
   Rectangle
-  Construction
-  Draw Diagonals
 
 Profile
   Profile
@@ -111,7 +109,7 @@ Inspect
   Measure
 ```
 
-The Create strip's **Construction** button is the runtime Creation Role for future Line/Circle/Arc and Rectangle-perimeter commits; it is deliberately separate from the Operations Regular/Construction controls that mutate already-selected authored geometry. **Draw Diagonals** is a Rectangle-only runtime option. Both reset with Sketch-edit teardown, create no history by themselves and never become persistent preferences.
+The top Create strip contains creation tools only. The right **Operations** panel exposes the runtime **Construction** Creation Role while Line/Circle/Arc/Rectangle is active, and additionally exposes **Draw Diagonals** while Rectangle is active. These creation options are context controls for the active tool; they remain semantically distinct from the selected-geometry Regular/Construction controls shown in Operations during ordinary Select. Both runtime options reset with Sketch-edit teardown, create no history by themselves and never become persistent preferences.
 
 Rectangle is activated by the toolbar or the top-level `RECTANGLE` token and uses the same controller/interaction state. First Corner captures the current DocumentRevision; Opposite Corner commits four ordinary perimeter Lines, plus two ordinary Construction diagonals when enabled, through one atomic application command. Stale revision fails closed instead of silently rebasing the second click. No Rectangle/group/center identity enters the Viewer or authored model.
 
