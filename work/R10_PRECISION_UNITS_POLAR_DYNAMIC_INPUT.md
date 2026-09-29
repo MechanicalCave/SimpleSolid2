@@ -102,20 +102,22 @@ Subject to explicit Owner acceptance, R10 adopts these bounded decisions:
 44. Polar supports Absolute reference from Sketch +U and Relative reference from the current operation reference direction.
 45. Additional Polar angles remain available as runtime offsets augmenting the primary family.
 46. Explicit complete coordinates / numeric locks outrank Polar capture; Polar capture outranks raw pointer only while the pointer is inside the attraction neighborhood.
-47. Polar and Dynamic Input mode/configuration state is runtime-only in R10 and retained across tool changes within one active Sketch edit session.
-48. Polar and Dynamic Input runtime state resets when Sketch edit ends; R10 does not create application-wide preference persistence for them.
-49. Dynamic Input is a runtime UI adapter to the same semantic request, field-selection state and CAD input buffer; it owns no CAD meaning and never creates a second parser/buffer.
-50. Dynamic Input is OFF by default at the start of a Sketch edit session in R10. DYN OFF hides the overlay/field-navigation UI only; keyboard-first precision input and Command Line syntax remain fully active.
-51. Dynamic Input presents request values in three semantic states where applicable: Free (pointer-derived), Assisted (for example Polar-captured) and Locked (explicit numeric field value).
-52. Typing while DYN is visible does not require clicking the overlay; printable input continues to the one workspace CAD buffer and is interpreted by the request's current Dynamic Input field.
-53. Tab with a valid current token locks that field and advances; Tab with an empty buffer advances field focus without creating a lock; Shift+Tab moves backward. Enter accepts/executes the current semantic request from the available locks plus remaining Polar/pointer degrees of freedom.
-54. Dynamic field locks constrain the existing resolver only and never create authored dimensions/constraints.
-55. Esc order remains live token → request-local numeric locks → existing tool-stage cancellation.
-56. Accepted point/value submission clears locks belonging to that request.
-57. R10 introduces no OSNAP, Object Snap Tracking, geometric inference, Grid Snap or candidate cycling.
-58. R10 introduces no authored dimension/constraint/solver state.
-59. Construction dash-gap cadence becomes fixed in screen/presentation space and independent of entity length; committed and preview Construction geometry use the same visual cadence policy.
-60. Construction dash styling remains Viewer presentation only and never becomes authored geometry or persistence state.
+47. Polar and Dynamic Input mode/configuration state is runtime-only in R10 and retained across tool changes and across Sketch-edit entries for the lifetime of the running application session.
+48. R10 introduces session-runtime interaction settings, not persisted preferences. At application-session initialization the defaults are: Polar ON, Step `360/8 = 45°`, Reference Absolute, no Additional Angles, Dynamic Input OFF.
+49. Closing/reopening a Sketch does not reset Polar/DYN runtime settings. Closing the application discards them; no Part state, Undo/history, disk preference or user-profile preference is written.
+50. `F10` toggles Polar ON/OFF and `F12` toggles Dynamic Input ON/OFF through the existing CAD focus/keyboard arbitration. Real text editors retain keyboard ownership.
+51. Dynamic Input is a runtime UI adapter to the same semantic request, field-selection state and CAD input buffer; it owns no CAD meaning and never creates a second parser/buffer.
+52. DYN OFF hides the overlay/field-navigation UI only; keyboard-first precision input and Command Line syntax remain fully active.
+53. Dynamic Input presents request values in three semantic states where applicable: Free (pointer-derived), Assisted (for example Polar-captured) and Locked (explicit numeric field value).
+54. Typing while DYN is visible does not require clicking the overlay; printable input continues to the one workspace CAD buffer and is interpreted by the request's current Dynamic Input field.
+55. Tab with a valid current token locks that field and advances; Tab with an empty buffer advances field focus without creating a lock; Shift+Tab moves backward. Enter accepts/executes the current semantic request from the available locks plus remaining Polar/pointer degrees of freedom.
+56. Dynamic field locks constrain the existing resolver only and never create authored dimensions/constraints.
+57. Esc order remains live token → request-local numeric locks → existing tool-stage cancellation.
+58. Accepted point/value submission clears locks belonging to that request.
+59. R10 introduces no OSNAP, Object Snap Tracking, geometric inference, Grid Snap or candidate cycling.
+60. R10 introduces no authored dimension/constraint/solver state.
+61. Construction dash-gap cadence becomes fixed in screen/presentation space and independent of entity length; committed and preview Construction geometry use the same visual cadence policy.
+62. Construction dash styling remains Viewer presentation only and never becomes authored geometry or persistence state.
 
 ## 4. Scope IN
 
@@ -168,7 +170,7 @@ R10 does not authorize:
 - Trim/Split/Join;
 - persistent Dynamic Input field locks;
 - persistence of Polar/Dynamic Input mode state;
-- application-wide/user-profile CAD preferences;
+- persisted application-wide/user-profile CAD preference architecture;
 - custom linetype editor or Construction linetype persistence;
 - width/height authored Rectangle parameters;
 - durable Rectangle identity/group/center;
@@ -534,7 +536,16 @@ Diameter | Radius
 
 Default at the start of each Sketch edit: **Diameter**.
 
-The selected mode is retained across Circle activations within that Sketch edit session and resets to Diameter when Sketch edit ends. It is runtime-only: changing it creates no DocumentRevision, dirty state, Undo entry or persisted geometry/property.
+The selected mode is retained across Circle activations within the current Sketch edit session and resets to Diameter when that Sketch edit ends. Unlike Polar/DYN, Circle Diameter/Radius mode does not carry across Sketch-edit entries. It is runtime-only: changing it creates no DocumentRevision, dirty state, Undo entry or persisted geometry/property.
+
+While Circle Size owns the semantic input context, tool-local tokens are:
+
+```text
+D = Diameter
+R = Radius
+```
+
+These are explicit setters, not a toggle. They are consumed only by the active Circle Size request before top-level command grammar; outside that context they have no new R10 meaning.
 
 Pointer behavior does not split into two tools. After Center is accepted, the pointer always identifies a circumference point:
 
@@ -940,7 +951,9 @@ There is no separate Ortho toggle or resolver path. A classic orthogonal-only se
 Polar spacing = 360/4 = 90°
 ```
 
-Default per Sketch edit: OFF.
+Application-session initialization default: **ON**.
+
+The current Polar ON/OFF value is retained across tool changes and later Sketch-edit entries for the lifetime of that application process.
 
 When OFF, pointer direction remains raw unless explicit numeric locks fully determine it.
 
@@ -1020,7 +1033,7 @@ Polar has one runtime reference-mode selector:
 Reference: Absolute | Relative
 ```
 
-Default per Sketch edit: **Absolute**.
+Application-session initialization default: **Absolute**. The selected Reference mode is retained across later Sketch-edit entries until changed or the application exits.
 
 Changing the reference mode is runtime-only and creates no DocumentRevision, dirty state or Undo entry.
 
@@ -1108,7 +1121,9 @@ Examples:
 
 Dynamic Input is a runtime presentation/input adapter to the same active semantic request, the same request-local numeric locks and the same workspace-global CAD input session.
 
-Default per Sketch edit: OFF.
+Application-session initialization default: **OFF**.
+
+The current DYN ON/OFF value is retained across tool changes and later Sketch-edit entries for the lifetime of that application process.
 
 **DYN OFF does not disable precision input.** With the overlay hidden, keyboard-first Command Line input, explicit coordinate/polar syntax, Direct Distance and typed Length/Angle/Factor requests continue to work exactly through the same semantic endpoint. DYN controls only the near-cursor field presentation and field-navigation workflow.
 
@@ -1333,7 +1348,14 @@ A compact persistent status affordance may therefore read conceptually:
 POLAR ON   360/8 = 45°   ABS    DYN ON
 ```
 
-Polar and DYN are Sketch-session interaction modes, not geometry tools. It must not masquerade as another Create/Modify tool button. Exact placement remains D1 for UI review. A compact persistent affordance near the Command Line/status area, with fuller configuration in a contextual panel or popover, is explicitly allowed.
+Polar and DYN are runtime interaction modes, not geometry tools. They must not masquerade as Create/Modify tool buttons. Exact placement remains D1 for UI review. A compact persistent affordance near the Command Line/status area, with fuller configuration in a contextual panel or popover, is explicitly allowed.
+
+Keyboard affordances:
+
+- `F10` toggles Polar ON/OFF;
+- `F12` toggles Dynamic Input ON/OFF;
+- the click affordance and shortcut mutate the same runtime setting;
+- shortcuts obey existing workspace CAD focus arbitration and do not steal input from real text editors.
 
 Changing runtime Polar/Dynamic Input configuration creates no CAD history.
 
@@ -1384,7 +1406,21 @@ Migration rules:
 - current writer emits the new unit property;
 - geometry values are not rescaled during load/save migration;
 - unknown/malformed unit values fail closed;
-- runtime Polar/Dynamic Input modes and numeric locks are never serialized.
+- runtime Polar/Dynamic Input modes/configuration and numeric locks are never serialized.
+
+R10 may keep one in-memory application-session interaction-settings object for Polar/DYN only. It is initialized at application startup to:
+
+```text
+Polar       ON
+Step        360/8 = 45°
+Reference   Absolute
+Additional  none
+DYN         OFF
+```
+
+It survives Sketch close/re-entry while the process runs and is discarded when the application exits. It is not Part authored state, not a document preference, not Undo/Redo state and not a disk/user-profile preference.
+
+Circle Diameter/Radius creation mode is more local: it persists only within one active Sketch edit and resets to Diameter for the next Sketch edit.
 
 No other R10 state requires persistence.
 
@@ -1477,100 +1513,105 @@ At minimum verify:
 31. continuous Line advances the relative base and clears stale locks;
 32. Circle center accepts point precision;
 33. Circle Size mode defaults to Diameter at Sketch-edit start and is retained across Circle activations within that edit;
-34. Circle Diameter mode converts typed positive D to semantic radius D/2;
-35. Circle Radius mode converts typed positive R to semantic radius R;
-36. Circle pointer always identifies a circumference point and preview presentation reflects the active Diameter/Radius mode;
-37. invalid/zero Circle Diameter or Radius input fails closed;
-38. Circle input mode is runtime-only and does not alter authored Circle schema/geometry semantics;
-39. Arc creation order is Start → End → Arc Point / Radius;
-40. Arc End relative point grammar uses Start as its semantic base;
-41. Arc third-stage pointer/explicit point creates the exact 3-point Start→ArcPoint→End arc and preserves short/long branch capability;
-42. Arc Dynamic Input derives live Radius from the current valid Arc Point candidate;
-43. typed Arc Radius requires R >= chord/2 and never moves/clamps Start or End;
-44. typed Arc Radius > chord/2 creates the pointer-side minor arc; R = chord/2 creates the pointer-side semicircle;
-45. typed Arc Radius < chord/2, non-positive or invalid input fails closed;
-46. locked Arc Radius waits for a valid pointer half-plane when side is ambiguous;
-47. major Arc remains available through Arc Point; Radius sign is never used as a branch selector;
-48. Rectangle First Corner accepts pointer or absolute Cartesian;
-49. Rectangle pointer second stage preserves existing Opposite Corner behavior;
-50. Rectangle keyboard second stage accepts Width;Height rather than second-corner coordinates;
-51. Rectangle Width/Height are strictly positive Length magnitudes;
-52. Rectangle pointer quadrant supplies ±U/±V placement orientation for locked Width/Height;
-53. complete Rectangle Width/Height with no usable quadrant remains uncommitted rather than inventing a quadrant;
-54. Rectangle single bare scalar without explicit Dynamic Input field context does not guess a complete size;
-55. Rectangle Width/Height remain transient and atomic 4/6-Line R9 semantics do not regress;
-56. Move Base/Destination accept precision input;
-57. Copy repeated placements accept precision input and retain fresh-ID/high-water semantics;
-58. grip Reshape/Move/Copy accept precision point input without changing affected-set rules;
-59. non-center grip Space cycle is `Reshape → Move → Rotate → Scale → Mirror → Reshape`;
-60. center grip Space cycle is `Move → Rotate → Scale → Mirror → Move`;
-61. grip mode cycling preserves pivot/selection/source state and never compounds preview;
-62. grip Rotate captures the current pivot→pointer direction as its zero/reference direction on entry, or the first later valid direction if none exists;
-63. grip Rotate pointer preview is the signed angle from the frozen zero/reference direction and is independent of pointer radius;
-64. re-entering grip Rotate captures a fresh zero/reference direction rather than reusing a prior one;
-65. Rotate accepts explicit signed Angle;
-66. Rotate positive/negative direction is deterministic and pointer-independent after explicit input;
-67. Scale accepts explicit positive Factor;
-68. grip Scale captures/re-captures factor-1 reference radius deterministically and explicit Factor overrides pointer;
-69. ordinary Mirror axis accepts precision point input;
-70. grip Mirror accepts exact signed Axis Angle through the pivot, measured from Sketch +U and independent of pointer after explicit input;
-71. no separate Ortho runtime mode/control exists;
-72. Polar default is OFF;
-73. Polar default spacing is `360/8 = 45°`;
-74. `360/4 = 90°` reproduces orthogonal-only directional attraction without a separate resolver;
-75. Polar spacing expressions such as `360/8`, `360/12` and `360/7` resolve deterministically;
-76. Polar capture is based on logical screen-space distance to the projected track, not on entity length or a global nearest-angle quantizer;
-77. initial capture/release tuning targets are approximately 9/15 logical pixels with a small base-point dead-zone around 12 logical pixels;
-78. Polar releases outside the release neighborhood and free pointer direction returns;
-79. Polar capture/release hysteresis is stable and does not flicker at the threshold;
-80. Polar does not jump directly between neighboring captured tracks without first releasing;
-81. Polar does not hard-quantize every pointer direction while enabled;
-82. captured Polar constrains direction only; pointer radius/magnitude remains free unless an explicit numeric lock owns it;
-83. pixel tolerances/guide state never enter authored CAD state, Commands or persistence;
-84. each Additional Polar Angle contributes one single extra track relative to the active reference rather than another repeating family;
-85. Additional Polar Angles use the shared Angle-expression parser, normalize within one turn and collapse duplicates against primary/additional tracks;
-86. Additional Polar Angles do not implicitly create opposite +180° tracks;
-87. Polar Reference defaults to Absolute for each new Sketch edit;
-88. Absolute uses Sketch +U and is independent of previous geometry;
-89. Relative uses only a valid semantic reference direction explicitly supplied by the active interaction context;
-90. Relative with no valid reference performs no Polar capture and does not silently fall back to Absolute;
-91. switching Absolute/Relative is runtime-only and has no revision/dirty/Undo effect;
-92. explicit complete point input outranks Polar;
-93. `@Distance<Angle` Angle is always absolute from Sketch +U and is independent of Polar Reference mode;
-94. locked point-field Angle is always absolute from Sketch +U and is independent of Polar Reference mode;
-95. locked Distance may combine with captured Polar direction;
-96. locked Angle outranks Polar direction;
-97. conflicting locks fail closed;
-98. Dynamic Input default is OFF per Sketch edit;
-99. DYN OFF hides only overlay/field navigation and does not disable keyboard-first precision input;
-100. Dynamic Input has no authored state/history impact;
-101. Dynamic Input and Command Line feed the same request and same live CAD token;
-102. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
-103. Free / Assisted / Locked value states are semantically distinguishable in presentation;
-104. unbased point field order is U → V;
-105. normal based-point field order is Distance → Angle → dU → dV;
-106. Rectangle second-stage field order is Width → Height and pointer quadrant supplies placement orientation;
-107. Circle Size exposes Diameter or Radius according to the current runtime mode, default Diameter;
-108. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
-109. valid token + Tab locks current field and advances;
-110. empty-buffer Tab advances without creating a lock;
-111. Shift+Tab moves backward deterministically;
-112. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
-113. request acceptance clears request-local locks;
-114. Esc follows buffer → locks → tool hierarchy;
-115. Sketch/tool/Document teardown clears precision runtime state;
-116. Measure displays correct current units without changing measurement semantics;
-117. changing units updates Measure presentation without geometry mutation;
-118. Construction dash-gap cadence is independent of entity length;
-119. Construction preview and committed geometry use the same cadence policy;
-120. Construction dash polish introduces no authored/persistent style state;
-121. R8 Measure/Between regressions remain green;
-122. R9 Rectangle/Construction/Profile regressions remain green;
-123. selection/grips/transforms/COPY/Grip Copy regressions remain green;
-124. global keyboard-first CAD input/focus arbitration regressions remain green;
-125. persistence backward-read coverage remains green;
-126. exact-head Windows FULL passes;
-127. required internal + PL/EN docs and Product Browser freshness pass.
+34. Circle Size tool-local `D` and `R` explicitly select Diameter and Radius only while Circle Size owns semantic input;
+35. Circle Diameter mode converts typed positive D to semantic radius D/2;
+36. Circle Radius mode converts typed positive R to semantic radius R;
+37. Circle pointer always identifies a circumference point and preview presentation reflects the active Diameter/Radius mode;
+38. invalid/zero Circle Diameter or Radius input fails closed;
+39. Circle input mode is runtime-only and does not alter authored Circle schema/geometry semantics;
+40. Arc creation order is Start → End → Arc Point / Radius;
+41. Arc End relative point grammar uses Start as its semantic base;
+42. Arc third-stage pointer/explicit point creates the exact 3-point Start→ArcPoint→End arc and preserves short/long branch capability;
+43. Arc Dynamic Input derives live Radius from the current valid Arc Point candidate;
+44. typed Arc Radius requires R >= chord/2 and never moves/clamps Start or End;
+45. typed Arc Radius > chord/2 creates the pointer-side minor arc; R = chord/2 creates the pointer-side semicircle;
+46. typed Arc Radius < chord/2, non-positive or invalid input fails closed;
+47. locked Arc Radius waits for a valid pointer half-plane when side is ambiguous;
+48. major Arc remains available through Arc Point; Radius sign is never used as a branch selector;
+49. Rectangle First Corner accepts pointer or absolute Cartesian;
+50. Rectangle pointer second stage preserves existing Opposite Corner behavior;
+51. Rectangle keyboard second stage accepts Width;Height rather than second-corner coordinates;
+52. Rectangle Width/Height are strictly positive Length magnitudes;
+53. Rectangle pointer quadrant supplies ±U/±V placement orientation for locked Width/Height;
+54. complete Rectangle Width/Height with no usable quadrant remains uncommitted rather than inventing a quadrant;
+55. Rectangle single bare scalar without explicit Dynamic Input field context does not guess a complete size;
+56. Rectangle Width/Height remain transient and atomic 4/6-Line R9 semantics do not regress;
+57. Move Base/Destination accept precision input;
+58. Copy repeated placements accept precision input and retain fresh-ID/high-water semantics;
+59. grip Reshape/Move/Copy accept precision point input without changing affected-set rules;
+60. non-center grip Space cycle is `Reshape → Move → Rotate → Scale → Mirror → Reshape`;
+61. center grip Space cycle is `Move → Rotate → Scale → Mirror → Move`;
+62. grip mode cycling preserves pivot/selection/source state and never compounds preview;
+63. grip Rotate captures the current pivot→pointer direction as its zero/reference direction on entry, or the first later valid direction if none exists;
+64. grip Rotate pointer preview is the signed angle from the frozen zero/reference direction and is independent of pointer radius;
+65. re-entering grip Rotate captures a fresh zero/reference direction rather than reusing a prior one;
+66. Rotate accepts explicit signed Angle;
+67. Rotate positive/negative direction is deterministic and pointer-independent after explicit input;
+68. Scale accepts explicit positive Factor;
+69. grip Scale captures/re-captures factor-1 reference radius deterministically and explicit Factor overrides pointer;
+70. ordinary Mirror axis accepts precision point input;
+71. grip Mirror accepts exact signed Axis Angle through the pivot, measured from Sketch +U and independent of pointer after explicit input;
+72. no separate Ortho runtime mode/control exists;
+73. application-session default Polar state is ON;
+74. application-session default Polar spacing is `360/8 = 45°`;
+75. `360/4 = 90°` reproduces orthogonal-only directional attraction without a separate resolver;
+76. Polar spacing expressions such as `360/8`, `360/12` and `360/7` resolve deterministically;
+77. Polar capture is based on logical screen-space distance to the projected track, not on entity length or a global nearest-angle quantizer;
+78. initial capture/release tuning targets are approximately 9/15 logical pixels with a small base-point dead-zone around 12 logical pixels;
+79. Polar releases outside the release neighborhood and free pointer direction returns;
+80. Polar capture/release hysteresis is stable and does not flicker at the threshold;
+81. Polar does not jump directly between neighboring captured tracks without first releasing;
+82. Polar does not hard-quantize every pointer direction while enabled;
+83. captured Polar constrains direction only; pointer radius/magnitude remains free unless an explicit numeric lock owns it;
+84. pixel tolerances/guide state never enter authored CAD state, Commands or persistence;
+85. each Additional Polar Angle contributes one single extra track relative to the active reference rather than another repeating family;
+86. Additional Polar Angles use the shared Angle-expression parser, normalize within one turn and collapse duplicates against primary/additional tracks;
+87. Additional Polar Angles do not implicitly create opposite +180° tracks;
+88. application-session default Polar Reference is Absolute;
+89. Polar ON/OFF, Step, Reference and Additional Angles survive Sketch close/re-entry within one application session;
+90. application restart restores Polar ON / 45° / Absolute / no Additional defaults;
+91. Absolute uses Sketch +U and is independent of previous geometry;
+92. Relative uses only a valid semantic reference direction explicitly supplied by the active interaction context;
+93. Relative with no valid reference performs no Polar capture and does not silently fall back to Absolute;
+94. switching Absolute/Relative is runtime-only and has no revision/dirty/Undo effect;
+95. explicit complete point input outranks Polar;
+96. `@Distance<Angle` Angle is always absolute from Sketch +U and is independent of Polar Reference mode;
+97. locked point-field Angle is always absolute from Sketch +U and is independent of Polar Reference mode;
+98. locked Distance may combine with captured Polar direction;
+99. locked Angle outranks Polar direction;
+100. conflicting locks fail closed;
+101. application-session default Dynamic Input state is OFF;
+102. Dynamic Input ON/OFF survives Sketch close/re-entry within one application session and resets to OFF after application restart;
+103. DYN OFF hides only overlay/field navigation and does not disable keyboard-first precision input;
+104. F10 toggles Polar and F12 toggles DYN through existing CAD focus arbitration without stealing real text-editor input;
+105. Dynamic Input has no authored state/history impact;
+106. Dynamic Input and Command Line feed the same request and same live CAD token;
+107. Dynamic Input uses the shared CAD input buffer rather than a second text buffer;
+108. Free / Assisted / Locked value states are semantically distinguishable in presentation;
+109. unbased point field order is U → V;
+110. normal based-point field order is Distance → Angle → dU → dV;
+111. Rectangle second-stage field order is Width → Height and pointer quadrant supplies placement orientation;
+112. Circle Size exposes Diameter or Radius according to the current runtime mode, default Diameter;
+113. Rotate/grip Rotate expose Angle; Scale/grip Scale expose Factor; grip Mirror exposes Axis Angle;
+114. valid token + Tab locks current field and advances;
+115. empty-buffer Tab advances without creating a lock;
+116. Shift+Tab moves backward deterministically;
+117. Enter accepts the current request from locks plus remaining Polar/pointer values rather than merely advancing field focus;
+118. request acceptance clears request-local locks;
+119. Esc follows buffer → locks → tool hierarchy;
+120. request-local numeric locks/candidates clear on tool/Sketch/Document teardown while application-session Polar/DYN settings survive Sketch teardown;
+121. Measure displays correct current units without changing measurement semantics;
+122. changing units updates Measure presentation without geometry mutation;
+123. Construction dash-gap cadence is independent of entity length;
+124. Construction preview and committed geometry use the same cadence policy;
+125. Construction dash polish introduces no authored/persistent style state;
+126. R8 Measure/Between regressions remain green;
+127. R9 Rectangle/Construction/Profile regressions remain green;
+128. selection/grips/transforms/COPY/Grip Copy regressions remain green;
+129. global keyboard-first CAD input/focus arbitration regressions remain green;
+130. persistence backward-read coverage remains green;
+131. exact-head Windows FULL passes;
+132. required internal + PL/EN docs and Product Browser freshness pass.
 
 ## 30. Manual Windows verification
 
@@ -1594,7 +1635,8 @@ Minimum checklist:
 - LINE Direct Distance with explicit mm/in unit suffix;
 - verify decimal comma and dot;
 - CIRCLE center by coordinates; in default Diameter mode type `10` and verify semantic radius 5;
-- switch Circle input mode to Radius, type `10`, and verify semantic radius 10;
+- while Circle Size is active press `R`, type `10`, and verify Radius mode with semantic radius 10; press `D` and verify explicit return to Diameter mode;
+- verify `D`/`R` are Circle-Size-local setters and do not become new top-level commands outside that context;
 - move pointer after Circle center and verify the same circumference preview is shown while the displayed Size value changes correctly between Diameter and Radius modes;
 - leave/re-enter Circle within the same Sketch edit and verify the selected Diameter/Radius mode is retained; end/re-enter Sketch edit and verify Diameter is restored as default;
 - ARC Start then End by pointer/coordinate precision and verify End-relative input is based on Start;
@@ -1630,7 +1672,12 @@ Minimum checklist:
 - grip Mirror pointer preview with pivot as Axis Start;
 - grip Mirror typed `45` and verify exact +45° axis through the pivot regardless of pointer position;
 - grip Mirror typed `-30` and verify exact -30° axis through the pivot regardless of pointer position;
-- enable Polar and verify it behaves as an attraction magnet rather than unconditional angular quantization;
+- on a fresh application session verify Polar starts ON, Step=45°, Reference=Absolute, no Additional Angles, and DYN starts OFF;
+- press F10 and verify Polar toggles OFF/ON; press F12 and verify DYN toggles ON/OFF through the same runtime settings as the UI affordances;
+- put focus in a real text editor and verify CAD F10/F12 handling does not steal that editor's keyboard ownership;
+- change Polar/DYN configuration, leave Sketch edit, enter another Sketch and verify the runtime configuration is retained;
+- restart the application and verify Polar/DYN configuration returns to the application-session defaults;
+- with Polar ON verify it behaves as an attraction magnet rather than unconditional angular quantization;
 - approach one track slowly and verify capture near the accepted screen-space threshold;
 - move away slowly and verify release occurs farther out than capture, without flicker;
 - while captured, move farther/closer along the same guide and verify length remains free;
@@ -1644,7 +1691,7 @@ Minimum checklist:
 - verify an Additional angle equivalent to a primary-family track collapses deterministically;
 - verify adding 17° does not implicitly add 197°;
 - switch to Relative with a known 12° reference and Additional=30° and verify the extra track is 42°;
-- verify Reference defaults to Absolute on a fresh Sketch edit;
+- in a fresh application session verify Reference initializes to Absolute; after changing it, verify later Sketch edits retain the session value;
 - verify Absolute tracks stay anchored to Sketch +U regardless of previous segment direction;
 - switch to Relative on a continuous Line and verify the previous committed segment becomes the 0° reference;
 - use Relative in a context with no valid semantic reference and verify Polar does not capture and does not silently fall back to Absolute;
