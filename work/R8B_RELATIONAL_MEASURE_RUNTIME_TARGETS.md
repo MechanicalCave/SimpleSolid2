@@ -1,9 +1,9 @@
 # R8B — Relational Measure + Runtime Semantic Targets
 
-**Status:** PROPOSED — INACTIVE  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-29  
 **Proposal revision:** 2026-09-29 — dynamic proximity-reveal markers + lightweight transient relation cues  
-**Owner acceptance:** pending  
+**Owner acceptance:** 2026-09-29  
 **Decision class:** D2 measurement target/interaction grammar + provider-neutral runtime marker/query contract; bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  

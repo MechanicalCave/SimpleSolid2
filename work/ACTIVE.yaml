@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/R8A_READ_ONLY_MEASURE.md"
+status: active
+active_work: "work/R8B_RELATIONAL_MEASURE_RUNTIME_TARGETS.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.5"
@@ -19,12 +19,19 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after R8A completion
-  - prepare a separate Owner-reviewed R8B Relational Measure / semantic runtime targets Work Contract before any further R8 production implementation
-  - keep R8C Show Dimensions overlays, R9+, ordinary RMB context, authored constraints/solver and solid modeling inactive until separately accepted
-  - preserve the Roadmap v1.5 sequence and complete the whole R8 milestone before R9 unless the Owner explicitly amends sequencing
+  - implement accepted R8B Relational Measure + Runtime Semantic Targets scope only
+  - use CI-03 FOCUSED evidence for ordinary implementation iterations
+  - preserve R8A quick Measure behavior while adding Between as an active-Measure submode
+  - keep R8C Show Dimensions, R9+, ordinary RMB context, authored constraints/solver and solid modeling inactive
+  - stop for Owner review on durable sub-element identity, generic OSNAP candidate resolution, unit-system architecture, generic minimum-distance engine or full dimension-overlay expansion
+  - obtain affected checkpoint evidence, exact-head FULL, Owner manual Windows PASS and CLOSURE before completion
 
 notes:
+  - Owner explicitly accepted R8B Relational Measure + Runtime Semantic Targets on 2026-09-29.
+  - R8B is the only active production scope.
+  - Dynamic marker proximity reveals visibility only; it does not snap/acquire.
+  - R8B authorizes one lightweight current-relation cue, not the R8C general dimension-overlay system.
+  - R8C and R9+ remain inactive.
   - R8A final implementation/documentation candidate 9cdc5a5f3a990e83ea4bc90164c9a5c8b01bb1dd passed affected FOCUSED #866 and exact-head Windows FULL #867.
   - R8A FULL #867 passed documentation/bootstrap/dispatcher checks, desktop Build, core-only 14/14, selector checks and desktop 77/77.
   - Owner manual Windows verification for R8A passed on 2026-09-29.
