@@ -404,6 +404,23 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.enableGripCopy());
     CHECK(interaction.directManipulationCopyEnabled());
 
+    // Exact pivot/no-change is a clean no-op and leaves Grip Copy active.
+    const auto grip_copy_revision_before =
+        session.document().revision();
+    click(interaction, sketch_id, 95.0, 95.0, 2.0, 0.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.directManipulationCopyEnabled());
+    CHECK(
+        session.document().revision() ==
+        grip_copy_revision_before);
+    CHECK(
+        session.undoDepth() ==
+        grip_copy_undo_before);
+    CHECK(
+        session.document().findSketch(sketch_id)->
+            model.entityCount() ==
+        grip_copy_count_before);
+
     click(interaction, sketch_id, 105.0, 105.0, 5.0, 3.0);
     CHECK(interaction.directManipulationActive());
     CHECK(interaction.directManipulationCopyEnabled());
@@ -416,11 +433,64 @@ int main(int argc, char* argv[]) {
         grip_copy_undo_before + 1U);
     CHECK(capture(session, sketch_id, source_ids) == source);
 
-    CHECK(interaction.escape());
+    // Undo is a history boundary for active Grip Copy: cancel transient
+    // state first, then undo only the last committed placement.
+    interaction.cancelForHistory();
+    CHECK(!interaction.directManipulationActive());
+    CHECK(interaction.tool() == sketch::SketchTool::select);
+    const auto grip_copy_undo = session.undo();
+    CHECK(grip_copy_undo.ok() && grip_copy_undo.changed);
+    CHECK(interaction.reconcileAfterHistory());
+    CHECK(interaction.selectedCount() == 3U);
+    CHECK(
+        session.document().findSketch(sketch_id)->
+            model.entityCount() ==
+        grip_copy_count_before);
+
+    const auto grip_copy_redo = session.redo();
+    CHECK(grip_copy_redo.ok() && grip_copy_redo.changed);
+    CHECK(interaction.reconcileAfterHistory());
+    CHECK(interaction.selectedCount() == 3U);
+    CHECK(
+        session.document().findSketch(sketch_id)->
+            model.entityCount() ==
+        grip_copy_count_before + source_ids.size());
+    CHECK(capture(session, sketch_id, source_ids) == source);
+
+    // A stale DocumentRevision fails Grip Copy atomically and ends only
+    // the transient direct-manipulation session.
+    CHECK(!viewport.sketch_scene_.lines.empty());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            viewport.sketch_scene_.lines.front().token,
+            viewer::SketchGripRole::line_center}};
+    click(interaction, sketch_id, 115.0, 115.0, 2.0, 0.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.enableGripCopy());
+    movePointer(interaction, sketch_id, 120.0, 120.0, 6.0, 4.0);
+
+    const auto grip_external =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {120.0, 120.0},
+                {130.0, 120.0}});
+    CHECK(grip_external.ok() && grip_external.changed);
+    const auto grip_count_after_external =
+        session.document().findSketch(sketch_id)->
+            model.entityCount();
+
+    CHECK(!interaction.commitDirectManipulation());
+    CHECK(!interaction.directManipulationActive());
     CHECK(interaction.tool() == sketch::SketchTool::select);
     CHECK(interaction.selectedCount() == 3U);
+    CHECK(
+        session.document().findSketch(sketch_id)->
+            model.entityCount() ==
+        grip_count_after_external);
 
-    // Stale revision fails the pending COPY atomically and ends the
+    // Stale revision fails the pending normal COPY atomically and ends the
     // transient command while preserving already committed copies.
     CHECK(interaction.activateCopy());
     click(interaction, sketch_id, 80.0, 80.0, 0.0, 0.0);
