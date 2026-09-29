@@ -641,7 +641,7 @@ R8C remains responsible for capabilities such as:
 
 R8B's temporary segment/highlight/continuation cue is therefore a **tool-local interaction visualization**, not an early general-purpose dimension-overlay engine.
 
-## 20. Minimum-distance operations deliberately deferred
+## 21. Minimum-distance operations deliberately deferred
 
 The roadmap mentions minimum geometric distance “where applicable”, but R8B deliberately does not implement generic closest-distance relations.
 
@@ -654,7 +654,7 @@ Reason:
 
 R8B first establishes explicit semantic runtime targets and three unambiguous relation families. A later bounded slice may add minimum curve distance if concrete engineering workflows justify it.
 
-## 21. Construction geometry
+## 22. Construction geometry
 
 Construction geometry participates in R8B measurement exactly like Regular geometry.
 
@@ -667,7 +667,7 @@ Construction semantic role does not change:
 
 R8B never converts role or affects Profile participation.
 
-## 22. Verification footprint
+## 23. Verification footprint
 
 Prefer existing test executables so ordinary development iterations remain CI-03 FOCUSED.
 
@@ -684,7 +684,7 @@ Exact target choice is D1.
 
 Verification infrastructure must not be changed merely to obtain a cheaper CI tier. Final merge evidence remains exact-head Windows FULL.
 
-## 23. Automated acceptance coverage
+## 24. Automated acceptance coverage
 
 At minimum verify:
 
@@ -739,7 +739,7 @@ At minimum verify:
 49. exact-head Windows FULL passes;
 50. required docs and Product Browser freshness pass.
 
-## 24. Manual Windows verification
+## 25. Manual Windows verification
 
 Final candidate requires Owner verification:
 
@@ -791,7 +791,7 @@ Product PL/EN documentation must explain the Between workflow, target roles, sup
 
 Generated Product Browser must be regenerated and deterministic.
 
-## 26. Stop conditions
+## 27. Stop conditions
 
 Stop for Owner review if implementation requires:
 
@@ -817,7 +817,7 @@ Stop for Owner review if implementation requires:
 
 These are D2/D3 scope expansions.
 
-## 27. R8 continuation boundary
+## 28. R8 continuation boundary
 
 R8B does not complete the whole R8 milestone.
 
@@ -838,7 +838,7 @@ R8B's single active-relation marker/highlight/segment/continuation cue is explic
 
 R9 remains inactive until R8 is completed or the Owner explicitly amends sequencing.
 
-## 28. Completion boundary
+## 29. Completion boundary
 
 R8B may become ACTIVE only after explicit Owner acceptance of this Work Contract.
 
