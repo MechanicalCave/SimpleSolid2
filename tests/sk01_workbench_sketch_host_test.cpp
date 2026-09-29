@@ -2101,7 +2101,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         operations_label->text() ==
         QStringLiteral(
-            "Grip — Reshape; Space cycles mode; Enter/LMB commits; Esc cancels"));
+            "Grip — Rotate; Space cycles mode; Enter/LMB commits; Esc cancels"));
 
     command_input->clear();
     command_input->setFocus();
@@ -2113,7 +2113,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         operations_label->text() ==
         QStringLiteral(
-            "Grip — Reshape; Space cycles mode; Enter/LMB commits; Esc cancels"));
+            "Grip — Rotate; Space cycles mode; Enter/LMB commits; Esc cancels"));
 
     QTest::keyClick(command_input, Qt::Key_Escape);
     QApplication::processEvents();

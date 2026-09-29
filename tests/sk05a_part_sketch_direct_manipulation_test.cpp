@@ -372,6 +372,33 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.cycleDirectEditMode());
     CHECK(
         interaction.directEditMode() ==
+        sketch::DirectEditMode::rotate);
+    CHECK(viewport.preview_scene_.lines.size() == 2U);
+    CHECK(session.document().state() == before_cycle_state);
+    CHECK(session.document().revision() == before_cycle_revision);
+    CHECK(session.undoDepth() == before_cycle_undo);
+
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::scale);
+    CHECK(viewport.preview_scene_.lines.size() == 2U);
+    CHECK(session.document().state() == before_cycle_state);
+    CHECK(session.document().revision() == before_cycle_revision);
+    CHECK(session.undoDepth() == before_cycle_undo);
+
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::mirror);
+    CHECK(viewport.preview_scene_.lines.size() == 2U);
+    CHECK(session.document().state() == before_cycle_state);
+    CHECK(session.document().revision() == before_cycle_revision);
+    CHECK(session.undoDepth() == before_cycle_undo);
+
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
         sketch::DirectEditMode::reshape);
     CHECK(viewport.preview_scene_.lines.size() == 1U);
     CHECK(session.document().state() == before_cycle_state);

@@ -258,7 +258,6 @@ int main() {
         sketch::Point2{-6.0, 4.0});
 
     // A pointer position invalid for Reshape can still be valid for Move.
-    CHECK(state.cycleDirectEditMode());
     CHECK(
         state.directEditMode() ==
         sketch::DirectEditMode::reshape);
@@ -276,6 +275,21 @@ int main() {
     CHECK(
         state.directManipulationGeometryState()
             .has_value());
+
+    // Complete the cycle back to Reshape before checking the same invalid
+    // owner-only reshape geometry again.
+    CHECK(state.cycleDirectEditMode());
+    CHECK(
+        state.directEditMode() ==
+        sketch::DirectEditMode::rotate);
+    CHECK(state.cycleDirectEditMode());
+    CHECK(
+        state.directEditMode() ==
+        sketch::DirectEditMode::scale);
+    CHECK(state.cycleDirectEditMode());
+    CHECK(
+        state.directEditMode() ==
+        sketch::DirectEditMode::mirror);
     CHECK(state.cycleDirectEditMode());
     CHECK(
         state.directEditMode() ==
