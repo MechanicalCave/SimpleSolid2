@@ -56,6 +56,8 @@ public:
     circleStage() const noexcept;
     [[nodiscard]] std::optional<sketch::ArcStage>
     arcStage() const noexcept;
+    [[nodiscard]] std::optional<sketch::RectangleStage>
+    rectangleStage() const noexcept;
     [[nodiscard]] std::optional<sketch::MoveStage>
     moveStage() const noexcept;
     [[nodiscard]] std::optional<sketch::CommonTransformStage>
@@ -109,6 +111,20 @@ public:
             command) override;
 
     [[nodiscard]] std::size_t selectedCount() const noexcept;
+
+    [[nodiscard]] sketch::EntityRole
+    creationRole() const noexcept {
+        return creation_role_;
+    }
+    [[nodiscard]] bool setCreationRole(
+        sketch::EntityRole role);
+    [[nodiscard]] bool rectangleDrawDiagonals()
+        const noexcept {
+        return rectangle_draw_diagonals_;
+    }
+    [[nodiscard]] bool setRectangleDrawDiagonals(
+        bool enabled);
+
     [[nodiscard]] std::optional<sketch::EntityRole>
     selectedEntityRole() const noexcept;
     [[nodiscard]] bool setSelectedEntityRole(
@@ -197,12 +213,13 @@ public:
         return selected_profile_id_;
     }
 
-    // Line/Circle/Arc are adapters to the same semantic
+    // Line/Circle/Arc/Rectangle are adapters to the same semantic
     // SketchInteractionState and resolved-input path.
     void activateSelect();
     void activateLine();
     void activateCircle();
     void activateArc();
+    void activateRectangle();
     [[nodiscard]] bool activateMove();
     [[nodiscard]] bool activateCopy();
     [[nodiscard]] bool activateRotate();
@@ -244,6 +261,7 @@ private:
     void handleLinePointer(const SketchPointerInput& input);
     void handleCirclePointer(const SketchPointerInput& input);
     void handleArcPointer(const SketchPointerInput& input);
+    void handleRectanglePointer(const SketchPointerInput& input);
     void handleMeasurePointer(const SketchPointerInput& input);
     void handleCommonTransformPointer(
         const SketchPointerInput& input);
@@ -254,6 +272,7 @@ private:
     void resetProfileRuntime() noexcept;
     [[nodiscard]] bool acceptLineResolvedPoint(
         sketch::ResolvedSketchInput input);
+    void updateRectanglePreview(sketch::Point2 current);
     void updateRectangleOverlay(viewer::ViewportPoint2 current);
     void updateHover(viewer::ViewportPoint2 point);
     [[nodiscard]] bool beginDirectManipulation(
@@ -278,6 +297,8 @@ private:
         std::optional<sketch::LineStage> line_stage;
         std::optional<sketch::CircleStage> circle_stage;
         std::optional<sketch::ArcStage> arc_stage;
+        std::optional<sketch::RectangleStage>
+            rectangle_stage;
         std::optional<sketch::CommonTransformStage>
             transform_stage;
         bool direct_manipulation_active{};
@@ -320,6 +341,9 @@ private:
         transform_revision_;
     std::optional<sketch::SketchTool>
         last_repeatable_command_;
+    sketch::EntityRole creation_role_{
+        sketch::EntityRole::regular};
+    bool rectangle_draw_diagonals_{};
 
     struct ProfileToolSession final {
         ProfileToolSessionKind kind{

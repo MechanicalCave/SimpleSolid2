@@ -103,6 +103,7 @@ struct SketchScene final {
 struct SketchPreviewLine final {
     Point3 start{};
     Point3 end{};
+    bool construction{false};
 
     [[nodiscard]] bool valid() const noexcept {
         return finite(start) &&
