@@ -434,8 +434,8 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.directManipulationActive());
     CHECK(interaction.directManipulationCopyEnabled());
     CHECK(
-        session.document().revision() ==
-        grip_copy_revision_before + 1U);
+        session.document().revision().value() ==
+        grip_copy_revision_before.value() + 1U);
     CHECK(
         session.undoDepth() ==
         grip_copy_undo_before + 1U);
