@@ -126,6 +126,7 @@ private:
     void activateSketchRotate();
     void activateSketchScale();
     void activateSketchMirror();
+    void activateSketchMeasure();
     void finishSketchLine();
     void cancelSketchLine();
     void deleteSketchSelection();
@@ -244,6 +245,8 @@ private:
     QPushButton* rotate_sketch_button_{};
     QPushButton* scale_sketch_button_{};
     QPushButton* mirror_sketch_button_{};
+    QLabel* inspect_tools_label_{};
+    QPushButton* measure_sketch_button_{};
     QPushButton* cancel_sketch_button_{};
     QPushButton* finish_sketch_button_{};
     QPushButton* finish_line_button_{};

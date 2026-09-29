@@ -1022,6 +1022,15 @@ bool PartSketchInteractionController::activateMeasure() {
     }
 
     interaction_.activateMeasure(hosted->model);
+    if (interaction_.measureTarget() &&
+        !measureResult()) {
+        static_cast<void>(
+            interaction_.setMeasureTarget(
+                hosted->model,
+                std::nullopt));
+        reportStatus(
+            "Measure result is not finite for the selected geometry.");
+    }
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();

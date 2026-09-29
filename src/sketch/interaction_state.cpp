@@ -547,6 +547,7 @@ bool SketchInteractionState::activateCommonTransform(
         return false;
     }
 
+    measure_target_.reset();
     manipulation_.reset();
     point_pointer_candidate_.reset();
     resetCommonTransform();

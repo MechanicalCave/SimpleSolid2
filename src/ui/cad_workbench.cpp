@@ -26,10 +26,13 @@
 #include <QVBoxLayout>
 
 #include <cmath>
+#include <numbers>
 #include <string>
 #include <string_view>
 #include <system_error>
+#include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 namespace simplesolid2::ui {
@@ -57,6 +60,94 @@ QString fromFilesystemPath(const std::filesystem::path& value) {
         reinterpret_cast<const char*>(utf8.data()),
         static_cast<qsizetype>(utf8.size()));
 #endif
+}
+
+QString measurementRoleText(
+    sketch::EntityRole role) {
+    return role == sketch::EntityRole::construction
+        ? QStringLiteral("Construction")
+        : QStringLiteral("Regular");
+}
+
+QString formatMeasurement(
+    const sketch::EntityMeasurement& measurement) {
+    const auto number = [](double value) {
+        return QString::number(value, 'g', 12);
+    };
+    const auto degrees = [&number](double radians) {
+        return number(
+            radians * 180.0 /
+            std::numbers::pi_v<double>) +
+            QStringLiteral("°");
+    };
+
+    return std::visit(
+        [&](const auto& value) -> QString {
+            using Value =
+                std::decay_t<decltype(value)>;
+            const auto id =
+                fromUtf8(value.entity_id.serialized());
+            const auto role =
+                measurementRoleText(value.role);
+
+            if constexpr (
+                std::is_same_v<
+                    Value,
+                    sketch::LineMeasurement>) {
+                return QStringLiteral(
+                           "Measure — Line [%1]\n"
+                           "Role: %2\n"
+                           "Length: %3\n"
+                           "Delta U: %4\n"
+                           "Delta V: %5\n"
+                           "Angle +U: %6")
+                    .arg(
+                        id,
+                        role,
+                        number(value.length),
+                        number(value.delta_u),
+                        number(value.delta_v),
+                        degrees(
+                            value.angle_from_positive_u));
+            } else if constexpr (
+                std::is_same_v<
+                    Value,
+                    sketch::CircleMeasurement>) {
+                return QStringLiteral(
+                           "Measure — Circle [%1]\n"
+                           "Role: %2\n"
+                           "Radius: %3\n"
+                           "Diameter: %4\n"
+                           "Circumference: %5\n"
+                           "Area: %6")
+                    .arg(
+                        id,
+                        role,
+                        number(value.radius),
+                        number(value.diameter),
+                        number(value.circumference),
+                        number(value.area));
+            } else {
+                return QStringLiteral(
+                           "Measure — Arc [%1]\n"
+                           "Role: %2\n"
+                           "Radius: %3\n"
+                           "Start angle: %4\n"
+                           "End angle: %5\n"
+                           "Signed sweep: %6\n"
+                           "Arc length: %7")
+                    .arg(
+                        id,
+                        role,
+                        number(value.radius),
+                        degrees(value.start_angle),
+                        degrees(value.end_angle),
+                        degrees(
+                            value.signed_sweep_angle),
+                        number(value.arc_length));
+            }
+        },
+        measurement);
 }
 
 std::optional<viewer::StandardView>
@@ -394,6 +485,27 @@ void CadWorkbench::buildUi() {
     shell_->editorToolsLayout().insertWidget(
         13,
         mirror_sketch_button_);
+
+    inspect_tools_label_ =
+        new QLabel(
+            QStringLiteral("Inspect:"),
+            shell_);
+    inspect_tools_label_->setObjectName(
+        QStringLiteral("sketchInspectToolsLabel"));
+    shell_->editorToolsLayout().insertWidget(
+        14,
+        inspect_tools_label_);
+
+    measure_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Measure"),
+            shell_);
+    measure_sketch_button_->setObjectName(
+        QStringLiteral("measureSketchToolButton"));
+    measure_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        15,
+        measure_sketch_button_);
 
     viewport_controller_ =
         new PartViewportController(
@@ -1031,6 +1143,11 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { activateSketchMirror(); });
+    QObject::connect(
+        measure_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchMeasure(); });
     QObject::connect(
         cancel_sketch_button_,
         &QPushButton::clicked,
@@ -1714,6 +1831,18 @@ void CadWorkbench::activateSketchMirror() {
     }
 }
 
+void CadWorkbench::activateSketchMeasure() {
+    if (sketch_interaction_controller_ &&
+        !sketch_interaction_controller_->activateMeasure()) {
+        setStatusText(
+            QStringLiteral("MEASURE could not be activated."));
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(Qt::OtherFocusReason);
+    }
+}
+
 void CadWorkbench::finishSketchLine() {
     if (!sketch_interaction_controller_) {
         return;
@@ -1755,6 +1884,10 @@ void CadWorkbench::finishSketchLine() {
     case sketch::SketchTool::mirror:
         setStatusText(
             QStringLiteral("Mirror finished — Select active."));
+        break;
+    case sketch::SketchTool::measure:
+        setStatusText(
+            QStringLiteral("Measure finished — Select active."));
         break;
     case sketch::SketchTool::select:
         break;
@@ -1805,6 +1938,10 @@ void CadWorkbench::cancelSketchLine() {
     case sketch::SketchTool::mirror:
         setStatusText(
             QStringLiteral("Mirror cancelled — selection preserved."));
+        break;
+    case sketch::SketchTool::measure:
+        setStatusText(
+            QStringLiteral("Measure cancelled — selection preserved."));
         break;
     case sketch::SketchTool::select:
         break;
@@ -1914,6 +2051,11 @@ QString CadWorkbench::cadInputPromptText() const {
                 .arg(mode_text);
         }
         return QStringLiteral("Command: SELECT");
+    }
+
+    if (tool == sketch::SketchTool::measure) {
+        return QStringLiteral(
+            "Command: MEASURE — Click Line/Circle/Arc; Esc ends");
     }
 
     const bool common_transform =
@@ -2728,6 +2870,16 @@ void CadWorkbench::syncSketchInteractionUi() {
             sketch_interaction_controller_->tool() ==
                 sketch::SketchTool::mirror);
     }
+    if (inspect_tools_label_ != nullptr) {
+        inspect_tools_label_->setVisible(editing);
+    }
+    if (measure_sketch_button_ != nullptr) {
+        measure_sketch_button_->setVisible(editing);
+        measure_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::measure);
+    }
 
     const bool profile_active =
         editing &&
@@ -3011,6 +3163,22 @@ void CadWorkbench::syncSketchInteractionUi() {
                 return;
     }
 
+    if (tool == sketch::SketchTool::measure) {
+        delete_selection_button_->setVisible(false);
+        finish_line_button_->setVisible(false);
+        cancel_line_button_->setVisible(false);
+
+        const auto result =
+            sketch_interaction_controller_->
+                measureResult();
+        operations_placeholder_->setText(
+            result
+                ? formatMeasurement(*result)
+                : QStringLiteral(
+                      "Measure — Click Line/Circle/Arc to inspect; Esc ends"));
+        return;
+    }
+
     const bool common_transform =
         tool == sketch::SketchTool::move ||
         tool == sketch::SketchTool::copy ||
@@ -3212,6 +3380,10 @@ void CadWorkbench::syncActionState() {
     scale_sketch_button_->setVisible(
         editing_sketch);
     mirror_sketch_button_->setVisible(
+        editing_sketch);
+    inspect_tools_label_->setVisible(
+        editing_sketch);
+    measure_sketch_button_->setVisible(
         editing_sketch);
 
     cancel_sketch_button_->setVisible(

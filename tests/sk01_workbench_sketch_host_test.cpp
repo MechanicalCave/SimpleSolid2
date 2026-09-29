@@ -529,6 +529,12 @@ int main(int argc, char* argv[]) {
     auto* mirror_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("mirrorSketchToolButton"));
+    auto* inspect_tools_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("sketchInspectToolsLabel"));
+    auto* measure_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("measureSketchToolButton"));
     auto* command_input =
         workspace_shell.findChild<QLineEdit*>(
             QStringLiteral("cadCommandInput"));
@@ -582,6 +588,8 @@ int main(int argc, char* argv[]) {
     CHECK(rotate_button != nullptr);
     CHECK(scale_button != nullptr);
     CHECK(mirror_button != nullptr);
+    CHECK(inspect_tools_label != nullptr);
+    CHECK(measure_button != nullptr);
     CHECK(command_input != nullptr);
     CHECK(command_prompt != nullptr);
     CHECK(editor_host->isAncestorOf(sketch_button));
@@ -662,6 +670,11 @@ int main(int argc, char* argv[]) {
     CHECK(
         modify_tools_label->text() ==
         QStringLiteral("Modify:"));
+    CHECK(!inspect_tools_label->isHidden());
+    CHECK(
+        inspect_tools_label->text() ==
+        QStringLiteral("Inspect:"));
+    CHECK(!measure_button->isHidden());
     CHECK(!rotate_button->isHidden());
     CHECK(!scale_button->isHidden());
     CHECK(!mirror_button->isHidden());
@@ -965,6 +978,42 @@ int main(int argc, char* argv[]) {
             ->model.findCircle(*tree_circle.entity_id)
             ->role() ==
         sketch::EntityRole::construction);
+
+    // R8A: Construction remains inspectable and Measure is read-only.
+    const auto construction_measure_state =
+        session->document().state();
+    const auto construction_measure_revision =
+        session->document().revision();
+    const auto construction_measure_undo =
+        session->undoDepth();
+    measure_button->click();
+    QApplication::processEvents();
+    CHECK(measure_button->isChecked());
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral("Measure — Circle [")));
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral("Role: Construction")));
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral("Radius:")));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: MEASURE — Click Line/Circle/Arc; Esc ends"));
+    CHECK(
+        session->document().state() ==
+        construction_measure_state);
+    CHECK(
+        session->document().revision() ==
+        construction_measure_revision);
+    CHECK(
+        session->undoDepth() ==
+        construction_measure_undo);
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!measure_button->isChecked());
 
     profile_items =
         tree->findItems(
@@ -1450,6 +1499,60 @@ int main(int argc, char* argv[]) {
         120.0, 100.0,
         5.0, 0.0);
     QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    // R8A toolbar and Command Line are adapters to the same read-only
+    // Measure state and do not replace normal selection or history.
+    const auto measure_ui_state =
+        session->document().state();
+    const auto measure_ui_revision =
+        session->document().revision();
+    const auto measure_ui_undo =
+        session->undoDepth();
+
+    measure_button->click();
+    QApplication::processEvents();
+    CHECK(measure_button->isChecked());
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral("Measure — Line [")));
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral("Length:")));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: MEASURE — Click Line/Circle/Arc; Esc ends"));
+    CHECK(session->document().state() == measure_ui_state);
+    CHECK(session->document().revision() == measure_ui_revision);
+    CHECK(session->undoDepth() == measure_ui_undo);
+
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!measure_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    command_input->setText(
+        QStringLiteral("MEASURE"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(measure_button->isChecked());
+    CHECK(command_input->text().isEmpty());
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral("Measure — Line [")));
+    CHECK(session->document().state() == measure_ui_state);
+    CHECK(session->document().revision() == measure_ui_revision);
+    CHECK(session->undoDepth() == measure_ui_undo);
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!measure_button->isChecked());
     CHECK(
         operations_label->text() ==
         QStringLiteral("Select — 1 entity selected"));
