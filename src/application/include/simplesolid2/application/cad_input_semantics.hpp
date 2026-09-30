@@ -105,6 +105,13 @@ public:
         return false;
     }
 
+    [[nodiscard]] virtual bool
+    lockCadInputSemanticPointField(
+        CadDynamicInputFieldSemantic,
+        double) {
+        return false;
+    }
+
     [[nodiscard]] virtual std::optional<CadInputPairRequest>
     cadInputSemanticPairRequest() const noexcept {
         return std::nullopt;

@@ -274,50 +274,110 @@ SketchCadInputSemanticEndpoint::lockDynamicInputField(
 
     const auto value_request =
         target_->cadInputSemanticValueRequest();
-    if (!value_request || fields.size() != 1U) {
+    if (value_request && fields.size() == 1U) {
+        const auto quantity =
+            parseCadQuantity(
+                submitted,
+                {
+                    value_request->dimension,
+                    number_format_.length_unit});
+        if (!quantity ||
+            (value_request->strictly_positive &&
+             quantity->canonical_value <= 0.0)) {
+            switch (value_request->semantic) {
+            case CadInputValueRequestSemantic::circle_size:
+                return {
+                    false,
+                    "Circle Size expects a positive Length expression."};
+            case CadInputValueRequestSemantic::arc_radius:
+                return {
+                    false,
+                    "Arc Radius expects a positive Length expression."};
+            case CadInputValueRequestSemantic::rotate_angle:
+                return {
+                    false,
+                    "Rotate Angle expects a valid Angle expression."};
+            case CadInputValueRequestSemantic::scale_factor:
+                return {
+                    false,
+                    "Scale Factor expects a positive Scalar expression."};
+            case CadInputValueRequestSemantic::mirror_axis_angle:
+                return {
+                    false,
+                    "Mirror Axis Angle expects a valid Angle expression."};
+            }
+        }
+
+        if (!target_->lockCadInputSemanticValue(
+                quantity->canonical_value)) {
+            return {
+                false,
+                "Active Dynamic Input value could not be locked."};
+        }
+        return {true, {}};
+    }
+
+    if (!target_->cadInputSemanticPointRequest()) {
         return {
             false,
             "Active Dynamic Input field does not support scalar locking yet."};
+    }
+
+    CadQuantityDimension dimension{
+        CadQuantityDimension::length};
+    bool non_negative = false;
+    switch (fields[index].semantic) {
+    case CadDynamicInputFieldSemantic::u:
+    case CadDynamicInputFieldSemantic::v:
+    case CadDynamicInputFieldSemantic::delta_u:
+    case CadDynamicInputFieldSemantic::delta_v:
+        break;
+
+    case CadDynamicInputFieldSemantic::distance:
+        non_negative = true;
+        break;
+
+    case CadDynamicInputFieldSemantic::angle:
+        dimension = CadQuantityDimension::angle;
+        break;
+
+    case CadDynamicInputFieldSemantic::width:
+    case CadDynamicInputFieldSemantic::height:
+    case CadDynamicInputFieldSemantic::diameter:
+    case CadDynamicInputFieldSemantic::radius:
+    case CadDynamicInputFieldSemantic::factor:
+    case CadDynamicInputFieldSemantic::axis_angle:
+        return {
+            false,
+            "Active Dynamic Input field does not support point locking."};
     }
 
     const auto quantity =
         parseCadQuantity(
             submitted,
             {
-                value_request->dimension,
+                dimension,
                 number_format_.length_unit});
     if (!quantity ||
-        (value_request->strictly_positive &&
-         quantity->canonical_value <= 0.0)) {
-        switch (value_request->semantic) {
-        case CadInputValueRequestSemantic::circle_size:
-            return {
-                false,
-                "Circle Size expects a positive Length expression."};
-        case CadInputValueRequestSemantic::arc_radius:
-            return {
-                false,
-                "Arc Radius expects a positive Length expression."};
-        case CadInputValueRequestSemantic::rotate_angle:
-            return {
-                false,
-                "Rotate Angle expects a valid Angle expression."};
-        case CadInputValueRequestSemantic::scale_factor:
-            return {
-                false,
-                "Scale Factor expects a positive Scalar expression."};
-        case CadInputValueRequestSemantic::mirror_axis_angle:
-            return {
-                false,
-                "Mirror Axis Angle expects a valid Angle expression."};
-        }
+        (non_negative &&
+         quantity->canonical_value < 0.0)) {
+        return {
+            false,
+            fields[index].semantic ==
+                    CadDynamicInputFieldSemantic::distance
+                ? "Distance expects a non-negative Length expression."
+                : fields[index].semantic ==
+                          CadDynamicInputFieldSemantic::angle
+                    ? "Angle expects a valid Angle expression."
+                    : "Point component expects a valid Length expression."};
     }
 
-    if (!target_->lockCadInputSemanticValue(
+    if (!target_->lockCadInputSemanticPointField(
+            fields[index].semantic,
             quantity->canonical_value)) {
         return {
             false,
-            "Active Dynamic Input value could not be locked."};
+            "Active Dynamic Input point field could not be locked."};
     }
     return {true, {}};
 }

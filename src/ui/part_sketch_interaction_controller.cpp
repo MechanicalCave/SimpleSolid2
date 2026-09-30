@@ -854,6 +854,64 @@ lockCadInputSemanticValue(double value) {
     return true;
 }
 
+bool PartSketchInteractionController::
+lockCadInputSemanticPointField(
+    application::CadDynamicInputFieldSemantic semantic,
+    double value) {
+    if (!active() ||
+        profile_session_ ||
+        !std::isfinite(value)) {
+        return false;
+    }
+
+    std::optional<sketch::PointFieldLockSemantic>
+        point_semantic;
+    switch (semantic) {
+    case application::CadDynamicInputFieldSemantic::u:
+        point_semantic =
+            sketch::PointFieldLockSemantic::u;
+        break;
+    case application::CadDynamicInputFieldSemantic::v:
+        point_semantic =
+            sketch::PointFieldLockSemantic::v;
+        break;
+    case application::CadDynamicInputFieldSemantic::distance:
+        point_semantic =
+            sketch::PointFieldLockSemantic::distance;
+        break;
+    case application::CadDynamicInputFieldSemantic::angle:
+        point_semantic =
+            sketch::PointFieldLockSemantic::angle;
+        break;
+    case application::CadDynamicInputFieldSemantic::delta_u:
+        point_semantic =
+            sketch::PointFieldLockSemantic::delta_u;
+        break;
+    case application::CadDynamicInputFieldSemantic::delta_v:
+        point_semantic =
+            sketch::PointFieldLockSemantic::delta_v;
+        break;
+
+    case application::CadDynamicInputFieldSemantic::width:
+    case application::CadDynamicInputFieldSemantic::height:
+    case application::CadDynamicInputFieldSemantic::diameter:
+    case application::CadDynamicInputFieldSemantic::radius:
+    case application::CadDynamicInputFieldSemantic::factor:
+    case application::CadDynamicInputFieldSemantic::axis_angle:
+        return false;
+    }
+
+    if (!point_semantic ||
+        !interaction_.lockPointField(
+            *point_semantic,
+            value)) {
+        return false;
+    }
+
+    notifyStateChanged();
+    return true;
+}
+
 std::optional<application::CadInputPairRequest>
 PartSketchInteractionController::
 cadInputSemanticPairRequest() const noexcept {

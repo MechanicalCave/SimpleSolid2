@@ -889,6 +889,60 @@ int main(int argc, char* argv[]) {
     CHECK(model_state.lines.back().end.v > 4.0);
     CHECK(model_state.lines.back().end.v < 6.0);
 
+    // Dynamic Input point-field locks route through the same semantic
+    // endpoint and existing PointRequest resolver.
+    interaction.activateLine();
+
+    auto dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "10");
+    CHECK(dyn_lock.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            1U,
+            "20");
+    CHECK(dyn_lock.accepted);
+    click(
+        interaction,
+        sketch_id,
+        300.0,
+        300.0,
+        1.0,
+        2.0);
+    CHECK(
+        interaction.lineStage() ==
+        sketch::LineStage::await_next_point);
+
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "100");
+    CHECK(dyn_lock.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            1U,
+            "90");
+    CHECK(dyn_lock.accepted);
+    click(
+        interaction,
+        sketch_id,
+        310.0,
+        310.0,
+        999.0,
+        999.0);
+
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(!model_state.lines.empty());
+    const auto& dyn_locked_line =
+        model_state.lines.back();
+    CHECK(near(dyn_locked_line.start.u, 10.0));
+    CHECK(near(dyn_locked_line.start.v, 20.0));
+    CHECK(near(dyn_locked_line.end.u, 10.0));
+    CHECK(near(dyn_locked_line.end.v, 120.0));
+
     std::cout
         << "SK-07F precision input controller PASS\n";
     return EXIT_SUCCESS;

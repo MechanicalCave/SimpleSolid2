@@ -107,6 +107,10 @@ public:
     submitCadInputSemanticValue(double value) override;
     [[nodiscard]] bool
     lockCadInputSemanticValue(double value) override;
+    [[nodiscard]] bool
+    lockCadInputSemanticPointField(
+        application::CadDynamicInputFieldSemantic semantic,
+        double value) override;
     [[nodiscard]] std::optional<
         application::CadInputPairRequest>
     cadInputSemanticPairRequest()

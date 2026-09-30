@@ -40,8 +40,13 @@ public:
         value_request;
     std::optional<double> submitted_value;
     std::optional<double> locked_value;
+    std::optional<
+        application::CadDynamicInputFieldSemantic>
+        locked_point_field;
+    std::optional<double> locked_point_value;
     bool value_result{true};
     bool lock_value_result{true};
+    bool lock_point_result{true};
     std::optional<application::CadInputPairRequest>
         pair_request;
     std::optional<std::pair<double, double>>
@@ -81,6 +86,13 @@ public:
     bool lockCadInputSemanticValue(double value) override {
         locked_value = value;
         return lock_value_result;
+    }
+    bool lockCadInputSemanticPointField(
+        application::CadDynamicInputFieldSemantic semantic,
+        double value) override {
+        locked_point_field = semantic;
+        locked_point_value = value;
+        return lock_point_result;
     }
     std::optional<application::CadInputPairRequest>
     cadInputSemanticPairRequest() const noexcept override {
@@ -270,6 +282,78 @@ int main() {
     target.lock_value_result = true;
 
     target.value_request.reset();
+    target.request = sketch::PointRequest{
+        sketch::Point2{0.0, 0.0},
+        sketch::Point2{3.0, 4.0},
+        true,
+        true,
+        true,
+        true};
+
+    target.locked_point_field.reset();
+    target.locked_point_value.reset();
+    lock_result =
+        dot.lockDynamicInputField(
+            0U,
+            "2in");
+    CHECK(lock_result.accepted);
+    CHECK(
+        target.locked_point_field ==
+        application::CadDynamicInputFieldSemantic::
+            distance);
+    CHECK(target.locked_point_value.has_value());
+    CHECK(near(*target.locked_point_value, 50.8));
+
+    lock_result =
+        dot.lockDynamicInputField(
+            1U,
+            "-30");
+    CHECK(lock_result.accepted);
+    CHECK(
+        target.locked_point_field ==
+        application::CadDynamicInputFieldSemantic::
+            angle);
+    CHECK(near(
+        *target.locked_point_value,
+        -std::numbers::pi_v<double> / 6.0));
+
+    lock_result =
+        dot.lockDynamicInputField(
+            0U,
+            "-1");
+    CHECK(!lock_result.accepted);
+    CHECK(
+        lock_result.diagnostic ==
+        "Distance expects a non-negative Length expression.");
+
+    target.lock_point_result = false;
+    lock_result =
+        dot.lockDynamicInputField(
+            2U,
+            "10");
+    CHECK(!lock_result.accepted);
+    CHECK(
+        lock_result.diagnostic ==
+        "Active Dynamic Input point field could not be locked.");
+    target.lock_point_result = true;
+
+    target.request = sketch::PointRequest{
+        std::nullopt,
+        sketch::Point2{1.0, 2.0},
+        false,
+        true,
+        false,
+        false};
+    lock_result =
+        dot.lockDynamicInputField(
+            0U,
+            "-12.5");
+    CHECK(lock_result.accepted);
+    CHECK(
+        target.locked_point_field ==
+        application::CadDynamicInputFieldSemantic::u);
+    CHECK(near(*target.locked_point_value, -12.5));
+
     target.request.reset();
 
     auto result = dot.submit("  line  ");
