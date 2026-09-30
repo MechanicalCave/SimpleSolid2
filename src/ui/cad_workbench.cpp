@@ -949,10 +949,17 @@ void CadWorkbench::buildUi() {
 
     viewport_controller_->setSketchPointerHandler(
         [this](const SketchPointerInput& input) {
+            if (input.viewport_position.valid()) {
+                dynamic_input_anchor_ =
+                    input.viewport_position;
+            } else {
+                dynamic_input_anchor_.reset();
+            }
             if (sketch_interaction_controller_) {
                 sketch_interaction_controller_->onPointer(
                     input);
             }
+            refreshCadDynamicInputOverlay();
         });
 
     if (viewport_widget_ != nullptr) {
@@ -2853,6 +2860,98 @@ void CadWorkbench::setCadInteractionSettingsProvider(
     refreshCadInteractionSettingsUi();
 }
 
+void CadWorkbench::refreshCadDynamicInputOverlay() {
+    if (viewport_controller_ == nullptr) {
+        return;
+    }
+
+    const auto clear = [this] {
+        viewport_controller_->clearSketchDynamicInputOverlay();
+    };
+
+    if (!dynamic_input_anchor_ ||
+        !dynamic_input_anchor_->valid() ||
+        !sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->active() ||
+        !cad_interaction_settings_provider_ ||
+        !cad_dynamic_input_ui_state_provider_) {
+        clear();
+        return;
+    }
+
+    const auto settings =
+        cad_interaction_settings_provider_();
+    if (!settings.valid() ||
+        !settings.dynamic_input_enabled) {
+        clear();
+        return;
+    }
+
+    const auto length_unit =
+        document_session_ != nullptr
+            ? document_session_->document().lengthUnit()
+            : core::LengthUnit::millimetre;
+    application::SketchCadInputSemanticEndpoint endpoint{
+        *sketch_interaction_controller_,
+        application::CadInputNumberFormat{
+            toUtf8(QLocale{}.decimalPoint()),
+            length_unit}};
+    const auto snapshots =
+        endpoint.dynamicInputFieldSnapshots();
+    if (snapshots.empty()) {
+        clear();
+        return;
+    }
+
+    const auto ui_state =
+        cad_dynamic_input_ui_state_provider_();
+    const auto focused_index =
+        ui_state.focused_index % snapshots.size();
+
+    viewer::SketchDynamicInputOverlay overlay;
+    overlay.anchor = *dynamic_input_anchor_;
+    overlay.focused_index = focused_index;
+    overlay.fields.reserve(snapshots.size());
+
+    for (std::size_t index = 0U;
+         index < snapshots.size();
+         ++index) {
+        const auto& snapshot = snapshots[index];
+        viewer::SketchDynamicInputValueState state =
+            viewer::SketchDynamicInputValueState::free;
+        if (snapshot.value) {
+            switch (snapshot.value->state) {
+            case application::CadDynamicInputValueState::free:
+                state = viewer::SketchDynamicInputValueState::free;
+                break;
+            case application::CadDynamicInputValueState::assisted:
+                state = viewer::SketchDynamicInputValueState::assisted;
+                break;
+            case application::CadDynamicInputValueState::locked:
+                state = viewer::SketchDynamicInputValueState::locked;
+                break;
+            }
+        }
+
+        std::string display = snapshot.display_value;
+        if (index == focused_index &&
+            !ui_state.buffer.empty()) {
+            display = ui_state.buffer;
+        }
+
+        overlay.fields.push_back(
+            viewer::SketchDynamicInputFieldPresentation{
+                snapshot.field.label,
+                std::move(display),
+                state});
+    }
+
+    if (!viewport_controller_->
+            setSketchDynamicInputOverlay(overlay)) {
+        clear();
+    }
+}
+
 std::string CadWorkbench::cadInputPrompt() const {
     return toUtf8(cadInputPromptText());
 }
@@ -3198,6 +3297,10 @@ void CadWorkbench::finishSketch() {
 
 void CadWorkbench::clearSketchRuntimeContext() {
     sketch_support_pick_active_ = false;
+    dynamic_input_anchor_.reset();
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->clearSketchDynamicInputOverlay();
+    }
 
     if (sketch_interaction_controller_) {
         sketch_interaction_controller_->end();
