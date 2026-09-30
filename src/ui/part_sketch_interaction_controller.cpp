@@ -118,6 +118,7 @@ void PartSketchInteractionController::begin(
     sketch_id_ = sketch_id;
     interaction_ = sketch::SketchInteractionState{};
     polar_capture_ = {};
+    last_pointer_input_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -142,6 +143,7 @@ void PartSketchInteractionController::begin(
 void PartSketchInteractionController::end() {
     interaction_ = sketch::SketchInteractionState{};
     polar_capture_ = {};
+    last_pointer_input_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -452,6 +454,30 @@ bool PartSketchInteractionController::submitDirectDistance(
     reportStatus(
         "Direct Distance is not valid for the active input stage.");
     return false;
+}
+
+bool PartSketchInteractionController::submitCadInputDynamicRequest() {
+    if (!active() || profile_session_ ||
+        !last_pointer_input_ ||
+        session_ == nullptr || !sketch_id_) {
+        return false;
+    }
+
+    const auto generation_before =
+        cad_input_context_generation_;
+    const auto revision_before =
+        session_->document().revision();
+
+    auto input = *last_pointer_input_;
+    input.sketch_id = *sketch_id_;
+    input.phase =
+        viewer::SpatialPointerPhase::primary_press;
+    onPointer(input);
+
+    return cad_input_context_generation_ !=
+               generation_before ||
+           session_->document().revision() !=
+               revision_before;
 }
 
 bool PartSketchInteractionController::submitExplicitPoint(
@@ -2868,6 +2894,11 @@ void PartSketchInteractionController::onPointer(
         !sketch_id_ ||
         input.sketch_id != *sketch_id_) {
         return;
+    }
+
+    if (input.viewport_position.valid() &&
+        input.position.finite()) {
+        last_pointer_input_ = input;
     }
 
     if (profile_session_) {
