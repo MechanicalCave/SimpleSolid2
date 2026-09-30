@@ -37,6 +37,7 @@ public:
     bool expose_dynamic_fields{true};
     std::size_t locked_field{};
     std::string locked_token;
+    unsigned dynamic_submit_count{};
     simplesolid2::application::CadInputContextGeneration
         generation{1U};
 
@@ -79,6 +80,18 @@ public:
         }
         locked_field = index;
         locked_token.assign(text);
+        return {true, {}};
+    }
+
+    [[nodiscard]]
+    simplesolid2::application::CadInputSubmitResult
+    submitCadDynamicInputRequest(
+        simplesolid2::application::CadInputContextGeneration
+            expected_context_generation) override {
+        if (expected_context_generation != generation) {
+            return {false, "Stale fake DYN submit context."};
+        }
+        ++dynamic_submit_count;
         return {true, {}};
     }
 
@@ -182,6 +195,14 @@ int main(int argc, char* argv[]) {
         shell.findChild<QLineEdit*>(
             QStringLiteral("cadCommandInput"))->
             text().isEmpty());
+
+    // R10: empty Enter with DYN ON belongs to the active semantic
+    // request even when the shared CAD text buffer is empty.
+    QTest::keyClick(
+        cad_surface,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(first.dynamic_submit_count == 1U);
 
     QTest::keyClick(
         cad_surface,
