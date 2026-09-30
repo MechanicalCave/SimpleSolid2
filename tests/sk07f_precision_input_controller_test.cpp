@@ -943,41 +943,44 @@ int main(int argc, char* argv[]) {
     CHECK(near(dyn_locked_line.end.u, 10.0));
     CHECK(near(dyn_locked_line.end.v, 120.0));
 
-    // Empty-token Esc clears Rectangle request-local Width/Height
-    // locks without discarding the captured creation revision.
-    interaction.activateRectangle();
+    // Empty-token Esc clears a request-local Grip Rotate Angle lock
+    // without discarding the manipulation revision needed for a later commit.
+    interaction.activateSelect();
+    CHECK(viewport.selection_.primary.has_value());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            *viewport.selection_.primary,
+            viewer::SketchGripRole::line_start}};
     click(
         interaction,
         sketch_id,
-        400.0,
-        400.0,
-        0.0,
-        0.0);
+        430.0,
+        430.0,
+        dyn_locked_line.start.u,
+        dyn_locked_line.start.v);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
     CHECK(
-        interaction.rectangleStage() ==
-        sketch::RectangleStage::
-            await_opposite_corner);
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::rotate);
 
     dyn_lock =
         semantic_input.lockDynamicInputField(
             0U,
-            "50");
+            "45");
     CHECK(dyn_lock.accepted);
-    dyn_lock =
-        semantic_input.lockDynamicInputField(
-            1U,
-            "30");
-    CHECK(dyn_lock.accepted);
-
     const auto revision_before_unlock_escape =
         session.document().revision();
     const auto undo_before_unlock_escape =
         session.undoDepth();
+
     CHECK(interaction.escape());
+    CHECK(interaction.directManipulationActive());
     CHECK(
-        interaction.rectangleStage() ==
-        sketch::RectangleStage::
-            await_opposite_corner);
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::rotate);
     CHECK(
         session.document().revision() ==
         revision_before_unlock_escape);
@@ -985,32 +988,15 @@ int main(int argc, char* argv[]) {
         session.undoDepth() ==
         undo_before_unlock_escape);
 
-    dyn_lock =
-        semantic_input.lockDynamicInputField(
-            0U,
-            "50");
-    CHECK(dyn_lock.accepted);
-    dyn_lock =
-        semantic_input.lockDynamicInputField(
-            1U,
-            "30");
-    CHECK(dyn_lock.accepted);
-
-    const auto line_count_before_esc_rectangle =
-        session.document().findSketch(sketch_id)->
-            model.state().lines.size();
-    click(
-        interaction,
-        sketch_id,
-        420.0,
-        420.0,
-        1.0,
-        1.0);
-    hosted = session.document().findSketch(sketch_id);
-    CHECK(hosted != nullptr);
+    semantic_result = semantic_input.submit("90");
+    CHECK(semantic_result.accepted);
+    CHECK(!interaction.directManipulationActive());
     CHECK(
-        hosted->model.state().lines.size() ==
-        line_count_before_esc_rectangle + 4U);
+        session.document().revision() ==
+        revision_before_unlock_escape + 1U);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_unlock_escape + 1U);
 
     std::cout
         << "SK-07F precision input controller PASS\n";
