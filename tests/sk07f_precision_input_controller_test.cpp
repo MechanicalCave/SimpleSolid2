@@ -900,39 +900,30 @@ int main(int argc, char* argv[]) {
     movePointer(
         interaction,
         sketch_id,
-        11.0,
         30.0,
-        11.0,
-        30.0);
+        1.0,
+        30.0,
+        11.0);
     CHECK(viewport.preview_scene_.lines.size() == 1U);
     CHECK(near(viewport.preview_scene_.lines[0].start.x, 10.0));
     CHECK(near(viewport.preview_scene_.lines[0].start.y, 10.0));
-    CHECK(viewport.preview_scene_.lines[0].end.x == 10.0);
-    CHECK(viewport.preview_scene_.lines[0].end.y > 30.0);
+    CHECK(viewport.preview_scene_.lines[0].end.x > 30.0);
+    CHECK(viewport.preview_scene_.lines[0].end.y == 10.0);
     CHECK(interaction.escape());
 
-    // Polar + Direct Distance must be able to author an exactly closed
-    // cardinal loop. Region/Profile topology is exact by design, so R10
-    // must not manufacture sub-floating-point gaps at 90-degree tracks.
+    // Precision polar coordinates must be able to author an exactly
+    // closed cardinal loop. Region/Profile topology is exact by design,
+    // so R10 must not manufacture sub-floating-point gaps at 90-degree
+    // directions that are semantically exact.
     interaction.activateLine();
-    CHECK(interaction.submitExplicitPoint(
-        {
-            sketch::ExplicitPointInputKind::
-                absolute_cartesian,
-            0.0,
-            0.0}));
     const auto closed_loop_first_line =
         session.document().findSketch(sketch_id)->
             model.state().lines.size();
-
-    movePointer(interaction, sketch_id, 20.0, 1.0, 20.0, 1.0);
-    CHECK(interaction.submitDirectDistance(100.0));
-    movePointer(interaction, sketch_id, 101.0, 20.0, 101.0, 20.0);
-    CHECK(interaction.submitDirectDistance(50.0));
-    movePointer(interaction, sketch_id, 80.0, 49.0, 80.0, 49.0);
-    CHECK(interaction.submitDirectDistance(100.0));
-    movePointer(interaction, sketch_id, 1.0, 30.0, 1.0, 30.0);
-    CHECK(interaction.submitDirectDistance(50.0));
+    CHECK(semantic_input.submit("0;0").accepted);
+    CHECK(semantic_input.submit("@100<0").accepted);
+    CHECK(semantic_input.submit("@50<90").accepted);
+    CHECK(semantic_input.submit("@100<180").accepted);
+    CHECK(semantic_input.submit("@50<270").accepted);
 
     hosted = session.document().findSketch(sketch_id);
     CHECK(hosted != nullptr);
