@@ -1083,66 +1083,18 @@ public:
                     context_->Display(object, false);
                 };
 
-            const auto interpolate =
-                [](const viewer::Point3& first,
-                   const viewer::Point3& second,
-                   double parameter) {
-                    return viewer::Point3{
-                        first.x +
-                            (second.x - first.x) *
-                                parameter,
-                        first.y +
-                            (second.y - first.y) *
-                                parameter,
-                        first.z +
-                            (second.z - first.z) *
-                                parameter};
-                };
-
             for (const auto& line : scene.lines) {
-                if (!line.construction) {
-                    display_segment(
-                        line.token,
-                        line.start,
-                        line.end,
-                        false);
-                    continue;
-                }
-
-                // Stable world-space construction dashes. The geometry, not
-                // screen-space stippling, owns the visible dash phase.
-                constexpr std::size_t kSlices = 24U;
-                for (std::size_t slice = 0U;
-                     slice < kSlices;
-                     slice += 2U) {
-                    const double first =
-                        static_cast<double>(slice) /
-                        static_cast<double>(kSlices);
-                    const double second =
-                        static_cast<double>(slice + 1U) /
-                        static_cast<double>(kSlices);
-                    display_segment(
-                        line.token,
-                        interpolate(
-                            line.start,
-                            line.end,
-                            first),
-                        interpolate(
-                            line.start,
-                            line.end,
-                            second),
-                        true);
-                }
+                display_segment(
+                    line.token,
+                    line.start,
+                    line.end,
+                    line.construction);
             }
 
             for (const auto& curve : scene.curves) {
                 for (std::size_t index = 1U;
                      index < curve.points.size();
                      ++index) {
-                    if (curve.construction &&
-                        (index % 2U) == 0U) {
-                        continue;
-                    }
                     display_segment(
                         curve.token,
                         curve.points[index - 1U],
@@ -1349,7 +1301,8 @@ public:
             const auto display_preview_segment =
                 [this](
                     const viewer::Point3& start_point,
-                    const viewer::Point3& end_point) {
+                    const viewer::Point3& end_point,
+                    bool construction) {
                     Handle(Geom_CartesianPoint) start =
                         new Geom_CartesianPoint(
                             toPoint(start_point));
@@ -1359,66 +1312,26 @@ public:
                     Handle(AIS_Line) object =
                         new AIS_Line(start, end);
 
+                    object->Attributes()->SetLineAspect(
+                        new Prs3d_LineAspect(
+                            Quantity_Color{
+                                0.22, 0.82, 0.96,
+                                Quantity_TOC_RGB},
+                            construction
+                                ? Aspect_TOL_DASH
+                                : Aspect_TOL_SOLID,
+                            1.6));
                     context_->Display(object, false);
-                    context_->SetColor(
-                        object,
-                        Quantity_Color{
-                            0.22, 0.82, 0.96,
-                            Quantity_TOC_RGB},
-                        false);
-                    context_->SetWidth(
-                        object,
-                        1.6,
-                        false);
                     context_->Deactivate(object);
                     sketch_preview_objects_.push_back(
                         object);
                 };
 
-            const auto interpolate =
-                [](const viewer::Point3& first,
-                   const viewer::Point3& second,
-                   double parameter) {
-                    return viewer::Point3{
-                        first.x +
-                            (second.x - first.x) *
-                                parameter,
-                        first.y +
-                            (second.y - first.y) *
-                                parameter,
-                        first.z +
-                            (second.z - first.z) *
-                                parameter};
-                };
-
             for (const auto& line : scene.lines) {
-                if (!line.construction) {
-                    display_preview_segment(
-                        line.start,
-                        line.end);
-                    continue;
-                }
-
-                constexpr std::size_t kSlices = 24U;
-                for (std::size_t slice = 0U;
-                     slice < kSlices;
-                     slice += 2U) {
-                    const double first =
-                        static_cast<double>(slice) /
-                        static_cast<double>(kSlices);
-                    const double second =
-                        static_cast<double>(slice + 1U) /
-                        static_cast<double>(kSlices);
-                    display_preview_segment(
-                        interpolate(
-                            line.start,
-                            line.end,
-                            first),
-                        interpolate(
-                            line.start,
-                            line.end,
-                            second));
-                }
+                display_preview_segment(
+                    line.start,
+                    line.end,
+                    line.construction);
             }
 
             sketch_preview_scene_ = scene;
@@ -3468,11 +3381,14 @@ public:
             entry.object->Attributes()->SetLineAspect(
                 new Prs3d_LineAspect(
                     color,
-                    Aspect_TOL_SOLID,
+                    entry.construction
+                        ? Aspect_TOL_DASH
+                        : Aspect_TOL_SOLID,
                     width));
 
-            // Construction dash geometry is already split in world-space.
-            // Redisplay is still required after replacing the line drawer.
+            // Construction cadence is a provider presentation style, not
+            // authored/tessellated geometry. Preserve DASH through all
+            // hover/selection/Measure-highlight redisplays.
             context_->Redisplay(
                 entry.object,
                 false);

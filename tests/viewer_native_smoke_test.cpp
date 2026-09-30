@@ -78,6 +78,43 @@ int main(int argc, char* argv[]) {
                  camera->projection ==
                      viewer::CameraProjection::orthographic;
 
+            // R10 Construction cadence is a provider presentation effect.
+            // Short/long committed Lines and preview Lines share the same
+            // construction flag without authored dash segmentation.
+            viewer::SketchScene construction_scene;
+            construction_scene.lines = {
+                {
+                    viewer::PresentationToken{0x201U},
+                    {0.0, 0.0, 0.0},
+                    {5.0, 0.0, 0.0},
+                    true},
+                {
+                    viewer::PresentationToken{0x202U},
+                    {0.0, 5.0, 0.0},
+                    {100.0, 5.0, 0.0},
+                    true},
+            };
+            ok = ok &&
+                 construction_scene.valid() &&
+                 widget.setSketchScene(
+                     construction_scene);
+
+            viewer::SketchPreviewScene
+                construction_preview;
+            construction_preview.lines = {
+                {
+                    {0.0, 10.0, 0.0},
+                    {100.0, 10.0, 0.0},
+                    true},
+            };
+            ok = ok &&
+                 construction_preview.valid() &&
+                 widget.setSketchPreviewScene(
+                     construction_preview);
+            ok = ok &&
+                 widget.setSketchPreviewScene(
+                     viewer::SketchPreviewScene{});
+
             viewer::SketchDynamicInputOverlay dyn_overlay{
                 viewer::ViewportPoint2{
                     895.0,
