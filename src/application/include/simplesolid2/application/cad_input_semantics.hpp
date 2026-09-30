@@ -112,6 +112,13 @@ public:
         return false;
     }
 
+    [[nodiscard]] virtual std::optional<
+        CadDynamicInputFieldValue>
+    cadInputSemanticDynamicFieldValue(
+        CadDynamicInputFieldSemantic) const noexcept {
+        return std::nullopt;
+    }
+
     [[nodiscard]] virtual std::optional<CadInputPairRequest>
     cadInputSemanticPairRequest() const noexcept {
         return std::nullopt;
@@ -169,6 +176,10 @@ public:
 
     [[nodiscard]] std::vector<CadDynamicInputField>
     dynamicInputFields() const;
+
+    [[nodiscard]] std::vector<
+        CadDynamicInputFieldSnapshot>
+    dynamicInputFieldSnapshots() const;
 
     [[nodiscard]] CadInputSubmitResult
     lockDynamicInputField(

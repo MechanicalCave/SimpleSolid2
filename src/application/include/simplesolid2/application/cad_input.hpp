@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cmath>
 #include <cstddef>
 #include <cstdint>
 #include <numbers>
@@ -44,6 +45,44 @@ struct CadDynamicInputField final {
     friend bool operator==(
         const CadDynamicInputField&,
         const CadDynamicInputField&) = default;
+};
+
+enum class CadDynamicInputValueState : std::uint8_t {
+    free,
+    assisted,
+    locked,
+};
+
+struct CadDynamicInputFieldValue final {
+    CadDynamicInputFieldSemantic semantic{
+        CadDynamicInputFieldSemantic::distance};
+    double canonical_value{};
+    CadDynamicInputValueState state{
+        CadDynamicInputValueState::free};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return std::isfinite(canonical_value);
+    }
+
+    friend bool operator==(
+        const CadDynamicInputFieldValue&,
+        const CadDynamicInputFieldValue&) = default;
+};
+
+struct CadDynamicInputFieldSnapshot final {
+    CadDynamicInputField field;
+    std::optional<CadDynamicInputFieldValue> value;
+    std::string display_value;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return field.valid() &&
+               (!value || value->valid()) &&
+               (!value || !display_value.empty());
+    }
+
+    friend bool operator==(
+        const CadDynamicInputFieldSnapshot&,
+        const CadDynamicInputFieldSnapshot&) = default;
 };
 
 enum class PolarReferenceMode : std::uint8_t {

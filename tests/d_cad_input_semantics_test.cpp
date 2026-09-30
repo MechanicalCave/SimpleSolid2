@@ -1,10 +1,12 @@
 #include <simplesolid2/application/cad_input_semantics.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <numbers>
 #include <optional>
+#include <vector>
 
 using namespace simplesolid2;
 
@@ -47,6 +49,8 @@ public:
     bool value_result{true};
     bool lock_value_result{true};
     bool lock_point_result{true};
+    std::vector<application::CadDynamicInputFieldValue>
+        dynamic_values;
     std::optional<application::CadInputPairRequest>
         pair_request;
     std::optional<std::pair<double, double>>
@@ -93,6 +97,23 @@ public:
         locked_point_field = semantic;
         locked_point_value = value;
         return lock_point_result;
+    }
+    std::optional<application::CadDynamicInputFieldValue>
+    cadInputSemanticDynamicFieldValue(
+        application::CadDynamicInputFieldSemantic semantic)
+        const noexcept override {
+        const auto found =
+            std::find_if(
+                dynamic_values.begin(),
+                dynamic_values.end(),
+                [semantic](const auto& value) {
+                    return value.semantic == semantic;
+                });
+        return found == dynamic_values.end()
+            ? std::nullopt
+            : std::optional<
+                  application::CadDynamicInputFieldValue>{
+                  *found};
     }
     std::optional<application::CadInputPairRequest>
     cadInputSemanticPairRequest() const noexcept override {
@@ -281,6 +302,84 @@ int main() {
         "Active Dynamic Input value could not be locked.");
     target.lock_value_result = true;
 
+    target.value_request.reset();
+    target.request = sketch::PointRequest{
+        sketch::Point2{0.0, 0.0},
+        sketch::Point2{3.0, 4.0},
+        true,
+        true,
+        true,
+        true};
+    target.dynamic_values = {
+        {
+            application::CadDynamicInputFieldSemantic::distance,
+            50.8,
+            application::CadDynamicInputValueState::free},
+        {
+            application::CadDynamicInputFieldSemantic::angle,
+            std::numbers::pi_v<double> / 4.0,
+            application::CadDynamicInputValueState::assisted},
+        {
+            application::CadDynamicInputFieldSemantic::delta_u,
+            25.4,
+            application::CadDynamicInputValueState::locked},
+    };
+
+    auto snapshots =
+        dot.dynamicInputFieldSnapshots();
+    CHECK(snapshots.size() == 4U);
+    CHECK(snapshots[0].field.label == "Distance");
+    CHECK(snapshots[0].value.has_value());
+    CHECK(
+        snapshots[0].value->state ==
+        application::CadDynamicInputValueState::free);
+    CHECK(snapshots[0].display_value == "50.8 mm");
+    CHECK(snapshots[1].field.label == "Angle");
+    CHECK(snapshots[1].value.has_value());
+    CHECK(
+        snapshots[1].value->state ==
+        application::CadDynamicInputValueState::assisted);
+    CHECK(
+        snapshots[1].display_value ==
+        "45\xC2\xB0");
+    CHECK(snapshots[2].value.has_value());
+    CHECK(
+        snapshots[2].value->state ==
+        application::CadDynamicInputValueState::locked);
+    CHECK(snapshots[2].display_value == "25.4 mm");
+    CHECK(!snapshots[3].value.has_value());
+    CHECK(snapshots[3].display_value.empty());
+
+    application::SketchCadInputSemanticEndpoint
+        inch_endpoint{
+            target,
+            application::CadInputNumberFormat{
+                ".",
+                core::LengthUnit::inch}};
+    snapshots =
+        inch_endpoint.dynamicInputFieldSnapshots();
+    CHECK(snapshots[0].display_value == "2 in");
+    CHECK(snapshots[2].display_value == "1 in");
+
+    target.dynamic_values = {
+        {
+            application::CadDynamicInputFieldSemantic::factor,
+            1.25,
+            application::CadDynamicInputValueState::locked},
+    };
+    target.request.reset();
+    target.value_request =
+        application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                scale_factor,
+            application::CadQuantityDimension::scalar,
+            true};
+    snapshots =
+        dot.dynamicInputFieldSnapshots();
+    CHECK(snapshots.size() == 1U);
+    CHECK(snapshots[0].display_value == "1.25");
+
+    target.dynamic_values.clear();
     target.value_request.reset();
     target.request = sketch::PointRequest{
         sketch::Point2{0.0, 0.0},

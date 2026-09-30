@@ -1,7 +1,10 @@
 #include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/application/precision_input.hpp>
 
+#include <array>
+#include <charconv>
 #include <cmath>
+#include <numbers>
 #include <cctype>
 #include <string>
 #include <utility>
@@ -28,6 +31,83 @@ std::string upperAscii(std::string_view text) {
         result.push_back(static_cast<char>(std::toupper(ch)));
     }
     return result;
+}
+
+std::string formatDynamicNumber(
+    double value) {
+    if (value == 0.0) {
+        value = 0.0;
+    }
+
+    std::array<char, 64> buffer{};
+    const auto converted =
+        std::to_chars(
+            buffer.data(),
+            buffer.data() + buffer.size(),
+            value,
+            std::chars_format::general,
+            12);
+    if (converted.ec != std::errc{}) {
+        return {};
+    }
+    return std::string{
+        buffer.data(),
+        converted.ptr};
+}
+
+std::string formatDynamicValue(
+    CadDynamicInputFieldSemantic semantic,
+    double canonical_value,
+    core::LengthUnit length_unit) {
+    if (!std::isfinite(canonical_value)) {
+        return {};
+    }
+
+    switch (semantic) {
+    case CadDynamicInputFieldSemantic::u:
+    case CadDynamicInputFieldSemantic::v:
+    case CadDynamicInputFieldSemantic::distance:
+    case CadDynamicInputFieldSemantic::delta_u:
+    case CadDynamicInputFieldSemantic::delta_v:
+    case CadDynamicInputFieldSemantic::width:
+    case CadDynamicInputFieldSemantic::height:
+    case CadDynamicInputFieldSemantic::diameter:
+    case CadDynamicInputFieldSemantic::radius: {
+        const double display =
+            core::fromCanonicalLength(
+                core::LengthValue{
+                    canonical_value},
+                length_unit);
+        auto text =
+            formatDynamicNumber(display);
+        if (text.empty()) {
+            return {};
+        }
+        text += " ";
+        text += core::lengthUnitSuffix(length_unit);
+        return text;
+    }
+
+    case CadDynamicInputFieldSemantic::angle:
+    case CadDynamicInputFieldSemantic::axis_angle: {
+        const double degrees =
+            canonical_value * 180.0 /
+            std::numbers::pi_v<double>;
+        auto text =
+            formatDynamicNumber(degrees);
+        if (text.empty()) {
+            return {};
+        }
+        text += "\xC2\xB0";
+        return text;
+    }
+
+    case CadDynamicInputFieldSemantic::factor:
+        return formatDynamicNumber(
+            canonical_value);
+    }
+
+    return {};
 }
 
 std::optional<ProfileCadInputCommand>
@@ -247,6 +327,43 @@ SketchCadInputSemanticEndpoint::dynamicInputFields() const {
         Field{Semantic::delta_u, "dU"},
         Field{Semantic::delta_v, "dV"},
     };
+}
+
+std::vector<CadDynamicInputFieldSnapshot>
+SketchCadInputSemanticEndpoint::
+dynamicInputFieldSnapshots() const {
+    std::vector<CadDynamicInputFieldSnapshot>
+        snapshots;
+    const auto fields = dynamicInputFields();
+    snapshots.reserve(fields.size());
+
+    for (const auto& field : fields) {
+        CadDynamicInputFieldSnapshot snapshot;
+        snapshot.field = field;
+
+        if (target_ != nullptr) {
+            const auto value =
+                target_->
+                    cadInputSemanticDynamicFieldValue(
+                        field.semantic);
+            if (value &&
+                value->valid() &&
+                value->semantic ==
+                    field.semantic) {
+                snapshot.value = value;
+                snapshot.display_value =
+                    formatDynamicValue(
+                        field.semantic,
+                        value->canonical_value,
+                        number_format_.length_unit);
+            }
+        }
+
+        snapshots.push_back(
+            std::move(snapshot));
+    }
+
+    return snapshots;
 }
 
 CadInputSubmitResult
