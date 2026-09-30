@@ -189,6 +189,11 @@ public:
 
     void clearSketchSelectionBoxOverlay();
 
+    [[nodiscard]] bool setSketchDynamicInputOverlay(
+        const viewer::SketchDynamicInputOverlay& overlay);
+
+    void clearSketchDynamicInputOverlay();
+
     void setSketchPointerHandler(
         SketchPointerHandler handler) {
         sketch_pointer_handler_ =
