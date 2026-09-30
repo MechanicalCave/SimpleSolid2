@@ -1008,7 +1008,7 @@ int main(int argc, char* argv[]) {
     dyn_lock =
         semantic_input.lockDynamicInputField(
             0U,
-            "20");
+            "20mm");
     CHECK(dyn_lock.accepted);
     const auto circles_before_dyn =
         session.document().findSketch(sketch_id)->
