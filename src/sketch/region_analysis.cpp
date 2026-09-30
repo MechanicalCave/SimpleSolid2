@@ -923,14 +923,15 @@ struct RawRelation final {
         std::move(intersections)};
 }
 
-[[nodiscard]] RawRelation exactLineArcEndpointFallback(
+[[nodiscard]] std::vector<RawIntersection>
+exactLineArcEndpointContacts(
     const CurveView& line,
     const CurveView& arc) {
     std::vector<RawIntersection> intersections;
     const auto arc_start = arcEndpoint(arc, false);
     const auto arc_end = arcEndpoint(arc, true);
     if (!arc_start || !arc_end) {
-        return {};
+        return intersections;
     }
 
     const auto append =
@@ -953,12 +954,74 @@ struct RawRelation final {
     append(line.first, 0.0, *arc_end, 1.0);
     append(line.second, 1.0, *arc_start, 0.0);
     append(line.second, 1.0, *arc_end, 1.0);
+    return intersections;
+}
 
-    return RawRelation{
-        intersections.empty()
-            ? CurveRelationStatus::disjoint
-            : CurveRelationStatus::discrete,
-        std::move(intersections)};
+[[nodiscard]] bool sameNumericalEndpointRoot(
+    const RawIntersection& computed,
+    const RawIntersection& exact) noexcept {
+    // This bound is dimensionless and is used only after exact evaluated
+    // endpoint equality has already proven the semantic contact. It does not
+    // create or heal a geometric contact; it only removes a second numerical
+    // image of that already-known quadratic root.
+    constexpr double parameter_bound =
+        256.0 *
+        std::numeric_limits<double>::epsilon();
+    return std::abs(
+               computed.first_parameter -
+               exact.first_parameter) <=
+               parameter_bound &&
+           std::abs(
+               computed.second_parameter -
+               exact.second_parameter) <=
+               parameter_bound;
+}
+
+[[nodiscard]] RawRelation mergeExactLineArcEndpoints(
+    RawRelation relation,
+    const CurveView& line,
+    const CurveView& arc) {
+    const auto exact =
+        exactLineArcEndpointContacts(
+            line,
+            arc);
+    if (exact.empty()) {
+        return relation;
+    }
+
+    if (relation.status ==
+        CurveRelationStatus::invalid) {
+        return relation;
+    }
+
+    if (relation.status ==
+        CurveRelationStatus::disjoint) {
+        return RawRelation{
+            CurveRelationStatus::discrete,
+            exact};
+    }
+
+    if (relation.status !=
+        CurveRelationStatus::discrete) {
+        return relation;
+    }
+
+    for (const auto& endpoint : exact) {
+        relation.intersections.erase(
+            std::remove_if(
+                relation.intersections.begin(),
+                relation.intersections.end(),
+                [&endpoint](const RawIntersection& item) {
+                    return sameNumericalEndpointRoot(
+                        item,
+                        endpoint);
+                }),
+            relation.intersections.end());
+        relation.intersections.push_back(
+            endpoint);
+    }
+
+    return relation;
 }
 
 [[nodiscard]] RawRelation filterSecondArc(
@@ -1055,18 +1118,15 @@ struct RawRelation final {
         auto support_relation =
             lineCircle(first, support);
         if (support_relation.status ==
-            CurveRelationStatus::disjoint) {
-            auto exact_endpoint =
-                exactLineArcEndpointFallback(
-                    first,
+            CurveRelationStatus::discrete) {
+            support_relation =
+                filterSecondArc(
+                    std::move(support_relation),
                     second);
-            if (exact_endpoint.status ==
-                CurveRelationStatus::discrete) {
-                return exact_endpoint;
-            }
         }
-        return filterSecondArc(
+        return mergeExactLineArcEndpoints(
             std::move(support_relation),
+            first,
             second);
     }
 

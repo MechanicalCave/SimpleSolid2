@@ -341,6 +341,31 @@ int main() {
             {13.25, -7.5},
             37.0 * pi / 180.0);
     CHECK(rotated.has_value());
+
+    // Each preserved Line<->Arc endpoint remains one exact endpoint
+    // intersection after rotation; no near-duplicate quadratic root may
+    // fragment the boundary.
+    auto rotated_model =
+        model_from_geometry(*rotated);
+    CHECK(rotated_model.has_value());
+    for (const auto line_id :
+         {dome_left, dome_right}) {
+        const auto relation =
+            sketch::analyzeCurveRelation(
+                *rotated_model,
+                line_id,
+                dome_arc);
+        CHECK(
+            relation.status ==
+            sketch::CurveRelationStatus::discrete);
+        CHECK(relation.intersections.size() == 1U);
+        CHECK(
+            relation.intersections.front()
+                .first_endpoint ||
+            relation.intersections.front()
+                .second_endpoint);
+    }
+
     verify_geometry(
         *rotated,
         dome_area,
