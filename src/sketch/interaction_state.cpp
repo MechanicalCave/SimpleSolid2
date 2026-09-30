@@ -47,6 +47,46 @@ constexpr double half_turn =
     return normalized;
 }
 
+[[nodiscard]] Point2 stableUnitDirection(
+    double angle) noexcept {
+    if (!std::isfinite(angle)) {
+        return {};
+    }
+
+    constexpr double quarter_turn =
+        std::numbers::pi_v<double> / 2.0;
+    double normalized = positiveTurn(angle);
+    int quadrant =
+        static_cast<int>(normalized / quarter_turn);
+    if (quadrant > 3) {
+        quadrant = 0;
+        normalized = 0.0;
+    }
+
+    const double local =
+        normalized -
+        static_cast<double>(quadrant) * quarter_turn;
+    if (local == 0.0) {
+        switch (quadrant) {
+        case 0: return {1.0, 0.0};
+        case 1: return {0.0, 1.0};
+        case 2: return {-1.0, 0.0};
+        case 3: return {0.0, -1.0};
+        default: return {};
+        }
+    }
+
+    const double cosine = std::cos(local);
+    const double sine = std::sin(local);
+    switch (quadrant) {
+    case 0: return {cosine, sine};
+    case 1: return {-sine, cosine};
+    case 2: return {-cosine, -sine};
+    case 3: return {sine, -cosine};
+    default: return {};
+    }
+}
+
 [[nodiscard]] double ccwDelta(
     double from,
     double to) noexcept {
@@ -790,11 +830,15 @@ SketchInteractionState::resolveExplicitPoint(
             !request->base) {
             return std::nullopt;
         }
-        resolved = {
-            request->base->u +
-                input.first * std::cos(input.second),
-            request->base->v +
-                input.first * std::sin(input.second)};
+        {
+            const auto direction =
+                stableUnitDirection(input.second);
+            resolved = {
+                request->base->u +
+                    input.first * direction.u,
+                request->base->v +
+                    input.first * direction.v};
+        }
         break;
     }
 
