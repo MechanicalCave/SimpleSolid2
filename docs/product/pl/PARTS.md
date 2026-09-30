@@ -58,9 +58,12 @@ Gdy żaden obiekt/referencja nie jest primary selection, Properties pokazuje pol
 - Number;
 - Title;
 - Description;
-- Engineering revision.
+- Engineering revision;
+- jednostkę długości wejścia/wyświetlania: mm, cm, m, in albo ft.
 
-`Apply Properties` wprowadza zmianę do otwartej sesji Dokumentu. Zmiana nie jest trwała na dysku, dopóki nie wykonasz `Save`.
+Zmiana jednostki Parta zmienia interpretację bezjednostkowych wartości Length i sposób prezentacji wartości fizycznych. Istniejąca geometria nie jest przeskalowywana. Jednostka jest authored state Dokumentu, uczestniczy w Undo/Redo, dirty'uje Part przy zmianie i staje się trwała po `Save`. Starsze natywne Party otwierają się jako mm.
+
+`Apply Properties` wprowadza pozostałe zmiany do otwartej sesji Dokumentu. Nie są trwałe na dysku, dopóki nie wykonasz `Save`.
 
 `Undo` i `Redo` działają dla authored changes bieżącej otwartej sesji.
 
@@ -154,39 +157,37 @@ Prawy panel **Operations** pokazuje checkowalną opcję **Construction**, gdy ak
 
 Preview Rectangle używa tych samych reguł krawędzi/przekątnych. Preview Construction jest kreskowane wyłącznie jako wskazówka wizualna. Finalny commit jest związany z DocumentRevision zapamiętanym przy First Corner; jeżeli Dokument zmieni się przed Opposite Corner, oczekujący prostokąt zostaje odrzucony fail-closed zamiast zostać po cichu przeliczony na nowy stan.
 
-R9 nie nadaje pojedynczej liczbie wpisanej podczas wyboru narożnika znaczenia width/height/diagonal. Wprowadzanie szerokości/wysokości, współrzędne, jednostki, Ortho/Polar, Dynamic Input oraz OSNAP/tracking pozostają poza bieżącym narzędziem Rectangle.
+Na etapie Opposite Corner precision input przyjmuje także `Width;Height`. Width i Height są dodatnimi wartościami Length, a bieżący kwadrant kursora określa orientację lewo/prawo i góra/dół. To gramatyka specyficzna dla Rectangle i nie jest reinterpretowana jako ogólne `U;V`.
 
 Tworzenie Line/Circle/Arc i zwykłe selection zachowują dotychczasową gramatykę. Zaznaczone edytowalne entities pokazują grips kodujące stan: pusty kwadrat w idle, pusty cyan na hover i pełny żółty dla aktywnego/captured gripa.
 
 ### Tryby edycji gripów
 
-Center grips dla Line/Circle/Arc są **Move-only**. Kliknięcie center gripa przesuwa cały zamrożony mieszany selection, używając położenia gripa ze startu sesji jako implicit base.
-
-Line Start/End, cztery Circle quadrant grips oraz Arc Start/End/Mid domyślnie uruchamiają **Reshape** właściciela. Podczas aktywnej manipulacji możesz nacisnąć **Space**, aby przełączać:
+Center grips przechodzą cyklem:
 
 ```text
-Reshape ↔ Move
+Move → Rotate → Scale → Mirror → Move
 ```
 
-W `Reshape` zmienia się tylko prymityw będący właścicielem aktywnego gripa. W `Move` przesuwa się cały selection zamrożony w chwili rozpoczęcia manipulacji. Ten sam aktywny grip, pivot, selection oraz bieżące położenie kursora pozostają zachowane przy przełączaniu.
+Obsługiwane non-center grips Line/Circle/Arc zaczynają w owner-only **Reshape** i przechodzą cyklem:
 
-Preview po Space jest liczone ponownie z geometrii ze startu sesji, a nie z poprzedniego preview. Samo przełączenie nie zmienia dokumentu, nie tworzy revision ani kroku Undo. Operations pokazuje bieżący tryb jako `Grip — Reshape` albo `Grip — Move`.
+```text
+Reshape → Move → Rotate → Scale → Mirror → Reshape
+```
 
-LMB albo Enter zatwierdza aktualny tryb. Esc anuluje całą niezatwierdzoną manipulację i zachowuje selection. Na center gripach Space niczego nie przełącza — pozostają w Move.
+Move/Rotate/Scale/Mirror działają na całym selection zamrożonym przy rozpoczęciu manipulacji; Reshape edytuje tylko właściciela aktywnego gripa. Każdy preview jest liczony od geometrii ze startu interakcji. Rotate przechwytuje świeży kierunek odniesienia, Scale świeży promień odniesienia, a Mirror używa aktywnego gripa jako pierwszego punktu osi.
 
-Space podczas aktywnej manipulacji gripem ma pierwszeństwo przed Repeat Last Command. Space przy focusie Command Line/pola tekstowego pozostaje zwykłą spacją.
+Możesz wpisać dokładną wartość: Angle dla Rotate, dodatni Factor dla Scale i Axis Angle dla Mirror. Po zaakceptowaniu dokładna wartość ma pierwszeństwo przed dalszym ruchem kursora.
 
-Podczas grip Reshape albo grip Move możesz także użyć Direct Distance: ustaw kursorem kierunek od położenia gripa ze startu sesji, wpisz odległość w Command Line i naciśnij Enter. Dla Move rozwiązuje to punkt docelowy dokładnie w zadanej odległości od pivotu; dla Reshape ten sam resolved point trafia do zwykłej semantyki reshape danego gripa.
+Space przełącza tryb i nie tworzy authored change. LMB albo Enter zatwierdza, Esc anuluje niezatwierdzoną manipulację. Grip Copy działa tylko w Reshape i Move i wyłącza się po przejściu do innego trybu.
 
 ### Grip Copy
 
-Podczas aktywnej manipulacji gripem wpisz `C` i naciśnij Enter, aby włączyć **Grip Copy**. Copy jest modyfikatorem bieżącego trybu Reshape/Move, a nie trzecim trybem edycji.
+Podczas aktywnej manipulacji gripem wpisz `C` i naciśnij Enter, aby włączyć **Grip Copy**. Copy jest modyfikatorem commit dostępnym tylko w Reshape i Move.
 
-W **Reshape + Copy** każdy zaakceptowany placement tworzy jedną kopię ze świeżym EntityId tylko prymitywu będącego właścicielem aktywnego gripa; oryginalny właściciel i wszystkie pozostałe zaznaczone encje pozostają bez zmian. W **Move + Copy** każdy placement kopiuje cały selection zamrożony przy rozpoczęciu manipulacji gripem. Oryginały pozostają selection/reference set, a utworzone kopie nie przejmują zaznaczenia.
+W **Reshape + Copy** placement tworzy fresh-ID kopię wyłącznie właściciela aktywnego gripa. W **Move + Copy** placement kopiuje cały zamrożony selection. Oryginały pozostają bez zmian i zaznaczone.
 
-Placement możesz zaakceptować LMB albo istniejącym Direct Distance: włącz Copy, ustaw kierunek kursorem, wpisz odległość i naciśnij Enter. Po udanym placement Grip Copy pozostaje aktywny dla następnej kopii z tego samego źródła i pivotu ze startu interakcji, ale poprzedni kierunek kursora jest czyszczony; przed kolejnym numerycznym placementem ponownie przesuń kursor.
-
-Placement bez rzeczywistej zmiany jest czystym no-op. Space zmienia Reshape↔Move tam, gdzie jest obsługiwane, i wyłącza Grip Copy, więc dla nowego trybu trzeba ponownie wysłać `C`. Esc kończy bieżącą sesję gripu i zachowuje wcześniej zatwierdzone kopie. Undo podczas aktywnego Grip Copy najpierw kończy transient session, a następnie cofa tylko ostatni zatwierdzony krok historii.
+Placement może użyć LMB albo tego samego precision PointRequest. Po udanej kopii source/pivot ze startu interakcji pozostają dla kolejnego placementu, ale request-local pointer candidates i numeric locks są czyszczone. Placement bez zmiany jest no-op. Space przełącza tryb i wyłącza Copy; po powrocie do Reshape albo Move trzeba ponownie wysłać `C`. Esc kończy transient session i zachowuje committed copies; Undo działa potem normalnie na ostatnim zatwierdzonym kroku historii.
 
 ### Wybór obiektów dla Modify
 
@@ -255,17 +256,33 @@ Wskaż pierwszy, a następnie drugi punkt osi. Dwa różne punkty definiują nie
 
 Mirror odbija cały zamrożony selection. Line/Circle/Arc zachowują swoje EntityId, a kierunek Arc po odbiciu pozostaje geometrycznie zgodny z odbitym łukiem. Jeżeli geometria po odbiciu jest dokładnie taka sama, operacja kończy się jako no-op.
 
-### Zatwierdzanie i wpisywanie wartości
+### Zatwierdzanie i precision input
 
-Preview Move/Copy/Rotate/Scale/Mirror jest tylko runtime. Move/Rotate/Scale/Mirror edytują istniejące entities i zachowują ich EntityId. COPY tworzy nowe entities ze świeżymi EntityId wyłącznie przy zatwierdzonym placement.
+Preview Move/Copy/Rotate/Scale/Mirror jest runtime-only. Move/Rotate/Scale/Mirror zachowują EntityId, a COPY tworzy świeże EntityId wyłącznie dla zaakceptowanych placementów. LMB na końcowym etapie albo Enter zatwierdza bieżący poprawny request.
 
-LMB na końcowym etapie albo Enter zatwierdza bieżący poprawny preview/placement. Esc anuluje niezatwierdzony stan i zachowuje właściwy selection.
+Wspólna gramatyka precision input przyjmuje:
 
-Obecna wersja obsługuje **Direct Distance** w pięciu klasach wejścia punktowego: drugi/kolejny punkt LINE, grip Reshape, grip Move, destination normalnego MOVE oraz placement normalnego COPY. Grip Copy używa istniejącego PointRequest gripa Reshape/Move zamiast tworzyć nową ścieżkę numeryczną; gdy Copy jest ON, rozwiązany punkt gripa zatwierdza kopię zamiast edycji oryginału. Najpierw musi istnieć base/pivot, następnie ustaw kursorem niezerowy kierunek, wpisz w Command Line skończoną nieujemną odległość i naciśnij Enter. Separator `.` jest zawsze akceptowany; akceptowany jest również bieżący separator dziesiętny locale, np. `,` w polskiej konfiguracji.
+```text
+Punkt absolutny        U;V
+Względny kartezjański  @dU;dV
+Względny polarny       @Distance<Angle
+```
 
-Po numerycznym placement COPY pozostaje aktywne dla następnej kopii, ale poprzedni kierunek nie jest używany ponownie po cichu — przesuń kursor, aby ustalić kierunek kolejnego Direct Distance. W LINE kolejny segment analogicznie wymaga nowego kierunku od nowego endpointu. Wartość `0` przechodzi przez resolver, po czym zwykła semantyka narzędzia decyduje o no-op/rejection: LINE nie tworzy odcinka zerowego, MOVE jest no-op, a COPY nie tworzy nakładającej się kopii.
+Bezjednostkowy Length używa bieżącej jednostki Parta. Jawny suffix `mm`, `cm`, `m`, `in` albo `ft` ją nadpisuje. Kropka dziesiętna jest zawsze akceptowana, a bieżący przecinek dziesiętny jest obsługiwany tam, gdzie ma zastosowanie. Ograniczona arytmetyka obsługuje `+`, `-`, `*`, `/` i nawiasy z walidacją wymiarów. Bare Angle oznacza stopnie; `deg` i `rad` są jawnymi suffixami kąta. Notacja stopy/cale przez cudzysłowy/apostrofy jest odrzucana.
 
-Nie są jeszcze obsługiwane: numeryczny kąt Rotate, współczynnik Scale, współrzędne absolutne/względne, zapis polarny, sufiksy/jednostki, Dynamic Input, Ortho/Polar ani snapping/tracking. Drukowalny tekst wpisywany przy normalnym focusie viewportu CAD trafia do globalnego bufora Command Line; znaczenie liczby nadal należy do aktywnego PointRequest/narzędzia i nie jest zgadywane przez globalny router.
+Line używa exact point input dla pierwszego i kolejnych punktów. Circle ma sekwencję **Center → Size**; Size domyślnie oznacza **Diameter** w każdej sesji Sketch Edit, a lokalne `D`/`R` przełączają Diameter/Radius. Arc ma sekwencję **Start → End → Arc Point / Radius**. Radius musi być co najmniej połową chordu; strona kursora wybiera bulge, Radius tworzy minor/semicircle, a jawny trzeci Arc Point może utworzyć major arc. Rectangle przyjmuje `Width;Height`.
+
+Rotate przyjmuje exact signed **Angle**, Scale exact positive **Factor**. Grip Rotate/Scale/Mirror wystawiają **Angle**, **Factor** i **Axis Angle**.
+
+### Polar i Dynamic Input
+
+**Polar** jest attraction aid, nie snappingiem. Domyślnie startuje jako ON z 45° (`360/8`), Reference **Absolute** i bez Additional Angles. Operations konfiguruje Step, Absolute/Relative i opcjonalne pojedyncze Additional Angles. Relative wymaga poprawnej referencji semantycznej i nie przechodzi po cichu na Absolute. **F10** przełącza Polar. Ustawienia przeżywają wyjście/wejście do Sketchy w bieżącej sesji aplikacji i resetują się po restarcie.
+
+**Dynamic Input (DYN)** domyślnie jest OFF i przełącza się przez **F12** albo Operations. Gdy jest ON, overlay przy kursorze pokazuje pola tego samego requestu i używa tego samego live tokenu co Command Line. Dla based point kolejność to **Distance → Angle → dU → dV**; punkt bez base używa **U → V**; Rectangle używa **Width → Height**; Circle pokazuje Diameter/Radius; Rotate/Scale/grip Mirror pokazują pojedyncze wartości semantyczne.
+
+**Tab** blokuje poprawną wartość bieżącego pola i przechodzi dalej; pusty Tab tylko przechodzi dalej; **Shift+Tab** cofa. **Enter** zatwierdza request z locków i pozostałych pointer/Polar values. **Esc** najpierw czyści live text, potem request-local locks, a następnie zwykły stage narzędzia. Locked Angle jest absolutny od Sketch +U i ma pierwszeństwo przed Polar; locked Distance może łączyć się z captured Polar direction. Konfliktujące rodziny locków są odrzucane fail-closed.
+
+Polar/DYN nie tworzą Document revision, dirty ani Undo i nie są zapisywane do Parta.
 
 Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uruchamia akcji CAD.
 
@@ -312,12 +329,12 @@ Po wyniku kolejny zaakceptowany cel rozpoczyna następną relację. Kliknięcie 
 
 Measure i Between są read-only: nie powodują dirty, nie zmieniają revision, nie zużywają identyfikatorów i nie tworzą Undo. Runtime measurement references nie są zapisywane, a Measure nie wchodzi do Repeat Last Command.
 
-Wartości liniowe/pola pozostają w skali współrzędnych Sketchu bez etykiety jednostki fizycznej; kąty są prezentowane w stopniach. Ogólne minimum distance curve-to-curve, OSNAP/tracking/inference, trwałe referencje sub-elementów, wiele overlayów wymiarowych, authored dimensions i constraints pozostają poza R8B. Szersze wyświetlanie wymiarów w viewporcie jest odłożone i ma zostać rozważone razem z przyszłymi authored/parametric dimensions i constraints, zamiast jako osobny subsystem overlay R8C.
+Wartości liniowe Measure są pokazywane w bieżącej jednostce długości Parta, a pole Circle w kwadracie tej jednostki; kąty pozostają w stopniach. Zmiana jednostki aktualizuje prezentację bez zmiany mierzonej geometrii. Ogólne minimum distance curve-to-curve, OSNAP/tracking/inference, trwałe referencje sub-elementów, authored dimensions i constraints pozostają poza bieżącym Measure. Szersze wyświetlanie wymiarów w viewporcie jest odłożone i ma zostać rozważone razem z przyszłymi authored/parametric dimensions i constraints, zamiast jako osobny subsystem overlay R8C.
 
 <!-- section-id: product.parts.profiles -->
 ## Construction i Profile
 
-Każda linia, okrąg i łuk w Sketchu może mieć rolę **Regular** albo **Construction**. Zaznacz geometrię w zwykłym Select i użyj `Regular` lub `Construction` w Operations. Construction pozostaje zapisaną geometrią pomocniczą, ale nie zamyka ani nie dzieli regionów używanych przez Profile. W viewporcie geometria Construction jest pokazywana linią przerywaną; jest to wyłącznie wskazówka prezentacyjna, a trwałą prawdą pozostaje authored rola encji. Regular Rectangle uczestniczy w analizie Profile tylko przez cztery Regular krawędzie; opcjonalne Construction przekątne nie dzielą regionu materiału. Construction Rectangle nie wnosi żadnej granicy materiału.
+Każda linia, okrąg i łuk w Sketchu może mieć rolę **Regular** albo **Construction**. Zaznacz geometrię w zwykłym Select i użyj `Regular` lub `Construction` w Operations. Construction pozostaje zapisaną geometrią pomocniczą, ale nie zamyka ani nie dzieli regionów używanych przez Profile. W viewporcie geometria Construction jest pokazywana linią przerywaną; jest to wyłącznie wskazówka prezentacyjna, a trwałą prawdą pozostaje authored rola encji. Cadence dash/gap jest screen-space presentation: krótkie i długie Construction Lines mają ten sam rytm wizualny, zoom nie modyfikuje authored geometry, a preview i committed Construction używają tej samej polityki. Regular Rectangle uczestniczy w analizie Profile tylko przez cztery Regular krawędzie; opcjonalne Construction przekątne nie dzielą regionu materiału. Construction Rectangle nie wnosi żadnej granicy materiału.
 
 Narzędzie **Profile** działa w aktywnym Sketchu. Przesuwanie kursora nad zamkniętą geometrią pokazuje półprzezroczysty wynik regionu; kliknięcie przyjmuje kandydata do bieżącego draftu i Status przypomina, że dopiero **Finish Profile** wykonuje trwały commit. O tym, co jest regionem, decyduje dokładna semantyka Line/Circle/Arc, nie tessellation Viewera.
 
@@ -395,11 +412,11 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia tożsamość/właściwości Dokumentu, wbudowany Origin, trwałą widoczność referencji, fundament Workbench/Viewer 3D, trwałe Sketche na płaszczyznach Origin z authored geometrią Line/Circle/Arc oraz authoring Rectangle rozkładany na zwykłe Lines.
+Obecny Part zapewnia tożsamość/właściwości Dokumentu, trwałą jednostkę długości wejścia/wyświetlania, wbudowany Origin, trwałą widoczność referencji, fundament Workbench/Viewer 3D, trwałe Sketche na płaszczyznach Origin z authored geometrią Line/Circle/Arc i rolami Regular/Construction, authoring Rectangle rozkładany na zwykłe Lines oraz Part-owned Profiles z live RegionIntent.
 
-Bieżący Sketch UI zapewnia Select oraz grupy Create, Modify i Inspect z Line/Circle/Arc/Rectangle, runtime toggle Construction dla przyszłego tworzenia, Rectangle Draw Diagonals, Move/Copy/Rotate/Scale/Mirror oraz read-only quick/Between Measure, addytywne point/Window/Crossing selection, semantyczne primary i hover, kwadratowe grips kodujące stan, selection-first i command-first common transforms, normalne COPY z repeated placement i świeżymi EntityId, Grip Copy przez aktywne `C` dla owner-only Reshape albo frozen-selection Move, Repeat Last Command przez Enter/Space w zwykłym Select, Space CycleEditMode między owner-only Reshape i frozen-selection Move na wspieranych non-center grips, Move-only center grips, atomowy mieszany Delete, Undo/Redo, Operations oraz keyboard-first Command Line.
+Bieżący Sketch UI obejmuje keyboard-first precision input, wartości mm/cm/m/in/ft i ograniczone expressions, absolutne/względne współrzędne kartezjańskie i polarne, exact Circle/Arc/Rectangle input, numeryczny Rotate/Scale i grip transforms, Polar attraction, Dynamic Input z request-local locks, Measure w bieżących jednostkach fizycznych, obsługiwany Grip edit cycle, Grip Copy w Reshape/Move, repeated COPY, Repeat Last Command, Undo/Redo oraz Save/Reopen.
 
-Direct Distance jest dostępny dla obsługiwanych etapów PointRequest opisanych wyżej, również dla placementów gripu po włączeniu Grip Copy. Profile nie jest operacją bryłową. Nadal brakuje Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numerycznego kąta Rotate i współczynnika Scale, współrzędnych absolutnych/względnych/polarnych, unit expressions i Dynamic Input, snapping/inference, constraintów/solvera, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features/Extrude, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+Profile nie jest operacją bryłową. Nadal brakuje Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, OSNAP/tracking/inference, Grid Snap, authored constraints/solver, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features/Extrude, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
 

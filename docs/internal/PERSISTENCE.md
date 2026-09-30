@@ -43,15 +43,15 @@ Part001.ss2part
 
 Container v1 uses UTF-8 JSON. The common manifest contains `format`, `container_version`, `document_kind`, `document_id` and `domain_schema_version`. Shared persistence owns package/container safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part domain writer is schema **v6**. It persists document properties, built-in Origin visibility, hosted Sketch records, `next_profile_id` and authored Profiles.
+The current Part domain writer is schema **v7**. It persists document properties, the durable display/input length unit, built-in Origin visibility, hosted Sketch records, `next_profile_id` and authored Profiles. Canonical geometric length values remain millimetres regardless of the selected display/input unit.
 
-Schema-v6 Sketch models store canonical `next_entity_id` plus mixed `entities[]`. Each Line/Circle/Arc record stores its semantic kind, canonical EntityId, canonical geometry and authored `regular`/`construction` role.
+Sketch models store canonical `next_entity_id` plus mixed `entities[]`. Each Line/Circle/Arc record stores its semantic kind, canonical EntityId, canonical geometry and authored `regular`/`construction` role.
 
 Each Profile record stores canonical ProfileId, source SketchId, authored name/visibility and semantic RegionIntent. RegionIntent persists source EntityIds and endpoint/intersection anchors; runtime region indices, evaluated parameters, cached arrangements, sampled fills and provider topology are not persisted.
 
-Schemas v1–v5 remain readable. V1 restores no Sketches; v2 restores host Sketch records with empty Shared 2D models; v3 reads the former Line-only model; v4 reads mixed Line/Circle/Arc and defaults roles to Regular; v5 reads persisted roles and creates no Profiles. A later successful Save of an older loaded file publishes schema v6.
+Schemas v1–v6 remain readable. Files without the v7 length-unit field restore **mm** in memory and keep all existing geometry numerically unchanged. A later successful Save of an older loaded file publishes schema v7.
 
-DocumentId remains only in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tool state, region-analysis cache and Viewer state are runtime-only.
+DocumentId remains only in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tool state, Polar/Dynamic Input application-session configuration, Dynamic Input field focus/locks, region-analysis cache and Viewer state are runtime-only.
 
 The former line-based `SS2PART` bootstrap format remains unsupported legacy test data and fails closed rather than being migrated.
 
@@ -105,6 +105,8 @@ The following state is not serialized as Part authored state:
 - reference grid runtime presentation;
 - active Sketch edit context;
 - Sketch support-pick tool state;
+- Polar/Dynamic Input application-session settings;
+- Polar capture, Dynamic Input field focus and request-local numeric locks;
 - Qt objects;
 - Viewer provider objects and OCCT handles;
 - cached Shared 2D region analysis and transient Profile drafts;
