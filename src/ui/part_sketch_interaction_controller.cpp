@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -15,6 +16,57 @@ namespace {
     return std::hypot(
         second.x - first.x,
         second.y - first.y);
+}
+
+[[nodiscard]] std::pair<double, double>
+stablePolarUnitDirection(double angle) noexcept {
+    if (!std::isfinite(angle)) {
+        return {0.0, 0.0};
+    }
+
+    constexpr double quarter_turn =
+        std::numbers::pi_v<double> / 2.0;
+    constexpr double full_turn =
+        4.0 * quarter_turn;
+
+    double normalized = std::fmod(angle, full_turn);
+    if (normalized < 0.0) {
+        normalized += full_turn;
+    }
+
+    int quadrant =
+        static_cast<int>(normalized / quarter_turn);
+    if (quadrant > 3) {
+        quadrant = 0;
+        normalized = 0.0;
+    }
+
+    const double local =
+        normalized -
+        static_cast<double>(quadrant) * quarter_turn;
+
+    // Exact quadrant tracks must remain exact authored directions. This
+    // prevents Polar-assisted Direct Distance from manufacturing a tiny
+    // topological gap at nominally closed 0/90/180/270-degree corners.
+    if (local == 0.0) {
+        switch (quadrant) {
+        case 0: return {1.0, 0.0};
+        case 1: return {0.0, 1.0};
+        case 2: return {-1.0, 0.0};
+        case 3: return {0.0, -1.0};
+        default: return {0.0, 0.0};
+        }
+    }
+
+    const double cosine = std::cos(local);
+    const double sine = std::sin(local);
+    switch (quadrant) {
+    case 0: return {cosine, sine};
+    case 1: return {-sine, cosine};
+    case 2: return {-cosine, -sine};
+    case 3: return {sine, -cosine};
+    default: return {0.0, 0.0};
+    }
 }
 
 [[nodiscard]] std::optional<double>
@@ -3649,6 +3701,24 @@ void PartSketchInteractionController::handleArcPointer(
         resolvePointerInput(input);
 
     if (input.phase == viewer::SpatialPointerPhase::move) {
+        if (resolved &&
+            interaction_.arcStage() ==
+                sketch::ArcStage::await_end) {
+            const auto request =
+                interaction_.activePointRequest();
+            if (request && request->base &&
+                *request->base != resolved->position) {
+                static_cast<void>(
+                    viewport_controller_->setSketchPreview(
+                        {SketchPreviewLine2D{
+                            *request->base,
+                            resolved->position}}));
+            } else {
+                viewport_controller_->clearSketchPreview();
+            }
+            return;
+        }
+
         const auto preview =
             resolved
                 ? interaction_.previewArc(
@@ -4275,11 +4345,13 @@ PartSketchInteractionController::resolvePointerInput(
     screen_distances.reserve(tracks.size());
 
     for (const double angle : tracks) {
+        const auto direction =
+            stablePolarUnitDirection(angle);
         const sketch::Point2 sample{
             base.u +
-                sample_radius * std::cos(angle),
+                sample_radius * direction.first,
             base.v +
-                sample_radius * std::sin(angle)};
+                sample_radius * direction.second};
         const auto sample_screen =
             viewport_controller_->
                 projectSketchPointToViewport(sample);
@@ -4310,11 +4382,13 @@ PartSketchInteractionController::resolvePointerInput(
             input.position);
     }
 
+    const auto captured_direction =
+        stablePolarUnitDirection(*captured);
     const sketch::Point2 assisted{
         base.u +
-            raw_radius * std::cos(*captured),
+            raw_radius * captured_direction.first,
         base.v +
-            raw_radius * std::sin(*captured)};
+            raw_radius * captured_direction.second};
     if (!assisted.finite()) {
         return raw();
     }
