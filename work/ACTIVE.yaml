@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/R10_PRECISION_UNITS_POLAR_DYNAMIC_INPUT.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -19,17 +19,19 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - implement only the Owner-accepted R10 Precision Input / Units / Polar / Dynamic Input Work Contract
-  - preserve one workspace CAD buffer / semantic request path and keep all R10 mutation inside the accepted contract surfaces
-  - keep R11+, ordinary RMB context, authored dimensions/constraints/solver and solid modeling inactive until separately accepted
-  - carry the accepted Construction fixed screen-space dash-gap cadence inside R10 without creating authored style state
-  - complete R10 with affected/FOCUSED evidence, exact-head Windows FULL, Owner manual Windows PASS, required internal + PL/EN Product docs/current Browser, then work-only CLOSURE
-  - preserve Roadmap v1.7 sequencing: R10 -> R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
+  - keep production mutation inactive after R10 completion
+  - prepare a separate Owner-reviewed R11 Object Snap / Tracking / Inference Work Contract before any R11 production implementation
+  - require R11 to consume the accepted R10 resolver priority, numeric locks, Polar/Dynamic Input semantics and one workspace CAD input path rather than creating a second point-resolution system
+  - keep R12+, ordinary RMB context, authored dimensions/constraints/solver and solid modeling inactive until separately accepted
+  - preserve Roadmap v1.7 sequencing: R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - R10 final exact-head candidate 03b171ae91342890013604a8b9d3c8021b639df7 passed Windows FULL #1009 on 2026-09-30; documentation/current Browser candidate 56d9483b13462b98424e26544d20943708070ce0 passed DOCS #1008.
+  - Owner manual Windows verification for the entire R10 Section 30 checklist passed on 2026-09-30 on runtime candidate d7e73428bf3a9cc81c48ba43e5f9f5ceaa5ca618; the final exact-head candidate adds only current-state documentation/evidence and one non-functional regression-test comment, with no runtime CAD semantic change after manual verification.
+  - R10 is completed by this work-only closeout candidate; no production scope is active. R11 Object Snap / Tracking / Inference is next in Roadmap v1.7 but remains inactive until a separate Owner-accepted Work Contract.
   - R10 runtime/manual candidate d7e73428bf3a9cc81c48ba43e5f9f5ceaa5ca618 passed exact-head Windows FULL #1007 on 2026-09-30; the same candidate received Owner manual Windows PASS for the entire R10 Section 30 checklist on 2026-09-30.
   - R10 Profile reliability evidence on that candidate covers Line-Arc common Move/Rotate/positive Scale/Mirror/repeated-transform topology preservation, a real gap remaining open, the Arc+diameter two-endpoint case, and durable Profile RegionIntent resolution after common source transform.
-  - R10 remains ACTIVE only through final required internal + PL/EN current-state documentation/current Product Browser, a new exact-head Windows FULL on that documentation candidate, and the work-only CLOSURE closeout; R11+ remain inactive.
+  - R10 completion conditions are satisfied: DOCS #1008 PASS, final exact-head Windows FULL #1009 PASS on 03b171ae91342890013604a8b9d3c8021b639df7, and Owner manual Windows PASS for the entire Section 30 checklist on the runtime-equivalent candidate d7e73428bf3a9cc81c48ba43e5f9f5ceaa5ca618.
   - Owner accepted Sketcher Roadmap v1.7 on 2026-09-29 as the bounded R10 amendment: separate Ortho is removed from R10; Polar is the sole directional magnet and 360/4 = 90 degrees provides orthogonal-only attraction.
   - R10 proposal-only head 171e627d3ab4ada1376ed7eb6775f9ce35b106d7 passed Windows PR gate #933 before activation.
   - R10 defaults/lifecycle accepted at activation include application-session Polar ON, Step 360/8 = 45 degrees, Reference Absolute, no Additional Angles, DYN OFF; Circle creation defaults Diameter per Sketch edit.
@@ -37,9 +39,9 @@ notes:
   - Owner manual Windows verification for R9 passed on 2026-09-29 on exact candidate bfe36544d71593a407bada63c07ae0e4b912808f, including the corrected UI composition with Construction/Draw Diagonals in the right Operations panel.
   - Historical R9 carry-over: Construction dash-gap cadence must not stretch/normalize with entity length. R10 has now accepted the bounded resolution: fixed screen/presentation-space cadence with no authored style state.
   - R9 completion conditions are satisfied; no production scope is active after R9.
-  - Owner explicitly accepted R10 Precision Input / Units / Polar / Dynamic Input on 2026-09-29; this Work Contract is now the only active production scope.
+  - Owner explicitly accepted R10 Precision Input / Units / Polar / Dynamic Input on 2026-09-29; R10 is now completed and no production scope is active.
   - Owner explicitly accepted R9 Rectangle + Construction Authoring Surface on 2026-09-29, including the optional Draw Diagonals behavior discussed before acceptance.
-  - R9 is completed; R10 is ACTIVE only through `work/R10_PRECISION_UNITS_POLAR_DYNAMIC_INPUT.md`; R11+ remain inactive.
+  - R9 and R10 are completed; R11+ remain inactive until separately accepted.
   - Draw Diagonals defaults OFF per Sketch edit, is runtime-only, and when enabled adds A→C and B→D as ordinary Construction Lines in the same atomic Rectangle transaction/Undo step; it creates no Rectangle center/group identity or constraint.
   - Rectangle remains a creation tool producing ordinary independent Lines, not a durable parametric Rectangle primitive.
   - Owner accepted Sketcher Roadmap v1.6 sequencing amendment on 2026-09-29: R8 is complete through R8A + R8B; standalone R8C Show Dimensions is deferred.

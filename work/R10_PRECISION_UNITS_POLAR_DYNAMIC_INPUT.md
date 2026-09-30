@@ -1,6 +1,6 @@
 # R10 — Precision Input / Units / Polar / Dynamic Input
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** ACCEPTED — COMPLETED  
 **Proposed:** 2026-09-29  
 **Owner acceptance:** 2026-09-29  
 **Decision class:** D2 shared semantic precision-input / units / runtime mode grammar + bounded D1 implementation  
@@ -1831,12 +1831,17 @@ Completion requires:
 
 R11+ remain inactive after R10 completion unless separately accepted.
 
-## 34. Pre-closeout verification evidence
+## 34. Completion evidence
 
-R10 implementation/manual evidence recorded on 2026-09-30 before the final documentation/closure checkpoint:
+R10 completion evidence on 2026-09-30:
 
-- runtime candidate `d7e73428bf3a9cc81c48ba43e5f9f5ceaa5ca618` passed exact-head Windows FULL #1007, including documentation/bootstrap/dispatcher checks, desktop Build, core-only semantic tests, FAST/SUBSYSTEM selector checks, full desktop tests and final `windows-msvc` PASS;
-- Profile reliability hardening on that candidate preserves already-established Line↔Arc endpoint topology across common Move/Rotate/positive Scale/Mirror and repeated mixed transforms while keeping a real authored gap open; regression coverage also includes the Arc+diameter two-endpoint case and durable Part RegionIntent resolution after a common source transform;
-- Owner manual Windows verification for the **entire Section 30 R10 checklist** passed on 2026-09-30 on the same exact runtime candidate `d7e73428bf3a9cc81c48ba43e5f9f5ceaa5ca618`, including units/persistence, quantity grammar, Line/Circle/Arc/Rectangle precision input, Move/Copy/grips/transforms, Polar, Dynamic Input, Measure units, Construction cadence and regression smoke including Profile;
-- R11 OSNAP/tracking/inference, Grid Snap, authored dimensions/constraints/solver, structural editing and solid modeling remain outside R10 and inactive;
-- final required internal + PL/EN current-state documentation, regenerated Product Browser, a new exact-head Windows FULL on that documentation candidate, and the work-only CLOSURE closeout remain required before R10 is marked complete.
+- runtime/manual candidate `d7e73428bf3a9cc81c48ba43e5f9f5ceaa5ca618` passed exact-head Windows FULL #1007 and received Owner manual Windows PASS for the **entire Section 30 R10 checklist** on 2026-09-30;
+- that manual PASS covered units/persistence, quantity grammar, Line/Circle/Arc/Rectangle precision input, Move/Copy/grips/transforms, Polar, Dynamic Input, Measure units, Construction cadence and regression smoke including Profile;
+- Profile reliability hardening preserves already-established Line↔Arc endpoint topology across common Move/Rotate/positive Scale/Mirror and repeated mixed transforms while keeping a real authored gap open; automated coverage also includes the Arc+diameter two-endpoint case and durable Part RegionIntent resolution after a common source transform;
+- documentation/current-state candidate `56d9483b13462b98424e26544d20943708070ce0` passed Windows DOCS #1008, including deterministic Product Browser regeneration/freshness and documentation validation;
+- final exact-head candidate `03b171ae91342890013604a8b9d3c8021b639df7` differs from the manually verified runtime candidate only by current-state documentation/evidence updates and one non-functional regression-test comment used to force the final FULL gate; no runtime CAD semantics changed after the Owner manual PASS;
+- final exact-head Windows FULL #1009 PASS on `03b171ae91342890013604a8b9d3c8021b639df7`, including documentation verification, bootstrap/dispatcher checks, desktop Build, core-only semantic tests, FAST/SUBSYSTEM selector checks, full desktop tests and final `windows-msvc` aggregation;
+- accepted R10 semantics remain bounded to one workspace CAD buffer / semantic request path, canonical physical quantity handling, Polar-only directional assistance, Dynamic Input as an adapter, exact current creation/transform grammar and fixed Construction presentation cadence;
+- no R11 OSNAP/tracking/inference, Grid Snap, authored dimensions/constraints/solver, topology-changing structural editing or solid-modeling scope was introduced.
+
+All R10 acceptance conditions are satisfied. R10 is complete at this work-only closeout candidate. R11 Object Snap / Tracking / Inference is the next planned Sketcher milestone under Roadmap v1.7 but remains inactive until a separate Owner-accepted Work Contract.
