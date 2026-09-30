@@ -113,6 +113,12 @@ public:
     [[nodiscard]] std::vector<
         application::CadDynamicInputField>
     cadDynamicInputFields() const override;
+    [[nodiscard]] application::CadInputSubmitResult
+    lockCadDynamicInputField(
+        std::size_t index,
+        std::string_view text,
+        application::CadInputContextGeneration
+            expected_context_generation) override;
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

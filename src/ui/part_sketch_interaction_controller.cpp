@@ -792,6 +792,68 @@ submitCadInputSemanticValue(double value) {
     return false;
 }
 
+bool PartSketchInteractionController::
+lockCadInputSemanticValue(double value) {
+    if (!active() || profile_session_ ||
+        !std::isfinite(value)) {
+        return false;
+    }
+
+    if (interaction_.directManipulationActive()) {
+        const auto mode =
+            interaction_.directEditMode();
+        if (!mode ||
+            (*mode != sketch::DirectEditMode::rotate &&
+             *mode != sketch::DirectEditMode::scale &&
+             *mode != sketch::DirectEditMode::mirror) ||
+            !interaction_.
+                acceptDirectManipulationValue(value)) {
+            return false;
+        }
+
+        const auto geometry =
+            interaction_.
+                directManipulationGeometryState();
+        if (!geometry ||
+            !viewport_controller_->
+                setSketchGeometryPreview(*geometry)) {
+            viewport_controller_->
+                clearSketchPreview();
+            return false;
+        }
+
+        notifyStateChanged();
+        return true;
+    }
+
+    const auto stage =
+        interaction_.commonTransformStage();
+    if (!stage ||
+        *stage !=
+            sketch::CommonTransformStage::
+                await_destination ||
+        (interaction_.tool() !=
+             sketch::SketchTool::rotate &&
+         interaction_.tool() !=
+             sketch::SketchTool::scale) ||
+        !interaction_.acceptTransformValue(value)) {
+        return false;
+    }
+
+    const auto geometry =
+        interaction_.transformGeometryState();
+    if (!geometry ||
+        !viewport_controller_->
+            setSketchGeometryPreview(*geometry)) {
+        viewport_controller_->
+            clearSketchPreview();
+        return false;
+    }
+
+    notifyStateChanged();
+    return true;
+}
+
 std::optional<application::CadInputPairRequest>
 PartSketchInteractionController::
 cadInputSemanticPairRequest() const noexcept {

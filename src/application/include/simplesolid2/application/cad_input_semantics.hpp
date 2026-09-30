@@ -100,6 +100,11 @@ public:
         return false;
     }
 
+    [[nodiscard]] virtual bool
+    lockCadInputSemanticValue(double) {
+        return false;
+    }
+
     [[nodiscard]] virtual std::optional<CadInputPairRequest>
     cadInputSemanticPairRequest() const noexcept {
         return std::nullopt;
@@ -157,6 +162,11 @@ public:
 
     [[nodiscard]] std::vector<CadDynamicInputField>
     dynamicInputFields() const;
+
+    [[nodiscard]] CadInputSubmitResult
+    lockDynamicInputField(
+        std::size_t index,
+        std::string_view text);
 
 private:
     ISketchCadInputSemanticTarget* target_{};

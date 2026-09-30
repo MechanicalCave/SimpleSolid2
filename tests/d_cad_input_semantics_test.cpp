@@ -39,7 +39,9 @@ public:
     std::optional<application::CadInputValueRequest>
         value_request;
     std::optional<double> submitted_value;
+    std::optional<double> locked_value;
     bool value_result{true};
+    bool lock_value_result{true};
     std::optional<application::CadInputPairRequest>
         pair_request;
     std::optional<std::pair<double, double>>
@@ -75,6 +77,10 @@ public:
     bool submitCadInputSemanticValue(double value) override {
         submitted_value = value;
         return value_result;
+    }
+    bool lockCadInputSemanticValue(double value) override {
+        locked_value = value;
+        return lock_value_result;
     }
     std::optional<application::CadInputPairRequest>
     cadInputSemanticPairRequest() const noexcept override {
@@ -217,6 +223,51 @@ int main() {
             mirror_axis_angle;
     fields = dot.dynamicInputFields();
     CHECK(fields[0].label == "Axis Angle");
+
+    target.value_request->semantic =
+        application::CadInputValueRequestSemantic::
+            rotate_angle;
+    target.value_request->dimension =
+        application::CadQuantityDimension::angle;
+    target.value_request->strictly_positive = false;
+    target.locked_value.reset();
+    auto lock_result =
+        dot.lockDynamicInputField(
+            0U,
+            "30");
+    CHECK(lock_result.accepted);
+    CHECK(target.locked_value.has_value());
+    CHECK(near(
+        *target.locked_value,
+        std::numbers::pi_v<double> / 6.0));
+
+    target.value_request->semantic =
+        application::CadInputValueRequestSemantic::
+            scale_factor;
+    target.value_request->dimension =
+        application::CadQuantityDimension::scalar;
+    target.value_request->strictly_positive = true;
+    target.locked_value.reset();
+    lock_result =
+        dot.lockDynamicInputField(
+            0U,
+            "0");
+    CHECK(!lock_result.accepted);
+    CHECK(
+        lock_result.diagnostic ==
+        "Scale Factor expects a positive Scalar expression.");
+    CHECK(!target.locked_value.has_value());
+
+    target.lock_value_result = false;
+    lock_result =
+        dot.lockDynamicInputField(
+            0U,
+            "2");
+    CHECK(!lock_result.accepted);
+    CHECK(
+        lock_result.diagnostic ==
+        "Active Dynamic Input value could not be locked.");
+    target.lock_value_result = true;
 
     target.value_request.reset();
     target.request.reset();

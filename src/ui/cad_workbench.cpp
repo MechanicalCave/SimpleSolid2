@@ -2820,6 +2820,47 @@ CadWorkbench::cadDynamicInputFields() const {
 }
 
 application::CadInputSubmitResult
+CadWorkbench::lockCadDynamicInputField(
+    std::size_t index,
+    std::string_view text,
+    application::CadInputContextGeneration
+        expected_context_generation) {
+    if (expected_context_generation !=
+        cadInputContextGeneration()) {
+        return {
+            false,
+            "CAD input semantic context is stale."};
+    }
+    if (!sketch_interaction_controller_) {
+        return {
+            false,
+            "No active CAD command context."};
+    }
+
+    const auto length_unit =
+        document_session_ != nullptr
+            ? document_session_->document().lengthUnit()
+            : core::LengthUnit::millimetre;
+
+    application::SketchCadInputSemanticEndpoint endpoint{
+        *sketch_interaction_controller_,
+        application::CadInputNumberFormat{
+            toUtf8(QLocale{}.decimalPoint()),
+            length_unit}};
+    auto result =
+        endpoint.lockDynamicInputField(
+            index,
+            text);
+    if (!result.accepted &&
+        status_ != nullptr &&
+        !result.diagnostic.empty()) {
+        setStatusText(
+            fromUtf8(result.diagnostic));
+    }
+    return result;
+}
+
+application::CadInputSubmitResult
 CadWorkbench::submitCadInput(
     std::string_view text,
     application::CadInputContextGeneration

@@ -250,6 +250,79 @@ SketchCadInputSemanticEndpoint::dynamicInputFields() const {
 }
 
 CadInputSubmitResult
+SketchCadInputSemanticEndpoint::lockDynamicInputField(
+    std::size_t index,
+    std::string_view text) {
+    if (target_ == nullptr ||
+        !target_->cadInputSemanticActive()) {
+        return {false, "No active CAD command context."};
+    }
+
+    const auto fields = dynamicInputFields();
+    if (index >= fields.size()) {
+        return {
+            false,
+            "Dynamic Input field index is stale."};
+    }
+
+    const auto submitted = trimAscii(text);
+    if (submitted.empty()) {
+        return {
+            false,
+            "Dynamic Input field token is empty."};
+    }
+
+    const auto value_request =
+        target_->cadInputSemanticValueRequest();
+    if (!value_request || fields.size() != 1U) {
+        return {
+            false,
+            "Active Dynamic Input field does not support scalar locking yet."};
+    }
+
+    const auto quantity =
+        parseCadQuantity(
+            submitted,
+            {
+                value_request->dimension,
+                number_format_.length_unit});
+    if (!quantity ||
+        (value_request->strictly_positive &&
+         quantity->canonical_value <= 0.0)) {
+        switch (value_request->semantic) {
+        case CadInputValueRequestSemantic::circle_size:
+            return {
+                false,
+                "Circle Size expects a positive Length expression."};
+        case CadInputValueRequestSemantic::arc_radius:
+            return {
+                false,
+                "Arc Radius expects a positive Length expression."};
+        case CadInputValueRequestSemantic::rotate_angle:
+            return {
+                false,
+                "Rotate Angle expects a valid Angle expression."};
+        case CadInputValueRequestSemantic::scale_factor:
+            return {
+                false,
+                "Scale Factor expects a positive Scalar expression."};
+        case CadInputValueRequestSemantic::mirror_axis_angle:
+            return {
+                false,
+                "Mirror Axis Angle expects a valid Angle expression."};
+        }
+    }
+
+    if (!target_->lockCadInputSemanticValue(
+            quantity->canonical_value)) {
+        return {
+            false,
+            "Active Dynamic Input value could not be locked."};
+    }
+    return {true, {}};
+}
+
+CadInputSubmitResult
 SketchCadInputSemanticEndpoint::submit(
     std::string_view text) {
     const auto submitted = trimAscii(text);
