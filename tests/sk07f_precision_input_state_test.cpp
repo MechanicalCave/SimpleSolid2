@@ -563,6 +563,99 @@ int main() {
             0.0));
     }
 
+    // Request-local point locks constrain the existing pointer resolver.
+    // Polar (Distance/Angle) and Cartesian (dU/dV) lock families may not
+    // be mixed; complete point submission remains a separate higher-priority path.
+    {
+        sketch::SketchInteractionState dyn_line;
+        dyn_line.activateLine();
+
+        CHECK(dyn_line.lockPointField(
+            sketch::PointFieldLockSemantic::u,
+            10.0));
+        auto resolved =
+            dyn_line.resolvePointerInput(
+                {1.0, 2.0});
+        CHECK(resolved.has_value());
+        CHECK(near(resolved->position.u, 10.0));
+        CHECK(near(resolved->position.v, 2.0));
+
+        CHECK(dyn_line.lockPointField(
+            sketch::PointFieldLockSemantic::v,
+            -5.0));
+        resolved =
+            dyn_line.resolvePointerInput(
+                {100.0, 200.0});
+        CHECK(resolved.has_value());
+        CHECK(near(resolved->position.u, 10.0));
+        CHECK(near(resolved->position.v, -5.0));
+
+        CHECK(
+            dyn_line.acceptLinePoint(
+                resolved->position).outcome ==
+            sketch::LinePointOutcome::
+                first_point_accepted);
+        CHECK(dyn_line.pointFieldLocks().empty());
+
+        CHECK(dyn_line.lockPointField(
+            sketch::PointFieldLockSemantic::distance,
+            100.0));
+        resolved =
+            dyn_line.resolvePointerInput(
+                {13.0, -1.0});
+        CHECK(resolved.has_value());
+        CHECK(near(resolved->position.u, 110.0));
+        CHECK(near(resolved->position.v, -5.0));
+
+        CHECK(dyn_line.lockPointField(
+            sketch::PointFieldLockSemantic::angle,
+            std::numbers::pi_v<double> / 2.0));
+        resolved =
+            dyn_line.resolvePointerInput(
+                {500.0, 500.0});
+        CHECK(resolved.has_value());
+        CHECK(near(resolved->position.u, 10.0));
+        CHECK(near(resolved->position.v, 95.0));
+        CHECK(!dyn_line.lockPointField(
+            sketch::PointFieldLockSemantic::delta_u,
+            1.0));
+
+        dyn_line.clearPointFieldLocks();
+        CHECK(dyn_line.lockPointField(
+            sketch::PointFieldLockSemantic::delta_u,
+            30.0));
+        resolved =
+            dyn_line.resolvePointerInput(
+                {15.0, 35.0});
+        CHECK(resolved.has_value());
+        CHECK(near(resolved->position.u, 40.0));
+        CHECK(near(resolved->position.v, 35.0));
+
+        CHECK(dyn_line.lockPointField(
+            sketch::PointFieldLockSemantic::delta_v,
+            -10.0));
+        resolved =
+            dyn_line.resolvePointerInput(
+                {999.0, 999.0});
+        CHECK(resolved.has_value());
+        CHECK(near(resolved->position.u, 40.0));
+        CHECK(near(resolved->position.v, -15.0));
+        CHECK(!dyn_line.lockPointField(
+            sketch::PointFieldLockSemantic::distance,
+            25.0));
+
+        dyn_line.clearPointFieldLocks();
+        CHECK(dyn_line.lockPointField(
+            sketch::PointFieldLockSemantic::angle,
+            0.0));
+        resolved =
+            dyn_line.resolvePointerInput(
+                {10.0, -5.0});
+        CHECK(resolved.has_value());
+        CHECK(resolved->position ==
+              sketch::Point2{10.0, -5.0});
+    }
+
     std::cout << "SK-07F precision input state PASS\n";
     return EXIT_SUCCESS;
 }

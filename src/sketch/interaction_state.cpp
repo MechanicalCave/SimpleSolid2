@@ -780,12 +780,161 @@ SketchInteractionState::resolveExplicitPoint(
 std::optional<ResolvedSketchInput>
 SketchInteractionState::resolvePointerInput(
     Point2 raw) noexcept {
-    if (!raw.finite() || !activePointRequest()) {
+    const auto request = activePointRequest();
+    if (!raw.finite() || !request) {
         return std::nullopt;
     }
 
     point_pointer_candidate_ = raw;
-    return ResolvedSketchInput{raw};
+    Point2 resolved = raw;
+
+    if (!request->base) {
+        if (point_field_locks_.u) {
+            resolved.u = *point_field_locks_.u;
+        }
+        if (point_field_locks_.v) {
+            resolved.v = *point_field_locks_.v;
+        }
+        return resolved.finite()
+            ? std::optional<ResolvedSketchInput>{
+                  ResolvedSketchInput{resolved}}
+            : std::nullopt;
+    }
+
+    const auto base = *request->base;
+    const double raw_du = raw.u - base.u;
+    const double raw_dv = raw.v - base.v;
+
+    if (point_field_locks_.delta_u ||
+        point_field_locks_.delta_v) {
+        resolved = {
+            base.u +
+                point_field_locks_.delta_u
+                    .value_or(raw_du),
+            base.v +
+                point_field_locks_.delta_v
+                    .value_or(raw_dv)};
+        return resolved.finite()
+            ? std::optional<ResolvedSketchInput>{
+                  ResolvedSketchInput{resolved}}
+            : std::nullopt;
+    }
+
+    if (point_field_locks_.distance ||
+        point_field_locks_.angle) {
+        const double raw_distance =
+            std::hypot(raw_du, raw_dv);
+
+        double resolved_angle{};
+        if (point_field_locks_.angle) {
+            resolved_angle =
+                *point_field_locks_.angle;
+        } else {
+            if (!std::isfinite(raw_distance) ||
+                raw_distance <= 0.0) {
+                return std::nullopt;
+            }
+            resolved_angle =
+                std::atan2(raw_dv, raw_du);
+        }
+
+        const double resolved_distance =
+            point_field_locks_.distance
+                .value_or(raw_distance);
+        if (!std::isfinite(resolved_distance) ||
+            resolved_distance < 0.0 ||
+            !std::isfinite(resolved_angle)) {
+            return std::nullopt;
+        }
+
+        resolved = {
+            base.u +
+                resolved_distance *
+                    std::cos(resolved_angle),
+            base.v +
+                resolved_distance *
+                    std::sin(resolved_angle)};
+    }
+
+    return resolved.finite()
+        ? std::optional<ResolvedSketchInput>{
+              ResolvedSketchInput{resolved}}
+        : std::nullopt;
+}
+
+bool SketchInteractionState::lockPointField(
+    PointFieldLockSemantic semantic,
+    double value) noexcept {
+    const auto request = activePointRequest();
+    if (!request || !std::isfinite(value)) {
+        return false;
+    }
+
+    const bool based = request->base.has_value();
+    const bool polar_family_locked =
+        point_field_locks_.distance.has_value() ||
+        point_field_locks_.angle.has_value();
+    const bool cartesian_family_locked =
+        point_field_locks_.delta_u.has_value() ||
+        point_field_locks_.delta_v.has_value();
+
+    switch (semantic) {
+    case PointFieldLockSemantic::u:
+        if (based ||
+            !request->absolute_cartesian_enabled) {
+            return false;
+        }
+        point_field_locks_.u = value;
+        return true;
+
+    case PointFieldLockSemantic::v:
+        if (based ||
+            !request->absolute_cartesian_enabled) {
+            return false;
+        }
+        point_field_locks_.v = value;
+        return true;
+
+    case PointFieldLockSemantic::distance:
+        if (!based ||
+            (!request->relative_polar_enabled &&
+             !request->direct_distance_enabled) ||
+            value < 0.0 ||
+            cartesian_family_locked) {
+            return false;
+        }
+        point_field_locks_.distance = value;
+        return true;
+
+    case PointFieldLockSemantic::angle:
+        if (!based ||
+            !request->relative_polar_enabled ||
+            cartesian_family_locked) {
+            return false;
+        }
+        point_field_locks_.angle = value;
+        return true;
+
+    case PointFieldLockSemantic::delta_u:
+        if (!based ||
+            !request->relative_cartesian_enabled ||
+            polar_family_locked) {
+            return false;
+        }
+        point_field_locks_.delta_u = value;
+        return true;
+
+    case PointFieldLockSemantic::delta_v:
+        if (!based ||
+            !request->relative_cartesian_enabled ||
+            polar_family_locked) {
+            return false;
+        }
+        point_field_locks_.delta_v = value;
+        return true;
+    }
+
+    return false;
 }
 
 std::optional<ResolvedSketchInput>
@@ -1162,6 +1311,7 @@ bool SketchInteractionState::acceptTransformPoint(
         transform_session_->reference_point.reset();
         transform_session_->current_preview.reset();
         transform_session_->explicit_value.reset();
+        point_field_locks_ = {};
         transform_session_->stage =
             (tool_ == SketchTool::move ||
              tool_ == SketchTool::copy)
@@ -1187,6 +1337,7 @@ bool SketchInteractionState::acceptTransformPoint(
         point_pointer_candidate_ = input.position;
         transform_session_->current_preview = input;
         transform_session_->explicit_value.reset();
+        point_field_locks_ = {};
         transform_session_->stage =
             CommonTransformStage::await_destination;
         clearHover();
@@ -1200,6 +1351,7 @@ bool SketchInteractionState::acceptTransformPoint(
         point_pointer_candidate_ = input.position;
         transform_session_->reference_point.reset();
         transform_session_->current_preview = input;
+        point_field_locks_ = {};
         transform_session_->stage =
             CommonTransformStage::await_axis_end;
         clearHover();
@@ -1437,6 +1589,7 @@ SketchInteractionState::acceptLinePoint(
         LineStage::await_first_point) {
         line_anchor_ = point;
         point_pointer_candidate_ = point;
+        point_field_locks_ = {};
         line_stage_ =
             LineStage::await_next_point;
         return {
@@ -1495,6 +1648,7 @@ SketchInteractionState::acceptCirclePoint(
     if (circle_stage_ ==
         CircleStage::await_center) {
         circle_center_ = point;
+        point_field_locks_ = {};
         circle_stage_ =
             CircleStage::await_radius;
         return {
@@ -1581,6 +1735,7 @@ SketchInteractionState::acceptArcPoint(
         arc_end_.reset();
         arc_radius_lock_.reset();
         point_pointer_candidate_ = point;
+        point_field_locks_ = {};
         arc_stage_ = ArcStage::await_end;
         return {
             ArcPointOutcome::start_accepted,
@@ -1596,6 +1751,7 @@ SketchInteractionState::acceptArcPoint(
         arc_end_ = point;
         arc_radius_lock_.reset();
         point_pointer_candidate_ = point;
+        point_field_locks_ = {};
         arc_stage_ = ArcStage::await_arc_point;
         return {
             ArcPointOutcome::end_accepted,
@@ -1749,6 +1905,7 @@ SketchInteractionState::acceptRectanglePoint(
         RectangleStage::await_first_corner) {
         rectangle_first_corner_ = point;
         point_pointer_candidate_ = point;
+        point_field_locks_ = {};
         rectangle_stage_ =
             RectangleStage::await_opposite_corner;
         return {
@@ -1865,6 +2022,7 @@ bool SketchInteractionState::resolveLineRequest(
                 resolved.end);
         line_anchor_ = resolved.end;
         point_pointer_candidate_ = resolved.end;
+        point_field_locks_ = {};
     }
 
     return true;
@@ -2427,6 +2585,7 @@ bool SketchInteractionState::cycleDirectEditMode() noexcept {
     manipulation_->rotate_reference_point.reset();
     manipulation_->scale_reference_radius.reset();
     manipulation_->explicit_value.reset();
+    point_field_locks_ = {};
 
     const auto current =
         manipulation_->current_input.position;
@@ -2884,6 +3043,7 @@ continueDirectManipulationCopyPlacement() noexcept {
     manipulation_->current_input =
         ResolvedSketchInput{manipulation_->pivot};
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
     clearHover();
     return true;
 }
@@ -2905,6 +3065,7 @@ void SketchInteractionState::finishDirectManipulation()
     noexcept {
     manipulation_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
     clearHover();
 }
 
@@ -2912,6 +3073,7 @@ void SketchInteractionState::cancelDirectManipulation()
     noexcept {
     manipulation_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
     clearHover();
 }
 
@@ -2945,6 +3107,7 @@ void SketchInteractionState::resetLineStage()
     line_relative_reference_.reset();
     pending_line_request_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
 }
 
 void SketchInteractionState::resetCircleStage()
@@ -2954,6 +3117,7 @@ void SketchInteractionState::resetCircleStage()
     circle_center_.reset();
     pending_circle_request_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
 }
 
 void SketchInteractionState::resetArcStage()
@@ -2965,6 +3129,7 @@ void SketchInteractionState::resetArcStage()
     arc_radius_lock_.reset();
     pending_arc_request_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
 }
 
 void SketchInteractionState::resetRectangleStage()
@@ -2975,12 +3140,14 @@ void SketchInteractionState::resetRectangleStage()
     rectangle_size_lock_.reset();
     pending_rectangle_request_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
 }
 
 void SketchInteractionState::resetCommonTransform()
     noexcept {
     transform_session_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
 }
 
 void SketchInteractionState::resetMeasure() noexcept {

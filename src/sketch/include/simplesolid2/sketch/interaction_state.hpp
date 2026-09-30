@@ -278,6 +278,34 @@ struct ExplicitPointInput final {
         const ExplicitPointInput&) = default;
 };
 
+enum class PointFieldLockSemantic : std::uint8_t {
+    u,
+    v,
+    distance,
+    angle,
+    delta_u,
+    delta_v,
+};
+
+struct PointFieldLocks final {
+    std::optional<double> u;
+    std::optional<double> v;
+    std::optional<double> distance;
+    std::optional<double> angle;
+    std::optional<double> delta_u;
+    std::optional<double> delta_v;
+
+    [[nodiscard]] bool empty() const noexcept {
+        return !u && !v &&
+               !distance && !angle &&
+               !delta_u && !delta_v;
+    }
+
+    friend bool operator==(
+        const PointFieldLocks&,
+        const PointFieldLocks&) = default;
+};
+
 struct PointRequest final {
     std::optional<Point2> base;
     std::optional<Point2> pointer_candidate;
@@ -353,6 +381,17 @@ public:
 
     [[nodiscard]] std::optional<ResolvedSketchInput>
     resolveDirectDistance(double distance) const noexcept;
+
+    [[nodiscard]] bool lockPointField(
+        PointFieldLockSemantic semantic,
+        double value) noexcept;
+    void clearPointFieldLocks() noexcept {
+        point_field_locks_ = {};
+    }
+    [[nodiscard]] const PointFieldLocks&
+    pointFieldLocks() const noexcept {
+        return point_field_locks_;
+    }
 
     [[nodiscard]] std::optional<Point2>
     lineAnchor() const noexcept {
@@ -689,6 +728,7 @@ private:
     // One shared runtime pointer candidate feeds the active semantic
     // PointRequest. It is never authored or persisted.
     std::optional<Point2> point_pointer_candidate_;
+    PointFieldLocks point_field_locks_;
 };
 
 } // namespace simplesolid2::sketch
