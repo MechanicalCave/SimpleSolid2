@@ -27,6 +27,8 @@ public:
     bool accept{true};
     bool expose_dynamic_fields{};
     bool accept_dynamic_lock{true};
+    bool accept_dynamic_submit{true};
+    unsigned dynamic_submit_count{};
     std::size_t locked_field{};
     std::string locked_token;
     simplesolid2::application::CadInputContextGeneration
@@ -76,6 +78,22 @@ public:
             accept_dynamic_lock
                 ? std::string{}
                 : std::string{"Rejected fake DYN lock."}};
+    }
+
+    [[nodiscard]]
+    simplesolid2::application::CadInputSubmitResult
+    submitCadDynamicInputRequest(
+        simplesolid2::application::CadInputContextGeneration
+            expected_context_generation) override {
+        if (expected_context_generation != generation) {
+            return {false, "Stale fake DYN submit context."};
+        }
+        ++dynamic_submit_count;
+        return {
+            accept_dynamic_submit,
+            accept_dynamic_submit
+                ? std::string{}
+                : std::string{"Rejected fake DYN submit."}};
     }
 
     [[nodiscard]]
@@ -255,6 +273,21 @@ int main() {
         dyn_settings));
     first.expose_dynamic_fields = true;
     CHECK(session.dynamicInputFields().size() == 2U);
+
+    auto dyn_enter = session.submit();
+    CHECK(dyn_enter.accepted);
+    CHECK(first.dynamic_submit_count == 1U);
+    CHECK(session.dynamicInputFieldIndex() == 0U);
+
+    first.accept_dynamic_submit = false;
+    dyn_enter = session.submit();
+    CHECK(!dyn_enter.accepted);
+    CHECK(first.dynamic_submit_count == 2U);
+    CHECK(
+        session.diagnostic() ==
+        "Rejected fake DYN submit.");
+    first.accept_dynamic_submit = true;
+    session.clearBuffer();
     CHECK(session.dynamicInputFieldIndex() == 0U);
     CHECK(
         session.currentDynamicInputField()->
@@ -293,9 +326,16 @@ int main() {
     CHECK(session.dynamicInputFieldIndex() == 0U);
 
     // Restore the pre-DYN runtime configuration before the existing
-    // endpoint-retention assertions below.
+    // endpoint-retention assertions below. Empty Enter keeps its legacy
+    // meaning when Dynamic Input is off.
     CHECK(session.setInteractionSettings(
         runtime_settings));
+    dyn_enter = session.submit();
+    CHECK(!dyn_enter.accepted);
+    CHECK(
+        dyn_enter.diagnostic ==
+        "CAD input buffer is empty.");
+    CHECK(first.dynamic_submit_count == 2U);
 
     session.appendText("MO");
     session.appendText("VE");

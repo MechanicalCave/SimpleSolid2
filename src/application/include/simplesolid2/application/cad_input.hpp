@@ -186,6 +186,14 @@ public:
             false,
             "Dynamic Input field locking is not available in this context."};
     }
+
+    [[nodiscard]] virtual CadInputSubmitResult
+    submitCadDynamicInputRequest(
+        CadInputContextGeneration) {
+        return {
+            false,
+            "Dynamic Input request acceptance is not available in this context."};
+    }
 };
 
 class CadInputSession final {

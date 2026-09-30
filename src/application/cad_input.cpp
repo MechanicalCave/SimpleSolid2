@@ -451,6 +451,41 @@ bool CadInputSession::setInteractionSettings(
 
 CadInputSubmitResult CadInputSession::submit() {
     if (buffer_.empty()) {
+        static_cast<void>(synchronizeContext());
+
+        auto* const dynamic_target = endpoint_;
+        if (dynamic_target != nullptr &&
+            interaction_settings_.dynamic_input_enabled &&
+            !dynamicInputFields().empty()) {
+            const auto endpoint_generation =
+                endpoint_generation_;
+            const auto current_context =
+                dynamic_target->
+                    cadInputContextGeneration();
+
+            auto result =
+                dynamic_target->
+                    submitCadDynamicInputRequest(
+                        current_context);
+
+            if (endpoint_ != dynamic_target ||
+                endpoint_generation_ !=
+                    endpoint_generation) {
+                CadInputSubmitResult stale{
+                    false,
+                    "CAD input endpoint changed during Dynamic Input submission."};
+                diagnostic_ = stale.diagnostic;
+                return stale;
+            }
+
+            diagnostic_ = result.diagnostic;
+            if (result.accepted) {
+                diagnostic_.clear();
+                dynamic_input_field_index_ = 0U;
+            }
+            return result;
+        }
+
         CadInputSubmitResult result{
             false,
             "CAD input buffer is empty."};
