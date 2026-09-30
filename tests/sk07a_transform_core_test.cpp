@@ -1,4 +1,5 @@
 #include <simplesolid2/sketch/interaction_state.hpp>
+#include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/sketch/transform.hpp>
 
 #include <cmath>
@@ -235,6 +236,83 @@ int main() {
         command_first.tool() ==
         sketch::SketchTool::select);
     CHECK(command_first.selectedEntities().size() == 2U);
+
+    // Profile topology reliability: a common transform of a closed
+    // Line+Arc contour must not change whether it is a bounded region.
+    // This is the production reproducer from the 2026-09-30 audit.
+    sketch::SketchModel dome;
+    const auto dome_arc =
+        dome.addArc(
+            {0.0, 0.0},
+            25.0,
+            0.0,
+            pi);
+    const auto dome_left =
+        dome.addLine(
+            {-25.0, 0.0},
+            {-25.0, -50.0});
+    const auto dome_bottom =
+        dome.addLine(
+            {-25.0, -50.0},
+            {25.0, -50.0});
+    const auto dome_right =
+        dome.addLine(
+            {25.0, -50.0},
+            {25.0, 0.0});
+
+    const auto baseline_regions =
+        sketch::analyzeRegions(dome);
+    CHECK(baseline_regions.complete());
+    CHECK(baseline_regions.regions.size() == 1U);
+    CHECK(baseline_regions.regions.front().holes.empty());
+
+    const std::vector<sketch::EntityId> dome_ids{
+        dome_arc,
+        dome_left,
+        dome_bottom,
+        dome_right};
+    const auto dome_capture =
+        sketch::captureSketchTransformGeometry(
+            dome,
+            dome_ids);
+    CHECK(dome_capture.has_value());
+
+    const auto verify_dome_translation =
+        [&](double delta_u) {
+            const auto moved =
+                sketch::translateSketchGeometry(
+                    *dome_capture,
+                    {delta_u, 0.0});
+            CHECK(moved.has_value());
+
+            auto moved_state = dome.state();
+            moved_state.lines = moved->lines;
+            moved_state.circles = moved->circles;
+            moved_state.arcs = moved->arcs;
+            auto moved_model =
+                sketch::SketchModel::restore(
+                    std::move(moved_state));
+            CHECK(moved_model.has_value());
+
+            const auto regions =
+                sketch::analyzeRegions(*moved_model);
+            CHECK(regions.complete());
+            CHECK(regions.regions.size() == 1U);
+            CHECK(regions.regions.front().holes.empty());
+            CHECK(near(
+                regions.regions.front().area,
+                2500.0 + 312.5 * pi,
+                1.0e-9));
+            CHECK(near(
+                regions.regions.front().perimeter,
+                150.0 + 25.0 * pi,
+                1.0e-9));
+        };
+
+    verify_dome_translation(0.0);
+    verify_dome_translation(-45.65);
+    verify_dome_translation(-42.77);
+    verify_dome_translation(-41.59);
 
     return EXIT_SUCCESS;
 }

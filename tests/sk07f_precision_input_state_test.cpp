@@ -277,7 +277,7 @@ int main() {
         CHECK(arc_request->absolute_cartesian_enabled);
         CHECK(arc_request->relative_cartesian_enabled);
         CHECK(arc_request->relative_polar_enabled);
-        CHECK(!arc_request->direct_distance_enabled);
+        CHECK(arc_request->direct_distance_enabled);
 
         const auto end =
             arc.resolveExplicitPoint(
