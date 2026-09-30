@@ -538,6 +538,9 @@ bool ProjectWorkspaceShell::eventFilter(
                 return false;
             }
             refreshCadInputPresentation();
+            if (cad_interaction_settings_changed_handler_) {
+                cad_interaction_settings_changed_handler_();
+            }
             return true;
         };
 

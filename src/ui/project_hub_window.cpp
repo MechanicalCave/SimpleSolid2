@@ -460,6 +460,19 @@ void ProjectHubWindow::buildWorkspacePage() {
             return workspace_shell_->
                 cadInteractionSettings();
         });
+    cad_workbench_->setCadInteractionSettingsUpdater(
+        [this](
+            application::CadInteractionSettings settings) {
+            return workspace_shell_->
+                setCadInteractionSettings(
+                    std::move(settings));
+        });
+    workspace_shell_->
+        setCadInteractionSettingsChangedHandler(
+            [this] {
+                cad_workbench_->
+                    refreshCadInteractionSettingsUi();
+            });
 
     cad_workbench_->setCloseDocumentHandler(
         [this](

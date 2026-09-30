@@ -4,6 +4,7 @@
 
 #include <QWidget>
 
+#include <functional>
 #include <string>
 #include <utility>
 
@@ -44,6 +45,14 @@ public:
         application::ICadInputEndpoint* endpoint);
     void refreshCadInputPresentation();
 
+    using CadInteractionSettingsChangedHandler =
+        std::function<void()>;
+    void setCadInteractionSettingsChangedHandler(
+        CadInteractionSettingsChangedHandler handler) {
+        cad_interaction_settings_changed_handler_ =
+            std::move(handler);
+    }
+
     [[nodiscard]] const std::string&
     cadInputBuffer() const noexcept;
 
@@ -59,6 +68,9 @@ public:
                 std::move(settings));
         if (accepted) {
             refreshCadInputPresentation();
+            if (cad_interaction_settings_changed_handler_) {
+                cad_interaction_settings_changed_handler_();
+            }
         }
         return accepted;
     }
@@ -92,6 +104,8 @@ private:
     QTabBar* document_tabs_{};
 
     application::CadInputSession cad_input_;
+    CadInteractionSettingsChangedHandler
+        cad_interaction_settings_changed_handler_;
     QWidget* command_line_widget_{};
     QLabel* command_prompt_{};
     QLineEdit* command_input_{};

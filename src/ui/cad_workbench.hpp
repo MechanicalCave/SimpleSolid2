@@ -17,6 +17,7 @@
 #include <unordered_map>
 
 class QCheckBox;
+class QComboBox;
 class QEvent;
 class QLabel;
 class QLineEdit;
@@ -89,8 +90,17 @@ public:
     using CadInteractionSettingsProvider =
         std::function<
             application::CadInteractionSettings()>;
+    using CadInteractionSettingsUpdater =
+        std::function<
+            bool(application::CadInteractionSettings)>;
     void setCadInteractionSettingsProvider(
         CadInteractionSettingsProvider provider);
+    void setCadInteractionSettingsUpdater(
+        CadInteractionSettingsUpdater updater) {
+        cad_interaction_settings_updater_ =
+            std::move(updater);
+    }
+    void refreshCadInteractionSettingsUi();
 
     [[nodiscard]] std::string cadInputPrompt() const override;
     [[nodiscard]] application::CadInputContextGeneration
@@ -108,6 +118,8 @@ private:
     void buildUi();
 
     void applyProperties();
+    void setPartLengthUnit(
+        core::LengthUnit unit);
     void applyProfileProperties();
     void deleteSelectedProfile();
     void setSketchSelectionRole(
@@ -195,6 +207,8 @@ private:
         cad_input_context_changed_handler_;
     CadInteractionSettingsProvider
         cad_interaction_settings_provider_;
+    CadInteractionSettingsUpdater
+        cad_interaction_settings_updater_;
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
@@ -238,9 +252,16 @@ private:
     QLineEdit* title_{};
     QPlainTextEdit* description_{};
     QLineEdit* engineering_revision_{};
+    QComboBox* length_unit_combo_{};
     QPushButton* apply_button_{};
 
     QLabel* operations_placeholder_{};
+    QWidget* precision_operations_widget_{};
+    QLabel* precision_status_label_{};
+    QPushButton* polar_toggle_button_{};
+    QPushButton* dynamic_input_toggle_button_{};
+    QComboBox* circle_size_mode_combo_{};
+    bool syncing_precision_ui_{};
     QPushButton* sketch_button_{};
     QPushButton* select_sketch_button_{};
     QLabel* create_tools_label_{};

@@ -7,6 +7,7 @@
 #include <QAction>
 #include <algorithm>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
@@ -422,6 +423,20 @@ int main(int argc, char* argv[]) {
         [&workspace_shell] {
             workspace_shell.refreshCadInputPresentation();
         });
+    workbench.setCadInteractionSettingsProvider(
+        [&workspace_shell] {
+            return workspace_shell.cadInteractionSettings();
+        });
+    workbench.setCadInteractionSettingsUpdater(
+        [&workspace_shell](
+            application::CadInteractionSettings settings) {
+            return workspace_shell.setCadInteractionSettings(
+                std::move(settings));
+        });
+    workspace_shell.setCadInteractionSettingsChangedHandler(
+        [&workbench] {
+            workbench.refreshCadInteractionSettingsUi();
+        });
 
     CHECK(
         workbench.activateDocument(
@@ -597,6 +612,24 @@ int main(int argc, char* argv[]) {
     auto* command_prompt =
         workspace_shell.findChild<QLabel*>(
             QStringLiteral("cadCommandPrompt"));
+    auto* length_unit_combo =
+        workbench.findChild<QComboBox*>(
+            QStringLiteral("partLengthUnitCombo"));
+    auto* precision_widget =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("precisionOperationsWidget"));
+    auto* precision_status =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("precisionCadAidStatus"));
+    auto* polar_toggle =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("polarToggleButton"));
+    auto* dyn_toggle =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("dynamicInputToggleButton"));
+    auto* circle_size_mode =
+        workbench.findChild<QComboBox*>(
+            QStringLiteral("circleSizeModeCombo"));
 
     CHECK(sketch_button != nullptr);
     CHECK(cancel_button != nullptr);
@@ -652,6 +685,12 @@ int main(int argc, char* argv[]) {
     CHECK(measure_between_button != nullptr);
     CHECK(command_input != nullptr);
     CHECK(command_prompt != nullptr);
+    CHECK(length_unit_combo != nullptr);
+    CHECK(precision_widget != nullptr);
+    CHECK(precision_status != nullptr);
+    CHECK(polar_toggle != nullptr);
+    CHECK(dyn_toggle != nullptr);
+    CHECK(circle_size_mode != nullptr);
     CHECK(editor_host->isAncestorOf(sketch_button));
     CHECK(!operations_content->isAncestorOf(sketch_button));
     CHECK(sketch_button->isEnabled());
@@ -661,6 +700,10 @@ int main(int argc, char* argv[]) {
     CHECK(
         operations_label->text() ==
         QStringLiteral("Part modeling context."));
+    CHECK(
+        length_unit_combo->currentText() ==
+        QStringLiteral("mm"));
+    CHECK(precision_widget->isHidden());
 
     auto* session =
         opened.session->documentSession(
@@ -721,6 +764,55 @@ int main(int argc, char* argv[]) {
         viewer::StandardView::front);
     CHECK(viewport->fitAllCount() > 0);
 
+    CHECK(!precision_widget->isHidden());
+    CHECK(polar_toggle->isChecked());
+    CHECK(!dyn_toggle->isChecked());
+    CHECK(
+        precision_status->text() ==
+        QStringLiteral(
+            "POLAR ON   360/8 = 45°   ABS   DYN OFF"));
+
+    const auto precision_state_before =
+        session->document().state();
+    const auto precision_revision_before =
+        session->document().revision();
+    const auto precision_undo_before =
+        session->undoDepth();
+
+    polar_toggle->click();
+    dyn_toggle->click();
+    QApplication::processEvents();
+    CHECK(!workspace_shell.cadInteractionSettings().polar.enabled);
+    CHECK(
+        workspace_shell.cadInteractionSettings().
+            dynamic_input_enabled);
+    CHECK(!polar_toggle->isChecked());
+    CHECK(dyn_toggle->isChecked());
+    CHECK(
+        session->document().state() ==
+        precision_state_before);
+    CHECK(
+        session->document().revision() ==
+        precision_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        precision_undo_before);
+
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClick(viewport, Qt::Key_F10);
+    QTest::keyClick(viewport, Qt::Key_F12);
+    QApplication::processEvents();
+    CHECK(workspace_shell.cadInteractionSettings().polar.enabled);
+    CHECK(
+        !workspace_shell.cadInteractionSettings().
+            dynamic_input_enabled);
+    CHECK(polar_toggle->isChecked());
+    CHECK(!dyn_toggle->isChecked());
+    CHECK(
+        precision_status->text() ==
+        QStringLiteral(
+            "POLAR ON   360/8 = 45°   ABS   DYN OFF"));
+
     // SK-07B: Sketch tools are visibly grouped and the new
     // transform adapters enter the same command-first collection stage.
     CHECK(!create_tools_label->isHidden());
@@ -755,6 +847,42 @@ int main(int argc, char* argv[]) {
     CHECK(!creation_construction_button->isChecked());
     CHECK(!rectangle_diagonals_button->isChecked());
     CHECK(construction_role_button->isHidden());
+
+    circle_button->click();
+    QApplication::processEvents();
+    CHECK(!circle_size_mode->isHidden());
+    CHECK(!circle_size_mode->isEnabled());
+    CHECK(
+        circle_size_mode->currentText() ==
+        QStringLiteral("Diameter"));
+
+    command_input->setText(
+        QStringLiteral("0;0"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(circle_size_mode->isEnabled());
+    circle_size_mode->setCurrentIndex(1);
+    QApplication::processEvents();
+    CHECK(
+        circle_size_mode->currentText() ==
+        QStringLiteral("Radius"));
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Circle — Radius mode [R]; specify size"));
+    circle_size_mode->setCurrentIndex(0);
+    QApplication::processEvents();
+    CHECK(
+        circle_size_mode->currentText() ==
+        QStringLiteral("Diameter"));
+    CHECK(
+        session->document().revision() ==
+        precision_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        precision_undo_before);
 
     rectangle_button->click();
     QApplication::processEvents();

@@ -7,6 +7,7 @@
 #include <simplesolid2/application/cad_input_semantics.hpp>
 
 #include <QCheckBox>
+#include <QComboBox>
 #include <QEvent>
 #include <QFormLayout>
 #include <QGridLayout>
@@ -49,6 +50,70 @@ QString fromUtf8(std::string_view value) {
     return QString::fromUtf8(
         value.data(),
         static_cast<qsizetype>(value.size()));
+}
+
+[[nodiscard]] int lengthUnitIndex(
+    core::LengthUnit unit) noexcept {
+    switch (unit) {
+    case core::LengthUnit::millimetre: return 0;
+    case core::LengthUnit::centimetre: return 1;
+    case core::LengthUnit::metre: return 2;
+    case core::LengthUnit::inch: return 3;
+    case core::LengthUnit::foot: return 4;
+    }
+    return 0;
+}
+
+[[nodiscard]] std::optional<core::LengthUnit>
+lengthUnitForIndex(int index) noexcept {
+    switch (index) {
+    case 0: return core::LengthUnit::millimetre;
+    case 1: return core::LengthUnit::centimetre;
+    case 2: return core::LengthUnit::metre;
+    case 3: return core::LengthUnit::inch;
+    case 4: return core::LengthUnit::foot;
+    default: return std::nullopt;
+    }
+}
+
+[[nodiscard]] QString polarSpacingSummary(
+    double radians) {
+    if (!std::isfinite(radians) ||
+        radians <= 0.0) {
+        return QStringLiteral("Invalid");
+    }
+
+    const double degrees =
+        radians * 180.0 /
+        std::numbers::pi_v<double>;
+    const double divisions =
+        2.0 * std::numbers::pi_v<double> /
+        radians;
+    const double rounded =
+        std::round(divisions);
+
+    if (std::isfinite(divisions) &&
+        rounded >= 1.0 &&
+        std::abs(divisions - rounded) <
+            1.0e-10) {
+        return QStringLiteral("360/%1 = %2°")
+            .arg(
+                QString::number(
+                    static_cast<qlonglong>(
+                        rounded)))
+            .arg(
+                QString::number(
+                    degrees,
+                    'g',
+                    12));
+    }
+
+    return QStringLiteral("%1°")
+        .arg(
+            QString::number(
+                degrees,
+                'g',
+                12));
 }
 
 QString fromFilesystemPath(const std::filesystem::path& value) {
@@ -831,12 +896,28 @@ void CadWorkbench::buildUi() {
     engineering_revision_->setObjectName(
         QStringLiteral("documentEngineeringRevisionEdit"));
 
+    length_unit_combo_ =
+        new QComboBox(document_properties_page_);
+    length_unit_combo_->setObjectName(
+        QStringLiteral("partLengthUnitCombo"));
+    length_unit_combo_->addItems(
+        {
+            QStringLiteral("mm"),
+            QStringLiteral("cm"),
+            QStringLiteral("m"),
+            QStringLiteral("in"),
+            QStringLiteral("ft"),
+        });
+
     form->addRow(QStringLiteral("Number"), number_);
     form->addRow(QStringLiteral("Title"), title_);
     form->addRow(QStringLiteral("Description"), description_);
     form->addRow(
         QStringLiteral("Engineering revision"),
         engineering_revision_);
+    form->addRow(
+        QStringLiteral("Input/display unit"),
+        length_unit_combo_);
     document_properties_root->addLayout(form);
 
     apply_button_ = new QPushButton(
@@ -1014,6 +1095,66 @@ void CadWorkbench::buildUi() {
         QStringLiteral("operationsPlaceholder"));
     operations_placeholder_->setWordWrap(true);
     operations_layout->addWidget(operations_placeholder_);
+
+    precision_operations_widget_ =
+        new QWidget(operations_content);
+    precision_operations_widget_->setObjectName(
+        QStringLiteral("precisionOperationsWidget"));
+    auto* precision_layout =
+        new QVBoxLayout(
+            precision_operations_widget_);
+    precision_layout->setContentsMargins(
+        0, 0, 0, 0);
+
+    precision_status_label_ =
+        new QLabel(
+            precision_operations_widget_);
+    precision_status_label_->setObjectName(
+        QStringLiteral("precisionCadAidStatus"));
+    precision_status_label_->setWordWrap(true);
+    precision_layout->addWidget(
+        precision_status_label_);
+
+    auto* precision_form =
+        new QFormLayout;
+    polar_toggle_button_ =
+        new QPushButton(
+            precision_operations_widget_);
+    polar_toggle_button_->setObjectName(
+        QStringLiteral("polarToggleButton"));
+    polar_toggle_button_->setCheckable(true);
+    precision_form->addRow(
+        QStringLiteral("Polar"),
+        polar_toggle_button_);
+
+    dynamic_input_toggle_button_ =
+        new QPushButton(
+            precision_operations_widget_);
+    dynamic_input_toggle_button_->setObjectName(
+        QStringLiteral("dynamicInputToggleButton"));
+    dynamic_input_toggle_button_->setCheckable(true);
+    precision_form->addRow(
+        QStringLiteral("Dynamic Input"),
+        dynamic_input_toggle_button_);
+
+    circle_size_mode_combo_ =
+        new QComboBox(
+            precision_operations_widget_);
+    circle_size_mode_combo_->setObjectName(
+        QStringLiteral("circleSizeModeCombo"));
+    circle_size_mode_combo_->addItems(
+        {
+            QStringLiteral("Diameter"),
+            QStringLiteral("Radius"),
+        });
+    precision_form->addRow(
+        QStringLiteral("Circle input"),
+        circle_size_mode_combo_);
+
+    precision_layout->addLayout(
+        precision_form);
+    operations_layout->addWidget(
+        precision_operations_widget_);
 
     create_construction_button_ =
         new QPushButton(
@@ -1269,6 +1410,78 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] { applyProperties(); });
+    QObject::connect(
+        length_unit_combo_,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int index) {
+            if (syncing_precision_ui_) {
+                return;
+            }
+            const auto unit =
+                lengthUnitForIndex(index);
+            if (unit) {
+                setPartLengthUnit(*unit);
+            }
+        });
+    QObject::connect(
+        polar_toggle_button_,
+        &QPushButton::clicked,
+        this,
+        [this](bool checked) {
+            if (syncing_precision_ui_ ||
+                !cad_interaction_settings_provider_ ||
+                !cad_interaction_settings_updater_) {
+                return;
+            }
+            auto settings =
+                cad_interaction_settings_provider_();
+            settings.polar.enabled = checked;
+            if (!cad_interaction_settings_updater_(
+                    std::move(settings))) {
+                refreshCadInteractionSettingsUi();
+            }
+        });
+    QObject::connect(
+        dynamic_input_toggle_button_,
+        &QPushButton::clicked,
+        this,
+        [this](bool checked) {
+            if (syncing_precision_ui_ ||
+                !cad_interaction_settings_provider_ ||
+                !cad_interaction_settings_updater_) {
+                return;
+            }
+            auto settings =
+                cad_interaction_settings_provider_();
+            settings.dynamic_input_enabled =
+                checked;
+            if (!cad_interaction_settings_updater_(
+                    std::move(settings))) {
+                refreshCadInteractionSettingsUi();
+            }
+        });
+    QObject::connect(
+        circle_size_mode_combo_,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int index) {
+            if (syncing_precision_ui_ ||
+                !sketch_interaction_controller_) {
+                return;
+            }
+            const auto mode =
+                index == 1
+                    ? application::
+                          CircleSizeInputMode::radius
+                    : application::
+                          CircleSizeInputMode::diameter;
+            if (!sketch_interaction_controller_->
+                    submitCadInputSemanticCircleSizeMode(
+                        mode)) {
+                refreshCadInteractionSettingsUi();
+            }
+        });
     QObject::connect(
         apply_profile_button_,
         &QPushButton::clicked,
@@ -1637,6 +1850,35 @@ void CadWorkbench::applyProperties() {
             ? QStringLiteral(
                   "Properties changed — save is required.")
             : QStringLiteral("No authored property change."));
+}
+
+void CadWorkbench::setPartLengthUnit(
+    core::LengthUnit unit) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        document_session->document().lengthUnit() ==
+            unit) {
+        return;
+    }
+
+    const auto result =
+        document_session->execute(
+            application::SetPartLengthUnitCommand{
+                unit});
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        refreshActiveContext();
+        return;
+    }
+
+    refreshActiveContext();
+    setStatusText(
+        result.changed
+            ? QStringLiteral(
+                  "Part input/display unit changed — save is required.")
+            : QStringLiteral(
+                  "No Part unit change."));
 }
 
 void CadWorkbench::applyProfileProperties() {
@@ -2242,6 +2484,7 @@ void CadWorkbench::setCadInteractionSettingsProvider(
             setCadInteractionSettingsProvider(
                 cad_interaction_settings_provider_);
     }
+    refreshCadInteractionSettingsUi();
 }
 
 std::string CadWorkbench::cadInputPrompt() const {
@@ -2678,6 +2921,14 @@ void CadWorkbench::refreshActiveContext() {
     engineering_revision_->setText(
         fromUtf8(properties.engineering_revision));
 
+    syncing_precision_ui_ = true;
+    length_unit_combo_->setCurrentIndex(
+        lengthUnitIndex(
+            document_session->document()
+                .lengthUnit()));
+    length_unit_combo_->setEnabled(true);
+    syncing_precision_ui_ = false;
+
     std::error_code ec;
     const auto relative = std::filesystem::relative(
         document_session->path(),
@@ -2713,6 +2964,10 @@ void CadWorkbench::clearActiveContext() {
     title_->clear();
     description_->clear();
     engineering_revision_->clear();
+    syncing_precision_ui_ = true;
+    length_unit_combo_->setCurrentIndex(0);
+    length_unit_combo_->setEnabled(false);
+    syncing_precision_ui_ = false;
     selected_profile_id_.reset();
     profile_name_->clear();
     profile_identity_->clear();
@@ -3093,6 +3348,87 @@ bool CadWorkbench::eventFilter(
     return QWidget::eventFilter(watched, event);
 }
 
+void CadWorkbench::refreshCadInteractionSettingsUi() {
+    syncing_precision_ui_ = true;
+
+    const bool editing =
+        sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active();
+    const bool settings_available =
+        static_cast<bool>(
+            cad_interaction_settings_provider_);
+
+    if (precision_operations_widget_ != nullptr) {
+        precision_operations_widget_->setVisible(
+            editing && settings_available);
+    }
+
+    if (editing && settings_available) {
+        const auto settings =
+            cad_interaction_settings_provider_();
+
+        polar_toggle_button_->setChecked(
+            settings.polar.enabled);
+        polar_toggle_button_->setText(
+            settings.polar.enabled
+                ? QStringLiteral("ON")
+                : QStringLiteral("OFF"));
+
+        dynamic_input_toggle_button_->setChecked(
+            settings.dynamic_input_enabled);
+        dynamic_input_toggle_button_->setText(
+            settings.dynamic_input_enabled
+                ? QStringLiteral("ON")
+                : QStringLiteral("OFF"));
+
+        const auto reference =
+            settings.polar.reference_mode ==
+                    application::
+                        PolarReferenceMode::absolute
+                ? QStringLiteral("ABS")
+                : QStringLiteral("REL");
+        precision_status_label_->setText(
+            QStringLiteral(
+                "POLAR %1   %2   %3   DYN %4")
+                .arg(
+                    settings.polar.enabled
+                        ? QStringLiteral("ON")
+                        : QStringLiteral("OFF"),
+                    polarSpacingSummary(
+                        settings.polar.primary_spacing),
+                    reference,
+                    settings.dynamic_input_enabled
+                        ? QStringLiteral("ON")
+                        : QStringLiteral("OFF")));
+
+        const bool circle =
+            sketch_interaction_controller_->tool() ==
+            sketch::SketchTool::circle;
+        circle_size_mode_combo_->setVisible(circle);
+        circle_size_mode_combo_->setEnabled(
+            circle &&
+            sketch_interaction_controller_->
+                circleStage() ==
+                sketch::CircleStage::await_radius);
+        circle_size_mode_combo_->setCurrentIndex(
+            sketch_interaction_controller_->
+                    circleSizeInputMode() ==
+                application::
+                    CircleSizeInputMode::radius
+                ? 1
+                : 0);
+    } else {
+        if (precision_status_label_ != nullptr) {
+            precision_status_label_->clear();
+        }
+        if (circle_size_mode_combo_ != nullptr) {
+            circle_size_mode_combo_->setVisible(false);
+        }
+    }
+
+    syncing_precision_ui_ = false;
+}
+
 void CadWorkbench::syncSketchInteractionUi() {
     notifyCadInputContextChanged();
 
@@ -3120,6 +3456,8 @@ void CadWorkbench::syncSketchInteractionUi() {
     const bool editing =
         sketch_interaction_controller_ &&
         sketch_interaction_controller_->active();
+
+    refreshCadInteractionSettingsUi();
 
     if (sketch_button_ != nullptr) {
         sketch_button_->setVisible(!editing);
