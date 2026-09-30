@@ -208,8 +208,39 @@ QString measurementRoleText(
         : QStringLiteral("Regular");
 }
 
+QString formatLengthMeasurement(
+    double canonical_millimetres,
+    core::LengthUnit unit) {
+    const auto value =
+        core::fromCanonicalLength(
+            core::LengthValue{
+                canonical_millimetres},
+            unit);
+    return QStringLiteral("%1 %2")
+        .arg(
+            QString::number(value, 'g', 12),
+            fromUtf8(
+                core::lengthUnitSuffix(unit)));
+}
+
+QString formatAreaMeasurement(
+    double canonical_square_millimetres,
+    core::LengthUnit unit) {
+    const double scale =
+        core::millimetresPerUnit(unit);
+    const double value =
+        canonical_square_millimetres /
+        (scale * scale);
+    return QStringLiteral("%1 %2²")
+        .arg(
+            QString::number(value, 'g', 12),
+            fromUtf8(
+                core::lengthUnitSuffix(unit)));
+}
+
 QString formatMeasurement(
-    const sketch::EntityMeasurement& measurement) {
+    const sketch::EntityMeasurement& measurement,
+    core::LengthUnit unit) {
     const auto number = [](double value) {
         return QString::number(value, 'g', 12);
     };
@@ -243,9 +274,15 @@ QString formatMeasurement(
                     .arg(
                         id,
                         role,
-                        number(value.length),
-                        number(value.delta_u),
-                        number(value.delta_v),
+                        formatLengthMeasurement(
+                            value.length,
+                            unit),
+                        formatLengthMeasurement(
+                            value.delta_u,
+                            unit),
+                        formatLengthMeasurement(
+                            value.delta_v,
+                            unit),
                         degrees(
                             value.angle_from_positive_u));
             } else if constexpr (
@@ -262,10 +299,18 @@ QString formatMeasurement(
                     .arg(
                         id,
                         role,
-                        number(value.radius),
-                        number(value.diameter),
-                        number(value.circumference),
-                        number(value.area));
+                        formatLengthMeasurement(
+                            value.radius,
+                            unit),
+                        formatLengthMeasurement(
+                            value.diameter,
+                            unit),
+                        formatLengthMeasurement(
+                            value.circumference,
+                            unit),
+                        formatAreaMeasurement(
+                            value.area,
+                            unit));
             } else {
                 return QStringLiteral(
                            "Measure — Arc [%1]\n"
@@ -278,12 +323,16 @@ QString formatMeasurement(
                     .arg(
                         id,
                         role,
-                        number(value.radius),
+                        formatLengthMeasurement(
+                            value.radius,
+                            unit),
                         degrees(value.start_angle),
                         degrees(value.end_angle),
                         degrees(
                             value.signed_sweep_angle),
-                        number(value.arc_length));
+                        formatLengthMeasurement(
+                            value.arc_length,
+                            unit));
             }
         },
         measurement);
@@ -348,7 +397,8 @@ QString formatMeasureRelationTarget(
 QString formatRelationalMeasurement(
     const sketch::RelationalMeasurement& measurement,
     const sketch::MeasureRelationTarget& first,
-    const sketch::MeasureRelationTarget& second) {
+    const sketch::MeasureRelationTarget& second,
+    core::LengthUnit unit) {
     const auto number = [](double value) {
         return QString::number(value, 'g', 12);
     };
@@ -382,9 +432,18 @@ QString formatRelationalMeasurement(
                            "Angle +U: %6")
                     .arg(first_text)
                     .arg(second_text)
-                    .arg(number(value.distance))
-                    .arg(number(value.delta_u))
-                    .arg(number(value.delta_v))
+                    .arg(
+                        formatLengthMeasurement(
+                            value.distance,
+                            unit))
+                    .arg(
+                        formatLengthMeasurement(
+                            value.delta_u,
+                            unit))
+                    .arg(
+                        formatLengthMeasurement(
+                            value.delta_v,
+                            unit))
                     .arg(degrees(
                         value.angle_from_positive_u));
             } else if constexpr (
@@ -401,11 +460,18 @@ QString formatRelationalMeasurement(
                            "Line semantics: infinite supporting line")
                     .arg(first_text)
                     .arg(second_text)
-                    .arg(number(value.distance))
-                    .arg(number(
-                        value.perpendicular_foot.u))
-                    .arg(number(
-                        value.perpendicular_foot.v));
+                    .arg(
+                        formatLengthMeasurement(
+                            value.distance,
+                            unit))
+                    .arg(
+                        formatLengthMeasurement(
+                            value.perpendicular_foot.u,
+                            unit))
+                    .arg(
+                        formatLengthMeasurement(
+                            value.perpendicular_foot.v,
+                            unit));
             } else {
                 return QStringLiteral(
                            "Measure Between\n"
@@ -4285,7 +4351,9 @@ void CadWorkbench::syncSketchInteractionUi() {
                     formatRelationalMeasurement(
                         *relation,
                         *first,
-                        *second));
+                        *second,
+                        document_session_->document()
+                            .lengthUnit()));
             } else if (first) {
                 operations_placeholder_->setText(
                     QStringLiteral(
@@ -4313,7 +4381,10 @@ void CadWorkbench::syncSketchInteractionUi() {
                 measureResult();
         operations_placeholder_->setText(
             result
-                ? formatMeasurement(*result)
+                ? formatMeasurement(
+                      *result,
+                      document_session_->document()
+                          .lengthUnit())
                 : QStringLiteral(
                       "Measure — Click Line/Circle/Arc to inspect; Between measures relations; Esc ends"));
         return;

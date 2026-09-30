@@ -2033,6 +2033,79 @@ int main(int argc, char* argv[]) {
         operations_label->text() ==
         QStringLiteral("Select — 1 entity selected"));
 
+    // R10 Measure presentation follows the durable Part display/input
+    // unit while the measured Sketch geometry remains unchanged.
+    const auto measured_geometry_before_unit_switch =
+        session->document()
+            .findSketch(sketch_id)
+            ->model.state();
+    const auto measure_unit_revision_before =
+        session->document().revision();
+    const auto measure_unit_undo_before =
+        session->undoDepth();
+
+    command_input->setText(
+        QStringLiteral("MEASURE"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(measure_button->isChecked());
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral(
+                "Length: 10.5 mm")));
+
+    length_unit_combo->setCurrentIndex(3);
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::inch);
+    CHECK(measure_button->isChecked());
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral(
+                "Length: 0.413385826772 in")));
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.state() ==
+        measured_geometry_before_unit_switch);
+    CHECK(
+        session->document().revision() !=
+        measure_unit_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        measure_unit_undo_before + 1U);
+
+    length_unit_combo->setCurrentIndex(0);
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::millimetre);
+    CHECK(measure_button->isChecked());
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral(
+                "Length: 10.5 mm")));
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.state() ==
+        measured_geometry_before_unit_switch);
+    CHECK(
+        session->undoDepth() ==
+        measure_unit_undo_before + 2U);
+
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!measure_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
     // AUDIT-01 A2: Delete has CAD-input precedence while a live
     // token exists and must not fall through to semantic geometry
     // deletion. The append-only viewport token itself is unchanged.
