@@ -41,6 +41,10 @@ public:
 
     void fitAll() override;
 
+    [[nodiscard]] std::optional<viewer::ViewportPoint2>
+    projectWorldPoint(
+        viewer::Point3 point) const override;
+
     void setNavigationCubeActionHandler(
         viewer::NavigationCubeActionHandler handler) override;
 

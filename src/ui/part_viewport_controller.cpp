@@ -816,6 +816,35 @@ bool PartViewportController::setSketchCursorMode(
     return true;
 }
 
+std::optional<viewer::ViewportPoint2>
+PartViewportController::projectSketchPointToViewport(
+    sketch::Point2 point) const {
+    if (viewport_ == nullptr ||
+        !point.finite()) {
+        return std::nullopt;
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto world =
+        detail::sketchPointToWorld(
+            hosted->placement,
+            point);
+    if (!world) {
+        return std::nullopt;
+    }
+
+    const auto projected =
+        viewport_->projectWorldPoint(*world);
+    return projected &&
+                   projected->valid()
+        ? projected
+        : std::nullopt;
+}
+
 SketchEntityPointQueryResult
 PartViewportController::querySketchEntityAt(
     viewer::ViewportPoint2 point) {

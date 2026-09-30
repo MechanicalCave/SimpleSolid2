@@ -32,6 +32,12 @@ public:
 
     virtual void fitAll() = 0;
 
+    [[nodiscard]] virtual std::optional<ViewportPoint2>
+    projectWorldPoint(Point3 point) const {
+        (void)point;
+        return std::nullopt;
+    }
+
     virtual void setNavigationCubeActionHandler(
         NavigationCubeActionHandler handler) {
         (void)handler;

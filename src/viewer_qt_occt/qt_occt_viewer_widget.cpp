@@ -2473,6 +2473,31 @@ public:
                 viewer::SelectionIntentMode::clear});
     }
 
+    [[nodiscard]] std::optional<viewer::ViewportPoint2>
+    projectWorldPoint(
+        const viewer::Point3& point) const {
+        const auto screen =
+            projectToScreen(point);
+        if (!screen) {
+            return std::nullopt;
+        }
+
+        const double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            return std::nullopt;
+        }
+
+        viewer::ViewportPoint2 result{
+            screen->x / dpr,
+            screen->y / dpr};
+        return result.valid()
+            ? std::optional<viewer::ViewportPoint2>{
+                  result}
+            : std::nullopt;
+    }
+
     void zoomByFactor(double factor) {
         ensureInitialized();
         if (view_.IsNull() || !std::isfinite(factor) || factor <= 0.0) return;
@@ -3588,6 +3613,18 @@ void QtOcctViewerWidget::fitAll() {
     guardedVoid(
         "fitAll",
         [this] { impl_->fitAll(); });
+}
+
+std::optional<viewer::ViewportPoint2>
+QtOcctViewerWidget::projectWorldPoint(
+    viewer::Point3 point) const {
+    return guardedResult<
+        std::optional<viewer::ViewportPoint2>>(
+        "projectWorldPoint",
+        [this, point] {
+            return impl_->projectWorldPoint(
+                point);
+        });
 }
 
 void QtOcctViewerWidget::setNavigationCubeActionHandler(

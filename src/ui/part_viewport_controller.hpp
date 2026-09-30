@@ -155,6 +155,11 @@ public:
     [[nodiscard]] bool setSketchCursorMode(
         viewer::ViewportCursorMode mode);
 
+    [[nodiscard]] std::optional<
+        viewer::ViewportPoint2>
+    projectSketchPointToViewport(
+        sketch::Point2 point) const;
+
     [[nodiscard]] SketchEntityPointQueryResult
     querySketchEntityAt(
         viewer::ViewportPoint2 point);
