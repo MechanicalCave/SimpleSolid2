@@ -661,7 +661,12 @@ bool ProjectWorkspaceShell::eventFilter(
 
     if (key_event->key() == Qt::Key_Return ||
         key_event->key() == Qt::Key_Enter) {
-        if (!cad_input_.buffer().empty()) {
+        const bool dynamic_request_available =
+            cad_input_.interactionSettings().
+                dynamic_input_enabled &&
+            !cad_input_.dynamicInputFields().empty();
+        if (!cad_input_.buffer().empty() ||
+            dynamic_request_available) {
             static_cast<void>(
                 cad_input_.submit());
             refreshCadInputPresentation();
