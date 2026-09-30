@@ -20,6 +20,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <numbers>
 #include <optional>
 #include <utility>
 
@@ -627,6 +628,24 @@ int main(int argc, char* argv[]) {
     auto* dyn_toggle =
         workbench.findChild<QPushButton*>(
             QStringLiteral("dynamicInputToggleButton"));
+    auto* polar_step =
+        workbench.findChild<QLineEdit*>(
+            QStringLiteral("polarStepEdit"));
+    auto* polar_reference =
+        workbench.findChild<QComboBox*>(
+            QStringLiteral("polarReferenceCombo"));
+    auto* polar_additional =
+        workbench.findChild<QLineEdit*>(
+            QStringLiteral("polarAdditionalAngleEdit"));
+    auto* polar_add_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("polarAdditionalAngleAddButton"));
+    auto* polar_clear_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("polarAdditionalAnglesClearButton"));
+    auto* polar_additional_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("polarAdditionalAnglesLabel"));
     auto* circle_size_mode =
         workbench.findChild<QComboBox*>(
             QStringLiteral("circleSizeModeCombo"));
@@ -690,6 +709,12 @@ int main(int argc, char* argv[]) {
     CHECK(precision_status != nullptr);
     CHECK(polar_toggle != nullptr);
     CHECK(dyn_toggle != nullptr);
+    CHECK(polar_step != nullptr);
+    CHECK(polar_reference != nullptr);
+    CHECK(polar_additional != nullptr);
+    CHECK(polar_add_button != nullptr);
+    CHECK(polar_clear_button != nullptr);
+    CHECK(polar_additional_label != nullptr);
     CHECK(circle_size_mode != nullptr);
     CHECK(editor_host->isAncestorOf(sketch_button));
     CHECK(!operations_content->isAncestorOf(sketch_button));
@@ -812,6 +837,98 @@ int main(int argc, char* argv[]) {
         precision_status->text() ==
         QStringLiteral(
             "POLAR ON   360/8 = 45°   ABS   DYN OFF"));
+    CHECK(
+        polar_reference->currentText() ==
+        QStringLiteral("Absolute"));
+    CHECK(
+        polar_additional_label->text() ==
+        QStringLiteral("none"));
+
+    polar_step->setFocus(Qt::OtherFocusReason);
+    polar_step->setText(
+        QStringLiteral("360/12"));
+    QTest::keyClick(
+        polar_step,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        std::abs(
+            workspace_shell.cadInteractionSettings()
+                    .polar.primary_spacing -
+            std::numbers::pi_v<double> / 6.0) <
+        1.0e-12);
+    CHECK(
+        precision_status->text() ==
+        QStringLiteral(
+            "POLAR ON   360/12 = 30°   ABS   DYN OFF"));
+
+    polar_reference->setCurrentIndex(1);
+    QApplication::processEvents();
+    CHECK(
+        workspace_shell.cadInteractionSettings()
+                .polar.reference_mode ==
+        application::PolarReferenceMode::relative);
+    CHECK(
+        precision_status->text() ==
+        QStringLiteral(
+            "POLAR ON   360/12 = 30°   REL   DYN OFF"));
+
+    polar_additional->setText(
+        QStringLiteral("17"));
+    polar_add_button->click();
+    polar_additional->setText(
+        QStringLiteral("30deg"));
+    polar_add_button->click();
+    QApplication::processEvents();
+    CHECK(
+        workspace_shell.cadInteractionSettings()
+            .polar.additional_angles.size() == 2U);
+    CHECK(
+        polar_additional_label->text() ==
+        QStringLiteral("17°, 30°"));
+
+    const auto settings_before_invalid_step =
+        workspace_shell.cadInteractionSettings();
+    polar_step->setText(
+        QStringLiteral("0"));
+    QTest::keyClick(
+        polar_step,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        workspace_shell.cadInteractionSettings() ==
+        settings_before_invalid_step);
+
+    polar_clear_button->click();
+    polar_reference->setCurrentIndex(0);
+    polar_step->setText(
+        QStringLiteral("45"));
+    QTest::keyClick(
+        polar_step,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        workspace_shell.cadInteractionSettings()
+            .polar.additional_angles.empty());
+    CHECK(
+        workspace_shell.cadInteractionSettings()
+                .polar.reference_mode ==
+        application::PolarReferenceMode::absolute);
+    CHECK(
+        std::abs(
+            workspace_shell.cadInteractionSettings()
+                    .polar.primary_spacing -
+            std::numbers::pi_v<double> / 4.0) <
+        1.0e-12);
+    CHECK(
+        session->document().state() ==
+        precision_state_before);
+    CHECK(
+        session->document().revision() ==
+        precision_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        precision_undo_before);
 
     // SK-07B: Sketch tools are visibly grouped and the new
     // transform adapters enter the same command-first collection stage.
@@ -2457,6 +2574,30 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(session->document().sketches().size() == 1U);
     CHECK(finish_button->isHidden());
+
+    const auto unit_revision_before =
+        session->document().revision();
+    const auto unit_undo_before =
+        session->undoDepth();
+    length_unit_combo->setCurrentIndex(3);
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::inch);
+    CHECK(
+        session->document().revision() !=
+        unit_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        unit_undo_before + 1U);
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::millimetre);
+    CHECK(
+        length_unit_combo->currentText() ==
+        QStringLiteral("mm"));
 
     CHECK(session->save().ok());
     CHECK(!session->needsSave());

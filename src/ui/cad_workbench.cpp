@@ -5,6 +5,7 @@
 #include "part_viewport_controller.hpp"
 
 #include <simplesolid2/application/cad_input_semantics.hpp>
+#include <simplesolid2/application/precision_input.hpp>
 
 #include <QCheckBox>
 #include <QComboBox>
@@ -74,6 +75,62 @@ lengthUnitForIndex(int index) noexcept {
     case 4: return core::LengthUnit::foot;
     default: return std::nullopt;
     }
+}
+
+[[nodiscard]] double normalizePolarAngle(
+    double angle) noexcept {
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    double result =
+        std::fmod(angle, full_turn);
+    if (result < 0.0) {
+        result += full_turn;
+    }
+    return result == full_turn
+        ? 0.0
+        : result;
+}
+
+[[nodiscard]] bool equivalentPolarAngle(
+    double first,
+    double second) noexcept {
+    constexpr double full_turn =
+        2.0 * std::numbers::pi_v<double>;
+    const double delta =
+        std::abs(
+            normalizePolarAngle(
+                first - second));
+    return std::min(
+               delta,
+               full_turn - delta) <=
+           1.0e-12;
+}
+
+[[nodiscard]] QString polarAngleText(
+    double radians) {
+    return QStringLiteral("%1°")
+        .arg(
+            QString::number(
+                radians * 180.0 /
+                    std::numbers::pi_v<double>,
+                'g',
+                12));
+}
+
+[[nodiscard]] QString polarAdditionalSummary(
+    const std::vector<double>& angles) {
+    if (angles.empty()) {
+        return QStringLiteral("none");
+    }
+
+    QString result;
+    for (const double angle : angles) {
+        if (!result.isEmpty()) {
+            result += QStringLiteral(", ");
+        }
+        result += polarAngleText(angle);
+    }
+    return result;
 }
 
 [[nodiscard]] QString polarSpacingSummary(
@@ -1127,6 +1184,75 @@ void CadWorkbench::buildUi() {
         QStringLiteral("Polar"),
         polar_toggle_button_);
 
+    polar_step_edit_ =
+        new QLineEdit(
+            precision_operations_widget_);
+    polar_step_edit_->setObjectName(
+        QStringLiteral("polarStepEdit"));
+    polar_step_edit_->setPlaceholderText(
+        QStringLiteral("e.g. 360/8"));
+    precision_form->addRow(
+        QStringLiteral("Step"),
+        polar_step_edit_);
+
+    polar_reference_combo_ =
+        new QComboBox(
+            precision_operations_widget_);
+    polar_reference_combo_->setObjectName(
+        QStringLiteral("polarReferenceCombo"));
+    polar_reference_combo_->addItems(
+        {
+            QStringLiteral("Absolute"),
+            QStringLiteral("Relative"),
+        });
+    precision_form->addRow(
+        QStringLiteral("Reference"),
+        polar_reference_combo_);
+
+    auto* additional_row =
+        new QWidget(
+            precision_operations_widget_);
+    auto* additional_layout =
+        new QHBoxLayout(additional_row);
+    additional_layout->setContentsMargins(
+        0, 0, 0, 0);
+    polar_additional_edit_ =
+        new QLineEdit(additional_row);
+    polar_additional_edit_->setObjectName(
+        QStringLiteral("polarAdditionalAngleEdit"));
+    polar_additional_edit_->setPlaceholderText(
+        QStringLiteral("e.g. 17 or 30deg"));
+    polar_additional_add_button_ =
+        new QPushButton(
+            QStringLiteral("Add"),
+            additional_row);
+    polar_additional_add_button_->setObjectName(
+        QStringLiteral("polarAdditionalAngleAddButton"));
+    additional_layout->addWidget(
+        polar_additional_edit_,
+        1);
+    additional_layout->addWidget(
+        polar_additional_add_button_);
+    precision_form->addRow(
+        QStringLiteral("Additional"),
+        additional_row);
+
+    polar_additional_label_ =
+        new QLabel(
+            precision_operations_widget_);
+    polar_additional_label_->setObjectName(
+        QStringLiteral("polarAdditionalAnglesLabel"));
+    polar_additional_label_->setWordWrap(true);
+    polar_additional_clear_button_ =
+        new QPushButton(
+            QStringLiteral("Clear"),
+            precision_operations_widget_);
+    polar_additional_clear_button_->setObjectName(
+        QStringLiteral("polarAdditionalAnglesClearButton"));
+    precision_form->addRow(
+        polar_additional_label_,
+        polar_additional_clear_button_);
+
     dynamic_input_toggle_button_ =
         new QPushButton(
             precision_operations_widget_);
@@ -1147,8 +1273,12 @@ void CadWorkbench::buildUi() {
             QStringLiteral("Diameter"),
             QStringLiteral("Radius"),
         });
+    circle_size_mode_label_ =
+        new QLabel(
+            QStringLiteral("Circle input"),
+            precision_operations_widget_);
     precision_form->addRow(
-        QStringLiteral("Circle input"),
+        circle_size_mode_label_,
         circle_size_mode_combo_);
 
     precision_layout->addLayout(
@@ -1437,6 +1567,176 @@ void CadWorkbench::buildUi() {
             auto settings =
                 cad_interaction_settings_provider_();
             settings.polar.enabled = checked;
+            if (!cad_interaction_settings_updater_(
+                    std::move(settings))) {
+                refreshCadInteractionSettingsUi();
+            }
+        });
+    QObject::connect(
+        polar_step_edit_,
+        &QLineEdit::editingFinished,
+        this,
+        [this] {
+            if (syncing_precision_ui_ ||
+                !cad_interaction_settings_provider_ ||
+                !cad_interaction_settings_updater_) {
+                return;
+            }
+
+            const auto parsed =
+                application::parseCadQuantity(
+                    toUtf8(
+                        polar_step_edit_->text()),
+                    {
+                        application::
+                            CadQuantityDimension::angle,
+                        core::LengthUnit::millimetre,
+                    });
+            if (!parsed ||
+                parsed->canonical_value <= 0.0 ||
+                parsed->canonical_value >
+                    std::numbers::pi_v<double>) {
+                setStatusText(
+                    QStringLiteral(
+                        "Polar Step must be a finite Angle greater than 0° and no greater than 180°."));
+                const auto current =
+                    cad_interaction_settings_provider_();
+                syncing_precision_ui_ = true;
+                polar_step_edit_->setText(
+                    QString::number(
+                        current.polar.primary_spacing *
+                            180.0 /
+                            std::numbers::pi_v<double>,
+                        'g',
+                        12));
+                syncing_precision_ui_ = false;
+                return;
+            }
+
+            auto settings =
+                cad_interaction_settings_provider_();
+            settings.polar.primary_spacing =
+                parsed->canonical_value;
+            if (!settings.valid() ||
+                !cad_interaction_settings_updater_(
+                    std::move(settings))) {
+                refreshCadInteractionSettingsUi();
+            }
+        });
+    QObject::connect(
+        polar_reference_combo_,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int index) {
+            if (syncing_precision_ui_ ||
+                !cad_interaction_settings_provider_ ||
+                !cad_interaction_settings_updater_) {
+                return;
+            }
+            auto settings =
+                cad_interaction_settings_provider_();
+            settings.polar.reference_mode =
+                index == 1
+                    ? application::
+                          PolarReferenceMode::relative
+                    : application::
+                          PolarReferenceMode::absolute;
+            if (!cad_interaction_settings_updater_(
+                    std::move(settings))) {
+                refreshCadInteractionSettingsUi();
+            }
+        });
+    QObject::connect(
+        polar_additional_add_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (syncing_precision_ui_ ||
+                !cad_interaction_settings_provider_ ||
+                !cad_interaction_settings_updater_) {
+                return;
+            }
+
+            const auto parsed =
+                application::parseCadQuantity(
+                    toUtf8(
+                        polar_additional_edit_->text()),
+                    {
+                        application::
+                            CadQuantityDimension::angle,
+                        core::LengthUnit::millimetre,
+                    });
+            if (!parsed) {
+                setStatusText(
+                    QStringLiteral(
+                        "Additional Polar Angle must be a finite Angle expression."));
+                return;
+            }
+
+            auto settings =
+                cad_interaction_settings_provider_();
+            const double normalized =
+                normalizePolarAngle(
+                    parsed->canonical_value);
+
+            auto primary_only = settings.polar;
+            primary_only.enabled = true;
+            primary_only.additional_angles.clear();
+            const auto primary_tracks =
+                application::generatePolarTrackAngles(
+                    primary_only);
+
+            const bool primary_duplicate =
+                std::any_of(
+                    primary_tracks.begin(),
+                    primary_tracks.end(),
+                    [normalized](double angle) {
+                        return equivalentPolarAngle(
+                            angle,
+                            normalized);
+                    });
+            const bool additional_duplicate =
+                std::any_of(
+                    settings.polar
+                        .additional_angles.begin(),
+                    settings.polar
+                        .additional_angles.end(),
+                    [normalized](double angle) {
+                        return equivalentPolarAngle(
+                            angle,
+                            normalized);
+                    });
+
+            polar_additional_edit_->clear();
+            if (primary_duplicate ||
+                additional_duplicate) {
+                setStatusText(
+                    QStringLiteral(
+                        "Additional Polar Angle is already covered by an existing track."));
+                refreshCadInteractionSettingsUi();
+                return;
+            }
+
+            settings.polar.additional_angles.push_back(
+                normalized);
+            if (!cad_interaction_settings_updater_(
+                    std::move(settings))) {
+                refreshCadInteractionSettingsUi();
+            }
+        });
+    QObject::connect(
+        polar_additional_clear_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (syncing_precision_ui_ ||
+                !cad_interaction_settings_provider_ ||
+                !cad_interaction_settings_updater_) {
+                return;
+            }
+            auto settings =
+                cad_interaction_settings_provider_();
+            settings.polar.additional_angles.clear();
             if (!cad_interaction_settings_updater_(
                     std::move(settings))) {
                 refreshCadInteractionSettingsUi();
@@ -3374,6 +3674,27 @@ void CadWorkbench::refreshCadInteractionSettingsUi() {
                 ? QStringLiteral("ON")
                 : QStringLiteral("OFF"));
 
+        if (!polar_step_edit_->hasFocus()) {
+            polar_step_edit_->setText(
+                QString::number(
+                    settings.polar.primary_spacing *
+                        180.0 /
+                        std::numbers::pi_v<double>,
+                    'g',
+                    12));
+        }
+        polar_reference_combo_->setCurrentIndex(
+            settings.polar.reference_mode ==
+                    application::
+                        PolarReferenceMode::relative
+                ? 1
+                : 0);
+        polar_additional_label_->setText(
+            polarAdditionalSummary(
+                settings.polar.additional_angles));
+        polar_additional_clear_button_->setEnabled(
+            !settings.polar.additional_angles.empty());
+
         dynamic_input_toggle_button_->setChecked(
             settings.dynamic_input_enabled);
         dynamic_input_toggle_button_->setText(
@@ -3404,6 +3725,7 @@ void CadWorkbench::refreshCadInteractionSettingsUi() {
         const bool circle =
             sketch_interaction_controller_->tool() ==
             sketch::SketchTool::circle;
+        circle_size_mode_label_->setVisible(circle);
         circle_size_mode_combo_->setVisible(circle);
         circle_size_mode_combo_->setEnabled(
             circle &&
@@ -3420,6 +3742,9 @@ void CadWorkbench::refreshCadInteractionSettingsUi() {
     } else {
         if (precision_status_label_ != nullptr) {
             precision_status_label_->clear();
+        }
+        if (circle_size_mode_label_ != nullptr) {
+            circle_size_mode_label_->setVisible(false);
         }
         if (circle_size_mode_combo_ != nullptr) {
             circle_size_mode_combo_->setVisible(false);

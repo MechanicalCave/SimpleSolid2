@@ -259,7 +259,14 @@ private:
     QWidget* precision_operations_widget_{};
     QLabel* precision_status_label_{};
     QPushButton* polar_toggle_button_{};
+    QLineEdit* polar_step_edit_{};
+    QComboBox* polar_reference_combo_{};
+    QLineEdit* polar_additional_edit_{};
+    QPushButton* polar_additional_add_button_{};
+    QPushButton* polar_additional_clear_button_{};
+    QLabel* polar_additional_label_{};
     QPushButton* dynamic_input_toggle_button_{};
+    QLabel* circle_size_mode_label_{};
     QComboBox* circle_size_mode_combo_{};
     bool syncing_precision_ui_{};
     QPushButton* sketch_button_{};
