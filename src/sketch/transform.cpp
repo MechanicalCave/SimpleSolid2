@@ -93,7 +93,6 @@ void captureLineArcEndpointContacts(
             return lhs.id < rhs.id;
         });
 
-    std::set<std::pair<EntityId, EntityId>> checked;
     for (const auto& arc : geometry.arcs) {
         for (const auto endpoint_role :
              {SketchTransformEndpointRole::start,
@@ -124,14 +123,6 @@ void captureLineArcEndpointContacts(
                  ++it) {
                 if (std::abs(it->point.v - endpoint->v) >
                     window) {
-                    continue;
-                }
-
-                const auto key =
-                    std::pair<EntityId, EntityId>{
-                        it->id,
-                        arc.id};
-                if (!checked.insert(key).second) {
                     continue;
                 }
 

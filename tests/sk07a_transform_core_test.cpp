@@ -428,7 +428,13 @@ int main() {
             open_dome,
             dome_ids);
     CHECK(open_capture.has_value());
-    CHECK(open_capture->line_arc_contacts.empty());
+    CHECK(open_capture->line_arc_contacts.size() == 1U);
+    CHECK(
+        open_capture->line_arc_contacts.front().line_id ==
+        dome_left);
+    CHECK(
+        open_capture->line_arc_contacts.front().arc_id ==
+        dome_arc);
 
     const auto open_moved =
         sketch::translateSketchGeometry(
@@ -449,6 +455,58 @@ int main() {
         sketch::analyzeRegions(*open_moved_model);
     CHECK(open_moved_analysis.regions.empty());
     CHECK(!open_moved_analysis.complete());
+
+    // A single diameter Line can own both exact endpoint contacts with one
+    // semicircular Arc. Both contacts must survive a common transform.
+    sketch::SketchModel semicircle;
+    const auto semicircle_arc =
+        semicircle.addArc(
+            {0.0, 0.0},
+            25.0,
+            0.0,
+            pi);
+    const auto semicircle_diameter =
+        semicircle.addLine(
+            {-25.0, 0.0},
+            {25.0, 0.0});
+    const std::vector<sketch::EntityId>
+        semicircle_ids{
+            semicircle_arc,
+            semicircle_diameter};
+    const auto semicircle_capture =
+        sketch::captureSketchTransformGeometry(
+            semicircle,
+            semicircle_ids);
+    CHECK(semicircle_capture.has_value());
+    CHECK(
+        semicircle_capture->line_arc_contacts.size() ==
+        2U);
+
+    const auto semicircle_moved =
+        sketch::translateSketchGeometry(
+            *semicircle_capture,
+            {-45.65, 13.375});
+    CHECK(semicircle_moved.has_value());
+    auto semicircle_state = semicircle.state();
+    semicircle_state.lines =
+        semicircle_moved->lines;
+    semicircle_state.circles =
+        semicircle_moved->circles;
+    semicircle_state.arcs =
+        semicircle_moved->arcs;
+    auto moved_semicircle =
+        sketch::SketchModel::restore(
+            std::move(semicircle_state));
+    CHECK(moved_semicircle.has_value());
+    const auto semicircle_regions =
+        sketch::analyzeRegions(
+            *moved_semicircle);
+    CHECK(semicircle_regions.complete());
+    CHECK(semicircle_regions.regions.size() == 1U);
+    CHECK(near(
+        semicircle_regions.regions.front().area,
+        312.5 * pi,
+        1.0e-8));
 
     return EXIT_SUCCESS;
 }
