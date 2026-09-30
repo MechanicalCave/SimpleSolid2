@@ -406,6 +406,10 @@ void ProjectWorkspaceShell::refreshCadInputPresentation() {
                     Qt::ElideRight,
                     available_width));
     }
+
+    if (cad_input_presentation_changed_handler_) {
+        cad_input_presentation_changed_handler_();
+    }
 }
 
 const std::string&
