@@ -399,6 +399,7 @@ private:
     PartViewportController* viewport_controller_{};
     application::DocumentSession* session_{};
     std::optional<sketch::SketchId> sketch_id_;
+    std::optional<SketchPointerInput> last_pointer_input_;
     sketch::SketchInteractionState interaction_;
 
     std::optional<viewer::ViewportPoint2> press_anchor_;
