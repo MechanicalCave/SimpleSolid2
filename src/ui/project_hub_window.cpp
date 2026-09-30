@@ -467,11 +467,24 @@ void ProjectHubWindow::buildWorkspacePage() {
                 setCadInteractionSettings(
                     std::move(settings));
         });
+    cad_workbench_->setCadDynamicInputUiStateProvider(
+        [this] {
+            return CadDynamicInputUiState{
+                workspace_shell_->cadInputBuffer(),
+                workspace_shell_->
+                    cadDynamicInputFieldIndex()};
+        });
     workspace_shell_->
         setCadInteractionSettingsChangedHandler(
             [this] {
                 cad_workbench_->
                     refreshCadInteractionSettingsUi();
+            });
+    workspace_shell_->
+        setCadInputPresentationChangedHandler(
+            [this] {
+                cad_workbench_->
+                    refreshCadDynamicInputOverlay();
             });
 
     cad_workbench_->setCloseDocumentHandler(
