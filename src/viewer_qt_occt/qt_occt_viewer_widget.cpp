@@ -2090,8 +2090,6 @@ public:
             return false;
         }
 
-        clearSketchDynamicInputOverlay();
-
         const double dpr =
             owner_.devicePixelRatioF();
         if (!std::isfinite(dpr) ||
@@ -2103,6 +2101,9 @@ public:
         constexpr double kMargin = 8.0;
         constexpr double kRowHeight = 18.0;
         constexpr double kCharWidth = 7.5;
+        constexpr double kTextHeight = 12.0;
+        constexpr const char* kTechnicalFont =
+            "Consolas";
 
         std::size_t max_chars = 1U;
         for (const auto& field : overlay.fields) {
@@ -2169,6 +2170,16 @@ public:
                 max_y);
 
         try {
+            while (sketch_dynamic_input_labels_.size() >
+                   overlay.fields.size()) {
+                const auto label =
+                    sketch_dynamic_input_labels_.back();
+                sketch_dynamic_input_labels_.pop_back();
+                if (!label.IsNull()) {
+                    context_->Remove(label, false);
+                }
+            }
+
             for (std::size_t index = 0U;
                  index < overlay.fields.size();
                  ++index) {
@@ -2211,24 +2222,6 @@ public:
                     break;
                 }
 
-                Handle(AIS_TextLabel) label =
-                    new AIS_TextLabel();
-                label->SetText(
-                    TCollection_ExtendedString{
-                        text.c_str(),
-                        Standard_True});
-                label->SetPosition(
-                    gp_Pnt{0.0, 0.0, 0.0});
-                label->SetColor(color);
-                label->SetHeight(12.0);
-                label->SetHJustification(
-                    Graphic3d_HTA_LEFT);
-                label->SetVJustification(
-                    Graphic3d_VTA_TOP);
-                label->SetZoomable(false);
-                label->SetZLayer(
-                    Graphic3d_ZLayerId_Topmost);
-
                 const int physical_x =
                     static_cast<int>(
                         std::lround(
@@ -2242,6 +2235,34 @@ public:
                                      index)) *
                             dpr));
 
+                const bool create =
+                    index >=
+                    sketch_dynamic_input_labels_.size();
+                Handle(AIS_TextLabel) label =
+                    create
+                        ? Handle(AIS_TextLabel){
+                              new AIS_TextLabel()}
+                        : sketch_dynamic_input_labels_[index];
+                if (label.IsNull()) {
+                    return false;
+                }
+
+                label->SetText(
+                    TCollection_ExtendedString{
+                        text.c_str(),
+                        Standard_True});
+                label->SetPosition(
+                    gp_Pnt{0.0, 0.0, 0.0});
+                label->SetColor(color);
+                label->SetFont(kTechnicalFont);
+                label->SetHeight(kTextHeight);
+                label->SetHJustification(
+                    Graphic3d_HTA_LEFT);
+                label->SetVJustification(
+                    Graphic3d_VTA_TOP);
+                label->SetZoomable(false);
+                label->SetZLayer(
+                    Graphic3d_ZLayerId_Topmost);
                 label->SetTransformPersistence(
                     new Graphic3d_TransformPers(
                         Graphic3d_TMF_2d,
@@ -2250,18 +2271,21 @@ public:
                             physical_x,
                             physical_y}));
 
-                context_->Display(
-                    label,
-                    false);
-                context_->Deactivate(label);
-                sketch_dynamic_input_labels_.
-                    push_back(label);
+                if (create) {
+                    context_->Display(label, false);
+                    context_->Deactivate(label);
+                    sketch_dynamic_input_labels_.
+                        push_back(label);
+                } else {
+                    context_->Redisplay(label, false);
+                }
             }
 
             sketch_dynamic_input_overlay_ =
                 overlay;
+            // One provider update per pointer sample. Reusing labels avoids
+            // remove/create churn and the previous double redraw flicker.
             context_->UpdateCurrentViewer();
-            view_->Redraw();
             return true;
         } catch (...) {
             clearSketchDynamicInputOverlay();
@@ -2270,6 +2294,11 @@ public:
     }
 
     void clearSketchDynamicInputOverlay() noexcept {
+        if (sketch_dynamic_input_labels_.empty() &&
+            !sketch_dynamic_input_overlay_) {
+            return;
+        }
+
         if (!context_.IsNull()) {
             for (const auto& label :
                  sketch_dynamic_input_labels_) {
@@ -2290,9 +2319,6 @@ public:
 
         if (!context_.IsNull()) {
             context_->UpdateCurrentViewer();
-        }
-        if (!view_.IsNull()) {
-            view_->Redraw();
         }
     }
 

@@ -140,6 +140,15 @@ int main(int argc, char* argv[]) {
             ok = ok &&
                  widget.setSketchDynamicInputOverlay(
                      dyn_overlay);
+            dyn_overlay.anchor =
+                viewer::ViewportPoint2{
+                    900.0,
+                    640.0};
+            dyn_overlay.fields[0].display_value =
+                "101 mm";
+            ok = ok &&
+                 widget.setSketchDynamicInputOverlay(
+                     dyn_overlay);
             widget.clearSketchDynamicInputOverlay();
 
             result = ok ? EXIT_SUCCESS : EXIT_FAILURE;

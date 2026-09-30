@@ -624,6 +624,39 @@ int main(int argc, char* argv[]) {
     CHECK(!model_state.arcs.empty());
     CHECK(near(model_state.arcs.back().radius, 50.8));
 
+    // Arc Start -> End accepts the same bare Direct Distance path as
+    // the visible helper chord. This is the manual keyboard workflow:
+    // point Start, aim the pointer/Polar direction, type chord length.
+    interaction.activateArc();
+    semantic_result = inch_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    movePointer(
+        interaction,
+        sketch_id,
+        180.0,
+        100.0,
+        100.0,
+        0.0);
+    semantic_result = inch_input.submit("4");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.arcStage() ==
+        sketch::ArcStage::await_arc_point);
+    movePointer(
+        interaction,
+        sketch_id,
+        180.0,
+        130.0,
+        50.8,
+        20.0);
+    semantic_result = inch_input.submit("2");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(!model_state.arcs.empty());
+    CHECK(near(model_state.arcs.back().radius, 50.8));
+
     interaction.activateArc();
     semantic_result = inch_input.submit("0;0");
     CHECK(semantic_result.accepted);

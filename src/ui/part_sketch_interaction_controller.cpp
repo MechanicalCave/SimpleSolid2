@@ -440,6 +440,21 @@ bool PartSketchInteractionController::submitDirectDistance(
         return acceptLineResolvedPoint(*resolved);
     }
 
+    if (interaction_.tool() == sketch::SketchTool::arc &&
+        interaction_.arcStage() ==
+            sketch::ArcStage::await_end) {
+        const auto accepted =
+            interaction_.acceptArcPoint(
+                resolved->position);
+        if (accepted.outcome !=
+            sketch::ArcPointOutcome::end_accepted) {
+            return false;
+        }
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+        return true;
+    }
+
     const auto stage = interaction_.commonTransformStage();
     if (stage &&
         *stage == sketch::CommonTransformStage::await_destination &&
