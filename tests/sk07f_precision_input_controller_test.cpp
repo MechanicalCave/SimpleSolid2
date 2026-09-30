@@ -950,6 +950,54 @@ int main(int argc, char* argv[]) {
     CHECK(closed_analysis.diagnostics.empty());
     CHECK(interaction.escape());
 
+    // Manual-workflow regression: pointer Polar attraction followed by
+    // bare Direct Distance must preserve the same exact cardinal closure.
+    // This is the path used when a rectangle is drawn as four LINE
+    // segments with Polar -> distance -> Polar -> distance.
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            1000.0,
+            1000.0}));
+    const auto polar_distance_first_line =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+
+    movePointer(interaction, sketch_id, 1020.0, 1001.0, 1020.0, 1001.0);
+    CHECK(interaction.submitDirectDistance(100.0));
+    movePointer(interaction, sketch_id, 1101.0, 1020.0, 1101.0, 1020.0);
+    CHECK(interaction.submitDirectDistance(50.0));
+    movePointer(interaction, sketch_id, 1080.0, 1051.0, 1080.0, 1051.0);
+    CHECK(interaction.submitDirectDistance(100.0));
+    movePointer(interaction, sketch_id, 999.0, 1030.0, 999.0, 1030.0);
+    CHECK(interaction.submitDirectDistance(50.0));
+
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        polar_distance_first_line + 4U);
+    CHECK(model_state.lines.back().end.u == 1000.0);
+    CHECK(model_state.lines.back().end.v == 1000.0);
+
+    sketch::SketchModel polar_distance_loop;
+    for (std::size_t index = polar_distance_first_line;
+         index < model_state.lines.size();
+         ++index) {
+        static_cast<void>(
+            polar_distance_loop.addLine(
+                model_state.lines[index].start,
+                model_state.lines[index].end));
+    }
+    const auto polar_distance_analysis =
+        sketch::analyzeRegions(polar_distance_loop);
+    CHECK(polar_distance_analysis.regions.size() == 1U);
+    CHECK(polar_distance_analysis.diagnostics.empty());
+    CHECK(interaction.escape());
+
     // Relative without an explicit semantic reference never falls back
     // to Absolute. The same pointer remains raw.
     polar_settings.polar.reference_mode =
