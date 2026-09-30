@@ -799,6 +799,51 @@ lockCadInputSemanticValue(double value) {
         return false;
     }
 
+    if (interaction_.tool() ==
+            sketch::SketchTool::circle &&
+        interaction_.circleStage() ==
+            sketch::CircleStage::await_radius) {
+        if (value <= 0.0) {
+            return false;
+        }
+        const double radius =
+            circle_size_input_mode_ ==
+                    application::CircleSizeInputMode::
+                        diameter
+                ? value * 0.5
+                : value;
+        if (!interaction_.lockCircleRadius(radius)) {
+            return false;
+        }
+        notifyStateChanged();
+        return true;
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::arc &&
+        interaction_.arcStage() ==
+            sketch::ArcStage::await_arc_point) {
+        if (value <= 0.0 ||
+            !interaction_.lockArcRadius(value)) {
+            return false;
+        }
+
+        const auto request =
+            interaction_.activePointRequest();
+        if (request && request->pointer_candidate) {
+            const auto preview =
+                interaction_.previewArc(
+                    *request->pointer_candidate);
+            if (preview) {
+                static_cast<void>(
+                    viewport_controller_->
+                        setSketchArcPreview(*preview));
+            }
+        }
+        notifyStateChanged();
+        return true;
+    }
+
     if (interaction_.directManipulationActive()) {
         const auto mode =
             interaction_.directEditMode();
@@ -1163,6 +1208,49 @@ submitCadInputSemanticPair(
     viewport_controller_->refreshPresentation();
     projectSelection();
     projectInteraction();
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::
+lockCadInputSemanticPairField(
+    application::CadDynamicInputFieldSemantic semantic,
+    double value) {
+    if (!active() || profile_session_ ||
+        interaction_.tool() !=
+            sketch::SketchTool::rectangle ||
+        interaction_.rectangleStage() !=
+            sketch::RectangleStage::
+                await_opposite_corner ||
+        !std::isfinite(value) ||
+        value <= 0.0) {
+        return false;
+    }
+
+    bool locked = false;
+    if (semantic ==
+        application::CadDynamicInputFieldSemantic::width) {
+        locked =
+            interaction_.lockRectangleWidth(value);
+    } else if (
+        semantic ==
+        application::CadDynamicInputFieldSemantic::height) {
+        locked =
+            interaction_.lockRectangleHeight(value);
+    } else {
+        return false;
+    }
+
+    if (!locked) {
+        return false;
+    }
+
+    const auto request =
+        interaction_.activePointRequest();
+    if (request && request->pointer_candidate) {
+        updateRectanglePreview(
+            *request->pointer_candidate);
+    }
     notifyStateChanged();
     return true;
 }

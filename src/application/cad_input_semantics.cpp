@@ -389,6 +389,53 @@ SketchCadInputSemanticEndpoint::lockDynamicInputField(
             "Dynamic Input field token is empty."};
     }
 
+    const auto pair_request =
+        target_->cadInputSemanticPairRequest();
+    if (pair_request && fields.size() == 2U) {
+        const auto semantic =
+            fields[index].semantic;
+        if (semantic !=
+                CadDynamicInputFieldSemantic::width &&
+            semantic !=
+                CadDynamicInputFieldSemantic::height) {
+            return {
+                false,
+                "Active pair Dynamic Input field is invalid."};
+        }
+
+        const auto dimension =
+            semantic ==
+                    CadDynamicInputFieldSemantic::width
+                ? pair_request->first_dimension
+                : pair_request->second_dimension;
+        const auto quantity =
+            parseCadQuantity(
+                submitted,
+                {
+                    dimension,
+                    number_format_.length_unit});
+        if (!quantity ||
+            (pair_request->strictly_positive &&
+             quantity->canonical_value <= 0.0)) {
+            return {
+                false,
+                semantic ==
+                        CadDynamicInputFieldSemantic::width
+                    ? "Rectangle Width expects a positive Length expression."
+                    : "Rectangle Height expects a positive Length expression."};
+        }
+
+        if (!target_->
+                lockCadInputSemanticPairField(
+                    semantic,
+                    quantity->canonical_value)) {
+            return {
+                false,
+                "Active Dynamic Input pair field could not be locked."};
+        }
+        return {true, {}};
+    }
+
     const auto value_request =
         target_->cadInputSemanticValueRequest();
     if (value_request && fields.size() == 1U) {

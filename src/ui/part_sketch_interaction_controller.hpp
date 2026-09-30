@@ -125,6 +125,10 @@ public:
         double first,
         double second) override;
     [[nodiscard]] bool
+    lockCadInputSemanticPairField(
+        application::CadDynamicInputFieldSemantic semantic,
+        double value) override;
+    [[nodiscard]] bool
     submitCadInputSemanticCircleSizeMode(
         application::CircleSizeInputMode mode) override;
     [[nodiscard]] application::CircleSizeInputMode

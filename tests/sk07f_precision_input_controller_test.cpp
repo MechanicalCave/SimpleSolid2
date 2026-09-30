@@ -1000,6 +1000,99 @@ int main(int argc, char* argv[]) {
     CHECK(near(dyn_locked_line.end.u, 10.0));
     CHECK(near(dyn_locked_line.end.v, 120.0));
 
+    // Dynamic Input creation locks stay request-local and the normal
+    // pointer commit path supplies only remaining placement/orientation.
+    interaction.activateCircle();
+    semantic_result = semantic_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "20");
+    CHECK(dyn_lock.accepted);
+    const auto circles_before_dyn =
+        session.document().findSketch(sketch_id)->
+            model.state().circles.size();
+    click(
+        interaction,
+        sketch_id,
+        320.0,
+        320.0,
+        500.0,
+        0.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.circles.size() ==
+        circles_before_dyn + 1U);
+    CHECK(near(model_state.circles.back().radius, 10.0));
+
+    interaction.activateArc();
+    semantic_result = semantic_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = semantic_input.submit("100;0");
+    CHECK(semantic_result.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "70");
+    CHECK(dyn_lock.accepted);
+    const auto arcs_before_dyn =
+        session.document().findSketch(sketch_id)->
+            model.state().arcs.size();
+    click(
+        interaction,
+        sketch_id,
+        330.0,
+        330.0,
+        50.0,
+        30.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.arcs.size() ==
+        arcs_before_dyn + 1U);
+    CHECK(near(model_state.arcs.back().radius, 70.0));
+
+    interaction.activateRectangle();
+    semantic_result = semantic_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "50");
+    CHECK(dyn_lock.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            1U,
+            "30");
+    CHECK(dyn_lock.accepted);
+    const auto lines_before_dyn_rectangle =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    click(
+        interaction,
+        sketch_id,
+        340.0,
+        340.0,
+        -500.0,
+        400.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_dyn_rectangle + 4U);
+    const auto& dyn_rect_first =
+        model_state.lines[
+            lines_before_dyn_rectangle];
+    CHECK(near(dyn_rect_first.start.u, 0.0));
+    CHECK(near(dyn_rect_first.start.v, 0.0));
+    CHECK(near(dyn_rect_first.end.u, -50.0));
+    CHECK(near(dyn_rect_first.end.v, 0.0));
+
     // Empty-token Esc clears a request-local Grip Rotate Angle lock
     // without discarding the manipulation revision needed for a later commit.
     interaction.activateSelect();

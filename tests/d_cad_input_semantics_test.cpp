@@ -55,7 +55,12 @@ public:
         pair_request;
     std::optional<std::pair<double, double>>
         submitted_pair;
+    std::optional<
+        application::CadDynamicInputFieldSemantic>
+        locked_pair_field;
+    std::optional<double> locked_pair_value;
     bool pair_result{true};
+    bool lock_pair_result{true};
     std::optional<application::CircleSizeInputMode>
         circle_size_mode;
     application::CircleSizeInputMode
@@ -124,6 +129,13 @@ public:
         double second) override {
         submitted_pair = std::pair{first, second};
         return pair_result;
+    }
+    bool lockCadInputSemanticPairField(
+        application::CadDynamicInputFieldSemantic semantic,
+        double value) override {
+        locked_pair_field = semantic;
+        locked_pair_value = value;
+        return lock_pair_result;
     }
     bool submitCadInputSemanticCircleSizeMode(
         application::CircleSizeInputMode mode) override {
@@ -719,6 +731,33 @@ int main() {
           "Rectangle size expects positive Width;Height Length expressions.");
     CHECK(!target.submitted_pair.has_value());
 
+    target.locked_pair_field.reset();
+    target.locked_pair_value.reset();
+    auto dyn_lock =
+        dot.lockDynamicInputField(0U, "2in");
+    CHECK(dyn_lock.accepted);
+    CHECK(
+        target.locked_pair_field ==
+        application::CadDynamicInputFieldSemantic::width);
+    CHECK(target.locked_pair_value.has_value());
+    CHECK(near(*target.locked_pair_value, 50.8));
+
+    dyn_lock =
+        dot.lockDynamicInputField(1U, "0");
+    CHECK(!dyn_lock.accepted);
+    CHECK(
+        dyn_lock.diagnostic ==
+        "Rectangle Height expects a positive Length expression.");
+
+    target.lock_pair_result = false;
+    dyn_lock =
+        dot.lockDynamicInputField(1U, "25");
+    CHECK(!dyn_lock.accepted);
+    CHECK(
+        dyn_lock.diagnostic ==
+        "Active Dynamic Input pair field could not be locked.");
+    target.lock_pair_result = true;
+
     target.activated.reset();
     result = dot.submit("LINE");
     CHECK(!result.accepted);
@@ -749,6 +788,13 @@ int main() {
     CHECK(result.accepted);
     CHECK(target.submitted_value.has_value());
     CHECK(near(*target.submitted_value, 50.8));
+
+    target.locked_value.reset();
+    dyn_lock =
+        dot.lockDynamicInputField(0U, "2in");
+    CHECK(dyn_lock.accepted);
+    CHECK(target.locked_value.has_value());
+    CHECK(near(*target.locked_value, 50.8));
 
     target.submitted_value.reset();
     result = dot.submit("0");

@@ -130,6 +130,13 @@ public:
     }
 
     [[nodiscard]] virtual bool
+    lockCadInputSemanticPairField(
+        CadDynamicInputFieldSemantic,
+        double) {
+        return false;
+    }
+
+    [[nodiscard]] virtual bool
     submitCadInputSemanticCircleSizeMode(
         CircleSizeInputMode) {
         return false;
