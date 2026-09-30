@@ -715,6 +715,82 @@ int main() {
               sketch::Point2{10.0, -5.0});
     }
 
+    // Esc hierarchy: with an empty live token, request-local numeric
+    // locks clear before the existing stage/tool cancellation semantics.
+    {
+        sketch::SketchInteractionState esc_line;
+        esc_line.activateLine();
+        CHECK(
+            esc_line.acceptLinePoint(
+                {0.0, 0.0}).outcome ==
+            sketch::LinePointOutcome::
+                first_point_accepted);
+        CHECK(esc_line.lockPointField(
+            sketch::PointFieldLockSemantic::distance,
+            25.0));
+        CHECK(esc_line.escape());
+        CHECK(esc_line.pointFieldLocks().empty());
+        CHECK(
+            esc_line.lineStage() ==
+            sketch::LineStage::await_next_point);
+        CHECK(esc_line.escape());
+        CHECK(
+            esc_line.lineStage() ==
+            sketch::LineStage::await_first_point);
+    }
+
+    {
+        sketch::SketchInteractionState esc_rectangle;
+        esc_rectangle.activateRectangle();
+        CHECK(
+            esc_rectangle.acceptRectanglePoint(
+                {0.0, 0.0}).outcome ==
+            sketch::RectanglePointOutcome::
+                first_corner_accepted);
+        CHECK(esc_rectangle.lockRectangleWidth(50.0));
+        CHECK(esc_rectangle.lockRectangleHeight(30.0));
+        CHECK(esc_rectangle.escape());
+        CHECK(
+            esc_rectangle.rectangleStage() ==
+            sketch::RectangleStage::
+                await_opposite_corner);
+        const auto free_preview =
+            esc_rectangle.previewRectangle(
+                {4.0, 3.0});
+        CHECK(free_preview.has_value());
+        CHECK(near(
+            free_preview->opposite_corner.u,
+            4.0));
+        CHECK(near(
+            free_preview->opposite_corner.v,
+            3.0));
+    }
+
+    {
+        sketch::SketchInteractionState esc_grip;
+        CHECK(esc_grip.addSelection(line_id));
+        CHECK(
+            esc_grip.beginDirectManipulation(
+                model,
+                {line_id,
+                 sketch::SketchGripRole::line_start}));
+        CHECK(esc_grip.cycleDirectEditMode());
+        CHECK(esc_grip.cycleDirectEditMode());
+        CHECK(
+            esc_grip.directEditMode() ==
+            sketch::DirectEditMode::rotate);
+        CHECK(
+            esc_grip.acceptDirectManipulationValue(
+                std::numbers::pi_v<double> / 4.0));
+        CHECK(esc_grip.escape());
+        CHECK(esc_grip.directManipulationActive());
+        CHECK(
+            esc_grip.directEditMode() ==
+            sketch::DirectEditMode::rotate);
+        CHECK(esc_grip.escape());
+        CHECK(!esc_grip.directManipulationActive());
+    }
+
     std::cout << "SK-07F precision input state PASS\n";
     return EXIT_SUCCESS;
 }

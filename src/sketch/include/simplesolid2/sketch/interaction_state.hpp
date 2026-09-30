@@ -683,6 +683,8 @@ private:
         const SketchModel& model);
 
     [[nodiscard]] bool commonTransformTool() const noexcept;
+    [[nodiscard]] bool
+    clearRequestLocalNumericLocks() noexcept;
 
     void resetToSelect() noexcept;
     void resetLineStage() noexcept;

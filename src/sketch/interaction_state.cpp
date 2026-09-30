@@ -2268,7 +2268,52 @@ void SketchInteractionState::cancelTool() noexcept {
     resetToSelect();
 }
 
+bool SketchInteractionState::
+clearRequestLocalNumericLocks() noexcept {
+    bool cleared = false;
+
+    if (!point_field_locks_.empty()) {
+        point_field_locks_ = {};
+        cleared = true;
+    }
+
+    if (circle_radius_lock_) {
+        circle_radius_lock_.reset();
+        cleared = true;
+    }
+
+    if (arc_radius_lock_) {
+        arc_radius_lock_.reset();
+        cleared = true;
+    }
+
+    if (rectangle_width_lock_ ||
+        rectangle_height_lock_) {
+        rectangle_width_lock_.reset();
+        rectangle_height_lock_.reset();
+        cleared = true;
+    }
+
+    if (transform_session_ &&
+        transform_session_->explicit_value) {
+        transform_session_->explicit_value.reset();
+        cleared = true;
+    }
+
+    if (manipulation_ &&
+        manipulation_->explicit_value) {
+        manipulation_->explicit_value.reset();
+        cleared = true;
+    }
+
+    return cleared;
+}
+
 bool SketchInteractionState::escape() noexcept {
+    if (clearRequestLocalNumericLocks()) {
+        return true;
+    }
+
     if (manipulation_) {
         cancelDirectManipulation();
         return true;

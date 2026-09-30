@@ -2071,16 +2071,25 @@ bool PartSketchInteractionController::escape() {
     const bool was_rectangle =
         interaction_.tool() ==
         sketch::SketchTool::rectangle;
+    const auto rectangle_stage_before =
+        interaction_.rectangleStage();
+
     const bool changed = interaction_.escape();
     if (!changed) return false;
 
-    if (was_manipulating) {
+    if (was_manipulating &&
+        !interaction_.directManipulationActive()) {
         manipulation_revision_.reset();
     }
-    if (was_transform) {
+    if (was_transform &&
+        !interaction_.commonTransformStage().has_value()) {
         transform_revision_.reset();
     }
-    if (was_rectangle) {
+    if (was_rectangle &&
+        (interaction_.tool() !=
+             sketch::SketchTool::rectangle ||
+         interaction_.rectangleStage() !=
+             rectangle_stage_before)) {
         rectangle_revision_.reset();
     }
 
