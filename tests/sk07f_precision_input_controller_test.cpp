@@ -991,9 +991,12 @@ int main(int argc, char* argv[]) {
     semantic_result = semantic_input.submit("90");
     CHECK(semantic_result.accepted);
     CHECK(!interaction.directManipulationActive());
+    const auto revision_after_unlock_commit =
+        revision_before_unlock_escape.next();
+    CHECK(revision_after_unlock_commit.has_value());
     CHECK(
         session.document().revision() ==
-        revision_before_unlock_escape + 1U);
+        *revision_after_unlock_commit);
     CHECK(
         session.undoDepth() ==
         undo_before_unlock_escape + 1U);
