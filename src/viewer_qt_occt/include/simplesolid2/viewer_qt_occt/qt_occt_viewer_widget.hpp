@@ -105,6 +105,11 @@ public:
 
     void clearSketchSelectionBoxOverlay() override;
 
+    [[nodiscard]] bool setSketchDynamicInputOverlay(
+        const viewer::SketchDynamicInputOverlay& overlay) override;
+
+    void clearSketchDynamicInputOverlay() override;
+
     void setSelectionIntentHandler(
         viewer::SelectionIntentHandler handler) override;
 

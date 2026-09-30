@@ -1055,6 +1055,7 @@ public:
         clearSketchMeasureMarkerScene();
         clearSketchMeasureCueScene();
         clearSketchGripScene();
+        clearSketchDynamicInputOverlay();
         sketch_interaction_presentation_ = {};
         clearSketchScene();
 
@@ -2163,6 +2164,223 @@ public:
             false);
         selection_rubber_band_visible_ = false;
         context_->UpdateCurrentViewer();
+    }
+
+    bool setSketchDynamicInputOverlay(
+        const viewer::SketchDynamicInputOverlay& overlay) {
+        if (!overlay.valid()) {
+            return false;
+        }
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearSketchDynamicInputOverlay();
+
+        const double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            return false;
+        }
+
+        constexpr double kOffset = 16.0;
+        constexpr double kMargin = 8.0;
+        constexpr double kRowHeight = 18.0;
+        constexpr double kCharWidth = 7.5;
+
+        std::size_t max_chars = 1U;
+        for (const auto& field : overlay.fields) {
+            const std::size_t chars =
+                2U +
+                field.label.size() +
+                (field.display_value.empty()
+                     ? 0U
+                     : 2U + field.display_value.size());
+            max_chars =
+                std::max(max_chars, chars);
+        }
+
+        const double logical_width =
+            14.0 +
+            kCharWidth *
+                static_cast<double>(max_chars);
+        const double logical_height =
+            kRowHeight *
+            static_cast<double>(
+                overlay.fields.size());
+
+        double logical_x =
+            overlay.anchor.x + kOffset;
+        double logical_y =
+            overlay.anchor.y + kOffset;
+
+        if (logical_x + logical_width + kMargin >
+            static_cast<double>(owner_.width())) {
+            logical_x =
+                overlay.anchor.x -
+                kOffset -
+                logical_width;
+        }
+        if (logical_y + logical_height + kMargin >
+            static_cast<double>(owner_.height())) {
+            logical_y =
+                overlay.anchor.y -
+                kOffset -
+                logical_height;
+        }
+
+        const double max_x =
+            std::max(
+                kMargin,
+                static_cast<double>(owner_.width()) -
+                    logical_width -
+                    kMargin);
+        const double max_y =
+            std::max(
+                kMargin,
+                static_cast<double>(owner_.height()) -
+                    logical_height -
+                    kMargin);
+        logical_x =
+            std::clamp(
+                logical_x,
+                kMargin,
+                max_x);
+        logical_y =
+            std::clamp(
+                logical_y,
+                kMargin,
+                max_y);
+
+        try {
+            for (std::size_t index = 0U;
+                 index < overlay.fields.size();
+                 ++index) {
+                const auto& field =
+                    overlay.fields[index];
+
+                std::string text =
+                    index == overlay.focused_index
+                        ? "> "
+                        : "  ";
+                text += field.label;
+                if (!field.display_value.empty()) {
+                    text += ": ";
+                    text += field.display_value;
+                }
+
+                Quantity_Color color{
+                    0.88,
+                    0.90,
+                    0.94,
+                    Quantity_TOC_RGB};
+                switch (field.state) {
+                case viewer::SketchDynamicInputValueState::free:
+                    break;
+                case viewer::SketchDynamicInputValueState::assisted:
+                    color =
+                        Quantity_Color{
+                            0.98,
+                            0.78,
+                            0.28,
+                            Quantity_TOC_RGB};
+                    break;
+                case viewer::SketchDynamicInputValueState::locked:
+                    color =
+                        Quantity_Color{
+                            0.38,
+                            0.92,
+                            0.58,
+                            Quantity_TOC_RGB};
+                    break;
+                }
+
+                Handle(AIS_TextLabel) label =
+                    new AIS_TextLabel();
+                label->SetText(
+                    TCollection_ExtendedString{
+                        text.c_str(),
+                        Standard_True});
+                label->SetPosition(
+                    gp_Pnt{0.0, 0.0, 0.0});
+                label->SetColor(color);
+                label->SetHeight(12.0);
+                label->SetHJustification(
+                    Graphic3d_HTA_LEFT);
+                label->SetVJustification(
+                    Graphic3d_VTA_TOP);
+                label->SetZoomable(false);
+                label->SetZLayer(
+                    Graphic3d_ZLayerId_Topmost);
+
+                const int physical_x =
+                    static_cast<int>(
+                        std::lround(
+                            logical_x * dpr));
+                const int physical_y =
+                    static_cast<int>(
+                        std::lround(
+                            (logical_y +
+                             kRowHeight *
+                                 static_cast<double>(
+                                     index)) *
+                            dpr));
+
+                label->SetTransformPersistence(
+                    new Graphic3d_TransformPers(
+                        Graphic3d_TMF_2d,
+                        Aspect_TOTP_LEFT_UPPER,
+                        Graphic3d_Vec2i{
+                            physical_x,
+                            physical_y}));
+
+                context_->Display(
+                    label,
+                    false);
+                context_->Deactivate(label);
+                sketch_dynamic_input_labels_.
+                    push_back(label);
+            }
+
+            sketch_dynamic_input_overlay_ =
+                overlay;
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearSketchDynamicInputOverlay();
+            throw;
+        }
+    }
+
+    void clearSketchDynamicInputOverlay() noexcept {
+        if (!context_.IsNull()) {
+            for (const auto& label :
+                 sketch_dynamic_input_labels_) {
+                if (label.IsNull()) continue;
+                const auto retained = label;
+                guardedVoid(
+                    "removeSketchDynamicInputLabel",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+
+        sketch_dynamic_input_labels_.clear();
+        sketch_dynamic_input_overlay_.reset();
+
+        if (!context_.IsNull()) {
+            context_->UpdateCurrentViewer();
+        }
+        if (!view_.IsNull()) {
+            view_->Redraw();
+        }
     }
 
     void setSelectionIntentHandler(
@@ -3514,6 +3732,10 @@ private:
     Handle(AIS_RubberBand)
         selection_rubber_band_;
     bool selection_rubber_band_visible_{};
+    std::vector<Handle(AIS_TextLabel)>
+        sketch_dynamic_input_labels_;
+    std::optional<viewer::SketchDynamicInputOverlay>
+        sketch_dynamic_input_overlay_;
 
     Handle(AIS_ViewCube) navigation_cube_;
     Handle(AIS_AnimationCamera)
@@ -3805,6 +4027,26 @@ void QtOcctViewerWidget::clearSketchSelectionBoxOverlay() {
         "clearSketchSelectionBoxOverlay",
         [this] {
             impl_->clearSketchSelectionBoxOverlay();
+        });
+}
+
+bool QtOcctViewerWidget::setSketchDynamicInputOverlay(
+    const viewer::SketchDynamicInputOverlay& overlay) {
+    return guardedBool(
+        "setSketchDynamicInputOverlay",
+        [this, &overlay] {
+            return impl_->
+                setSketchDynamicInputOverlay(
+                    overlay);
+        });
+}
+
+void QtOcctViewerWidget::clearSketchDynamicInputOverlay() {
+    guardedVoid(
+        "clearSketchDynamicInputOverlay",
+        [this] {
+            impl_->
+                clearSketchDynamicInputOverlay();
         });
 }
 

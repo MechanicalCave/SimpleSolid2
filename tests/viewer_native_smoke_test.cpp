@@ -78,6 +78,33 @@ int main(int argc, char* argv[]) {
                  camera->projection ==
                      viewer::CameraProjection::orthographic;
 
+            viewer::SketchDynamicInputOverlay dyn_overlay{
+                viewer::ViewportPoint2{
+                    895.0,
+                    635.0},
+                {
+                    {
+                        "Distance",
+                        "100 mm",
+                        viewer::SketchDynamicInputValueState::
+                            locked},
+                    {
+                        "Angle",
+                        "45\xC2\xB0",
+                        viewer::SketchDynamicInputValueState::
+                            assisted},
+                    {
+                        "dU",
+                        {},
+                        viewer::SketchDynamicInputValueState::
+                            free},
+                },
+                1U};
+            ok = ok &&
+                 widget.setSketchDynamicInputOverlay(
+                     dyn_overlay);
+            widget.clearSketchDynamicInputOverlay();
+
             result = ok ? EXIT_SUCCESS : EXIT_FAILURE;
             widget.close();
             app.quit();
