@@ -2444,6 +2444,23 @@ int main(int argc, char* argv[]) {
     CHECK(session->document().revision() == cycle_revision);
     CHECK(session->undoDepth() == cycle_undo);
 
+    // Retire the two R10 Measure unit-presentation commands before
+    // the original SK-07F history cleanup. This restores the pre-check
+    // authored Part unit and keeps the later Line Undo expectations intact.
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::inch);
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::millimetre);
+    CHECK(
+        length_unit_combo->currentText() ==
+        QStringLiteral("mm"));
+
     // Remove the two temporary SK-07F Line segments so later history
     // assertions retain their original pre-SK-07E shape.
     undo_button->click();
