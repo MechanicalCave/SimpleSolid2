@@ -7,6 +7,7 @@
 #include <simplesolid2/sketch/transform.hpp>
 
 #include <array>
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <vector>
@@ -47,8 +48,8 @@ enum class CircleStage : std::uint8_t {
 
 enum class ArcStage : std::uint8_t {
     await_start,
-    await_through,
     await_end,
+    await_arc_point,
 };
 
 enum class RectangleStage : std::uint8_t {
@@ -128,6 +129,7 @@ struct LinePointResult final {
 enum class CirclePointOutcome : std::uint8_t {
     inactive_tool,
     invalid_point,
+    invalid_radius,
     center_accepted,
     zero_radius_ignored,
     circle_requested,
@@ -143,8 +145,10 @@ struct CirclePointResult final {
 enum class ArcPointOutcome : std::uint8_t {
     inactive_tool,
     invalid_point,
+    invalid_radius,
     start_accepted,
-    through_accepted,
+    end_accepted,
+    radius_locked,
     degenerate_ignored,
     arc_requested,
     request_pending,
@@ -176,7 +180,9 @@ struct RectangleIntent final {
 enum class RectanglePointOutcome : std::uint8_t {
     inactive_tool,
     invalid_point,
+    invalid_size,
     first_corner_accepted,
+    size_locked,
     degenerate_ignored,
     rectangle_requested,
     request_pending,
@@ -213,6 +219,9 @@ using LineHandleRole = SketchGripRole;
 enum class DirectEditMode : std::uint8_t {
     reshape,
     move,
+    rotate,
+    scale,
+    mirror,
 };
 
 struct SketchGripRef final {
@@ -245,15 +254,79 @@ struct ResolvedSketchInput final {
         const ResolvedSketchInput&) = default;
 };
 
+enum class ExplicitPointInputKind : std::uint8_t {
+    absolute_cartesian,
+    relative_cartesian,
+    relative_polar,
+};
+
+struct ExplicitPointInput final {
+    ExplicitPointInputKind kind{
+        ExplicitPointInputKind::absolute_cartesian};
+    double first{};
+    double second{};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return std::isfinite(first) &&
+               std::isfinite(second) &&
+               (kind != ExplicitPointInputKind::relative_polar ||
+                first >= 0.0);
+    }
+
+    friend bool operator==(
+        const ExplicitPointInput&,
+        const ExplicitPointInput&) = default;
+};
+
+enum class PointFieldLockSemantic : std::uint8_t {
+    u,
+    v,
+    distance,
+    angle,
+    delta_u,
+    delta_v,
+};
+
+struct PointFieldLocks final {
+    std::optional<double> u;
+    std::optional<double> v;
+    std::optional<double> distance;
+    std::optional<double> angle;
+    std::optional<double> delta_u;
+    std::optional<double> delta_v;
+
+    [[nodiscard]] bool empty() const noexcept {
+        return !u && !v &&
+               !distance && !angle &&
+               !delta_u && !delta_v;
+    }
+
+    friend bool operator==(
+        const PointFieldLocks&,
+        const PointFieldLocks&) = default;
+};
+
 struct PointRequest final {
     std::optional<Point2> base;
     std::optional<Point2> pointer_candidate;
     bool direct_distance_enabled{};
+    bool absolute_cartesian_enabled{};
+    bool relative_cartesian_enabled{};
+    bool relative_polar_enabled{};
+    std::optional<double> polar_relative_reference;
 
     [[nodiscard]] bool valid() const noexcept {
+        const bool requires_base =
+            direct_distance_enabled ||
+            relative_cartesian_enabled ||
+            relative_polar_enabled;
         return (!base || base->finite()) &&
                (!pointer_candidate ||
-                pointer_candidate->finite());
+                pointer_candidate->finite()) &&
+               (!polar_relative_reference ||
+                std::isfinite(
+                    *polar_relative_reference)) &&
+               (!requires_base || base.has_value());
     }
 
     friend bool operator==(
@@ -303,7 +376,25 @@ public:
     resolvePointerInput(Point2 raw) noexcept;
 
     [[nodiscard]] std::optional<ResolvedSketchInput>
+    resolvedPointRequestCandidate() const noexcept;
+
+    [[nodiscard]] std::optional<ResolvedSketchInput>
+    resolveExplicitPoint(
+        ExplicitPointInput input) const noexcept;
+
+    [[nodiscard]] std::optional<ResolvedSketchInput>
     resolveDirectDistance(double distance) const noexcept;
+
+    [[nodiscard]] bool lockPointField(
+        PointFieldLockSemantic semantic,
+        double value) noexcept;
+    void clearPointFieldLocks() noexcept {
+        point_field_locks_ = {};
+    }
+    [[nodiscard]] const PointFieldLocks&
+    pointFieldLocks() const noexcept {
+        return point_field_locks_;
+    }
 
     [[nodiscard]] std::optional<Point2>
     lineAnchor() const noexcept {
@@ -372,6 +463,8 @@ public:
         ResolvedSketchInput input) noexcept;
     [[nodiscard]] bool updateTransformPreview(
         ResolvedSketchInput input) noexcept;
+    [[nodiscard]] bool acceptTransformValue(
+        double value) noexcept;
     [[nodiscard]] std::optional<SketchTransformGeometry>
     transformGeometryState() const;
     [[nodiscard]] bool continueCopyPlacement() noexcept;
@@ -393,12 +486,38 @@ public:
 
     [[nodiscard]] CirclePointResult acceptCirclePoint(
         Point2 point) noexcept;
+    [[nodiscard]] bool lockCircleRadius(
+        double radius) noexcept;
+    void clearCircleRadiusLock() noexcept {
+        circle_radius_lock_.reset();
+    }
+    [[nodiscard]] bool circleRadiusLocked() const noexcept {
+        return circle_radius_lock_.has_value();
+    }
+    [[nodiscard]] CirclePointResult acceptCircleRadius(
+        double radius) noexcept;
 
     [[nodiscard]] ArcPointResult acceptArcPoint(
         Point2 point) noexcept;
+    [[nodiscard]] ArcPointResult acceptArcPointer(
+        Point2 point) noexcept;
+    [[nodiscard]] bool lockArcRadius(
+        double radius) noexcept;
+    [[nodiscard]] ArcPointResult acceptArcRadius(
+        double radius) noexcept;
+    [[nodiscard]] bool arcRadiusLocked() const noexcept {
+        return arc_radius_lock_.has_value();
+    }
 
     [[nodiscard]] RectanglePointResult acceptRectanglePoint(
         Point2 point) noexcept;
+    [[nodiscard]] bool lockRectangleWidth(
+        double width) noexcept;
+    [[nodiscard]] bool lockRectangleHeight(
+        double height) noexcept;
+    [[nodiscard]] RectanglePointResult acceptRectangleSize(
+        double width,
+        double height) noexcept;
 
     [[nodiscard]] bool resolveLineRequest(
         bool committed) noexcept;
@@ -508,6 +627,8 @@ public:
 
     [[nodiscard]] bool updateDirectManipulation(
         ResolvedSketchInput input) noexcept;
+    [[nodiscard]] bool acceptDirectManipulationValue(
+        double value) noexcept;
 
     [[nodiscard]] std::optional<
         DirectManipulationGeometry>
@@ -533,6 +654,7 @@ private:
         std::optional<Point2> base_point;
         std::optional<Point2> reference_point;
         std::optional<ResolvedSketchInput> current_preview;
+        std::optional<double> explicit_value;
     };
 
     struct DirectManipulationSession final {
@@ -543,6 +665,9 @@ private:
         DirectManipulationGeometry selection_geometry;
         Point2 pivot;
         ResolvedSketchInput current_input;
+        std::optional<Point2> rotate_reference_point;
+        std::optional<double> scale_reference_radius;
+        std::optional<double> explicit_value;
         bool copy_enabled{};
     };
 
@@ -561,6 +686,8 @@ private:
         const SketchModel& model);
 
     [[nodiscard]] bool commonTransformTool() const noexcept;
+    [[nodiscard]] bool
+    clearRequestLocalNumericLocks() noexcept;
 
     void resetToSelect() noexcept;
     void resetLineStage() noexcept;
@@ -575,25 +702,31 @@ private:
     LineStage line_stage_{
         LineStage::await_first_point};
     std::optional<Point2> line_anchor_;
+    std::optional<double>
+        line_relative_reference_;
     std::optional<LineSegmentIntent>
         pending_line_request_;
 
     CircleStage circle_stage_{
         CircleStage::await_center};
     std::optional<Point2> circle_center_;
+    std::optional<double> circle_radius_lock_;
     std::optional<CircleIntent>
         pending_circle_request_;
 
     ArcStage arc_stage_{
         ArcStage::await_start};
     std::optional<Point2> arc_start_;
-    std::optional<Point2> arc_through_;
+    std::optional<Point2> arc_end_;
+    std::optional<double> arc_radius_lock_;
     std::optional<ArcIntent>
         pending_arc_request_;
 
     RectangleStage rectangle_stage_{
         RectangleStage::await_first_corner};
     std::optional<Point2> rectangle_first_corner_;
+    std::optional<double> rectangle_width_lock_;
+    std::optional<double> rectangle_height_lock_;
     std::optional<RectangleIntent>
         pending_rectangle_request_;
 
@@ -615,6 +748,7 @@ private:
     // One shared runtime pointer candidate feeds the active semantic
     // PointRequest. It is never authored or persisted.
     std::optional<Point2> point_pointer_candidate_;
+    PointFieldLocks point_field_locks_;
 };
 
 } // namespace simplesolid2::sketch

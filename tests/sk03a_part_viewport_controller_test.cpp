@@ -70,6 +70,17 @@ public:
 
     void fitAll() override {}
 
+    std::optional<viewer::ViewportPoint2>
+    projectWorldPoint(
+        viewer::Point3 point) const override {
+        if (!viewer::finite(point)) {
+            return std::nullopt;
+        }
+        return viewer::ViewportPoint2{
+            point.x * 10.0,
+            point.y * 10.0};
+    }
+
     bool setReferenceScene(
         const viewer::ReferenceScene& scene) override {
         if (!scene.valid()) return false;
@@ -270,6 +281,14 @@ int main(int argc, char* argv[]) {
     CHECK((
         viewport.sketch_scene_.lines[0].end ==
         viewer::Point3{4.0, 2.0, 0.0}));
+
+    const auto projected =
+        controller.projectSketchPointToViewport(
+            sketch::Point2{2.0, 3.0});
+    CHECK(projected.has_value());
+    CHECK((
+        *projected ==
+        viewer::ViewportPoint2{20.0, 30.0}));
 
     const auto revision_before_preview =
         session.document().revision();
@@ -515,6 +534,10 @@ int main(int argc, char* argv[]) {
     CHECK(viewport.sketch_scene_.lines.size() == 1U);
 
     controller.setSketchEditSketch(std::nullopt);
+    CHECK(
+        !controller.projectSketchPointToViewport(
+             sketch::Point2{2.0, 3.0})
+             .has_value());
     CHECK(viewport.sketch_scene_.lines.empty());
     CHECK(!viewport.sketch_scene_.origin.has_value());
     CHECK(viewport.preview_scene_.lines.empty());

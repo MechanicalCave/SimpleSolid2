@@ -108,6 +108,26 @@ parseSupportRole(std::string_view value) noexcept {
     return std::nullopt;
 }
 
+std::optional<core::LengthUnit>
+parseLengthUnitName(std::string_view value) noexcept {
+    if (value == "mm") {
+        return core::LengthUnit::millimetre;
+    }
+    if (value == "cm") {
+        return core::LengthUnit::centimetre;
+    }
+    if (value == "m") {
+        return core::LengthUnit::metre;
+    }
+    if (value == "in") {
+        return core::LengthUnit::inch;
+    }
+    if (value == "ft") {
+        return core::LengthUnit::foot;
+    }
+    return std::nullopt;
+}
+
 nlohmann::json vectorJson(
     const std::array<double, 3>& value) {
     return nlohmann::json::array(
@@ -301,6 +321,10 @@ std::string serializeAuthored(
                   document.presentation()
                       .builtin_references.mask())},
          }},
+        {"length_unit",
+         std::string{
+             core::lengthUnitSuffix(
+                 document.lengthUnit())}},
         {"sketches", std::move(sketches)},
         {"next_profile_id",
          document.profileIdCursor().serialized()},
@@ -1093,10 +1117,14 @@ std::optional<PartAuthoredState> parseAuthored(
         schema_version == 1;
     const bool has_profiles =
         schema_version >= 6;
+    const bool has_length_unit =
+        schema_version >= 7;
     const std::size_t expected_fields =
         legacy_v1
             ? 2U
-            : (has_profiles ? 5U : 3U);
+            : (has_profiles
+                   ? (has_length_unit ? 6U : 5U)
+                   : 3U);
 
     if (authored.is_discarded() ||
         !authored.is_object() ||
@@ -1105,6 +1133,9 @@ std::optional<PartAuthoredState> parseAuthored(
         !authored.contains("presentation") ||
         (!legacy_v1 &&
          !authored.contains("sketches")) ||
+        (has_length_unit &&
+         (!authored.contains("length_unit") ||
+          !authored["length_unit"].is_string())) ||
         (has_profiles &&
          (!authored.contains("next_profile_id") ||
           !authored.contains("profiles")))) {
@@ -1172,6 +1203,19 @@ std::optional<PartAuthoredState> parseAuthored(
             "engineering_revision"].get<std::string>();
     state.presentation.builtin_references =
         *visibility;
+
+    if (has_length_unit) {
+        const auto length_unit =
+            parseLengthUnitName(
+                authored["length_unit"]
+                    .get<std::string>());
+        if (!length_unit) {
+            error =
+                "Native Part contains an invalid length unit";
+            return std::nullopt;
+        }
+        state.length_unit = *length_unit;
+    }
 
     if (!legacy_v1 &&
         !parseSketches(
@@ -1395,12 +1439,8 @@ PartLoadResult PartDocumentStore::load(
             path);
     }
 
-    if (descriptor.domain_schema_version != 1 &&
-        descriptor.domain_schema_version != 2 &&
-        descriptor.domain_schema_version != 3 &&
-        descriptor.domain_schema_version != 4 &&
-        descriptor.domain_schema_version != 5 &&
-        descriptor.domain_schema_version !=
+    if (descriptor.domain_schema_version < 1 ||
+        descriptor.domain_schema_version >
             current_schema_version) {
         return loadFailure(
             PartStoreErrorCode::unsupported_schema,

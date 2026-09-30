@@ -8,10 +8,36 @@
 
 namespace simplesolid2::sketch {
 
+enum class SketchTransformEndpointRole {
+    start,
+    end,
+};
+
+struct SketchTransformLineArcContact final {
+    EntityId line_id;
+    SketchTransformEndpointRole line_endpoint{
+        SketchTransformEndpointRole::start};
+    EntityId arc_id;
+    SketchTransformEndpointRole arc_endpoint{
+        SketchTransformEndpointRole::start};
+
+    friend bool operator==(
+        const SketchTransformLineArcContact&,
+        const SketchTransformLineArcContact&) = default;
+};
+
 struct SketchTransformGeometry final {
     std::vector<SketchLineState> lines;
     std::vector<SketchCircleState> circles;
     std::vector<SketchArcState> arcs;
+
+    // Runtime transform provenance only. These contacts are inferred from
+    // the accepted source geometry when a common transform begins. They are
+    // not authored Sketch relations and are never persisted. Their sole
+    // purpose is to prevent one affine transform from destroying an existing
+    // exact Line<->Arc endpoint contact through independent double rounding.
+    std::vector<SketchTransformLineArcContact>
+        line_arc_contacts;
 
     [[nodiscard]] bool empty() const noexcept {
         return lines.empty() &&

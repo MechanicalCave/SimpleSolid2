@@ -7,6 +7,7 @@
 #include <QAction>
 #include <algorithm>
 #include <QCheckBox>
+#include <QComboBox>
 #include <QApplication>
 #include <QLabel>
 #include <QLineEdit>
@@ -19,6 +20,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <numbers>
 #include <optional>
 #include <utility>
 
@@ -200,6 +202,17 @@ public:
 
     void clearSketchSelectionBoxOverlay() override {}
 
+    bool setSketchDynamicInputOverlay(
+        const viewer::SketchDynamicInputOverlay& overlay) override {
+        if (!overlay.valid()) return false;
+        dynamic_input_overlay_ = overlay;
+        return true;
+    }
+
+    void clearSketchDynamicInputOverlay() override {
+        dynamic_input_overlay_.reset();
+    }
+
     void setSelectionIntentHandler(
         viewer::SelectionIntentHandler handler) override {
         selection_handler_ =
@@ -288,6 +301,11 @@ public:
         return sketch_preview_scene_;
     }
 
+    [[nodiscard]] const std::optional<viewer::SketchDynamicInputOverlay>&
+    dynamicInputOverlay() const noexcept {
+        return dynamic_input_overlay_;
+    }
+
     [[nodiscard]] const viewer::SketchInteractionPresentation&
     interactionPresentation() const noexcept {
         return interaction_presentation_;
@@ -312,6 +330,8 @@ private:
     viewer::ReferenceScene scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene sketch_preview_scene_;
+    std::optional<viewer::SketchDynamicInputOverlay>
+        dynamic_input_overlay_;
     viewer::SketchGripScene grip_scene_;
     viewer::SketchInteractionPresentation
         interaction_presentation_;
@@ -421,6 +441,31 @@ int main(int argc, char* argv[]) {
     workbench.setCadInputContextChangedHandler(
         [&workspace_shell] {
             workspace_shell.refreshCadInputPresentation();
+        });
+    workbench.setCadInteractionSettingsProvider(
+        [&workspace_shell] {
+            return workspace_shell.cadInteractionSettings();
+        });
+    workbench.setCadInteractionSettingsUpdater(
+        [&workspace_shell](
+            application::CadInteractionSettings settings) {
+            return workspace_shell.setCadInteractionSettings(
+                std::move(settings));
+        });
+    workspace_shell.setCadInteractionSettingsChangedHandler(
+        [&workbench] {
+            workbench.refreshCadInteractionSettingsUi();
+        });
+
+    workbench.setCadDynamicInputUiStateProvider(
+        [&workspace_shell] {
+            return ui::CadDynamicInputUiState{
+                workspace_shell.cadInputBuffer(),
+                workspace_shell.cadDynamicInputFieldIndex()};
+        });
+    workspace_shell.setCadInputPresentationChangedHandler(
+        [&workbench] {
+            workbench.refreshCadDynamicInputOverlay();
         });
 
     CHECK(
@@ -597,6 +642,42 @@ int main(int argc, char* argv[]) {
     auto* command_prompt =
         workspace_shell.findChild<QLabel*>(
             QStringLiteral("cadCommandPrompt"));
+    auto* length_unit_combo =
+        workbench.findChild<QComboBox*>(
+            QStringLiteral("partLengthUnitCombo"));
+    auto* precision_widget =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("precisionOperationsWidget"));
+    auto* precision_status =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("precisionCadAidStatus"));
+    auto* polar_toggle =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("polarToggleButton"));
+    auto* dyn_toggle =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("dynamicInputToggleButton"));
+    auto* polar_step =
+        workbench.findChild<QLineEdit*>(
+            QStringLiteral("polarStepEdit"));
+    auto* polar_reference =
+        workbench.findChild<QComboBox*>(
+            QStringLiteral("polarReferenceCombo"));
+    auto* polar_additional =
+        workbench.findChild<QLineEdit*>(
+            QStringLiteral("polarAdditionalAngleEdit"));
+    auto* polar_add_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("polarAdditionalAngleAddButton"));
+    auto* polar_clear_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("polarAdditionalAnglesClearButton"));
+    auto* polar_additional_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral("polarAdditionalAnglesLabel"));
+    auto* circle_size_mode =
+        workbench.findChild<QComboBox*>(
+            QStringLiteral("circleSizeModeCombo"));
 
     CHECK(sketch_button != nullptr);
     CHECK(cancel_button != nullptr);
@@ -652,6 +733,18 @@ int main(int argc, char* argv[]) {
     CHECK(measure_between_button != nullptr);
     CHECK(command_input != nullptr);
     CHECK(command_prompt != nullptr);
+    CHECK(length_unit_combo != nullptr);
+    CHECK(precision_widget != nullptr);
+    CHECK(precision_status != nullptr);
+    CHECK(polar_toggle != nullptr);
+    CHECK(dyn_toggle != nullptr);
+    CHECK(polar_step != nullptr);
+    CHECK(polar_reference != nullptr);
+    CHECK(polar_additional != nullptr);
+    CHECK(polar_add_button != nullptr);
+    CHECK(polar_clear_button != nullptr);
+    CHECK(polar_additional_label != nullptr);
+    CHECK(circle_size_mode != nullptr);
     CHECK(editor_host->isAncestorOf(sketch_button));
     CHECK(!operations_content->isAncestorOf(sketch_button));
     CHECK(sketch_button->isEnabled());
@@ -661,6 +754,10 @@ int main(int argc, char* argv[]) {
     CHECK(
         operations_label->text() ==
         QStringLiteral("Part modeling context."));
+    CHECK(
+        length_unit_combo->currentText() ==
+        QStringLiteral("mm"));
+    CHECK(precision_widget->isHidden());
 
     auto* session =
         opened.session->documentSession(
@@ -721,6 +818,147 @@ int main(int argc, char* argv[]) {
         viewer::StandardView::front);
     CHECK(viewport->fitAllCount() > 0);
 
+    CHECK(!precision_widget->isHidden());
+    CHECK(polar_toggle->isChecked());
+    CHECK(!dyn_toggle->isChecked());
+    CHECK(
+        precision_status->text() ==
+        QStringLiteral(
+            "POLAR ON   360/8 = 45°   ABS   DYN OFF"));
+
+    const auto precision_state_before =
+        session->document().state();
+    const auto precision_revision_before =
+        session->document().revision();
+    const auto precision_undo_before =
+        session->undoDepth();
+
+    polar_toggle->click();
+    dyn_toggle->click();
+    QApplication::processEvents();
+    CHECK(!workspace_shell.cadInteractionSettings().polar.enabled);
+    CHECK(
+        workspace_shell.cadInteractionSettings().
+            dynamic_input_enabled);
+    CHECK(!polar_toggle->isChecked());
+    CHECK(dyn_toggle->isChecked());
+    CHECK(
+        session->document().state() ==
+        precision_state_before);
+    CHECK(
+        session->document().revision() ==
+        precision_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        precision_undo_before);
+
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClick(viewport, Qt::Key_F10);
+    QTest::keyClick(viewport, Qt::Key_F12);
+    QApplication::processEvents();
+    CHECK(workspace_shell.cadInteractionSettings().polar.enabled);
+    CHECK(
+        !workspace_shell.cadInteractionSettings().
+            dynamic_input_enabled);
+    CHECK(polar_toggle->isChecked());
+    CHECK(!dyn_toggle->isChecked());
+    CHECK(
+        precision_status->text() ==
+        QStringLiteral(
+            "POLAR ON   360/8 = 45°   ABS   DYN OFF"));
+    CHECK(
+        polar_reference->currentText() ==
+        QStringLiteral("Absolute"));
+    CHECK(
+        polar_additional_label->text() ==
+        QStringLiteral("none"));
+
+    polar_step->setFocus(Qt::OtherFocusReason);
+    polar_step->setText(
+        QStringLiteral("360/12"));
+    QTest::keyClick(
+        polar_step,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        std::abs(
+            workspace_shell.cadInteractionSettings()
+                    .polar.primary_spacing -
+            std::numbers::pi_v<double> / 6.0) <
+        1.0e-12);
+    CHECK(
+        precision_status->text() ==
+        QStringLiteral(
+            "POLAR ON   360/12 = 30°   ABS   DYN OFF"));
+
+    polar_reference->setCurrentIndex(1);
+    QApplication::processEvents();
+    CHECK(
+        workspace_shell.cadInteractionSettings()
+                .polar.reference_mode ==
+        application::PolarReferenceMode::relative);
+    CHECK(
+        precision_status->text() ==
+        QStringLiteral(
+            "POLAR ON   360/12 = 30°   REL   DYN OFF"));
+
+    polar_additional->setText(
+        QStringLiteral("17"));
+    polar_add_button->click();
+    polar_additional->setText(
+        QStringLiteral("30deg"));
+    polar_add_button->click();
+    QApplication::processEvents();
+    CHECK(
+        workspace_shell.cadInteractionSettings()
+            .polar.additional_angles.size() == 2U);
+    CHECK(
+        polar_additional_label->text() ==
+        QStringLiteral("17°, 30°"));
+
+    const auto settings_before_invalid_step =
+        workspace_shell.cadInteractionSettings();
+    polar_step->setText(
+        QStringLiteral("0"));
+    QTest::keyClick(
+        polar_step,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        workspace_shell.cadInteractionSettings() ==
+        settings_before_invalid_step);
+
+    polar_clear_button->click();
+    polar_reference->setCurrentIndex(0);
+    polar_step->setText(
+        QStringLiteral("45"));
+    QTest::keyClick(
+        polar_step,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(
+        workspace_shell.cadInteractionSettings()
+            .polar.additional_angles.empty());
+    CHECK(
+        workspace_shell.cadInteractionSettings()
+                .polar.reference_mode ==
+        application::PolarReferenceMode::absolute);
+    CHECK(
+        std::abs(
+            workspace_shell.cadInteractionSettings()
+                    .polar.primary_spacing -
+            std::numbers::pi_v<double> / 4.0) <
+        1.0e-12);
+    CHECK(
+        session->document().state() ==
+        precision_state_before);
+    CHECK(
+        session->document().revision() ==
+        precision_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        precision_undo_before);
+
     // SK-07B: Sketch tools are visibly grouped and the new
     // transform adapters enter the same command-first collection stage.
     CHECK(!create_tools_label->isHidden());
@@ -755,6 +993,42 @@ int main(int argc, char* argv[]) {
     CHECK(!creation_construction_button->isChecked());
     CHECK(!rectangle_diagonals_button->isChecked());
     CHECK(construction_role_button->isHidden());
+
+    circle_button->click();
+    QApplication::processEvents();
+    CHECK(!circle_size_mode->isHidden());
+    CHECK(!circle_size_mode->isEnabled());
+    CHECK(
+        circle_size_mode->currentText() ==
+        QStringLiteral("Diameter"));
+
+    command_input->setText(
+        QStringLiteral("0;0"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(circle_size_mode->isEnabled());
+    circle_size_mode->setCurrentIndex(1);
+    QApplication::processEvents();
+    CHECK(
+        circle_size_mode->currentText() ==
+        QStringLiteral("Radius"));
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Circle — Radius mode [R]; specify size"));
+    circle_size_mode->setCurrentIndex(0);
+    QApplication::processEvents();
+    CHECK(
+        circle_size_mode->currentText() ==
+        QStringLiteral("Diameter"));
+    CHECK(
+        session->document().revision() ==
+        precision_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        precision_undo_before);
 
     rectangle_button->click();
     QApplication::processEvents();
@@ -1232,7 +1506,9 @@ int main(int argc, char* argv[]) {
         session->document()
             .findSketch(sketch_id)
             ->model.entityCount();
-    delete_profile_button->click();
+    CHECK(!profile_properties_page->isHidden());
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClick(viewport, Qt::Key_Delete);
     QApplication::processEvents();
     CHECK(
         session->document()
@@ -1527,6 +1803,35 @@ int main(int argc, char* argv[]) {
         140.0, 100.0,
         1.0, 0.0);
 
+    // R10 integration regression: DYN ON must project the real semantic
+    // fields next to the current pointer, and the one Workspace CAD token
+    // must appear in the focused field instead of living only in Command Line.
+    dyn_toggle->click();
+    QApplication::processEvents();
+    CHECK(viewport->dynamicInputOverlay().has_value());
+    CHECK(viewport->dynamicInputOverlay()->fields.size() == 4U);
+    CHECK(
+        viewport->dynamicInputOverlay()->fields[0].label ==
+        "Distance");
+    CHECK(viewport->dynamicInputOverlay()->anchor.x == 140.0);
+    CHECK(viewport->dynamicInputOverlay()->anchor.y == 100.0);
+
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(viewport, QStringLiteral("12"));
+    QApplication::processEvents();
+    CHECK(command_input->text() == QStringLiteral("12"));
+    CHECK(viewport->dynamicInputOverlay().has_value());
+    CHECK(
+        viewport->dynamicInputOverlay()->fields[0].display_value ==
+        "12");
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(command_input->text().isEmpty());
+
+    dyn_toggle->click();
+    QApplication::processEvents();
+    CHECK(!viewport->dynamicInputOverlay().has_value());
+
     // SK-07F/WB-02: an active semantic PointRequest owns Command
     // Line submission before top-level command activation. Rejection
     // keeps LINE authoritative but Enter consumes the submitted token.
@@ -1782,6 +2087,79 @@ int main(int argc, char* argv[]) {
     CHECK(session->document().revision() == measure_ui_revision);
     CHECK(session->undoDepth() == measure_ui_undo);
     QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!measure_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    // R10 Measure presentation follows the durable Part display/input
+    // unit while the measured Sketch geometry remains unchanged.
+    const auto measured_geometry_before_unit_switch =
+        session->document()
+            .findSketch(sketch_id)
+            ->model.state();
+    const auto measure_unit_revision_before =
+        session->document().revision();
+    const auto measure_unit_undo_before =
+        session->undoDepth();
+
+    command_input->setText(
+        QStringLiteral("MEASURE"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(measure_button->isChecked());
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral(
+                "Length: 10.5 mm")));
+
+    length_unit_combo->setCurrentIndex(3);
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::inch);
+    CHECK(measure_button->isChecked());
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral(
+                "Length: 0.413385826772 in")));
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.state() ==
+        measured_geometry_before_unit_switch);
+    CHECK(
+        session->document().revision() !=
+        measure_unit_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        measure_unit_undo_before + 1U);
+
+    length_unit_combo->setCurrentIndex(0);
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::millimetre);
+    CHECK(measure_button->isChecked());
+    CHECK(
+        operations_label->text().contains(
+            QStringLiteral(
+                "Length: 10.5 mm")));
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.state() ==
+        measured_geometry_before_unit_switch);
+    CHECK(
+        session->undoDepth() ==
+        measure_unit_undo_before + 2U);
+
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Escape);
     QApplication::processEvents();
     CHECK(!measure_button->isChecked());
     CHECK(
@@ -2101,7 +2479,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         operations_label->text() ==
         QStringLiteral(
-            "Grip — Reshape; Space cycles mode; Enter/LMB commits; Esc cancels"));
+            "Grip — Rotate; Space cycles mode; Enter/LMB commits; Esc cancels"));
 
     command_input->clear();
     command_input->setFocus();
@@ -2113,7 +2491,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         operations_label->text() ==
         QStringLiteral(
-            "Grip — Reshape; Space cycles mode; Enter/LMB commits; Esc cancels"));
+            "Grip — Rotate; Space cycles mode; Enter/LMB commits; Esc cancels"));
 
     QTest::keyClick(command_input, Qt::Key_Escape);
     QApplication::processEvents();
@@ -2125,6 +2503,23 @@ int main(int argc, char* argv[]) {
     CHECK(session->document().state() == cycle_state);
     CHECK(session->document().revision() == cycle_revision);
     CHECK(session->undoDepth() == cycle_undo);
+
+    // Retire the two R10 Measure unit-presentation commands before
+    // the original SK-07F history cleanup. This restores the pre-check
+    // authored Part unit and keeps the later Line Undo expectations intact.
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::inch);
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::millimetre);
+    CHECK(
+        length_unit_combo->currentText() ==
+        QStringLiteral("mm"));
 
     // Remove the two temporary SK-07F Line segments so later history
     // assertions retain their original pre-SK-07E shape.
@@ -2329,6 +2724,30 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(session->document().sketches().size() == 1U);
     CHECK(finish_button->isHidden());
+
+    const auto unit_revision_before =
+        session->document().revision();
+    const auto unit_undo_before =
+        session->undoDepth();
+    length_unit_combo->setCurrentIndex(3);
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::inch);
+    CHECK(
+        session->document().revision() !=
+        unit_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        unit_undo_before + 1U);
+    undo_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document().lengthUnit() ==
+        core::LengthUnit::millimetre);
+    CHECK(
+        length_unit_combo->currentText() ==
+        QStringLiteral("mm"));
 
     CHECK(session->save().ok());
     CHECK(!session->needsSave());

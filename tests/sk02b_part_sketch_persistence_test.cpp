@@ -279,7 +279,9 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 6);
+            .domain_schema_version ==
+        part::PartDocumentStore::
+            current_schema_version);
     CHECK(
         package.package->authored_json.find(
             "\"next_entity_id\"") !=
@@ -548,7 +550,9 @@ int main() {
     CHECK(migrated.ok());
     CHECK(
         migrated.package->descriptor
-            .domain_schema_version == 6);
+            .domain_schema_version ==
+        part::PartDocumentStore::
+            current_schema_version);
     CHECK(
         migrated.package->authored_json.find(
             "\"model\"") !=

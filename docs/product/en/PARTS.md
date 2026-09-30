@@ -58,9 +58,12 @@ When no model/reference object is the primary selection, Properties shows the Do
 - Number;
 - Title;
 - Description;
-- Engineering revision.
+- Engineering revision;
+- Input/display length unit: mm, cm, m, in or ft.
 
-`Apply Properties` changes the open Document session. The change is not durable on disk until you use `Save`.
+Changing the Part unit changes how unitless Length input is interpreted and how physical values are displayed. Existing geometry is not rescaled. The unit is authored Document state, participates in Undo/Redo, makes the Part dirty when changed and becomes durable after `Save`. Older native Parts open as mm.
+
+`Apply Properties` changes the other Document fields in the open session. Those changes are not durable on disk until you use `Save`.
 
 `Undo` and `Redo` operate on authored changes in the current open session.
 
@@ -154,39 +157,37 @@ The right **Operations** panel shows a checkable **Construction** option wheneve
 
 Rectangle preview follows the same perimeter/diagonal semantics. Construction preview is dashed as a visual cue only. The final commit is bound to the Document revision captured at First Corner; if the Document changes before Opposite Corner, the pending rectangle fails closed instead of being silently rebased.
 
-R9 does not assign a numeric meaning to a bare scalar while Rectangle is asking for a corner. Width/height entry, coordinates, units, Ortho/Polar, Dynamic Input and OSNAP/tracking remain outside the current Rectangle tool.
+At Opposite Corner, precision input also accepts `Width;Height`. Width and Height are positive Length values; the current pointer quadrant supplies left/right and up/down orientation. This Rectangle-specific grammar is not reinterpreted as generic `U;V`.
 
 Line/Circle/Arc creation and ordinary selection retain the existing behavior. Selected editable entities show state-based square grips: hollow idle, cyan hollow hover and filled yellow active/captured.
 
 ### Grip edit modes
 
-Line/Circle/Arc center grips are **Move-only**. Clicking a center grip moves the complete frozen mixed selection, using the grip's interaction-start position as the implicit base.
-
-Line Start/End, the four Circle quadrant grips and Arc Start/End/Mid default to owner-only **Reshape**. During active manipulation, press **Space** to cycle:
+Center grips cycle:
 
 ```text
-Reshape ↔ Move
+Move → Rotate → Scale → Mirror → Move
 ```
 
-In `Reshape`, only the primitive that owns the active grip is edited. In `Move`, the complete selection frozen when manipulation started is translated. The same active grip, pivot, frozen selection and current pointer position are preserved while cycling.
+Supported non-center Line/Circle/Arc grips start in owner-only **Reshape** and cycle:
 
-After Space, preview is recomputed from interaction-start geometry rather than from the previous preview. Cycling itself does not change the Document, create a revision or add an Undo step. Operations shows the current mode as `Grip — Reshape` or `Grip — Move`.
+```text
+Reshape → Move → Rotate → Scale → Mirror → Reshape
+```
 
-LMB or Enter commits the current mode. Esc cancels the complete uncommitted manipulation and preserves selection. Space on a center grip does not change mode; center grips remain Move-only.
+Move/Rotate/Scale/Mirror operate on the complete selection frozen when manipulation starts; Reshape edits only the active-grip owner. Every preview is recomputed from interaction-start geometry. Rotate captures a fresh reference direction, Scale a fresh reference radius, and Mirror uses the active grip as the first axis point.
 
-Space during active grip manipulation has precedence over Repeat Last Command. Space while Command Line or another text-entry field has focus remains a literal text space.
+You can type exact values in the numeric modes: Angle for Rotate, a positive Factor for Scale and Axis Angle for Mirror. Once accepted, the exact value outranks further pointer motion.
 
-During grip Reshape or grip Move you can also use Direct Distance: point the cursor in a direction from the grip's interaction-start position, type a distance in Command Line and press Enter. For Move this resolves a destination exactly that distance from the pivot; for Reshape the same resolved point is passed to the normal primitive-specific reshape semantics.
+Space cycles the mode and creates no authored change. LMB or Enter commits; Esc cancels the uncommitted manipulation. Grip Copy is available only in Reshape and Move and turns OFF when cycling into another mode.
 
 ### Grip Copy
 
-While a grip manipulation is active, type `C` and press Enter to enable **Grip Copy**. Copy is a modifier of the current Reshape/Move mode, not a third edit mode.
+While a grip manipulation is active, type `C` and press Enter to enable **Grip Copy**. Copy is a commit modifier available only in Reshape and Move.
 
-In **Reshape + Copy**, each accepted placement creates one fresh-ID copy of only the primitive that owns the active grip; the original owner and every other selected entity remain unchanged. In **Move + Copy**, each placement duplicates the complete selection that was frozen when the grip interaction started. The originals remain the selected/reference set and created copies do not take over selection.
+In **Reshape + Copy**, each accepted placement creates one fresh-ID copy of only the active-grip owner. In **Move + Copy**, each placement duplicates the complete frozen selection. Originals remain unchanged and selected.
 
-LMB can accept a placement, and the existing Direct Distance path can also accept it: enable Copy, establish a pointer direction, type the distance and press Enter. After a successful placement Grip Copy stays active for another copy from the same interaction-start source and pivot, but the previous pointer direction is cleared; move the pointer again before another numeric placement.
-
-An exact no-change placement is a clean no-op. Pressing Space changes Reshape↔Move where supported and turns Grip Copy OFF, so `C` must be submitted again for the new mode. Esc ends the transient grip session while keeping already committed copies. Undo while Grip Copy is active first ends the transient session and then undoes only the latest committed history step.
+Placement can use LMB or the same precision PointRequest. After a successful copy, the interaction-start source/pivot are retained for another placement, but request-local pointer candidates and numeric locks are cleared. An exact no-change placement is a no-op. Space cycles mode and turns Copy OFF; it must be enabled again after returning to Reshape or Move. Esc ends the transient session while keeping committed copies; Undo then affects the latest committed history step normally.
 
 ### Selecting objects for Modify
 
@@ -255,23 +256,39 @@ Specify the first and second axis points. Two distinct points define an infinite
 
 Mirror reflects the complete frozen selection. Line/Circle/Arc preserve their EntityIds, and Arc direction remains geometrically consistent with the reflected directed arc. If the complete geometry is exactly unchanged by the chosen axis, the operation completes as a no-op.
 
-### Commit and numeric entry
+### Commit and precision input
 
-Move/Copy/Rotate/Scale/Mirror preview is runtime-only. Move/Rotate/Scale/Mirror edit existing entities and preserve their EntityIds. COPY creates new entities with fresh EntityIds only for accepted placements.
+Move/Copy/Rotate/Scale/Mirror preview is runtime-only. Move/Rotate/Scale/Mirror preserve EntityIds; COPY creates fresh EntityIds only for accepted placements. LMB at the final stage or Enter commits the current valid request.
 
-LMB at the final point stage or Enter commits the current valid preview/placement. Esc cancels uncommitted transient state and preserves the relevant selection.
+The shared precision grammar accepts:
 
-The current version supports **Direct Distance** at five point-input classes: the second/next LINE point, grip Reshape, grip Move, normal MOVE destination and normal COPY placement. Grip Copy reuses the existing grip Reshape/Move PointRequest rather than adding another numeric path; when Copy is ON, the resolved grip point commits a duplicate instead of editing the original. A base/pivot must already exist; then establish a non-zero direction with the cursor, type a finite non-negative distance in Command Line and press Enter. `.` is always accepted as a decimal separator, and the current locale decimal separator is accepted as well.
+```text
+Absolute point        U;V
+Relative Cartesian    @dU;dV
+Relative polar        @Distance<Angle
+```
 
-After a numeric COPY placement, COPY remains active for another placement, but the previous direction is not silently reused — move the pointer to establish the direction for the next Direct Distance. Continuous LINE behaves the same way from its new endpoint. A value of `0` can be resolved, after which normal tool semantics decide the no-op/rejection: LINE creates no zero-length segment, MOVE is a no-op, and COPY creates no coincident copy.
+Bare Length uses the current Part unit. Explicit `mm`, `cm`, `m`, `in` or `ft` overrides it. Decimal dot is always accepted and the current decimal comma is accepted where applicable. Bounded arithmetic supports `+`, `-`, `*`, `/` and parentheses with dimensional validation. Bare Angle is degrees; `deg` and `rad` are explicit angle suffixes. Feet/inches quote notation is rejected.
 
-Numeric Rotate angle, Scale factor, absolute/relative Cartesian coordinates, polar syntax, unit suffixes/expressions, Dynamic Input, Ortho/Polar and snapping/tracking are not implemented yet. Printable text typed with normal CAD viewport focus is routed into the workspace-global Command Line buffer; numeric meaning is still owned by the active PointRequest/tool and is not guessed by the global router.
+Line uses exact point input for the first and later points. Circle is **Center → Size**; Size defaults to **Diameter** for each Sketch Edit and local `D`/`R` switch Diameter/Radius. Arc is **Start → End → Arc Point / Radius**. Radius must be at least half the chord; pointer side chooses the bulge, Radius creates the minor/semicircle result, and an explicit third Arc Point can create a major arc. Rectangle second stage accepts `Width;Height`.
+
+Rotate accepts exact signed **Angle** and Scale exact positive **Factor**. Grip Rotate/Scale/Mirror expose **Angle**, **Factor** and **Axis Angle**.
+
+### Polar and Dynamic Input
+
+**Polar** is attraction, not snapping. It starts ON at 45° (`360/8`), Reference **Absolute**, with no Additional Angles. Operations configures Step, Absolute/Relative and optional single Additional Angles. Relative requires a valid semantic reference and never silently falls back to Absolute. **F10** toggles Polar. Its settings survive Sketch close/re-entry during the current application session and reset at application restart.
+
+**Dynamic Input (DYN)** starts OFF and is toggled by **F12** or Operations. When ON, the cursor overlay exposes fields of the same active request and uses the same live token as Command Line. Based-point order is **Distance → Angle → dU → dV**; unbased points use **U → V**; Rectangle uses **Width → Height**; Circle exposes Diameter/Radius; Rotate/Scale/grip Mirror expose their single semantic values.
+
+**Tab** locks a valid current field and advances; empty Tab advances without locking; **Shift+Tab** moves backward. **Enter** accepts the request from locks plus remaining pointer/Polar values. **Esc** clears live text first, then request-local locks, then follows ordinary tool cancellation. Locked Angle is absolute from Sketch +U and outranks Polar; locked Distance may combine with captured Polar direction. Conflicting lock families fail closed.
+
+Polar/DYN create no Document revision, dirty state or Undo step and are not saved in the Part.
 
 Space typed while a text-entry field has focus remains text input; it does not trigger a CAD action.
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeric Rotate/Scale, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages.
+Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Object Snap/tracking/inference, Grid Snap, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
 
 <!-- section-id: product.parts.measure -->
 ## Inspect — Measure
@@ -312,12 +329,12 @@ After a result, the next accepted target starts the next relation. Blank click c
 
 Measure and Between are read-only: no dirty state, revision change, identity allocation or Undo step. Runtime measurement references are not persisted and Measure is not Repeat Last Command.
 
-Linear/area values remain in Sketch coordinate scale without a physical unit label; angles are displayed in degrees. General curve-to-curve minimum distance, OSNAP/tracking/inference, persistent sub-element references, multiple dimension overlays, authored dimensions and constraints remain outside R8B. Broader viewport dimension display is deferred and will be reconsidered with future authored/parametric dimensions and constraints rather than as a separate R8C overlay subsystem.
+Linear Measure values are shown in the current Part length unit and Circle area uses the squared current unit; angles remain degrees. Changing the Part unit updates presentation without changing measured geometry. General curve-to-curve minimum distance, OSNAP/tracking/inference, persistent sub-element references, authored dimensions and constraints remain outside the current Measure surface. Broader viewport dimension display is deferred and will be reconsidered with future authored/parametric dimensions and constraints rather than as a separate R8C overlay subsystem.
 
 <!-- section-id: product.parts.profiles -->
 ## Construction and Profile
 
-Every Sketch Line, Circle and Arc can be **Regular** or **Construction**. Select geometry in ordinary Select and use `Regular` or `Construction` in Operations. Construction remains saved helper geometry, but it does not close or split regions used by Profile. The viewport presents Construction geometry with a dashed line; this is only a presentation cue, while the authored entity role remains semantic truth. A Regular Rectangle participates in Profile analysis only through its four Regular perimeter Lines; optional Construction diagonals do not split the material region. A Construction Rectangle contributes no material boundary.
+Every Sketch Line, Circle and Arc can be **Regular** or **Construction**. Select geometry in ordinary Select and use `Regular` or `Construction` in Operations. Construction remains saved helper geometry, but it does not close or split regions used by Profile. The viewport presents Construction geometry with a dashed line; this is only a presentation cue, while the authored entity role remains semantic truth. Dash/gap cadence is screen-space presentation: short and long Construction lines use the same visual cadence, zoom does not rescale authored geometry, and preview/committed Construction use the same policy. A Regular Rectangle participates in Profile analysis only through its four Regular perimeter Lines; optional Construction diagonals do not split the material region. A Construction Rectangle contributes no material boundary.
 
 The **Profile** tool works inside the active Sketch. Moving the pointer over closed geometry shows a translucent region result; clicking accepts that candidate into the current draft and Status reminds you that **Finish Profile** performs the durable commit. Region truth comes from exact Line/Circle/Arc semantics, not from Viewer tessellation.
 
@@ -325,7 +342,7 @@ Operations provides **Add Area**, **Subtract Area**, **Detect Islands**, **Highl
 
 An open chain remains open: SimpleSolid does not close a small gap with a hidden tolerance or auto-repair it. Clicking where no bounded region exists reports an open-boundary diagnostic when the analysis detects one. Without snapping/OSNAP, two points that only look coincident on screen are not silently made equal. A disconnected Add result, subtraction that splits material, or ambiguous topology is rejected without changing the Document.
 
-Finish creates a Part-owned Profile with a stable `ProfileId`. The Profile stores semantic references to source-Sketch geometry rather than a copy of the visible fill. Source edits can keep the Profile **Valid**, make it **Invalid**, and later restore it to Valid without changing ProfileId. SimpleSolid does not automatically rebind an Invalid Profile to similar or nearest replacement geometry.
+Finish creates a Part-owned Profile with a stable `ProfileId`. The Profile stores semantic references to source-Sketch geometry rather than a copy of the visible fill. Source edits can keep the Profile **Valid**, make it **Invalid**, and later restore it to Valid without changing ProfileId. Moving, rotating, positively scaling or mirroring a complete connected Line/Arc boundary together preserves its existing endpoint topology; this is preservation of an already-established contact, not proximity-based gap healing. Moving only part of the boundary may intentionally open a real gap, which remains open until the authored geometry is actually closed again. SimpleSolid does not automatically rebind an Invalid Profile to similar or nearest replacement geometry.
 
 A Profile appears under its source Sketch in Document Tree. Properties shows Name, ProfileId, Source Sketch, Status, diagnostic, Area, Perimeter, Holes and Visibility. Area/Perimeter/Holes are derived and become unavailable for Invalid instead of retaining stale values. Name and Visibility are authored.
 
@@ -395,11 +412,11 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, Rectangle authoring that resolves to ordinary Lines, and Part-owned Profiles with live RegionIntent semantics.
+The current Part provides Document identity/properties, a durable display/input length unit, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, Rectangle authoring that resolves to ordinary Lines, and Part-owned Profiles with live RegionIntent semantics.
 
-The current Sketch UI provides Select plus Create, Modify and Inspect groups with Line/Circle/Arc/Rectangle, a runtime future-creation Construction toggle, Rectangle Draw Diagonals, Move/Copy/Rotate/Scale/Mirror and read-only quick/Between Measure, additive point/Window/Crossing selection, semantic primary and hover, state-based square grips, selection-first and command-first common transforms, normal repeated COPY with fresh EntityIds, Grip Copy through active-grip `C` for owner-only Reshape or frozen-selection Move, Repeat Last Command through Enter/Space in ordinary Select, Space CycleEditMode between owner-only Reshape and frozen-selection Move on supported non-center grips, Move-only center grips, atomic mixed Delete, Undo/Redo, Operations and keyboard-first Command Line.
+The current Sketch UI includes keyboard-first precision input, mm/cm/m/in/ft quantities and bounded expressions, absolute/relative Cartesian and polar point entry, exact Circle/Arc/Rectangle size input, numeric Rotate/Scale and grip transform values, Polar attraction, Dynamic Input with request-local locks, Measure in current physical units, the supported Grip edit cycle, Grip Copy in Reshape/Move, repeated COPY, Repeat Last Command, Undo/Redo and Save/Reopen.
 
-Direct Distance is available for the supported PointRequest stages documented above, including grip placements while Grip Copy is enabled. Profile is not a solid operation. The product still lacks Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, numeric Rotate angle and Scale factor, absolute/relative/polar coordinate entry, unit expressions and Dynamic Input, snapping/inference, constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
+Profile is not a solid operation. The product still lacks Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, OSNAP/tracking/inference, Grid Snap, authored constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
 

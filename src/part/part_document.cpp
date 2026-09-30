@@ -76,6 +76,11 @@ PartDocument::evaluateProfile(
 
 bool PartDocument::validAuthoredState(
     const PartAuthoredState& state) noexcept {
+    if (!core::isLengthUnit(
+            state.length_unit)) {
+        return false;
+    }
+
     for (std::size_t index = 0;
          index < state.sketches.size();
          ++index) {

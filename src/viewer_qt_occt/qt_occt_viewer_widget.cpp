@@ -1055,6 +1055,7 @@ public:
         clearSketchMeasureMarkerScene();
         clearSketchMeasureCueScene();
         clearSketchGripScene();
+        clearSketchDynamicInputOverlay();
         sketch_interaction_presentation_ = {};
         clearSketchScene();
 
@@ -1082,66 +1083,18 @@ public:
                     context_->Display(object, false);
                 };
 
-            const auto interpolate =
-                [](const viewer::Point3& first,
-                   const viewer::Point3& second,
-                   double parameter) {
-                    return viewer::Point3{
-                        first.x +
-                            (second.x - first.x) *
-                                parameter,
-                        first.y +
-                            (second.y - first.y) *
-                                parameter,
-                        first.z +
-                            (second.z - first.z) *
-                                parameter};
-                };
-
             for (const auto& line : scene.lines) {
-                if (!line.construction) {
-                    display_segment(
-                        line.token,
-                        line.start,
-                        line.end,
-                        false);
-                    continue;
-                }
-
-                // Stable world-space construction dashes. The geometry, not
-                // screen-space stippling, owns the visible dash phase.
-                constexpr std::size_t kSlices = 24U;
-                for (std::size_t slice = 0U;
-                     slice < kSlices;
-                     slice += 2U) {
-                    const double first =
-                        static_cast<double>(slice) /
-                        static_cast<double>(kSlices);
-                    const double second =
-                        static_cast<double>(slice + 1U) /
-                        static_cast<double>(kSlices);
-                    display_segment(
-                        line.token,
-                        interpolate(
-                            line.start,
-                            line.end,
-                            first),
-                        interpolate(
-                            line.start,
-                            line.end,
-                            second),
-                        true);
-                }
+                display_segment(
+                    line.token,
+                    line.start,
+                    line.end,
+                    line.construction);
             }
 
             for (const auto& curve : scene.curves) {
                 for (std::size_t index = 1U;
                      index < curve.points.size();
                      ++index) {
-                    if (curve.construction &&
-                        (index % 2U) == 0U) {
-                        continue;
-                    }
                     display_segment(
                         curve.token,
                         curve.points[index - 1U],
@@ -1348,7 +1301,8 @@ public:
             const auto display_preview_segment =
                 [this](
                     const viewer::Point3& start_point,
-                    const viewer::Point3& end_point) {
+                    const viewer::Point3& end_point,
+                    bool construction) {
                     Handle(Geom_CartesianPoint) start =
                         new Geom_CartesianPoint(
                             toPoint(start_point));
@@ -1358,66 +1312,26 @@ public:
                     Handle(AIS_Line) object =
                         new AIS_Line(start, end);
 
+                    object->Attributes()->SetLineAspect(
+                        new Prs3d_LineAspect(
+                            Quantity_Color{
+                                0.22, 0.82, 0.96,
+                                Quantity_TOC_RGB},
+                            construction
+                                ? Aspect_TOL_DASH
+                                : Aspect_TOL_SOLID,
+                            1.6));
                     context_->Display(object, false);
-                    context_->SetColor(
-                        object,
-                        Quantity_Color{
-                            0.22, 0.82, 0.96,
-                            Quantity_TOC_RGB},
-                        false);
-                    context_->SetWidth(
-                        object,
-                        1.6,
-                        false);
                     context_->Deactivate(object);
                     sketch_preview_objects_.push_back(
                         object);
                 };
 
-            const auto interpolate =
-                [](const viewer::Point3& first,
-                   const viewer::Point3& second,
-                   double parameter) {
-                    return viewer::Point3{
-                        first.x +
-                            (second.x - first.x) *
-                                parameter,
-                        first.y +
-                            (second.y - first.y) *
-                                parameter,
-                        first.z +
-                            (second.z - first.z) *
-                                parameter};
-                };
-
             for (const auto& line : scene.lines) {
-                if (!line.construction) {
-                    display_preview_segment(
-                        line.start,
-                        line.end);
-                    continue;
-                }
-
-                constexpr std::size_t kSlices = 24U;
-                for (std::size_t slice = 0U;
-                     slice < kSlices;
-                     slice += 2U) {
-                    const double first =
-                        static_cast<double>(slice) /
-                        static_cast<double>(kSlices);
-                    const double second =
-                        static_cast<double>(slice + 1U) /
-                        static_cast<double>(kSlices);
-                    display_preview_segment(
-                        interpolate(
-                            line.start,
-                            line.end,
-                            first),
-                        interpolate(
-                            line.start,
-                            line.end,
-                            second));
-                }
+                display_preview_segment(
+                    line.start,
+                    line.end,
+                    line.construction);
             }
 
             sketch_preview_scene_ = scene;
@@ -2165,6 +2079,249 @@ public:
         context_->UpdateCurrentViewer();
     }
 
+    bool setSketchDynamicInputOverlay(
+        const viewer::SketchDynamicInputOverlay& overlay) {
+        if (!overlay.valid()) {
+            return false;
+        }
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        const double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            return false;
+        }
+
+        constexpr double kOffset = 16.0;
+        constexpr double kMargin = 8.0;
+        constexpr double kRowHeight = 18.0;
+        constexpr double kCharWidth = 7.5;
+        constexpr double kTextHeight = 12.0;
+        constexpr const char* kTechnicalFont =
+            "Consolas";
+
+        std::size_t max_chars = 1U;
+        for (const auto& field : overlay.fields) {
+            const std::size_t chars =
+                2U +
+                field.label.size() +
+                (field.display_value.empty()
+                     ? 0U
+                     : 2U + field.display_value.size());
+            max_chars =
+                std::max(max_chars, chars);
+        }
+
+        const double logical_width =
+            14.0 +
+            kCharWidth *
+                static_cast<double>(max_chars);
+        const double logical_height =
+            kRowHeight *
+            static_cast<double>(
+                overlay.fields.size());
+
+        double logical_x =
+            overlay.anchor.x + kOffset;
+        double logical_y =
+            overlay.anchor.y + kOffset;
+
+        if (logical_x + logical_width + kMargin >
+            static_cast<double>(owner_.width())) {
+            logical_x =
+                overlay.anchor.x -
+                kOffset -
+                logical_width;
+        }
+        if (logical_y + logical_height + kMargin >
+            static_cast<double>(owner_.height())) {
+            logical_y =
+                overlay.anchor.y -
+                kOffset -
+                logical_height;
+        }
+
+        const double max_x =
+            std::max(
+                kMargin,
+                static_cast<double>(owner_.width()) -
+                    logical_width -
+                    kMargin);
+        const double max_y =
+            std::max(
+                kMargin,
+                static_cast<double>(owner_.height()) -
+                    logical_height -
+                    kMargin);
+        logical_x =
+            std::clamp(
+                logical_x,
+                kMargin,
+                max_x);
+        logical_y =
+            std::clamp(
+                logical_y,
+                kMargin,
+                max_y);
+
+        try {
+            while (sketch_dynamic_input_labels_.size() >
+                   overlay.fields.size()) {
+                const auto label =
+                    sketch_dynamic_input_labels_.back();
+                sketch_dynamic_input_labels_.pop_back();
+                if (!label.IsNull()) {
+                    context_->Remove(label, false);
+                }
+            }
+
+            for (std::size_t index = 0U;
+                 index < overlay.fields.size();
+                 ++index) {
+                const auto& field =
+                    overlay.fields[index];
+
+                std::string text =
+                    index == overlay.focused_index
+                        ? "> "
+                        : "  ";
+                text += field.label;
+                if (!field.display_value.empty()) {
+                    text += ": ";
+                    text += field.display_value;
+                }
+
+                Quantity_Color color{
+                    0.88,
+                    0.90,
+                    0.94,
+                    Quantity_TOC_RGB};
+                switch (field.state) {
+                case viewer::SketchDynamicInputValueState::free:
+                    break;
+                case viewer::SketchDynamicInputValueState::assisted:
+                    color =
+                        Quantity_Color{
+                            0.98,
+                            0.78,
+                            0.28,
+                            Quantity_TOC_RGB};
+                    break;
+                case viewer::SketchDynamicInputValueState::locked:
+                    color =
+                        Quantity_Color{
+                            0.38,
+                            0.92,
+                            0.58,
+                            Quantity_TOC_RGB};
+                    break;
+                }
+
+                const int physical_x =
+                    static_cast<int>(
+                        std::lround(
+                            logical_x * dpr));
+                const int physical_y =
+                    static_cast<int>(
+                        std::lround(
+                            (logical_y +
+                             kRowHeight *
+                                 static_cast<double>(
+                                     index)) *
+                            dpr));
+
+                const bool create =
+                    index >=
+                    sketch_dynamic_input_labels_.size();
+                Handle(AIS_TextLabel) label =
+                    create
+                        ? Handle(AIS_TextLabel){
+                              new AIS_TextLabel()}
+                        : sketch_dynamic_input_labels_[index];
+                if (label.IsNull()) {
+                    return false;
+                }
+
+                label->SetText(
+                    TCollection_ExtendedString{
+                        text.c_str(),
+                        Standard_True});
+                label->SetPosition(
+                    gp_Pnt{0.0, 0.0, 0.0});
+                label->SetColor(color);
+                label->SetFont(kTechnicalFont);
+                label->SetHeight(kTextHeight);
+                label->SetHJustification(
+                    Graphic3d_HTA_LEFT);
+                label->SetVJustification(
+                    Graphic3d_VTA_TOP);
+                label->SetZoomable(false);
+                label->SetZLayer(
+                    Graphic3d_ZLayerId_Topmost);
+                label->SetTransformPersistence(
+                    new Graphic3d_TransformPers(
+                        Graphic3d_TMF_2d,
+                        Aspect_TOTP_LEFT_UPPER,
+                        Graphic3d_Vec2i{
+                            physical_x,
+                            physical_y}));
+
+                if (create) {
+                    context_->Display(label, false);
+                    context_->Deactivate(label);
+                    sketch_dynamic_input_labels_.
+                        push_back(label);
+                } else {
+                    context_->Redisplay(label, false);
+                }
+            }
+
+            sketch_dynamic_input_overlay_ =
+                overlay;
+            // One provider update per pointer sample. Reusing labels avoids
+            // remove/create churn and the previous double redraw flicker.
+            context_->UpdateCurrentViewer();
+            return true;
+        } catch (...) {
+            clearSketchDynamicInputOverlay();
+            throw;
+        }
+    }
+
+    void clearSketchDynamicInputOverlay() noexcept {
+        if (sketch_dynamic_input_labels_.empty() &&
+            !sketch_dynamic_input_overlay_) {
+            return;
+        }
+
+        if (!context_.IsNull()) {
+            for (const auto& label :
+                 sketch_dynamic_input_labels_) {
+                if (label.IsNull()) continue;
+                const auto retained = label;
+                guardedVoid(
+                    "removeSketchDynamicInputLabel",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+
+        sketch_dynamic_input_labels_.clear();
+        sketch_dynamic_input_overlay_.reset();
+
+        if (!context_.IsNull()) {
+            context_->UpdateCurrentViewer();
+        }
+    }
+
     void setSelectionIntentHandler(
         viewer::SelectionIntentHandler handler) {
         selection_intent_handler_ = std::move(handler);
@@ -2471,6 +2628,31 @@ public:
             viewer::SelectionIntent{
                 {},
                 viewer::SelectionIntentMode::clear});
+    }
+
+    [[nodiscard]] std::optional<viewer::ViewportPoint2>
+    projectWorldPoint(
+        const viewer::Point3& point) const {
+        const auto screen =
+            projectToScreen(point);
+        if (!screen) {
+            return std::nullopt;
+        }
+
+        const double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            return std::nullopt;
+        }
+
+        viewer::ViewportPoint2 result{
+            screen->x / dpr,
+            screen->y / dpr};
+        return result.valid()
+            ? std::optional<viewer::ViewportPoint2>{
+                  result}
+            : std::nullopt;
     }
 
     void zoomByFactor(double factor) {
@@ -3225,11 +3407,14 @@ public:
             entry.object->Attributes()->SetLineAspect(
                 new Prs3d_LineAspect(
                     color,
-                    Aspect_TOL_SOLID,
+                    entry.construction
+                        ? Aspect_TOL_DASH
+                        : Aspect_TOL_SOLID,
                     width));
 
-            // Construction dash geometry is already split in world-space.
-            // Redisplay is still required after replacing the line drawer.
+            // Construction cadence is a provider presentation style, not
+            // authored/tessellated geometry. Preserve DASH through all
+            // hover/selection/Measure-highlight redisplays.
             context_->Redisplay(
                 entry.object,
                 false);
@@ -3489,6 +3674,10 @@ private:
     Handle(AIS_RubberBand)
         selection_rubber_band_;
     bool selection_rubber_band_visible_{};
+    std::vector<Handle(AIS_TextLabel)>
+        sketch_dynamic_input_labels_;
+    std::optional<viewer::SketchDynamicInputOverlay>
+        sketch_dynamic_input_overlay_;
 
     Handle(AIS_ViewCube) navigation_cube_;
     Handle(AIS_AnimationCamera)
@@ -3588,6 +3777,18 @@ void QtOcctViewerWidget::fitAll() {
     guardedVoid(
         "fitAll",
         [this] { impl_->fitAll(); });
+}
+
+std::optional<viewer::ViewportPoint2>
+QtOcctViewerWidget::projectWorldPoint(
+    viewer::Point3 point) const {
+    return guardedResult<
+        std::optional<viewer::ViewportPoint2>>(
+        "projectWorldPoint",
+        [this, point] {
+            return impl_->projectWorldPoint(
+                point);
+        });
 }
 
 void QtOcctViewerWidget::setNavigationCubeActionHandler(
@@ -3768,6 +3969,26 @@ void QtOcctViewerWidget::clearSketchSelectionBoxOverlay() {
         "clearSketchSelectionBoxOverlay",
         [this] {
             impl_->clearSketchSelectionBoxOverlay();
+        });
+}
+
+bool QtOcctViewerWidget::setSketchDynamicInputOverlay(
+    const viewer::SketchDynamicInputOverlay& overlay) {
+    return guardedBool(
+        "setSketchDynamicInputOverlay",
+        [this, &overlay] {
+            return impl_->
+                setSketchDynamicInputOverlay(
+                    overlay);
+        });
+}
+
+void QtOcctViewerWidget::clearSketchDynamicInputOverlay() {
+    guardedVoid(
+        "clearSketchDynamicInputOverlay",
+        [this] {
+            impl_->
+                clearSketchDynamicInputOverlay();
         });
 }
 

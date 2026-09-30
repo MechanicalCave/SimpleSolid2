@@ -1,6 +1,10 @@
 #include <simplesolid2/sketch/transform.hpp>
 
+#include <simplesolid2/sketch/region_analysis.hpp>
+
+#include <algorithm>
 #include <cmath>
+#include <limits>
 #include <numbers>
 #include <set>
 #include <utility>
@@ -10,6 +14,230 @@ namespace {
 
 constexpr double full_turn =
     2.0 * std::numbers::pi_v<double>;
+
+[[nodiscard]] std::optional<Point2> transformedArcEndpoint(
+    const SketchArcState& arc,
+    SketchTransformEndpointRole endpoint) noexcept {
+    const double angle =
+        endpoint == SketchTransformEndpointRole::start
+            ? arc.start_angle
+            : arc.start_angle + arc.sweep_angle;
+    if (!std::isfinite(angle) ||
+        !arc.center.finite() ||
+        !std::isfinite(arc.radius) ||
+        arc.radius <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double cosine = std::cos(angle);
+    const double sine = std::sin(angle);
+    if (!std::isfinite(cosine) ||
+        !std::isfinite(sine)) {
+        return std::nullopt;
+    }
+
+    const Point2 result{
+        std::fma(arc.radius, cosine, arc.center.u),
+        std::fma(arc.radius, sine, arc.center.v)};
+    return result.finite()
+        ? std::optional<Point2>{result}
+        : std::nullopt;
+}
+
+struct LineEndpointCandidate final {
+    EntityId id;
+    Point2 point;
+};
+
+[[nodiscard]] double endpointCandidateWindow(
+    const SketchArcState& arc,
+    Point2 endpoint) noexcept {
+    const double scale =
+        std::max(
+            {1.0,
+             std::abs(arc.center.u),
+             std::abs(arc.center.v),
+             std::abs(endpoint.u),
+             std::abs(endpoint.v),
+             arc.radius});
+    return 128.0 *
+           std::numeric_limits<double>::epsilon() *
+           scale;
+}
+
+void captureLineArcEndpointContacts(
+    const SketchModel& model,
+    SketchTransformGeometry& geometry) {
+    if (geometry.lines.empty() ||
+        geometry.arcs.empty()) {
+        return;
+    }
+
+    std::vector<LineEndpointCandidate> line_endpoints;
+    line_endpoints.reserve(geometry.lines.size() * 2U);
+    for (const auto& line : geometry.lines) {
+        line_endpoints.push_back({line.id, line.start});
+        line_endpoints.push_back({line.id, line.end});
+    }
+    std::sort(
+        line_endpoints.begin(),
+        line_endpoints.end(),
+        [](const LineEndpointCandidate& lhs,
+           const LineEndpointCandidate& rhs) {
+            if (lhs.point.u != rhs.point.u) {
+                return lhs.point.u < rhs.point.u;
+            }
+            if (lhs.point.v != rhs.point.v) {
+                return lhs.point.v < rhs.point.v;
+            }
+            return lhs.id < rhs.id;
+        });
+
+    for (const auto& arc : geometry.arcs) {
+        for (const auto endpoint_role :
+             {SketchTransformEndpointRole::start,
+              SketchTransformEndpointRole::end}) {
+            const auto endpoint =
+                transformedArcEndpoint(
+                    arc,
+                    endpoint_role);
+            if (!endpoint) continue;
+
+            const double window =
+                endpointCandidateWindow(
+                    arc,
+                    *endpoint);
+            const auto lower =
+                std::lower_bound(
+                    line_endpoints.begin(),
+                    line_endpoints.end(),
+                    endpoint->u - window,
+                    [](const LineEndpointCandidate& candidate,
+                       double u) {
+                        return candidate.point.u < u;
+                    });
+
+            for (auto it = lower;
+                 it != line_endpoints.end() &&
+                 it->point.u <= endpoint->u + window;
+                 ++it) {
+                if (std::abs(it->point.v - endpoint->v) >
+                    window) {
+                    continue;
+                }
+
+                const auto relation =
+                    analyzeCurveRelation(
+                        model,
+                        it->id,
+                        arc.id);
+                if (relation.status !=
+                    CurveRelationStatus::discrete) {
+                    continue;
+                }
+
+                const bool line_is_first =
+                    relation.first_entity == it->id;
+                for (const auto& intersection :
+                     relation.intersections) {
+                    if (!intersection.first_endpoint ||
+                        !intersection.second_endpoint) {
+                        continue;
+                    }
+
+                    const double line_parameter =
+                        line_is_first
+                            ? intersection.first_parameter
+                            : intersection.second_parameter;
+                    const double arc_parameter =
+                        line_is_first
+                            ? intersection.second_parameter
+                            : intersection.first_parameter;
+                    if ((line_parameter != 0.0 &&
+                         line_parameter != 1.0) ||
+                        (arc_parameter != 0.0 &&
+                         arc_parameter != 1.0)) {
+                        continue;
+                    }
+
+                    geometry.line_arc_contacts.push_back(
+                        SketchTransformLineArcContact{
+                            it->id,
+                            line_parameter == 0.0
+                                ? SketchTransformEndpointRole::start
+                                : SketchTransformEndpointRole::end,
+                            arc.id,
+                            arc_parameter == 0.0
+                                ? SketchTransformEndpointRole::start
+                                : SketchTransformEndpointRole::end});
+                }
+            }
+        }
+    }
+
+    std::sort(
+        geometry.line_arc_contacts.begin(),
+        geometry.line_arc_contacts.end(),
+        [](const SketchTransformLineArcContact& lhs,
+           const SketchTransformLineArcContact& rhs) {
+            if (lhs.line_id != rhs.line_id) {
+                return lhs.line_id < rhs.line_id;
+            }
+            if (lhs.line_endpoint != rhs.line_endpoint) {
+                return lhs.line_endpoint < rhs.line_endpoint;
+            }
+            if (lhs.arc_id != rhs.arc_id) {
+                return lhs.arc_id < rhs.arc_id;
+            }
+            return lhs.arc_endpoint < rhs.arc_endpoint;
+        });
+    geometry.line_arc_contacts.erase(
+        std::unique(
+            geometry.line_arc_contacts.begin(),
+            geometry.line_arc_contacts.end()),
+        geometry.line_arc_contacts.end());
+}
+
+[[nodiscard]] bool preserveLineArcEndpointContacts(
+    SketchTransformGeometry& geometry) noexcept {
+    for (const auto& contact :
+         geometry.line_arc_contacts) {
+        const auto line =
+            std::find_if(
+                geometry.lines.begin(),
+                geometry.lines.end(),
+                [&contact](const SketchLineState& value) {
+                    return value.id == contact.line_id;
+                });
+        const auto arc =
+            std::find_if(
+                geometry.arcs.begin(),
+                geometry.arcs.end(),
+                [&contact](const SketchArcState& value) {
+                    return value.id == contact.arc_id;
+                });
+        if (line == geometry.lines.end() ||
+            arc == geometry.arcs.end()) {
+            return false;
+        }
+
+        const auto point =
+            transformedArcEndpoint(
+                *arc,
+                contact.arc_endpoint);
+        if (!point) {
+            return false;
+        }
+
+        if (contact.line_endpoint ==
+            SketchTransformEndpointRole::start) {
+            line->start = *point;
+        } else {
+            line->end = *point;
+        }
+    }
+    return true;
+}
 
 [[nodiscard]] bool validGeometry(
     const SketchTransformGeometry& geometry) noexcept {
@@ -159,6 +387,12 @@ captureSketchTransformGeometry(
         return std::nullopt;
     }
 
+    if (!result.empty()) {
+        captureLineArcEndpointContacts(
+            model,
+            result);
+    }
+
     return result.empty()
         ? std::nullopt
         : std::optional<SketchTransformGeometry>{
@@ -208,6 +442,11 @@ translateSketchGeometry(
             !arc.center.finite()) {
             return std::nullopt;
         }
+    }
+
+    if (!preserveLineArcEndpointContacts(result) ||
+        !validGeometry(result)) {
+        return std::nullopt;
     }
 
     return result;
@@ -284,6 +523,10 @@ rotateSketchGeometry(
         arc.start_angle += angle_radians;
     }
 
+    if (!preserveLineArcEndpointContacts(result)) {
+        return std::nullopt;
+    }
+
     return validGeometry(result)
         ? std::optional<SketchTransformGeometry>{
               std::move(result)}
@@ -358,6 +601,10 @@ scaleSketchGeometry(
         }
         arc.center = *center;
         arc.radius = radius;
+    }
+
+    if (!preserveLineArcEndpointContacts(result)) {
+        return std::nullopt;
     }
 
     return validGeometry(result)
@@ -454,6 +701,10 @@ mirrorSketchGeometry(
             arc.start_angle;
         arc.sweep_angle =
             -arc.sweep_angle;
+    }
+
+    if (!preserveLineArcEndpointContacts(result)) {
+        return std::nullopt;
     }
 
     return validGeometry(result)

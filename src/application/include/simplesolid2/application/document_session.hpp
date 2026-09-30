@@ -1,5 +1,6 @@
 #pragma once
 
+#include <simplesolid2/core/units.hpp>
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/sketch/transform.hpp>
@@ -17,6 +18,11 @@ namespace simplesolid2::application {
 
 struct SetDocumentPropertiesCommand final {
     core::DocumentProperties properties;
+};
+
+struct SetPartLengthUnitCommand final {
+    core::LengthUnit unit{
+        core::LengthUnit::millimetre};
 };
 
 struct SetBuiltinReferenceVisibilityCommand final {
@@ -280,6 +286,8 @@ public:
 
     [[nodiscard]] DocumentSessionResult execute(
         const SetDocumentPropertiesCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const SetPartLengthUnitCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const SetBuiltinReferenceVisibilityCommand& command);
     [[nodiscard]] CreatePartSketchResult execute(

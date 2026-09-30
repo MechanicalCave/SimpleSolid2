@@ -1,6 +1,7 @@
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/part/profile.hpp>
+#include <simplesolid2/sketch/transform.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -255,6 +256,87 @@ int main() {
             .status ==
         part::ProfileIntentResolutionStatus::
             missing_source_entity);
+
+    // A durable Profile intent over a mixed Line+Arc boundary survives a
+    // common transform of all of its source entities. This is the Part-level
+    // counterpart of the Shared-2D transform-invariance reproducer.
+    sketch::SketchModel dome_profile_model;
+    const double profile_pi =
+        std::numbers::pi_v<double>;
+    const auto dome_profile_arc =
+        dome_profile_model.addArc(
+            {0.0, 0.0},
+            25.0,
+            0.0,
+            profile_pi);
+    const auto dome_profile_left =
+        dome_profile_model.addLine(
+            {-25.0, 0.0},
+            {-25.0, -50.0});
+    const auto dome_profile_bottom =
+        dome_profile_model.addLine(
+            {-25.0, -50.0},
+            {25.0, -50.0});
+    const auto dome_profile_right =
+        dome_profile_model.addLine(
+            {25.0, -50.0},
+            {25.0, 0.0});
+
+    const auto dome_profile_analysis =
+        sketch::analyzeRegions(
+            dome_profile_model);
+    CHECK(dome_profile_analysis.complete());
+    CHECK(dome_profile_analysis.regions.size() == 1U);
+    const auto dome_profile_intent =
+        part::makeProfileRegionIntent(
+            dome_profile_analysis.regions.front());
+    CHECK(dome_profile_intent.has_value());
+    CHECK(
+        part::resolveProfileRegionIntent(
+            dome_profile_model,
+            *dome_profile_intent)
+            .valid());
+
+    const std::vector<sketch::EntityId>
+        dome_profile_ids{
+            dome_profile_arc,
+            dome_profile_left,
+            dome_profile_bottom,
+            dome_profile_right};
+    const auto dome_profile_capture =
+        sketch::captureSketchTransformGeometry(
+            dome_profile_model,
+            dome_profile_ids);
+    CHECK(dome_profile_capture.has_value());
+    const auto dome_profile_moved =
+        sketch::translateSketchGeometry(
+            *dome_profile_capture,
+            {-45.65, 0.0});
+    CHECK(dome_profile_moved.has_value());
+
+    auto dome_profile_state =
+        dome_profile_model.state();
+    dome_profile_state.lines =
+        dome_profile_moved->lines;
+    dome_profile_state.circles =
+        dome_profile_moved->circles;
+    dome_profile_state.arcs =
+        dome_profile_moved->arcs;
+    auto transformed_dome_profile_model =
+        sketch::SketchModel::restore(
+            std::move(dome_profile_state));
+    CHECK(transformed_dome_profile_model.has_value());
+
+    const auto dome_profile_resolved =
+        part::resolveProfileRegionIntent(
+            *transformed_dome_profile_model,
+            *dome_profile_intent);
+    CHECK(dome_profile_resolved.valid());
+    CHECK(
+        std::abs(
+            dome_profile_resolved.region->area -
+            (2500.0 + 312.5 * profile_pi)) <
+        1.0e-8);
 
     // Intersection-based source spans carry semantic counterpart EntityId +
     // canonical branch, not raw curve parameters.

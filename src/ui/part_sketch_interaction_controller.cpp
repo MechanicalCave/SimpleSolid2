@@ -2,11 +2,110 @@
 
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 namespace simplesolid2::ui {
+namespace {
+
+[[nodiscard]] double viewportDistance(
+    viewer::ViewportPoint2 first,
+    viewer::ViewportPoint2 second) noexcept {
+    return std::hypot(
+        second.x - first.x,
+        second.y - first.y);
+}
+
+[[nodiscard]] std::pair<double, double>
+stablePolarUnitDirection(double angle) noexcept {
+    if (!std::isfinite(angle)) {
+        return {0.0, 0.0};
+    }
+
+    constexpr double quarter_turn =
+        std::numbers::pi_v<double> / 2.0;
+    constexpr double full_turn =
+        4.0 * quarter_turn;
+
+    double normalized = std::fmod(angle, full_turn);
+    if (normalized < 0.0) {
+        normalized += full_turn;
+    }
+
+    int quadrant =
+        static_cast<int>(normalized / quarter_turn);
+    if (quadrant > 3) {
+        quadrant = 0;
+        normalized = 0.0;
+    }
+
+    const double local =
+        normalized -
+        static_cast<double>(quadrant) * quarter_turn;
+
+    // Exact quadrant tracks must remain exact authored directions. This
+    // prevents Polar-assisted Direct Distance from manufacturing a tiny
+    // topological gap at nominally closed 0/90/180/270-degree corners.
+    if (local == 0.0) {
+        switch (quadrant) {
+        case 0: return {1.0, 0.0};
+        case 1: return {0.0, 1.0};
+        case 2: return {-1.0, 0.0};
+        case 3: return {0.0, -1.0};
+        default: return {0.0, 0.0};
+        }
+    }
+
+    const double cosine = std::cos(local);
+    const double sine = std::sin(local);
+    switch (quadrant) {
+    case 0: return {cosine, sine};
+    case 1: return {-sine, cosine};
+    case 2: return {-cosine, -sine};
+    case 3: return {sine, -cosine};
+    default: return {0.0, 0.0};
+    }
+}
+
+[[nodiscard]] std::optional<double>
+viewportPointRayDistance(
+    viewer::ViewportPoint2 point,
+    viewer::ViewportPoint2 start,
+    viewer::ViewportPoint2 through) noexcept {
+    if (!point.valid() ||
+        !start.valid() ||
+        !through.valid()) {
+        return std::nullopt;
+    }
+
+    const double dx = through.x - start.x;
+    const double dy = through.y - start.y;
+    const double length_squared =
+        dx * dx + dy * dy;
+    if (!std::isfinite(length_squared) ||
+        length_squared <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double projection =
+        ((point.x - start.x) * dx +
+         (point.y - start.y) * dy) /
+        length_squared;
+    const double parameter =
+        std::max(0.0, projection);
+    const viewer::ViewportPoint2 closest{
+        start.x + parameter * dx,
+        start.y + parameter * dy};
+    const double result =
+        viewportDistance(point, closest);
+    return std::isfinite(result)
+        ? std::optional<double>{result}
+        : std::nullopt;
+}
+
+} // namespace
 
 PartSketchInteractionController::PartSketchInteractionController(
     PartViewportController& viewport_controller)
@@ -18,6 +117,8 @@ void PartSketchInteractionController::begin(
     session_ = &session;
     sketch_id_ = sketch_id;
     interaction_ = sketch::SketchInteractionState{};
+    polar_capture_ = {};
+    last_pointer_input_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -26,6 +127,8 @@ void PartSketchInteractionController::begin(
     last_repeatable_command_.reset();
     creation_role_ = sketch::EntityRole::regular;
     rectangle_draw_diagonals_ = false;
+    circle_size_input_mode_ =
+        application::CircleSizeInputMode::diameter;
     resetProfileRuntime();
     selected_profile_id_.reset();
 
@@ -39,6 +142,8 @@ void PartSketchInteractionController::begin(
 
 void PartSketchInteractionController::end() {
     interaction_ = sketch::SketchInteractionState{};
+    polar_capture_ = {};
+    last_pointer_input_.reset();
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -47,6 +152,8 @@ void PartSketchInteractionController::end() {
     last_repeatable_command_.reset();
     creation_role_ = sketch::EntityRole::regular;
     rectangle_draw_diagonals_ = false;
+    circle_size_input_mode_ =
+        application::CircleSizeInputMode::diameter;
     resetProfileRuntime();
     selected_profile_id_.reset();
 
@@ -333,6 +440,21 @@ bool PartSketchInteractionController::submitDirectDistance(
         return acceptLineResolvedPoint(*resolved);
     }
 
+    if (interaction_.tool() == sketch::SketchTool::arc &&
+        interaction_.arcStage() ==
+            sketch::ArcStage::await_end) {
+        const auto accepted =
+            interaction_.acceptArcPoint(
+                resolved->position);
+        if (accepted.outcome !=
+            sketch::ArcPointOutcome::end_accepted) {
+            return false;
+        }
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+        return true;
+    }
+
     const auto stage = interaction_.commonTransformStage();
     if (stage &&
         *stage == sketch::CommonTransformStage::await_destination &&
@@ -347,6 +469,903 @@ bool PartSketchInteractionController::submitDirectDistance(
     reportStatus(
         "Direct Distance is not valid for the active input stage.");
     return false;
+}
+
+bool PartSketchInteractionController::submitCadInputDynamicRequest() {
+    if (!active() || profile_session_ ||
+        !last_pointer_input_ ||
+        session_ == nullptr || !sketch_id_) {
+        return false;
+    }
+
+    const auto generation_before =
+        cad_input_context_generation_;
+    const auto revision_before =
+        session_->document().revision();
+
+    auto input = *last_pointer_input_;
+    input.sketch_id = *sketch_id_;
+    input.phase =
+        viewer::SpatialPointerPhase::primary_press;
+    onPointer(input);
+
+    return cad_input_context_generation_ !=
+               generation_before ||
+           session_->document().revision() !=
+               revision_before;
+}
+
+bool PartSketchInteractionController::submitExplicitPoint(
+    sketch::ExplicitPointInput input) {
+    if (!active() || profile_session_) {
+        return false;
+    }
+
+    const auto resolved =
+        interaction_.resolveExplicitPoint(input);
+    if (!resolved) {
+        reportStatus(
+            "Explicit point input is not available for the active point stage.");
+        return false;
+    }
+
+    if (interaction_.directManipulationActive()) {
+        if (!interaction_.updateDirectManipulation(*resolved)) {
+            return false;
+        }
+        return commitDirectManipulation();
+    }
+
+    if (interaction_.tool() == sketch::SketchTool::line) {
+        return acceptLineResolvedPoint(*resolved);
+    }
+
+    if (interaction_.tool() ==
+        sketch::SketchTool::circle) {
+        const auto accepted =
+            interaction_.acceptCirclePoint(
+                resolved->position);
+        if (accepted.outcome !=
+            sketch::CirclePointOutcome::
+                center_accepted) {
+            return false;
+        }
+
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+        return true;
+    }
+
+    if (interaction_.tool() ==
+        sketch::SketchTool::arc) {
+        const auto accepted =
+            interaction_.acceptArcPoint(
+                resolved->position);
+        if (accepted.outcome ==
+                sketch::ArcPointOutcome::
+                    arc_requested &&
+            accepted.request) {
+            const auto result =
+                session_->execute(
+                    application::AddSketchArcCommand{
+                        *sketch_id_,
+                        accepted.request->center,
+                        accepted.request->radius,
+                        accepted.request->start_angle,
+                        accepted.request->sweep_angle,
+                        creation_role_});
+            const bool committed =
+                result.ok() && result.changed;
+            static_cast<void>(
+                interaction_.resolveArcRequest(
+                    committed));
+
+            viewport_controller_->clearSketchPreview();
+            if (!committed) {
+                reportStatus(
+                    result.diagnostic.message.empty()
+                        ? std::string{
+                              "Arc commit failed."}
+                        : result.diagnostic.message);
+                notifyStateChanged();
+                return false;
+            }
+
+            viewport_controller_->refreshPresentation();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            return true;
+        }
+
+        if (accepted.outcome ==
+                sketch::ArcPointOutcome::
+                    start_accepted ||
+            accepted.outcome ==
+                sketch::ArcPointOutcome::
+                    end_accepted) {
+            viewport_controller_->clearSketchPreview();
+            notifyStateChanged();
+            return true;
+        }
+        return false;
+    }
+
+    if (interaction_.tool() ==
+        sketch::SketchTool::rectangle) {
+        const auto accepted =
+            interaction_.acceptRectanglePoint(
+                resolved->position);
+        if (accepted.outcome !=
+            sketch::RectanglePointOutcome::
+                first_corner_accepted) {
+            return false;
+        }
+
+        rectangle_revision_ =
+            session_->document().revision();
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+        return true;
+    }
+
+    const auto stage =
+        interaction_.commonTransformStage();
+    if (!stage) {
+        return false;
+    }
+
+    const bool reference_stage =
+        *stage ==
+            sketch::CommonTransformStage::await_base_point ||
+        *stage ==
+            sketch::CommonTransformStage::await_reference_point ||
+        *stage ==
+            sketch::CommonTransformStage::await_axis_start;
+    if (reference_stage) {
+        if (!interaction_.acceptTransformPoint(*resolved)) {
+            return false;
+        }
+        viewport_controller_->clearSketchPreview();
+        configureForCurrentTool();
+        projectInteraction();
+        notifyStateChanged();
+        return true;
+    }
+
+    const bool commit_stage =
+        *stage ==
+            sketch::CommonTransformStage::await_destination ||
+        *stage ==
+            sketch::CommonTransformStage::await_axis_end;
+    if (!commit_stage ||
+        !interaction_.updateTransformPreview(*resolved)) {
+        return false;
+    }
+    return commitTransform();
+}
+
+std::optional<application::CadInputValueRequest>
+PartSketchInteractionController::
+cadInputSemanticValueRequest() const noexcept {
+    if (!active() || profile_session_) {
+        return std::nullopt;
+    }
+
+    if (interaction_.directManipulationActive()) {
+        const auto mode =
+            interaction_.directEditMode();
+        if (!mode) {
+            return std::nullopt;
+        }
+
+        switch (*mode) {
+        case sketch::DirectEditMode::rotate:
+            return application::CadInputValueRequest{
+                application::CadInputValueRequestSemantic::
+                    rotate_angle,
+                application::CadQuantityDimension::angle,
+                false};
+
+        case sketch::DirectEditMode::scale:
+            return application::CadInputValueRequest{
+                application::CadInputValueRequestSemantic::
+                    scale_factor,
+                application::CadQuantityDimension::scalar,
+                true};
+
+        case sketch::DirectEditMode::mirror:
+            return application::CadInputValueRequest{
+                application::CadInputValueRequestSemantic::
+                    mirror_axis_angle,
+                application::CadQuantityDimension::angle,
+                false};
+
+        case sketch::DirectEditMode::reshape:
+        case sketch::DirectEditMode::move:
+            break;
+        }
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::circle &&
+        interaction_.circleStage() ==
+            sketch::CircleStage::await_radius) {
+        return application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                circle_size,
+            application::CadQuantityDimension::length,
+            true};
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::arc &&
+        interaction_.arcStage() ==
+            sketch::ArcStage::await_arc_point) {
+        return application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                arc_radius,
+            application::CadQuantityDimension::length,
+            true};
+    }
+
+    if (interaction_.commonTransformStage() ==
+            sketch::CommonTransformStage::
+                await_destination &&
+        interaction_.tool() ==
+            sketch::SketchTool::rotate) {
+        return application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                rotate_angle,
+            application::CadQuantityDimension::angle,
+            false};
+    }
+
+    if (interaction_.commonTransformStage() ==
+            sketch::CommonTransformStage::
+                await_destination &&
+        interaction_.tool() ==
+            sketch::SketchTool::scale) {
+        return application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                scale_factor,
+            application::CadQuantityDimension::scalar,
+            true};
+    }
+
+    return std::nullopt;
+}
+
+bool PartSketchInteractionController::
+submitCadInputSemanticValue(double value) {
+    if (!active() || profile_session_ ||
+        !std::isfinite(value)) {
+        return false;
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::circle &&
+        interaction_.circleStage() ==
+            sketch::CircleStage::await_radius) {
+        if (value <= 0.0) {
+            return false;
+        }
+        const double radius =
+            circle_size_input_mode_ ==
+                    application::CircleSizeInputMode::
+                        diameter
+                ? value * 0.5
+                : value;
+        const auto accepted =
+            interaction_.acceptCircleRadius(radius);
+        if (accepted.outcome !=
+                sketch::CirclePointOutcome::
+                    circle_requested ||
+            !accepted.request) {
+            return false;
+        }
+
+        const auto result =
+            session_->execute(
+                application::AddSketchCircleCommand{
+                    *sketch_id_,
+                    accepted.request->center,
+                    accepted.request->radius,
+                    creation_role_});
+        const bool committed =
+            result.ok() && result.changed;
+        static_cast<void>(
+            interaction_.resolveCircleRequest(
+                committed));
+
+        viewport_controller_->clearSketchPreview();
+        if (!committed) {
+            reportStatus(
+                result.diagnostic.message.empty()
+                    ? std::string{
+                          "Circle commit failed."}
+                    : result.diagnostic.message);
+            notifyStateChanged();
+            return false;
+        }
+
+        viewport_controller_->refreshPresentation();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        return true;
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::arc &&
+        interaction_.arcStage() ==
+            sketch::ArcStage::await_arc_point) {
+        if (value <= 0.0) {
+            return false;
+        }
+        const auto accepted =
+            interaction_.acceptArcRadius(value);
+        if (accepted.outcome ==
+            sketch::ArcPointOutcome::radius_locked) {
+            viewport_controller_->clearSketchPreview();
+            notifyStateChanged();
+            return true;
+        }
+        if (accepted.outcome !=
+                sketch::ArcPointOutcome::
+                    arc_requested ||
+            !accepted.request) {
+            return false;
+        }
+
+        const auto result =
+            session_->execute(
+                application::AddSketchArcCommand{
+                    *sketch_id_,
+                    accepted.request->center,
+                    accepted.request->radius,
+                    accepted.request->start_angle,
+                    accepted.request->sweep_angle,
+                    creation_role_});
+        const bool committed =
+            result.ok() && result.changed;
+        static_cast<void>(
+            interaction_.resolveArcRequest(
+                committed));
+
+        viewport_controller_->clearSketchPreview();
+        if (!committed) {
+            reportStatus(
+                result.diagnostic.message.empty()
+                    ? std::string{
+                          "Arc commit failed."}
+                    : result.diagnostic.message);
+            notifyStateChanged();
+            return false;
+        }
+
+        viewport_controller_->refreshPresentation();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        return true;
+    }
+
+    if (interaction_.directManipulationActive()) {
+        const auto mode =
+            interaction_.directEditMode();
+        if (mode &&
+            (*mode == sketch::DirectEditMode::rotate ||
+             *mode == sketch::DirectEditMode::scale ||
+             *mode == sketch::DirectEditMode::mirror)) {
+            if (!interaction_.
+                    acceptDirectManipulationValue(value)) {
+                return false;
+            }
+            return commitDirectManipulation();
+        }
+    }
+
+    const auto transform_stage =
+        interaction_.commonTransformStage();
+    if (transform_stage &&
+        *transform_stage ==
+            sketch::CommonTransformStage::
+                await_destination &&
+        (interaction_.tool() ==
+             sketch::SketchTool::rotate ||
+         interaction_.tool() ==
+             sketch::SketchTool::scale)) {
+        if (!interaction_.acceptTransformValue(value)) {
+            return false;
+        }
+        return commitTransform();
+    }
+
+    return false;
+}
+
+bool PartSketchInteractionController::
+lockCadInputSemanticValue(double value) {
+    if (!active() || profile_session_ ||
+        !std::isfinite(value)) {
+        return false;
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::circle &&
+        interaction_.circleStage() ==
+            sketch::CircleStage::await_radius) {
+        if (value <= 0.0) {
+            return false;
+        }
+        const double radius =
+            circle_size_input_mode_ ==
+                    application::CircleSizeInputMode::
+                        diameter
+                ? value * 0.5
+                : value;
+        if (!interaction_.lockCircleRadius(radius)) {
+            return false;
+        }
+        notifyStateChanged();
+        return true;
+    }
+
+    if (interaction_.tool() ==
+            sketch::SketchTool::arc &&
+        interaction_.arcStage() ==
+            sketch::ArcStage::await_arc_point) {
+        if (value <= 0.0 ||
+            !interaction_.lockArcRadius(value)) {
+            return false;
+        }
+
+        const auto request =
+            interaction_.activePointRequest();
+        if (request && request->pointer_candidate) {
+            const auto preview =
+                interaction_.previewArc(
+                    *request->pointer_candidate);
+            if (preview) {
+                static_cast<void>(
+                    viewport_controller_->
+                        setSketchArcPreview(*preview));
+            }
+        }
+        notifyStateChanged();
+        return true;
+    }
+
+    if (interaction_.directManipulationActive()) {
+        const auto mode =
+            interaction_.directEditMode();
+        if (!mode ||
+            (*mode != sketch::DirectEditMode::rotate &&
+             *mode != sketch::DirectEditMode::scale &&
+             *mode != sketch::DirectEditMode::mirror) ||
+            !interaction_.
+                acceptDirectManipulationValue(value)) {
+            return false;
+        }
+
+        const auto geometry =
+            interaction_.
+                directManipulationGeometryState();
+        if (!geometry ||
+            !viewport_controller_->
+                setSketchGeometryPreview(*geometry)) {
+            viewport_controller_->
+                clearSketchPreview();
+            return false;
+        }
+
+        notifyStateChanged();
+        return true;
+    }
+
+    const auto stage =
+        interaction_.commonTransformStage();
+    if (!stage ||
+        *stage !=
+            sketch::CommonTransformStage::
+                await_destination ||
+        (interaction_.tool() !=
+             sketch::SketchTool::rotate &&
+         interaction_.tool() !=
+             sketch::SketchTool::scale) ||
+        !interaction_.acceptTransformValue(value)) {
+        return false;
+    }
+
+    const auto geometry =
+        interaction_.transformGeometryState();
+    if (!geometry ||
+        !viewport_controller_->
+            setSketchGeometryPreview(*geometry)) {
+        viewport_controller_->
+            clearSketchPreview();
+        return false;
+    }
+
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::
+lockCadInputSemanticPointField(
+    application::CadDynamicInputFieldSemantic semantic,
+    double value) {
+    if (!active() ||
+        profile_session_ ||
+        !std::isfinite(value)) {
+        return false;
+    }
+
+    std::optional<sketch::PointFieldLockSemantic>
+        point_semantic;
+    switch (semantic) {
+    case application::CadDynamicInputFieldSemantic::u:
+        point_semantic =
+            sketch::PointFieldLockSemantic::u;
+        break;
+    case application::CadDynamicInputFieldSemantic::v:
+        point_semantic =
+            sketch::PointFieldLockSemantic::v;
+        break;
+    case application::CadDynamicInputFieldSemantic::distance:
+        point_semantic =
+            sketch::PointFieldLockSemantic::distance;
+        break;
+    case application::CadDynamicInputFieldSemantic::angle:
+        point_semantic =
+            sketch::PointFieldLockSemantic::angle;
+        break;
+    case application::CadDynamicInputFieldSemantic::delta_u:
+        point_semantic =
+            sketch::PointFieldLockSemantic::delta_u;
+        break;
+    case application::CadDynamicInputFieldSemantic::delta_v:
+        point_semantic =
+            sketch::PointFieldLockSemantic::delta_v;
+        break;
+
+    case application::CadDynamicInputFieldSemantic::width:
+    case application::CadDynamicInputFieldSemantic::height:
+    case application::CadDynamicInputFieldSemantic::diameter:
+    case application::CadDynamicInputFieldSemantic::radius:
+    case application::CadDynamicInputFieldSemantic::factor:
+    case application::CadDynamicInputFieldSemantic::axis_angle:
+        return false;
+    }
+
+    if (!point_semantic ||
+        !interaction_.lockPointField(
+            *point_semantic,
+            value)) {
+        return false;
+    }
+
+    notifyStateChanged();
+    return true;
+}
+
+std::optional<
+    application::CadDynamicInputFieldValue>
+PartSketchInteractionController::
+cadInputSemanticDynamicFieldValue(
+    application::CadDynamicInputFieldSemantic semantic)
+    const noexcept {
+    if (!active() || profile_session_) {
+        return std::nullopt;
+    }
+
+    const auto request =
+        interaction_.activePointRequest();
+    if (!request) {
+        return std::nullopt;
+    }
+
+    using Value =
+        application::CadDynamicInputFieldValue;
+    using State =
+        application::CadDynamicInputValueState;
+    const auto& locks =
+        interaction_.pointFieldLocks();
+    const auto resolved =
+        interaction_.resolvedPointRequestCandidate();
+
+    if (!request->base) {
+        switch (semantic) {
+        case application::CadDynamicInputFieldSemantic::u:
+            if (locks.u) {
+                return Value{
+                    semantic,
+                    *locks.u,
+                    State::locked};
+            }
+            return resolved
+                ? std::optional<Value>{
+                      Value{
+                          semantic,
+                          resolved->position.u,
+                          State::free}}
+                : std::nullopt;
+
+        case application::CadDynamicInputFieldSemantic::v:
+            if (locks.v) {
+                return Value{
+                    semantic,
+                    *locks.v,
+                    State::locked};
+            }
+            return resolved
+                ? std::optional<Value>{
+                      Value{
+                          semantic,
+                          resolved->position.v,
+                          State::free}}
+                : std::nullopt;
+
+        default:
+            return std::nullopt;
+        }
+    }
+
+    const auto base = *request->base;
+    const auto assisted_state =
+        polar_capture_.captured_angle
+            ? State::assisted
+            : State::free;
+
+    switch (semantic) {
+    case application::CadDynamicInputFieldSemantic::distance:
+        if (locks.distance) {
+            return Value{
+                semantic,
+                *locks.distance,
+                State::locked};
+        }
+        if (!resolved) {
+            return std::nullopt;
+        }
+        return Value{
+            semantic,
+            std::hypot(
+                resolved->position.u - base.u,
+                resolved->position.v - base.v),
+            State::free};
+
+    case application::CadDynamicInputFieldSemantic::angle:
+        if (locks.angle) {
+            return Value{
+                semantic,
+                *locks.angle,
+                State::locked};
+        }
+        if (polar_capture_.captured_angle) {
+            return Value{
+                semantic,
+                *polar_capture_.captured_angle,
+                State::assisted};
+        }
+        if (!resolved) {
+            return std::nullopt;
+        } else {
+            const double du =
+                resolved->position.u - base.u;
+            const double dv =
+                resolved->position.v - base.v;
+            if (du == 0.0 && dv == 0.0) {
+                return std::nullopt;
+            }
+            return Value{
+                semantic,
+                std::atan2(dv, du),
+                State::free};
+        }
+
+    case application::CadDynamicInputFieldSemantic::delta_u:
+        if (locks.delta_u) {
+            return Value{
+                semantic,
+                *locks.delta_u,
+                State::locked};
+        }
+        return resolved
+            ? std::optional<Value>{
+                  Value{
+                      semantic,
+                      resolved->position.u - base.u,
+                      assisted_state}}
+            : std::nullopt;
+
+    case application::CadDynamicInputFieldSemantic::delta_v:
+        if (locks.delta_v) {
+            return Value{
+                semantic,
+                *locks.delta_v,
+                State::locked};
+        }
+        return resolved
+            ? std::optional<Value>{
+                  Value{
+                      semantic,
+                      resolved->position.v - base.v,
+                      assisted_state}}
+            : std::nullopt;
+
+    case application::CadDynamicInputFieldSemantic::u:
+    case application::CadDynamicInputFieldSemantic::v:
+    case application::CadDynamicInputFieldSemantic::width:
+    case application::CadDynamicInputFieldSemantic::height:
+    case application::CadDynamicInputFieldSemantic::diameter:
+    case application::CadDynamicInputFieldSemantic::radius:
+    case application::CadDynamicInputFieldSemantic::factor:
+    case application::CadDynamicInputFieldSemantic::axis_angle:
+        return std::nullopt;
+    }
+
+    return std::nullopt;
+}
+
+std::optional<application::CadInputPairRequest>
+PartSketchInteractionController::
+cadInputSemanticPairRequest() const noexcept {
+    if (!active() || profile_session_ ||
+        interaction_.tool() !=
+            sketch::SketchTool::rectangle ||
+        interaction_.rectangleStage() !=
+            sketch::RectangleStage::
+                await_opposite_corner) {
+        return std::nullopt;
+    }
+
+    return application::CadInputPairRequest{
+        application::CadInputPairRequestSemantic::
+            rectangle_size,
+        application::CadQuantityDimension::length,
+        application::CadQuantityDimension::length,
+        true};
+}
+
+bool PartSketchInteractionController::
+submitCadInputSemanticPair(
+    double first,
+    double second) {
+    if (!active() || profile_session_ ||
+        interaction_.tool() !=
+            sketch::SketchTool::rectangle ||
+        interaction_.rectangleStage() !=
+            sketch::RectangleStage::
+                await_opposite_corner ||
+        !std::isfinite(first) ||
+        !std::isfinite(second) ||
+        first <= 0.0 ||
+        second <= 0.0) {
+        return false;
+    }
+
+    const auto accepted =
+        interaction_.acceptRectangleSize(
+            first,
+            second);
+    if (accepted.outcome ==
+        sketch::RectanglePointOutcome::size_locked) {
+        viewport_controller_->clearSketchPreview();
+        notifyStateChanged();
+        return true;
+    }
+    if (accepted.outcome !=
+            sketch::RectanglePointOutcome::
+                rectangle_requested ||
+        !accepted.request ||
+        !rectangle_revision_) {
+        return false;
+    }
+
+    const auto result =
+        session_->execute(
+            application::AddSketchRectangleCommand{
+                *sketch_id_,
+                *rectangle_revision_,
+                accepted.request->first_corner,
+                accepted.request->opposite_corner,
+                creation_role_,
+                rectangle_draw_diagonals_});
+    const bool committed =
+        result.ok() && result.changed;
+    static_cast<void>(
+        interaction_.resolveRectangleRequest(
+            committed));
+
+    viewport_controller_->clearSketchPreview();
+    if (!committed) {
+        if (result.diagnostic.code ==
+            application::DocumentSessionErrorCode::
+                revision_diverged) {
+            static_cast<void>(
+                interaction_.escape());
+            rectangle_revision_.reset();
+        }
+        reportStatus(
+            result.diagnostic.message.empty()
+                ? std::string{
+                      "Rectangle commit failed."}
+                : result.diagnostic.message);
+        notifyStateChanged();
+        return false;
+    }
+
+    rectangle_revision_.reset();
+    viewport_controller_->refreshPresentation();
+    projectSelection();
+    projectInteraction();
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::
+lockCadInputSemanticPairField(
+    application::CadDynamicInputFieldSemantic semantic,
+    double value) {
+    if (!active() || profile_session_ ||
+        interaction_.tool() !=
+            sketch::SketchTool::rectangle ||
+        interaction_.rectangleStage() !=
+            sketch::RectangleStage::
+                await_opposite_corner ||
+        !std::isfinite(value) ||
+        value <= 0.0) {
+        return false;
+    }
+
+    bool locked = false;
+    if (semantic ==
+        application::CadDynamicInputFieldSemantic::width) {
+        locked =
+            interaction_.lockRectangleWidth(value);
+    } else if (
+        semantic ==
+        application::CadDynamicInputFieldSemantic::height) {
+        locked =
+            interaction_.lockRectangleHeight(value);
+    } else {
+        return false;
+    }
+
+    if (!locked) {
+        return false;
+    }
+
+    const auto request =
+        interaction_.activePointRequest();
+    if (request && request->pointer_candidate) {
+        updateRectanglePreview(
+            *request->pointer_candidate);
+    }
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::
+submitCadInputSemanticCircleSizeMode(
+    application::CircleSizeInputMode mode) {
+    if (!active() || profile_session_ ||
+        interaction_.tool() !=
+            sketch::SketchTool::circle ||
+        interaction_.circleStage() !=
+            sketch::CircleStage::await_radius) {
+        return false;
+    }
+
+    if (circle_size_input_mode_ == mode) {
+        return true;
+    }
+
+    circle_size_input_mode_ = mode;
+    notifyStateChanged();
+    return true;
 }
 
 bool PartSketchInteractionController::activateCadInputSemanticTool(
@@ -725,7 +1744,7 @@ bool PartSketchInteractionController::cycleDirectEditMode() {
         interaction_.cycleDirectEditMode();
     if (!changed) {
         reportStatus(
-            "Only Move is available for this grip.");
+            "Grip edit mode could not be cycled.");
         notifyStateChanged();
         return false;
     }
@@ -741,11 +1760,28 @@ bool PartSketchInteractionController::cycleDirectEditMode() {
     projectInteraction();
     notifyStateChanged();
 
+    const char* mode_name = "Unknown";
+    switch (*interaction_.directEditMode()) {
+    case sketch::DirectEditMode::reshape:
+        mode_name = "Reshape";
+        break;
+    case sketch::DirectEditMode::move:
+        mode_name = "Move";
+        break;
+    case sketch::DirectEditMode::rotate:
+        mode_name = "Rotate";
+        break;
+    case sketch::DirectEditMode::scale:
+        mode_name = "Scale";
+        break;
+    case sketch::DirectEditMode::mirror:
+        mode_name = "Mirror";
+        break;
+    }
+
     reportStatus(
-        interaction_.directEditMode() ==
-                sketch::DirectEditMode::move
-            ? "Grip edit mode: Move."
-            : "Grip edit mode: Reshape.");
+        std::string{"Grip edit mode: "} +
+        mode_name + ".");
     return true;
 }
 
@@ -1375,16 +2411,25 @@ bool PartSketchInteractionController::escape() {
     const bool was_rectangle =
         interaction_.tool() ==
         sketch::SketchTool::rectangle;
+    const auto rectangle_stage_before =
+        interaction_.rectangleStage();
+
     const bool changed = interaction_.escape();
     if (!changed) return false;
 
-    if (was_manipulating) {
+    if (was_manipulating &&
+        !interaction_.directManipulationActive()) {
         manipulation_revision_.reset();
     }
-    if (was_transform) {
+    if (was_transform &&
+        !interaction_.commonTransformStage().has_value()) {
         transform_revision_.reset();
     }
-    if (was_rectangle) {
+    if (was_rectangle &&
+        (interaction_.tool() !=
+             sketch::SketchTool::rectangle ||
+         interaction_.rectangleStage() !=
+             rectangle_stage_before)) {
         rectangle_revision_.reset();
     }
 
@@ -1866,6 +2911,11 @@ void PartSketchInteractionController::onPointer(
         return;
     }
 
+    if (input.viewport_position.valid() &&
+        input.position.finite()) {
+        last_pointer_input_ = input;
+    }
+
     if (profile_session_) {
         handleProfilePointer(input);
         return;
@@ -2155,7 +3205,7 @@ void PartSketchInteractionController::handleSelectPointer(
         if (input.phase ==
             viewer::SpatialPointerPhase::move) {
             updateDirectManipulationPreview(
-                input.position);
+                input);
             return;
         }
 
@@ -2163,7 +3213,7 @@ void PartSketchInteractionController::handleSelectPointer(
             viewer::SpatialPointerPhase::
                 primary_press) {
             updateDirectManipulationPreview(
-                input.position);
+                input);
             static_cast<void>(
                 commitDirectManipulation());
         }
@@ -2537,8 +3587,7 @@ void PartSketchInteractionController::handleMeasurePointer(
 void PartSketchInteractionController::handleLinePointer(
     const SketchPointerInput& input) {
     const auto resolved =
-        interaction_.resolvePointerInput(
-            input.position);
+        resolvePointerInput(input);
 
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
@@ -2695,9 +3744,27 @@ void PartSketchInteractionController::handleCirclePointer(
 void PartSketchInteractionController::handleArcPointer(
     const SketchPointerInput& input) {
     const auto resolved =
-        sketch::resolveSketchInput(input.position);
+        resolvePointerInput(input);
 
     if (input.phase == viewer::SpatialPointerPhase::move) {
+        if (resolved &&
+            interaction_.arcStage() ==
+                sketch::ArcStage::await_end) {
+            const auto request =
+                interaction_.activePointRequest();
+            if (request && request->base &&
+                *request->base != resolved->position) {
+                static_cast<void>(
+                    viewport_controller_->setSketchPreview(
+                        {SketchPreviewLine2D{
+                            *request->base,
+                            resolved->position}}));
+            } else {
+                viewport_controller_->clearSketchPreview();
+            }
+            return;
+        }
+
         const auto preview =
             resolved
                 ? interaction_.previewArc(
@@ -2720,7 +3787,7 @@ void PartSketchInteractionController::handleArcPointer(
     }
 
     const auto accepted =
-        interaction_.acceptArcPoint(
+        interaction_.acceptArcPointer(
             resolved->position);
 
     if (accepted.outcome ==
@@ -2760,7 +3827,9 @@ void PartSketchInteractionController::handleArcPointer(
     if (accepted.outcome ==
             sketch::ArcPointOutcome::start_accepted ||
         accepted.outcome ==
-            sketch::ArcPointOutcome::through_accepted ||
+            sketch::ArcPointOutcome::end_accepted ||
+        accepted.outcome ==
+            sketch::ArcPointOutcome::radius_locked ||
         accepted.outcome ==
             sketch::ArcPointOutcome::degenerate_ignored) {
         viewport_controller_->clearSketchPreview();
@@ -2811,8 +3880,7 @@ void PartSketchInteractionController::
 handleRectanglePointer(
     const SketchPointerInput& input) {
     const auto resolved =
-        interaction_.resolvePointerInput(
-            input.position);
+        resolvePointerInput(input);
 
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
@@ -3084,7 +4152,7 @@ handleCommonTransformPointer(
     }
 
     const auto resolved =
-        interaction_.resolvePointerInput(input.position);
+        resolvePointerInput(input);
 
     const bool reference_stage =
         *stage ==
@@ -3120,14 +4188,14 @@ handleCommonTransformPointer(
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
         updateCommonTransformPreview(
-            input.position);
+            input);
         return;
     }
 
     if (input.phase ==
         viewer::SpatialPointerPhase::primary_press) {
         updateCommonTransformPreview(
-            input.position);
+            input);
         static_cast<void>(commitTransform());
     }
 }
@@ -3242,11 +4310,144 @@ beginDirectManipulation(
     return true;
 }
 
+std::optional<sketch::ResolvedSketchInput>
+PartSketchInteractionController::resolvePointerInput(
+    const SketchPointerInput& input) {
+    const auto raw =
+        [this, &input]() {
+            polar_capture_ = {};
+            return interaction_.resolvePointerInput(
+                input.position);
+        };
+
+    const auto request =
+        interaction_.activePointRequest();
+    if (!request ||
+        !request->base ||
+        (!request->relative_polar_enabled &&
+         !request->direct_distance_enabled) ||
+        !cad_interaction_settings_provider_ ||
+        !input.viewport_position.valid() ||
+        !input.position.finite()) {
+        return raw();
+    }
+
+    const auto settings =
+        cad_interaction_settings_provider_();
+    if (!settings.valid() ||
+        !settings.polar.enabled) {
+        return raw();
+    }
+
+    std::optional<double> relative_reference;
+    if (settings.polar.reference_mode ==
+        application::PolarReferenceMode::relative) {
+        relative_reference =
+            request->polar_relative_reference;
+        if (!relative_reference) {
+            return raw();
+        }
+    }
+
+    const auto tracks =
+        application::generatePolarTrackAngles(
+            settings.polar,
+            relative_reference);
+    if (tracks.empty()) {
+        return raw();
+    }
+
+    const auto base = *request->base;
+    const auto base_screen =
+        viewport_controller_->
+            projectSketchPointToViewport(base);
+    if (!base_screen) {
+        return raw();
+    }
+
+    const double base_screen_distance =
+        viewportDistance(
+            *base_screen,
+            input.viewport_position);
+    const double raw_radius =
+        std::hypot(
+            input.position.u - base.u,
+            input.position.v - base.v);
+    if (!std::isfinite(raw_radius) ||
+        raw_radius <= 0.0) {
+        return raw();
+    }
+
+    double sample_radius =
+        raw_radius * 2.0;
+    if (!std::isfinite(sample_radius) ||
+        sample_radius <= raw_radius) {
+        sample_radius = raw_radius;
+    }
+
+    std::vector<
+        application::PolarTrackScreenDistance>
+        screen_distances;
+    screen_distances.reserve(tracks.size());
+
+    for (const double angle : tracks) {
+        const auto direction =
+            stablePolarUnitDirection(angle);
+        const sketch::Point2 sample{
+            base.u +
+                sample_radius * direction.first,
+            base.v +
+                sample_radius * direction.second};
+        const auto sample_screen =
+            viewport_controller_->
+                projectSketchPointToViewport(sample);
+        if (!sample_screen) {
+            continue;
+        }
+
+        const auto distance =
+            viewportPointRayDistance(
+                input.viewport_position,
+                *base_screen,
+                *sample_screen);
+        if (!distance) {
+            continue;
+        }
+        screen_distances.push_back(
+            {angle, *distance});
+    }
+
+    const auto captured =
+        application::resolvePolarCapture(
+            polar_capture_,
+            true,
+            base_screen_distance,
+            screen_distances);
+    if (!captured) {
+        return interaction_.resolvePointerInput(
+            input.position);
+    }
+
+    const auto captured_direction =
+        stablePolarUnitDirection(*captured);
+    const sketch::Point2 assisted{
+        base.u +
+            raw_radius * captured_direction.first,
+        base.v +
+            raw_radius * captured_direction.second};
+    if (!assisted.finite()) {
+        return raw();
+    }
+
+    return interaction_.resolvePointerInput(
+        assisted);
+}
+
 void PartSketchInteractionController::
 updateDirectManipulationPreview(
-    sketch::Point2 raw_input) {
+    const SketchPointerInput& input) {
     const auto resolved =
-        interaction_.resolvePointerInput(raw_input);
+        resolvePointerInput(input);
     if (!resolved ||
         !interaction_.updateDirectManipulation(*resolved)) {
         viewport_controller_->clearSketchPreview();
@@ -3264,9 +4465,9 @@ updateDirectManipulationPreview(
 
 void PartSketchInteractionController::
 updateCommonTransformPreview(
-    sketch::Point2 raw_input) {
+    const SketchPointerInput& input) {
     const auto resolved =
-        interaction_.resolvePointerInput(raw_input);
+        resolvePointerInput(input);
     if (!resolved ||
         !interaction_.updateTransformPreview(
             *resolved)) {
@@ -3457,6 +4658,8 @@ currentCadInputContextFingerprint() const noexcept {
         fingerprint.direct_distance_enabled =
             request->direct_distance_enabled;
     }
+    fingerprint.circle_size_input_mode =
+        circle_size_input_mode_;
 
     return fingerprint;
 }
@@ -3471,6 +4674,7 @@ refreshCadInputContextGeneration() {
     }
 
     cad_input_context_fingerprint_ = current;
+    polar_capture_ = {};
     ++cad_input_context_generation_;
 }
 

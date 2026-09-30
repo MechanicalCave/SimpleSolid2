@@ -125,7 +125,7 @@ One host-neutral `SketchInteractionState` remains the runtime interaction author
 
 The default tool is Select. Creation tools preserve the existing semantic selection while grips are hidden/inactive, and newly created geometry is not auto-selected.
 
-Line keeps the continuous Start/Next-point grammar. Circle uses Center → Radius; exact zero radius produces no commit request. Arc uses Start → Through → End; duplicate accepted points, collinear triples or any invalid circumcircle/sweep fail closed.
+Line keeps the continuous Start/Next-point grammar. Circle uses **Center → Size**. Size has one runtime Diameter/Radius selector that defaults to Diameter for each Sketch edit; pointer placement still uses the cursor as a circumference point, while typed Diameter/Radius values must be finite and strictly positive. Arc uses **Start → End → Arc Point / Radius**. Start and End define the chord; a third pointer/point token preserves the exact 3-point construction, while typed Radius must satisfy `R >= chord/2` and creates the pointer-side minor/semicircle solution. Major-arc creation remains available through the third Arc Point path. These creation selectors/locks are runtime-only; committed Circle/Arc geometry keeps the canonical center/radius and center/radius/start-angle/signed-sweep representations.
 
 Rectangle uses **First Corner → Opposite Corner** in Sketch-local U/V. `RectangleIntent` derives the exact perimeter `A→B`, `B→C`, `C→D`, `D→A` with `B=(u1,v0)` and `D=(u0,v1)`. Zero U or V extent is rejected exactly, with no Product epsilon. Rectangle remains active after a successful commit so another rectangle can start from a fresh First Corner.
 
@@ -175,36 +175,23 @@ SK-07G adds one runtime-only **Grip Copy** modifier orthogonal to `DirectEditMod
 
 With Grip Copy enabled, Move duplicates the complete frozen selection while Reshape duplicates only the entity that owns the active grip. Originals remain unchanged and selected/reference entities. Every accepted placement uses the existing semantic duplication command and SK-07C fresh-EntityId/high-water lifecycle. Repeated placements remain in the same direct-manipulation session and are always recomputed from the interaction-start source geometry and pivot. A successful placement clears the prior pointer candidate so a later Direct Distance requires a fresh direction. Space changing Reshape↔Move turns Grip Copy OFF; Esc/tool/history/context termination also ends the modifier with the owning manipulation session. Construction/Regular role remains part of the frozen owner geometry so exact no-change detection is role-correct.
 
-Pointer and text-derived point values flow through the shared `ResolvedSketchInput` seam. A semantic `PointRequest` view is derived from the existing interaction stage rather than creating a second tool state machine. The request exposes an optional semantic base, one shared runtime pointer candidate and whether Direct Distance is legal at that stage.
+Pointer and text-derived point values flow through the shared `ResolvedSketchInput` seam. A semantic `PointRequest` view is derived from the existing interaction stage rather than creating a second tool state machine. R10 expands that same request path instead of adding per-tool parsers: point requests may accept absolute Cartesian `U;V`, relative Cartesian `@dU;dV`, relative polar `@Distance<Angle`, and Direct Distance where the active stage permits it. Shared quantity parsing resolves Length to canonical millimetres, Angle to radians and Scalar as dimensionless finite values before Sketch semantics consume them.
 
-The current Direct Distance resolver is deliberately minimal:
+Dynamic Input is an adapter to that same request and the one workspace CAD buffer. Unbased point fields are `U → V`; based point fields are `Distance → Angle → dU → dV`. Request-local locks constrain the existing resolver only and never become authored dimensions or constraints. Enter may combine explicit locks with the remaining pointer/Polar degrees of freedom; a complete explicit point token outranks assistance, and incompatible lock families fail closed.
 
-```text
-direction = normalize(pointer_candidate - base)
-resolved_point = base + direction * distance
-```
+Direct Distance remains finite and non-negative and uses the current resolved free direction. It is available for the second/next Line point, Arc End, normal Move/Copy destinations and supported grip Reshape/Move requests. Rectangle uses its explicit positive `Width;Height` size grammar instead of guessing a generic scalar; Circle Size uses Diameter/Radius; Rotate uses signed Angle; Scale uses positive Factor; grip Mirror uses Axis Angle.
 
-The scalar must be finite and non-negative and the pointer candidate must define a non-zero direction. The resolver does not know Line, Move, Copy or primitive-specific reshape geometry; it only returns one resolved Sketch-local point. The active operation then consumes that point through the same preview/accept/commit path as pointer input.
+Command submission remains context-first. While a semantic request is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. During active direct manipulation the same semantic layer additionally recognizes the bounded tool-local token `C` for Grip Copy. Outside active direct manipulation, `C` remains an unknown top-level Sketch command. The workspace-global text transport and live buffer remain domain-neutral; semantic code receives typed/parsed values and stays independent of Qt/locale presentation.
 
-Direct Distance is currently enabled only for:
+Printable text typed while the normal CAD viewport has focus reaches the same global buffer as directly editing Command Line; no focus transfer is required. Real text editors retain their keyboard ownership. Polar is runtime directional assistance, not authored geometry: captured direction may supply a free direction, while explicit point/Angle locks keep their accepted priority.
 
-- the second/next Line point after an accepted Line anchor;
-- active grip Reshape;
-- active grip Move, including a non-center grip after Space switches Reshape → Move;
-- normal MOVE destination after Base Point;
-- normal COPY placement after Base Point.
-
-Rectangle PointRequests deliberately keep Direct Distance disabled in R9. A bare scalar at First Corner or Opposite Corner is rejected rather than guessed as width, height, diagonal, square side or a U/V coordinate. Rectangle precision/coordinate grammar remains for the later precision-input milestone.
-
-Command submission is context-first. While a semantic PointRequest is active, the Part/Sketch input endpoint offers submitted text to that request before top-level command activation. During active direct manipulation that semantic layer additionally recognizes the bounded tool-local token `C` for Grip Copy before attempting bare-distance parsing. Outside active direct manipulation, `C` remains an unknown top-level Sketch command. The workspace-global text transport and live buffer do not know `PointRequest`, Grip Copy, Line, Move or Copy. The current Part/Sketch adapter accepts a bare finite non-negative scalar using `.` or the current UI-locale decimal separator and rejects grouping separators, units, coordinate tuples, polar syntax and exponent notation rather than guessing. Semantic Sketch code receives only typed/parsed semantic input and remains Qt/locale independent.
-
-Printable text typed while the normal CAD viewport has focus now reaches the same global buffer as directly editing Command Line; no focus transfer is required. Real text editors retain their keyboard ownership. This changes only the input adapter path, not Direct Distance semantics or mutation authority.
-
-After a Line segment, normal COPY placement or Grip Copy placement completes, stale pointer direction is not reused silently. The continuous Line anchor becomes the new base with no non-zero direction; repeated normal COPY and repeated Grip Copy clear their pointer candidate, so the pointer must establish a new direction before another numeric Direct Distance can resolve.
+After an accepted Line segment, normal COPY placement or Grip Copy placement, stale pointer candidates and request-local locks are cleared as required by the owning request lifecycle. Repeated placements therefore cannot silently reuse an old direction.
 
 Accepted non-no-op edit transforms/reshape commit through the host semantic geometry-update command and Part transaction and preserve EntityIds. Each accepted normal COPY or Grip Copy placement instead executes the existing atomic semantic duplication command, allocates a fresh ID for each copied entity and creates one revision/Undo entry. Multiple repeated placements are independent Undo steps.
 
-Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation, including Grip Copy, before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/se<!-- section-id: internal.shared-2d.measurement -->
+Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation, including Grip Copy, before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/session.
+
+<!-- section-id: internal.shared-2d.measurement -->
 ## Read-only whole-entity measurement
 
 R8A adds provider-neutral measurement in `measurement.hpp`. Measurement consumes the authoritative semantic `SketchModel` geometry by `EntityId`; it does not consume Viewer tessellation, presentation tokens, pixels or sampled display chords.
@@ -236,9 +223,7 @@ There is no Product gap tolerance or auto-close policy. A small geometric gap re
 
 All derived region candidates, relation intersections, sampled interior points and analysis caches are runtime-only. Durable Profile identity is owned by Part through semantic RegionIntent references to source Sketch EntityIds and anchors.
 
-ssion.
-
-Numeric angles, scale factors, absolute/relative coordinates, polar coordinates, unit expressions and Dynamic Input are still not implemented. Direct Distance is the only numeric precision-input capability in the current interaction state.
+Common Move/Rotate/positive-Scale/Mirror transforms preserve already-existing Line↔Arc endpoint topology without introducing a persistent constraint or Product gap tolerance. The transform snapshot carries runtime-only provenance for source endpoint contacts that are proven by the source geometry, and the transformed explicit Line endpoint is canonicalized to the transformed evaluated Arc endpoint. Region relation analysis gives that exact evaluated endpoint contact precedence over an alternate floating-point image of the same intersection root; any de-duplication bound is dimensionless parameter-space conditioning after exact contact is already established, never a world-space rule for creating contact. Previously disjoint geometry is not welded, so a real authored gap remains open through the same common transforms.
 
 <!-- section-id: internal.shared-2d.boundaries -->
 ## Deliberately not implemented yet
@@ -247,14 +232,15 @@ The current Part integration presents and edits authored Line/Circle/Arc through
 
 The current normal Modify command set is Move, Copy, Rotate, positive uniform Scale and Mirror. COPY currently means translation duplication with repeated placements and fresh identities.
 
+There is deliberately no separate Ortho mode in the current Sketcher; Polar is the single directional-attraction mechanism and a 90° Polar step provides orthogonal-only attraction.
+
 The product still does not implement:
 
 - Copy modifier combined with Rotate/Scale/Mirror or other future edit modes beyond the implemented grip Reshape/Move paths;
 - ordinary-Select RMB context;
 - clipboard Copy/Paste or cross-Sketch/cross-Document duplication;
 - intrinsic Origin snapping;
-- snapping/Object Snap, tracking, Ortho/Polar/Grid Snap or geometric inference;
-- numeric Rotate/Scale values, absolute/relative coordinate entry, polar syntax, unit expressions or Dynamic Input;
+- Object Snap, Object Snap Tracking, Grid Snap or geometric inference;
 - authored dimensions, constraints or solver evaluation;
 - a durable Rectangle primitive/group/center/constraint model or Polyline semantics;
 - projected/reference geometry;
@@ -265,17 +251,18 @@ Those capabilities remain governed by later accepted Work Contracts.
 <!-- section-id: internal.shared-2d.tests -->
 ## Verification
 
-The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Rectangle two-corner/decomposition state, atomic four/six-Line Rectangle creation, Creation Role and Construction-diagonal behavior, Profile exclusion of Construction geometry, read-only whole-entity measurement, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, normal/Grip Copy identity behavior, Repeat Last Command, Space CycleEditMode and precision input.
+The current Sketch regression set covers Shared 2D dependency boundaries, mixed primitive semantics, Rectangle two-corner/decomposition state, atomic four/six-Line Rectangle creation, Creation Role and Construction-diagonal behavior, Profile exclusion of Construction geometry, read-only whole-entity measurement, Part hosting, schema-v6 persistence/history, provider-neutral presentation/input, selection, hover/grips, direct manipulation, common transforms, normal/Grip Copy identity behavior, Repeat Last Command, Space CycleEditMode, R10 quantities/point grammar/Polar/Dynamic Input and Profile topology invariance across common transforms.
 
 Key registered tests include:
 
 - `sk02a.shared_2d_core` / `sk02a.shared_2d_boundaries` — neutral model/dependency boundaries plus whole-entity measurement, curve relations, regions, Construction exclusion, open/overlap diagnostics, holes/islands, point picking and region composition;
 - `sk06a.circle_arc_model_persistence` / `sk06a.circle_arc_interaction_state` — mixed Line/Circle/Arc authored and interaction semantics;
 - `e1.arc_numerical_stability` — 3-Point Arc translation/scale conditioning, radial residual through all requested points, CW/CCW/long branch preservation, ±1e6 translation, 1e-200/1e200 scale, near-collinear acceptance and fail-closed exact/invalid extremes;
-- `sk07a.transform_core`, `sk07b.transform_core`, `sk07b.common_transform_state`, `sk07b.transform_controller` — mixed transforms and atomic controller behavior;
+- `sk07a.transform_core`, `sk07b.transform_core`, `sk07b.common_transform_state`, `sk07b.transform_controller` — mixed transforms and atomic controller behavior, including closed Line+Arc region invariance through Move/Rotate/positive Scale/Mirror/repeated transforms, preservation of both endpoints in the Arc+diameter case, and proof that a real gap remains open;
 - `sk07c.copy_command`, `sk07c.copy_interaction_state`, `sk07c.copy_controller` — fresh identity, repeated placement, Undo/Redo identity restoration and high-water persistence;
 - `sk07d.repeat_last_command_controller` and `sk07e.space_cycle_edit_mode` — runtime command/grip grammar;
-- `sk07f.precision_input_state` / `sk07f.precision_input_controller` — PointRequest and Direct Distance across Line, Move, Copy and grip paths;
+- `r10.quantity_input`, `sk07f.precision_input_state` / `sk07f.precision_input_controller` — shared quantity grammar plus PointRequest capabilities, coordinate/polar/direct-distance resolution and request-local precision state across creation, transform and grip paths;
+- `sk02b.part_sketch_model` — durable Profile RegionIntent resolution, including a mixed Line+Arc Profile that remains valid after a common source transform while retaining source EntityIds/anchors;
 - `wb02.cad_input_session`, `wb02.cad_input_boundaries`, `wb02.global_cad_input_ui` plus the Workbench Sketch-host regression — keyboard-first transport, focus arbitration, stale-context rejection and real Workbench integration.
 
 Work-item completion uses the repository's exact-head Windows gate; current-state documentation does not preserve obsolete milestone gate counts.

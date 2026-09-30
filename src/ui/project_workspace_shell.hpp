@@ -4,7 +4,9 @@
 
 #include <QWidget>
 
+#include <functional>
 #include <string>
+#include <utility>
 
 class QEvent;
 class QLabel;
@@ -43,8 +45,46 @@ public:
         application::ICadInputEndpoint* endpoint);
     void refreshCadInputPresentation();
 
+    using CadInteractionSettingsChangedHandler =
+        std::function<void()>;
+    using CadInputPresentationChangedHandler =
+        std::function<void()>;
+    void setCadInteractionSettingsChangedHandler(
+        CadInteractionSettingsChangedHandler handler) {
+        cad_interaction_settings_changed_handler_ =
+            std::move(handler);
+    }
+    void setCadInputPresentationChangedHandler(
+        CadInputPresentationChangedHandler handler) {
+        cad_input_presentation_changed_handler_ =
+            std::move(handler);
+    }
+
     [[nodiscard]] const std::string&
     cadInputBuffer() const noexcept;
+    [[nodiscard]] std::size_t
+    cadDynamicInputFieldIndex() const noexcept {
+        return cad_input_.dynamicInputFieldIndex();
+    }
+
+    [[nodiscard]] const application::CadInteractionSettings&
+    cadInteractionSettings() const noexcept {
+        return cad_input_.interactionSettings();
+    }
+
+    [[nodiscard]] bool setCadInteractionSettings(
+        application::CadInteractionSettings settings) {
+        const bool accepted =
+            cad_input_.setInteractionSettings(
+                std::move(settings));
+        if (accepted) {
+            refreshCadInputPresentation();
+            if (cad_interaction_settings_changed_handler_) {
+                cad_interaction_settings_changed_handler_();
+            }
+        }
+        return accepted;
+    }
 
     [[nodiscard]] bool showingWorkspace() const noexcept;
 
@@ -75,6 +115,10 @@ private:
     QTabBar* document_tabs_{};
 
     application::CadInputSession cad_input_;
+    CadInteractionSettingsChangedHandler
+        cad_interaction_settings_changed_handler_;
+    CadInputPresentationChangedHandler
+        cad_input_presentation_changed_handler_;
     QWidget* command_line_widget_{};
     QLabel* command_prompt_{};
     QLineEdit* command_input_{};

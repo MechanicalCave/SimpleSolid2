@@ -96,6 +96,9 @@ int main() {
         properties.engineering_revision = "B";
         tx.setProperties(properties);
         CHECK(
+            tx.setLengthUnit(
+                core::LengthUnit::inch));
+        CHECK(
             tx.setBuiltinReferenceVisible(
                 core::BuiltinReferenceRole::
                     xy_plane,
@@ -146,6 +149,10 @@ int main() {
         std::string::npos);
     CHECK(
         package.package->authored_json.find(
+            "\"length_unit\": \"in\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
             "\"sketches\"") !=
         std::string::npos);
     CHECK(
@@ -168,6 +175,9 @@ int main() {
     CHECK(
         loaded.document->properties() ==
         document.properties());
+    CHECK(
+        loaded.document->lengthUnit() ==
+        core::LengthUnit::inch);
     CHECK(
         loaded.document->revision().value() ==
         0U);
@@ -294,6 +304,9 @@ int main() {
         legacy_v1.document->properties().title ==
         "Legacy native v1");
     CHECK(legacy_v1.document->sketches().empty());
+    CHECK(
+        legacy_v1.document->lengthUnit() ==
+        core::LengthUnit::millimetre);
 
     std::ifstream legacy_before_stream{
         legacy_v1_path,
@@ -328,6 +341,98 @@ int main() {
         legacy_after.package->authored_json.find(
             "\"sketches\"") !=
         std::string::npos);
+    CHECK(
+        legacy_after.package->authored_json.find(
+            "\"length_unit\": \"mm\"") !=
+        std::string::npos);
+
+    const auto legacy_v6_path =
+        temp.path / "LegacyV6.ss2part";
+    const auto legacy_v6_id =
+        core::DocumentId::generate();
+    writeBytes(
+        legacy_v6_path,
+        buildPartPackage(
+            std::string{
+                legacy_v6_id.value()},
+            6,
+            "{"
+            "\"properties\":{"
+                "\"number\":\"\","
+                "\"title\":\"Legacy native v6\","
+                "\"description\":\"\","
+                "\"engineering_revision\":\"A\""
+            "},"
+            "\"presentation\":{"
+                "\"builtin_reference_visibility_mask\":15"
+            "},"
+            "\"sketches\":[],"
+            "\"next_profile_id\":\"1\","
+            "\"profiles\":[]"
+            "}"));
+
+    const auto legacy_v6 =
+        store.load(legacy_v6_path);
+    CHECK(legacy_v6.ok());
+    CHECK(
+        legacy_v6.document->lengthUnit() ==
+        core::LengthUnit::millimetre);
+    CHECK(
+        legacy_v6.document->properties().title ==
+        "Legacy native v6");
+
+    CHECK(
+        store.save(
+            legacy_v6_path,
+            *legacy_v6.document,
+            *legacy_v6.checkpoint)
+            .ok());
+    const auto migrated_v6 =
+        persistence::readNativeDocumentContainer(
+            legacy_v6_path);
+    CHECK(migrated_v6.ok());
+    CHECK(
+        migrated_v6.package->descriptor
+            .domain_schema_version ==
+        part::PartDocumentStore::
+            current_schema_version);
+    CHECK(
+        migrated_v6.package->authored_json.find(
+            "\"length_unit\": \"mm\"") !=
+        std::string::npos);
+
+    const auto bad_unit_path =
+        temp.path / "BadLengthUnit.ss2part";
+    writeBytes(
+        bad_unit_path,
+        buildPartPackage(
+            std::string{
+                core::DocumentId::generate()
+                    .value()},
+            part::PartDocumentStore::
+                current_schema_version,
+            "{"
+            "\"properties\":{"
+                "\"number\":\"\","
+                "\"title\":\"\","
+                "\"description\":\"\","
+                "\"engineering_revision\":\"\""
+            "},"
+            "\"presentation\":{"
+                "\"builtin_reference_visibility_mask\":15"
+            "},"
+            "\"length_unit\":\"yd\","
+            "\"sketches\":[],"
+            "\"next_profile_id\":\"1\","
+            "\"profiles\":[]"
+            "}"));
+    const auto bad_unit =
+        store.load(bad_unit_path);
+    CHECK(!bad_unit.ok());
+    CHECK(
+        bad_unit.diagnostic.code ==
+        part::PartStoreErrorCode::
+            malformed_document);
 
     const auto duplicate_sketch_path =
         temp.path / "DuplicateSketch.ss2part";

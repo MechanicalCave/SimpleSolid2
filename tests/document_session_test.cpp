@@ -271,6 +271,126 @@ int main() {
     }
 
     {
+        auto unit_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession unit_session{
+            {},
+            std::move(unit_document)};
+
+        CHECK(
+            unit_session.document().lengthUnit() ==
+            core::LengthUnit::millimetre);
+
+        const auto created_sketch =
+            unit_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            created_sketch.ok() &&
+            created_sketch.sketch_id.has_value());
+        const auto line =
+            unit_session.execute(
+                application::AddSketchLineCommand{
+                    *created_sketch.sketch_id,
+                    {25.4, -10.0},
+                    {50.8, 15.0}});
+        CHECK(
+            line.ok() &&
+            line.entity_id.has_value());
+
+        const auto* before_sketch =
+            unit_session.document().findSketch(
+                *created_sketch.sketch_id);
+        CHECK(before_sketch != nullptr);
+        const auto before_geometry =
+            before_sketch->model.state();
+        const auto before_revision =
+            unit_session.document().revision();
+        const auto before_undo =
+            unit_session.undoDepth();
+
+        const auto invalid_unit =
+            unit_session.execute(
+                application::SetPartLengthUnitCommand{
+                    static_cast<
+                        core::LengthUnit>(255U)});
+        CHECK(!invalid_unit.ok());
+        CHECK(
+            invalid_unit.diagnostic.code ==
+            application::DocumentSessionErrorCode::
+                invalid_command);
+        CHECK(
+            unit_session.document().revision() ==
+            before_revision);
+        CHECK(
+            unit_session.undoDepth() ==
+            before_undo);
+
+        const auto changed_unit =
+            unit_session.execute(
+                application::SetPartLengthUnitCommand{
+                    core::LengthUnit::inch});
+        CHECK(changed_unit.ok());
+        CHECK(changed_unit.changed);
+        CHECK(
+            unit_session.document().lengthUnit() ==
+            core::LengthUnit::inch);
+        CHECK(
+            unit_session.document().revision().value() ==
+            before_revision.value() + 1U);
+        CHECK(
+            unit_session.undoDepth() ==
+            before_undo + 1U);
+
+        const auto* after_sketch =
+            unit_session.document().findSketch(
+                *created_sketch.sketch_id);
+        CHECK(after_sketch != nullptr);
+        CHECK(
+            after_sketch->model.state() ==
+            before_geometry);
+
+        const auto unit_no_op_revision =
+            unit_session.document().revision();
+        const auto unit_no_op =
+            unit_session.execute(
+                application::SetPartLengthUnitCommand{
+                    core::LengthUnit::inch});
+        CHECK(unit_no_op.ok());
+        CHECK(!unit_no_op.changed);
+        CHECK(
+            unit_session.document().revision() ==
+            unit_no_op_revision);
+        CHECK(
+            unit_session.undoDepth() ==
+            before_undo + 1U);
+
+        CHECK(unit_session.undo().changed);
+        CHECK(
+            unit_session.document().lengthUnit() ==
+            core::LengthUnit::millimetre);
+        CHECK(
+            unit_session.document()
+                .findSketch(
+                    *created_sketch.sketch_id)
+                ->model.state() ==
+            before_geometry);
+
+        CHECK(unit_session.redo().changed);
+        CHECK(
+            unit_session.document().lengthUnit() ==
+            core::LengthUnit::inch);
+        CHECK(
+            unit_session.document()
+                .findSketch(
+                    *created_sketch.sketch_id)
+                ->model.state() ==
+            before_geometry);
+    }
+
+    {
         const auto exhausted_id =
             core::DocumentId::generate();
         auto exhausted_seed =

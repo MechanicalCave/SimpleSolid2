@@ -258,6 +258,20 @@ int main() {
             max_revision);
     CHECK(reconstructed.ok());
     CHECK(reconstructed.document.has_value());
+
+    auto invalid_unit_state =
+        part::PartAuthoredState{};
+    invalid_unit_state.length_unit =
+        static_cast<core::LengthUnit>(255U);
+    const auto invalid_unit_restore =
+        part::PartDocument::restore(
+            core::DocumentId::generate(),
+            std::move(invalid_unit_state));
+    CHECK(!invalid_unit_restore.ok());
+    CHECK(
+        invalid_unit_restore.code ==
+        part::PartReconstructErrorCode::
+            invalid_state);
     CHECK(
         reconstructed.document->revision() ==
         max_revision);

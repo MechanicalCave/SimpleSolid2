@@ -1,6 +1,8 @@
 #pragma once
 
 #include <simplesolid2/application/cad_input.hpp>
+#include <simplesolid2/application/precision_input.hpp>
+#include <simplesolid2/core/units.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 
 #include <optional>
@@ -10,7 +12,11 @@
 namespace simplesolid2::application {
 
 struct CadInputNumberFormat final {
+    // Retained for source compatibility with pre-R10 adapters.
+    // R10 precision grammar accepts both '.' and ',' regardless of locale.
     std::string decimal_separator{"."};
+    core::LengthUnit length_unit{
+        core::LengthUnit::millimetre};
 };
 
 enum class ProfileCadInputCommandKind {
@@ -32,6 +38,41 @@ struct ProfileCadInputCommand final {
     std::optional<bool> enabled;
 };
 
+enum class CadInputValueRequestSemantic {
+    circle_size,
+    arc_radius,
+    rotate_angle,
+    scale_factor,
+    mirror_axis_angle,
+};
+
+struct CadInputValueRequest final {
+    CadInputValueRequestSemantic semantic{
+        CadInputValueRequestSemantic::circle_size};
+    CadQuantityDimension dimension{
+        CadQuantityDimension::length};
+    bool strictly_positive{};
+};
+
+enum class CadInputPairRequestSemantic {
+    rectangle_size,
+};
+
+struct CadInputPairRequest final {
+    CadInputPairRequestSemantic semantic{
+        CadInputPairRequestSemantic::rectangle_size};
+    CadQuantityDimension first_dimension{
+        CadQuantityDimension::length};
+    CadQuantityDimension second_dimension{
+        CadQuantityDimension::length};
+    bool strictly_positive{};
+};
+
+enum class CircleSizeInputMode {
+    diameter,
+    radius,
+};
+
 class ISketchCadInputSemanticTarget {
 public:
     virtual ~ISketchCadInputSemanticTarget() = default;
@@ -44,6 +85,67 @@ public:
 
     [[nodiscard]] virtual bool activateCadInputSemanticTool(
         sketch::SketchTool tool) = 0;
+
+    [[nodiscard]] virtual bool
+    submitCadInputSemanticExplicitPoint(
+        sketch::ExplicitPointInput input) = 0;
+
+    [[nodiscard]] virtual std::optional<CadInputValueRequest>
+    cadInputSemanticValueRequest() const noexcept {
+        return std::nullopt;
+    }
+
+    [[nodiscard]] virtual bool
+    submitCadInputSemanticValue(double) {
+        return false;
+    }
+
+    [[nodiscard]] virtual bool
+    lockCadInputSemanticValue(double) {
+        return false;
+    }
+
+    [[nodiscard]] virtual bool
+    lockCadInputSemanticPointField(
+        CadDynamicInputFieldSemantic,
+        double) {
+        return false;
+    }
+
+    [[nodiscard]] virtual std::optional<
+        CadDynamicInputFieldValue>
+    cadInputSemanticDynamicFieldValue(
+        CadDynamicInputFieldSemantic) const noexcept {
+        return std::nullopt;
+    }
+
+    [[nodiscard]] virtual std::optional<CadInputPairRequest>
+    cadInputSemanticPairRequest() const noexcept {
+        return std::nullopt;
+    }
+
+    [[nodiscard]] virtual bool
+    submitCadInputSemanticPair(double, double) {
+        return false;
+    }
+
+    [[nodiscard]] virtual bool
+    lockCadInputSemanticPairField(
+        CadDynamicInputFieldSemantic,
+        double) {
+        return false;
+    }
+
+    [[nodiscard]] virtual bool
+    submitCadInputSemanticCircleSizeMode(
+        CircleSizeInputMode) {
+        return false;
+    }
+
+    [[nodiscard]] virtual CircleSizeInputMode
+    cadInputSemanticCircleSizeMode() const noexcept {
+        return CircleSizeInputMode::diameter;
+    }
 
     [[nodiscard]] virtual bool submitCadInputSemanticDirectDistance(
         double distance) = 0;
@@ -77,6 +179,18 @@ public:
         CadInputNumberFormat number_format);
 
     [[nodiscard]] CadInputSubmitResult submit(
+        std::string_view text);
+
+    [[nodiscard]] std::vector<CadDynamicInputField>
+    dynamicInputFields() const;
+
+    [[nodiscard]] std::vector<
+        CadDynamicInputFieldSnapshot>
+    dynamicInputFieldSnapshots() const;
+
+    [[nodiscard]] CadInputSubmitResult
+    lockDynamicInputField(
+        std::size_t index,
         std::string_view text);
 
 private:

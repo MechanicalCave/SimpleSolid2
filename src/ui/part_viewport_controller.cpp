@@ -816,6 +816,35 @@ bool PartViewportController::setSketchCursorMode(
     return true;
 }
 
+std::optional<viewer::ViewportPoint2>
+PartViewportController::projectSketchPointToViewport(
+    sketch::Point2 point) const {
+    if (viewport_ == nullptr ||
+        !point.finite()) {
+        return std::nullopt;
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto world =
+        detail::sketchPointToWorld(
+            hosted->placement,
+            point);
+    if (!world) {
+        return std::nullopt;
+    }
+
+    const auto projected =
+        viewport_->projectWorldPoint(*world);
+    return projected &&
+                   projected->valid()
+        ? projected
+        : std::nullopt;
+}
+
 SketchEntityPointQueryResult
 PartViewportController::querySketchEntityAt(
     viewer::ViewportPoint2 point) {
@@ -1139,6 +1168,19 @@ bool PartViewportController::setSketchSelectionBoxOverlay(
 void PartViewportController::clearSketchSelectionBoxOverlay() {
     if (viewport_ != nullptr) {
         viewport_->clearSketchSelectionBoxOverlay();
+    }
+}
+
+bool PartViewportController::setSketchDynamicInputOverlay(
+    const viewer::SketchDynamicInputOverlay& overlay) {
+    return viewport_ != nullptr &&
+           overlay.valid() &&
+           viewport_->setSketchDynamicInputOverlay(overlay);
+}
+
+void PartViewportController::clearSketchDynamicInputOverlay() {
+    if (viewport_ != nullptr) {
+        viewport_->clearSketchDynamicInputOverlay();
     }
 }
 

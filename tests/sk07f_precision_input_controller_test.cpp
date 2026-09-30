@@ -4,6 +4,7 @@
 
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <QApplication>
 #include <QTreeWidget>
@@ -13,6 +14,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <numbers>
 #include <optional>
 #include <string>
 #include <utility>
@@ -53,6 +55,17 @@ public:
     bool setStandardView(viewer::StandardView) override { return true; }
     bool setProjection(viewer::CameraProjection) override { return true; }
     void fitAll() override {}
+
+    std::optional<viewer::ViewportPoint2>
+    projectWorldPoint(
+        viewer::Point3 point) const override {
+        if (!viewer::finite(point)) {
+            return std::nullopt;
+        }
+        return viewer::ViewportPoint2{
+            point.x,
+            point.y};
+    }
 
     bool setReferenceScene(const viewer::ReferenceScene& scene) override {
         return scene.valid();
@@ -503,6 +516,788 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.escape());
     CHECK(!interaction.activePointRequest().has_value());
     CHECK(session.document().state() == before_escape);
+
+    // R10 point grammar uses the same semantic endpoint and PointRequest.
+    // Unitless coordinates follow the durable Part display/input length unit.
+    const auto set_inches =
+        session.execute(
+            application::SetPartLengthUnitCommand{
+                core::LengthUnit::inch});
+    CHECK(set_inches.ok());
+    CHECK(set_inches.changed);
+
+    application::SketchCadInputSemanticEndpoint inch_input{
+        interaction,
+        application::CadInputNumberFormat{
+            ".",
+            core::LengthUnit::inch}};
+
+    interaction.activateLine();
+    semantic_result = inch_input.submit("1;2");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.lineStage() ==
+        sketch::LineStage::await_next_point);
+
+    semantic_result = inch_input.submit("@1;0.5");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(!model_state.lines.empty());
+    const auto& exact_cartesian =
+        model_state.lines.back();
+    CHECK(near(exact_cartesian.start.u, 25.4));
+    CHECK(near(exact_cartesian.start.v, 50.8));
+    CHECK(near(exact_cartesian.end.u, 50.8));
+    CHECK(near(exact_cartesian.end.v, 63.5));
+
+    semantic_result = inch_input.submit("@1<90");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(model_state.lines.size() >= 2U);
+    const auto& exact_polar =
+        model_state.lines.back();
+    CHECK(near(exact_polar.start.u, 50.8));
+    CHECK(near(exact_polar.start.v, 63.5));
+    CHECK(near(exact_polar.end.u, 50.8));
+    CHECK(near(exact_polar.end.v, 88.9));
+    CHECK(interaction.escape());
+
+    // Circle Center -> Size defaults to Diameter at Sketch-edit entry.
+    interaction.activateCircle();
+    semantic_result = inch_input.submit("1;1");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.circleSizeInputMode() ==
+        application::CircleSizeInputMode::diameter);
+    semantic_result = inch_input.submit("2");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(!model_state.circles.empty());
+    CHECK(near(model_state.circles.back().center.u, 25.4));
+    CHECK(near(model_state.circles.back().center.v, 25.4));
+    CHECK(near(model_state.circles.back().radius, 25.4));
+
+    // R is an explicit runtime setter and persists across Circle
+    // activations within this Sketch edit.
+    interaction.activateCircle();
+    semantic_result = inch_input.submit("2;2");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("R");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.circleSizeInputMode() ==
+        application::CircleSizeInputMode::radius);
+    semantic_result = inch_input.submit("1");
+    CHECK(semantic_result.accepted);
+    interaction.activateCircle();
+    CHECK(
+        interaction.circleSizeInputMode() ==
+        application::CircleSizeInputMode::radius);
+    CHECK(interaction.escape());
+
+    // Arc: Start -> End -> Arc Point / Radius. Pointer side supplies
+    // the typed-Radius bulge, while an explicit Arc Point outranks a
+    // previously locked Radius.
+    interaction.activateArc();
+    semantic_result = inch_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("@4;0");
+    CHECK(semantic_result.accepted);
+    movePointer(
+        interaction,
+        sketch_id,
+        150.0,
+        150.0,
+        50.8,
+        20.0);
+    semantic_result = inch_input.submit("2");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(!model_state.arcs.empty());
+    CHECK(near(model_state.arcs.back().radius, 50.8));
+
+    // Arc Start -> End accepts the same bare Direct Distance path as
+    // the visible helper chord. This is the manual keyboard workflow:
+    // point Start, aim the pointer/Polar direction, type chord length.
+    interaction.activateArc();
+    semantic_result = inch_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    const auto arc_chord_request =
+        interaction.activePointRequest();
+    CHECK(arc_chord_request.has_value());
+    CHECK(arc_chord_request->base.has_value());
+    CHECK(arc_chord_request->direct_distance_enabled);
+    movePointer(
+        interaction,
+        sketch_id,
+        180.0,
+        100.0,
+        100.0,
+        0.0);
+    semantic_result = inch_input.submit("4");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.arcStage() ==
+        sketch::ArcStage::await_arc_point);
+    movePointer(
+        interaction,
+        sketch_id,
+        180.0,
+        130.0,
+        50.8,
+        20.0);
+    semantic_result = inch_input.submit("2");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(!model_state.arcs.empty());
+    CHECK(near(model_state.arcs.back().radius, 50.8));
+
+    interaction.activateArc();
+    semantic_result = inch_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("@2;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("2");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.arcStage() ==
+        sketch::ArcStage::await_arc_point);
+    const auto arc_count_before_point =
+        session.document().findSketch(sketch_id)->
+            model.state().arcs.size();
+    semantic_result = inch_input.submit("1;1");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    CHECK(
+        hosted->model.state().arcs.size() ==
+        arc_count_before_point + 1U);
+
+    // Rectangle owns Width;Height at stage two. Pointer supplies left/up
+    // quadrant while the pair supplies exact positive magnitudes.
+    interaction.activateRectangle();
+    semantic_result = inch_input.submit("10;10");
+    CHECK(semantic_result.accepted);
+    movePointer(
+        interaction,
+        sketch_id,
+        160.0,
+        160.0,
+        200.0,
+        300.0);
+    const auto lines_before_rectangle =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    semantic_result = inch_input.submit("2;1");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_rectangle + 4U);
+    const auto& rectangle_first_edge =
+        model_state.lines[lines_before_rectangle];
+    CHECK(near(rectangle_first_edge.start.u, 254.0));
+    CHECK(near(rectangle_first_edge.start.v, 254.0));
+    CHECK(near(rectangle_first_edge.end.u, 203.2));
+    CHECK(near(rectangle_first_edge.end.v, 254.0));
+
+    // ROTATE final stage owns an Angle request; bare values are degrees.
+    CHECK(interaction.selectedCount() == 1U);
+    CHECK(interaction.activateRotate());
+    semantic_result = inch_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("1;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("90");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(near(moved_source->start().u, -50.0));
+    CHECK(near(moved_source->start().v, 40.0));
+    CHECK(near(moved_source->end().u, -80.0));
+    CHECK(near(moved_source->end().v, 70.0));
+
+    // SCALE final stage owns a positive dimensionless Factor. Invalid zero
+    // fails closed without ending the transform; 0.5 then commits exactly.
+    CHECK(interaction.activateScale());
+    semantic_result = inch_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = inch_input.submit("1;0");
+    CHECK(semantic_result.accepted);
+    const auto revision_before_bad_factor =
+        session.document().revision();
+    semantic_result = inch_input.submit("0");
+    CHECK(!semantic_result.accepted);
+    CHECK(
+        session.document().revision() ==
+        revision_before_bad_factor);
+    CHECK(
+        interaction.commonTransformStage() ==
+        sketch::CommonTransformStage::
+            await_destination);
+    semantic_result = inch_input.submit("0.5");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(near(moved_source->start().u, -25.0));
+    CHECK(near(moved_source->start().v, 20.0));
+    CHECK(near(moved_source->end().u, -40.0));
+    CHECK(near(moved_source->end().v, 35.0));
+
+    // Grip Rotate: exact Angle is signed and pointer-independent.
+    CHECK(viewport.selection_.primary.has_value());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            *viewport.selection_.primary,
+            viewer::SketchGripRole::line_start}};
+    click(
+        interaction,
+        sketch_id,
+        210.0,
+        210.0,
+        -25.0,
+        20.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::rotate);
+    semantic_result = semantic_input.submit("90");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(near(moved_source->start().u, -25.0));
+    CHECK(near(moved_source->start().v, 20.0));
+    CHECK(near(moved_source->end().u, -40.0));
+    CHECK(near(moved_source->end().v, 5.0));
+
+    // Grip Scale: exact positive Factor owns the final geometry.
+    CHECK(viewport.selection_.primary.has_value());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            *viewport.selection_.primary,
+            viewer::SketchGripRole::line_start}};
+    click(
+        interaction,
+        sketch_id,
+        220.0,
+        220.0,
+        -25.0,
+        20.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::scale);
+    const auto revision_before_bad_grip_factor =
+        session.document().revision();
+    semantic_result = semantic_input.submit("0");
+    CHECK(!semantic_result.accepted);
+    CHECK(
+        session.document().revision() ==
+        revision_before_bad_grip_factor);
+    CHECK(interaction.directManipulationActive());
+    semantic_result = semantic_input.submit("2");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(near(moved_source->start().u, -25.0));
+    CHECK(near(moved_source->start().v, 20.0));
+    CHECK(near(moved_source->end().u, -55.0));
+    CHECK(near(moved_source->end().v, -10.0));
+
+    // Grip Mirror: typed Axis Angle is absolute from Sketch +U.
+    CHECK(viewport.selection_.primary.has_value());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            *viewport.selection_.primary,
+            viewer::SketchGripRole::line_start}};
+    click(
+        interaction,
+        sketch_id,
+        230.0,
+        230.0,
+        -25.0,
+        20.0);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::mirror);
+    semantic_result = semantic_input.submit("90");
+    CHECK(semantic_result.accepted);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    moved_source = hosted->model.findLine(source_id);
+    CHECK(moved_source != nullptr);
+    CHECK(near(moved_source->start().u, -25.0));
+    CHECK(near(moved_source->start().v, 20.0));
+    CHECK(near(moved_source->end().u, 5.0));
+    CHECK(near(moved_source->end().v, -10.0));
+
+    // Polar is a logical-screen-space magnet. With 90-degree Absolute
+    // tracks, (20,1) captures +U. Direct Distance owns magnitude only.
+    application::CadInteractionSettings polar_settings;
+    polar_settings.polar.primary_spacing =
+        std::numbers::pi_v<double> / 2.0;
+    interaction.setCadInteractionSettingsProvider(
+        [&polar_settings] {
+            return polar_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            0.0,
+            0.0}));
+    const auto line_count_before_polar =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    movePointer(
+        interaction,
+        sketch_id,
+        20.0,
+        1.0,
+        20.0,
+        1.0);
+
+    auto dyn_snapshots =
+        semantic_input.dynamicInputFieldSnapshots();
+    CHECK(dyn_snapshots.size() == 4U);
+    CHECK(
+        dyn_snapshots[0].value->state ==
+        application::CadDynamicInputValueState::free);
+    CHECK(near(
+        dyn_snapshots[0].value->canonical_value,
+        std::sqrt(401.0)));
+    CHECK(
+        dyn_snapshots[1].value->state ==
+        application::CadDynamicInputValueState::assisted);
+    CHECK(near(
+        dyn_snapshots[1].value->canonical_value,
+        0.0));
+    CHECK(
+        dyn_snapshots[2].value->state ==
+        application::CadDynamicInputValueState::assisted);
+    CHECK(
+        dyn_snapshots[3].value->state ==
+        application::CadDynamicInputValueState::assisted);
+
+    CHECK(interaction.submitDirectDistance(100.0));
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        line_count_before_polar + 1U);
+    CHECK(near(model_state.lines.back().start.u, 0.0));
+    CHECK(near(model_state.lines.back().start.v, 0.0));
+    CHECK(near(model_state.lines.back().end.u, 100.0));
+    CHECK(near(model_state.lines.back().end.v, 0.0));
+
+    // Arc Start -> End uses the same Polar-resolved point as a visible
+    // helper chord before the End point is accepted.
+    interaction.activateArc();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            10.0,
+            10.0}));
+    movePointer(
+        interaction,
+        sketch_id,
+        30.0,
+        1.0,
+        30.0,
+        11.0);
+    CHECK(viewport.preview_scene_.lines.size() == 1U);
+    CHECK(near(viewport.preview_scene_.lines[0].start.x, 10.0));
+    CHECK(near(viewport.preview_scene_.lines[0].start.y, 10.0));
+    CHECK(viewport.preview_scene_.lines[0].end.x > 30.0);
+    CHECK(viewport.preview_scene_.lines[0].end.y == 10.0);
+    CHECK(interaction.escape());
+
+    // Precision polar coordinates must be able to author an exactly
+    // closed cardinal loop. Region/Profile topology is exact by design,
+    // so R10 must not manufacture sub-floating-point gaps at 90-degree
+    // directions that are semantically exact.
+    interaction.activateLine();
+    const auto closed_loop_first_line =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    CHECK(semantic_input.submit("0;0").accepted);
+    CHECK(semantic_input.submit("@100<0").accepted);
+    CHECK(semantic_input.submit("@50<90").accepted);
+    CHECK(semantic_input.submit("@100<180").accepted);
+    CHECK(semantic_input.submit("@50<270").accepted);
+
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        closed_loop_first_line + 4U);
+    const auto& closing_line = model_state.lines.back();
+    CHECK(closing_line.end.u == 0.0);
+    CHECK(closing_line.end.v == 0.0);
+
+    sketch::SketchModel exact_closed_loop;
+    for (std::size_t index = closed_loop_first_line;
+         index < model_state.lines.size();
+         ++index) {
+        static_cast<void>(
+            exact_closed_loop.addLine(
+                model_state.lines[index].start,
+                model_state.lines[index].end));
+    }
+    const auto closed_analysis =
+        sketch::analyzeRegions(exact_closed_loop);
+    CHECK(closed_analysis.regions.size() == 1U);
+    CHECK(closed_analysis.diagnostics.empty());
+    CHECK(interaction.escape());
+
+    // Manual-workflow regression: pointer Polar attraction followed by
+    // bare Direct Distance must preserve the same exact cardinal closure.
+    // This is the path used when a rectangle is drawn as four LINE
+    // segments with Polar -> distance -> Polar -> distance.
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            1000.0,
+            1000.0}));
+    const auto polar_distance_first_line =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+
+    movePointer(interaction, sketch_id, 1020.0, 1001.0, 1020.0, 1001.0);
+    CHECK(interaction.submitDirectDistance(100.0));
+    movePointer(interaction, sketch_id, 1101.0, 1020.0, 1101.0, 1020.0);
+    CHECK(interaction.submitDirectDistance(50.0));
+    movePointer(interaction, sketch_id, 1080.0, 1051.0, 1080.0, 1051.0);
+    CHECK(interaction.submitDirectDistance(100.0));
+    movePointer(interaction, sketch_id, 999.0, 1030.0, 999.0, 1030.0);
+    CHECK(interaction.submitDirectDistance(50.0));
+
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        polar_distance_first_line + 4U);
+    CHECK(model_state.lines.back().end.u == 1000.0);
+    CHECK(model_state.lines.back().end.v == 1000.0);
+
+    sketch::SketchModel polar_distance_loop;
+    for (std::size_t index = polar_distance_first_line;
+         index < model_state.lines.size();
+         ++index) {
+        static_cast<void>(
+            polar_distance_loop.addLine(
+                model_state.lines[index].start,
+                model_state.lines[index].end));
+    }
+    const auto polar_distance_analysis =
+        sketch::analyzeRegions(polar_distance_loop);
+    CHECK(polar_distance_analysis.regions.size() == 1U);
+    CHECK(polar_distance_analysis.diagnostics.empty());
+    CHECK(interaction.escape());
+
+    // Relative without an explicit semantic reference never falls back
+    // to Absolute. The same pointer remains raw.
+    polar_settings.polar.reference_mode =
+        application::PolarReferenceMode::relative;
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            0.0,
+            0.0}));
+    movePointer(
+        interaction,
+        sketch_id,
+        20.0,
+        1.0,
+        20.0,
+        1.0);
+    CHECK(interaction.submitDirectDistance(100.0));
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(model_state.lines.back().end.v > 4.0);
+    CHECK(model_state.lines.back().end.v < 6.0);
+
+    // Dynamic Input point-field locks route through the same semantic
+    // endpoint and existing PointRequest resolver.
+    interaction.activateLine();
+
+    auto dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "10");
+    CHECK(dyn_lock.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            1U,
+            "20mm");
+    CHECK(dyn_lock.accepted);
+
+    dyn_snapshots =
+        semantic_input.dynamicInputFieldSnapshots();
+    CHECK(dyn_snapshots.size() == 2U);
+    CHECK(
+        dyn_snapshots[0].value->state ==
+        application::CadDynamicInputValueState::locked);
+    CHECK(near(
+        dyn_snapshots[0].value->canonical_value,
+        10.0));
+    CHECK(
+        dyn_snapshots[1].value->state ==
+        application::CadDynamicInputValueState::locked);
+    CHECK(near(
+        dyn_snapshots[1].value->canonical_value,
+        20.0));
+
+    click(
+        interaction,
+        sketch_id,
+        300.0,
+        300.0,
+        1.0,
+        2.0);
+    CHECK(
+        interaction.lineStage() ==
+        sketch::LineStage::await_next_point);
+
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "100");
+    CHECK(dyn_lock.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            1U,
+            "90");
+    CHECK(dyn_lock.accepted);
+
+    dyn_snapshots =
+        semantic_input.dynamicInputFieldSnapshots();
+    CHECK(dyn_snapshots.size() == 4U);
+    CHECK(
+        dyn_snapshots[0].value->state ==
+        application::CadDynamicInputValueState::locked);
+    CHECK(near(
+        dyn_snapshots[0].value->canonical_value,
+        100.0));
+    CHECK(
+        dyn_snapshots[1].value->state ==
+        application::CadDynamicInputValueState::locked);
+    CHECK(near(
+        dyn_snapshots[1].value->canonical_value,
+        std::numbers::pi_v<double> / 2.0));
+
+    CHECK(interaction.submitCadInputDynamicRequest());
+
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(!model_state.lines.empty());
+    const auto& dyn_locked_line =
+        model_state.lines.back();
+    CHECK(near(dyn_locked_line.start.u, 10.0));
+    CHECK(near(dyn_locked_line.start.v, 20.0));
+    CHECK(near(dyn_locked_line.end.u, 10.0));
+    CHECK(near(dyn_locked_line.end.v, 120.0));
+
+    // Dynamic Input creation locks stay request-local and the normal
+    // pointer commit path supplies only remaining placement/orientation.
+    interaction.activateCircle();
+    semantic_result = semantic_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = semantic_input.submit("D");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.circleSizeInputMode() ==
+        application::CircleSizeInputMode::diameter);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "20mm");
+    CHECK(dyn_lock.accepted);
+    const auto circles_before_dyn =
+        session.document().findSketch(sketch_id)->
+            model.state().circles.size();
+    click(
+        interaction,
+        sketch_id,
+        320.0,
+        320.0,
+        500.0,
+        0.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.circles.size() ==
+        circles_before_dyn + 1U);
+    CHECK(near(model_state.circles.back().radius, 10.0));
+
+    interaction.activateArc();
+    semantic_result = semantic_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    semantic_result = semantic_input.submit("100;0");
+    CHECK(semantic_result.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "70mm");
+    CHECK(dyn_lock.accepted);
+    const auto arcs_before_dyn =
+        session.document().findSketch(sketch_id)->
+            model.state().arcs.size();
+    click(
+        interaction,
+        sketch_id,
+        330.0,
+        330.0,
+        50.0,
+        30.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.arcs.size() ==
+        arcs_before_dyn + 1U);
+    CHECK(near(model_state.arcs.back().radius, 70.0));
+
+    interaction.activateRectangle();
+    semantic_result = semantic_input.submit("0;0");
+    CHECK(semantic_result.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "50mm");
+    CHECK(dyn_lock.accepted);
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            1U,
+            "30mm");
+    CHECK(dyn_lock.accepted);
+    const auto lines_before_dyn_rectangle =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    click(
+        interaction,
+        sketch_id,
+        340.0,
+        340.0,
+        -500.0,
+        400.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_dyn_rectangle + 4U);
+    const auto& dyn_rect_first =
+        model_state.lines[
+            lines_before_dyn_rectangle];
+    CHECK(near(dyn_rect_first.start.u, 0.0));
+    CHECK(near(dyn_rect_first.start.v, 0.0));
+    CHECK(near(dyn_rect_first.end.u, -50.0));
+    CHECK(near(dyn_rect_first.end.v, 0.0));
+
+    // Empty-token Esc clears a request-local Grip Rotate Angle lock
+    // without discarding the manipulation revision needed for a later commit.
+    interaction.activateSelect();
+    CHECK(viewport.selection_.primary.has_value());
+    viewport.grip_query_ = {
+        true,
+        viewer::SketchGripKey{
+            *viewport.selection_.primary,
+            viewer::SketchGripRole::line_start}};
+    click(
+        interaction,
+        sketch_id,
+        430.0,
+        430.0,
+        dyn_locked_line.start.u,
+        dyn_locked_line.start.v);
+    CHECK(interaction.directManipulationActive());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(interaction.cycleDirectEditMode());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::rotate);
+
+    dyn_lock =
+        semantic_input.lockDynamicInputField(
+            0U,
+            "45");
+    CHECK(dyn_lock.accepted);
+    const auto revision_before_unlock_escape =
+        session.document().revision();
+    const auto undo_before_unlock_escape =
+        session.undoDepth();
+
+    CHECK(interaction.escape());
+    CHECK(interaction.directManipulationActive());
+    CHECK(
+        interaction.directEditMode() ==
+        sketch::DirectEditMode::rotate);
+    CHECK(
+        session.document().revision() ==
+        revision_before_unlock_escape);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_unlock_escape);
+
+    semantic_result = semantic_input.submit("90");
+    CHECK(semantic_result.accepted);
+    CHECK(!interaction.directManipulationActive());
+    const auto revision_after_unlock_commit =
+        revision_before_unlock_escape.next();
+    CHECK(revision_after_unlock_commit.has_value());
+    CHECK(
+        session.document().revision() ==
+        *revision_after_unlock_commit);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_unlock_escape + 1U);
 
     std::cout
         << "SK-07F precision input controller PASS\n";

@@ -1,4 +1,5 @@
 #include <simplesolid2/sketch/interaction_state.hpp>
+#include <simplesolid2/sketch/transform.hpp>
 
 #include <cmath>
 #include <cstdlib>
@@ -163,21 +164,100 @@ int main() {
         moved_arc->center ==
         sketch::Point2{2.0, 23.0});
 
+    // Rotate captures the current pointer direction as zero and always
+    // recomputes from the frozen interaction-start selection.
+    CHECK(state.cycleDirectEditMode());
+    CHECK(
+        state.directEditMode() ==
+        sketch::DirectEditMode::rotate);
+    const auto rotate_zero =
+        state.directManipulationGeometryState();
+    CHECK(rotate_zero.has_value());
+    CHECK(
+        *rotate_zero ==
+        sketch::captureSketchTransformGeometry(
+            model,
+            frozen_selection).value());
+
+    CHECK(
+        state.updateDirectManipulation(
+            sketch::ResolvedSketchInput{
+                {-3.0, 2.0}}));
+    const auto rotated =
+        state.directManipulationGeometryState();
+    const auto expected_rotated =
+        sketch::rotateSketchGeometry(
+            sketch::captureSketchTransformGeometry(
+                model,
+                frozen_selection).value(),
+            {0.0, 0.0},
+            pi * 0.5);
+    CHECK(rotated.has_value());
+    CHECK(expected_rotated.has_value());
+    CHECK(*rotated == *expected_rotated);
+
+    // Scale captures the current radius as factor 1.0; pointer direction
+    // is irrelevant and the preview still comes from frozen geometry.
+    CHECK(state.cycleDirectEditMode());
+    CHECK(
+        state.directEditMode() ==
+        sketch::DirectEditMode::scale);
+    const auto scale_one =
+        state.directManipulationGeometryState();
+    CHECK(scale_one.has_value());
+    CHECK(
+        *scale_one ==
+        sketch::captureSketchTransformGeometry(
+            model,
+            frozen_selection).value());
+
+    CHECK(
+        state.updateDirectManipulation(
+            sketch::ResolvedSketchInput{
+                {-6.0, 4.0}}));
+    const auto scaled =
+        state.directManipulationGeometryState();
+    const auto expected_scaled =
+        sketch::scaleSketchGeometry(
+            sketch::captureSketchTransformGeometry(
+                model,
+                frozen_selection).value(),
+            {0.0, 0.0},
+            2.0);
+    CHECK(scaled.has_value());
+    CHECK(expected_scaled.has_value());
+    CHECK(*scaled == *expected_scaled);
+
+    // Mirror uses the active grip as Axis Start and the pointer as Axis End.
+    CHECK(state.cycleDirectEditMode());
+    CHECK(
+        state.directEditMode() ==
+        sketch::DirectEditMode::mirror);
+    const auto mirrored =
+        state.directManipulationGeometryState();
+    const auto expected_mirrored =
+        sketch::mirrorSketchGeometry(
+            sketch::captureSketchTransformGeometry(
+                model,
+                frozen_selection).value(),
+            {0.0, 0.0},
+            {-6.0, 4.0});
+    CHECK(mirrored.has_value());
+    CHECK(expected_mirrored.has_value());
+    CHECK(*mirrored == *expected_mirrored);
+
     CHECK(state.cycleDirectEditMode());
     CHECK(
         state.directEditMode() ==
         sketch::DirectEditMode::reshape);
     const auto reshape_again =
         state.directManipulationGeometryState();
-    CHECK(reshape_again == reshape);
-
-    CHECK(state.cycleDirectEditMode());
-    const auto moved_again =
-        state.directManipulationGeometryState();
-    CHECK(moved_again == moved);
+    CHECK(reshape_again.has_value());
+    CHECK(
+        reshape_again->lines.front().start ==
+        sketch::Point2{-6.0, 4.0});
 
     // A pointer position invalid for Reshape can still be valid for Move.
-    CHECK(state.cycleDirectEditMode());
     CHECK(
         state.directEditMode() ==
         sketch::DirectEditMode::reshape);
@@ -195,6 +275,21 @@ int main() {
     CHECK(
         state.directManipulationGeometryState()
             .has_value());
+
+    // Complete the cycle back to Reshape before checking the same invalid
+    // owner-only reshape geometry again.
+    CHECK(state.cycleDirectEditMode());
+    CHECK(
+        state.directEditMode() ==
+        sketch::DirectEditMode::rotate);
+    CHECK(state.cycleDirectEditMode());
+    CHECK(
+        state.directEditMode() ==
+        sketch::DirectEditMode::scale);
+    CHECK(state.cycleDirectEditMode());
+    CHECK(
+        state.directEditMode() ==
+        sketch::DirectEditMode::mirror);
     CHECK(state.cycleDirectEditMode());
     CHECK(
         state.directEditMode() ==
@@ -204,8 +299,9 @@ int main() {
              .has_value());
     state.cancelDirectManipulation();
 
-    // Every non-center grip keeps its existing Reshape default and cycles.
-    const std::vector<sketch::SketchGripRef> two_mode_grips{
+    // Every non-center grip keeps Reshape default and cycles through
+    // Reshape -> Move -> Rotate -> Scale -> Mirror -> Reshape.
+    const std::vector<sketch::SketchGripRef> non_center_grips{
         {line_id, sketch::SketchGripRole::line_start},
         {line_id, sketch::SketchGripRole::line_end},
         {circle_id, sketch::SketchGripRole::circle_quadrant_pos_u},
@@ -217,7 +313,7 @@ int main() {
         {arc_id, sketch::SketchGripRole::arc_mid},
     };
 
-    for (const auto grip : two_mode_grips) {
+    for (const auto grip : non_center_grips) {
         auto cycling =
             selectedState(
                 line_id,
@@ -237,78 +333,80 @@ int main() {
             cycling.directEditMode() ==
             sketch::DirectEditMode::reshape);
 
-        CHECK(cycling.cycleDirectEditMode());
-        CHECK(cycling.activeGrip() == grip);
-        CHECK(
-            cycling.directEditMode() ==
-            sketch::DirectEditMode::move);
-        CHECK(
-            cycling.selectedEntities() ==
-            selected);
-        CHECK(
-            cycling.primarySelection() ==
-            primary);
+        const std::vector<sketch::DirectEditMode> cycle{
+            sketch::DirectEditMode::move,
+            sketch::DirectEditMode::rotate,
+            sketch::DirectEditMode::scale,
+            sketch::DirectEditMode::mirror,
+            sketch::DirectEditMode::reshape};
 
-        CHECK(cycling.cycleDirectEditMode());
-        CHECK(cycling.activeGrip() == grip);
-        CHECK(
-            cycling.directEditMode() ==
-            sketch::DirectEditMode::reshape);
-        CHECK(
-            cycling.selectedEntities() ==
-            selected);
-        CHECK(
-            cycling.primarySelection() ==
-            primary);
+        for (const auto expected_mode : cycle) {
+            CHECK(cycling.cycleDirectEditMode());
+            CHECK(cycling.activeGrip() == grip);
+            CHECK(
+                cycling.directEditMode() ==
+                expected_mode);
+            CHECK(
+                cycling.selectedEntities() ==
+                selected);
+            CHECK(
+                cycling.primarySelection() ==
+                primary);
+            CHECK(!cycling.directManipulationCopyEnabled());
+        }
         cycling.cancelDirectManipulation();
     }
 
-    // Center grips are Move-only; Space/Cycle is a semantic no-op.
-    const std::vector<sketch::SketchGripRef> move_only_grips{
+    // Center grips cycle Move -> Rotate -> Scale -> Mirror -> Move.
+    const std::vector<sketch::SketchGripRef> center_grips{
         {line_id, sketch::SketchGripRole::line_center},
         {circle_id, sketch::SketchGripRole::circle_center},
         {arc_id, sketch::SketchGripRole::arc_center},
     };
 
-    for (const auto grip : move_only_grips) {
-        auto move_only =
+    for (const auto grip : center_grips) {
+        auto cycling =
             selectedState(
                 line_id,
                 circle_id,
                 arc_id);
         const auto selected =
-            move_only.selectedEntities();
+            cycling.selectedEntities();
         const auto primary =
-            move_only.primarySelection();
+            cycling.primarySelection();
 
         CHECK(
-            move_only.beginDirectManipulation(
+            cycling.beginDirectManipulation(
                 model,
                 grip));
         CHECK(
-            move_only.directEditMode() ==
+            cycling.directEditMode() ==
             sketch::DirectEditMode::move);
-        CHECK(!move_only.directManipulationCopyEnabled());
-        CHECK(move_only.enableDirectManipulationCopy());
-        CHECK(move_only.directManipulationCopyEnabled());
+        CHECK(cycling.enableDirectManipulationCopy());
+        CHECK(cycling.directManipulationCopyEnabled());
 
-        CHECK(!move_only.cycleDirectEditMode());
-        CHECK(move_only.directManipulationCopyEnabled());
-        CHECK(move_only.activeGrip() == grip);
-        CHECK(
-            move_only.directEditMode() ==
-            sketch::DirectEditMode::move);
-        CHECK(
-            move_only.selectedEntities() ==
-            selected);
-        CHECK(
-            move_only.primarySelection() ==
-            primary);
-        CHECK(
-            move_only.directManipulationGeometryState()
-                .has_value());
+        const std::vector<sketch::DirectEditMode> cycle{
+            sketch::DirectEditMode::rotate,
+            sketch::DirectEditMode::scale,
+            sketch::DirectEditMode::mirror,
+            sketch::DirectEditMode::move};
 
-        move_only.cancelDirectManipulation();
+        for (const auto expected_mode : cycle) {
+            CHECK(cycling.cycleDirectEditMode());
+            CHECK(cycling.activeGrip() == grip);
+            CHECK(
+                cycling.directEditMode() ==
+                expected_mode);
+            CHECK(
+                cycling.selectedEntities() ==
+                selected);
+            CHECK(
+                cycling.primarySelection() ==
+                primary);
+            CHECK(!cycling.directManipulationCopyEnabled());
+        }
+
+        cycling.cancelDirectManipulation();
     }
 
     CHECK(!state.directManipulationActive());

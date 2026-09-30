@@ -47,6 +47,46 @@ constexpr double half_turn =
     return normalized;
 }
 
+[[nodiscard]] Point2 stableUnitDirection(
+    double angle) noexcept {
+    if (!std::isfinite(angle)) {
+        return {};
+    }
+
+    constexpr double quarter_turn =
+        std::numbers::pi_v<double> / 2.0;
+    double normalized = positiveTurn(angle);
+    int quadrant =
+        static_cast<int>(normalized / quarter_turn);
+    if (quadrant > 3) {
+        quadrant = 0;
+        normalized = 0.0;
+    }
+
+    const double local =
+        normalized -
+        static_cast<double>(quadrant) * quarter_turn;
+    if (local == 0.0) {
+        switch (quadrant) {
+        case 0: return {1.0, 0.0};
+        case 1: return {0.0, 1.0};
+        case 2: return {-1.0, 0.0};
+        case 3: return {0.0, -1.0};
+        default: return {};
+        }
+    }
+
+    const double cosine = std::cos(local);
+    const double sine = std::sin(local);
+    switch (quadrant) {
+    case 0: return {cosine, sine};
+    case 1: return {-sine, cosine};
+    case 2: return {-cosine, -sine};
+    case 3: return {sine, -cosine};
+    default: return {};
+    }
+}
+
 [[nodiscard]] double ccwDelta(
     double from,
     double to) noexcept {
@@ -228,6 +268,192 @@ arcThroughThreePoints(
         : std::nullopt;
 }
 
+[[nodiscard]] int directedChordSide(
+    Point2 start,
+    Point2 end,
+    Point2 point) noexcept {
+    if (!start.finite() ||
+        !end.finite() ||
+        !point.finite()) {
+        return 0;
+    }
+
+    const double du = end.u - start.u;
+    const double dv = end.v - start.v;
+    const double pu = point.u - start.u;
+    const double pv = point.v - start.v;
+    if (!std::isfinite(du) ||
+        !std::isfinite(dv) ||
+        !std::isfinite(pu) ||
+        !std::isfinite(pv)) {
+        return 0;
+    }
+
+    const double chord_scale =
+        std::max(std::abs(du), std::abs(dv));
+    const double point_scale =
+        std::max(std::abs(pu), std::abs(pv));
+    if (chord_scale <= 0.0 ||
+        point_scale <= 0.0) {
+        return 0;
+    }
+
+    const double cross =
+        (du / chord_scale) *
+            (pv / point_scale) -
+        (dv / chord_scale) *
+            (pu / point_scale);
+    if (!std::isfinite(cross) || cross == 0.0) {
+        return 0;
+    }
+    return cross > 0.0 ? 1 : -1;
+}
+
+[[nodiscard]] std::optional<ArcIntent>
+arcFromChordRadius(
+    Point2 start,
+    Point2 end,
+    Point2 side_point,
+    double radius) noexcept {
+    if (!start.finite() ||
+        !end.finite() ||
+        !side_point.finite() ||
+        !std::isfinite(radius) ||
+        radius <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double du = end.u - start.u;
+    const double dv = end.v - start.v;
+    const double chord = std::hypot(du, dv);
+    if (!std::isfinite(chord) || chord <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double half_chord = chord * 0.5;
+    if (radius < half_chord) {
+        return std::nullopt;
+    }
+
+    const int side =
+        directedChordSide(start, end, side_point);
+    if (side == 0) {
+        return std::nullopt;
+    }
+
+    const double ratio = half_chord / radius;
+    if (!std::isfinite(ratio) ||
+        ratio < 0.0 || ratio > 1.0) {
+        return std::nullopt;
+    }
+
+    const double offset =
+        radius *
+        std::sqrt(std::max(
+            0.0,
+            1.0 - ratio * ratio));
+    if (!std::isfinite(offset)) {
+        return std::nullopt;
+    }
+
+    const Point2 midpoint{
+        start.u + du * 0.5,
+        start.v + dv * 0.5};
+    const Point2 left_normal{
+        -dv / chord,
+        du / chord};
+    const Point2 center{
+        midpoint.u -
+            static_cast<double>(side) *
+                offset * left_normal.u,
+        midpoint.v -
+            static_cast<double>(side) *
+                offset * left_normal.v};
+    if (!center.finite()) {
+        return std::nullopt;
+    }
+
+    const double sweep_magnitude =
+        2.0 * std::asin(ratio);
+    if (!std::isfinite(sweep_magnitude) ||
+        sweep_magnitude <= 0.0 ||
+        sweep_magnitude > half_turn) {
+        return std::nullopt;
+    }
+
+    ArcIntent result{
+        center,
+        radius,
+        direction(center, start),
+        side > 0
+            ? -sweep_magnitude
+            : sweep_magnitude};
+    return result.valid()
+        ? std::optional<ArcIntent>{result}
+        : std::nullopt;
+}
+
+[[nodiscard]] std::optional<RectangleIntent>
+rectangleFromSize(
+    Point2 first,
+    Point2 pointer,
+    double width,
+    double height) noexcept {
+    if (!first.finite() ||
+        !pointer.finite() ||
+        !std::isfinite(width) ||
+        !std::isfinite(height) ||
+        width <= 0.0 ||
+        height <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double du = pointer.u - first.u;
+    const double dv = pointer.v - first.v;
+    if (!std::isfinite(du) ||
+        !std::isfinite(dv) ||
+        du == 0.0 ||
+        dv == 0.0) {
+        return std::nullopt;
+    }
+
+    RectangleIntent result{
+        first,
+        {
+            first.u + (du > 0.0 ? width : -width),
+            first.v + (dv > 0.0 ? height : -height)}};
+    return result.valid()
+        ? std::optional<RectangleIntent>{result}
+        : std::nullopt;
+}
+
+[[nodiscard]] std::optional<RectangleIntent>
+rectangleFromSizeLocks(
+    Point2 first,
+    Point2 pointer,
+    std::optional<double> width,
+    std::optional<double> height) noexcept {
+    if (!first.finite() ||
+        !pointer.finite()) {
+        return std::nullopt;
+    }
+
+    const double du = pointer.u - first.u;
+    const double dv = pointer.v - first.v;
+    if (!std::isfinite(du) ||
+        !std::isfinite(dv) ||
+        du == 0.0 ||
+        dv == 0.0) {
+        return std::nullopt;
+    }
+
+    return rectangleFromSize(
+        first,
+        pointer,
+        width.value_or(std::abs(du)),
+        height.value_or(std::abs(dv)));
+}
+
 [[nodiscard]] std::optional<double>
 sameDirectionSweep(
     double start_angle,
@@ -402,10 +628,27 @@ bool SketchInteractionState::commonTransformTool()
 std::optional<PointRequest>
 SketchInteractionState::activePointRequest() const noexcept {
     if (manipulation_) {
+        const bool distance_enabled =
+            manipulation_->mode ==
+                DirectEditMode::reshape ||
+            manipulation_->mode ==
+                DirectEditMode::move;
         PointRequest request{
             manipulation_->pivot,
             point_pointer_candidate_,
+            distance_enabled,
+            true,
+            true,
             true};
+        if (manipulation_->mode ==
+                DirectEditMode::rotate &&
+            manipulation_->rotate_reference_point) {
+            request.polar_relative_reference =
+                direction(
+                    manipulation_->pivot,
+                    *manipulation_->
+                        rotate_reference_point);
+        }
         return request.valid()
             ? std::optional<PointRequest>{request}
             : std::nullopt;
@@ -413,26 +656,79 @@ SketchInteractionState::activePointRequest() const noexcept {
 
     if (tool_ == SketchTool::line &&
         !pending_line_request_) {
-        PointRequest request{
-            line_stage_ == LineStage::await_next_point
-                ? line_anchor_
-                : std::nullopt,
-            point_pointer_candidate_,
+        const bool based =
             line_stage_ == LineStage::await_next_point &&
-                line_anchor_.has_value()};
+            line_anchor_.has_value();
+        PointRequest request{
+            based ? line_anchor_ : std::nullopt,
+            point_pointer_candidate_,
+            based,
+            true,
+            based,
+            based};
+        if (based && line_relative_reference_) {
+            request.polar_relative_reference =
+                line_relative_reference_;
+        }
         return request.valid()
             ? std::optional<PointRequest>{request}
             : std::nullopt;
     }
 
+    if (tool_ == SketchTool::circle &&
+        circle_stage_ == CircleStage::await_center &&
+        !pending_circle_request_) {
+        PointRequest request{
+            std::nullopt,
+            point_pointer_candidate_,
+            false,
+            true,
+            false,
+            false};
+        return request.valid()
+            ? std::optional<PointRequest>{request}
+            : std::nullopt;
+    }
+
+    if (tool_ == SketchTool::arc &&
+        !pending_arc_request_) {
+        const bool end_stage =
+            arc_stage_ == ArcStage::await_end &&
+            arc_start_.has_value();
+        const bool arc_point_stage =
+            arc_stage_ == ArcStage::await_arc_point &&
+            arc_start_.has_value() &&
+            arc_end_.has_value();
+
+        if (arc_stage_ == ArcStage::await_start ||
+            end_stage ||
+            arc_point_stage) {
+            PointRequest request{
+                end_stage ? arc_start_ : std::nullopt,
+                point_pointer_candidate_,
+                end_stage,
+                true,
+                end_stage,
+                end_stage};
+            return request.valid()
+                ? std::optional<PointRequest>{request}
+                : std::nullopt;
+        }
+    }
+
     if (tool_ == SketchTool::rectangle &&
         !pending_rectangle_request_) {
-        PointRequest request{
+        const bool first_corner =
             rectangle_stage_ ==
-                    RectangleStage::await_opposite_corner
-                ? rectangle_first_corner_
-                : std::nullopt,
+            RectangleStage::await_first_corner;
+        PointRequest request{
+            first_corner
+                ? std::nullopt
+                : rectangle_first_corner_,
             point_pointer_candidate_,
+            false,
+            first_corner,
+            false,
             false};
         return request.valid()
             ? std::optional<PointRequest>{request}
@@ -449,6 +745,9 @@ SketchInteractionState::activePointRequest() const noexcept {
     PointRequest request{
         transform_session_->base_point,
         point_pointer_candidate_,
+        false,
+        true,
+        false,
         false};
 
     switch (transform_session_->stage) {
@@ -461,16 +760,91 @@ SketchInteractionState::activePointRequest() const noexcept {
             (tool_ == SketchTool::move ||
              tool_ == SketchTool::copy) &&
             request.base.has_value();
+        request.relative_cartesian_enabled =
+            request.base.has_value();
+        request.relative_polar_enabled =
+            request.base.has_value();
         break;
     case CommonTransformStage::await_reference_point:
     case CommonTransformStage::await_axis_end:
+        request.relative_cartesian_enabled =
+            request.base.has_value();
+        request.relative_polar_enabled =
+            request.base.has_value();
         break;
     case CommonTransformStage::select_objects:
         return std::nullopt;
     }
 
+    if (transform_session_->stage ==
+            CommonTransformStage::await_destination &&
+        (tool_ == SketchTool::rotate ||
+         tool_ == SketchTool::scale) &&
+        transform_session_->base_point &&
+        transform_session_->reference_point) {
+        request.polar_relative_reference =
+            direction(
+                *transform_session_->base_point,
+                *transform_session_->
+                    reference_point);
+    }
+
     return request.valid()
         ? std::optional<PointRequest>{request}
+        : std::nullopt;
+}
+
+std::optional<ResolvedSketchInput>
+SketchInteractionState::resolveExplicitPoint(
+    ExplicitPointInput input) const noexcept {
+    if (!input.valid()) {
+        return std::nullopt;
+    }
+
+    const auto request = activePointRequest();
+    if (!request) {
+        return std::nullopt;
+    }
+
+    Point2 resolved;
+    switch (input.kind) {
+    case ExplicitPointInputKind::absolute_cartesian:
+        if (!request->absolute_cartesian_enabled) {
+            return std::nullopt;
+        }
+        resolved = {input.first, input.second};
+        break;
+
+    case ExplicitPointInputKind::relative_cartesian:
+        if (!request->relative_cartesian_enabled ||
+            !request->base) {
+            return std::nullopt;
+        }
+        resolved = {
+            request->base->u + input.first,
+            request->base->v + input.second};
+        break;
+
+    case ExplicitPointInputKind::relative_polar:
+        if (!request->relative_polar_enabled ||
+            !request->base) {
+            return std::nullopt;
+        }
+        {
+            const auto direction =
+                stableUnitDirection(input.second);
+            resolved = {
+                request->base->u +
+                    input.first * direction.u,
+                request->base->v +
+                    input.first * direction.v};
+        }
+        break;
+    }
+
+    return resolved.finite()
+        ? std::optional<ResolvedSketchInput>{
+              ResolvedSketchInput{resolved}}
         : std::nullopt;
 }
 
@@ -482,7 +856,169 @@ SketchInteractionState::resolvePointerInput(
     }
 
     point_pointer_candidate_ = raw;
-    return ResolvedSketchInput{raw};
+    return resolvedPointRequestCandidate();
+}
+
+std::optional<ResolvedSketchInput>
+SketchInteractionState::
+resolvedPointRequestCandidate() const noexcept {
+    const auto request = activePointRequest();
+    if (!request ||
+        !request->pointer_candidate) {
+        return std::nullopt;
+    }
+
+    const auto raw =
+        *request->pointer_candidate;
+    Point2 resolved = raw;
+
+    if (!request->base) {
+        if (point_field_locks_.u) {
+            resolved.u = *point_field_locks_.u;
+        }
+        if (point_field_locks_.v) {
+            resolved.v = *point_field_locks_.v;
+        }
+        return resolved.finite()
+            ? std::optional<ResolvedSketchInput>{
+                  ResolvedSketchInput{resolved}}
+            : std::nullopt;
+    }
+
+    const auto base = *request->base;
+    const double raw_du = raw.u - base.u;
+    const double raw_dv = raw.v - base.v;
+
+    if (point_field_locks_.delta_u ||
+        point_field_locks_.delta_v) {
+        resolved = {
+            base.u +
+                point_field_locks_.delta_u
+                    .value_or(raw_du),
+            base.v +
+                point_field_locks_.delta_v
+                    .value_or(raw_dv)};
+        return resolved.finite()
+            ? std::optional<ResolvedSketchInput>{
+                  ResolvedSketchInput{resolved}}
+            : std::nullopt;
+    }
+
+    if (point_field_locks_.distance ||
+        point_field_locks_.angle) {
+        const double raw_distance =
+            std::hypot(raw_du, raw_dv);
+
+        double resolved_angle{};
+        if (point_field_locks_.angle) {
+            resolved_angle =
+                *point_field_locks_.angle;
+        } else {
+            if (!std::isfinite(raw_distance) ||
+                raw_distance <= 0.0) {
+                return std::nullopt;
+            }
+            resolved_angle =
+                std::atan2(raw_dv, raw_du);
+        }
+
+        const double resolved_distance =
+            point_field_locks_.distance
+                .value_or(raw_distance);
+        if (!std::isfinite(resolved_distance) ||
+            resolved_distance < 0.0 ||
+            !std::isfinite(resolved_angle)) {
+            return std::nullopt;
+        }
+
+        resolved = {
+            base.u +
+                resolved_distance *
+                    std::cos(resolved_angle),
+            base.v +
+                resolved_distance *
+                    std::sin(resolved_angle)};
+    }
+
+    return resolved.finite()
+        ? std::optional<ResolvedSketchInput>{
+              ResolvedSketchInput{resolved}}
+        : std::nullopt;
+}
+
+bool SketchInteractionState::lockPointField(
+    PointFieldLockSemantic semantic,
+    double value) noexcept {
+    const auto request = activePointRequest();
+    if (!request || !std::isfinite(value)) {
+        return false;
+    }
+
+    const bool based = request->base.has_value();
+    const bool polar_family_locked =
+        point_field_locks_.distance.has_value() ||
+        point_field_locks_.angle.has_value();
+    const bool cartesian_family_locked =
+        point_field_locks_.delta_u.has_value() ||
+        point_field_locks_.delta_v.has_value();
+
+    switch (semantic) {
+    case PointFieldLockSemantic::u:
+        if (based ||
+            !request->absolute_cartesian_enabled) {
+            return false;
+        }
+        point_field_locks_.u = value;
+        return true;
+
+    case PointFieldLockSemantic::v:
+        if (based ||
+            !request->absolute_cartesian_enabled) {
+            return false;
+        }
+        point_field_locks_.v = value;
+        return true;
+
+    case PointFieldLockSemantic::distance:
+        if (!based ||
+            (!request->relative_polar_enabled &&
+             !request->direct_distance_enabled) ||
+            value < 0.0 ||
+            cartesian_family_locked) {
+            return false;
+        }
+        point_field_locks_.distance = value;
+        return true;
+
+    case PointFieldLockSemantic::angle:
+        if (!based ||
+            !request->relative_polar_enabled ||
+            cartesian_family_locked) {
+            return false;
+        }
+        point_field_locks_.angle = value;
+        return true;
+
+    case PointFieldLockSemantic::delta_u:
+        if (!based ||
+            !request->relative_cartesian_enabled ||
+            polar_family_locked) {
+            return false;
+        }
+        point_field_locks_.delta_u = value;
+        return true;
+
+    case PointFieldLockSemantic::delta_v:
+        if (!based ||
+            !request->relative_cartesian_enabled ||
+            polar_family_locked) {
+            return false;
+        }
+        point_field_locks_.delta_v = value;
+        return true;
+    }
+
+    return false;
 }
 
 std::optional<ResolvedSketchInput>
@@ -826,6 +1362,7 @@ bool SketchInteractionState::completeTransformSelection(
     transform_session_->base_point.reset();
     transform_session_->reference_point.reset();
     transform_session_->current_preview.reset();
+    transform_session_->explicit_value.reset();
     point_pointer_candidate_.reset();
     transform_session_->stage =
         tool_ == SketchTool::mirror
@@ -857,6 +1394,8 @@ bool SketchInteractionState::acceptTransformPoint(
         point_pointer_candidate_ = input.position;
         transform_session_->reference_point.reset();
         transform_session_->current_preview.reset();
+        transform_session_->explicit_value.reset();
+        point_field_locks_ = {};
         transform_session_->stage =
             (tool_ == SketchTool::move ||
              tool_ == SketchTool::copy)
@@ -881,6 +1420,8 @@ bool SketchInteractionState::acceptTransformPoint(
             input.position;
         point_pointer_candidate_ = input.position;
         transform_session_->current_preview = input;
+        transform_session_->explicit_value.reset();
+        point_field_locks_ = {};
         transform_session_->stage =
             CommonTransformStage::await_destination;
         clearHover();
@@ -894,6 +1435,7 @@ bool SketchInteractionState::acceptTransformPoint(
         point_pointer_candidate_ = input.position;
         transform_session_->reference_point.reset();
         transform_session_->current_preview = input;
+        point_field_locks_ = {};
         transform_session_->stage =
             CommonTransformStage::await_axis_end;
         clearHover();
@@ -932,6 +1474,31 @@ bool SketchInteractionState::updateTransformPreview(
     return true;
 }
 
+bool SketchInteractionState::acceptTransformValue(
+    double value) noexcept {
+    if (!transform_session_ ||
+        transform_session_->stage !=
+            CommonTransformStage::await_destination ||
+        !transform_session_->base_point ||
+        !transform_session_->reference_point ||
+        !std::isfinite(value)) {
+        return false;
+    }
+
+    if (tool_ == SketchTool::rotate) {
+        transform_session_->explicit_value = value;
+        return true;
+    }
+
+    if (tool_ == SketchTool::scale &&
+        value > 0.0) {
+        transform_session_->explicit_value = value;
+        return true;
+    }
+
+    return false;
+}
+
 std::optional<SketchTransformGeometry>
 SketchInteractionState::transformGeometryState() const {
     if (!commonTransformTool() ||
@@ -966,6 +1533,13 @@ SketchInteractionState::transformGeometryState() const {
             *transform_session_->reference_point;
 
         if (tool_ == SketchTool::rotate) {
+            if (transform_session_->explicit_value) {
+                return rotateSketchGeometry(
+                    transform_session_->initial_geometry,
+                    base,
+                    *transform_session_->explicit_value);
+            }
+
             const auto angle =
                 signedAngle(
                     base,
@@ -977,6 +1551,15 @@ SketchInteractionState::transformGeometryState() const {
                           initial_geometry,
                       base,
                       *angle)
+                : std::nullopt;
+        }
+
+        if (transform_session_->explicit_value) {
+            return *transform_session_->explicit_value > 0.0
+                ? scaleSketchGeometry(
+                      transform_session_->initial_geometry,
+                      base,
+                      *transform_session_->explicit_value)
                 : std::nullopt;
         }
 
@@ -1090,6 +1673,7 @@ SketchInteractionState::acceptLinePoint(
         LineStage::await_first_point) {
         line_anchor_ = point;
         point_pointer_candidate_ = point;
+        point_field_locks_ = {};
         line_stage_ =
             LineStage::await_next_point;
         return {
@@ -1148,6 +1732,8 @@ SketchInteractionState::acceptCirclePoint(
     if (circle_stage_ ==
         CircleStage::await_center) {
         circle_center_ = point;
+        circle_radius_lock_.reset();
+        point_field_locks_ = {};
         circle_stage_ =
             CircleStage::await_radius;
         return {
@@ -1169,10 +1755,55 @@ SketchInteractionState::acceptCirclePoint(
 
     CircleIntent request{
         *circle_center_,
-        distance(*circle_center_, point)};
+        circle_radius_lock_.value_or(
+            distance(*circle_center_, point))};
     if (!request.valid()) {
         return {
             CirclePointOutcome::zero_radius_ignored,
+            std::nullopt};
+    }
+
+    pending_circle_request_ = request;
+    return {
+        CirclePointOutcome::circle_requested,
+        request};
+}
+
+bool SketchInteractionState::lockCircleRadius(
+    double radius) noexcept {
+    if (tool_ != SketchTool::circle ||
+        circle_stage_ != CircleStage::await_radius ||
+        pending_circle_request_ ||
+        !circle_center_ ||
+        !std::isfinite(radius) ||
+        radius <= 0.0) {
+        return false;
+    }
+
+    circle_radius_lock_ = radius;
+    return true;
+}
+
+CirclePointResult
+SketchInteractionState::acceptCircleRadius(
+    double radius) noexcept {
+    if (tool_ != SketchTool::circle) {
+        return {
+            CirclePointOutcome::inactive_tool,
+            std::nullopt};
+    }
+    if (!lockCircleRadius(radius)) {
+        return {
+            CirclePointOutcome::invalid_radius,
+            std::nullopt};
+    }
+
+    CircleIntent request{
+        *circle_center_,
+        radius};
+    if (!request.valid()) {
+        return {
+            CirclePointOutcome::invalid_radius,
             std::nullopt};
     }
 
@@ -1198,22 +1829,29 @@ SketchInteractionState::acceptArcPoint(
 
     if (arc_stage_ == ArcStage::await_start) {
         arc_start_ = point;
-        arc_stage_ = ArcStage::await_through;
+        arc_end_.reset();
+        arc_radius_lock_.reset();
+        point_pointer_candidate_ = point;
+        point_field_locks_ = {};
+        arc_stage_ = ArcStage::await_end;
         return {
             ArcPointOutcome::start_accepted,
             std::nullopt};
     }
 
-    if (arc_stage_ == ArcStage::await_through) {
+    if (arc_stage_ == ArcStage::await_end) {
         if (!arc_start_ || point == *arc_start_) {
             return {
                 ArcPointOutcome::degenerate_ignored,
                 std::nullopt};
         }
-        arc_through_ = point;
-        arc_stage_ = ArcStage::await_end;
+        arc_end_ = point;
+        arc_radius_lock_.reset();
+        point_pointer_candidate_ = point;
+        point_field_locks_ = {};
+        arc_stage_ = ArcStage::await_arc_point;
         return {
-            ArcPointOutcome::through_accepted,
+            ArcPointOutcome::end_accepted,
             std::nullopt};
     }
 
@@ -1222,21 +1860,128 @@ SketchInteractionState::acceptArcPoint(
             ArcPointOutcome::request_pending,
             std::nullopt};
     }
-    if (!arc_start_ || !arc_through_) {
+    if (!arc_start_ || !arc_end_) {
         resetArcStage();
         return {
             ArcPointOutcome::invalid_point,
             std::nullopt};
     }
 
+    // A complete explicit Arc Point outranks any runtime Radius lock.
+    arc_radius_lock_.reset();
     const auto request =
         arcThroughThreePoints(
             *arc_start_,
-            *arc_through_,
-            point);
+            point,
+            *arc_end_);
     if (!request) {
         return {
             ArcPointOutcome::degenerate_ignored,
+            std::nullopt};
+    }
+
+    pending_arc_request_ = *request;
+    return {
+        ArcPointOutcome::arc_requested,
+        request};
+}
+
+ArcPointResult
+SketchInteractionState::acceptArcPointer(
+    Point2 point) noexcept {
+    if (tool_ != SketchTool::arc ||
+        arc_stage_ != ArcStage::await_arc_point ||
+        !arc_radius_lock_) {
+        return acceptArcPoint(point);
+    }
+    if (!point.finite()) {
+        return {
+            ArcPointOutcome::invalid_point,
+            std::nullopt};
+    }
+    if (pending_arc_request_) {
+        return {
+            ArcPointOutcome::request_pending,
+            std::nullopt};
+    }
+    if (!arc_start_ || !arc_end_) {
+        resetArcStage();
+        return {
+            ArcPointOutcome::invalid_point,
+            std::nullopt};
+    }
+
+    point_pointer_candidate_ = point;
+    const auto request =
+        arcFromChordRadius(
+            *arc_start_,
+            *arc_end_,
+            point,
+            *arc_radius_lock_);
+    if (!request) {
+        return {
+            ArcPointOutcome::radius_locked,
+            std::nullopt};
+    }
+
+    pending_arc_request_ = *request;
+    return {
+        ArcPointOutcome::arc_requested,
+        request};
+}
+
+bool SketchInteractionState::lockArcRadius(
+    double radius) noexcept {
+    if (tool_ != SketchTool::arc ||
+        arc_stage_ != ArcStage::await_arc_point ||
+        pending_arc_request_ ||
+        !arc_start_ ||
+        !arc_end_ ||
+        !std::isfinite(radius) ||
+        radius <= 0.0) {
+        return false;
+    }
+
+    const double chord =
+        distance(*arc_start_, *arc_end_);
+    if (!std::isfinite(chord) ||
+        chord <= 0.0 ||
+        radius < chord * 0.5) {
+        return false;
+    }
+
+    arc_radius_lock_ = radius;
+    return true;
+}
+
+ArcPointResult
+SketchInteractionState::acceptArcRadius(
+    double radius) noexcept {
+    if (tool_ != SketchTool::arc) {
+        return {
+            ArcPointOutcome::inactive_tool,
+            std::nullopt};
+    }
+    if (!lockArcRadius(radius)) {
+        return {
+            ArcPointOutcome::invalid_radius,
+            std::nullopt};
+    }
+    if (!point_pointer_candidate_) {
+        return {
+            ArcPointOutcome::radius_locked,
+            std::nullopt};
+    }
+
+    const auto request =
+        arcFromChordRadius(
+            *arc_start_,
+            *arc_end_,
+            *point_pointer_candidate_,
+            radius);
+    if (!request) {
+        return {
+            ArcPointOutcome::radius_locked,
             std::nullopt};
     }
 
@@ -1263,7 +2008,10 @@ SketchInteractionState::acceptRectanglePoint(
     if (rectangle_stage_ ==
         RectangleStage::await_first_corner) {
         rectangle_first_corner_ = point;
+        rectangle_width_lock_.reset();
+        rectangle_height_lock_.reset();
         point_pointer_candidate_ = point;
+        point_field_locks_ = {};
         rectangle_stage_ =
             RectangleStage::await_opposite_corner;
         return {
@@ -1283,16 +2031,111 @@ SketchInteractionState::acceptRectanglePoint(
             std::nullopt};
     }
 
-    RectangleIntent request{
-        *rectangle_first_corner_,
-        point};
-    if (!request.valid()) {
+    std::optional<RectangleIntent> request;
+    if (rectangle_width_lock_ ||
+        rectangle_height_lock_) {
+        request =
+            rectangleFromSizeLocks(
+                *rectangle_first_corner_,
+                point,
+                rectangle_width_lock_,
+                rectangle_height_lock_);
+    } else {
+        RectangleIntent candidate{
+            *rectangle_first_corner_,
+            point};
+        if (candidate.valid()) {
+            request = candidate;
+        }
+    }
+    if (!request) {
         return {
             RectanglePointOutcome::degenerate_ignored,
             std::nullopt};
     }
 
-    pending_rectangle_request_ = request;
+    pending_rectangle_request_ = *request;
+    return {
+        RectanglePointOutcome::rectangle_requested,
+        request};
+}
+
+bool SketchInteractionState::lockRectangleWidth(
+    double width) noexcept {
+    if (tool_ != SketchTool::rectangle ||
+        rectangle_stage_ !=
+            RectangleStage::await_opposite_corner ||
+        pending_rectangle_request_ ||
+        !rectangle_first_corner_ ||
+        !std::isfinite(width) ||
+        width <= 0.0) {
+        return false;
+    }
+
+    rectangle_width_lock_ = width;
+    return true;
+}
+
+bool SketchInteractionState::lockRectangleHeight(
+    double height) noexcept {
+    if (tool_ != SketchTool::rectangle ||
+        rectangle_stage_ !=
+            RectangleStage::await_opposite_corner ||
+        pending_rectangle_request_ ||
+        !rectangle_first_corner_ ||
+        !std::isfinite(height) ||
+        height <= 0.0) {
+        return false;
+    }
+
+    rectangle_height_lock_ = height;
+    return true;
+}
+
+RectanglePointResult
+SketchInteractionState::acceptRectangleSize(
+    double width,
+    double height) noexcept {
+    if (tool_ != SketchTool::rectangle) {
+        return {
+            RectanglePointOutcome::inactive_tool,
+            std::nullopt};
+    }
+    if (rectangle_stage_ !=
+            RectangleStage::await_opposite_corner ||
+        pending_rectangle_request_ ||
+        !rectangle_first_corner_ ||
+        !std::isfinite(width) ||
+        !std::isfinite(height) ||
+        width <= 0.0 ||
+        height <= 0.0) {
+        return {
+            RectanglePointOutcome::invalid_size,
+            std::nullopt};
+    }
+
+    rectangle_width_lock_ = width;
+    rectangle_height_lock_ = height;
+
+    if (!point_pointer_candidate_) {
+        return {
+            RectanglePointOutcome::size_locked,
+            std::nullopt};
+    }
+
+    const auto request =
+        rectangleFromSize(
+            *rectangle_first_corner_,
+            *point_pointer_candidate_,
+            width,
+            height);
+    if (!request) {
+        return {
+            RectanglePointOutcome::size_locked,
+            std::nullopt};
+    }
+
+    pending_rectangle_request_ = *request;
     return {
         RectanglePointOutcome::rectangle_requested,
         request};
@@ -1312,8 +2155,13 @@ bool SketchInteractionState::resolveLineRequest(
     pending_line_request_.reset();
 
     if (committed) {
+        line_relative_reference_ =
+            direction(
+                resolved.start,
+                resolved.end);
         line_anchor_ = resolved.end;
         point_pointer_candidate_ = resolved.end;
+        point_field_locks_ = {};
     }
 
     return true;
@@ -1338,7 +2186,7 @@ bool SketchInteractionState::resolveCircleRequest(
 bool SketchInteractionState::resolveArcRequest(
     bool committed) noexcept {
     if (tool_ != SketchTool::arc ||
-        arc_stage_ != ArcStage::await_end ||
+        arc_stage_ != ArcStage::await_arc_point ||
         !pending_arc_request_) {
         return false;
     }
@@ -1403,7 +2251,8 @@ SketchInteractionState::previewCircle(
 
     CircleIntent preview{
         *circle_center_,
-        distance(*circle_center_, current)};
+        circle_radius_lock_.value_or(
+            distance(*circle_center_, current))};
     return preview.valid()
         ? std::optional<CircleIntent>{preview}
         : std::nullopt;
@@ -1413,18 +2262,26 @@ std::optional<ArcIntent>
 SketchInteractionState::previewArc(
     Point2 current) const noexcept {
     if (tool_ != SketchTool::arc ||
-        arc_stage_ != ArcStage::await_end ||
+        arc_stage_ != ArcStage::await_arc_point ||
         !arc_start_ ||
-        !arc_through_ ||
+        !arc_end_ ||
         pending_arc_request_ ||
         !current.finite()) {
         return std::nullopt;
     }
 
+    if (arc_radius_lock_) {
+        return arcFromChordRadius(
+            *arc_start_,
+            *arc_end_,
+            current,
+            *arc_radius_lock_);
+    }
+
     return arcThroughThreePoints(
         *arc_start_,
-        *arc_through_,
-        current);
+        current,
+        *arc_end_);
 }
 
 std::optional<RectangleIntent>
@@ -1437,6 +2294,15 @@ SketchInteractionState::previewRectangle(
         pending_rectangle_request_ ||
         !current.finite()) {
         return std::nullopt;
+    }
+
+    if (rectangle_width_lock_ ||
+        rectangle_height_lock_) {
+        return rectangleFromSizeLocks(
+            *rectangle_first_corner_,
+            current,
+            rectangle_width_lock_,
+            rectangle_height_lock_);
     }
 
     RectangleIntent preview{
@@ -1459,7 +2325,52 @@ void SketchInteractionState::cancelTool() noexcept {
     resetToSelect();
 }
 
+bool SketchInteractionState::
+clearRequestLocalNumericLocks() noexcept {
+    bool cleared = false;
+
+    if (!point_field_locks_.empty()) {
+        point_field_locks_ = {};
+        cleared = true;
+    }
+
+    if (circle_radius_lock_) {
+        circle_radius_lock_.reset();
+        cleared = true;
+    }
+
+    if (arc_radius_lock_) {
+        arc_radius_lock_.reset();
+        cleared = true;
+    }
+
+    if (rectangle_width_lock_ ||
+        rectangle_height_lock_) {
+        rectangle_width_lock_.reset();
+        rectangle_height_lock_.reset();
+        cleared = true;
+    }
+
+    if (transform_session_ &&
+        transform_session_->explicit_value) {
+        transform_session_->explicit_value.reset();
+        cleared = true;
+    }
+
+    if (manipulation_ &&
+        manipulation_->explicit_value) {
+        manipulation_->explicit_value.reset();
+        cleared = true;
+    }
+
+    return cleared;
+}
+
 bool SketchInteractionState::escape() noexcept {
+    if (clearRequestLocalNumericLocks()) {
+        return true;
+    }
+
     if (manipulation_) {
         cancelDirectManipulation();
         return true;
@@ -1796,7 +2707,9 @@ bool SketchInteractionState::directManipulationCopyEnabled()
 
 bool SketchInteractionState::enableDirectManipulationCopy()
     noexcept {
-    if (!manipulation_) {
+    if (!manipulation_ ||
+        (manipulation_->mode != DirectEditMode::reshape &&
+         manipulation_->mode != DirectEditMode::move)) {
         return false;
     }
     manipulation_->copy_enabled = true;
@@ -1808,30 +2721,79 @@ bool SketchInteractionState::cycleDirectEditMode() noexcept {
         return false;
     }
 
-    switch (manipulation_->active_grip.role) {
-    case SketchGripRole::line_center:
-    case SketchGripRole::circle_center:
-    case SketchGripRole::arc_center:
-        return false;
+    const bool center_grip =
+        manipulation_->active_grip.role ==
+            SketchGripRole::line_center ||
+        manipulation_->active_grip.role ==
+            SketchGripRole::circle_center ||
+        manipulation_->active_grip.role ==
+            SketchGripRole::arc_center;
 
-    case SketchGripRole::line_start:
-    case SketchGripRole::line_end:
-    case SketchGripRole::circle_quadrant_pos_u:
-    case SketchGripRole::circle_quadrant_pos_v:
-    case SketchGripRole::circle_quadrant_neg_u:
-    case SketchGripRole::circle_quadrant_neg_v:
-    case SketchGripRole::arc_start:
-    case SketchGripRole::arc_end:
-    case SketchGripRole::arc_mid:
-        manipulation_->mode =
-            manipulation_->mode == DirectEditMode::reshape
-                ? DirectEditMode::move
-                : DirectEditMode::reshape;
-        manipulation_->copy_enabled = false;
-        return true;
+    DirectEditMode next = manipulation_->mode;
+    if (center_grip) {
+        switch (manipulation_->mode) {
+        case DirectEditMode::reshape:
+        case DirectEditMode::mirror:
+            next = DirectEditMode::move;
+            break;
+        case DirectEditMode::move:
+            next = DirectEditMode::rotate;
+            break;
+        case DirectEditMode::rotate:
+            next = DirectEditMode::scale;
+            break;
+        case DirectEditMode::scale:
+            next = DirectEditMode::mirror;
+            break;
+        }
+    } else {
+        switch (manipulation_->mode) {
+        case DirectEditMode::reshape:
+            next = DirectEditMode::move;
+            break;
+        case DirectEditMode::move:
+            next = DirectEditMode::rotate;
+            break;
+        case DirectEditMode::rotate:
+            next = DirectEditMode::scale;
+            break;
+        case DirectEditMode::scale:
+            next = DirectEditMode::mirror;
+            break;
+        case DirectEditMode::mirror:
+            next = DirectEditMode::reshape;
+            break;
+        }
     }
 
-    return false;
+    manipulation_->mode = next;
+    manipulation_->copy_enabled = false;
+    manipulation_->rotate_reference_point.reset();
+    manipulation_->scale_reference_radius.reset();
+    manipulation_->explicit_value.reset();
+    point_field_locks_ = {};
+
+    const auto current =
+        manipulation_->current_input.position;
+    if (next == DirectEditMode::rotate &&
+        current.finite() &&
+        current != manipulation_->pivot) {
+        manipulation_->rotate_reference_point =
+            current;
+    } else if (next == DirectEditMode::scale &&
+               current.finite()) {
+        const double radius =
+            distance(
+                manipulation_->pivot,
+                current);
+        if (std::isfinite(radius) &&
+            radius > 0.0) {
+            manipulation_->scale_reference_radius =
+                radius;
+        }
+    }
+
+    return true;
 }
 
 bool SketchInteractionState::beginDirectManipulation(
@@ -1988,8 +2950,58 @@ bool SketchInteractionState::updateDirectManipulation(
         return false;
     }
 
+    if (manipulation_->mode ==
+            DirectEditMode::rotate &&
+        !manipulation_->rotate_reference_point &&
+        input.position != manipulation_->pivot) {
+        manipulation_->rotate_reference_point =
+            input.position;
+    }
+
+    if (manipulation_->mode ==
+            DirectEditMode::scale &&
+        !manipulation_->scale_reference_radius) {
+        const double radius =
+            distance(
+                manipulation_->pivot,
+                input.position);
+        if (std::isfinite(radius) &&
+            radius > 0.0) {
+            manipulation_->scale_reference_radius =
+                radius;
+        }
+    }
+
     manipulation_->current_input = input;
     return true;
+}
+
+bool SketchInteractionState::acceptDirectManipulationValue(
+    double value) noexcept {
+    if (!manipulation_ ||
+        !std::isfinite(value)) {
+        return false;
+    }
+
+    switch (manipulation_->mode) {
+    case DirectEditMode::rotate:
+    case DirectEditMode::mirror:
+        manipulation_->explicit_value = value;
+        return true;
+
+    case DirectEditMode::scale:
+        if (value <= 0.0) {
+            return false;
+        }
+        manipulation_->explicit_value = value;
+        return true;
+
+    case DirectEditMode::reshape:
+    case DirectEditMode::move:
+        return false;
+    }
+
+    return false;
 }
 
 std::optional<DirectManipulationGeometry>
@@ -2003,13 +3015,87 @@ SketchInteractionState::directManipulationGeometryState()
     const auto current =
         manipulation_->current_input.position;
 
-    if (manipulation_->mode ==
-        DirectEditMode::move) {
+    switch (manipulation_->mode) {
+    case DirectEditMode::move:
         return translateSketchGeometry(
             manipulation_->selection_geometry,
             Point2{
                 current.u - manipulation_->pivot.u,
                 current.v - manipulation_->pivot.v});
+
+    case DirectEditMode::rotate:
+        if (manipulation_->explicit_value) {
+            return rotateSketchGeometry(
+                manipulation_->selection_geometry,
+                manipulation_->pivot,
+                *manipulation_->explicit_value);
+        }
+        if (!manipulation_->rotate_reference_point) {
+            return std::nullopt;
+        }
+        if (const auto angle =
+                signedAngle(
+                    manipulation_->pivot,
+                    *manipulation_->
+                        rotate_reference_point,
+                    current)) {
+            return rotateSketchGeometry(
+                manipulation_->selection_geometry,
+                manipulation_->pivot,
+                *angle);
+        }
+        return std::nullopt;
+
+    case DirectEditMode::scale:
+        if (manipulation_->explicit_value) {
+            return *manipulation_->explicit_value > 0.0
+                ? scaleSketchGeometry(
+                      manipulation_->selection_geometry,
+                      manipulation_->pivot,
+                      *manipulation_->explicit_value)
+                : std::nullopt;
+        }
+        if (!manipulation_->scale_reference_radius) {
+            return std::nullopt;
+        } else {
+            const double current_radius =
+                distance(
+                    manipulation_->pivot,
+                    current);
+            if (!std::isfinite(current_radius) ||
+                current_radius <= 0.0) {
+                return std::nullopt;
+            }
+            const double factor =
+                current_radius /
+                *manipulation_->
+                    scale_reference_radius;
+            return std::isfinite(factor) &&
+                           factor > 0.0
+                ? scaleSketchGeometry(
+                      manipulation_->selection_geometry,
+                      manipulation_->pivot,
+                      factor)
+                : std::nullopt;
+        }
+
+    case DirectEditMode::mirror:
+        if (manipulation_->explicit_value) {
+            return mirrorSketchGeometry(
+                manipulation_->selection_geometry,
+                manipulation_->pivot,
+                pointOnCircle(
+                    manipulation_->pivot,
+                    1.0,
+                    *manipulation_->explicit_value));
+        }
+        return mirrorSketchGeometry(
+            manipulation_->selection_geometry,
+            manipulation_->pivot,
+            current);
+
+    case DirectEditMode::reshape:
+        break;
     }
 
     auto result =
@@ -2143,6 +3229,7 @@ continueDirectManipulationCopyPlacement() noexcept {
     manipulation_->current_input =
         ResolvedSketchInput{manipulation_->pivot};
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
     clearHover();
     return true;
 }
@@ -2164,6 +3251,7 @@ void SketchInteractionState::finishDirectManipulation()
     noexcept {
     manipulation_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
     clearHover();
 }
 
@@ -2171,6 +3259,7 @@ void SketchInteractionState::cancelDirectManipulation()
     noexcept {
     manipulation_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
     clearHover();
 }
 
@@ -2201,8 +3290,10 @@ void SketchInteractionState::resetLineStage()
     line_stage_ =
         LineStage::await_first_point;
     line_anchor_.reset();
+    line_relative_reference_.reset();
     pending_line_request_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
 }
 
 void SketchInteractionState::resetCircleStage()
@@ -2210,7 +3301,10 @@ void SketchInteractionState::resetCircleStage()
     circle_stage_ =
         CircleStage::await_center;
     circle_center_.reset();
+    circle_radius_lock_.reset();
     pending_circle_request_.reset();
+    point_pointer_candidate_.reset();
+    point_field_locks_ = {};
 }
 
 void SketchInteractionState::resetArcStage()
@@ -2218,8 +3312,11 @@ void SketchInteractionState::resetArcStage()
     arc_stage_ =
         ArcStage::await_start;
     arc_start_.reset();
-    arc_through_.reset();
+    arc_end_.reset();
+    arc_radius_lock_.reset();
     pending_arc_request_.reset();
+    point_pointer_candidate_.reset();
+    point_field_locks_ = {};
 }
 
 void SketchInteractionState::resetRectangleStage()
@@ -2227,14 +3324,18 @@ void SketchInteractionState::resetRectangleStage()
     rectangle_stage_ =
         RectangleStage::await_first_corner;
     rectangle_first_corner_.reset();
+    rectangle_width_lock_.reset();
+    rectangle_height_lock_.reset();
     pending_rectangle_request_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
 }
 
 void SketchInteractionState::resetCommonTransform()
     noexcept {
     transform_session_.reset();
     point_pointer_candidate_.reset();
+    point_field_locks_ = {};
 }
 
 void SketchInteractionState::resetMeasure() noexcept {

@@ -32,6 +32,12 @@ public:
 
     virtual void fitAll() = 0;
 
+    [[nodiscard]] virtual std::optional<ViewportPoint2>
+    projectWorldPoint(Point3 point) const {
+        (void)point;
+        return std::nullopt;
+    }
+
     virtual void setNavigationCubeActionHandler(
         NavigationCubeActionHandler handler) {
         (void)handler;
@@ -128,6 +134,13 @@ public:
         const SketchSelectionBoxOverlay& overlay) = 0;
 
     virtual void clearSketchSelectionBoxOverlay() = 0;
+
+    virtual bool setSketchDynamicInputOverlay(
+        const SketchDynamicInputOverlay& overlay) {
+        return overlay.valid();
+    }
+
+    virtual void clearSketchDynamicInputOverlay() {}
 
     virtual void setSelectionIntentHandler(
         SelectionIntentHandler handler) = 0;

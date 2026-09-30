@@ -78,6 +78,79 @@ int main(int argc, char* argv[]) {
                  camera->projection ==
                      viewer::CameraProjection::orthographic;
 
+            // R10 Construction cadence is a provider presentation effect.
+            // Short/long committed Lines and preview Lines share the same
+            // construction flag without authored dash segmentation.
+            viewer::SketchScene construction_scene;
+            construction_scene.lines = {
+                {
+                    viewer::PresentationToken{0x201U},
+                    {0.0, 0.0, 0.0},
+                    {5.0, 0.0, 0.0},
+                    true},
+                {
+                    viewer::PresentationToken{0x202U},
+                    {0.0, 5.0, 0.0},
+                    {100.0, 5.0, 0.0},
+                    true},
+            };
+            ok = ok &&
+                 construction_scene.valid() &&
+                 widget.setSketchScene(
+                     construction_scene);
+
+            viewer::SketchPreviewScene
+                construction_preview;
+            construction_preview.lines = {
+                {
+                    {0.0, 10.0, 0.0},
+                    {100.0, 10.0, 0.0},
+                    true},
+            };
+            ok = ok &&
+                 construction_preview.valid() &&
+                 widget.setSketchPreviewScene(
+                     construction_preview);
+            ok = ok &&
+                 widget.setSketchPreviewScene(
+                     viewer::SketchPreviewScene{});
+
+            viewer::SketchDynamicInputOverlay dyn_overlay{
+                viewer::ViewportPoint2{
+                    895.0,
+                    635.0},
+                {
+                    {
+                        "Distance",
+                        "100 mm",
+                        viewer::SketchDynamicInputValueState::
+                            locked},
+                    {
+                        "Angle",
+                        "45\xC2\xB0",
+                        viewer::SketchDynamicInputValueState::
+                            assisted},
+                    {
+                        "dU",
+                        {},
+                        viewer::SketchDynamicInputValueState::
+                            free},
+                },
+                1U};
+            ok = ok &&
+                 widget.setSketchDynamicInputOverlay(
+                     dyn_overlay);
+            dyn_overlay.anchor =
+                viewer::ViewportPoint2{
+                    900.0,
+                    640.0};
+            dyn_overlay.fields[0].display_value =
+                "101 mm";
+            ok = ok &&
+                 widget.setSketchDynamicInputOverlay(
+                     dyn_overlay);
+            widget.clearSketchDynamicInputOverlay();
+
             result = ok ? EXIT_SUCCESS : EXIT_FAILURE;
             widget.close();
             app.quit();

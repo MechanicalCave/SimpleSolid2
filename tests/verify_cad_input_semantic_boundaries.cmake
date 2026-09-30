@@ -3,6 +3,9 @@ if(NOT DEFINED SOURCE_ROOT)
 endif()
 
 set(_semantic_files
+    "${SOURCE_ROOT}/src/core/include/simplesolid2/core/units.hpp"
+    "${SOURCE_ROOT}/src/application/include/simplesolid2/application/precision_input.hpp"
+    "${SOURCE_ROOT}/src/application/precision_input.cpp"
     "${SOURCE_ROOT}/src/application/include/simplesolid2/application/cad_input_semantics.hpp"
     "${SOURCE_ROOT}/src/application/cad_input_semantics.cpp"
 )

@@ -406,6 +406,10 @@ void ProjectWorkspaceShell::refreshCadInputPresentation() {
                     Qt::ElideRight,
                     available_width));
     }
+
+    if (cad_input_presentation_changed_handler_) {
+        cad_input_presentation_changed_handler_();
+    }
 }
 
 const std::string&
@@ -511,7 +515,71 @@ bool ProjectWorkspaceShell::eventFilter(
             event);
     }
 
+    const auto cycle_dynamic_field =
+        [this, key_event]() {
+            if (key_event->key() != Qt::Key_Tab &&
+                key_event->key() !=
+                    Qt::Key_Backtab) {
+                return false;
+            }
+            if (!cad_input_.interactionSettings().
+                    dynamic_input_enabled ||
+                cad_input_.dynamicInputFields().empty()) {
+                return false;
+            }
+
+            const bool reverse =
+                key_event->key() ==
+                    Qt::Key_Backtab ||
+                (key_event->modifiers() &
+                 Qt::ShiftModifier);
+            static_cast<void>(
+                cad_input_.cycleDynamicInputField(
+                    reverse));
+            refreshCadInputPresentation();
+            return true;
+        };
+
+    const auto toggle_runtime_aid =
+        [this, key_event]() {
+            if (!cad_input_.hasEndpoint() ||
+                !cad_input_.buffer().empty() ||
+                key_event->modifiers() !=
+                    Qt::NoModifier) {
+                return false;
+            }
+
+            auto settings =
+                cad_input_.interactionSettings();
+            if (key_event->key() == Qt::Key_F10) {
+                settings.polar.enabled =
+                    !settings.polar.enabled;
+            } else if (
+                key_event->key() == Qt::Key_F12) {
+                settings.dynamic_input_enabled =
+                    !settings.dynamic_input_enabled;
+            } else {
+                return false;
+            }
+
+            if (!cad_input_.setInteractionSettings(
+                    std::move(settings))) {
+                return false;
+            }
+            refreshCadInputPresentation();
+            if (cad_interaction_settings_changed_handler_) {
+                cad_interaction_settings_changed_handler_();
+            }
+            return true;
+        };
+
     if (focus == command_input_) {
+        if (cycle_dynamic_field()) {
+            return true;
+        }
+        if (toggle_runtime_aid()) {
+            return true;
+        }
         if (key_event->key() == Qt::Key_Escape) {
             cad_input_.clearBuffer();
             refreshCadInputPresentation();
@@ -553,6 +621,14 @@ bool ProjectWorkspaceShell::eventFilter(
             event);
     }
 
+    if (toggle_runtime_aid()) {
+        return true;
+    }
+
+    if (cycle_dynamic_field()) {
+        return true;
+    }
+
     // A2: while a viewport-entered CAD token is live, Delete belongs
     // to input editing precedence and must never fall through to
     // semantic Delete Selection. Append-only viewport input has no
@@ -585,7 +661,12 @@ bool ProjectWorkspaceShell::eventFilter(
 
     if (key_event->key() == Qt::Key_Return ||
         key_event->key() == Qt::Key_Enter) {
-        if (!cad_input_.buffer().empty()) {
+        const bool dynamic_request_available =
+            cad_input_.interactionSettings().
+                dynamic_input_enabled &&
+            !cad_input_.dynamicInputFields().empty();
+        if (!cad_input_.buffer().empty() ||
+            dynamic_request_available) {
             static_cast<void>(
                 cad_input_.submit());
             refreshCadInputPresentation();

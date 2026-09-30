@@ -95,17 +95,17 @@ std::optional<CaseResult> buildArc(
 
     if (state.acceptArcPoint(start).outcome !=
             sketch::ArcPointOutcome::start_accepted ||
-        state.acceptArcPoint(through).outcome !=
-            sketch::ArcPointOutcome::through_accepted) {
+        state.acceptArcPoint(end).outcome !=
+            sketch::ArcPointOutcome::end_accepted) {
         return std::nullopt;
     }
 
-    const auto preview = state.previewArc(end);
+    const auto preview = state.previewArc(through);
     if (!preview) {
         return std::nullopt;
     }
 
-    const auto result = state.acceptArcPoint(end);
+    const auto result = state.acceptArcPoint(through);
     if (result.outcome !=
             sketch::ArcPointOutcome::arc_requested ||
         !result.request ||
@@ -377,7 +377,7 @@ int main() {
             sketch::ArcPointOutcome::start_accepted);
         CHECK(
             state.acceptArcPoint({1.0, 0.0}).outcome ==
-            sketch::ArcPointOutcome::through_accepted);
+            sketch::ArcPointOutcome::end_accepted);
         CHECK(
             state.acceptArcPoint({2.0, 0.0}).outcome ==
             sketch::ArcPointOutcome::degenerate_ignored);
@@ -416,7 +416,7 @@ int main() {
             sketch::ArcPointOutcome::start_accepted);
         CHECK(
             state.acceptArcPoint({-high, 1.0}).outcome ==
-            sketch::ArcPointOutcome::through_accepted);
+            sketch::ArcPointOutcome::end_accepted);
         CHECK(
             state.acceptArcPoint({0.0, 2.0}).outcome ==
             sketch::ArcPointOutcome::degenerate_ignored);

@@ -11,6 +11,9 @@ endfunction()
 ss2_core_only_test(d_cad_input_semantics_test d.cad_input_semantics d_cad_input_semantics_test.cpp)
 target_link_libraries(d_cad_input_semantics_test PRIVATE simplesolid2_application)
 
+ss2_core_only_test(r10_quantity_input_test r10.quantity_input r10_quantity_input_test.cpp)
+target_link_libraries(r10_quantity_input_test PRIVATE simplesolid2_application)
+
 ss2_core_only_test(wb02_cad_input_session_test wb02.cad_input_session wb02_cad_input_session_test.cpp)
 target_link_libraries(wb02_cad_input_session_test PRIVATE simplesolid2_cad_input)
 

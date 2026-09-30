@@ -8,7 +8,7 @@
 
 The current `PartDocument` is persistent and hosts durable Part Sketch objects with embedded Shared 2D Line/Circle/Arc geometry plus Part-owned Profile objects. It still contains no Body, Feature or modeled solid B-Rep.
 
-Its authored state consists of stable `DocumentId`, common Document Properties, persistent presentation state for the seven built-in Origin references, an ordered collection of Part-hosted Sketch records, a monotonic `ProfileId` cursor and an ordered collection of Profiles.
+Its authored state consists of stable `DocumentId`, common Document Properties, the durable Part display/input `LengthUnit`, persistent presentation state for the seven built-in Origin references, an ordered collection of Part-hosted Sketch records, a monotonic `ProfileId` cursor and an ordered collection of Profiles. Length geometry remains canonical in millimetres; changing the display/input unit changes interpretation and presentation only and never rescales existing geometry.
 
 Each Part Sketch has stable `SketchId`, semantic support restricted to XY/XZ/YZ built-in Origin planes, explicit `SketchPlacement`, persistent visibility and one value-owned `sketch::SketchModel`. Shared 2D owns entity identity, Line/Circle/Arc geometry and Regular/Construction role; Part owns host support/placement/visibility/persistence.
 
@@ -72,17 +72,17 @@ Closing and reopening creates fresh runtime history.
 
 The native extension is `.ss2part`.
 
-The current Part domain writer uses schema **v6**. It stores document properties, built-in Origin visibility, hosted Sketch records, canonical `next_profile_id` and authored Profiles.
+The current Part domain writer uses schema **v7**. It stores document properties, the durable display/input length unit, built-in Origin visibility, hosted Sketch records, canonical `next_profile_id` and authored Profiles.
 
-Each Sketch stores stable SketchId, Origin-plane support, explicit placement, visibility and one embedded Shared 2D model. The model stores canonical `next_entity_id` plus mixed Line/Circle/Arc `entities[]`. Since schema v5 every entity also stores authored `regular` or `construction` role.
+Each Sketch stores stable SketchId, Origin-plane support, explicit placement, visibility and one embedded Shared 2D model. The model stores canonical `next_entity_id` plus mixed Line/Circle/Arc `entities[]`. Every entity stores its authored `regular` or `construction` role.
 
-Each schema-v6 Profile stores canonical ProfileId, source SketchId, authored name/visibility and the semantic RegionIntent loop/anchor structure. Derived region indices, sampled presentation geometry, Viewer tokens and OCCT handles are not serialized.
+Each Profile stores canonical ProfileId, source SketchId, authored name/visibility and the semantic RegionIntent loop/anchor structure. Derived region indices, sampled presentation geometry, Viewer tokens and OCCT handles are not serialized.
 
-Schemas v1–v5 remain readable. V1 restores no Sketches; v2 restores hosted Sketch records with empty Shared 2D models; v3 reads the former Line-only model; v4 reads mixed Line/Circle/Arc records and defaults their role to Regular; v5 reads persisted entity roles and creates no Profiles. Opening an older schema does not rewrite the file; a later successful ordinary Save publishes current schema v6.
+Schemas v1–v6 remain readable. Older schemas have no length-unit field and therefore migrate in memory to **mm** without rescaling any geometry. Opening an older schema does not rewrite the file; a later successful ordinary Save publishes current schema v7 with the selected length unit.
 
-ProjectId, DocumentSession, Undo/Redo, active Sketch/Profile tool context, region-analysis cache, camera, active selection, Qt objects, Viewer objects and OCCT handles are not serialized as authored Part state.
+ProjectId, DocumentSession, Undo/Redo, active Sketch/Profile tool context, Polar/Dynamic Input runtime configuration, request-local numeric locks, region-analysis cache, camera, active selection, Qt objects, Viewer objects and OCCT handles are not serialized as authored Part state.
 
-Ordinary Save remains conditional on the session's native-file checkpoint. Save-conflict rules and whole-file atomic publication are unchanged by F.
+Ordinary Save remains conditional on the session's native-file checkpoint. Save-conflict rules and whole-file atomic publication are unchanged.
 
 <!-- section-id: internal.part-documents.discovery -->
 ## Discovery and canonical sessions
@@ -118,11 +118,13 @@ If the active Sketch disappears through Undo/history or the editing context is r
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The Part model durably owns hosted Shared 2D Line/Circle/Arc entities and Part-owned Profiles. The active Sketch editor supports semantic point/Window/Crossing selection, mixed Delete, Line/Circle/Arc creation, Regular/Construction role changes, Profile Create/Edit with Add/Subtract, Move/Copy/Rotate/Scale/Mirror, state-based grips, owner-only Reshape, grip Move, Space CycleEditMode, Repeat Last Command and Direct Distance at the currently supported point requests.
+The Part model durably owns hosted Shared 2D Line/Circle/Arc entities, a display/input length unit and Part-owned Profiles. The active Sketch editor supports semantic point/Window/Crossing selection, mixed Delete, Line/Circle/Arc/Rectangle creation, Regular/Construction role changes, Profile Create/Edit with Add/Subtract, Move/Copy/Rotate/Scale/Mirror, the full supported grip edit cycle, Grip Copy in Reshape/Move, Repeat Last Command and the R10 shared precision-input path.
 
-Presentation tokens, preview, pointer input, Command Line buffer, hover/grip state and camera remain runtime-only and are not Part/Sketch identity.
+Length input accepts mm/cm/m/in/ft with canonical millimetres, dimensional arithmetic and absolute/relative Cartesian or polar point syntax. Polar and Dynamic Input are application-session runtime aids; request-local numeric locks remain transient. Exact Rotate/Scale and supported grip Rotate/Scale/Mirror numeric input reuse the same semantic request pipeline.
 
-The product still does not implement authored constraints/dimensions/solver, snapping/inference, Ortho/Polar/Grid Snap, Dynamic Input, numeric Rotate angle or Scale factor, absolute/relative/polar coordinate entry, unit expressions, grip Copy modifier, ordinary-Select RMB context, Datum/Construction Plane support, planar model-face Sketch support, Body/Feature modeled solid geometry, persistent topology naming or Material.
+Presentation tokens, preview, pointer input, Command Line/Dynamic Input live token, Polar capture, numeric locks, hover/grip state and camera remain runtime-only and are not Part/Sketch identity.
+
+The product still does not implement authored constraints/dimensions/solver, OSNAP/tracking/inference, Grid Snap, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Datum/Construction Plane support, planar model-face Sketch support, Body/Feature modeled solid geometry, persistent topology naming or Material.
 
 The Viewer is not a second model: no OCCT object or Viewer token is durable Part/Sketch identity, support or authored state.
 

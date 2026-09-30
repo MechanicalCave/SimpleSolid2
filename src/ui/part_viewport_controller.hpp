@@ -155,6 +155,11 @@ public:
     [[nodiscard]] bool setSketchCursorMode(
         viewer::ViewportCursorMode mode);
 
+    [[nodiscard]] std::optional<
+        viewer::ViewportPoint2>
+    projectSketchPointToViewport(
+        sketch::Point2 point) const;
+
     [[nodiscard]] SketchEntityPointQueryResult
     querySketchEntityAt(
         viewer::ViewportPoint2 point);
@@ -183,6 +188,11 @@ public:
         const viewer::SketchSelectionBoxOverlay& overlay);
 
     void clearSketchSelectionBoxOverlay();
+
+    [[nodiscard]] bool setSketchDynamicInputOverlay(
+        const viewer::SketchDynamicInputOverlay& overlay);
+
+    void clearSketchDynamicInputOverlay();
 
     void setSketchPointerHandler(
         SketchPointerHandler handler) {

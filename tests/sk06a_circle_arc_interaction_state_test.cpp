@@ -119,18 +119,23 @@ int main() {
         sketch::SketchTool::select);
     CHECK(creation.selectedEntities().size() == 1U);
 
-    // 3-point Arc: positive short branch.
+    // Chord-first 3-point Arc: Start -> End -> Arc Point.
     creation.activateArc();
     CHECK(
         creation.acceptArcPoint({1.0, 0.0}).outcome ==
         sketch::ArcPointOutcome::start_accepted);
     CHECK(
-        creation.acceptArcPoint(
-            {quadrant, quadrant}).outcome ==
-        sketch::ArcPointOutcome::through_accepted);
+        creation.arcStage() ==
+        sketch::ArcStage::await_end);
+    CHECK(
+        creation.acceptArcPoint({0.0, 1.0}).outcome ==
+        sketch::ArcPointOutcome::end_accepted);
+    CHECK(
+        creation.arcStage() ==
+        sketch::ArcStage::await_arc_point);
 
     const auto arc_preview =
-        creation.previewArc({0.0, 1.0});
+        creation.previewArc({quadrant, quadrant});
     CHECK(arc_preview.has_value());
     CHECK(near(arc_preview->center.u, 0.0));
     CHECK(near(arc_preview->center.v, 0.0));
@@ -138,7 +143,7 @@ int main() {
     CHECK(near(arc_preview->sweep_angle, pi * 0.5));
 
     const auto short_ccw =
-        creation.acceptArcPoint({0.0, 1.0});
+        creation.acceptArcPoint({quadrant, quadrant});
     CHECK(
         short_ccw.outcome ==
         sketch::ArcPointOutcome::arc_requested);
@@ -155,16 +160,16 @@ int main() {
         creation.tool() ==
         sketch::SketchTool::arc);
 
-    // Positive long branch is selected by the Through point.
+    // A third Arc Point still selects the major branch unambiguously.
     creation.activateArc();
     CHECK(
         creation.acceptArcPoint({1.0, 0.0}).outcome ==
         sketch::ArcPointOutcome::start_accepted);
     CHECK(
-        creation.acceptArcPoint({-1.0, 0.0}).outcome ==
-        sketch::ArcPointOutcome::through_accepted);
+        creation.acceptArcPoint({0.0, -1.0}).outcome ==
+        sketch::ArcPointOutcome::end_accepted);
     const auto long_ccw =
-        creation.acceptArcPoint({0.0, -1.0});
+        creation.acceptArcPoint({-1.0, 0.0});
     CHECK(long_ccw.request.has_value());
     CHECK(long_ccw.request->sweep_angle > pi);
     CHECK(
@@ -178,16 +183,76 @@ int main() {
         creation.acceptArcPoint({1.0, 0.0}).outcome ==
         sketch::ArcPointOutcome::start_accepted);
     CHECK(
-        creation.acceptArcPoint(
-            {quadrant, -quadrant}).outcome ==
-        sketch::ArcPointOutcome::through_accepted);
+        creation.acceptArcPoint({0.0, -1.0}).outcome ==
+        sketch::ArcPointOutcome::end_accepted);
     const auto short_cw =
-        creation.acceptArcPoint({0.0, -1.0});
+        creation.acceptArcPoint(
+            {quadrant, -quadrant});
     CHECK(short_cw.request.has_value());
     CHECK(short_cw.request->sweep_angle < 0.0);
     CHECK(
         std::abs(short_cw.request->sweep_angle) <
         pi);
+    CHECK(creation.resolveArcRequest(true));
+
+    // Typed Radius is a positive magnitude constrained by the chord.
+    // With no usable side yet it locks without committing; pointer side
+    // later chooses the minor/semicircle solution.
+    creation.activateArc();
+    CHECK(
+        creation.acceptArcPoint({-50.0, 0.0}).outcome ==
+        sketch::ArcPointOutcome::start_accepted);
+    CHECK(
+        creation.acceptArcPoint({50.0, 0.0}).outcome ==
+        sketch::ArcPointOutcome::end_accepted);
+    CHECK(
+        creation.acceptArcRadius(49.0).outcome ==
+        sketch::ArcPointOutcome::invalid_radius);
+    CHECK(
+        creation.acceptArcRadius(50.0).outcome ==
+        sketch::ArcPointOutcome::radius_locked);
+    CHECK(creation.arcRadiusLocked());
+
+    const auto semicircle_preview =
+        creation.previewArc({0.0, 20.0});
+    CHECK(semicircle_preview.has_value());
+    CHECK(near(semicircle_preview->center.u, 0.0));
+    CHECK(near(semicircle_preview->center.v, 0.0));
+    CHECK(near(semicircle_preview->radius, 50.0));
+    CHECK(near(
+        semicircle_preview->sweep_angle,
+        -pi));
+
+    const auto semicircle =
+        creation.acceptArcPointer({0.0, 20.0});
+    CHECK(
+        semicircle.outcome ==
+        sketch::ArcPointOutcome::arc_requested);
+    CHECK(semicircle.request.has_value());
+    CHECK(near(semicircle.request->radius, 50.0));
+    CHECK(near(
+        semicircle.request->sweep_angle,
+        -pi));
+    CHECK(creation.resolveArcRequest(true));
+
+    // Complete Arc Point input outranks a previously locked Radius.
+    creation.activateArc();
+    CHECK(
+        creation.acceptArcPoint({-2.0, 0.0}).outcome ==
+        sketch::ArcPointOutcome::start_accepted);
+    CHECK(
+        creation.acceptArcPoint({2.0, 0.0}).outcome ==
+        sketch::ArcPointOutcome::end_accepted);
+    CHECK(
+        creation.acceptArcRadius(3.0).outcome ==
+        sketch::ArcPointOutcome::radius_locked);
+    const auto explicit_arc_point =
+        creation.acceptArcPoint({0.0, 1.0});
+    CHECK(explicit_arc_point.request.has_value());
+    CHECK(near(
+        explicit_arc_point.request->radius,
+        2.5));
+    CHECK(!creation.arcRadiusLocked());
     CHECK(creation.resolveArcRequest(true));
 
     // Duplicate/collinear construction points fail closed.
@@ -200,16 +265,16 @@ int main() {
         sketch::ArcPointOutcome::degenerate_ignored);
     CHECK(
         creation.arcStage() ==
-        sketch::ArcStage::await_through);
+        sketch::ArcStage::await_end);
     CHECK(
         creation.acceptArcPoint({1.0, 0.0}).outcome ==
-        sketch::ArcPointOutcome::through_accepted);
+        sketch::ArcPointOutcome::end_accepted);
     CHECK(
         creation.acceptArcPoint({2.0, 0.0}).outcome ==
         sketch::ArcPointOutcome::degenerate_ignored);
     CHECK(
         creation.arcStage() ==
-        sketch::ArcStage::await_end);
+        sketch::ArcStage::await_arc_point);
     CHECK(!creation.previewArc({2.0, 0.0}).has_value());
 
     // Direct manipulation works on a frozen mixed selection.

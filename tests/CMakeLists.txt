@@ -1473,6 +1473,13 @@ target_link_libraries(d_cad_input_semantics_test PRIVATE simplesolid2_applicatio
 target_compile_features(d_cad_input_semantics_test PRIVATE cxx_std_20)
 add_test(NAME d.cad_input_semantics COMMAND d_cad_input_semantics_test)
 
+add_executable(r10_quantity_input_test
+    r10_quantity_input_test.cpp
+)
+target_link_libraries(r10_quantity_input_test PRIVATE simplesolid2_application)
+target_compile_features(r10_quantity_input_test PRIVATE cxx_std_20)
+add_test(NAME r10.quantity_input COMMAND r10_quantity_input_test)
+
 add_executable(wb02_cad_input_session_test
     wb02_cad_input_session_test.cpp
 )
@@ -1525,6 +1532,7 @@ set_tests_properties(wb02.global_cad_input_ui PROPERTIES
 
 set(_ss2_application_tests
     d.cad_input_semantics
+    r10.quantity_input
     wb02.cad_input_session
     ph01.project_workspace_metadata
     ph01.project_session
@@ -1564,6 +1572,7 @@ set(_ss2_persistence_tests
 set_property(TEST ${_ss2_persistence_tests} APPEND PROPERTY LABELS "subsystem-persistence")
 
 set(_ss2_core_tests
+    r10.quantity_input
     d.cad_input_semantic_boundaries
     wb02.cad_input_boundaries
     part01.document_primitives

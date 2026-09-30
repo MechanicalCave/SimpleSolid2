@@ -39,6 +39,9 @@ class PartSketchInteractionController final
 public:
     using StateChangedHandler = std::function<void()>;
     using StatusHandler = std::function<void(const std::string&)>;
+    using CadInteractionSettingsProvider =
+        std::function<
+            application::CadInteractionSettings()>;
 
     explicit PartSketchInteractionController(
         PartViewportController& viewport_controller);
@@ -47,6 +50,13 @@ public:
         application::DocumentSession& session,
         sketch::SketchId sketch_id);
     void end();
+
+    void setCadInteractionSettingsProvider(
+        CadInteractionSettingsProvider provider) {
+        cad_interaction_settings_provider_ =
+            std::move(provider);
+        polar_capture_ = {};
+    }
 
     [[nodiscard]] bool active() const noexcept;
     [[nodiscard]] sketch::SketchTool tool() const noexcept;
@@ -69,6 +79,13 @@ public:
         return cad_input_context_generation_;
     }
     [[nodiscard]] bool submitDirectDistance(double distance);
+    [[nodiscard]] bool submitCadInputDynamicRequest();
+    [[nodiscard]] bool submitExplicitPoint(
+        sketch::ExplicitPointInput input);
+    [[nodiscard]] application::CircleSizeInputMode
+    circleSizeInputMode() const noexcept {
+        return circle_size_input_mode_;
+    }
 
     [[nodiscard]] bool cadInputSemanticActive() const noexcept override {
         return active();
@@ -79,15 +96,59 @@ public:
     }
     [[nodiscard]] bool activateCadInputSemanticTool(
         sketch::SketchTool tool) override;
+    [[nodiscard]] bool submitCadInputSemanticExplicitPoint(
+        sketch::ExplicitPointInput input) override {
+        return submitExplicitPoint(input);
+    }
+    [[nodiscard]] std::optional<
+        application::CadInputValueRequest>
+    cadInputSemanticValueRequest()
+        const noexcept override;
+    [[nodiscard]] bool
+    submitCadInputSemanticValue(double value) override;
+    [[nodiscard]] bool
+    lockCadInputSemanticValue(double value) override;
+    [[nodiscard]] bool
+    lockCadInputSemanticPointField(
+        application::CadDynamicInputFieldSemantic semantic,
+        double value) override;
+    [[nodiscard]] std::optional<
+        application::CadDynamicInputFieldValue>
+    cadInputSemanticDynamicFieldValue(
+        application::CadDynamicInputFieldSemantic semantic)
+        const noexcept override;
+    [[nodiscard]] std::optional<
+        application::CadInputPairRequest>
+    cadInputSemanticPairRequest()
+        const noexcept override;
+    [[nodiscard]] bool
+    submitCadInputSemanticPair(
+        double first,
+        double second) override;
+    [[nodiscard]] bool
+    lockCadInputSemanticPairField(
+        application::CadDynamicInputFieldSemantic semantic,
+        double value) override;
+    [[nodiscard]] bool
+    submitCadInputSemanticCircleSizeMode(
+        application::CircleSizeInputMode mode) override;
+    [[nodiscard]] application::CircleSizeInputMode
+    cadInputSemanticCircleSizeMode() const noexcept override {
+        return circle_size_input_mode_;
+    }
     [[nodiscard]] bool submitCadInputSemanticDirectDistance(
         double distance) override {
         return submitDirectDistance(distance);
     }
     [[nodiscard]] bool
     cadInputSemanticGripCopyAvailable() const noexcept override {
+        const auto mode = directEditMode();
         return active() &&
                !profile_session_ &&
-               directManipulationActive();
+               directManipulationActive() &&
+               mode.has_value() &&
+               (*mode == sketch::DirectEditMode::reshape ||
+                *mode == sketch::DirectEditMode::move);
     }
     [[nodiscard]] bool
     submitCadInputSemanticGripCopy() override {
@@ -277,10 +338,14 @@ private:
     void updateHover(viewer::ViewportPoint2 point);
     [[nodiscard]] bool beginDirectManipulation(
         sketch::SketchGripRef grip);
+    [[nodiscard]] std::optional<
+        sketch::ResolvedSketchInput>
+    resolvePointerInput(
+        const SketchPointerInput& input);
     void updateDirectManipulationPreview(
-        sketch::Point2 raw_input);
+        const SketchPointerInput& input);
     void updateCommonTransformPreview(
-        sketch::Point2 raw_input);
+        const SketchPointerInput& input);
     [[nodiscard]] application::DocumentSessionResult
     executeGeometryUpdate(
         const sketch::SketchTransformGeometry& geometry,
@@ -314,6 +379,10 @@ private:
             selected_profile_id;
         std::optional<sketch::Point2> point_base;
         bool direct_distance_enabled{};
+        application::CircleSizeInputMode
+            circle_size_input_mode{
+                application::CircleSizeInputMode::
+                    diameter};
         std::optional<core::DocumentRevision>
             document_revision;
 
@@ -331,6 +400,7 @@ private:
     PartViewportController* viewport_controller_{};
     application::DocumentSession* session_{};
     std::optional<sketch::SketchId> sketch_id_;
+    std::optional<SketchPointerInput> last_pointer_input_;
     sketch::SketchInteractionState interaction_;
 
     std::optional<viewer::ViewportPoint2> press_anchor_;
@@ -346,6 +416,13 @@ private:
     sketch::EntityRole creation_role_{
         sketch::EntityRole::regular};
     bool rectangle_draw_diagonals_{};
+    application::CircleSizeInputMode
+        circle_size_input_mode_{
+            application::CircleSizeInputMode::diameter};
+    CadInteractionSettingsProvider
+        cad_interaction_settings_provider_;
+    application::PolarCaptureState
+        polar_capture_;
 
     struct ProfileToolSession final {
         ProfileToolSessionKind kind{

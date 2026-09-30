@@ -41,6 +41,10 @@ public:
 
     void fitAll() override;
 
+    [[nodiscard]] std::optional<viewer::ViewportPoint2>
+    projectWorldPoint(
+        viewer::Point3 point) const override;
+
     void setNavigationCubeActionHandler(
         viewer::NavigationCubeActionHandler handler) override;
 
@@ -100,6 +104,11 @@ public:
         const viewer::SketchSelectionBoxOverlay& overlay) override;
 
     void clearSketchSelectionBoxOverlay() override;
+
+    [[nodiscard]] bool setSketchDynamicInputOverlay(
+        const viewer::SketchDynamicInputOverlay& overlay) override;
+
+    void clearSketchDynamicInputOverlay() override;
 
     void setSelectionIntentHandler(
         viewer::SelectionIntentHandler handler) override;

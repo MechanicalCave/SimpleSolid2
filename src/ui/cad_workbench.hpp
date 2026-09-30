@@ -17,6 +17,7 @@
 #include <unordered_map>
 
 class QCheckBox;
+class QComboBox;
 class QEvent;
 class QLabel;
 class QLineEdit;
@@ -34,6 +35,11 @@ class PartDocumentTreeController;
 class PartSketchInteractionController;
 class PartViewportController;
 class ViewCubeWidget;
+
+struct CadDynamicInputUiState final {
+    std::string buffer;
+    std::size_t focused_index{};
+};
 
 class CadWorkbench final : public QWidget,
                            public application::ICadInputEndpoint {
@@ -86,12 +92,50 @@ public:
             std::move(handler);
     }
 
+    using CadInteractionSettingsProvider =
+        std::function<
+            application::CadInteractionSettings()>;
+    using CadInteractionSettingsUpdater =
+        std::function<
+            bool(application::CadInteractionSettings)>;
+    void setCadInteractionSettingsProvider(
+        CadInteractionSettingsProvider provider);
+    void setCadInteractionSettingsUpdater(
+        CadInteractionSettingsUpdater updater) {
+        cad_interaction_settings_updater_ =
+            std::move(updater);
+    }
+    void refreshCadInteractionSettingsUi();
+
+    using CadDynamicInputUiStateProvider =
+        std::function<CadDynamicInputUiState()>;
+    void setCadDynamicInputUiStateProvider(
+        CadDynamicInputUiStateProvider provider) {
+        cad_dynamic_input_ui_state_provider_ =
+            std::move(provider);
+        refreshCadDynamicInputOverlay();
+    }
+    void refreshCadDynamicInputOverlay();
+
     [[nodiscard]] std::string cadInputPrompt() const override;
     [[nodiscard]] application::CadInputContextGeneration
     cadInputContextGeneration() const noexcept override;
     [[nodiscard]] application::CadInputSubmitResult
     submitCadInput(
         std::string_view text,
+        application::CadInputContextGeneration
+            expected_context_generation) override;
+    [[nodiscard]] std::vector<
+        application::CadDynamicInputField>
+    cadDynamicInputFields() const override;
+    [[nodiscard]] application::CadInputSubmitResult
+    lockCadDynamicInputField(
+        std::size_t index,
+        std::string_view text,
+        application::CadInputContextGeneration
+            expected_context_generation) override;
+    [[nodiscard]] application::CadInputSubmitResult
+    submitCadDynamicInputRequest(
         application::CadInputContextGeneration
             expected_context_generation) override;
 
@@ -102,6 +146,8 @@ private:
     void buildUi();
 
     void applyProperties();
+    void setPartLengthUnit(
+        core::LengthUnit unit);
     void applyProfileProperties();
     void deleteSelectedProfile();
     void setSketchSelectionRole(
@@ -187,6 +233,14 @@ private:
         document_state_changed_handler_;
     CadInputContextChangedHandler
         cad_input_context_changed_handler_;
+    CadInteractionSettingsProvider
+        cad_interaction_settings_provider_;
+    CadInteractionSettingsUpdater
+        cad_interaction_settings_updater_;
+    CadDynamicInputUiStateProvider
+        cad_dynamic_input_ui_state_provider_;
+    std::optional<viewer::ViewportPoint2>
+        dynamic_input_anchor_;
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
@@ -230,9 +284,23 @@ private:
     QLineEdit* title_{};
     QPlainTextEdit* description_{};
     QLineEdit* engineering_revision_{};
+    QComboBox* length_unit_combo_{};
     QPushButton* apply_button_{};
 
     QLabel* operations_placeholder_{};
+    QWidget* precision_operations_widget_{};
+    QLabel* precision_status_label_{};
+    QPushButton* polar_toggle_button_{};
+    QLineEdit* polar_step_edit_{};
+    QComboBox* polar_reference_combo_{};
+    QLineEdit* polar_additional_edit_{};
+    QPushButton* polar_additional_add_button_{};
+    QPushButton* polar_additional_clear_button_{};
+    QLabel* polar_additional_label_{};
+    QPushButton* dynamic_input_toggle_button_{};
+    QLabel* circle_size_mode_label_{};
+    QComboBox* circle_size_mode_combo_{};
+    bool syncing_precision_ui_{};
     QPushButton* sketch_button_{};
     QPushButton* select_sketch_button_{};
     QLabel* create_tools_label_{};
