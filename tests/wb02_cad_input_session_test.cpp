@@ -292,6 +292,11 @@ int main() {
     CHECK(session.synchronizeContext());
     CHECK(session.dynamicInputFieldIndex() == 0U);
 
+    // Restore the pre-DYN runtime configuration before the existing
+    // endpoint-retention assertions below.
+    CHECK(session.setInteractionSettings(
+        runtime_settings));
+
     session.appendText("MO");
     session.appendText("VE");
     CHECK(session.buffer() == "MOVE");
