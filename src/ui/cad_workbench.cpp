@@ -3789,10 +3789,16 @@ bool CadWorkbench::eventFilter(
         auto* key_event =
             static_cast<QKeyEvent*>(event);
 
-        if (watched == viewport_widget_ &&
-            (!sketch_interaction_controller_ ||
-             !sketch_interaction_controller_->active()) &&
+        const bool profile_delete_context =
+            watched == viewport_widget_ &&
             selected_profile_id_ &&
+            properties_stack_ != nullptr &&
+            properties_stack_->currentWidget() ==
+                profile_properties_page_ &&
+            (!sketch_interaction_controller_ ||
+             !sketch_interaction_controller_->
+                  profileToolActive());
+        if (profile_delete_context &&
             key_event->key() == Qt::Key_Delete) {
             deleteSelectedProfile();
             return true;

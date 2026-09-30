@@ -1506,7 +1506,9 @@ int main(int argc, char* argv[]) {
         session->document()
             .findSketch(sketch_id)
             ->model.entityCount();
-    delete_profile_button->click();
+    CHECK(!profile_properties_page->isHidden());
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClick(viewport, Qt::Key_Delete);
     QApplication::processEvents();
     CHECK(
         session->document()

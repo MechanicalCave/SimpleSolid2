@@ -706,7 +706,7 @@ SketchInteractionState::activePointRequest() const noexcept {
             PointRequest request{
                 end_stage ? arc_start_ : std::nullopt,
                 point_pointer_candidate_,
-                false,
+                end_stage,
                 true,
                 end_stage,
                 end_stage};

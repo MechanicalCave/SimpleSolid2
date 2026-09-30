@@ -630,6 +630,11 @@ int main(int argc, char* argv[]) {
     interaction.activateArc();
     semantic_result = inch_input.submit("0;0");
     CHECK(semantic_result.accepted);
+    const auto arc_chord_request =
+        interaction.activePointRequest();
+    CHECK(arc_chord_request.has_value());
+    CHECK(arc_chord_request->base.has_value());
+    CHECK(arc_chord_request->direct_distance_enabled);
     movePointer(
         interaction,
         sketch_id,
