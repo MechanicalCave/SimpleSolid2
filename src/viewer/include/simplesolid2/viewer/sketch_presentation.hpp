@@ -1,10 +1,12 @@
 #pragma once
 
 #include <simplesolid2/viewer/reference_presentation.hpp>
+#include <simplesolid2/viewer/spatial_pointer.hpp>
 
 #include <cstddef>
 #include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace simplesolid2::viewer {
@@ -409,6 +411,52 @@ struct SketchMeasureCueScene final {
         }
         return true;
     }
+};
+
+enum class SketchDynamicInputValueState : std::uint8_t {
+    free,
+    assisted,
+    locked,
+};
+
+struct SketchDynamicInputFieldPresentation final {
+    std::string label;
+    std::string display_value;
+    SketchDynamicInputValueState state{
+        SketchDynamicInputValueState::free};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return !label.empty();
+    }
+
+    friend bool operator==(
+        const SketchDynamicInputFieldPresentation&,
+        const SketchDynamicInputFieldPresentation&) = default;
+};
+
+struct SketchDynamicInputOverlay final {
+    ViewportPoint2 anchor;
+    std::vector<SketchDynamicInputFieldPresentation> fields;
+    std::size_t focused_index{};
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (!anchor.valid() ||
+            fields.empty() ||
+            focused_index >= fields.size()) {
+            return false;
+        }
+
+        for (const auto& field : fields) {
+            if (!field.valid()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    friend bool operator==(
+        const SketchDynamicInputOverlay&,
+        const SketchDynamicInputOverlay&) = default;
 };
 
 } // namespace simplesolid2::viewer

@@ -230,5 +230,45 @@ int main() {
         invalid_cue.segments.front().start;
     CHECK(!invalid_cue.valid());
 
+    // R10 DYN is a provider-neutral screen-space presentation. The
+    // viewer receives formatted text plus visual state; parsing and
+    // request-local locks remain in the application interaction layer.
+    viewer::SketchDynamicInputOverlay dyn_overlay{
+        viewer::ViewportPoint2{320.0, 180.0},
+        {
+            {
+                "Distance",
+                "100 mm",
+                viewer::SketchDynamicInputValueState::locked},
+            {
+                "Angle",
+                "45\xC2\xB0",
+                viewer::SketchDynamicInputValueState::assisted},
+            {
+                "dU",
+                {},
+                viewer::SketchDynamicInputValueState::free},
+        },
+        1U};
+    CHECK(dyn_overlay.valid());
+
+    auto invalid_dyn_anchor = dyn_overlay;
+    invalid_dyn_anchor.anchor.x =
+        std::numeric_limits<double>::quiet_NaN();
+    CHECK(!invalid_dyn_anchor.valid());
+
+    auto invalid_dyn_focus = dyn_overlay;
+    invalid_dyn_focus.focused_index =
+        invalid_dyn_focus.fields.size();
+    CHECK(!invalid_dyn_focus.valid());
+
+    auto invalid_dyn_field = dyn_overlay;
+    invalid_dyn_field.fields.front().label.clear();
+    CHECK(!invalid_dyn_field.valid());
+
+    auto empty_dyn = dyn_overlay;
+    empty_dyn.fields.clear();
+    CHECK(!empty_dyn.valid());
+
     return EXIT_SUCCESS;
 }

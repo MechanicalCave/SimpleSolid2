@@ -135,6 +135,13 @@ public:
 
     virtual void clearSketchSelectionBoxOverlay() = 0;
 
+    virtual bool setSketchDynamicInputOverlay(
+        const SketchDynamicInputOverlay& overlay) {
+        return overlay.valid();
+    }
+
+    virtual void clearSketchDynamicInputOverlay() {}
+
     virtual void setSelectionIntentHandler(
         SelectionIntentHandler handler) = 0;
 
