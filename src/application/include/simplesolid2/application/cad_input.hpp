@@ -17,6 +17,35 @@ struct CadInputSubmitResult final {
     std::string diagnostic;
 };
 
+enum class CadDynamicInputFieldSemantic : std::uint8_t {
+    u,
+    v,
+    distance,
+    angle,
+    delta_u,
+    delta_v,
+    width,
+    height,
+    diameter,
+    radius,
+    factor,
+    axis_angle,
+};
+
+struct CadDynamicInputField final {
+    CadDynamicInputFieldSemantic semantic{
+        CadDynamicInputFieldSemantic::distance};
+    std::string label;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return !label.empty();
+    }
+
+    friend bool operator==(
+        const CadDynamicInputField&,
+        const CadDynamicInputField&) = default;
+};
+
 enum class PolarReferenceMode : std::uint8_t {
     absolute,
     relative,
@@ -103,6 +132,21 @@ public:
     submitCadInput(
         std::string_view text,
         CadInputContextGeneration expected_context_generation) = 0;
+
+    [[nodiscard]] virtual std::vector<CadDynamicInputField>
+    cadDynamicInputFields() const {
+        return {};
+    }
+
+    [[nodiscard]] virtual CadInputSubmitResult
+    lockCadDynamicInputField(
+        std::size_t,
+        std::string_view,
+        CadInputContextGeneration) {
+        return {
+            false,
+            "Dynamic Input field locking is not available in this context."};
+    }
 };
 
 class CadInputSession final {
@@ -124,6 +168,17 @@ public:
     [[nodiscard]] std::string prompt() const;
     [[nodiscard]] const std::string& diagnostic() const noexcept;
 
+    [[nodiscard]] std::vector<CadDynamicInputField>
+    dynamicInputFields() const;
+    [[nodiscard]] std::size_t
+    dynamicInputFieldIndex() const noexcept {
+        return dynamic_input_field_index_;
+    }
+    [[nodiscard]] std::optional<CadDynamicInputField>
+    currentDynamicInputField() const;
+    [[nodiscard]] bool cycleDynamicInputField(
+        bool reverse = false);
+
     [[nodiscard]] const CadInteractionSettings&
     interactionSettings() const noexcept {
         return interaction_settings_;
@@ -143,6 +198,7 @@ private:
     std::optional<CadInputContextGeneration>
         buffer_context_generation_;
     CadInteractionSettings interaction_settings_;
+    std::size_t dynamic_input_field_index_{};
 };
 
 } // namespace simplesolid2::application

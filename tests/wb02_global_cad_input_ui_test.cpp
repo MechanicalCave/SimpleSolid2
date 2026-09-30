@@ -34,6 +34,9 @@ public:
     std::string rejection{
         "Rejected by fake endpoint."};
     bool accept{true};
+    bool expose_dynamic_fields{true};
+    std::size_t locked_field{};
+    std::string locked_token;
     simplesolid2::application::CadInputContextGeneration
         generation{1U};
 
@@ -46,6 +49,37 @@ public:
     [[nodiscard]] std::string
     cadInputPrompt() const override {
         return "Command: FAKE";
+    }
+
+    [[nodiscard]]
+    std::vector<
+        simplesolid2::application::CadDynamicInputField>
+    cadDynamicInputFields() const override {
+        if (!expose_dynamic_fields) {
+            return {};
+        }
+        using Semantic =
+            simplesolid2::application::
+                CadDynamicInputFieldSemantic;
+        return {
+            {Semantic::distance, "Distance"},
+            {Semantic::angle, "Angle"},
+        };
+    }
+
+    [[nodiscard]]
+    simplesolid2::application::CadInputSubmitResult
+    lockCadDynamicInputField(
+        std::size_t index,
+        std::string_view text,
+        simplesolid2::application::CadInputContextGeneration
+            expected_context_generation) override {
+        if (expected_context_generation != generation) {
+            return {false, "Stale fake DYN context."};
+        }
+        locked_field = index;
+        locked_token.assign(text);
+        return {true, {}};
     }
 
     [[nodiscard]]
@@ -144,6 +178,32 @@ int main(int argc, char* argv[]) {
     CHECK(
         shell.cadInteractionSettings().
             dynamic_input_enabled);
+    CHECK(
+        shell.findChild<QLineEdit*>(
+            QStringLiteral("cadCommandInput"))->
+            text().isEmpty());
+
+    QTest::keyClick(
+        cad_surface,
+        Qt::Key_Tab);
+    QApplication::processEvents();
+
+    QTest::keyClicks(
+        cad_surface,
+        QStringLiteral("100"));
+    CHECK(input->text() == QStringLiteral("100"));
+    QTest::keyClick(
+        cad_surface,
+        Qt::Key_Tab);
+    QApplication::processEvents();
+    CHECK(first.locked_field == 1U);
+    CHECK(first.locked_token == "100");
+    CHECK(input->text().isEmpty());
+
+    QTest::keyClick(
+        cad_surface,
+        Qt::Key_Backtab);
+    QApplication::processEvents();
 
     QTest::keyClicks(
         cad_surface,
@@ -168,6 +228,14 @@ int main(int argc, char* argv[]) {
     CHECK(QApplication::focusWidget() == cad_surface);
 
     input->setFocus(Qt::OtherFocusReason);
+    QTest::keyClick(
+        input,
+        Qt::Key_Tab);
+    QApplication::processEvents();
+    QTest::keyClick(
+        input,
+        Qt::Key_Backtab);
+    QApplication::processEvents();
     QTest::keyClicks(
         input,
         QStringLiteral("MOVE"));

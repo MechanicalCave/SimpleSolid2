@@ -25,6 +25,10 @@ public:
     std::string prompt{"Command: FAKE"};
     std::string last;
     bool accept{true};
+    bool expose_dynamic_fields{};
+    bool accept_dynamic_lock{true};
+    std::size_t locked_field{};
+    std::string locked_token;
     simplesolid2::application::CadInputContextGeneration
         generation{1U};
 
@@ -37,6 +41,41 @@ public:
     [[nodiscard]] std::string
     cadInputPrompt() const override {
         return prompt;
+    }
+
+    [[nodiscard]]
+    std::vector<
+        simplesolid2::application::CadDynamicInputField>
+    cadDynamicInputFields() const override {
+        if (!expose_dynamic_fields) {
+            return {};
+        }
+        using Semantic =
+            simplesolid2::application::
+                CadDynamicInputFieldSemantic;
+        return {
+            {Semantic::distance, "Distance"},
+            {Semantic::angle, "Angle"},
+        };
+    }
+
+    [[nodiscard]]
+    simplesolid2::application::CadInputSubmitResult
+    lockCadDynamicInputField(
+        std::size_t index,
+        std::string_view text,
+        simplesolid2::application::CadInputContextGeneration
+            expected_context_generation) override {
+        if (expected_context_generation != generation) {
+            return {false, "Stale fake DYN context."};
+        }
+        locked_field = index;
+        locked_token.assign(text);
+        return {
+            accept_dynamic_lock,
+            accept_dynamic_lock
+                ? std::string{}
+                : std::string{"Rejected fake DYN lock."}};
     }
 
     [[nodiscard]]
@@ -207,6 +246,51 @@ int main() {
     CHECK(session.hasEndpoint());
     CHECK(session.endpoint() == &first);
     CHECK(session.prompt() == "Command: FAKE");
+    CHECK(session.dynamicInputFields().empty());
+
+    auto dyn_settings =
+        session.interactionSettings();
+    dyn_settings.dynamic_input_enabled = true;
+    CHECK(session.setInteractionSettings(
+        dyn_settings));
+    first.expose_dynamic_fields = true;
+    CHECK(session.dynamicInputFields().size() == 2U);
+    CHECK(session.dynamicInputFieldIndex() == 0U);
+    CHECK(
+        session.currentDynamicInputField()->
+            label == "Distance");
+
+    CHECK(session.cycleDynamicInputField());
+    CHECK(session.dynamicInputFieldIndex() == 1U);
+    CHECK(
+        session.currentDynamicInputField()->
+            label == "Angle");
+    CHECK(session.cycleDynamicInputField(true));
+    CHECK(session.dynamicInputFieldIndex() == 0U);
+
+    session.setBuffer("100");
+    CHECK(session.cycleDynamicInputField());
+    CHECK(first.locked_field == 0U);
+    CHECK(first.locked_token == "100");
+    CHECK(session.buffer().empty());
+    CHECK(session.dynamicInputFieldIndex() == 1U);
+
+    first.accept_dynamic_lock = false;
+    session.setBuffer("BADLOCK");
+    CHECK(session.cycleDynamicInputField());
+    CHECK(first.locked_field == 1U);
+    CHECK(first.locked_token == "BADLOCK");
+    CHECK(session.buffer() == "BADLOCK");
+    CHECK(session.dynamicInputFieldIndex() == 1U);
+    CHECK(
+        session.diagnostic() ==
+        "Rejected fake DYN lock.");
+    session.clearBuffer();
+    first.accept_dynamic_lock = true;
+
+    ++first.generation;
+    CHECK(session.synchronizeContext());
+    CHECK(session.dynamicInputFieldIndex() == 0U);
 
     session.appendText("MO");
     session.appendText("VE");

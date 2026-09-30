@@ -216,6 +216,7 @@ void CadInputSession::attachEndpoint(
     buffer_context_generation_.reset();
     buffer_.clear();
     diagnostic_.clear();
+    dynamic_input_field_index_ = 0U;
 }
 
 void CadInputSession::detachEndpoint() noexcept {
@@ -225,6 +226,7 @@ void CadInputSession::detachEndpoint() noexcept {
     buffer_context_generation_.reset();
     buffer_.clear();
     diagnostic_.clear();
+    dynamic_input_field_index_ = 0U;
 }
 
 bool CadInputSession::hasEndpoint() const noexcept {
@@ -253,6 +255,7 @@ bool CadInputSession::synchronizeContext() {
     buffer_context_generation_.reset();
     buffer_.clear();
     diagnostic_.clear();
+    dynamic_input_field_index_ = 0U;
     return true;
 }
 
@@ -329,12 +332,120 @@ CadInputSession::diagnostic() const noexcept {
     return diagnostic_;
 }
 
+std::vector<CadDynamicInputField>
+CadInputSession::dynamicInputFields() const {
+    if (endpoint_ == nullptr ||
+        !interaction_settings_.dynamic_input_enabled) {
+        return {};
+    }
+
+    auto fields =
+        endpoint_->cadDynamicInputFields();
+    fields.erase(
+        std::remove_if(
+            fields.begin(),
+            fields.end(),
+            [](const CadDynamicInputField& field) {
+                return !field.valid();
+            }),
+        fields.end());
+    return fields;
+}
+
+std::optional<CadDynamicInputField>
+CadInputSession::currentDynamicInputField() const {
+    const auto fields = dynamicInputFields();
+    if (fields.empty()) {
+        return std::nullopt;
+    }
+    const auto index =
+        dynamic_input_field_index_ %
+        fields.size();
+    return fields[index];
+}
+
+bool CadInputSession::cycleDynamicInputField(
+    bool reverse) {
+    static_cast<void>(synchronizeContext());
+
+    if (endpoint_ == nullptr ||
+        !interaction_settings_.dynamic_input_enabled) {
+        return false;
+    }
+
+    const auto fields = dynamicInputFields();
+    if (fields.empty()) {
+        dynamic_input_field_index_ = 0U;
+        return false;
+    }
+
+    dynamic_input_field_index_ %=
+        fields.size();
+
+    if (!buffer_.empty()) {
+        if (!buffer_context_generation_ ||
+            *buffer_context_generation_ !=
+                observed_context_generation_) {
+            clearBuffer();
+            diagnostic_ =
+                "CAD input context changed before Dynamic Input lock.";
+            return true;
+        }
+
+        auto result =
+            endpoint_->lockCadDynamicInputField(
+                dynamic_input_field_index_,
+                buffer_,
+                observed_context_generation_);
+        diagnostic_ = result.diagnostic;
+        if (!result.accepted) {
+            return true;
+        }
+
+        buffer_.clear();
+        buffer_context_generation_.reset();
+        diagnostic_.clear();
+
+        // A successful request-local lock may legitimately advance the
+        // semantic generation. Synchronize only after the endpoint has
+        // consumed the token, preserving the one-buffer ownership rule.
+        const auto current =
+            endpoint_->cadInputContextGeneration();
+        observed_context_generation_ = current;
+    }
+
+    const auto next_fields =
+        dynamicInputFields();
+    if (next_fields.empty()) {
+        dynamic_input_field_index_ = 0U;
+        return true;
+    }
+
+    if (reverse) {
+        dynamic_input_field_index_ =
+            dynamic_input_field_index_ == 0U
+                ? next_fields.size() - 1U
+                : dynamic_input_field_index_ - 1U;
+    } else {
+        dynamic_input_field_index_ =
+            (dynamic_input_field_index_ + 1U) %
+            next_fields.size();
+    }
+    return true;
+}
+
 bool CadInputSession::setInteractionSettings(
     CadInteractionSettings settings) noexcept {
     if (!settings.valid()) {
         return false;
     }
+    const bool disabling_dynamic_input =
+        interaction_settings_.dynamic_input_enabled &&
+        !settings.dynamic_input_enabled;
     interaction_settings_ = std::move(settings);
+    if (disabling_dynamic_input) {
+        dynamic_input_field_index_ = 0U;
+    }
     return true;
 }
 

@@ -511,6 +511,31 @@ bool ProjectWorkspaceShell::eventFilter(
             event);
     }
 
+    const auto cycle_dynamic_field =
+        [this, key_event]() {
+            if (key_event->key() != Qt::Key_Tab &&
+                key_event->key() !=
+                    Qt::Key_Backtab) {
+                return false;
+            }
+            if (!cad_input_.interactionSettings().
+                    dynamic_input_enabled ||
+                cad_input_.dynamicInputFields().empty()) {
+                return false;
+            }
+
+            const bool reverse =
+                key_event->key() ==
+                    Qt::Key_Backtab ||
+                (key_event->modifiers() &
+                 Qt::ShiftModifier);
+            static_cast<void>(
+                cad_input_.cycleDynamicInputField(
+                    reverse));
+            refreshCadInputPresentation();
+            return true;
+        };
+
     const auto toggle_runtime_aid =
         [this, key_event]() {
             if (!cad_input_.hasEndpoint() ||
@@ -545,6 +570,9 @@ bool ProjectWorkspaceShell::eventFilter(
         };
 
     if (focus == command_input_) {
+        if (cycle_dynamic_field()) {
+            return true;
+        }
         if (toggle_runtime_aid()) {
             return true;
         }
@@ -590,6 +618,10 @@ bool ProjectWorkspaceShell::eventFilter(
     }
 
     if (toggle_runtime_aid()) {
+        return true;
+    }
+
+    if (cycle_dynamic_field()) {
         return true;
     }
 
