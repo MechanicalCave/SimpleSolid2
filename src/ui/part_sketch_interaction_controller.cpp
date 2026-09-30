@@ -7,6 +7,53 @@
 #include <vector>
 
 namespace simplesolid2::ui {
+namespace {
+
+[[nodiscard]] double viewportDistance(
+    viewer::ViewportPoint2 first,
+    viewer::ViewportPoint2 second) noexcept {
+    return std::hypot(
+        second.x - first.x,
+        second.y - first.y);
+}
+
+[[nodiscard]] std::optional<double>
+viewportPointRayDistance(
+    viewer::ViewportPoint2 point,
+    viewer::ViewportPoint2 start,
+    viewer::ViewportPoint2 through) noexcept {
+    if (!point.valid() ||
+        !start.valid() ||
+        !through.valid()) {
+        return std::nullopt;
+    }
+
+    const double dx = through.x - start.x;
+    const double dy = through.y - start.y;
+    const double length_squared =
+        dx * dx + dy * dy;
+    if (!std::isfinite(length_squared) ||
+        length_squared <= 0.0) {
+        return std::nullopt;
+    }
+
+    const double projection =
+        ((point.x - start.x) * dx +
+         (point.y - start.y) * dy) /
+        length_squared;
+    const double parameter =
+        std::max(0.0, projection);
+    const viewer::ViewportPoint2 closest{
+        start.x + parameter * dx,
+        start.y + parameter * dy};
+    const double result =
+        viewportDistance(point, closest);
+    return std::isfinite(result)
+        ? std::optional<double>{result}
+        : std::nullopt;
+}
+
+} // namespace
 
 PartSketchInteractionController::PartSketchInteractionController(
     PartViewportController& viewport_controller)
@@ -18,6 +65,7 @@ void PartSketchInteractionController::begin(
     session_ = &session;
     sketch_id_ = sketch_id;
     interaction_ = sketch::SketchInteractionState{};
+    polar_capture_ = {};
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -41,6 +89,7 @@ void PartSketchInteractionController::begin(
 
 void PartSketchInteractionController::end() {
     interaction_ = sketch::SketchInteractionState{};
+    polar_capture_ = {};
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -2682,7 +2731,7 @@ void PartSketchInteractionController::handleSelectPointer(
         if (input.phase ==
             viewer::SpatialPointerPhase::move) {
             updateDirectManipulationPreview(
-                input.position);
+                input);
             return;
         }
 
@@ -2690,7 +2739,7 @@ void PartSketchInteractionController::handleSelectPointer(
             viewer::SpatialPointerPhase::
                 primary_press) {
             updateDirectManipulationPreview(
-                input.position);
+                input);
             static_cast<void>(
                 commitDirectManipulation());
         }
@@ -3064,8 +3113,7 @@ void PartSketchInteractionController::handleMeasurePointer(
 void PartSketchInteractionController::handleLinePointer(
     const SketchPointerInput& input) {
     const auto resolved =
-        interaction_.resolvePointerInput(
-            input.position);
+        resolvePointerInput(input);
 
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
@@ -3222,8 +3270,7 @@ void PartSketchInteractionController::handleCirclePointer(
 void PartSketchInteractionController::handleArcPointer(
     const SketchPointerInput& input) {
     const auto resolved =
-        interaction_.resolvePointerInput(
-            input.position);
+        resolvePointerInput(input);
 
     if (input.phase == viewer::SpatialPointerPhase::move) {
         const auto preview =
@@ -3341,8 +3388,7 @@ void PartSketchInteractionController::
 handleRectanglePointer(
     const SketchPointerInput& input) {
     const auto resolved =
-        interaction_.resolvePointerInput(
-            input.position);
+        resolvePointerInput(input);
 
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
@@ -3614,7 +3660,7 @@ handleCommonTransformPointer(
     }
 
     const auto resolved =
-        interaction_.resolvePointerInput(input.position);
+        resolvePointerInput(input);
 
     const bool reference_stage =
         *stage ==
@@ -3650,14 +3696,14 @@ handleCommonTransformPointer(
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
         updateCommonTransformPreview(
-            input.position);
+            input);
         return;
     }
 
     if (input.phase ==
         viewer::SpatialPointerPhase::primary_press) {
         updateCommonTransformPreview(
-            input.position);
+            input);
         static_cast<void>(commitTransform());
     }
 }
@@ -3772,11 +3818,140 @@ beginDirectManipulation(
     return true;
 }
 
+std::optional<sketch::ResolvedSketchInput>
+PartSketchInteractionController::resolvePointerInput(
+    const SketchPointerInput& input) {
+    const auto raw =
+        [this, &input]() {
+            polar_capture_ = {};
+            return interaction_.resolvePointerInput(
+                input.position);
+        };
+
+    const auto request =
+        interaction_.activePointRequest();
+    if (!request ||
+        !request->base ||
+        (!request->relative_polar_enabled &&
+         !request->direct_distance_enabled) ||
+        !cad_interaction_settings_provider_ ||
+        !input.viewport_position.valid() ||
+        !input.position.finite()) {
+        return raw();
+    }
+
+    const auto settings =
+        cad_interaction_settings_provider_();
+    if (!settings.valid() ||
+        !settings.polar.enabled) {
+        return raw();
+    }
+
+    std::optional<double> relative_reference;
+    if (settings.polar.reference_mode ==
+        application::PolarReferenceMode::relative) {
+        relative_reference =
+            request->polar_relative_reference;
+        if (!relative_reference) {
+            return raw();
+        }
+    }
+
+    const auto tracks =
+        application::generatePolarTrackAngles(
+            settings.polar,
+            relative_reference);
+    if (tracks.empty()) {
+        return raw();
+    }
+
+    const auto base = *request->base;
+    const auto base_screen =
+        viewport_controller_->
+            projectSketchPointToViewport(base);
+    if (!base_screen) {
+        return raw();
+    }
+
+    const double base_screen_distance =
+        viewportDistance(
+            *base_screen,
+            input.viewport_position);
+    const double raw_radius =
+        std::hypot(
+            input.position.u - base.u,
+            input.position.v - base.v);
+    if (!std::isfinite(raw_radius) ||
+        raw_radius <= 0.0) {
+        return raw();
+    }
+
+    double sample_radius =
+        raw_radius * 2.0;
+    if (!std::isfinite(sample_radius) ||
+        sample_radius <= raw_radius) {
+        sample_radius = raw_radius;
+    }
+
+    std::vector<
+        application::PolarTrackScreenDistance>
+        screen_distances;
+    screen_distances.reserve(tracks.size());
+
+    for (const double angle : tracks) {
+        const sketch::Point2 sample{
+            base.u +
+                sample_radius * std::cos(angle),
+            base.v +
+                sample_radius * std::sin(angle)};
+        const auto sample_screen =
+            viewport_controller_->
+                projectSketchPointToViewport(sample);
+        if (!sample_screen) {
+            continue;
+        }
+
+        const auto distance =
+            viewportPointRayDistance(
+                input.viewport_position,
+                *base_screen,
+                *sample_screen);
+        if (!distance) {
+            continue;
+        }
+        screen_distances.push_back(
+            {angle, *distance});
+    }
+
+    const auto captured =
+        application::resolvePolarCapture(
+            polar_capture_,
+            true,
+            base_screen_distance,
+            screen_distances);
+    if (!captured) {
+        return interaction_.resolvePointerInput(
+            input.position);
+    }
+
+    const sketch::Point2 assisted{
+        base.u +
+            raw_radius * std::cos(*captured),
+        base.v +
+            raw_radius * std::sin(*captured)};
+    if (!assisted.finite()) {
+        return raw();
+    }
+
+    return interaction_.resolvePointerInput(
+        assisted);
+}
+
 void PartSketchInteractionController::
 updateDirectManipulationPreview(
-    sketch::Point2 raw_input) {
+    const SketchPointerInput& input) {
     const auto resolved =
-        interaction_.resolvePointerInput(raw_input);
+        resolvePointerInput(input);
     if (!resolved ||
         !interaction_.updateDirectManipulation(*resolved)) {
         viewport_controller_->clearSketchPreview();
@@ -3794,9 +3969,9 @@ updateDirectManipulationPreview(
 
 void PartSketchInteractionController::
 updateCommonTransformPreview(
-    sketch::Point2 raw_input) {
+    const SketchPointerInput& input) {
     const auto resolved =
-        interaction_.resolvePointerInput(raw_input);
+        resolvePointerInput(input);
     if (!resolved ||
         !interaction_.updateTransformPreview(
             *resolved)) {
@@ -4003,6 +4178,7 @@ refreshCadInputContextGeneration() {
     }
 
     cad_input_context_fingerprint_ = current;
+    polar_capture_ = {};
     ++cad_input_context_generation_;
 }
 

@@ -13,6 +13,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <numbers>
 #include <optional>
 #include <string>
 #include <utility>
@@ -53,6 +54,17 @@ public:
     bool setStandardView(viewer::StandardView) override { return true; }
     bool setProjection(viewer::CameraProjection) override { return true; }
     void fitAll() override {}
+
+    std::optional<viewer::ViewportPoint2>
+    projectWorldPoint(
+        viewer::Point3 point) const override {
+        if (!viewer::finite(point)) {
+            return std::nullopt;
+        }
+        return viewer::ViewportPoint2{
+            point.x,
+            point.y};
+    }
 
     bool setReferenceScene(const viewer::ReferenceScene& scene) override {
         return scene.valid();
@@ -812,6 +824,70 @@ int main(int argc, char* argv[]) {
     CHECK(near(moved_source->start().v, 20.0));
     CHECK(near(moved_source->end().u, 5.0));
     CHECK(near(moved_source->end().v, -10.0));
+
+    // Polar is a logical-screen-space magnet. With 90-degree Absolute
+    // tracks, (20,1) captures +U. Direct Distance owns magnitude only.
+    application::CadInteractionSettings polar_settings;
+    polar_settings.polar.primary_spacing =
+        std::numbers::pi_v<double> / 2.0;
+    interaction.setCadInteractionSettingsProvider(
+        [&polar_settings] {
+            return polar_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            0.0,
+            0.0}));
+    const auto line_count_before_polar =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    movePointer(
+        interaction,
+        sketch_id,
+        20.0,
+        1.0,
+        20.0,
+        1.0);
+    CHECK(interaction.submitDirectDistance(100.0));
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        line_count_before_polar + 1U);
+    CHECK(near(model_state.lines.back().start.u, 0.0));
+    CHECK(near(model_state.lines.back().start.v, 0.0));
+    CHECK(near(model_state.lines.back().end.u, 100.0));
+    CHECK(near(model_state.lines.back().end.v, 0.0));
+
+    // Relative without an explicit semantic reference never falls back
+    // to Absolute. The same pointer remains raw.
+    polar_settings.polar.reference_mode =
+        application::PolarReferenceMode::relative;
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            0.0,
+            0.0}));
+    movePointer(
+        interaction,
+        sketch_id,
+        20.0,
+        1.0,
+        20.0,
+        1.0);
+    CHECK(interaction.submitDirectDistance(100.0));
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(model_state.lines.back().end.v > 4.0);
+    CHECK(model_state.lines.back().end.v < 6.0);
 
     std::cout
         << "SK-07F precision input controller PASS\n";

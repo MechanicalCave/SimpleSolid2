@@ -690,6 +690,11 @@ void CadWorkbench::buildUi() {
     sketch_interaction_controller_ =
         std::make_unique<PartSketchInteractionController>(
             *viewport_controller_);
+    if (cad_interaction_settings_provider_) {
+        sketch_interaction_controller_->
+            setCadInteractionSettingsProvider(
+                cad_interaction_settings_provider_);
+    }
     sketch_interaction_controller_->setStateChangedHandler(
         [this] {
             syncSketchInteractionUi();
@@ -2226,6 +2231,17 @@ void CadWorkbench::deleteSketchSelection() {
 
     setStatusText(
         QStringLiteral("Sketch selection deleted."));
+}
+
+void CadWorkbench::setCadInteractionSettingsProvider(
+    CadInteractionSettingsProvider provider) {
+    cad_interaction_settings_provider_ =
+        std::move(provider);
+    if (sketch_interaction_controller_) {
+        sketch_interaction_controller_->
+            setCadInteractionSettingsProvider(
+                cad_interaction_settings_provider_);
+    }
 }
 
 std::string CadWorkbench::cadInputPrompt() const {

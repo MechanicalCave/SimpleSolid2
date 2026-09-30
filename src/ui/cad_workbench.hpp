@@ -86,6 +86,12 @@ public:
             std::move(handler);
     }
 
+    using CadInteractionSettingsProvider =
+        std::function<
+            application::CadInteractionSettings()>;
+    void setCadInteractionSettingsProvider(
+        CadInteractionSettingsProvider provider);
+
     [[nodiscard]] std::string cadInputPrompt() const override;
     [[nodiscard]] application::CadInputContextGeneration
     cadInputContextGeneration() const noexcept override;
@@ -187,6 +193,8 @@ private:
         document_state_changed_handler_;
     CadInputContextChangedHandler
         cad_input_context_changed_handler_;
+    CadInteractionSettingsProvider
+        cad_interaction_settings_provider_;
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};

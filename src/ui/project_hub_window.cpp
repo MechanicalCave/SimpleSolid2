@@ -455,6 +455,12 @@ void ProjectHubWindow::buildWorkspacePage() {
     workspace_shell_->setDocumentWorkbench(
         cad_workbench_);
 
+    cad_workbench_->setCadInteractionSettingsProvider(
+        [this] {
+            return workspace_shell_->
+                cadInteractionSettings();
+        });
+
     cad_workbench_->setCloseDocumentHandler(
         [this](
             const core::DocumentId&

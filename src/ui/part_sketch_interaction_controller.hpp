@@ -39,6 +39,9 @@ class PartSketchInteractionController final
 public:
     using StateChangedHandler = std::function<void()>;
     using StatusHandler = std::function<void(const std::string&)>;
+    using CadInteractionSettingsProvider =
+        std::function<
+            application::CadInteractionSettings()>;
 
     explicit PartSketchInteractionController(
         PartViewportController& viewport_controller);
@@ -47,6 +50,13 @@ public:
         application::DocumentSession& session,
         sketch::SketchId sketch_id);
     void end();
+
+    void setCadInteractionSettingsProvider(
+        CadInteractionSettingsProvider provider) {
+        cad_interaction_settings_provider_ =
+            std::move(provider);
+        polar_capture_ = {};
+    }
 
     [[nodiscard]] bool active() const noexcept;
     [[nodiscard]] sketch::SketchTool tool() const noexcept;
@@ -308,10 +318,14 @@ private:
     void updateHover(viewer::ViewportPoint2 point);
     [[nodiscard]] bool beginDirectManipulation(
         sketch::SketchGripRef grip);
+    [[nodiscard]] std::optional<
+        sketch::ResolvedSketchInput>
+    resolvePointerInput(
+        const SketchPointerInput& input);
     void updateDirectManipulationPreview(
-        sketch::Point2 raw_input);
+        const SketchPointerInput& input);
     void updateCommonTransformPreview(
-        sketch::Point2 raw_input);
+        const SketchPointerInput& input);
     [[nodiscard]] application::DocumentSessionResult
     executeGeometryUpdate(
         const sketch::SketchTransformGeometry& geometry,
@@ -384,6 +398,10 @@ private:
     application::CircleSizeInputMode
         circle_size_input_mode_{
             application::CircleSizeInputMode::diameter};
+    CadInteractionSettingsProvider
+        cad_interaction_settings_provider_;
+    application::PolarCaptureState
+        polar_capture_;
 
     struct ProfileToolSession final {
         ProfileToolSessionKind kind{
