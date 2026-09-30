@@ -924,7 +924,7 @@ int main(int argc, char* argv[]) {
     dyn_lock =
         semantic_input.lockDynamicInputField(
             1U,
-            "20");
+            "20mm");
     CHECK(dyn_lock.accepted);
 
     dyn_snapshots =
@@ -1036,7 +1036,7 @@ int main(int argc, char* argv[]) {
     dyn_lock =
         semantic_input.lockDynamicInputField(
             0U,
-            "70");
+            "70mm");
     CHECK(dyn_lock.accepted);
     const auto arcs_before_dyn =
         session.document().findSketch(sketch_id)->
@@ -1062,12 +1062,12 @@ int main(int argc, char* argv[]) {
     dyn_lock =
         semantic_input.lockDynamicInputField(
             0U,
-            "50");
+            "50mm");
     CHECK(dyn_lock.accepted);
     dyn_lock =
         semantic_input.lockDynamicInputField(
             1U,
-            "30");
+            "30mm");
     CHECK(dyn_lock.accepted);
     const auto lines_before_dyn_rectangle =
         session.document().findSketch(sketch_id)->
