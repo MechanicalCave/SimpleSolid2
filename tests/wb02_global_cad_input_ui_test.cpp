@@ -128,6 +128,23 @@ int main(int argc, char* argv[]) {
     cad_surface->setFocus(Qt::OtherFocusReason);
     CHECK(QApplication::focusWidget() == cad_surface);
 
+    CHECK(shell.cadInteractionSettings().polar.enabled);
+    CHECK(
+        !shell.cadInteractionSettings().
+            dynamic_input_enabled);
+    QTest::keyClick(
+        cad_surface,
+        Qt::Key_F10);
+    QApplication::processEvents();
+    CHECK(!shell.cadInteractionSettings().polar.enabled);
+    QTest::keyClick(
+        cad_surface,
+        Qt::Key_F12);
+    QApplication::processEvents();
+    CHECK(
+        shell.cadInteractionSettings().
+            dynamic_input_enabled);
+
     QTest::keyClicks(
         cad_surface,
         QStringLiteral("50"));
@@ -164,6 +181,18 @@ int main(int argc, char* argv[]) {
 
     ordinary_editor->clear();
     ordinary_editor->setFocus(Qt::OtherFocusReason);
+    const auto settings_before_editor_keys =
+        shell.cadInteractionSettings();
+    QTest::keyClick(
+        ordinary_editor,
+        Qt::Key_F10);
+    QTest::keyClick(
+        ordinary_editor,
+        Qt::Key_F12);
+    QApplication::processEvents();
+    CHECK(
+        shell.cadInteractionSettings() ==
+        settings_before_editor_keys);
     QTest::keyClicks(
         ordinary_editor,
         QStringLiteral("PartName50"));
@@ -267,8 +296,13 @@ int main(int argc, char* argv[]) {
     popup.close();
     QApplication::processEvents();
 
+    const auto settings_before_endpoint_switch =
+        shell.cadInteractionSettings();
     shell.setCadInputEndpoint(&second);
     CHECK(input->text().isEmpty());
+    CHECK(
+        shell.cadInteractionSettings() ==
+        settings_before_endpoint_switch);
 
     QTest::keyClicks(
         cad_surface,

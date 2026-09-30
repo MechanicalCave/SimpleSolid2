@@ -511,7 +511,40 @@ bool ProjectWorkspaceShell::eventFilter(
             event);
     }
 
+    const auto toggle_runtime_aid =
+        [this, key_event]() {
+            if (!cad_input_.hasEndpoint() ||
+                !cad_input_.buffer().empty() ||
+                key_event->modifiers() !=
+                    Qt::NoModifier) {
+                return false;
+            }
+
+            auto settings =
+                cad_input_.interactionSettings();
+            if (key_event->key() == Qt::Key_F10) {
+                settings.polar.enabled =
+                    !settings.polar.enabled;
+            } else if (
+                key_event->key() == Qt::Key_F12) {
+                settings.dynamic_input_enabled =
+                    !settings.dynamic_input_enabled;
+            } else {
+                return false;
+            }
+
+            if (!cad_input_.setInteractionSettings(
+                    std::move(settings))) {
+                return false;
+            }
+            refreshCadInputPresentation();
+            return true;
+        };
+
     if (focus == command_input_) {
+        if (toggle_runtime_aid()) {
+            return true;
+        }
         if (key_event->key() == Qt::Key_Escape) {
             cad_input_.clearBuffer();
             refreshCadInputPresentation();
@@ -551,6 +584,10 @@ bool ProjectWorkspaceShell::eventFilter(
         return QWidget::eventFilter(
             watched,
             event);
+    }
+
+    if (toggle_runtime_aid()) {
+        return true;
     }
 
     // A2: while a viewport-entered CAD token is live, Delete belongs

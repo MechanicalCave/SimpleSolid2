@@ -5,6 +5,7 @@
 #include <QWidget>
 
 #include <string>
+#include <utility>
 
 class QEvent;
 class QLabel;
@@ -45,6 +46,22 @@ public:
 
     [[nodiscard]] const std::string&
     cadInputBuffer() const noexcept;
+
+    [[nodiscard]] const application::CadInteractionSettings&
+    cadInteractionSettings() const noexcept {
+        return cad_input_.interactionSettings();
+    }
+
+    [[nodiscard]] bool setCadInteractionSettings(
+        application::CadInteractionSettings settings) {
+        const bool accepted =
+            cad_input_.setInteractionSettings(
+                std::move(settings));
+        if (accepted) {
+            refreshCadInputPresentation();
+        }
+        return accepted;
+    }
 
     [[nodiscard]] bool showingWorkspace() const noexcept;
 
