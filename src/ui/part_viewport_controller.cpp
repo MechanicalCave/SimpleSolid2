@@ -1171,6 +1171,19 @@ void PartViewportController::clearSketchSelectionBoxOverlay() {
     }
 }
 
+bool PartViewportController::setSketchDynamicInputOverlay(
+    const viewer::SketchDynamicInputOverlay& overlay) {
+    return viewport_ != nullptr &&
+           overlay.valid() &&
+           viewport_->setSketchDynamicInputOverlay(overlay);
+}
+
+void PartViewportController::clearSketchDynamicInputOverlay() {
+    if (viewport_ != nullptr) {
+        viewport_->clearSketchDynamicInputOverlay();
+    }
+}
+
 std::optional<SketchEntityAddress>
 PartViewportController::sketchEntityFor(
     viewer::PresentationToken token) const {
