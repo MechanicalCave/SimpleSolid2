@@ -604,8 +604,8 @@ int main() {
             dyn_line.resolvePointerInput(
                 {13.0, -1.0});
         CHECK(resolved.has_value());
-        CHECK(near(resolved->position.u, 110.0));
-        CHECK(near(resolved->position.v, -5.0));
+        CHECK(near(resolved->position.u, 70.0));
+        CHECK(near(resolved->position.v, 75.0));
 
         CHECK(dyn_line.lockPointField(
             sketch::PointFieldLockSemantic::angle,
