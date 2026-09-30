@@ -483,6 +483,14 @@ public:
 
     [[nodiscard]] CirclePointResult acceptCirclePoint(
         Point2 point) noexcept;
+    [[nodiscard]] bool lockCircleRadius(
+        double radius) noexcept;
+    void clearCircleRadiusLock() noexcept {
+        circle_radius_lock_.reset();
+    }
+    [[nodiscard]] bool circleRadiusLocked() const noexcept {
+        return circle_radius_lock_.has_value();
+    }
     [[nodiscard]] CirclePointResult acceptCircleRadius(
         double radius) noexcept;
 
@@ -490,6 +498,8 @@ public:
         Point2 point) noexcept;
     [[nodiscard]] ArcPointResult acceptArcPointer(
         Point2 point) noexcept;
+    [[nodiscard]] bool lockArcRadius(
+        double radius) noexcept;
     [[nodiscard]] ArcPointResult acceptArcRadius(
         double radius) noexcept;
     [[nodiscard]] bool arcRadiusLocked() const noexcept {
@@ -498,6 +508,10 @@ public:
 
     [[nodiscard]] RectanglePointResult acceptRectanglePoint(
         Point2 point) noexcept;
+    [[nodiscard]] bool lockRectangleWidth(
+        double width) noexcept;
+    [[nodiscard]] bool lockRectangleHeight(
+        double height) noexcept;
     [[nodiscard]] RectanglePointResult acceptRectangleSize(
         double width,
         double height) noexcept;
@@ -691,6 +705,7 @@ private:
     CircleStage circle_stage_{
         CircleStage::await_center};
     std::optional<Point2> circle_center_;
+    std::optional<double> circle_radius_lock_;
     std::optional<CircleIntent>
         pending_circle_request_;
 
@@ -705,8 +720,8 @@ private:
     RectangleStage rectangle_stage_{
         RectangleStage::await_first_corner};
     std::optional<Point2> rectangle_first_corner_;
-    std::optional<std::array<double, 2>>
-        rectangle_size_lock_;
+    std::optional<double> rectangle_width_lock_;
+    std::optional<double> rectangle_height_lock_;
     std::optional<RectangleIntent>
         pending_rectangle_request_;
 

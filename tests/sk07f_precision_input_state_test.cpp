@@ -217,6 +217,25 @@ int main() {
         CHECK(
             circle.acceptCircleRadius(0.0).outcome ==
             sketch::CirclePointOutcome::invalid_radius);
+        CHECK(circle.lockCircleRadius(7.5));
+        CHECK(circle.circleRadiusLocked());
+        const auto locked_preview =
+            circle.previewCircle({100.0, 6.0});
+        CHECK(locked_preview.has_value());
+        CHECK(near(locked_preview->radius, 7.5));
+        const auto locked_circle =
+            circle.acceptCirclePoint({100.0, 6.0});
+        CHECK(
+            locked_circle.outcome ==
+            sketch::CirclePointOutcome::circle_requested);
+        CHECK(locked_circle.request.has_value());
+        CHECK(near(locked_circle.request->radius, 7.5));
+        CHECK(circle.resolveCircleRequest(true));
+
+        circle.activateCircle();
+        CHECK(
+            circle.acceptCirclePoint({5.0, 6.0}).outcome ==
+            sketch::CirclePointOutcome::center_accepted);
         const auto exact_circle =
             circle.acceptCircleRadius(7.5);
         CHECK(
@@ -288,6 +307,34 @@ int main() {
                  .has_value());
     }
 
+    // Dynamic Arc Radius lock changes preview only; pointer side still
+    // owns orientation and acceptance produces the request.
+    {
+        sketch::SketchInteractionState arc_lock;
+        arc_lock.activateArc();
+        CHECK(
+            arc_lock.acceptArcPoint({0.0, 0.0}).outcome ==
+            sketch::ArcPointOutcome::start_accepted);
+        CHECK(
+            arc_lock.acceptArcPoint({10.0, 0.0}).outcome ==
+            sketch::ArcPointOutcome::end_accepted);
+        CHECK(!arc_lock.lockArcRadius(4.9));
+        CHECK(arc_lock.lockArcRadius(6.0));
+        CHECK(arc_lock.arcRadiusLocked());
+        const auto preview =
+            arc_lock.previewArc({5.0, 4.0});
+        CHECK(preview.has_value());
+        CHECK(near(preview->radius, 6.0));
+        const auto request =
+            arc_lock.acceptArcPointer({5.0, 4.0});
+        CHECK(
+            request.outcome ==
+            sketch::ArcPointOutcome::arc_requested);
+        CHECK(request.request.has_value());
+        CHECK(near(request.request->radius, 6.0));
+        CHECK(arc_lock.resolveArcRequest(true));
+    }
+
     // Rectangle second-stage pair is transient Width;Height. Pointer
     // supplies only quadrant; exact magnitudes remain locked.
     {
@@ -298,10 +345,22 @@ int main() {
                          {10.0, 10.0}).outcome ==
             sketch::RectanglePointOutcome::
                 first_corner_accepted);
+        CHECK(rectangle.lockRectangleWidth(4.0));
+        const auto width_preview =
+            rectangle.previewRectangle({9.0, 13.0});
+        CHECK(width_preview.has_value());
         CHECK(
-            rectangle.acceptRectangleSize(
-                         4.0, 2.0).outcome ==
-            sketch::RectanglePointOutcome::size_locked);
+            width_preview->opposite_corner ==
+            sketch::Point2{6.0, 13.0});
+
+        CHECK(rectangle.lockRectangleHeight(2.0));
+        const auto size_preview =
+            rectangle.previewRectangle({9.0, 13.0});
+        CHECK(size_preview.has_value());
+        CHECK(
+            size_preview->opposite_corner ==
+            sketch::Point2{6.0, 12.0});
+
         CHECK(
             rectangle.resolvePointerInput(
                          {9.0, 11.0}).has_value());

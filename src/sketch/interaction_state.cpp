@@ -387,6 +387,33 @@ rectangleFromSize(
         : std::nullopt;
 }
 
+[[nodiscard]] std::optional<RectangleIntent>
+rectangleFromSizeLocks(
+    Point2 first,
+    Point2 pointer,
+    std::optional<double> width,
+    std::optional<double> height) noexcept {
+    if (!first.finite() ||
+        !pointer.finite()) {
+        return std::nullopt;
+    }
+
+    const double du = pointer.u - first.u;
+    const double dv = pointer.v - first.v;
+    if (!std::isfinite(du) ||
+        !std::isfinite(dv) ||
+        du == 0.0 ||
+        dv == 0.0) {
+        return std::nullopt;
+    }
+
+    return rectangleFromSize(
+        first,
+        pointer,
+        width.value_or(std::abs(du)),
+        height.value_or(std::abs(dv)));
+}
+
 [[nodiscard]] std::optional<double>
 sameDirectionSweep(
     double start_angle,
@@ -1648,6 +1675,7 @@ SketchInteractionState::acceptCirclePoint(
     if (circle_stage_ ==
         CircleStage::await_center) {
         circle_center_ = point;
+        circle_radius_lock_.reset();
         point_field_locks_ = {};
         circle_stage_ =
             CircleStage::await_radius;
@@ -1670,7 +1698,8 @@ SketchInteractionState::acceptCirclePoint(
 
     CircleIntent request{
         *circle_center_,
-        distance(*circle_center_, point)};
+        circle_radius_lock_.value_or(
+            distance(*circle_center_, point))};
     if (!request.valid()) {
         return {
             CirclePointOutcome::zero_radius_ignored,
@@ -1683,6 +1712,21 @@ SketchInteractionState::acceptCirclePoint(
         request};
 }
 
+bool SketchInteractionState::lockCircleRadius(
+    double radius) noexcept {
+    if (tool_ != SketchTool::circle ||
+        circle_stage_ != CircleStage::await_radius ||
+        pending_circle_request_ ||
+        !circle_center_ ||
+        !std::isfinite(radius) ||
+        radius <= 0.0) {
+        return false;
+    }
+
+    circle_radius_lock_ = radius;
+    return true;
+}
+
 CirclePointResult
 SketchInteractionState::acceptCircleRadius(
     double radius) noexcept {
@@ -1691,11 +1735,7 @@ SketchInteractionState::acceptCircleRadius(
             CirclePointOutcome::inactive_tool,
             std::nullopt};
     }
-    if (circle_stage_ != CircleStage::await_radius ||
-        pending_circle_request_ ||
-        !circle_center_ ||
-        !std::isfinite(radius) ||
-        radius <= 0.0) {
+    if (!lockCircleRadius(radius)) {
         return {
             CirclePointOutcome::invalid_radius,
             std::nullopt};
@@ -1833,6 +1873,30 @@ SketchInteractionState::acceptArcPointer(
         request};
 }
 
+bool SketchInteractionState::lockArcRadius(
+    double radius) noexcept {
+    if (tool_ != SketchTool::arc ||
+        arc_stage_ != ArcStage::await_arc_point ||
+        pending_arc_request_ ||
+        !arc_start_ ||
+        !arc_end_ ||
+        !std::isfinite(radius) ||
+        radius <= 0.0) {
+        return false;
+    }
+
+    const double chord =
+        distance(*arc_start_, *arc_end_);
+    if (!std::isfinite(chord) ||
+        chord <= 0.0 ||
+        radius < chord * 0.5) {
+        return false;
+    }
+
+    arc_radius_lock_ = radius;
+    return true;
+}
+
 ArcPointResult
 SketchInteractionState::acceptArcRadius(
     double radius) noexcept {
@@ -1841,28 +1905,11 @@ SketchInteractionState::acceptArcRadius(
             ArcPointOutcome::inactive_tool,
             std::nullopt};
     }
-    if (arc_stage_ != ArcStage::await_arc_point ||
-        pending_arc_request_ ||
-        !arc_start_ ||
-        !arc_end_ ||
-        !std::isfinite(radius) ||
-        radius <= 0.0) {
+    if (!lockArcRadius(radius)) {
         return {
             ArcPointOutcome::invalid_radius,
             std::nullopt};
     }
-
-    const double chord =
-        distance(*arc_start_, *arc_end_);
-    if (!std::isfinite(chord) ||
-        chord <= 0.0 ||
-        radius < chord * 0.5) {
-        return {
-            ArcPointOutcome::invalid_radius,
-            std::nullopt};
-    }
-
-    arc_radius_lock_ = radius;
     if (!point_pointer_candidate_) {
         return {
             ArcPointOutcome::radius_locked,
@@ -1904,6 +1951,8 @@ SketchInteractionState::acceptRectanglePoint(
     if (rectangle_stage_ ==
         RectangleStage::await_first_corner) {
         rectangle_first_corner_ = point;
+        rectangle_width_lock_.reset();
+        rectangle_height_lock_.reset();
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
         rectangle_stage_ =
@@ -1926,13 +1975,14 @@ SketchInteractionState::acceptRectanglePoint(
     }
 
     std::optional<RectangleIntent> request;
-    if (rectangle_size_lock_) {
+    if (rectangle_width_lock_ ||
+        rectangle_height_lock_) {
         request =
-            rectangleFromSize(
+            rectangleFromSizeLocks(
                 *rectangle_first_corner_,
                 point,
-                (*rectangle_size_lock_)[0],
-                (*rectangle_size_lock_)[1]);
+                rectangle_width_lock_,
+                rectangle_height_lock_);
     } else {
         RectangleIntent candidate{
             *rectangle_first_corner_,
@@ -1951,6 +2001,38 @@ SketchInteractionState::acceptRectanglePoint(
     return {
         RectanglePointOutcome::rectangle_requested,
         request};
+}
+
+bool SketchInteractionState::lockRectangleWidth(
+    double width) noexcept {
+    if (tool_ != SketchTool::rectangle ||
+        rectangle_stage_ !=
+            RectangleStage::await_opposite_corner ||
+        pending_rectangle_request_ ||
+        !rectangle_first_corner_ ||
+        !std::isfinite(width) ||
+        width <= 0.0) {
+        return false;
+    }
+
+    rectangle_width_lock_ = width;
+    return true;
+}
+
+bool SketchInteractionState::lockRectangleHeight(
+    double height) noexcept {
+    if (tool_ != SketchTool::rectangle ||
+        rectangle_stage_ !=
+            RectangleStage::await_opposite_corner ||
+        pending_rectangle_request_ ||
+        !rectangle_first_corner_ ||
+        !std::isfinite(height) ||
+        height <= 0.0) {
+        return false;
+    }
+
+    rectangle_height_lock_ = height;
+    return true;
 }
 
 RectanglePointResult
@@ -1975,8 +2057,8 @@ SketchInteractionState::acceptRectangleSize(
             std::nullopt};
     }
 
-    rectangle_size_lock_ =
-        std::array<double, 2>{width, height};
+    rectangle_width_lock_ = width;
+    rectangle_height_lock_ = height;
 
     if (!point_pointer_candidate_) {
         return {
@@ -2112,7 +2194,8 @@ SketchInteractionState::previewCircle(
 
     CircleIntent preview{
         *circle_center_,
-        distance(*circle_center_, current)};
+        circle_radius_lock_.value_or(
+            distance(*circle_center_, current))};
     return preview.valid()
         ? std::optional<CircleIntent>{preview}
         : std::nullopt;
@@ -2156,12 +2239,13 @@ SketchInteractionState::previewRectangle(
         return std::nullopt;
     }
 
-    if (rectangle_size_lock_) {
-        return rectangleFromSize(
+    if (rectangle_width_lock_ ||
+        rectangle_height_lock_) {
+        return rectangleFromSizeLocks(
             *rectangle_first_corner_,
             current,
-            (*rectangle_size_lock_)[0],
-            (*rectangle_size_lock_)[1]);
+            rectangle_width_lock_,
+            rectangle_height_lock_);
     }
 
     RectangleIntent preview{
@@ -3115,6 +3199,7 @@ void SketchInteractionState::resetCircleStage()
     circle_stage_ =
         CircleStage::await_center;
     circle_center_.reset();
+    circle_radius_lock_.reset();
     pending_circle_request_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
@@ -3137,7 +3222,8 @@ void SketchInteractionState::resetRectangleStage()
     rectangle_stage_ =
         RectangleStage::await_first_corner;
     rectangle_first_corner_.reset();
-    rectangle_size_lock_.reset();
+    rectangle_width_lock_.reset();
+    rectangle_height_lock_.reset();
     pending_rectangle_request_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
