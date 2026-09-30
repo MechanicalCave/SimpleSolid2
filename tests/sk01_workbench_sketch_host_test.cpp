@@ -202,6 +202,17 @@ public:
 
     void clearSketchSelectionBoxOverlay() override {}
 
+    bool setSketchDynamicInputOverlay(
+        const viewer::SketchDynamicInputOverlay& overlay) override {
+        if (!overlay.valid()) return false;
+        dynamic_input_overlay_ = overlay;
+        return true;
+    }
+
+    void clearSketchDynamicInputOverlay() override {
+        dynamic_input_overlay_.reset();
+    }
+
     void setSelectionIntentHandler(
         viewer::SelectionIntentHandler handler) override {
         selection_handler_ =
@@ -290,6 +301,11 @@ public:
         return sketch_preview_scene_;
     }
 
+    [[nodiscard]] const std::optional<viewer::SketchDynamicInputOverlay>&
+    dynamicInputOverlay() const noexcept {
+        return dynamic_input_overlay_;
+    }
+
     [[nodiscard]] const viewer::SketchInteractionPresentation&
     interactionPresentation() const noexcept {
         return interaction_presentation_;
@@ -314,6 +330,8 @@ private:
     viewer::ReferenceScene scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene sketch_preview_scene_;
+    std::optional<viewer::SketchDynamicInputOverlay>
+        dynamic_input_overlay_;
     viewer::SketchGripScene grip_scene_;
     viewer::SketchInteractionPresentation
         interaction_presentation_;
@@ -437,6 +455,17 @@ int main(int argc, char* argv[]) {
     workspace_shell.setCadInteractionSettingsChangedHandler(
         [&workbench] {
             workbench.refreshCadInteractionSettingsUi();
+        });
+
+    workbench.setCadDynamicInputUiStateProvider(
+        [&workspace_shell] {
+            return ui::CadDynamicInputUiState{
+                workspace_shell.cadInputBuffer(),
+                workspace_shell.cadDynamicInputFieldIndex()};
+        });
+    workspace_shell.setCadInputPresentationChangedHandler(
+        [&workbench] {
+            workbench.refreshCadDynamicInputOverlay();
         });
 
     CHECK(
@@ -1771,6 +1800,35 @@ int main(int argc, char* argv[]) {
         viewer::SpatialPointerPhase::move,
         140.0, 100.0,
         1.0, 0.0);
+
+    // R10 integration regression: DYN ON must project the real semantic
+    // fields next to the current pointer, and the one Workspace CAD token
+    // must appear in the focused field instead of living only in Command Line.
+    dyn_toggle->click();
+    QApplication::processEvents();
+    CHECK(viewport->dynamicInputOverlay().has_value());
+    CHECK(viewport->dynamicInputOverlay()->fields.size() == 4U);
+    CHECK(
+        viewport->dynamicInputOverlay()->fields[0].label ==
+        "Distance");
+    CHECK(viewport->dynamicInputOverlay()->anchor.x == 140.0);
+    CHECK(viewport->dynamicInputOverlay()->anchor.y == 100.0);
+
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClicks(viewport, QStringLiteral("12"));
+    QApplication::processEvents();
+    CHECK(command_input->text() == QStringLiteral("12"));
+    CHECK(viewport->dynamicInputOverlay().has_value());
+    CHECK(
+        viewport->dynamicInputOverlay()->fields[0].display_value ==
+        "12");
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(command_input->text().isEmpty());
+
+    dyn_toggle->click();
+    QApplication::processEvents();
+    CHECK(!viewport->dynamicInputOverlay().has_value());
 
     // SK-07F/WB-02: an active semantic PointRequest owns Command
     // Line submission before top-level command activation. Rejection
