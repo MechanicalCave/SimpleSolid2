@@ -239,6 +239,7 @@ int main() {
 
     // Profile topology reliability: a common transform of a closed
     // Line+Arc contour must not change whether it is a bounded region.
+    // This regression is part of the final R10 exact-head FULL closeout.
     // This is the production reproducer from the 2026-09-30 audit.
     sketch::SketchModel dome;
     const auto dome_arc =
