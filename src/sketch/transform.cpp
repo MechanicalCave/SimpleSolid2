@@ -540,6 +540,7 @@ rotateSketchGeometry(
         ? std::optional<SketchTransformGeometry>{
               std::move(result)}
         : std::nullopt;
+}
 
 std::optional<SketchTransformGeometry>
 scaleSketchGeometry(
@@ -619,6 +620,7 @@ scaleSketchGeometry(
         ? std::optional<SketchTransformGeometry>{
               std::move(result)}
         : std::nullopt;
+}
 
 std::optional<SketchTransformGeometry>
 mirrorSketchGeometry(
@@ -718,5 +720,6 @@ mirrorSketchGeometry(
         ? std::optional<SketchTransformGeometry>{
               std::move(result)}
         : std::nullopt;
+}
 
 } // namespace simplesolid2::sketch
