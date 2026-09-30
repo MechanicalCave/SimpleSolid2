@@ -288,7 +288,7 @@ Space typed while a text-entry field has focus remains text input; it does not t
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeric Rotate/Scale, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages.
+Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Object Snap/tracking/inference, Grid Snap, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
 
 <!-- section-id: product.parts.measure -->
 ## Inspect — Measure
@@ -342,7 +342,7 @@ Operations provides **Add Area**, **Subtract Area**, **Detect Islands**, **Highl
 
 An open chain remains open: SimpleSolid does not close a small gap with a hidden tolerance or auto-repair it. Clicking where no bounded region exists reports an open-boundary diagnostic when the analysis detects one. Without snapping/OSNAP, two points that only look coincident on screen are not silently made equal. A disconnected Add result, subtraction that splits material, or ambiguous topology is rejected without changing the Document.
 
-Finish creates a Part-owned Profile with a stable `ProfileId`. The Profile stores semantic references to source-Sketch geometry rather than a copy of the visible fill. Source edits can keep the Profile **Valid**, make it **Invalid**, and later restore it to Valid without changing ProfileId. SimpleSolid does not automatically rebind an Invalid Profile to similar or nearest replacement geometry.
+Finish creates a Part-owned Profile with a stable `ProfileId`. The Profile stores semantic references to source-Sketch geometry rather than a copy of the visible fill. Source edits can keep the Profile **Valid**, make it **Invalid**, and later restore it to Valid without changing ProfileId. Moving, rotating, positively scaling or mirroring a complete connected Line/Arc boundary together preserves its existing endpoint topology; this is preservation of an already-established contact, not proximity-based gap healing. Moving only part of the boundary may intentionally open a real gap, which remains open until the authored geometry is actually closed again. SimpleSolid does not automatically rebind an Invalid Profile to similar or nearest replacement geometry.
 
 A Profile appears under its source Sketch in Document Tree. Properties shows Name, ProfileId, Source Sketch, Status, diagnostic, Area, Perimeter, Holes and Visibility. Area/Perimeter/Holes are derived and become unavailable for Invalid instead of retaining stale values. Name and Visibility are authored.
 

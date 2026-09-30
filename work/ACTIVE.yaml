@@ -27,6 +27,9 @@ next:
   - preserve Roadmap v1.7 sequencing: R10 -> R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - R10 runtime/manual candidate d7e73428bf3a9cc81c48ba43e5f9f5ceaa5ca618 passed exact-head Windows FULL #1007 on 2026-09-30; the same candidate received Owner manual Windows PASS for the entire R10 Section 30 checklist on 2026-09-30.
+  - R10 Profile reliability evidence on that candidate covers Line-Arc common Move/Rotate/positive Scale/Mirror/repeated-transform topology preservation, a real gap remaining open, the Arc+diameter two-endpoint case, and durable Profile RegionIntent resolution after common source transform.
+  - R10 remains ACTIVE only through final required internal + PL/EN current-state documentation/current Product Browser, a new exact-head Windows FULL on that documentation candidate, and the work-only CLOSURE closeout; R11+ remain inactive.
   - Owner accepted Sketcher Roadmap v1.7 on 2026-09-29 as the bounded R10 amendment: separate Ortho is removed from R10; Polar is the sole directional magnet and 360/4 = 90 degrees provides orthogonal-only attraction.
   - R10 proposal-only head 171e627d3ab4ada1376ed7eb6775f9ce35b106d7 passed Windows PR gate #933 before activation.
   - R10 defaults/lifecycle accepted at activation include application-session Polar ON, Step 360/8 = 45 degrees, Reference Absolute, no Additional Angles, DYN OFF; Circle creation defaults Diameter per Sketch edit.

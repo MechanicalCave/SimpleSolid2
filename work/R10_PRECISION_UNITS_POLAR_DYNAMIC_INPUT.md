@@ -1797,7 +1797,7 @@ These are separate scope/architecture decisions.
 
 R10 does not activate R11.
 
-After R10 completes, Roadmap v1.6 places R11 Object Snap / Tracking / Inference next.
+After R10 completes, Roadmap v1.7 places R11 Object Snap / Tracking / Inference next.
 
 R11 must consume the accepted R10 resolver priority and numeric locks. It must not create a second point-resolution system.
 
@@ -1830,3 +1830,13 @@ Completion requires:
 - work-only CLOSURE closeout.
 
 R11+ remain inactive after R10 completion unless separately accepted.
+
+## 34. Pre-closeout verification evidence
+
+R10 implementation/manual evidence recorded on 2026-09-30 before the final documentation/closure checkpoint:
+
+- runtime candidate `d7e73428bf3a9cc81c48ba43e5f9f5ceaa5ca618` passed exact-head Windows FULL #1007, including documentation/bootstrap/dispatcher checks, desktop Build, core-only semantic tests, FAST/SUBSYSTEM selector checks, full desktop tests and final `windows-msvc` PASS;
+- Profile reliability hardening on that candidate preserves already-established Line↔Arc endpoint topology across common Move/Rotate/positive Scale/Mirror and repeated mixed transforms while keeping a real authored gap open; regression coverage also includes the Arc+diameter two-endpoint case and durable Part RegionIntent resolution after a common source transform;
+- Owner manual Windows verification for the **entire Section 30 R10 checklist** passed on 2026-09-30 on the same exact runtime candidate `d7e73428bf3a9cc81c48ba43e5f9f5ceaa5ca618`, including units/persistence, quantity grammar, Line/Circle/Arc/Rectangle precision input, Move/Copy/grips/transforms, Polar, Dynamic Input, Measure units, Construction cadence and regression smoke including Profile;
+- R11 OSNAP/tracking/inference, Grid Snap, authored dimensions/constraints/solver, structural editing and solid modeling remain outside R10 and inactive;
+- final required internal + PL/EN current-state documentation, regenerated Product Browser, a new exact-head Windows FULL on that documentation candidate, and the work-only CLOSURE closeout remain required before R10 is marked complete.

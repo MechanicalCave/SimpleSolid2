@@ -288,7 +288,7 @@ Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uru
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję. Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin.
 
-Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Ortho/Polar, snapping/tracking/inference, coordinate/Dynamic Input, numeryczne Rotate/Scale, constraints/solver, authored dimensions, płaszczyzny Construction/Datum i płaskie ściany modelu pozostają późniejszymi etapami.
+Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Object Snap/tracking/inference, Grid Snap, constraints/solver, authored dimensions, płaszczyzny Datum i płaskie ściany modelu pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
 
 <!-- section-id: product.parts.measure -->
 ## Inspect — Measure
@@ -342,7 +342,7 @@ Operations udostępnia **Add Area**, **Subtract Area**, **Detect Islands**, **Hi
 
 Otwarty łańcuch pozostaje otwarty: SimpleSolid nie domyka małej szczeliny ukrytą tolerancją ani nie naprawia jej automatycznie. Kliknięcie w miejscu, gdzie nie istnieje bounded region, zgłasza diagnostykę otwartej granicy, jeżeli analiza ją wykryła. Bez snapping/OSNAP dwa punkty, które tylko wyglądają na pokrywające się na ekranie, nie są automatycznie zrównywane. Rozłączony wynik Add, Subtract rozcinający materiał albo niejednoznaczna topologia są odrzucane bez zmiany Dokumentu.
 
-Finish tworzy Part-owned Profile ze stabilnym `ProfileId`. Profile przechowuje semantyczne odwołania do geometrii źródłowego Sketchu zamiast kopii widocznego wypełnienia. Edycja źródła może pozostawić Profile **Valid**, uczynić go **Invalid**, a późniejsza naprawa może przywrócić Valid bez zmiany ProfileId. SimpleSolid nie przepina automatycznie Invalid Profile do podobnej ani najbliższej nowej geometrii.
+Finish tworzy Part-owned Profile ze stabilnym `ProfileId`. Profile przechowuje semantyczne odwołania do geometrii źródłowego Sketchu zamiast kopii widocznego wypełnienia. Edycja źródła może pozostawić Profile **Valid**, uczynić go **Invalid**, a późniejsza naprawa może przywrócić Valid bez zmiany ProfileId. Wspólne Move, Rotate, dodatni Scale albo Mirror całej połączonej granicy Line/Arc zachowuje jej istniejącą topologię endpointów; jest to zachowanie już ustanowionego kontaktu, a nie domykanie szczeliny na podstawie bliskości. Przesunięcie tylko części granicy może celowo utworzyć prawdziwą szczelinę, która pozostaje otwarta do czasu rzeczywistego ponownego domknięcia authored geometry. SimpleSolid nie przepina automatycznie Invalid Profile do podobnej ani najbliższej nowej geometrii.
 
 Profile jest dzieckiem źródłowego Sketchu w Document Tree. Properties pokazuje Name, ProfileId, Source Sketch, Status, diagnostykę, Area, Perimeter, Holes i Visibility. Area/Perimeter/Holes są pochodne i dla Invalid stają się niedostępne zamiast pokazywać stare wartości. Name i Visibility są authored.
 
