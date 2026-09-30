@@ -116,6 +116,11 @@ public:
         return false;
     }
 
+    [[nodiscard]] virtual CircleSizeInputMode
+    cadInputSemanticCircleSizeMode() const noexcept {
+        return CircleSizeInputMode::diameter;
+    }
+
     [[nodiscard]] virtual bool submitCadInputSemanticDirectDistance(
         double distance) = 0;
 
@@ -149,6 +154,9 @@ public:
 
     [[nodiscard]] CadInputSubmitResult submit(
         std::string_view text);
+
+    [[nodiscard]] std::vector<CadDynamicInputField>
+    dynamicInputFields() const;
 
 private:
     ISketchCadInputSemanticTarget* target_{};

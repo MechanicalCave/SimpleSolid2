@@ -2799,6 +2799,26 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                : application::CadInputContextGeneration{};
 }
 
+std::vector<application::CadDynamicInputField>
+CadWorkbench::cadDynamicInputFields() const {
+    if (!sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->active()) {
+        return {};
+    }
+
+    const auto length_unit =
+        document_session_ != nullptr
+            ? document_session_->document().lengthUnit()
+            : core::LengthUnit::millimetre;
+
+    application::SketchCadInputSemanticEndpoint endpoint{
+        *sketch_interaction_controller_,
+        application::CadInputNumberFormat{
+            toUtf8(QLocale{}.decimalPoint()),
+            length_unit}};
+    return endpoint.dynamicInputFields();
+}
+
 application::CadInputSubmitResult
 CadWorkbench::submitCadInput(
     std::string_view text,

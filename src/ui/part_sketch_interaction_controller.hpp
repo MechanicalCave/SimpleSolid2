@@ -116,6 +116,10 @@ public:
     [[nodiscard]] bool
     submitCadInputSemanticCircleSizeMode(
         application::CircleSizeInputMode mode) override;
+    [[nodiscard]] application::CircleSizeInputMode
+    cadInputSemanticCircleSizeMode() const noexcept override {
+        return circle_size_input_mode_;
+    }
     [[nodiscard]] bool submitCadInputSemanticDirectDistance(
         double distance) override {
         return submitDirectDistance(distance);

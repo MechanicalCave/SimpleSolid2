@@ -182,6 +182,73 @@ SketchCadInputSemanticEndpoint::SketchCadInputSemanticEndpoint(
     : target_{&target},
       number_format_{std::move(number_format)} {}
 
+std::vector<CadDynamicInputField>
+SketchCadInputSemanticEndpoint::dynamicInputFields() const {
+    if (target_ == nullptr ||
+        !target_->cadInputSemanticActive()) {
+        return {};
+    }
+
+    using Field = CadDynamicInputField;
+    using Semantic = CadDynamicInputFieldSemantic;
+
+    if (const auto pair =
+            target_->cadInputSemanticPairRequest()) {
+        switch (pair->semantic) {
+        case CadInputPairRequestSemantic::rectangle_size:
+            return {
+                Field{Semantic::width, "Width"},
+                Field{Semantic::height, "Height"},
+            };
+        }
+    }
+
+    if (const auto value =
+            target_->cadInputSemanticValueRequest()) {
+        switch (value->semantic) {
+        case CadInputValueRequestSemantic::circle_size:
+            return {
+                target_->cadInputSemanticCircleSizeMode() ==
+                        CircleSizeInputMode::radius
+                    ? Field{Semantic::radius, "Radius"}
+                    : Field{Semantic::diameter, "Diameter"},
+            };
+        case CadInputValueRequestSemantic::arc_radius:
+            return {
+                Field{Semantic::radius, "Radius"}};
+        case CadInputValueRequestSemantic::rotate_angle:
+            return {
+                Field{Semantic::angle, "Angle"}};
+        case CadInputValueRequestSemantic::scale_factor:
+            return {
+                Field{Semantic::factor, "Factor"}};
+        case CadInputValueRequestSemantic::mirror_axis_angle:
+            return {
+                Field{Semantic::axis_angle, "Axis Angle"}};
+        }
+    }
+
+    const auto point =
+        target_->cadInputSemanticPointRequest();
+    if (!point) {
+        return {};
+    }
+
+    if (!point->base) {
+        return {
+            Field{Semantic::u, "U"},
+            Field{Semantic::v, "V"},
+        };
+    }
+
+    return {
+        Field{Semantic::distance, "Distance"},
+        Field{Semantic::angle, "Angle"},
+        Field{Semantic::delta_u, "dU"},
+        Field{Semantic::delta_v, "dV"},
+    };
+}
+
 CadInputSubmitResult
 SketchCadInputSemanticEndpoint::submit(
     std::string_view text) {

@@ -110,6 +110,9 @@ public:
         std::string_view text,
         application::CadInputContextGeneration
             expected_context_generation) override;
+    [[nodiscard]] std::vector<
+        application::CadDynamicInputField>
+    cadDynamicInputFields() const override;
 
 protected:
     bool eventFilter(QObject* watched, QEvent* event) override;

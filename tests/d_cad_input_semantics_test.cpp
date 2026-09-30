@@ -47,6 +47,9 @@ public:
     bool pair_result{true};
     std::optional<application::CircleSizeInputMode>
         circle_size_mode;
+    application::CircleSizeInputMode
+        current_circle_size_mode{
+            application::CircleSizeInputMode::diameter};
     bool circle_size_mode_result{true};
     std::optional<application::ProfileCadInputCommand>
         profile_command;
@@ -86,7 +89,12 @@ public:
     bool submitCadInputSemanticCircleSizeMode(
         application::CircleSizeInputMode mode) override {
         circle_size_mode = mode;
+        current_circle_size_mode = mode;
         return circle_size_mode_result;
+    }
+    application::CircleSizeInputMode
+    cadInputSemanticCircleSizeMode() const noexcept override {
+        return current_circle_size_mode;
     }
     bool submitCadInputSemanticDirectDistance(double distance) override {
         submitted_distance = distance;
@@ -122,6 +130,96 @@ int main() {
     Target target;
     application::SketchCadInputSemanticEndpoint dot{
         target, application::CadInputNumberFormat{"."}};
+
+    CHECK(dot.dynamicInputFields().empty());
+
+    target.request = sketch::PointRequest{
+        std::nullopt,
+        sketch::Point2{1.0, 2.0},
+        false,
+        true,
+        false,
+        false};
+    auto fields = dot.dynamicInputFields();
+    CHECK(fields.size() == 2U);
+    CHECK(
+        fields[0].semantic ==
+        application::CadDynamicInputFieldSemantic::u);
+    CHECK(fields[0].label == "U");
+    CHECK(
+        fields[1].semantic ==
+        application::CadDynamicInputFieldSemantic::v);
+    CHECK(fields[1].label == "V");
+
+    target.request = sketch::PointRequest{
+        sketch::Point2{0.0, 0.0},
+        sketch::Point2{3.0, 4.0},
+        true,
+        true,
+        true,
+        true};
+    fields = dot.dynamicInputFields();
+    CHECK(fields.size() == 4U);
+    CHECK(fields[0].label == "Distance");
+    CHECK(fields[1].label == "Angle");
+    CHECK(fields[2].label == "dU");
+    CHECK(fields[3].label == "dV");
+
+    target.pair_request =
+        application::CadInputPairRequest{
+            application::CadInputPairRequestSemantic::
+                rectangle_size,
+            application::CadQuantityDimension::length,
+            application::CadQuantityDimension::length,
+            true};
+    fields = dot.dynamicInputFields();
+    CHECK(fields.size() == 2U);
+    CHECK(fields[0].label == "Width");
+    CHECK(fields[1].label == "Height");
+    target.pair_request.reset();
+
+    target.value_request =
+        application::CadInputValueRequest{
+            application::CadInputValueRequestSemantic::
+                arc_radius,
+            application::CadQuantityDimension::length,
+            true};
+    fields = dot.dynamicInputFields();
+    CHECK(fields.size() == 1U);
+    CHECK(fields[0].label == "Radius");
+
+    target.value_request->semantic =
+        application::CadInputValueRequestSemantic::
+            circle_size;
+    target.current_circle_size_mode =
+        application::CircleSizeInputMode::diameter;
+    fields = dot.dynamicInputFields();
+    CHECK(fields.size() == 1U);
+    CHECK(fields[0].label == "Diameter");
+    target.current_circle_size_mode =
+        application::CircleSizeInputMode::radius;
+    fields = dot.dynamicInputFields();
+    CHECK(fields.size() == 1U);
+    CHECK(fields[0].label == "Radius");
+
+    target.value_request->semantic =
+        application::CadInputValueRequestSemantic::
+            rotate_angle;
+    fields = dot.dynamicInputFields();
+    CHECK(fields[0].label == "Angle");
+    target.value_request->semantic =
+        application::CadInputValueRequestSemantic::
+            scale_factor;
+    fields = dot.dynamicInputFields();
+    CHECK(fields[0].label == "Factor");
+    target.value_request->semantic =
+        application::CadInputValueRequestSemantic::
+            mirror_axis_angle;
+    fields = dot.dynamicInputFields();
+    CHECK(fields[0].label == "Axis Angle");
+
+    target.value_request.reset();
+    target.request.reset();
 
     auto result = dot.submit("  line  ");
     CHECK(result.accepted);
