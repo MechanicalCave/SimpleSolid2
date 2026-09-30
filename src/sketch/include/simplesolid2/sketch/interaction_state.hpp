@@ -376,6 +376,9 @@ public:
     resolvePointerInput(Point2 raw) noexcept;
 
     [[nodiscard]] std::optional<ResolvedSketchInput>
+    resolvedPointRequestCandidate() const noexcept;
+
+    [[nodiscard]] std::optional<ResolvedSketchInput>
     resolveExplicitPoint(
         ExplicitPointInput input) const noexcept;
 

@@ -852,6 +852,29 @@ int main(int argc, char* argv[]) {
         1.0,
         20.0,
         1.0);
+
+    auto dyn_snapshots =
+        semantic_input.dynamicInputFieldSnapshots();
+    CHECK(dyn_snapshots.size() == 4U);
+    CHECK(
+        dyn_snapshots[0].value->state ==
+        application::CadDynamicInputValueState::free);
+    CHECK(near(
+        dyn_snapshots[0].value->canonical_value,
+        std::sqrt(401.0)));
+    CHECK(
+        dyn_snapshots[1].value->state ==
+        application::CadDynamicInputValueState::assisted);
+    CHECK(near(
+        dyn_snapshots[1].value->canonical_value,
+        0.0));
+    CHECK(
+        dyn_snapshots[2].value->state ==
+        application::CadDynamicInputValueState::assisted);
+    CHECK(
+        dyn_snapshots[3].value->state ==
+        application::CadDynamicInputValueState::assisted);
+
     CHECK(interaction.submitDirectDistance(100.0));
     hosted = session.document().findSketch(sketch_id);
     CHECK(hosted != nullptr);
@@ -903,6 +926,23 @@ int main(int argc, char* argv[]) {
             1U,
             "20");
     CHECK(dyn_lock.accepted);
+
+    dyn_snapshots =
+        semantic_input.dynamicInputFieldSnapshots();
+    CHECK(dyn_snapshots.size() == 2U);
+    CHECK(
+        dyn_snapshots[0].value->state ==
+        application::CadDynamicInputValueState::locked);
+    CHECK(near(
+        dyn_snapshots[0].value->canonical_value,
+        10.0));
+    CHECK(
+        dyn_snapshots[1].value->state ==
+        application::CadDynamicInputValueState::locked);
+    CHECK(near(
+        dyn_snapshots[1].value->canonical_value,
+        20.0));
+
     click(
         interaction,
         sketch_id,
@@ -924,6 +964,23 @@ int main(int argc, char* argv[]) {
             1U,
             "90");
     CHECK(dyn_lock.accepted);
+
+    dyn_snapshots =
+        semantic_input.dynamicInputFieldSnapshots();
+    CHECK(dyn_snapshots.size() == 4U);
+    CHECK(
+        dyn_snapshots[0].value->state ==
+        application::CadDynamicInputValueState::locked);
+    CHECK(near(
+        dyn_snapshots[0].value->canonical_value,
+        100.0));
+    CHECK(
+        dyn_snapshots[1].value->state ==
+        application::CadDynamicInputValueState::locked);
+    CHECK(near(
+        dyn_snapshots[1].value->canonical_value,
+        std::numbers::pi_v<double> / 2.0));
+
     click(
         interaction,
         sketch_id,

@@ -807,12 +807,25 @@ SketchInteractionState::resolveExplicitPoint(
 std::optional<ResolvedSketchInput>
 SketchInteractionState::resolvePointerInput(
     Point2 raw) noexcept {
-    const auto request = activePointRequest();
-    if (!raw.finite() || !request) {
+    if (!raw.finite() || !activePointRequest()) {
         return std::nullopt;
     }
 
     point_pointer_candidate_ = raw;
+    return resolvedPointRequestCandidate();
+}
+
+std::optional<ResolvedSketchInput>
+SketchInteractionState::
+resolvedPointRequestCandidate() const noexcept {
+    const auto request = activePointRequest();
+    if (!request ||
+        !request->pointer_candidate) {
+        return std::nullopt;
+    }
+
+    const auto raw =
+        *request->pointer_candidate;
     Point2 resolved = raw;
 
     if (!request->base) {

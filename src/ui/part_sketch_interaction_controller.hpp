@@ -112,6 +112,11 @@ public:
         application::CadDynamicInputFieldSemantic semantic,
         double value) override;
     [[nodiscard]] std::optional<
+        application::CadDynamicInputFieldValue>
+    cadInputSemanticDynamicFieldValue(
+        application::CadDynamicInputFieldSemantic semantic)
+        const noexcept override;
+    [[nodiscard]] std::optional<
         application::CadInputPairRequest>
     cadInputSemanticPairRequest()
         const noexcept override;

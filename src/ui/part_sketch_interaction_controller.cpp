@@ -912,6 +912,165 @@ lockCadInputSemanticPointField(
     return true;
 }
 
+std::optional<
+    application::CadDynamicInputFieldValue>
+PartSketchInteractionController::
+cadInputSemanticDynamicFieldValue(
+    application::CadDynamicInputFieldSemantic semantic)
+    const noexcept {
+    if (!active() || profile_session_) {
+        return std::nullopt;
+    }
+
+    const auto request =
+        interaction_.activePointRequest();
+    if (!request) {
+        return std::nullopt;
+    }
+
+    using Value =
+        application::CadDynamicInputFieldValue;
+    using State =
+        application::CadDynamicInputValueState;
+    const auto& locks =
+        interaction_.pointFieldLocks();
+    const auto resolved =
+        interaction_.resolvedPointRequestCandidate();
+
+    if (!request->base) {
+        switch (semantic) {
+        case application::CadDynamicInputFieldSemantic::u:
+            if (locks.u) {
+                return Value{
+                    semantic,
+                    *locks.u,
+                    State::locked};
+            }
+            return resolved
+                ? std::optional<Value>{
+                      Value{
+                          semantic,
+                          resolved->position.u,
+                          State::free}}
+                : std::nullopt;
+
+        case application::CadDynamicInputFieldSemantic::v:
+            if (locks.v) {
+                return Value{
+                    semantic,
+                    *locks.v,
+                    State::locked};
+            }
+            return resolved
+                ? std::optional<Value>{
+                      Value{
+                          semantic,
+                          resolved->position.v,
+                          State::free}}
+                : std::nullopt;
+
+        default:
+            return std::nullopt;
+        }
+    }
+
+    const auto base = *request->base;
+    const auto assisted_state =
+        polar_capture_.captured_angle
+            ? State::assisted
+            : State::free;
+
+    switch (semantic) {
+    case application::CadDynamicInputFieldSemantic::distance:
+        if (locks.distance) {
+            return Value{
+                semantic,
+                *locks.distance,
+                State::locked};
+        }
+        if (!resolved) {
+            return std::nullopt;
+        }
+        return Value{
+            semantic,
+            std::hypot(
+                resolved->position.u - base.u,
+                resolved->position.v - base.v),
+            State::free};
+
+    case application::CadDynamicInputFieldSemantic::angle:
+        if (locks.angle) {
+            return Value{
+                semantic,
+                *locks.angle,
+                State::locked};
+        }
+        if (polar_capture_.captured_angle) {
+            return Value{
+                semantic,
+                *polar_capture_.captured_angle,
+                State::assisted};
+        }
+        if (!resolved) {
+            return std::nullopt;
+        } else {
+            const double du =
+                resolved->position.u - base.u;
+            const double dv =
+                resolved->position.v - base.v;
+            if (du == 0.0 && dv == 0.0) {
+                return std::nullopt;
+            }
+            return Value{
+                semantic,
+                std::atan2(dv, du),
+                State::free};
+        }
+
+    case application::CadDynamicInputFieldSemantic::delta_u:
+        if (locks.delta_u) {
+            return Value{
+                semantic,
+                *locks.delta_u,
+                State::locked};
+        }
+        return resolved
+            ? std::optional<Value>{
+                  Value{
+                      semantic,
+                      resolved->position.u - base.u,
+                      assisted_state}}
+            : std::nullopt;
+
+    case application::CadDynamicInputFieldSemantic::delta_v:
+        if (locks.delta_v) {
+            return Value{
+                semantic,
+                *locks.delta_v,
+                State::locked};
+        }
+        return resolved
+            ? std::optional<Value>{
+                  Value{
+                      semantic,
+                      resolved->position.v - base.v,
+                      assisted_state}}
+            : std::nullopt;
+
+    case application::CadDynamicInputFieldSemantic::u:
+    case application::CadDynamicInputFieldSemantic::v:
+    case application::CadDynamicInputFieldSemantic::width:
+    case application::CadDynamicInputFieldSemantic::height:
+    case application::CadDynamicInputFieldSemantic::diameter:
+    case application::CadDynamicInputFieldSemantic::radius:
+    case application::CadDynamicInputFieldSemantic::factor:
+    case application::CadDynamicInputFieldSemantic::axis_angle:
+        return std::nullopt;
+    }
+
+    return std::nullopt;
+}
+
 std::optional<application::CadInputPairRequest>
 PartSketchInteractionController::
 cadInputSemanticPairRequest() const noexcept {
