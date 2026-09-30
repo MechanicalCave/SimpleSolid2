@@ -4,6 +4,7 @@
 
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <QApplication>
 #include <QTreeWidget>
@@ -886,6 +887,77 @@ int main(int argc, char* argv[]) {
     CHECK(near(model_state.lines.back().start.v, 0.0));
     CHECK(near(model_state.lines.back().end.u, 100.0));
     CHECK(near(model_state.lines.back().end.v, 0.0));
+
+    // Arc Start -> End uses the same Polar-resolved point as a visible
+    // helper chord before the End point is accepted.
+    interaction.activateArc();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            10.0,
+            10.0}));
+    movePointer(
+        interaction,
+        sketch_id,
+        11.0,
+        30.0,
+        11.0,
+        30.0);
+    CHECK(viewport.preview_scene_.lines.size() == 1U);
+    CHECK(near(viewport.preview_scene_.lines[0].start.x, 10.0));
+    CHECK(near(viewport.preview_scene_.lines[0].start.y, 10.0));
+    CHECK(viewport.preview_scene_.lines[0].end.x == 10.0);
+    CHECK(viewport.preview_scene_.lines[0].end.y > 30.0);
+    CHECK(interaction.escape());
+
+    // Polar + Direct Distance must be able to author an exactly closed
+    // cardinal loop. Region/Profile topology is exact by design, so R10
+    // must not manufacture sub-floating-point gaps at 90-degree tracks.
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            0.0,
+            0.0}));
+    const auto closed_loop_first_line =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+
+    movePointer(interaction, sketch_id, 20.0, 1.0, 20.0, 1.0);
+    CHECK(interaction.submitDirectDistance(100.0));
+    movePointer(interaction, sketch_id, 101.0, 20.0, 101.0, 20.0);
+    CHECK(interaction.submitDirectDistance(50.0));
+    movePointer(interaction, sketch_id, 80.0, 49.0, 80.0, 49.0);
+    CHECK(interaction.submitDirectDistance(100.0));
+    movePointer(interaction, sketch_id, 1.0, 30.0, 1.0, 30.0);
+    CHECK(interaction.submitDirectDistance(50.0));
+
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        closed_loop_first_line + 4U);
+    const auto& closing_line = model_state.lines.back();
+    CHECK(closing_line.end.u == 0.0);
+    CHECK(closing_line.end.v == 0.0);
+
+    sketch::SketchModel exact_closed_loop;
+    for (std::size_t index = closed_loop_first_line;
+         index < model_state.lines.size();
+         ++index) {
+        static_cast<void>(
+            exact_closed_loop.addLine(
+                model_state.lines[index].start,
+                model_state.lines[index].end));
+    }
+    const auto closed_analysis =
+        sketch::analyzeRegions(exact_closed_loop);
+    CHECK(closed_analysis.regions.size() == 1U);
+    CHECK(closed_analysis.diagnostics.empty());
+    CHECK(interaction.escape());
 
     // Relative without an explicit semantic reference never falls back
     // to Absolute. The same pointer remains raw.
