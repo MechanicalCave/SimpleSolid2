@@ -3026,6 +3026,32 @@ CadWorkbench::lockCadDynamicInputField(
 }
 
 application::CadInputSubmitResult
+CadWorkbench::submitCadDynamicInputRequest(
+    application::CadInputContextGeneration
+        expected_context_generation) {
+    if (expected_context_generation !=
+        cadInputContextGeneration()) {
+        return {
+            false,
+            "CAD input semantic context is stale."};
+    }
+    if (!sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->active()) {
+        return {
+            false,
+            "No active CAD command context."};
+    }
+
+    if (!sketch_interaction_controller_->
+            submitCadInputDynamicRequest()) {
+        return {
+            false,
+            "Dynamic Input request is not yet fully placeable."};
+    }
+    return {true, {}};
+}
+
+application::CadInputSubmitResult
 CadWorkbench::submitCadInput(
     std::string_view text,
     application::CadInputContextGeneration
