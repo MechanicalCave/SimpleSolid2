@@ -36,6 +36,11 @@ class PartSketchInteractionController;
 class PartViewportController;
 class ViewCubeWidget;
 
+struct CadDynamicInputUiState final {
+    std::string buffer;
+    std::size_t focused_index{};
+};
+
 class CadWorkbench final : public QWidget,
                            public application::ICadInputEndpoint {
 public:
@@ -101,6 +106,16 @@ public:
             std::move(updater);
     }
     void refreshCadInteractionSettingsUi();
+
+    using CadDynamicInputUiStateProvider =
+        std::function<CadDynamicInputUiState()>;
+    void setCadDynamicInputUiStateProvider(
+        CadDynamicInputUiStateProvider provider) {
+        cad_dynamic_input_ui_state_provider_ =
+            std::move(provider);
+        refreshCadDynamicInputOverlay();
+    }
+    void refreshCadDynamicInputOverlay();
 
     [[nodiscard]] std::string cadInputPrompt() const override;
     [[nodiscard]] application::CadInputContextGeneration
@@ -218,6 +233,10 @@ private:
         cad_interaction_settings_provider_;
     CadInteractionSettingsUpdater
         cad_interaction_settings_updater_;
+    CadDynamicInputUiStateProvider
+        cad_dynamic_input_ui_state_provider_;
+    std::optional<viewer::ViewportPoint2>
+        dynamic_input_anchor_;
 
     CadWorkbenchShell* shell_{};
     PartDocumentTreeController* tree_controller_{};
