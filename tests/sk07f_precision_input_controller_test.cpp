@@ -1092,13 +1092,7 @@ int main(int argc, char* argv[]) {
         dyn_snapshots[1].value->canonical_value,
         std::numbers::pi_v<double> / 2.0));
 
-    click(
-        interaction,
-        sketch_id,
-        310.0,
-        310.0,
-        999.0,
-        999.0);
+    CHECK(interaction.submitCadInputDynamicRequest());
 
     hosted = session.document().findSketch(sketch_id);
     CHECK(hosted != nullptr);
