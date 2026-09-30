@@ -332,6 +332,10 @@ CadInputSession::diagnostic() const noexcept {
     return diagnostic_;
 }
 
+// R10 ownership invariant: CadInputSession owns the one live text buffer,
+// application-session aid configuration and field focus only. Field meaning
+// and request-local numeric locks remain owned by the attached semantic
+// endpoint/PointRequest; Dynamic Input never becomes a second CAD state path.
 std::vector<CadDynamicInputField>
 CadInputSession::dynamicInputFields() const {
     if (endpoint_ == nullptr ||
