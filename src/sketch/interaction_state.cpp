@@ -573,6 +573,15 @@ SketchInteractionState::activePointRequest() const noexcept {
             true,
             true,
             true};
+        if (manipulation_->mode ==
+                DirectEditMode::rotate &&
+            manipulation_->rotate_reference_point) {
+            request.polar_relative_reference =
+                direction(
+                    manipulation_->pivot,
+                    *manipulation_->
+                        rotate_reference_point);
+        }
         return request.valid()
             ? std::optional<PointRequest>{request}
             : std::nullopt;
@@ -590,6 +599,10 @@ SketchInteractionState::activePointRequest() const noexcept {
             true,
             based,
             based};
+        if (based && line_relative_reference_) {
+            request.polar_relative_reference =
+                line_relative_reference_;
+        }
         return request.valid()
             ? std::optional<PointRequest>{request}
             : std::nullopt;
@@ -694,6 +707,19 @@ SketchInteractionState::activePointRequest() const noexcept {
         break;
     case CommonTransformStage::select_objects:
         return std::nullopt;
+    }
+
+    if (transform_session_->stage ==
+            CommonTransformStage::await_destination &&
+        (tool_ == SketchTool::rotate ||
+         tool_ == SketchTool::scale) &&
+        transform_session_->base_point &&
+        transform_session_->reference_point) {
+        request.polar_relative_reference =
+            direction(
+                *transform_session_->base_point,
+                *transform_session_->
+                    reference_point);
     }
 
     return request.valid()
@@ -1833,6 +1859,10 @@ bool SketchInteractionState::resolveLineRequest(
     pending_line_request_.reset();
 
     if (committed) {
+        line_relative_reference_ =
+            direction(
+                resolved.start,
+                resolved.end);
         line_anchor_ = resolved.end;
         point_pointer_candidate_ = resolved.end;
     }
@@ -2912,6 +2942,7 @@ void SketchInteractionState::resetLineStage()
     line_stage_ =
         LineStage::await_first_point;
     line_anchor_.reset();
+    line_relative_reference_.reset();
     pending_line_request_.reset();
     point_pointer_candidate_.reset();
 }

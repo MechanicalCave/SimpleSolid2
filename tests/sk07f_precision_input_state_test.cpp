@@ -482,6 +482,87 @@ int main() {
         CHECK(*mirrored == *expected_mirrored);
     }
 
+    // Polar Relative uses only semantic references explicitly owned by
+    // the active request. Continuous Line exposes the previous committed
+    // segment direction; Rotate exposes its accepted reference vector.
+    {
+        sketch::SketchInteractionState polar_line;
+        polar_line.activateLine();
+        CHECK(
+            polar_line.acceptLinePoint(
+                {0.0, 0.0}).outcome ==
+            sketch::LinePointOutcome::
+                first_point_accepted);
+        const auto segment =
+            polar_line.acceptLinePoint(
+                {3.0, 4.0});
+        CHECK(
+            segment.outcome ==
+            sketch::LinePointOutcome::
+                segment_requested);
+        CHECK(polar_line.resolveLineRequest(true));
+        const auto request =
+            polar_line.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->polar_relative_reference
+                .has_value());
+        CHECK(near(
+            *request->polar_relative_reference,
+            std::atan2(4.0, 3.0)));
+    }
+
+    {
+        sketch::SketchInteractionState polar_rotate;
+        CHECK(polar_rotate.addSelection(line_id));
+        CHECK(polar_rotate.activateRotate(model));
+        CHECK(
+            polar_rotate.acceptTransformPoint(
+                sketch::ResolvedSketchInput{
+                    {0.0, 0.0}}));
+        CHECK(
+            polar_rotate.acceptTransformPoint(
+                sketch::ResolvedSketchInput{
+                    {0.0, 2.0}}));
+        const auto request =
+            polar_rotate.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->polar_relative_reference
+                .has_value());
+        CHECK(near(
+            *request->polar_relative_reference,
+            std::numbers::pi_v<double> / 2.0));
+    }
+
+    {
+        sketch::SketchInteractionState polar_grip;
+        CHECK(polar_grip.addSelection(line_id));
+        CHECK(
+            polar_grip.beginDirectManipulation(
+                model,
+                {line_id,
+                 sketch::SketchGripRole::line_start}));
+        CHECK(
+            polar_grip.updateDirectManipulation(
+                sketch::ResolvedSketchInput{
+                    {1.0, 0.0}}));
+        CHECK(polar_grip.cycleDirectEditMode());
+        CHECK(polar_grip.cycleDirectEditMode());
+        CHECK(
+            polar_grip.directEditMode() ==
+            sketch::DirectEditMode::rotate);
+        const auto request =
+            polar_grip.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->polar_relative_reference
+                .has_value());
+        CHECK(near(
+            *request->polar_relative_reference,
+            0.0));
+    }
+
     std::cout << "SK-07F precision input state PASS\n";
     return EXIT_SUCCESS;
 }

@@ -285,6 +285,7 @@ struct PointRequest final {
     bool absolute_cartesian_enabled{};
     bool relative_cartesian_enabled{};
     bool relative_polar_enabled{};
+    std::optional<double> polar_relative_reference;
 
     [[nodiscard]] bool valid() const noexcept {
         const bool requires_base =
@@ -294,6 +295,9 @@ struct PointRequest final {
         return (!base || base->finite()) &&
                (!pointer_candidate ||
                 pointer_candidate->finite()) &&
+               (!polar_relative_reference ||
+                std::isfinite(
+                    *polar_relative_reference)) &&
                (!requires_base || base.has_value());
     }
 
@@ -640,6 +644,8 @@ private:
     LineStage line_stage_{
         LineStage::await_first_point};
     std::optional<Point2> line_anchor_;
+    std::optional<double>
+        line_relative_reference_;
     std::optional<LineSegmentIntent>
         pending_line_request_;
 
