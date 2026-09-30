@@ -79,6 +79,7 @@ public:
         return cad_input_context_generation_;
     }
     [[nodiscard]] bool submitDirectDistance(double distance);
+    [[nodiscard]] bool submitCadInputDynamicRequest();
     [[nodiscard]] bool submitExplicitPoint(
         sketch::ExplicitPointInput input);
     [[nodiscard]] application::CircleSizeInputMode
