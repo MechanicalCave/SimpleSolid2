@@ -1005,6 +1005,11 @@ int main(int argc, char* argv[]) {
     interaction.activateCircle();
     semantic_result = semantic_input.submit("0;0");
     CHECK(semantic_result.accepted);
+    semantic_result = semantic_input.submit("D");
+    CHECK(semantic_result.accepted);
+    CHECK(
+        interaction.circleSizeInputMode() ==
+        application::CircleSizeInputMode::diameter);
     dyn_lock =
         semantic_input.lockDynamicInputField(
             0U,
