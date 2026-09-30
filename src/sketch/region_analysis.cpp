@@ -923,6 +923,44 @@ struct RawRelation final {
         std::move(intersections)};
 }
 
+[[nodiscard]] RawRelation exactLineArcEndpointFallback(
+    const CurveView& line,
+    const CurveView& arc) {
+    std::vector<RawIntersection> intersections;
+    const auto arc_start = arcEndpoint(arc, false);
+    const auto arc_end = arcEndpoint(arc, true);
+    if (!arc_start || !arc_end) {
+        return {};
+    }
+
+    const auto append =
+        [&intersections](
+            Point2 line_point,
+            double line_parameter,
+            Point2 arc_point,
+            double arc_parameter) {
+            if (line_point == arc_point) {
+                intersections.push_back(
+                    RawIntersection{
+                        line_point,
+                        line_parameter,
+                        arc_parameter,
+                        false});
+            }
+        };
+
+    append(line.first, 0.0, *arc_start, 0.0);
+    append(line.first, 0.0, *arc_end, 1.0);
+    append(line.second, 1.0, *arc_start, 0.0);
+    append(line.second, 1.0, *arc_end, 1.0);
+
+    return RawRelation{
+        intersections.empty()
+            ? CurveRelationStatus::disjoint
+            : CurveRelationStatus::discrete,
+        std::move(intersections)};
+}
+
 [[nodiscard]] RawRelation filterSecondArc(
     RawRelation relation,
     const CurveView& arc) {
@@ -1014,8 +1052,21 @@ struct RawRelation final {
         second.kind == CurveKind::arc) {
         CurveView support = second;
         support.kind = CurveKind::circle;
+        auto support_relation =
+            lineCircle(first, support);
+        if (support_relation.status ==
+            CurveRelationStatus::disjoint) {
+            auto exact_endpoint =
+                exactLineArcEndpointFallback(
+                    first,
+                    second);
+            if (exact_endpoint.status ==
+                CurveRelationStatus::discrete) {
+                return exact_endpoint;
+            }
+        }
         return filterSecondArc(
-            lineCircle(first, support),
+            std::move(support_relation),
             second);
     }
 
