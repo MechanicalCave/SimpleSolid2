@@ -132,11 +132,6 @@ profileCommand(std::string_view token) noexcept {
             ProfileCadInputCommandKind::subtract_area,
             std::nullopt};
     }
-    if (token == "FIND") {
-        return ProfileCadInputCommand{
-            ProfileCadInputCommandKind::find_all_regions,
-            std::nullopt};
-    }
     if (token == "FINISH") {
         return ProfileCadInputCommand{
             ProfileCadInputCommandKind::finish,
