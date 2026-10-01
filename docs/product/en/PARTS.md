@@ -290,6 +290,45 @@ Creation tools preserve pre-existing selection but hide/deactivate grips while a
 
 Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
 
+<!-- section-id: product.parts.structural-editing -->
+## Structural editing — Trim and Extend
+
+During Sketch Edit, **Modify** provides **Trim**, **Extend** and **Extend Both**. You can also type `TRIM`, `EXTEND` or `EXTEND BOTH` in Command Line.
+
+### Trim
+
+Select one or more finite Line/Arc/Circle entities to use as boundaries, then start **Trim** and click the target fragment to remove. Regular and Construction geometry can both be targets and boundaries.
+
+Trim is intentionally one-result only:
+
+- a terminal span of a **Line** may be removed, leaving one Line;
+- a terminal span of an **Arc** may be removed, leaving one Arc;
+- a **Circle** may be trimmed when the selected finite boundaries provide at least two distinct exact cut locations. The clicked local Circle span is removed and the connected complement becomes one Arc.
+
+A middle Line/Arc removal that would leave two pieces is rejected. Split and Join are not part of this tool set. Tangent Circle Trim with only one cut, coincident/overlapping ambiguity or another result that cannot be represented as one supported primitive is rejected without changing the Sketch.
+
+Circle→Arc is a real identity change: the old Circle is retired and the new Arc receives a fresh identity. Existing Profiles are **not** automatically rebound to that new Arc. A Profile that depended on the retired Circle can become Invalid until Undo restores the original geometry.
+
+### Extend
+
+Select one or more finite Line/Arc/Circle boundaries, start **Extend**, then click near the end of the target Line or Arc that should continue. The selected end extends to the nearest valid exact intersection in that continuation direction.
+
+Standard Extend uses only the **finite authored boundary geometry**. It does not use a boundary's invisible virtual continuation. Circle is not an Extend target.
+
+### Extend Both
+
+**Extend Both** is only for exactly two Lines. Start the tool, choose the first Line and then the second. When both finite Lines need extension, their infinite supporting lines are used to find one common virtual intersection and both Lines extend to it atomically.
+
+Parallel or coincident Lines, cases where the intersection is already on either finite Line, and cases where only one Line needs extension are rejected. Use ordinary Extend when only one target needs to reach an existing finite boundary.
+
+### Preview, history and failure behavior
+
+Before commit, the viewport previews the proposed removed span or added continuation. The preview is runtime-only and is not selectable geometry.
+
+Each accepted Trim or Extend creates one Undo step. Extend Both changes both Lines in one atomic Undo step. **Esc** cancels only the transient tool state; edits already committed remain normal history. Undo/Redo preserves the accepted entity identities, and Save/Close/Reopen preserves the resulting geometry and identities.
+
+Structural truth is exact Sketch geometry. Object Snap, Tracking, Polar and Dynamic Input may help acquire input, but they do not create constraints, weld small gaps or make a near miss count as an intersection. Ambiguous, unsupported, stale or non-finite cases fail closed without a partial edit.
+
 <!-- section-id: product.parts.object-snap -->
 ## Object Snap, Tracking and temporary overrides
 

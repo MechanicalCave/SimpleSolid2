@@ -191,6 +191,37 @@ Accepted non-no-op edit transforms/reshape commit through the host semantic geom
 
 Esc cancels transient state and preserves the affected/source selection; already committed repeated copies remain. Undo/Redo cancels an active transient common transform/COPY/direct manipulation, including Grip Copy, before global history. PointRequest, pointer candidate and numeric resolution state are runtime-only and are cleared with their owning stage/session.
 
+<!-- section-id: internal.shared-2d.structural-editing -->
+## Structural Trim and Extend
+
+Shared 2D owns the provider-neutral structural-edit evaluator for the current authored `Line`, `Arc` and `Circle` vocabulary. The evaluator consumes semantic `EntityId` values, Sketch-local U/V geometry and explicit finite boundary identities; it has no dependency on Viewer/provider tokens, screen pixels, OSNAP aperture or Part persistence.
+
+`Trim` removes exactly one connected target fragment and is accepted only when one authored result remains. Terminal Line and Arc trims update the same primitive and preserve `EntityId` plus Regular/Construction role. A middle Line/Arc trim that would leave two authored pieces is not an R12 operation and fails unchanged. Circle Trim requires at least two distinct exact finite-boundary cut locations. Removing the picked local Circle span authors the connected complement as one Arc, retires the Circle identity and allocates one fresh monotonic non-reused Arc `EntityId` with the source role.
+
+Standard `Extend` supports Line and Arc targets only. The chosen endpoint continues to the nearest exact positive intersection with explicit **finite authored** Line/Arc/Circle boundary geometry. A hit that exists only on a boundary's virtual continuation is ineligible. Line extension preserves the Line identity and opposite endpoint; Arc extension preserves identity, center/radius, role and signed orientation. Circle is not an Extend target.
+
+`Extend Both` is a separate two-Line operation. It may use the two infinite supporting lines only to compute one unique virtual intersection, and is applicable only when both finite Lines need extension to that point. Parallel, coincident, already-containing and one-sided cases fail closed. Both Line endpoint mutations commit atomically and preserve both identities and independent roles.
+
+Coincident/overlapping ambiguity, non-finite geometry, stale identity/revision, unsupported output cardinality and equal-nearest ambiguity fail without authored mutation. The UI's hover target, endpoint choice, preview and boundary selection are runtime-only. Trim previews the fragment to remove; Extend previews the added continuation; Extend Both previews both continuations. These visuals are not selectable CAD identity.
+
+The application/Part path remains authoritative for durable mutation:
+
+```text
+UI / Command Line
+→ semantic structural request
+→ Shared-2D evaluation
+→ revision-bound Part command/transaction
+→ PartDocument commit
+→ derived Profile evaluation
+→ presentation
+```
+
+A successful single Trim or Extend is one history entry. Extend Both updates both Lines in one transaction and one history entry. Undo/Redo restores the exact committed old/new identities, including the original Circle versus its fresh replacement Arc.
+
+Profile intent is never rebound automatically. Same-kind edits can keep a Profile valid when all referenced identities/anchors still resolve. Circle→Arc replacement leaves the existing ProfileId and RegionIntent unchanged; if that intent referenced the retired Circle, derived evaluation becomes invalid/missing-source. Undo can restore the old Circle and make the unchanged intent valid again.
+
+No structural operation history, picked fragment, preview, virtual guide or genealogy is persisted. Existing Sketch persistence stores only the resulting ordinary geometry, roles, EntityIds and `next_entity_id` high-water; Save/Reopen therefore preserves a Circle→Arc replacement identity without introducing a new authored schema.
+
 <!-- section-id: internal.shared-2d.measurement -->
 ## Read-only whole-entity measurement
 
@@ -266,4 +297,3 @@ Key registered tests include:
 - `wb02.cad_input_session`, `wb02.cad_input_boundaries`, `wb02.global_cad_input_ui` plus the Workbench Sketch-host regression — keyboard-first transport, focus arbitration, stale-context rejection and real Workbench integration.
 
 Work-item completion uses the repository's exact-head Windows gate; current-state documentation does not preserve obsolete milestone gate counts.
-
