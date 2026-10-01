@@ -1,8 +1,8 @@
 # CI-04 — Build Graph & Warm Verification
 
-**Status:** PROPOSED — INACTIVE  
+**Status:** ACCEPTED — ACTIVE  
 **Owner proposal acceptance:** 2026-09-30  
-**Activation:** implementation requires a separate explicit Owner activation  
+**Owner activation:** 2026-10-01  
 **Decision class:** D1 repository workflow / build implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Related:** CI-01, CI-02, CI-03, R11 Object Snap / Tracking / Inference proposal
@@ -421,13 +421,8 @@ No CAD/domain source under `src/**` is authorized for semantic mutation by CI-04
 
 ## 24. Activation boundary
 
-This proposal records Owner-reviewed CI-04 semantics only.
+The Owner explicitly activated CI-04 on 2026-10-01.
 
-No CI-04 implementation is active on this proposal branch.
+CI-04 implementation is authorized only within this accepted D1 repository/build contract. R11 remains separately proposal-only/inactive and no CAD/product semantic mutation is authorized by CI-04.
 
-Implementation requires a separate explicit Owner activation. Until then:
-
-- existing build/test behavior remains authoritative;
-- CI-01/CI-02/CI-03 remain unchanged;
-- R11 remains separately proposal-only/inactive;
-- no production or verification-infrastructure mutation is authorized by CI-04.
+Implementation must preserve CI-01/CI-02/CI-03 evidence invariants while proceeding through the staged rollout defined above.
