@@ -1529,6 +1529,93 @@ int main(int argc, char* argv[]) {
     }
 
     {
+        auto staged_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession staged_session{
+            {},
+            std::move(staged_document)};
+        const auto staged_created =
+            staged_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(staged_created.ok() && staged_created.sketch_id);
+        const auto staged_sketch_id =
+            *staged_created.sketch_id;
+        const auto boundary =
+            staged_session.execute(
+                application::AddSketchLineCommand{
+                    staged_sketch_id,
+                    {4.0, -2.0},
+                    {4.0, 2.0}});
+        CHECK(boundary.ok() && boundary.entity_id);
+
+        QTreeWidget staged_tree;
+        ui::PartDocumentTreeController staged_tree_controller{
+            staged_tree};
+        TestViewport staged_viewport;
+        ui::PartViewportController staged_viewport_controller{
+            staged_tree_controller,
+            &staged_viewport};
+        staged_viewport_controller.setDocumentSession(
+            &staged_session);
+        staged_viewport_controller.setSketchEditSketch(
+            staged_sketch_id);
+
+        ui::PartSketchInteractionController staged_interaction{
+            staged_viewport_controller};
+        staged_interaction.begin(
+            staged_session,
+            staged_sketch_id);
+        staged_interaction.clearSelection();
+
+        const auto before_state =
+            staged_session.document().state();
+        const auto before_revision =
+            staged_session.document().revision();
+        const auto before_undo =
+            staged_session.undoDepth();
+
+        CHECK(staged_interaction.activateTrim());
+        CHECK(
+            staged_interaction
+                .structuralBoundarySelectionPending());
+        CHECK(staged_interaction.structuralBoundaries().empty());
+
+        CHECK(staged_viewport.sketch_scene_.lines.size() == 1U);
+        staged_viewport.point_query_ = {
+            true,
+            staged_viewport.sketch_scene_.lines.front().token};
+        staged_interaction.onPointer(
+            pointer(
+                staged_sketch_id,
+                viewer::SpatialPointerPhase::primary_press,
+                40.0, 20.0,
+                4.0, 0.0));
+        CHECK(staged_interaction.selectedCount() == 1U);
+        CHECK(staged_interaction.structuralBoundaries().empty());
+
+        CHECK(
+            staged_interaction
+                .completeStructuralBoundarySelection());
+        CHECK(
+            !staged_interaction
+                 .structuralBoundarySelectionPending());
+        CHECK(
+            staged_interaction.structuralBoundaries().size() ==
+            1U);
+        CHECK(
+            staged_session.document().state() ==
+            before_state);
+        CHECK(
+            staged_session.document().revision() ==
+            before_revision);
+        CHECK(staged_session.undoDepth() == before_undo);
+        staged_interaction.end();
+    }
+
+    {
         auto mutual_document =
             part::PartDocument::create(
                 core::DocumentId::generate());

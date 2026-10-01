@@ -2305,12 +2305,15 @@ bool PartSketchInteractionController::activateTrim() {
         session_ == nullptr ||
         !interaction_.activateTrim(hosted->model)) {
         reportStatus(
-            "TRIM requires one or more selected Line/Arc/Circle boundaries.");
+            "TRIM could not start with the current preselection.");
         return false;
     }
 
     structural_revision_ =
-        session_->document().revision();
+        interaction_.structuralBoundarySelectionPending()
+            ? std::nullopt
+            : std::optional<core::DocumentRevision>{
+                  session_->document().revision()};
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -2323,7 +2326,9 @@ bool PartSketchInteractionController::activateTrim() {
     configureForCurrentTool();
     notifyStateChanged();
     reportStatus(
-        "TRIM active — selected entities are finite boundaries; click the target fragment.");
+        interaction_.structuralBoundarySelectionPending()
+            ? "TRIM active — select finite boundaries; Enter/RMB continues."
+            : "TRIM active — preselected entities are finite boundaries; click the target fragment.");
     return true;
 }
 
@@ -2334,12 +2339,15 @@ bool PartSketchInteractionController::activateExtend() {
         session_ == nullptr ||
         !interaction_.activateExtend(hosted->model)) {
         reportStatus(
-            "EXTEND requires one or more selected Line/Arc/Circle finite boundaries.");
+            "EXTEND could not start with the current preselection.");
         return false;
     }
 
     structural_revision_ =
-        session_->document().revision();
+        interaction_.structuralBoundarySelectionPending()
+            ? std::nullopt
+            : std::optional<core::DocumentRevision>{
+                  session_->document().revision()};
     press_anchor_.reset();
     rectangle_drag_active_ = false;
     manipulation_revision_.reset();
@@ -2352,7 +2360,36 @@ bool PartSketchInteractionController::activateExtend() {
     configureForCurrentTool();
     notifyStateChanged();
     reportStatus(
-        "EXTEND active — selected entities are finite boundaries; click the target end.");
+        interaction_.structuralBoundarySelectionPending()
+            ? "EXTEND active — select finite boundaries; Enter/RMB continues."
+            : "EXTEND active — preselected entities are finite boundaries; click the target end.");
+    return true;
+}
+
+bool PartSketchInteractionController::
+completeStructuralBoundarySelection() {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr ||
+        session_ == nullptr ||
+        !interaction_.completeStructuralBoundarySelection(
+            hosted->model)) {
+        reportStatus(
+            "Select at least one finite Line/Arc/Circle boundary before continuing.");
+        return false;
+    }
+
+    structural_revision_ =
+        session_->document().revision();
+    interaction_.clearHover();
+    viewport_controller_->clearSketchPreview();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    reportStatus(
+        interaction_.tool() == sketch::SketchTool::trim
+            ? "TRIM boundaries accepted — click target fragments."
+            : "EXTEND boundaries accepted — click target ends.");
     return true;
 }
 
@@ -3473,6 +3510,35 @@ handleStructuralEditPointer(
     static_cast<void>(
         interaction_.setHoveredEntity(candidate));
     projectInteraction();
+
+    if ((tool == sketch::SketchTool::trim ||
+         tool == sketch::SketchTool::extend) &&
+        interaction_.structuralBoundarySelectionPending()) {
+        viewport_controller_->clearSketchPreview();
+        if (input.phase ==
+            viewer::SpatialPointerPhase::primary_press) {
+            if (!interaction_.toggleStructuralBoundarySelection(
+                    hosted->model,
+                    candidate)) {
+                reportStatus(
+                    "Structural boundary must be a finite Line, Arc or Circle.");
+                return;
+            }
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus(
+                std::string{
+                    tool == sketch::SketchTool::trim
+                        ? "TRIM"
+                        : "EXTEND"} +
+                " — " +
+                std::to_string(
+                    interaction_.selectedEntities().size()) +
+                " boundary entities selected; Enter/RMB continues.");
+        }
+        return;
+    }
 
     if (tool == sketch::SketchTool::extend_both) {
         const auto first =

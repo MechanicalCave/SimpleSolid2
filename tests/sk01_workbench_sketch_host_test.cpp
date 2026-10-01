@@ -881,9 +881,8 @@ int main(int argc, char* argv[]) {
         viewer::StandardView::front);
     CHECK(viewport->fitAllCount() > 0);
 
-    // R12 structural-edit controls are explicit Modify tools. Trim/Extend
-    // fail closed without a boundary selection; Extend Both may enter its
-    // first-Line acquisition state without authored mutation.
+    // R12 structural-edit controls support tool-first boundary acquisition.
+    // Empty Enter/RMB cannot advance without a finite boundary.
     CHECK(!trim_button->isHidden());
     CHECK(!extend_button->isHidden());
     CHECK(!extend_both_button->isHidden());
@@ -897,17 +896,45 @@ int main(int argc, char* argv[]) {
 
     trim_button->click();
     QApplication::processEvents();
-    CHECK(!trim_button->isChecked());
+    CHECK(trim_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Trim — Select boundaries (0 selected); Enter/RMB to continue"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: TRIM — Select finite boundaries; Enter/RMB to continue"));
+    QTest::keyClick(viewport, Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(trim_button->isChecked());
     CHECK(
         session->document().state() ==
         structural_ui_state);
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!trim_button->isChecked());
 
     extend_button->click();
     QApplication::processEvents();
-    CHECK(!extend_button->isChecked());
+    CHECK(extend_button->isChecked());
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: EXTEND — Select finite boundaries; Enter/RMB to continue"));
+    QTest::mouseClick(
+        viewport,
+        Qt::RightButton,
+        Qt::NoModifier,
+        QPoint{20, 20});
+    QApplication::processEvents();
+    CHECK(extend_button->isChecked());
     CHECK(
         session->document().state() ==
         structural_ui_state);
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!extend_button->isChecked());
 
     extend_both_button->click();
     QApplication::processEvents();

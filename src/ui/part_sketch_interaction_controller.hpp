@@ -208,6 +208,12 @@ public:
     structuralBoundaries() const noexcept {
         return interaction_.structuralBoundaries();
     }
+    [[nodiscard]] bool
+    structuralBoundarySelectionPending() const noexcept {
+        return interaction_.structuralBoundarySelectionPending();
+    }
+    [[nodiscard]] bool completeStructuralBoundarySelection();
+
     [[nodiscard]] std::optional<sketch::EntityId>
     extendBothFirstLine() const noexcept {
         return interaction_.extendBothFirstLine();

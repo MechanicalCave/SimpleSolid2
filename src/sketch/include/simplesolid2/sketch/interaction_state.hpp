@@ -552,13 +552,27 @@ public:
     [[nodiscard]] bool activateMirror(
         const SketchModel& model);
 
-    // R12 structural tools reuse semantic EntityId selection. Trim/Extend
-    // snapshot current selection as explicit finite boundary geometry.
+    // R12 structural tools support both workflows:
+    // - preselection snapshots finite boundaries and enters target editing;
+    // - tool-first starts boundary acquisition, then Enter/RMB confirms it.
     [[nodiscard]] bool activateTrim(
         const SketchModel& model);
     [[nodiscard]] bool activateExtend(
         const SketchModel& model);
     void activateExtendBoth() noexcept;
+
+    [[nodiscard]] bool
+    structuralBoundarySelectionPending() const noexcept {
+        return (tool_ == SketchTool::trim ||
+                tool_ == SketchTool::extend) &&
+               structural_boundaries_.empty();
+    }
+
+    [[nodiscard]] bool toggleStructuralBoundarySelection(
+        const SketchModel& model,
+        EntityId entity);
+    [[nodiscard]] bool completeStructuralBoundarySelection(
+        const SketchModel& model);
 
     [[nodiscard]] const std::vector<EntityId>&
     structuralBoundaries() const noexcept {

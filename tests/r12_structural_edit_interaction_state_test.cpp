@@ -55,9 +55,42 @@ int main() {
     CHECK(state.escape());
 
     state.clearSelection();
-    CHECK(!state.activateTrim(model));
-    CHECK(!state.activateExtend(model));
-    CHECK(state.tool() == SketchTool::select);
+    CHECK(state.activateTrim(model));
+    CHECK(state.tool() == SketchTool::trim);
+    CHECK(state.structuralBoundarySelectionPending());
+    CHECK(state.structuralBoundaries().empty());
+    CHECK(
+        state.toggleStructuralBoundarySelection(
+            model,
+            boundary_line));
+    CHECK(
+        state.toggleStructuralBoundarySelection(
+            model,
+            boundary_circle));
+    CHECK(state.selectedEntities().size() == 2U);
+    CHECK(
+        state.completeStructuralBoundarySelection(
+            model));
+    CHECK(!state.structuralBoundarySelectionPending());
+    CHECK(state.structuralBoundaries().size() == 2U);
+    CHECK(state.escape());
+
+    state.clearSelection();
+    CHECK(state.activateExtend(model));
+    CHECK(state.structuralBoundarySelectionPending());
+    CHECK(
+        !state.completeStructuralBoundarySelection(
+            model));
+    CHECK(
+        state.toggleStructuralBoundarySelection(
+            model,
+            boundary_line));
+    CHECK(
+        state.completeStructuralBoundarySelection(
+            model));
+    CHECK(!state.structuralBoundarySelectionPending());
+    CHECK(state.structuralBoundaries().size() == 1U);
+    CHECK(state.escape());
 
     state.activateExtendBoth();
     CHECK(state.tool() == SketchTool::extend_both);

@@ -3000,7 +3000,7 @@ void CadWorkbench::activateSketchTrim() {
         !sketch_interaction_controller_->activateTrim()) {
         setStatusText(
             QStringLiteral(
-                "TRIM requires selected finite boundary geometry."));
+                "TRIM could not start with the current preselection."));
         syncSketchInteractionUi();
         return;
     }
@@ -3015,7 +3015,7 @@ void CadWorkbench::activateSketchExtend() {
         !sketch_interaction_controller_->activateExtend()) {
         setStatusText(
             QStringLiteral(
-                "EXTEND requires selected finite boundary geometry."));
+                "EXTEND could not start with the current preselection."));
         syncSketchInteractionUi();
         return;
     }
@@ -3584,13 +3584,21 @@ QString CadWorkbench::cadInputPromptText() const {
     }
 
     if (tool == sketch::SketchTool::trim) {
-        return QStringLiteral(
-            "Command: TRIM — Click target fragment; selected entities are finite boundaries");
+        return sketch_interaction_controller_->
+                       structuralBoundarySelectionPending()
+                   ? QStringLiteral(
+                         "Command: TRIM — Select finite boundaries; Enter/RMB to continue")
+                   : QStringLiteral(
+                         "Command: TRIM — Click target fragment");
     }
 
     if (tool == sketch::SketchTool::extend) {
-        return QStringLiteral(
-            "Command: EXTEND — Click target end; selected entities are finite boundaries");
+        return sketch_interaction_controller_->
+                       structuralBoundarySelectionPending()
+                   ? QStringLiteral(
+                         "Command: EXTEND — Select finite boundaries; Enter/RMB to continue")
+                   : QStringLiteral(
+                         "Command: EXTEND — Click target end");
     }
 
     if (tool == sketch::SketchTool::extend_both) {
@@ -4214,6 +4222,18 @@ bool CadWorkbench::eventFilter(
             static_cast<QMouseEvent*>(event);
         if (mouse_event->button() == Qt::RightButton &&
             sketch_interaction_controller_->
+                structuralBoundarySelectionPending()) {
+            if (sketch_interaction_controller_->
+                    completeStructuralBoundarySelection()) {
+                setStatusText(
+                    QStringLiteral(
+                        "Structural boundaries accepted."));
+            }
+            return true;
+        }
+
+        if (mouse_event->button() == Qt::RightButton &&
+            sketch_interaction_controller_->
                 commonTransformStage() ==
                 sketch::CommonTransformStage::select_objects) {
             if (sketch_interaction_controller_->
@@ -4281,6 +4301,19 @@ bool CadWorkbench::eventFilter(
                     setStatusText(
                         QStringLiteral(
                             "Sketch edit committed."));
+                }
+                return true;
+            }
+
+            if ((key_event->key() == Qt::Key_Return ||
+                 key_event->key() == Qt::Key_Enter) &&
+                sketch_interaction_controller_->
+                    structuralBoundarySelectionPending()) {
+                if (sketch_interaction_controller_->
+                        completeStructuralBoundarySelection()) {
+                    setStatusText(
+                        QStringLiteral(
+                            "Structural boundaries accepted."));
                 }
                 return true;
             }
@@ -5068,12 +5101,20 @@ void CadWorkbench::syncSketchInteractionUi() {
             cancel_line_button_->setText(
                 QStringLiteral("Cancel Trim"));
             operations_placeholder_->setText(
-                QStringLiteral(
-                    "Trim — %1 finite boundary entities; click target fragment")
-                    .arg(
-                        static_cast<qulonglong>(
-                            sketch_interaction_controller_->
-                                structuralBoundaries().size())));
+                sketch_interaction_controller_->
+                        structuralBoundarySelectionPending()
+                    ? QStringLiteral(
+                          "Trim — Select boundaries (%1 selected); Enter/RMB to continue")
+                          .arg(
+                              static_cast<qulonglong>(
+                                  sketch_interaction_controller_->
+                                      selectedCount()))
+                    : QStringLiteral(
+                          "Trim — %1 finite boundary entities; click target fragment")
+                          .arg(
+                              static_cast<qulonglong>(
+                                  sketch_interaction_controller_->
+                                      structuralBoundaries().size())));
         } else if (
             tool == sketch::SketchTool::extend) {
             finish_line_button_->setText(
@@ -5081,12 +5122,20 @@ void CadWorkbench::syncSketchInteractionUi() {
             cancel_line_button_->setText(
                 QStringLiteral("Cancel Extend"));
             operations_placeholder_->setText(
-                QStringLiteral(
-                    "Extend — %1 finite boundary entities; click target end")
-                    .arg(
-                        static_cast<qulonglong>(
-                            sketch_interaction_controller_->
-                                structuralBoundaries().size())));
+                sketch_interaction_controller_->
+                        structuralBoundarySelectionPending()
+                    ? QStringLiteral(
+                          "Extend — Select boundaries (%1 selected); Enter/RMB to continue")
+                          .arg(
+                              static_cast<qulonglong>(
+                                  sketch_interaction_controller_->
+                                      selectedCount()))
+                    : QStringLiteral(
+                          "Extend — %1 finite boundary entities; click target end")
+                          .arg(
+                              static_cast<qulonglong>(
+                                  sketch_interaction_controller_->
+                                      structuralBoundaries().size())));
         } else {
             finish_line_button_->setText(
                 QStringLiteral("Finish Extend Both"));

@@ -1578,9 +1578,6 @@ namespace {
 
 bool SketchInteractionState::activateTrim(
     const SketchModel& model) {
-    if (selected_.empty()) {
-        return false;
-    }
     for (const auto id : selected_) {
         if (!structuralBoundaryKindSupported(
                 model,
@@ -1599,16 +1596,15 @@ bool SketchInteractionState::activateTrim(
     resetArcStage();
     resetRectangleStage();
     resetStructuralEdit();
-    structural_boundaries_ = selected_;
+    if (!selected_.empty()) {
+        structural_boundaries_ = selected_;
+    }
     tool_ = SketchTool::trim;
     return true;
 }
 
 bool SketchInteractionState::activateExtend(
     const SketchModel& model) {
-    if (selected_.empty()) {
-        return false;
-    }
     for (const auto id : selected_) {
         if (!structuralBoundaryKindSupported(
                 model,
@@ -1627,8 +1623,36 @@ bool SketchInteractionState::activateExtend(
     resetArcStage();
     resetRectangleStage();
     resetStructuralEdit();
-    structural_boundaries_ = selected_;
+    if (!selected_.empty()) {
+        structural_boundaries_ = selected_;
+    }
     tool_ = SketchTool::extend;
+    return true;
+}
+
+bool SketchInteractionState::toggleStructuralBoundarySelection(
+    const SketchModel& model,
+    EntityId entity) {
+    if (!structuralBoundarySelectionPending() ||
+        !structuralBoundaryKindSupported(model, entity)) {
+        return false;
+    }
+    return toggleSelection(entity);
+}
+
+bool SketchInteractionState::completeStructuralBoundarySelection(
+    const SketchModel& model) {
+    if (!structuralBoundarySelectionPending() ||
+        selected_.empty()) {
+        return false;
+    }
+    for (const auto id : selected_) {
+        if (!structuralBoundaryKindSupported(model, id)) {
+            return false;
+        }
+    }
+    structural_boundaries_ = selected_;
+    clearHover();
     return true;
 }
 
