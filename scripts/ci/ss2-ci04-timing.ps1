@@ -16,6 +16,28 @@ if ([string]::IsNullOrWhiteSpace($EvidenceRoot)) {
 }
 $EvidenceRoot = [IO.Path]::GetFullPath($EvidenceRoot)
 
+
+function Invoke-SS2GitCommand {
+    param(
+        [Parameter(Mandatory=$true)][string[]]$ArgumentList,
+        [switch]$AllowFailure
+    )
+
+    $previousPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & git @ArgumentList 2>&1 | ForEach-Object { Write-Host "[git] $_" }
+        $code = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
+
+    if (-not $AllowFailure -and $code -ne 0) {
+        throw "Git command failed with exit code $code: git $($ArgumentList -join ' ')"
+    }
+    return $code
+}
+
 function Remove-SS2EvidencePath {
     param([Parameter(Mandatory=$true)][string]$Path)
     if (Test-Path -LiteralPath $Path) {
@@ -71,28 +93,19 @@ function Invoke-SS2SetupAt {
 New-Item -ItemType Directory -Force -Path $EvidenceRoot | Out-Null
 $baselineSource = Join-Path $EvidenceRoot "baseline-src"
 
-& git -C $root cat-file -e "$BaselineRef^{commit}" 2>$null
-if ($LASTEXITCODE -ne 0) {
-    Write-Host "[timing] fetching baseline ref $BaselineRef"
-    & git -C $root fetch --no-tags --depth=1 origin $BaselineRef
-    if ($LASTEXITCODE -ne 0) {
-        throw "Unable to fetch CI-04 timing baseline $BaselineRef."
-    }
-}
+Write-Host "[timing] fetching baseline ref $BaselineRef"
+$null = Invoke-SS2GitCommand @("-C", $root, "fetch", "--no-tags", "--depth=1", "origin", $BaselineRef)
 
-& git -C $root worktree prune
+$null = Invoke-SS2GitCommand @("-C", $root, "worktree", "prune")
 if (Test-Path -LiteralPath $baselineSource) {
-    & git -C $root worktree remove --force $baselineSource 2>$null
-    if ($LASTEXITCODE -ne 0) {
+    $removeCode = Invoke-SS2GitCommand @("-C", $root, "worktree", "remove", "--force", $baselineSource) -AllowFailure
+    if ($removeCode -ne 0) {
         Remove-SS2EvidencePath $baselineSource
-        & git -C $root worktree prune
+        $null = Invoke-SS2GitCommand @("-C", $root, "worktree", "prune")
     }
 }
 
-& git -C $root worktree add --detach $baselineSource $BaselineRef
-if ($LASTEXITCODE -ne 0) {
-    throw "Unable to create CI-04 baseline worktree."
-}
+$null = Invoke-SS2GitCommand @("-C", $root, "worktree", "add", "--detach", $baselineSource, $BaselineRef)
 
 $results = [ordered]@{
     baseline_ref = $BaselineRef
@@ -203,8 +216,10 @@ try {
         }
     }
 } finally {
-    & git -C $root worktree remove --force $baselineSource 2>$null
-    & git -C $root worktree prune
+    if (Test-Path -LiteralPath $baselineSource) {
+        $null = Invoke-SS2GitCommand @("-C", $root, "worktree", "remove", "--force", $baselineSource) -AllowFailure
+    }
+    $null = Invoke-SS2GitCommand @("-C", $root, "worktree", "prune") -AllowFailure
 }
 
 exit 0
