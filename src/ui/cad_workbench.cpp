@@ -1687,15 +1687,15 @@ void CadWorkbench::buildUi() {
     profile_operations_layout->addWidget(
         profile_subtract_area_button_);
 
-    profile_detect_islands_button_ =
+    profile_show_islands_button_ =
         new QPushButton(
-            QStringLiteral("Detect Islands"),
+            QStringLiteral("Show Islands"),
             profile_operations_widget_);
-    profile_detect_islands_button_->setObjectName(
-        QStringLiteral("profileDetectIslandsButton"));
-    profile_detect_islands_button_->setCheckable(true);
+    profile_show_islands_button_->setObjectName(
+        QStringLiteral("profileShowIslandsButton"));
+    profile_show_islands_button_->setCheckable(true);
     profile_operations_layout->addWidget(
-        profile_detect_islands_button_);
+        profile_show_islands_button_);
 
     profile_highlight_hover_button_ =
         new QPushButton(
@@ -1736,15 +1736,6 @@ void CadWorkbench::buildUi() {
     profile_result_label_->setWordWrap(true);
     profile_operations_layout->addWidget(
         profile_result_label_);
-
-    profile_find_regions_button_ =
-        new QPushButton(
-            QStringLiteral("Find All Regions"),
-            profile_operations_widget_);
-    profile_find_regions_button_->setObjectName(
-        QStringLiteral("profileFindRegionsButton"));
-    profile_operations_layout->addWidget(
-        profile_find_regions_button_);
 
     profile_finish_button_ =
         new QPushButton(
@@ -2411,8 +2402,8 @@ void CadWorkbench::buildUi() {
             auto options =
                 sketch_interaction_controller_->
                     profileToolOptions();
-            options.detect_islands =
-                profile_detect_islands_button_->
+            options.show_islands =
+                profile_show_islands_button_->
                     isChecked();
             options.highlight_on_hover =
                 profile_highlight_hover_button_->
@@ -2429,7 +2420,7 @@ void CadWorkbench::buildUi() {
         };
 
     for (auto* button : {
-             profile_detect_islands_button_,
+             profile_show_islands_button_,
              profile_highlight_hover_button_,
              profile_show_boundaries_button_,
              profile_show_problems_button_}) {
@@ -2440,29 +2431,6 @@ void CadWorkbench::buildUi() {
             update_profile_options);
     }
 
-    QObject::connect(
-        profile_find_regions_button_,
-        &QPushButton::clicked,
-        this,
-        [this] {
-            if (!sketch_interaction_controller_) {
-                return;
-            }
-            const auto result =
-                sketch_interaction_controller_->
-                    submitCadInputSemanticProfileCommand(
-                        application::
-                            ProfileCadInputCommand{
-                                application::
-                                    ProfileCadInputCommandKind::
-                                        find_all_regions,
-                                std::nullopt});
-            if (!result.accepted &&
-                !result.diagnostic.empty()) {
-                setStatusText(
-                    fromUtf8(result.diagnostic));
-            }
-        });
     QObject::connect(
         profile_finish_button_,
         &QPushButton::clicked,
@@ -2658,7 +2626,7 @@ void CadWorkbench::deleteSelectedProfile() {
         !selected_profile_id_ ||
         (sketch_interaction_controller_ &&
          sketch_interaction_controller_->
-             profileToolActive())) {
+             active())) {
         return;
     }
 
@@ -4204,7 +4172,7 @@ void CadWorkbench::refreshProfileProperties(
     delete_profile_button_->setEnabled(
         !sketch_interaction_controller_ ||
         !sketch_interaction_controller_->
-             profileToolActive());
+             active());
 
     properties_stack_->setCurrentWidget(
         profile_properties_page_);
@@ -4259,7 +4227,7 @@ bool CadWorkbench::eventFilter(
                 profile_properties_page_ &&
             (!sketch_interaction_controller_ ||
              !sketch_interaction_controller_->
-                  profileToolActive());
+                  active());
         if (profile_delete_context &&
             key_event->key() == Qt::Key_Delete) {
             deleteSelectedProfile();
@@ -4806,14 +4774,24 @@ void CadWorkbench::syncSketchInteractionUi() {
         const auto options =
             sketch_interaction_controller_->
                 profileToolOptions();
-        profile_detect_islands_button_->setChecked(
-            options.detect_islands);
+        profile_show_islands_button_->setChecked(
+            options.show_islands);
         profile_highlight_hover_button_->setChecked(
             options.highlight_on_hover);
         profile_show_boundaries_button_->setChecked(
             options.show_region_boundaries);
         profile_show_problems_button_->setChecked(
             options.show_problems);
+
+        const auto island_count =
+            sketch_interaction_controller_->
+                profileIslandCount();
+        const auto island_text =
+            options.show_islands
+                ? QString::number(
+                      static_cast<qulonglong>(
+                          island_count))
+                : QStringLiteral("Hidden");
 
         const auto current =
             sketch_interaction_controller_->
@@ -4841,10 +4819,7 @@ void CadWorkbench::syncSketchInteractionUi() {
                     .arg(
                         static_cast<qulonglong>(
                             current->holes.size()))
-                    .arg(
-                        static_cast<qulonglong>(
-                            sketch_interaction_controller_->
-                                profileIslandCount()))
+                    .arg(island_text)
                     .arg(
                         static_cast<qulonglong>(
                             sketch_interaction_controller_->
@@ -4938,10 +4913,7 @@ void CadWorkbench::syncSketchInteractionUi() {
                     "Islands: %2\n"
                     "Problems: %3")
                     .arg(status)
-                    .arg(
-                        static_cast<qulonglong>(
-                            sketch_interaction_controller_->
-                                profileIslandCount()))
+                    .arg(island_text)
                     .arg(
                         static_cast<qulonglong>(
                             sketch_interaction_controller_->
