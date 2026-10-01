@@ -80,18 +80,20 @@ $configure = Join-Path $PSScriptRoot "ss2-configure.ps1"
 & $configure -BuildDir $BuildDir
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$build =
-    if ([IO.Path]::IsPathRooted($BuildDir)) {
-        [IO.Path]::GetFullPath($BuildDir)
-    } else {
-        [IO.Path]::GetFullPath((Join-Path $root $BuildDir))
-    }
+$build = Resolve-SS2BuildPath $BuildDir
 
 Write-Host "[check] targets=$($targets -join ',')"
 Write-Host "[check] tests=$($tests -join ',')"
 Write-Host "[check] build=$build config=$Config"
 
 $buildArgs = @("--build", $build, "--config", $Config, "--target") + $targets
+if ($env:SS2_BUILD_PARALLELISM) {
+    $jobs = 0
+    if (-not [int]::TryParse($env:SS2_BUILD_PARALLELISM, [ref]$jobs) -or $jobs -lt 1) {
+        throw "SS2_BUILD_PARALLELISM must be a positive integer."
+    }
+    $buildArgs += @("--parallel", "$jobs")
+}
 & $cmake @buildArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
