@@ -1332,6 +1332,22 @@ add_test(
     COMMAND r12_structural_edit_document_session_test
 )
 
+add_executable(r12_structural_edit_interaction_state_test
+    r12_structural_edit_interaction_state_test.cpp
+)
+
+target_link_libraries(r12_structural_edit_interaction_state_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(r12_structural_edit_interaction_state_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME r12.structural_edit_interaction_state
+    COMMAND r12_structural_edit_interaction_state_test
+)
+
 add_executable(sk07f_precision_input_controller_test
     sk07f_precision_input_controller_test.cpp
 )
@@ -1471,6 +1487,7 @@ set(_ss2_sketch_tests
     r11.snap_core
     r12.structural_edit_core
     r12.structural_edit_document_session
+    r12.structural_edit_interaction_state
 )
 set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
 

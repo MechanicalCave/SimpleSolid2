@@ -1275,6 +1275,7 @@ SketchInteractionState::resolveDirectDistance(
 }
 
 void SketchInteractionState::activateLine() noexcept {
+    resetStructuralEdit();
     resetMeasure();
     manipulation_.reset();
     point_pointer_candidate_.reset();
@@ -1288,6 +1289,7 @@ void SketchInteractionState::activateLine() noexcept {
 }
 
 void SketchInteractionState::activateCircle() noexcept {
+    resetStructuralEdit();
     resetMeasure();
     manipulation_.reset();
     point_pointer_candidate_.reset();
@@ -1301,6 +1303,7 @@ void SketchInteractionState::activateCircle() noexcept {
 }
 
 void SketchInteractionState::activateArc() noexcept {
+    resetStructuralEdit();
     resetMeasure();
     manipulation_.reset();
     point_pointer_candidate_.reset();
@@ -1314,6 +1317,7 @@ void SketchInteractionState::activateArc() noexcept {
 }
 
 void SketchInteractionState::activateRectangle() noexcept {
+    resetStructuralEdit();
     resetMeasure();
     manipulation_.reset();
     point_pointer_candidate_.reset();
@@ -1328,6 +1332,7 @@ void SketchInteractionState::activateRectangle() noexcept {
 
 void SketchInteractionState::activateMeasure(
     const SketchModel& model) noexcept {
+    resetStructuralEdit();
     manipulation_.reset();
     point_pointer_candidate_.reset();
     resetCommonTransform();
@@ -1475,6 +1480,7 @@ SketchInteractionState::measureRelationalResult(
 bool SketchInteractionState::activateCommonTransform(
     SketchTool tool,
     const SketchModel& model) {
+    resetStructuralEdit();
     if (tool != SketchTool::move &&
         tool != SketchTool::copy &&
         tool != SketchTool::rotate &&
@@ -1556,6 +1562,102 @@ bool SketchInteractionState::activateMirror(
     return activateCommonTransform(
         SketchTool::mirror,
         model);
+}
+
+namespace {
+
+[[nodiscard]] bool structuralBoundaryKindSupported(
+    const SketchModel& model,
+    EntityId id) noexcept {
+    return model.findLine(id) != nullptr ||
+           model.findCircle(id) != nullptr ||
+           model.findArc(id) != nullptr;
+}
+
+} // namespace
+
+bool SketchInteractionState::activateTrim(
+    const SketchModel& model) {
+    if (selected_.empty()) {
+        return false;
+    }
+    for (const auto id : selected_) {
+        if (!structuralBoundaryKindSupported(
+                model,
+                id)) {
+            return false;
+        }
+    }
+
+    resetMeasure();
+    manipulation_.reset();
+    point_pointer_candidate_.reset();
+    resetCommonTransform();
+    clearHover();
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+    resetRectangleStage();
+    resetStructuralEdit();
+    structural_boundaries_ = selected_;
+    tool_ = SketchTool::trim;
+    return true;
+}
+
+bool SketchInteractionState::activateExtend(
+    const SketchModel& model) {
+    if (selected_.empty()) {
+        return false;
+    }
+    for (const auto id : selected_) {
+        if (!structuralBoundaryKindSupported(
+                model,
+                id)) {
+            return false;
+        }
+    }
+
+    resetMeasure();
+    manipulation_.reset();
+    point_pointer_candidate_.reset();
+    resetCommonTransform();
+    clearHover();
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+    resetRectangleStage();
+    resetStructuralEdit();
+    structural_boundaries_ = selected_;
+    tool_ = SketchTool::extend;
+    return true;
+}
+
+void SketchInteractionState::activateExtendBoth() noexcept {
+    resetMeasure();
+    manipulation_.reset();
+    point_pointer_candidate_.reset();
+    resetCommonTransform();
+    clearHover();
+    resetLineStage();
+    resetCircleStage();
+    resetArcStage();
+    resetRectangleStage();
+    resetStructuralEdit();
+    clearSelection();
+    tool_ = SketchTool::extend_both;
+}
+
+bool SketchInteractionState::setExtendBothFirstLine(
+    const SketchModel& model,
+    EntityId line) {
+    if (tool_ != SketchTool::extend_both ||
+        !line.valid() ||
+        model.findLine(line) == nullptr) {
+        return false;
+    }
+    extend_both_first_line_ = line;
+    clearHover();
+    return true;
 }
 
 bool SketchInteractionState::completeTransformSelection(
@@ -2668,6 +2770,14 @@ bool SketchInteractionState::escape() noexcept {
         return true;
     }
 
+    if (tool_ == SketchTool::trim ||
+        tool_ == SketchTool::extend ||
+        tool_ == SketchTool::extend_both) {
+        resetToSelect();
+        clearHover();
+        return true;
+    }
+
     if (tool_ == SketchTool::measure) {
         if (measure_between_active_) {
             leaveMeasureBetween();
@@ -3523,6 +3633,7 @@ void SketchInteractionState::resetToSelect() noexcept {
     resetArcStage();
     resetRectangleStage();
     resetCommonTransform();
+    resetStructuralEdit();
 }
 
 void SketchInteractionState::resetLineStage()
@@ -3598,6 +3709,11 @@ void SketchInteractionState::resetMeasure() noexcept {
     measure_between_active_ = false;
     measure_first_target_.reset();
     measure_second_target_.reset();
+}
+
+void SketchInteractionState::resetStructuralEdit() noexcept {
+    structural_boundaries_.clear();
+    extend_both_first_line_.reset();
 }
 
 } // namespace simplesolid2::sketch

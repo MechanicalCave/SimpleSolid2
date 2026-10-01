@@ -27,6 +27,9 @@ enum class SketchTool : std::uint8_t {
     rotate,
     scale,
     mirror,
+    trim,
+    extend,
+    extend_both,
 };
 
 enum class MeasureRelationAcceptOutcome : std::uint8_t {
@@ -549,6 +552,31 @@ public:
     [[nodiscard]] bool activateMirror(
         const SketchModel& model);
 
+    // R12 structural tools reuse semantic EntityId selection. Trim/Extend
+    // snapshot current selection as explicit finite boundary geometry.
+    [[nodiscard]] bool activateTrim(
+        const SketchModel& model);
+    [[nodiscard]] bool activateExtend(
+        const SketchModel& model);
+    void activateExtendBoth() noexcept;
+
+    [[nodiscard]] const std::vector<EntityId>&
+    structuralBoundaries() const noexcept {
+        return structural_boundaries_;
+    }
+
+    [[nodiscard]] std::optional<EntityId>
+    extendBothFirstLine() const noexcept {
+        return extend_both_first_line_;
+    }
+
+    [[nodiscard]] bool setExtendBothFirstLine(
+        const SketchModel& model,
+        EntityId line);
+    void clearExtendBothFirstLine() noexcept {
+        extend_both_first_line_.reset();
+    }
+
     [[nodiscard]] bool completeTransformSelection(
         const SketchModel& model);
     [[nodiscard]] bool acceptTransformPoint(
@@ -811,6 +839,7 @@ private:
     void resetRectangleStage() noexcept;
     void resetCommonTransform() noexcept;
     void resetMeasure() noexcept;
+    void resetStructuralEdit() noexcept;
 
     SketchTool tool_{SketchTool::select};
 
@@ -847,6 +876,9 @@ private:
 
     std::optional<CommonTransformSession>
         transform_session_;
+
+    std::vector<EntityId> structural_boundaries_;
+    std::optional<EntityId> extend_both_first_line_;
 
     std::vector<EntityId> selected_;
     std::optional<EntityId> primary_;
