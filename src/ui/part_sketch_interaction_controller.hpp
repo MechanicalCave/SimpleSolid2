@@ -436,6 +436,7 @@ private:
     currentCadInputContextFingerprint() const noexcept;
     void refreshCadInputContextGeneration();
     void notifyStateChanged();
+    void refreshSnapInferencePresentation();
     void reportStatus(std::string message);
 
     PartViewportController* viewport_controller_{};

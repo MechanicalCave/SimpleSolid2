@@ -179,6 +179,16 @@ public:
 
     void clearSketchMeasurePresentation();
 
+    [[nodiscard]] bool
+    projectSketchSnapInferencePresentation(
+        const std::optional<sketch::SnapCandidate>&
+            current,
+        const sketch::TrackingAnchorState&
+            anchors,
+        bool show_anchors);
+
+    void clearSketchSnapInferencePresentation();
+
     [[nodiscard]] SketchEntityRectangleQueryResult
     querySketchEntities(
         const viewer::ViewportRect2& rectangle,

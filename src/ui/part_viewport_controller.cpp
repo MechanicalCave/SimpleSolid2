@@ -134,6 +134,48 @@ semanticGripRole(
     return sketch::SketchGripRole::line_center;
 }
 
+[[nodiscard]] viewer::SketchSnapMarkerKind
+viewerSnapMarkerKind(
+    sketch::SnapKind kind) noexcept {
+    switch (kind) {
+    case sketch::SnapKind::endpoint:
+        return viewer::SketchSnapMarkerKind::endpoint;
+    case sketch::SnapKind::midpoint:
+        return viewer::SketchSnapMarkerKind::midpoint;
+    case sketch::SnapKind::center:
+        return viewer::SketchSnapMarkerKind::center;
+    case sketch::SnapKind::quadrant:
+        return viewer::SketchSnapMarkerKind::quadrant;
+    case sketch::SnapKind::intersection:
+        return viewer::SketchSnapMarkerKind::intersection;
+    case sketch::SnapKind::origin:
+        return viewer::SketchSnapMarkerKind::origin;
+    case sketch::SnapKind::perpendicular:
+        return viewer::SketchSnapMarkerKind::perpendicular;
+    case sketch::SnapKind::tangent:
+        return viewer::SketchSnapMarkerKind::tangent;
+    case sketch::SnapKind::nearest:
+        return viewer::SketchSnapMarkerKind::nearest;
+    }
+    return viewer::SketchSnapMarkerKind::endpoint;
+}
+
+[[nodiscard]] std::string snapMarkerLabel(
+    sketch::SnapKind kind) {
+    switch (kind) {
+    case sketch::SnapKind::endpoint: return "END";
+    case sketch::SnapKind::midpoint: return "MID";
+    case sketch::SnapKind::center: return "CEN";
+    case sketch::SnapKind::quadrant: return "QUAD";
+    case sketch::SnapKind::intersection: return "INT";
+    case sketch::SnapKind::origin: return "ORG";
+    case sketch::SnapKind::perpendicular: return "PER";
+    case sketch::SnapKind::tangent: return "TAN";
+    case sketch::SnapKind::nearest: return "NEA";
+    }
+    return {};
+}
+
 [[nodiscard]] viewer::SketchMeasureMarkerRole
 viewerMeasureMarkerRole(
     sketch::MeasurePointRole role) noexcept {
@@ -1104,6 +1146,88 @@ void PartViewportController::clearSketchMeasurePresentation() {
     static_cast<void>(
         viewport_->setSketchMeasureCueScene(
             viewer::SketchMeasureCueScene{}));
+}
+
+bool PartViewportController::
+projectSketchSnapInferencePresentation(
+    const std::optional<sketch::SnapCandidate>&
+        current,
+    const sketch::TrackingAnchorState& anchors,
+    bool show_anchors) {
+    if (viewport_ == nullptr) {
+        return false;
+    }
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr ||
+        !anchors.valid()) {
+        return false;
+    }
+
+    viewer::SketchSnapInferenceScene scene;
+    const auto make_marker =
+        [hosted](
+            const sketch::SnapCandidate& candidate)
+            -> std::optional<
+                viewer::SketchSnapMarkerPresentation> {
+            if (!candidate.valid()) {
+                return std::nullopt;
+            }
+            const auto world =
+                detail::sketchPointToWorld(
+                    hosted->placement,
+                    candidate.point);
+            const auto label =
+                snapMarkerLabel(candidate.kind);
+            if (!world || label.empty()) {
+                return std::nullopt;
+            }
+            viewer::SketchSnapMarkerPresentation
+                marker{
+                    *world,
+                    viewerSnapMarkerKind(
+                        candidate.kind),
+                    label};
+            return marker.valid()
+                ? std::optional<
+                      viewer::
+                          SketchSnapMarkerPresentation>{
+                      std::move(marker)}
+                : std::nullopt;
+        };
+
+    if (current) {
+        scene.current = make_marker(*current);
+        if (!scene.current) {
+            return false;
+        }
+    }
+
+    if (show_anchors) {
+        scene.acquired.reserve(
+            anchors.anchors.size());
+        for (const auto& anchor :
+             anchors.anchors) {
+            const auto marker =
+                make_marker(anchor.snap);
+            if (!marker) {
+                return false;
+            }
+            scene.acquired.push_back(*marker);
+        }
+    }
+
+    return scene.valid() &&
+           viewport_->
+               setSketchSnapInferenceScene(scene);
+}
+
+void PartViewportController::
+clearSketchSnapInferencePresentation() {
+    if (viewport_ != nullptr) {
+        static_cast<void>(
+            viewport_->setSketchSnapInferenceScene(
+                viewer::SketchSnapInferenceScene{}));
+    }
 }
 
 SketchEntityRectangleQueryResult

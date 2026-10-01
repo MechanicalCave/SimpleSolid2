@@ -3010,36 +3010,39 @@ void PartSketchInteractionController::onPointer(
 
     if (profile_session_) {
         handleProfilePointer(input);
+        refreshSnapInferencePresentation();
         return;
     }
 
     switch (interaction_.tool()) {
     case sketch::SketchTool::select:
         handleSelectPointer(input);
-        return;
+        break;
     case sketch::SketchTool::line:
         handleLinePointer(input);
-        return;
+        break;
     case sketch::SketchTool::circle:
         handleCirclePointer(input);
-        return;
+        break;
     case sketch::SketchTool::arc:
         handleArcPointer(input);
-        return;
+        break;
     case sketch::SketchTool::rectangle:
         handleRectanglePointer(input);
-        return;
+        break;
     case sketch::SketchTool::measure:
         handleMeasurePointer(input);
-        return;
+        break;
     case sketch::SketchTool::move:
     case sketch::SketchTool::copy:
     case sketch::SketchTool::rotate:
     case sketch::SketchTool::scale:
     case sketch::SketchTool::mirror:
         handleCommonTransformPointer(input);
-        return;
+        break;
     }
+
+    refreshSnapInferencePresentation();
 }
 
 const part::PartSketch*
@@ -5721,6 +5724,7 @@ refreshCadInputContextGeneration() {
 
 void PartSketchInteractionController::notifyStateChanged() {
     refreshCadInputContextGeneration();
+    refreshSnapInferencePresentation();
 
     if (viewport_controller_ != nullptr) {
         if (!profile_session_) {
@@ -5790,6 +5794,71 @@ void PartSketchInteractionController::notifyStateChanged() {
 
     if (state_changed_handler_) {
         state_changed_handler_();
+    }
+}
+
+void PartSketchInteractionController::
+refreshSnapInferencePresentation() {
+    if (viewport_controller_ == nullptr ||
+        !active() ||
+        profile_session_ ||
+        !cad_interaction_settings_provider_) {
+        if (viewport_controller_ != nullptr) {
+            viewport_controller_->
+                clearSketchSnapInferencePresentation();
+        }
+        return;
+    }
+
+    const auto request =
+        interaction_.activePointRequest();
+    if (!request) {
+        viewport_controller_->
+            clearSketchSnapInferencePresentation();
+        return;
+    }
+
+    const auto settings =
+        cad_interaction_settings_provider_();
+    if (!settings.valid()) {
+        viewport_controller_->
+            clearSketchSnapInferencePresentation();
+        return;
+    }
+
+    const auto eligibility =
+        sketch::resolveSnapEligibility(
+            objectSnapPreferences(
+                settings.object_snap),
+            request->temporary_snap_override);
+
+    std::optional<sketch::SnapCandidate>
+        current;
+    if (request->resolution &&
+        request->resolution->object_snap) {
+        current =
+            request->resolution->object_snap;
+    }
+
+    const bool show_anchors =
+        eligibility.object_tracking &&
+        !eligibility.suppress_object_assistance;
+
+    if (!current &&
+        (!show_anchors ||
+         request->tracking_anchors.anchors.empty())) {
+        viewport_controller_->
+            clearSketchSnapInferencePresentation();
+        return;
+    }
+
+    if (!viewport_controller_->
+            projectSketchSnapInferencePresentation(
+                current,
+                request->tracking_anchors,
+                show_anchors)) {
+        viewport_controller_->
+            clearSketchSnapInferencePresentation();
     }
 }
 

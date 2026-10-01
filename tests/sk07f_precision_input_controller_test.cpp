@@ -98,6 +98,13 @@ public:
         if (!point.valid()) return {};
         return grip_query_;
     }
+    bool setSketchSnapInferenceScene(
+        const viewer::SketchSnapInferenceScene& scene) override {
+        if (!scene.valid()) return false;
+        snap_inference_scene_ = scene;
+        return true;
+    }
+
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override {
         if (!selection.valid()) return false;
@@ -145,6 +152,7 @@ public:
     viewer::SketchPreviewScene preview_scene_;
     viewer::SketchGripScene grip_scene_;
     viewer::SketchInteractionPresentation interaction_presentation_;
+    viewer::SketchSnapInferenceScene snap_inference_scene_;
     viewer::SketchGripQueryResult grip_query_{true, std::nullopt};
     viewer::PresentationSelection selection_;
     viewer::SketchPointQueryResult point_query_{true, std::nullopt};
@@ -922,6 +930,27 @@ int main(int argc, char* argv[]) {
     CHECK((
         point_resolution->position ==
         sketch::Point2{5000.0, 5007.0}));
+    CHECK(
+        viewport.snap_inference_scene_.current.
+            has_value());
+    CHECK(
+        viewport.snap_inference_scene_.current->
+            kind ==
+        viewer::SketchSnapMarkerKind::endpoint);
+    CHECK(
+        viewport.snap_inference_scene_.current->
+            label == "END");
+    CHECK(near(
+        viewport.snap_inference_scene_.current->
+            position.x,
+        5000.0));
+    CHECK(near(
+        viewport.snap_inference_scene_.current->
+            position.y,
+        5007.0));
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            empty());
 
     click(
         interaction,
@@ -972,6 +1001,12 @@ int main(int argc, char* argv[]) {
         point_resolution->source ==
         sketch::PointResolutionSource::raw_pointer);
     CHECK(!point_resolution->object_snap.has_value());
+    CHECK(
+        !viewport.snap_inference_scene_.current.
+             has_value());
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            empty());
 
     click(
         interaction,
@@ -1460,6 +1495,24 @@ int main(int argc, char* argv[]) {
         8000.0,
         8000.0);
     CHECK(interaction.trackingAnchorCount() == 1U);
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            size() == 1U);
+    CHECK(
+        viewport.snap_inference_scene_.acquired[0].
+            kind ==
+        viewer::SketchSnapMarkerKind::endpoint);
+    CHECK(
+        viewport.snap_inference_scene_.acquired[0].
+            label == "END");
+    CHECK(near(
+        viewport.snap_inference_scene_.acquired[0].
+            position.x,
+        8000.0));
+    CHECK(near(
+        viewport.snap_inference_scene_.acquired[0].
+            position.y,
+        8000.0));
 
     movePointer(
         interaction,
@@ -1528,6 +1581,9 @@ int main(int argc, char* argv[]) {
         tracking_resolution->source ==
         sketch::PointResolutionSource::raw_pointer);
     CHECK(interaction.trackingAnchorCount() == 2U);
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            empty());
 
     tracking_settings.object_snap.object_tracking_enabled = true;
     CHECK(interaction.setTemporarySnapOverride(

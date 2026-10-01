@@ -135,6 +135,12 @@ public:
 
     virtual void clearSketchSelectionBoxOverlay() = 0;
 
+    virtual bool setSketchSnapInferenceScene(
+        const SketchSnapInferenceScene& scene) {
+        return scene.valid() &&
+               scene.empty();
+    }
+
     virtual bool setSketchDynamicInputOverlay(
         const SketchDynamicInputOverlay& overlay) {
         return overlay.valid();

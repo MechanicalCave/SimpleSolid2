@@ -413,6 +413,65 @@ struct SketchMeasureCueScene final {
     }
 };
 
+enum class SketchSnapMarkerKind : std::uint8_t {
+    endpoint,
+    midpoint,
+    center,
+    quadrant,
+    intersection,
+    origin,
+    perpendicular,
+    tangent,
+    nearest,
+};
+
+struct SketchSnapMarkerPresentation final {
+    Point3 position{};
+    SketchSnapMarkerKind kind{
+        SketchSnapMarkerKind::endpoint};
+    std::string label;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return finite(position) &&
+               !label.empty();
+    }
+
+    friend bool operator==(
+        const SketchSnapMarkerPresentation&,
+        const SketchSnapMarkerPresentation&) = default;
+};
+
+struct SketchSnapInferenceScene final {
+    std::optional<SketchSnapMarkerPresentation>
+        current;
+    std::vector<SketchSnapMarkerPresentation>
+        acquired;
+
+    [[nodiscard]] bool empty() const noexcept {
+        return !current &&
+               acquired.empty();
+    }
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (current && !current->valid()) {
+            return false;
+        }
+        if (acquired.size() > 2U) {
+            return false;
+        }
+        return std::all_of(
+            acquired.begin(),
+            acquired.end(),
+            [](const auto& marker) {
+                return marker.valid();
+            });
+    }
+
+    friend bool operator==(
+        const SketchSnapInferenceScene&,
+        const SketchSnapInferenceScene&) = default;
+};
+
 enum class SketchDynamicInputValueState : std::uint8_t {
     free,
     assisted,
