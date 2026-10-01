@@ -625,6 +625,109 @@ bool SketchInteractionState::commonTransformTool()
            tool_ == SketchTool::mirror;
 }
 
+namespace {
+
+[[nodiscard]] std::optional<PointResolution>
+resolvePointRequestCandidate(
+    const PointRequest& request,
+    const PointFieldLocks& locks,
+    PointResolutionSource pointer_source,
+    const std::optional<SnapCandidate>& pointer_snap)
+    noexcept {
+    if (!request.pointer_candidate) {
+        return std::nullopt;
+    }
+
+    const auto raw = *request.pointer_candidate;
+    Point2 resolved = raw;
+    const bool locked = !locks.empty();
+
+    const auto finish =
+        [&](Point2 point)
+            -> std::optional<PointResolution> {
+            if (!point.finite()) {
+                return std::nullopt;
+            }
+
+            PointResolution result{
+                point,
+                locked
+                    ? PointResolutionSource::numeric_lock
+                    : pointer_source,
+                locked
+                    ? std::nullopt
+                    : pointer_snap};
+
+            return result.valid()
+                ? std::optional<PointResolution>{
+                      std::move(result)}
+                : std::nullopt;
+        };
+
+    if (!request.base) {
+        if (locks.u) {
+            resolved.u = *locks.u;
+        }
+        if (locks.v) {
+            resolved.v = *locks.v;
+        }
+        return finish(resolved);
+    }
+
+    const auto base = *request.base;
+    const double raw_du = raw.u - base.u;
+    const double raw_dv = raw.v - base.v;
+
+    if (locks.delta_u ||
+        locks.delta_v) {
+        resolved = {
+            base.u +
+                locks.delta_u.value_or(raw_du),
+            base.v +
+                locks.delta_v.value_or(raw_dv)};
+        return finish(resolved);
+    }
+
+    if (locks.distance ||
+        locks.angle) {
+        const double raw_distance =
+            std::hypot(raw_du, raw_dv);
+
+        double resolved_angle{};
+        if (locks.angle) {
+            resolved_angle = *locks.angle;
+        } else {
+            if (!std::isfinite(raw_distance) ||
+                raw_distance <= 0.0) {
+                return std::nullopt;
+            }
+            resolved_angle =
+                std::atan2(raw_dv, raw_du);
+        }
+
+        const double resolved_distance =
+            locks.distance.value_or(
+                raw_distance);
+        if (!std::isfinite(resolved_distance) ||
+            resolved_distance < 0.0 ||
+            !std::isfinite(resolved_angle)) {
+            return std::nullopt;
+        }
+
+        resolved = {
+            base.u +
+                resolved_distance *
+                    std::cos(resolved_angle),
+            base.v +
+                resolved_distance *
+                    std::sin(resolved_angle)};
+    }
+
+    return finish(resolved);
+}
+
+} // namespace
+
 std::optional<PointRequest>
 SketchInteractionState::activePointRequest() const noexcept {
     const auto finalized =
@@ -632,6 +735,12 @@ SketchInteractionState::activePointRequest() const noexcept {
             -> std::optional<PointRequest> {
             request.temporary_snap_override =
                 temporary_snap_override_;
+            request.resolution =
+                resolvePointRequestCandidate(
+                    request,
+                    point_field_locks_,
+                    point_pointer_source_,
+                    point_pointer_snap_);
             return request.valid()
                 ? std::optional<PointRequest>{
                       std::move(request)}
@@ -859,20 +968,61 @@ SketchInteractionState::resolveExplicitPoint(
         break;
     }
 
-    return resolved.finite()
+    PointResolution result{
+        resolved,
+        PointResolutionSource::explicit_numeric,
+        std::nullopt};
+    return result.valid()
         ? std::optional<ResolvedSketchInput>{
-              ResolvedSketchInput{resolved}}
+              result}
         : std::nullopt;
 }
 
 std::optional<ResolvedSketchInput>
 SketchInteractionState::resolvePointerInput(
     Point2 raw) noexcept {
+    return resolvePointerInput(
+        raw,
+        PointResolutionSource::raw_pointer);
+}
+
+std::optional<ResolvedSketchInput>
+SketchInteractionState::resolvePointerInput(
+    Point2 raw,
+    PointResolutionSource source,
+    std::optional<SnapCandidate> object_snap) noexcept {
     if (!raw.finite() || !activePointRequest()) {
         return std::nullopt;
     }
 
+    const bool pointer_source =
+        source ==
+            PointResolutionSource::raw_pointer ||
+        source ==
+            PointResolutionSource::polar ||
+        source ==
+            PointResolutionSource::object_snap ||
+        source ==
+            PointResolutionSource::tracking_inference;
+    if (!pointer_source) {
+        return std::nullopt;
+    }
+
+    if (source ==
+        PointResolutionSource::object_snap) {
+        if (!object_snap ||
+            !object_snap->valid() ||
+            object_snap->point != raw) {
+            return std::nullopt;
+        }
+    } else if (object_snap) {
+        return std::nullopt;
+    }
+
     point_pointer_candidate_ = raw;
+    point_pointer_source_ = source;
+    point_pointer_snap_ =
+        std::move(object_snap);
     return resolvedPointRequestCandidate();
 }
 
@@ -880,86 +1030,8 @@ std::optional<ResolvedSketchInput>
 SketchInteractionState::
 resolvedPointRequestCandidate() const noexcept {
     const auto request = activePointRequest();
-    if (!request ||
-        !request->pointer_candidate) {
-        return std::nullopt;
-    }
-
-    const auto raw =
-        *request->pointer_candidate;
-    Point2 resolved = raw;
-
-    if (!request->base) {
-        if (point_field_locks_.u) {
-            resolved.u = *point_field_locks_.u;
-        }
-        if (point_field_locks_.v) {
-            resolved.v = *point_field_locks_.v;
-        }
-        return resolved.finite()
-            ? std::optional<ResolvedSketchInput>{
-                  ResolvedSketchInput{resolved}}
-            : std::nullopt;
-    }
-
-    const auto base = *request->base;
-    const double raw_du = raw.u - base.u;
-    const double raw_dv = raw.v - base.v;
-
-    if (point_field_locks_.delta_u ||
-        point_field_locks_.delta_v) {
-        resolved = {
-            base.u +
-                point_field_locks_.delta_u
-                    .value_or(raw_du),
-            base.v +
-                point_field_locks_.delta_v
-                    .value_or(raw_dv)};
-        return resolved.finite()
-            ? std::optional<ResolvedSketchInput>{
-                  ResolvedSketchInput{resolved}}
-            : std::nullopt;
-    }
-
-    if (point_field_locks_.distance ||
-        point_field_locks_.angle) {
-        const double raw_distance =
-            std::hypot(raw_du, raw_dv);
-
-        double resolved_angle{};
-        if (point_field_locks_.angle) {
-            resolved_angle =
-                *point_field_locks_.angle;
-        } else {
-            if (!std::isfinite(raw_distance) ||
-                raw_distance <= 0.0) {
-                return std::nullopt;
-            }
-            resolved_angle =
-                std::atan2(raw_dv, raw_du);
-        }
-
-        const double resolved_distance =
-            point_field_locks_.distance
-                .value_or(raw_distance);
-        if (!std::isfinite(resolved_distance) ||
-            resolved_distance < 0.0 ||
-            !std::isfinite(resolved_angle)) {
-            return std::nullopt;
-        }
-
-        resolved = {
-            base.u +
-                resolved_distance *
-                    std::cos(resolved_angle),
-            base.v +
-                resolved_distance *
-                    std::sin(resolved_angle)};
-    }
-
-    return resolved.finite()
-        ? std::optional<ResolvedSketchInput>{
-              ResolvedSketchInput{resolved}}
+    return request
+        ? request->resolution
         : std::nullopt;
 }
 
@@ -1066,9 +1138,13 @@ SketchInteractionState::resolveDirectDistance(
     const Point2 resolved{
         base.u + (du / length) * requested_distance,
         base.v + (dv / length) * requested_distance};
-    return resolved.finite()
+    PointResolution result{
+        resolved,
+        PointResolutionSource::explicit_numeric,
+        std::nullopt};
+    return result.valid()
         ? std::optional<ResolvedSketchInput>{
-              ResolvedSketchInput{resolved}}
+              result}
         : std::nullopt;
 }
 

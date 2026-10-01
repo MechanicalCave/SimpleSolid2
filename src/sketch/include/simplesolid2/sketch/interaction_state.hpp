@@ -243,17 +243,42 @@ using LineGripRef = SketchGripRef;
 using DirectManipulationGeometry =
     SketchTransformGeometry;
 
-struct ResolvedSketchInput final {
+enum class PointResolutionSource : std::uint8_t {
+    raw_pointer,
+    polar,
+    object_snap,
+    tracking_inference,
+    explicit_numeric,
+    numeric_lock,
+};
+
+struct PointResolution final {
     Point2 position;
+    PointResolutionSource source{
+        PointResolutionSource::raw_pointer};
+    std::optional<SnapCandidate> object_snap;
 
     [[nodiscard]] bool valid() const noexcept {
-        return position.finite();
+        if (!position.finite()) {
+            return false;
+        }
+        if (source ==
+            PointResolutionSource::object_snap) {
+            return object_snap &&
+                   object_snap->valid() &&
+                   object_snap->point == position;
+        }
+        return !object_snap.has_value();
     }
 
     friend bool operator==(
-        const ResolvedSketchInput&,
-        const ResolvedSketchInput&) = default;
+        const PointResolution&,
+        const PointResolution&) = default;
 };
+
+// Source compatibility: pre-R11 code consumes the same final semantic point
+// object under its historical name.
+using ResolvedSketchInput = PointResolution;
 
 enum class ExplicitPointInputKind : std::uint8_t {
     absolute_cartesian,
@@ -317,6 +342,7 @@ struct PointRequest final {
     std::optional<double> polar_relative_reference;
     std::optional<TemporarySnapOverrideKind>
         temporary_snap_override;
+    std::optional<PointResolution> resolution;
 
     [[nodiscard]] bool valid() const noexcept {
         const bool requires_base =
@@ -329,7 +355,10 @@ struct PointRequest final {
                (!polar_relative_reference ||
                 std::isfinite(
                     *polar_relative_reference)) &&
-               (!requires_base || base.has_value());
+               (!requires_base || base.has_value()) &&
+               (!resolution ||
+                (pointer_candidate &&
+                 resolution->valid()));
     }
 
     friend bool operator==(
@@ -377,6 +406,13 @@ public:
 
     [[nodiscard]] std::optional<ResolvedSketchInput>
     resolvePointerInput(Point2 raw) noexcept;
+
+    [[nodiscard]] std::optional<ResolvedSketchInput>
+    resolvePointerInput(
+        Point2 raw,
+        PointResolutionSource source,
+        std::optional<SnapCandidate> object_snap =
+            std::nullopt) noexcept;
 
     [[nodiscard]] std::optional<ResolvedSketchInput>
     resolvedPointRequestCandidate() const noexcept;
@@ -702,6 +738,9 @@ private:
     clearRequestLocalNumericLocks() noexcept;
     void consumeTemporarySnapOverride() noexcept {
         temporary_snap_override_.reset();
+        point_pointer_source_ =
+            PointResolutionSource::raw_pointer;
+        point_pointer_snap_.reset();
     }
 
     void resetToSelect() noexcept;
@@ -763,6 +802,9 @@ private:
     // One shared runtime pointer candidate feeds the active semantic
     // PointRequest. It is never authored or persisted.
     std::optional<Point2> point_pointer_candidate_;
+    PointResolutionSource point_pointer_source_{
+        PointResolutionSource::raw_pointer};
+    std::optional<SnapCandidate> point_pointer_snap_;
     PointFieldLocks point_field_locks_;
     std::optional<TemporarySnapOverrideKind>
         temporary_snap_override_;

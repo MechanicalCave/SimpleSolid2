@@ -1,5 +1,6 @@
 #include <simplesolid2/sketch/interaction_state.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -44,6 +45,10 @@ int main() {
              20.0});
     CHECK(first.has_value());
     CHECK(
+        first->source ==
+        sketch::PointResolutionSource::explicit_numeric);
+    CHECK(!first->object_snap.has_value());
+    CHECK(
         state.acceptLinePoint(first->position).outcome ==
         sketch::LinePointOutcome::first_point_accepted);
 
@@ -77,10 +82,24 @@ int main() {
     CHECK(near(relative_polar->position.u, 10.0));
     CHECK(near(relative_polar->position.v, 30.0));
 
-    CHECK(state.resolvePointerInput({13.0, 24.0}).has_value());
+    const auto raw_pointer =
+        state.resolvePointerInput({13.0, 24.0});
+    CHECK(raw_pointer.has_value());
+    CHECK(
+        raw_pointer->source ==
+        sketch::PointResolutionSource::raw_pointer);
+    request = state.activePointRequest();
+    CHECK(request.has_value());
+    CHECK(request->resolution.has_value());
+    CHECK(
+        request->resolution->source ==
+        sketch::PointResolutionSource::raw_pointer);
 
     const auto direct = state.resolveDirectDistance(50.0);
     CHECK(direct.has_value());
+    CHECK(
+        direct->source ==
+        sketch::PointResolutionSource::explicit_numeric);
     CHECK(near(direct->position.u, 40.0));
     CHECK(near(direct->position.v, 60.0));
     CHECK(
@@ -94,6 +113,58 @@ int main() {
     CHECK(zero.has_value());
     CHECK(zero->position == sketch::Point2{10.0, 20.0});
     CHECK(!state.resolveDirectDistance(-1.0).has_value());
+
+    // R11 PointResolution is request-owned. Object Snap provenance survives
+    // only when no higher-priority numeric lock changes the point.
+    sketch::SketchModel provenance_model;
+    const auto provenance_line =
+        provenance_model.addLine(
+            {0.0, 0.0},
+            {10.0, 0.0});
+    const auto snap_candidates =
+        sketch::staticSnapCandidates(
+            provenance_model);
+    const auto snap_it =
+        std::find_if(
+            snap_candidates.begin(),
+            snap_candidates.end(),
+            [provenance_line](
+                const sketch::SnapCandidate& item) {
+                return item.kind ==
+                           sketch::SnapKind::endpoint &&
+                       item.source.first_entity ==
+                           provenance_line &&
+                       item.point ==
+                           sketch::Point2{10.0, 0.0};
+            });
+    CHECK(snap_it != snap_candidates.end());
+
+    const auto snapped =
+        state.resolvePointerInput(
+            snap_it->point,
+            sketch::PointResolutionSource::
+                object_snap,
+            *snap_it);
+    CHECK(snapped.has_value());
+    CHECK(
+        snapped->source ==
+        sketch::PointResolutionSource::object_snap);
+    CHECK(snapped->object_snap.has_value());
+    request = state.activePointRequest();
+    CHECK(request.has_value());
+    CHECK(request->resolution == snapped);
+
+    CHECK(state.lockPointField(
+        sketch::PointFieldLockSemantic::distance,
+        25.0));
+    const auto locked_resolution =
+        state.resolvedPointRequestCandidate();
+    CHECK(locked_resolution.has_value());
+    CHECK(
+        locked_resolution->source ==
+        sketch::PointResolutionSource::numeric_lock);
+    CHECK(!locked_resolution->object_snap.has_value());
+    state.clearPointFieldLocks();
 
     const auto line_request =
         state.acceptLinePoint(direct->position);
