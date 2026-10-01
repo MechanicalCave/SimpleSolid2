@@ -497,5 +497,309 @@ int main() {
             StructuralEditStatus::not_applicable);
     }
 
+    // Arc middle Trim is outside R12 because it would leave two Arcs.
+    {
+        SketchModel model;
+        const auto target =
+            model.addArc(
+                {0.0, 0.0},
+                10.0,
+                0.0,
+                std::numbers::pi_v<double>);
+        const auto right =
+            model.addLine(
+                {5.0, -20.0},
+                {5.0, 20.0});
+        const auto left =
+            model.addLine(
+                {-5.0, -20.0},
+                {-5.0, 20.0});
+        const auto trimmed =
+            evaluateTrim(
+                model,
+                {
+                    target,
+                    {right, left},
+                    {0.0, 10.0}});
+        CHECK(
+            trimmed.status ==
+            StructuralEditStatus::not_applicable);
+        CHECK(!trimmed.state.has_value());
+    }
+
+    // Four finite cuts partition a Circle into four local spans. The clicked
+    // lower-right span alone is removed and the connected complement is one
+    // fresh 270-degree Arc.
+    {
+        SketchModel model;
+        const auto target =
+            model.addCircle(
+                {0.0, 0.0},
+                10.0);
+        const auto horizontal =
+            model.addLine(
+                {-20.0, 0.0},
+                {20.0, 0.0});
+        const auto vertical =
+            model.addLine(
+                {0.0, -20.0},
+                {0.0, 20.0});
+        const auto trimmed =
+            evaluateTrim(
+                model,
+                {
+                    target,
+                    {horizontal, vertical},
+                    {1.0, -1.0}});
+        CHECK(trimmed.ready());
+        CHECK(trimmed.result_entity.has_value());
+        CHECK(*trimmed.result_entity != target);
+        const auto edited =
+            resultModel(trimmed);
+        CHECK(edited.has_value());
+        const auto* arc =
+            edited->findArc(
+                *trimmed.result_entity);
+        CHECK(arc != nullptr);
+        CHECK(near(
+            arc->startAngle(),
+            0.0));
+        CHECK(near(
+            arc->sweepAngle(),
+            3.0 *
+                std::numbers::pi_v<double> /
+                2.0));
+    }
+
+    // Coincident authored boundary geometry must not invent arbitrary cuts.
+    {
+        SketchModel model;
+        const auto target =
+            model.addCircle(
+                {0.0, 0.0},
+                5.0);
+        const auto coincident =
+            model.addCircle(
+                {0.0, 0.0},
+                5.0);
+        const auto trimmed =
+            evaluateTrim(
+                model,
+                {
+                    target,
+                    {coincident},
+                    {5.0, 0.0}});
+        CHECK(
+            trimmed.status ==
+            StructuralEditStatus::ambiguous_topology);
+        CHECK(!trimmed.state.has_value());
+    }
+
+    // Multiple Line-Extend boundaries are ordered by exact positive travel,
+    // not by caller/provider order.
+    {
+        SketchModel model;
+        const auto target =
+            model.addLine(
+                {0.0, 0.0},
+                {1.0, 0.0});
+        const auto far =
+            model.addLine(
+                {5.0, -1.0},
+                {5.0, 1.0});
+        const auto near_boundary =
+            model.addLine(
+                {3.0, -1.0},
+                {3.0, 1.0});
+        const auto extended =
+            evaluateExtend(
+                model,
+                {
+                    target,
+                    {far, near_boundary},
+                    StructuralEndpointRole::end});
+        CHECK(extended.ready());
+        const auto edited =
+            resultModel(extended);
+        CHECK(edited.has_value());
+        CHECK(nearPoint(
+            edited->findLine(target)->end(),
+            {3.0, 0.0}));
+    }
+
+    // Arc Extend supports each finite boundary kind and both endpoint
+    // continuation directions without changing the Arc EntityId.
+    {
+        SketchModel circle_model;
+        const auto target =
+            circle_model.addArc(
+                {0.0, 0.0},
+                5.0,
+                0.0,
+                std::numbers::pi_v<double> /
+                    2.0);
+        const auto circle_boundary =
+            circle_model.addCircle(
+                {-6.0, 0.0},
+                1.0);
+        const auto to_circle =
+            evaluateExtend(
+                circle_model,
+                {
+                    target,
+                    {circle_boundary},
+                    StructuralEndpointRole::end});
+        CHECK(to_circle.ready());
+        CHECK(to_circle.result_entity == target);
+        const auto circle_edited =
+            resultModel(to_circle);
+        CHECK(circle_edited.has_value());
+        CHECK(near(
+            circle_edited->findArc(target)
+                ->sweepAngle(),
+            std::numbers::pi_v<double>));
+
+        SketchModel arc_model;
+        const auto arc_target =
+            arc_model.addArc(
+                {0.0, 0.0},
+                5.0,
+                0.0,
+                std::numbers::pi_v<double> /
+                    2.0);
+        const auto arc_boundary =
+            arc_model.addArc(
+                {-6.0, 0.0},
+                1.0,
+                -std::numbers::pi_v<double> /
+                    2.0,
+                std::numbers::pi_v<double>);
+        const auto to_arc =
+            evaluateExtend(
+                arc_model,
+                {
+                    arc_target,
+                    {arc_boundary},
+                    StructuralEndpointRole::end});
+        CHECK(to_arc.ready());
+        const auto arc_edited =
+            resultModel(to_arc);
+        CHECK(arc_edited.has_value());
+        CHECK(near(
+            arc_edited->findArc(arc_target)
+                ->sweepAngle(),
+            std::numbers::pi_v<double>));
+
+        SketchModel start_model;
+        const auto start_target =
+            start_model.addArc(
+                {0.0, 0.0},
+                5.0,
+                0.0,
+                std::numbers::pi_v<double> /
+                    2.0);
+        const auto start_boundary =
+            start_model.addLine(
+                {-1.0, -5.0},
+                {1.0, -5.0});
+        const auto from_start =
+            evaluateExtend(
+                start_model,
+                {
+                    start_target,
+                    {start_boundary},
+                    StructuralEndpointRole::start});
+        CHECK(from_start.ready());
+        const auto start_edited =
+            resultModel(from_start);
+        CHECK(start_edited.has_value());
+        const auto* start_arc =
+            start_edited->findArc(start_target);
+        CHECK(start_arc != nullptr);
+        CHECK(near(
+            start_arc->startAngle(),
+            3.0 *
+                std::numbers::pi_v<double> /
+                2.0));
+        CHECK(near(
+            start_arc->sweepAngle(),
+            std::numbers::pi_v<double>));
+
+        SketchModel negative_model;
+        const auto negative_target =
+            negative_model.addArc(
+                {0.0, 0.0},
+                5.0,
+                0.0,
+                -std::numbers::pi_v<double> /
+                    2.0);
+        const auto negative_boundary =
+            negative_model.addLine(
+                {-5.0, -1.0},
+                {-5.0, 1.0});
+        const auto negative_extended =
+            evaluateExtend(
+                negative_model,
+                {
+                    negative_target,
+                    {negative_boundary},
+                    StructuralEndpointRole::end});
+        CHECK(negative_extended.ready());
+        const auto negative_edited =
+            resultModel(negative_extended);
+        CHECK(negative_edited.has_value());
+        CHECK(near(
+            negative_edited
+                ->findArc(negative_target)
+                ->sweepAngle(),
+            -std::numbers::pi_v<double>));
+    }
+
+    // A Circle is deliberately not an Extend target in R12.
+    {
+        SketchModel model;
+        const auto target =
+            model.addCircle(
+                {0.0, 0.0},
+                1.0);
+        const auto boundary =
+            model.addLine(
+                {2.0, -2.0},
+                {2.0, 2.0});
+        const auto extended =
+            evaluateExtend(
+                model,
+                {
+                    target,
+                    {boundary},
+                    StructuralEndpointRole::end});
+        CHECK(
+            extended.status ==
+            StructuralEditStatus::unsupported);
+        CHECK(!extended.state.has_value());
+    }
+
+    // Collinear Line supports are ambiguous for Extend Both; no arbitrary
+    // virtual intersection may be selected.
+    {
+        SketchModel model;
+        const auto first =
+            model.addLine(
+                {0.0, 0.0},
+                {1.0, 0.0});
+        const auto second =
+            model.addLine(
+                {3.0, 0.0},
+                {2.0, 0.0});
+        const auto extended =
+            evaluateExtendBoth(
+                model,
+                {first, second});
+        CHECK(
+            extended.status ==
+            StructuralEditStatus::ambiguous_topology);
+        CHECK(!extended.state.has_value());
+    }
+
     return 0;
 }

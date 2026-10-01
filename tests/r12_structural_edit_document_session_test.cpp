@@ -1,5 +1,6 @@
 #include <simplesolid2/application/document_session.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -210,6 +211,142 @@ int main() {
                 .findLine(*second.entity_id)
                 ->end().v,
             1.0));
+    }
+
+    // Circle -> Arc replacement never rewrites Profile RegionIntent to the
+    // fresh Arc. The authored Profile remains the same identity/intent and
+    // becomes unresolved; Undo restores the original Circle and validity.
+    {
+        application::DocumentSession session{
+            {},
+            part::PartDocument::create(
+                core::DocumentId::generate())};
+        const auto sketch_created =
+            session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::xy_plane});
+        CHECK(
+            sketch_created.ok() &&
+            sketch_created.sketch_id);
+        const auto sketch_id =
+            *sketch_created.sketch_id;
+
+        const auto circle =
+            session.execute(
+                application::AddSketchCircleCommand{
+                    sketch_id,
+                    {0.0, 0.0},
+                    10.0});
+        CHECK(circle.ok() && circle.entity_id);
+
+        const auto* source =
+            session.document().findSketch(sketch_id);
+        CHECK(source != nullptr);
+        const auto analysis =
+            sketch::analyzeRegions(source->model);
+        const auto picked =
+            sketch::pickRegion(
+                source->model,
+                analysis,
+                {0.0, 0.0});
+        CHECK(picked.region_index.has_value());
+        const auto region =
+            std::find_if(
+                analysis.regions.begin(),
+                analysis.regions.end(),
+                [&](const sketch::RegionCandidate2D& item) {
+                    return item.region_index ==
+                           *picked.region_index;
+                });
+        CHECK(region != analysis.regions.end());
+        const auto intent =
+            part::makeProfileRegionIntent(*region);
+        CHECK(intent.has_value());
+
+        const auto profile =
+            session.execute(
+                application::CreateProfileCommand{
+                    sketch_id,
+                    session.document().revision(),
+                    *intent});
+        CHECK(profile.ok() && profile.profile_id);
+        const auto profile_id =
+            *profile.profile_id;
+        const auto profile_before =
+            *session.document().findProfile(
+                profile_id);
+        CHECK(
+            session.document()
+                .evaluateProfile(profile_id)
+                ->valid());
+
+        // Construction participates as an R12 boundary but does not alter the
+        // material-region topology before Trim.
+        const auto cutter =
+            session.execute(
+                application::AddSketchLineCommand{
+                    sketch_id,
+                    {-20.0, 0.0},
+                    {20.0, 0.0},
+                    sketch::EntityRole::construction});
+        CHECK(cutter.ok() && cutter.entity_id);
+        CHECK(
+            session.document()
+                .evaluateProfile(profile_id)
+                ->valid());
+
+        const auto trimmed =
+            session.execute(
+                application::TrimSketchCommand{
+                    sketch_id,
+                    session.document().revision(),
+                    *circle.entity_id,
+                    {*cutter.entity_id},
+                    {0.0, -10.0}});
+        CHECK(trimmed.ok() && trimmed.changed);
+        CHECK(trimmed.result_entity.has_value());
+        CHECK(
+            *trimmed.result_entity !=
+            *circle.entity_id);
+
+        const auto* profile_after =
+            session.document().findProfile(
+                profile_id);
+        CHECK(profile_after != nullptr);
+        CHECK(*profile_after == profile_before);
+        const auto broken =
+            session.document().evaluateProfile(
+                profile_id);
+        CHECK(broken.has_value());
+        CHECK(!broken->valid());
+        CHECK(
+            broken->status ==
+            part::ProfileIntentResolutionStatus::
+                missing_source_entity);
+
+        CHECK(session.undo().changed);
+        const auto restored =
+            session.document().evaluateProfile(
+                profile_id);
+        CHECK(restored.has_value());
+        CHECK(restored->valid());
+        CHECK(
+            *session.document().findProfile(
+                profile_id) ==
+            profile_before);
+
+        CHECK(session.redo().changed);
+        const auto broken_again =
+            session.document().evaluateProfile(
+                profile_id);
+        CHECK(broken_again.has_value());
+        CHECK(!broken_again->valid());
+        CHECK(
+            session.document()
+                .findSketch(sketch_id)
+                ->model.findArc(
+                    *trimmed.result_entity) !=
+            nullptr);
     }
 
     return EXIT_SUCCESS;
