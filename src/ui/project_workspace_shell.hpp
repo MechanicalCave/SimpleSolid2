@@ -65,6 +65,17 @@ public:
             std::move(handler);
     }
 
+    using DocumentHistoryActionHandler =
+        std::function<void()>;
+    void setDocumentHistoryHandlers(
+        DocumentHistoryActionHandler undo_handler,
+        DocumentHistoryActionHandler redo_handler) {
+        document_undo_handler_ =
+            std::move(undo_handler);
+        document_redo_handler_ =
+            std::move(redo_handler);
+    }
+
     [[nodiscard]] const std::string&
     cadInputBuffer() const noexcept;
     [[nodiscard]] std::size_t
@@ -128,6 +139,10 @@ private:
         cad_interaction_settings_changed_handler_;
     CadInputPresentationChangedHandler
         cad_input_presentation_changed_handler_;
+    DocumentHistoryActionHandler
+        document_undo_handler_;
+    DocumentHistoryActionHandler
+        document_redo_handler_;
     QWidget* command_line_widget_{};
     QLabel* command_prompt_{};
     QLineEdit* command_input_{};
