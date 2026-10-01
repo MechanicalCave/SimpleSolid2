@@ -100,7 +100,7 @@ int main() {
             SnapSemanticRole::line_start,
             horizontal);
     CHECK(line_start != nullptr);
-    CHECK(line_start->point == Point2{0.0, 0.0});
+    CHECK((line_start->point == Point2{0.0, 0.0}));
 
     const auto* line_mid =
         findCandidate(
@@ -109,7 +109,7 @@ int main() {
             SnapSemanticRole::line_midpoint,
             horizontal);
     CHECK(line_mid != nullptr);
-    CHECK(line_mid->point == Point2{5.0, 0.0});
+    CHECK((line_mid->point == Point2{5.0, 0.0}));
 
     const auto* circle_center =
         findCandidate(
@@ -118,7 +118,7 @@ int main() {
             SnapSemanticRole::circle_center,
             circle);
     CHECK(circle_center != nullptr);
-    CHECK(circle_center->point == Point2{20.0, 0.0});
+    CHECK((circle_center->point == Point2{20.0, 0.0}));
 
     const auto* circle_quad =
         findCandidate(
@@ -127,7 +127,7 @@ int main() {
             SnapSemanticRole::circle_quadrant_pos_v,
             circle);
     CHECK(circle_quad != nullptr);
-    CHECK(circle_quad->point == Point2{20.0, 5.0});
+    CHECK((circle_quad->point == Point2{20.0, 5.0}));
 
     const auto* arc_quad_u =
         findCandidate(
@@ -162,7 +162,7 @@ int main() {
             SnapKind::origin,
             SnapSemanticRole::intrinsic_origin);
     CHECK(origin != nullptr);
-    CHECK(origin->point == Point2{0.0, 0.0});
+    CHECK((origin->point == Point2{0.0, 0.0}));
     CHECK(
         origin->source.kind ==
         SnapSourceKind::intrinsic_origin);
@@ -192,9 +192,9 @@ int main() {
     CHECK(
         crossings.front().kind ==
         SnapKind::intersection);
-    CHECK(
+    CHECK((
         crossings.front().point ==
-        Point2{10.0, 0.0});
+        Point2{10.0, 0.0}));
     CHECK(
         crossings.front().source.kind ==
         SnapSourceKind::intersection);
@@ -247,9 +247,9 @@ int main() {
             horizontal,
             {20.0, 3.0});
     CHECK(nearest_line_end.has_value());
-    CHECK(
+    CHECK((
         nearest_line_end->point ==
-        Point2{10.0, 0.0});
+        Point2{10.0, 0.0}));
 
     const auto nearest_circle =
         nearestSnapCandidate(
@@ -257,9 +257,9 @@ int main() {
             circle,
             {22.0, 0.0});
     CHECK(nearest_circle.has_value());
-    CHECK(
+    CHECK((
         nearest_circle->point ==
-        Point2{25.0, 0.0});
+        Point2{25.0, 0.0}));
     CHECK(
         !nearestSnapCandidate(
             model,
@@ -301,12 +301,12 @@ int main() {
             circle,
             {30.0, 0.0});
     CHECK(perpendicular_circle.size() == 2U);
-    CHECK(
+    CHECK((
         perpendicular_circle[0].point ==
-        Point2{25.0, 0.0});
-    CHECK(
+        Point2{25.0, 0.0}));
+    CHECK((
         perpendicular_circle[1].point ==
-        Point2{15.0, 0.0});
+        Point2{15.0, 0.0}));
     CHECK(
         perpendicularSnapCandidates(
             model,
@@ -352,9 +352,9 @@ int main() {
             circle,
             {25.0, 0.0});
     CHECK(on_circle_tangent.size() == 1U);
-    CHECK(
+    CHECK((
         on_circle_tangent.front().point ==
-        Point2{25.0, 0.0});
+        Point2{25.0, 0.0}));
 
     const auto arc_tangents =
         tangentSnapCandidates(
