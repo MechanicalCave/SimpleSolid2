@@ -1641,6 +1641,7 @@ set(_ss2_native_tests
     wb01b.navigation_cube_native
 )
 set_property(TEST ${_ss2_native_tests} APPEND PROPERTY LABELS "native")
+set_property(TEST ${_ss2_native_tests} APPEND PROPERTY RESOURCE_LOCK "ss2_native_viewer")
 
 # Production UI implementation is compiled once in src/simplesolid2_ui and linked here.
 set(_ss2_ui_test_targets
