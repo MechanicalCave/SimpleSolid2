@@ -4703,7 +4703,8 @@ PartSketchInteractionController::resolvePointerInput(
             eligibility.intersection ||
             eligibility.perpendicular ||
             eligibility.tangent ||
-            eligibility.nearest;
+            eligibility.nearest ||
+            eligibility.extension;
 
         if (!eligibility.suppress_object_assistance &&
             (anyStaticSnapMode(modes) ||
@@ -4753,6 +4754,125 @@ PartSketchInteractionController::resolvePointerInput(
                     std::sort(
                         nearby_entities.begin(),
                         nearby_entities.end());
+                }
+            }
+
+            // EXT is an explicit request-local reference acquisition, not a
+            // static SnapKind. Pick only authored Line endpoints from the
+            // bounded nearby set. Acquisition itself does not accept a point.
+            if (eligibility.extension &&
+                (!request->deferred_snap_reference ||
+                 request->deferred_snap_reference->kind !=
+                     sketch::DeferredSnapReferenceKind::
+                         line_extension)) {
+                struct ExtensionEndpointCandidate final {
+                    sketch::EntityId entity;
+                    sketch::SnapSemanticRole role;
+                    double screen_distance{};
+                };
+                std::optional<ExtensionEndpointCandidate>
+                    best_extension_endpoint;
+
+                for (const auto entity :
+                     nearby_entities) {
+                    const auto* line =
+                        hosted->model.findLine(entity);
+                    if (line == nullptr) {
+                        continue;
+                    }
+
+                    const std::array<
+                        std::pair<
+                            sketch::Point2,
+                            sketch::SnapSemanticRole>,
+                        2U>
+                        endpoints{{
+                            {
+                                line->start(),
+                                sketch::SnapSemanticRole::
+                                    line_start},
+                            {
+                                line->end(),
+                                sketch::SnapSemanticRole::
+                                    line_end},
+                        }};
+
+                    for (const auto& [point, role] :
+                         endpoints) {
+                        const auto projected =
+                            viewport_controller_->
+                                projectSketchPointToViewport(
+                                    point);
+                        if (!projected) {
+                            continue;
+                        }
+                        const double distance =
+                            viewportDistance(
+                                input.viewport_position,
+                                *projected);
+                        if (!std::isfinite(distance) ||
+                            distance >
+                                snap_policy.
+                                    capture_distance) {
+                            continue;
+                        }
+
+                        const ExtensionEndpointCandidate
+                            candidate{
+                                entity,
+                                role,
+                                distance};
+                        if (!best_extension_endpoint ||
+                            candidate.screen_distance <
+                                best_extension_endpoint->
+                                    screen_distance ||
+                            (candidate.screen_distance ==
+                                 best_extension_endpoint->
+                                     screen_distance &&
+                             std::tuple{
+                                 candidate.entity,
+                                 static_cast<std::uint8_t>(
+                                     candidate.role)} <
+                                 std::tuple{
+                                     best_extension_endpoint->
+                                         entity,
+                                     static_cast<std::uint8_t>(
+                                         best_extension_endpoint->
+                                             role)})) {
+                            best_extension_endpoint =
+                                candidate;
+                        }
+                    }
+                }
+
+                if (best_extension_endpoint) {
+                    const auto reference =
+                        sketch::
+                            makeLineExtensionReference(
+                                hosted->model,
+                                best_extension_endpoint->
+                                    entity,
+                                best_extension_endpoint->
+                                    role);
+                    if (reference) {
+                        static_cast<void>(
+                            interaction_.
+                                setDeferredSnapReference(
+                                    *reference));
+
+                        if (request->
+                                temporary_snap_override ==
+                            sketch::
+                                TemporarySnapOverrideKind::
+                                    extension) {
+                            interaction_.
+                                clearPointerResolution();
+                            snap_capture_.clear();
+                            tracking_hover_.reset();
+                            polar_capture_ = {};
+                            return std::nullopt;
+                        }
+                    }
                 }
             }
 
@@ -4877,6 +4997,60 @@ PartSketchInteractionController::resolvePointerInput(
     }
 
     tracking_hover_.reset();
+
+    const auto deferred_reference =
+        interaction_.deferredSnapReference();
+    if (!eligibility.suppress_object_assistance &&
+        deferred_reference &&
+        deferred_reference->kind ==
+            sketch::DeferredSnapReferenceKind::
+                line_extension) {
+        std::optional<sketch::Point2>
+            extension_point;
+
+        if (eligibility.extension) {
+            extension_point =
+                sketch::projectPointToLineExtension(
+                    hosted->model,
+                    *deferred_reference,
+                    input.position);
+        } else if (
+            eligibility.perpendicular &&
+            request->base) {
+            extension_point =
+                sketch::
+                    perpendicularPointOnLineExtension(
+                        hosted->model,
+                        *deferred_reference,
+                        *request->base);
+        }
+
+        if (extension_point) {
+            const auto projected =
+                viewport_controller_->
+                    projectSketchPointToViewport(
+                        *extension_point);
+            if (projected) {
+                const double distance =
+                    viewportDistance(
+                        input.viewport_position,
+                        *projected);
+                const sketch::SnapResolutionPolicy
+                    policy{};
+                if (std::isfinite(distance) &&
+                    distance <=
+                        policy.capture_distance) {
+                    polar_capture_ = {};
+                    return interaction_.
+                        resolvePointerInput(
+                            *extension_point,
+                            sketch::
+                                PointResolutionSource::
+                                    tracking_inference);
+                }
+            }
+        }
+    }
 
     if (request->temporary_snap_override &&
         *request->temporary_snap_override !=

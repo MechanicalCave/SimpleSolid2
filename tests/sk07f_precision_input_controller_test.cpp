@@ -1503,6 +1503,188 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.trackingAnchorCount() == 0U);
     CHECK(interaction.escape());
 
+    // EXT is two-phase runtime inference: acquire one Line endpoint
+    // reference, then resolve only the positive ray beyond that endpoint.
+    const auto extension_line_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {9000.0, 9000.0},
+                {9010.0, 9000.0},
+                sketch::EntityRole::regular});
+    CHECK(
+        extension_line_result.ok() &&
+        extension_line_result.changed);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    const auto extension_line =
+        model_state.lines.back().id;
+    viewport_controller.refreshPresentation();
+    const auto extension_token =
+        viewport_controller.sketchPresentationFor(
+            extension_line);
+    CHECK(extension_token.has_value());
+    viewport.rectangle_query_ = {
+        true,
+        {*extension_token}};
+
+    application::CadInteractionSettings extension_settings;
+    extension_settings.polar.enabled = false;
+    extension_settings.object_snap.endpoint = false;
+    extension_settings.object_snap.midpoint = false;
+    extension_settings.object_snap.center = false;
+    extension_settings.object_snap.quadrant = false;
+    extension_settings.object_snap.intersection = false;
+    extension_settings.object_snap.origin = false;
+    interaction.setCadInteractionSettingsProvider(
+        [&extension_settings] {
+            return extension_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            8900.0,
+            8900.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            extension));
+
+    movePointer(
+        interaction,
+        sketch_id,
+        9010.0,
+        9000.0,
+        9010.0,
+        9000.0);
+    CHECK(!interaction.pointResolution().has_value());
+    auto extension_request =
+        interaction.activePointRequest();
+    CHECK(extension_request.has_value());
+    CHECK(
+        extension_request->deferred_snap_reference.
+            has_value());
+    CHECK(
+        extension_request->deferred_snap_reference->
+            kind ==
+        sketch::DeferredSnapReferenceKind::
+            line_extension);
+
+    movePointer(
+        interaction,
+        sketch_id,
+        9020.0,
+        9004.0,
+        9020.0,
+        9004.0);
+    auto extension_resolution =
+        interaction.pointResolution();
+    CHECK(extension_resolution.has_value());
+    CHECK(
+        extension_resolution->source ==
+        sketch::PointResolutionSource::
+            tracking_inference);
+    CHECK((
+        extension_resolution->position ==
+        sketch::Point2{9020.0, 9000.0}));
+
+    const auto lines_before_extension =
+        hosted->model.state().lines.size();
+    click(
+        interaction,
+        sketch_id,
+        9020.0,
+        9004.0,
+        9020.0,
+        9004.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_extension + 1U);
+    CHECK((
+        model_state.lines.back().end ==
+        sketch::Point2{9020.0, 9000.0}));
+    CHECK(
+        !interaction.activePointRequest()->
+             deferred_snap_reference.has_value());
+    CHECK(interaction.escape());
+
+    // EXT never applies to the finite segment itself.
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            8900.0,
+            8900.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            extension));
+    movePointer(
+        interaction,
+        sketch_id,
+        9010.0,
+        9000.0,
+        9010.0,
+        9000.0);
+    movePointer(
+        interaction,
+        sketch_id,
+        9005.0,
+        9003.0,
+        9005.0,
+        9003.0);
+    CHECK(!interaction.pointResolution().has_value());
+    CHECK(interaction.escape());
+
+    // Switching the one-shot family EXT -> PER preserves the request-local
+    // Extension reference. The exact perpendicular foot may lie outside the
+    // finite Line and still resolve on the explicit positive ray.
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            9020.0,
+            9010.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            extension));
+    movePointer(
+        interaction,
+        sketch_id,
+        9010.0,
+        9000.0,
+        9010.0,
+        9000.0);
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            perpendicular));
+    movePointer(
+        interaction,
+        sketch_id,
+        9020.0,
+        9004.0,
+        9020.0,
+        9004.0);
+    extension_resolution =
+        interaction.pointResolution();
+    CHECK(extension_resolution.has_value());
+    CHECK(
+        extension_resolution->source ==
+        sketch::PointResolutionSource::
+            tracking_inference);
+    CHECK((
+        extension_resolution->position ==
+        sketch::Point2{9020.0, 9000.0}));
+    CHECK(interaction.escape());
+    viewport.rectangle_query_ = {true, {}};
+
     // Polar is a logical-screen-space magnet. With 90-degree Absolute
     // tracks, (20,1) captures +U. Direct Distance owns magnitude only.
     application::CadInteractionSettings polar_settings;
