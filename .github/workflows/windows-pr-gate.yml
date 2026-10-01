@@ -375,6 +375,28 @@ jobs:
           .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug") -Tier full -NoBuild
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: CI-04 warm FULL parity evidence
+        run: |
+          $ErrorActionPreference = "Stop"
+          $message = (git log -1 --format=%B) -join "`n"
+          if ($message -notmatch '(?m)^CI04-Warm-Parity:\s*true\s*$') {
+              Write-Host "[warm-parity] skipped; current commit does not request CI-04 warm parity"
+              exit 0
+          }
+
+          $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
+          $sw = [Diagnostics.Stopwatch]::StartNew()
+          .\ss2.ps1 build -BuildDir $build -Target ss2_tests_full
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $sw.Stop()
+          Write-Host "[warm-parity] warm build seconds=$([Math]::Round($sw.Elapsed.TotalSeconds, 2))"
+
+          $sw.Restart()
+          .\ss2.ps1 test -BuildDir $build -Tier full -NoBuild
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $sw.Stop()
+          Write-Host "[warm-parity] warm test seconds=$([Math]::Round($sw.Elapsed.TotalSeconds, 2))"
+
       - name: CI-04 comparative timing evidence
         run: |
           $ErrorActionPreference = "Stop"
