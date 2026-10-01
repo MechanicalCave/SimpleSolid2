@@ -2,6 +2,7 @@
 
 **Status:** PROPOSED — INACTIVE  
 **Proposed:** 2026-09-30  
+**Proposal synchronization:** 2026-10-01 after CI-04 completion  
 **Owner acceptance:** pending  
 **Decision class:** D2 runtime point-resolution / snap / tracking / inference grammar + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -66,24 +67,53 @@ R12+ remain inactive.
 
 ## 4. Core architectural rule — one point-resolution system
 
-R11 must extend the accepted R10 point-resolution pipeline.
+R11 extends the accepted R10 semantic point-resolution path. It does not add a peer resolver.
+
+The runtime request model is:
+
+```text
+PointRequest
+  ├─ shared user OSNAP/OTRACK preferences reference
+  ├─ one-shot Temporary Snap Override
+  ├─ request-local captured snap state
+  ├─ request-local tracking anchors
+  ├─ optional deferred request-relative reference
+  ├─ request-local inference guides
+  └─ one final PointResolution
+```
+
+A `PointResolution` is the single semantic result consumed by preview/accept/commit. It contains the exact Sketch-local point plus runtime provenance/presentation information sufficient to explain how that point was resolved.
+
+The accepted priority hierarchy is:
+
+```text
+complete explicit numeric point
+> explicit numeric/request locks
+> compatible exact Object Snap
+> tracking/inference guide result
+> Polar
+> raw pointer
+```
+
+A higher-priority condition is never changed to satisfy a lower-priority aid.
 
 Conceptually:
 
 ```text
-raw pointer / semantic geometry
+raw pointer + semantic geometry + request state
         │
-        ├─ runtime snap candidate generation
-        ├─ tracking / inference candidate generation
-        └─ Polar directional assistance
+        ├─ static/request-relative snap candidate generation
+        ├─ tracking/inference candidate generation
+        ├─ Polar directional assistance
+        └─ explicit numeric / request locks
                 │
                 ▼
-        existing semantic PointRequest
-                │
-        existing numeric/request locks
+        one semantic resolver
                 │
                 ▼
-        resolved semantic Sketch-local Point2
+        PointResolution
+                │
+        normal preview / accept / commit
 ```
 
 R11 must not introduce:
@@ -92,23 +122,29 @@ R11 must not introduce:
 - a second per-tool point state machine;
 - a Viewer-owned final point;
 - a tool-specific snap parser;
+- a separate tolerance-based geometry resolver;
 - a snap path that bypasses normal preview/accept/commit semantics.
 
 The active operation still owns whether a point is valid and what accepting it means.
 
-## 5. Runtime snap reference versus durable identity
+## 5. Runtime candidate and result semantics
 
 A snap target is runtime semantic provenance, not authored identity.
 
-A runtime snap candidate may conceptually carry:
+A runtime candidate carries conceptually:
 
 - exact/evaluated Sketch-local `Point2`;
-- snap kind;
+- snap/inference kind;
 - semantic source reference(s), such as EntityId + semantic role;
-- optional request-relative source information for perpendicular/tangent;
-- deterministic display/ranking key.
+- request-relative source information where PER/TAN/EXT requires it;
+- request-relative validity information;
+- deterministic stable ranking key independent of provider enumeration order.
 
-The exact C++ representation is D1 and may differ.
+The exact C++ type layout is D1, but the semantic payload is not optional.
+
+Origin uses a stable intrinsic semantic key and must not be represented by a fake EntityId.
+
+A final `PointResolution` may additionally carry presentation provenance such as captured snap kind, tracking/guide source and label information, but that runtime provenance is not persisted into authored CAD state.
 
 R11 must not infer a durable shared vertex, relation or constraint from a snap. If a Line endpoint is authored at an Endpoint snap, the resulting coordinate is exact according to the accepted operation; no new Coincident relation is authored by R11.
 
@@ -128,9 +164,9 @@ Profile fills, Viewer edges, Navigation Cube geometry and provider-native topolo
 
 Future projected/reference geometry requires a later contract.
 
-## 7. Snap modes
+## 7. Snap modes and request-relative semantics
 
-The proposed R11 mode vocabulary is:
+The R11 user-visible mode vocabulary is:
 
 ### Static semantic point modes
 
@@ -145,36 +181,77 @@ The proposed R11 mode vocabulary is:
   - Arc Center.
 - **Quadrant**
   - Circle ±U/±V quadrants;
-  - Arc quadrant points only when the corresponding canonical quadrant lies on the authored sweep.
+  - Arc quadrant points only when the canonical quadrant lies on the authored sweep.
 - **Intersection**
-  - exact evaluated discrete intersections of eligible authored curves;
-  - no overlap/coincident-curve guess.
+  - exact evaluated finite discrete intersections of eligible authored curves;
+  - overlap/coincident curves do not invent a candidate.
 - **Origin**
   - intrinsic active-Sketch Origin.
 
-### Request-relative modes
+### Perpendicular
 
-- **Perpendicular**
-  - requires an active PointRequest with a semantic base;
-  - resolves perpendicular feet from the base to eligible Line/Circle/Arc geometry where the exact finite-curve result exists.
-- **Tangent**
-  - requires an active PointRequest with a semantic base;
-  - resolves mathematically valid tangent points from the base to eligible Circle/Arc geometry;
-  - invalid/inside-circle cases fail closed.
-- **Nearest**
-  - closest finite-curve point to the current Sketch-local pointer candidate;
-  - remains a fallback-style snap and must not mask more specific semantic snaps.
+Perpendicular is one user-visible mode with internal request phases:
 
-### Bounded Extension
+- **PerpendicularFromPoint**
+  - requires a resolved request base;
+  - Line: exact orthogonal foot is eligible only when the foot lies on the finite Line segment unless explicit Extension semantics are active;
+  - Circle: candidate is the radial contact on the Circle in the base→center direction family where uniquely defined;
+  - Arc: corresponding Circle contact is additionally filtered by authored Arc sweep;
+  - base at Circle/Arc center is non-unique and fails closed.
+- **PerpendicularContinuation**
+  - applies when the current operation already establishes the source/reference direction needed for a perpendicular continuation;
+  - uses the same exact finite-curve validity rules;
+  - is runtime request state, not a persistent relation.
 
-Initial proposal: **Line Extension only**.
+### Tangent
 
-- extension is based on the infinite support of an authored Line;
-- it is eligible only beyond a finite Line endpoint, not over the finite segment itself;
-- the displayed guide must make the extension semantics explicit;
-- Arc/Circle extension is deferred because its product meaning is not yet justified.
+Tangent is one user-visible mode with internal phases:
 
-Any broader extension family requires Owner refinement before activation.
+- **TangentFromPoint**
+  - from an already resolved base to Circle/Arc;
+  - exact tangent points are computed from supporting-circle geometry;
+  - Arc candidates are filtered by authored sweep;
+  - inside-circle/no-real-tangent cases fail closed.
+- **DeferredTangent**
+  - when TAN is explicitly requested before the operation has a suitable base, the request may capture one semantic Circle/Arc source as a deferred runtime reference;
+  - accepting that first phase does not author a constraint or hidden point.
+- **CommonTangent**
+  - when a deferred first source and a second Circle/Arc source are available, all exact admissible common-tangent branches are generated;
+  - branch choice uses the same screen-space ranking/hysteresis rules as other runtime candidates;
+  - Arc endpoints/sweeps filter branches after supporting-circle construction.
+- **TangentContinuation**
+  - may be used only where the current operation already provides the semantic continuation source needed to define tangent continuation;
+  - it remains request-local runtime state.
+
+No TAN phase creates a persistent Tangent constraint.
+
+### Nearest
+
+Nearest is a continuous finite-curve projection:
+
+- Line: nearest point on the finite segment;
+- Circle: nearest radial point when uniquely defined;
+- Arc: nearest point on the finite authored sweep, including endpoint fallback where appropriate;
+- degenerate/non-unique cases fail closed.
+
+Nearest is a fallback tier. Any eligible specific snap at the same interaction wins before Nearest regardless of a small screen-distance advantage.
+
+Nearest is OFF by default.
+
+### Extension
+
+Extension is a virtual inference reference, not a static `SnapKind`.
+
+Initial R11 Extension is Line-only:
+
+- explicit Extension acquisition identifies one authored Line endpoint/reference;
+- the virtual support is a positive ray continuing beyond that endpoint away from the finite segment;
+- the finite Line segment itself is not Extension;
+- Extension may participate in compatible request-relative inference such as PER where the explicit Extension context makes that support legal;
+- the virtual ray/guide is runtime-only and non-selectable;
+- Arc/Circle extension is deferred.
+
+Extension is OFF by default and must never become implicit world-space line extrapolation for unrelated snap modes.
 
 ## 8. Reuse of R8B semantic point infrastructure
 
@@ -207,111 +284,159 @@ Requirements:
 
 R11 does not change Package-F region-closure rules.
 
-## 10. Screen-space acquisition versus geometric result
+## 10. Screen-space acquisition, exact geometry and hysteresis
 
-Snap eligibility is a runtime/presentation decision and may use logical screen-space distance.
+Snap eligibility is a runtime/presentation decision and uses logical screen-space distance.
 
-The resolved point itself must come from semantic/evaluated geometry.
+The resolved point itself comes only from semantic/evaluated geometry.
 
 Therefore:
 
-- pixel distance may decide whether a candidate is considered;
-- pixel distance must never change stored geometry;
-- no pixel value becomes a Product gap tolerance;
-- zoom/DPI must not change the exact geometric location of a captured candidate;
-- two distinct points must not be geometrically merged merely because their markers overlap on screen.
+- aperture and release thresholds are logical screen-space values;
+- screen distance is measured from the pointer to the projected exact candidate;
+- pixels never become Product geometry tolerance;
+- zoom/DPI/camera changes may change acquisition eligibility but must not change the exact candidate point;
+- two nearby but distinct semantic points remain distinct even if markers overlap;
+- no world-space epsilon may merge snap candidates.
+
+Capture uses bounded hysteresis so a currently captured valid candidate is not replaced by tiny pointer jitter. Hysteresis affects acquisition/branch retention only; it never changes exact geometry or ranking authority.
+
+The initial numeric aperture/release values are D1 tuning parameters and must be established from Windows interaction evidence.
 
 ## 11. Deterministic candidate resolution
 
-The roadmap requires deterministic resolution with no manual candidate cycling.
+Candidate resolution is deterministic and has no manual candidate cycling.
 
-Proposed resolver rules:
+The accepted pipeline is:
 
-1. a valid Temporary Snap Override restricts candidate kinds for the next accepted point;
-2. otherwise only currently enabled persistent OSNAP modes participate;
-3. candidates outside the screen-space acquisition aperture are ignored;
-4. exact same-coordinate candidates may collapse to one geometric result while retaining deterministic provenance for presentation;
-5. **Nearest is fallback-tier** and cannot outrank a more specific eligible semantic snap merely because the nearest-point projection is a few pixels closer;
-6. within the same semantic tier, lower screen-space distance wins;
-7. remaining ties use a fixed snap-kind order and stable semantic source key, never provider enumeration order;
-8. no Tab/manual cycling is introduced.
+1. Temporary Override / master-enabled gate;
+2. request/context/source compatibility;
+3. exact geometric validity;
+4. compatibility with explicit numeric/request locks;
+5. logical screen-space aperture;
+6. exact same-point collapse;
+7. specific-snap tier versus Nearest fallback tier;
+8. logical screen distance to the projected exact candidate;
+9. deterministic exact tie key;
+10. capture/branch hysteresis.
 
-The exact fixed snap-kind order and any tie-band value remain Owner decisions before activation.
+Temporary Override restricts the eligible family. It does not mean "prefer this family and then silently fall back".
 
-## 12. Interaction with R10 exact input and locks
+Same-point collapse is allowed only when Shared 2D exact/canonical semantic evaluation establishes the same geometric contact. It must not use an epsilon, world-space snap tolerance or marker overlap. Exact Endpoint+Intersection coincidence may therefore collapse; merely nearby points may not.
 
-R10 input priority remains authoritative.
+Within the specific-snap tier, remaining exact ties use a fixed semantic kind order plus stable semantic source key. Provider query/enumeration order is never a tie-breaker.
 
-R11 must preserve these rules:
+Nearest is a hard lower tier and cannot outrank an eligible specific snap merely because its continuous projection is slightly closer on screen.
 
-- a complete explicit point token resolves independently of OSNAP/Tracking;
-- locked U/V/dU/dV/Distance/Angle values are never silently changed to satisfy a snap;
-- an OSNAP marker may be shown as captured only when the final request resolution is compatible with the advertised snap result;
-- Temporary Snap Override changes snap eligibility only; it does not outrank numeric locks;
-- Dynamic Input remains an adapter to the same request and may display snap/inference state but owns no snap semantics.
+The exact numeric aperture/hysteresis constants remain D1 tuning; the ordering above does not.
 
-For an unlocked point request, an accepted exact OSNAP candidate supplies the semantic point.
+## 12. Interaction with R10 explicit input and locks
 
-For partially locked requests, implementation must fail closed rather than display a snap glyph while committing a different point.
+R10 remains authoritative for explicit numeric input.
 
-## 13. Interaction with Polar
+Rules:
 
-R11 and Polar are complementary:
+- a complete explicit point token resolves independently of OSNAP, OTRACK, inference and Polar;
+- explicit U/V/dU/dV/Distance/Angle locks are never silently changed to satisfy snap/tracking/Polar;
+- Temporary Override changes only runtime snap eligibility and never outranks numeric locks;
+- an OSNAP marker may be shown as captured only when the final `PointResolution` actually preserves that exact advertised snap;
+- Dynamic Input remains an adapter to the same `PointRequest` and owns no snap/tracking semantics.
 
-- exact object snaps target semantic points/relations;
-- Polar constrains free direction;
-- numeric locks remain higher priority than both.
+For an unlocked point request, a compatible exact OSNAP point supplies the semantic point.
 
-Proposed behavior:
+For a partially locked request, OSNAP may resolve only remaining free parameters where the exact candidate is compatible. Otherwise that snap candidate is rejected.
 
-- when an exact OSNAP point candidate is captured and compatible with request locks, that point outranks Polar attraction;
-- when no exact point snap is active, Polar continues to supply directional assistance exactly as in R10;
-- tracking/inference guides may share the configured Polar angle family, but whether Tracking remains active when the Polar attraction toggle itself is OFF is an explicit Owner decision before activation.
+After OSNAP, compatible tracking/inference may resolve a still-free point. Polar may act only after those higher-priority aids. Raw pointer is last.
 
-R11 must not reinterpret explicit `@Distance<Angle` or locked Dynamic Input Angle values.
+Implementation must fail closed rather than display one semantic result while committing another.
 
-## 14. Persistent OSNAP mode set
+## 13. Interaction with Polar and base inference
 
-R11 introduces one runtime OSNAP configuration:
+R11 and Polar are complementary but separate runtime aids.
 
-- master enabled/disabled state;
+Accepted hierarchy:
+
+```text
+explicit numeric
+> numeric locks
+> OSNAP
+> tracking/inference
+> Polar
+> raw
+```
+
+Rules:
+
+- a compatible exact OSNAP point outranks Polar attraction;
+- tracking/guide inference outranks Polar when it yields an exact compatible inferred point;
+- Polar remains the lower-priority directional magnet when no higher-priority exact point is active;
+- explicit `@Distance<Angle` and locked Dynamic Input Angle values are never reinterpreted by R11.
+
+Object Snap Tracking has a separate master toggle from Polar.
+
+When OTRACK is ON and Polar is OFF, tracking remains useful using the Sketch base U/V direction family.
+
+When Polar is ON, OTRACK may additionally use the currently configured accepted Polar direction family.
+
+Base Sketch U/V inference needed by the current request may remain available even when OTRACK is OFF; OTRACK specifically controls acquired-anchor tracking, not all geometric point inference.
+
+No tracking or Polar guide is authored geometry.
+
+## 14. Persistent user OSNAP / OTRACK preferences
+
+R11 introduces one shared live user configuration used by all open documents/Sketches:
+
+- OSNAP master enabled/disabled state;
 - enabled persistent snap-mode set;
-- separate Object Snap Tracking enabled/disabled state.
+- separate OTRACK master enabled/disabled state.
 
-The configuration is user-controlled but not authored Part/Sketch state.
+Accepted defaults:
 
-Open Owner decisions before activation:
+- ON: Endpoint, Midpoint, Center, Quadrant, Intersection, Origin;
+- OFF: Perpendicular, Tangent, Nearest, Extension;
+- OTRACK: OFF.
 
-- default enabled snap modes;
-- whether mode configuration is application-session only or becomes application preference;
-- master-toggle shortcut (proposed CAD convention: F3);
-- tracking-toggle shortcut (proposed CAD convention: F11).
+The preferences are application/user preferences and persist across documents and application sessions.
 
-No document revision, dirty state or Undo entry may result from changing runtime snap configuration.
+They are not document, Part or Sketch authored state:
+
+- no document override;
+- no per-tool copy of the mode set;
+- no revision/dirty/Undo entry from changing preferences;
+- no persistence-schema change to CAD documents.
+
+Open requests consume the shared live configuration; changing master/per-kind/OTRACK settings takes effect immediately without replacing the request.
+
+UI must provide a clear Object Snap control/panel containing master, per-kind and separate OTRACK controls. It need not occupy permanent screen space if it remains directly discoverable/invokable.
+
+R11 requires semantic actions for OSNAP master and OTRACK master. This contract does not freeze F3/F11 or any other concrete keyboard shortcut; final shortcut binding is a bounded UI decision consistent with existing SS2 shortcut ownership.
 
 ## 15. Temporary Snap Override
 
-Temporary Snap Override applies only to the next point acquisition of the current semantic request.
+Temporary Snap Override applies to exactly the next point acquisition of the current semantic request.
 
 Requirements:
 
-- it does not mutate the persistent enabled-mode set;
-- it clears after one point acceptance, Esc, request replacement or tool/context replacement;
-- a **None** override may suppress persistent snaps for exactly one point;
-- it is context-first and only meaningful while a point-capable request is active;
+- it does not mutate persistent user preferences;
+- it restricts eligible snap/inference family rather than merely changing rank;
+- it clears after one accepted point, Esc, request replacement, tool replacement or Sketch-context exit;
+- invalid/unavailable requested snap family fails closed without unrelated fallback;
+- it is meaningful only while a point-capable request is active;
 - ordinary Select RMB context is not activated by R11.
 
-Proposed one-shot semantic tokens for review:
+Accepted semantic override tokens:
 
 `END`, `MID`, `CEN`, `QUAD`, `INT`, `PER`, `TAN`, `NEA`, `ORG`, `EXT`, `NONE`.
 
-Exact token spellings and UI affordance remain Owner decisions.
+The exact UI surface for entering/selecting those semantic actions remains D1.
+
+`NONE` is the one remaining behavior requiring explicit Owner freeze before activation. Current proposed meaning: for exactly one point it suppresses OSNAP-derived snapping, acquired-anchor OTRACK use, Extension and request-relative TAN/PER acquisition, while retaining complete explicit numeric input, numeric locks, generic base Sketch U/V inference, Polar and raw pointer. It must not mutate user preferences.
 
 ## 16. Object Snap Tracking acquisition
 
-Tracking is runtime-only and based on deliberate hover/dwell acquisition of eligible semantic snap points.
+OTRACK is runtime-only and acquires anchors by deliberate hover/dwell over eligible semantic snap points.
 
-Proposed eligible acquisition sources:
+Eligible anchor sources are:
 
 - Endpoint;
 - Midpoint;
@@ -320,55 +445,76 @@ Proposed eligible acquisition sources:
 - Intersection;
 - Origin.
 
-Request-relative Perpendicular/Tangent and continuously moving Nearest points are not proposed as acquired tracking anchors.
+Perpendicular, Tangent, Nearest and Extension-derived moving points are not tracking anchors.
 
-Requirements:
+Baseline behavior:
 
-- moving near a supported semantic snap point may show its snap marker;
-- dwelling on that marker may acquire it as a tracking point;
-- acquired points remain visibly distinct from ordinary hover/captured snap;
-- more than one point may be acquired;
-- acquired points clear on accepted point, Esc, request/tool replacement or Sketch-context exit;
-- acquisition does not select geometry and creates no authored state.
+- maximum acquired anchors: **2**;
+- acquiring a third anchor is rejected until an existing anchor is explicitly removed or the request lifecycle clears them;
+- no FIFO replacement is allowed because silent anchor eviction would make guide meaning unpredictable;
+- acquired anchors are visibly distinct from transient hover/captured snap;
+- acquisition does not select geometry and creates no authored state;
+- anchors clear on accepted point, Esc, request/tool replacement or Sketch-context exit.
 
-Exact dwell duration, maximum acquired-point count and explicit un-acquire gesture remain Owner decisions.
+Exact dwell duration and the explicit un-acquire gesture are D1 interaction tuning subject to manual verification.
 
 ## 17. Tracking guides and guide intersections
 
-Each acquired point may emit runtime guide lines through that point using an accepted tracking-direction family.
+Each acquired tracking anchor may emit exact runtime guides through that anchor.
+
+Direction family:
+
+- Sketch U/V guides are always available for OTRACK;
+- when Polar is ON, accepted Polar directions may additionally participate;
+- OTRACK OFF disables acquired-anchor guides but does not disable generic base Sketch U/V inference required by the active request.
 
 A guide:
 
-- is provider-neutral presentation derived from semantic point + direction;
-- is not selectable/editable/snappable as authored geometry;
-- may participate in runtime inference to produce a candidate at the intersection of compatible guides;
+- is provider-neutral semantic presentation derived from exact anchor + exact direction;
+- is not selectable/editable/authored geometry;
+- may participate in runtime inference;
 - must remain visually distinguishable from Polar's current captured guide and from authored Construction geometry.
 
-A guide intersection is a runtime inferred point only. Accepting it authors the ordinary operation's coordinate result; it does not author the guide or a constraint.
+With the baseline maximum of two anchors, R11 may resolve an exact **GuideIntersection** where two active guides intersect discretely.
 
-Open Owner decision:
+Guide×Guide resolution is exact semantic math. Screen-space distance only decides acquisition/ranking eligibility.
 
-- when Polar attraction is OFF, should tracking guides still use the configured Polar direction family, fall back to orthogonal directions, or be disabled until a direction family is explicitly available?
+Accepting a GuideIntersection authors only the owning operation's normal coordinate result. It does not persist the anchors, guides or a constraint.
 
-## 18. Inference scope
+## 18. Inference scope and ranking
 
 R11 inference is bounded to point placement assistance, not relation solving.
 
-Authorized inference categories proposed here:
+Authorized runtime inference includes:
 
-- alignment through acquired tracking points along the tracking direction family;
-- intersection of two or more active tracking guides;
-- current perpendicular guide from request base to candidate curve;
-- current tangent guide from request base to candidate Circle/Arc;
-- Line Extension guide;
+- Sketch U/V base guides;
+- alignment through OTRACK anchors using the accepted guide direction family;
+- exact Guide×Guide intersection;
+- exact projection onto a compatible active guide;
+- request-relative Perpendicular guide/result;
+- request-relative Tangent guide/result;
+- explicit Line Extension ray;
 - visual indication of the currently captured exact snap.
+
+Within inference, the baseline ranking is:
+
+```text
+exact OSNAP
+> exact GuideIntersection
+> exact compatible guide projection / request-relative inference
+> Polar
+> raw
+```
+
+This hierarchy remains subordinate to complete explicit numeric input and numeric locks.
 
 Not authorized:
 
 - automatic Parallel/Coincident/Tangent/Perpendicular authored constraints;
 - persistent relation glyphs after point acceptance;
 - generic solver-backed inference;
-- hidden movement of existing geometry.
+- hidden movement of existing geometry;
+- gap healing or tolerance welding.
 
 ## 19. Visual presentation
 
@@ -433,14 +579,25 @@ Only the owning CAD operation's normal accepted commit creates authored mutation
 
 ## 23. Save / Close / Reopen
 
-R11 runtime acquisition state is never serialized:
+User OSNAP/OTRACK preferences persist as application/user preferences, not as CAD document state.
 
-- current captured candidate is not saved;
-- Temporary Override is not saved;
-- acquired tracking points are not saved;
-- current guides are not saved.
+Persisted user preferences:
 
-The lifecycle of user-configured persistent OSNAP mode preferences remains an Owner decision before activation. It must not be stored as Part authored geometry.
+- OSNAP master;
+- enabled persistent snap-mode set;
+- OTRACK master.
+
+Never persisted:
+
+- Temporary Override;
+- current captured candidate;
+- tracking anchors;
+- deferred TAN/PER/EXT request references;
+- current guides;
+- current hysteresis/capture state;
+- current `PointResolution`.
+
+Save/Close/Reopen of a Part/Sketch must not serialize runtime acquisition state and must not create document revision/dirty changes merely because OSNAP preferences changed.
 
 ## 24. Failure behavior
 
@@ -492,29 +649,43 @@ At minimum automated coverage must prove:
 
 - Endpoint/Midpoint/Center/Quadrant/Origin exact point results;
 - Arc quadrant eligibility only when the point lies on authored sweep;
-- all current Line/Circle/Arc discrete intersection combinations;
-- Construction geometry participates in snapping;
+- all current Line/Circle/Arc finite discrete intersection combinations;
+- Construction geometry has equal snap/reference eligibility;
 - overlap/coincident ambiguity does not invent a point;
-- Perpendicular requires/uses request base and respects finite curve semantics;
-- Tangent valid/invalid/base-inside cases;
-- Nearest remains finite-curve and does not dominate specific snaps;
-- bounded Line Extension semantics;
-- deterministic ranking independent of provider/query enumeration order;
-- same exact-coordinate candidate collapse without durable identity creation;
-- distinct nearby points are not welded;
-- acquisition aperture is screen-space only and zoom does not change resolved geometry;
-- complete explicit numeric point input outranks OSNAP;
-- partial numeric locks are never violated by OSNAP;
-- exact OSNAP outranks Polar only when compatible with request locks;
+- exact same-point collapse uses semantic/canonical exact contact and does not merge nearby points;
+- deterministic result independent of provider/query enumeration order;
+- capture hysteresis preserves the valid branch/candidate without changing geometry;
+- PerpendicularFromPoint finite Line foot behavior;
+- Perpendicular Circle radial contact, center non-unique failure and Arc sweep filtering;
+- PerpendicularContinuation request lifecycle where applicable;
+- TangentFromPoint valid/invalid/base-inside cases;
+- DeferredTangent source capture is runtime-only;
+- CommonTangent exact branch generation, Arc filtering, deterministic screen selection and hysteresis;
+- TangentContinuation request lifecycle where applicable;
+- Nearest is continuous finite-curve projection and never dominates an eligible specific snap;
+- explicit Line Extension is a positive ray beyond the acquired endpoint and does not apply over the finite segment;
+- compatible EXT/PER behavior uses only explicit Extension context;
+- logical-screen aperture/zoom/DPI changes do not change exact resolved geometry;
+- complete explicit numeric point input outranks all runtime aids;
+- partial numeric locks are never violated;
+- OSNAP outranks OTRACK/inference/Polar only when compatible;
+- GuideIntersection outranks lower guide projection/Polar;
+- OTRACK U/V operation remains valid with Polar OFF;
+- Polar direction family may augment OTRACK with Polar ON;
+- persistent defaults are END/MID/CEN/QUAD/INT/ORG ON and PER/TAN/NEA/EXT + OTRACK OFF;
+- preference changes are shared live and create no document history/dirty state;
 - Temporary Override is one-shot and persistent mode set remains unchanged;
-- one-shot None suppresses snaps for one point;
-- multiple tracking-point acquisition/clear lifecycle;
-- guide intersections produce runtime candidate only;
-- Tracking/Polar interaction according to the final Owner-accepted rule;
+- requested override family fails closed without unrelated fallback;
+- final accepted `NONE` semantics are covered exactly;
+- tracking anchors are limited to 2, third acquisition does not silently evict an anchor, and lifecycle clearing is deterministic;
+- guide intersections and guide projections remain runtime-only;
+- PointRequest replacement/tool replacement/Esc/acceptance clear all request-local R11 state correctly;
 - R8B Measure Between behavior remains unchanged;
 - selection/grips/Move/Copy/Rotate/Scale/Mirror/R10 DYN/Polar regressions remain green;
 - Profile closure still uses exact authored geometry with no snap tolerance leakage;
-- Undo/Redo and Save/Close/Reopen do not persist transient snap/acquisition state;
+- Undo/Redo and Save/Close/Reopen never persist transient snap/acquisition state;
+- user preference persistence is application/user-level only;
+- R11 semantic/math tests run core-only wherever Qt/OCCT are not semantically required;
 - exact-head Windows FULL passes.
 
 ## 28. Manual Windows verification
@@ -572,24 +743,32 @@ PL/EN Product documentation must explain:
 
 Product Browser must be regenerated and deterministic.
 
-## 30. Owner decisions required before activation
+## 30. Remaining Owner/D1 decisions before activation
 
-The proposal deliberately does **not** guess these product decisions:
+Most product semantics are now resolved.
 
-1. default persistent OSNAP mode set;
-2. application-session versus user-preference lifecycle for mode configuration;
-3. exact master/Tracking shortcuts — proposed F3/F11;
-4. exact semantic tie-order and any screen-distance tie band;
-5. initial logical-pixel snap aperture;
-6. tracking dwell duration;
-7. maximum simultaneously acquired tracking points;
-8. un-acquire gesture;
-9. Tracking direction family while Polar attraction is OFF;
-10. final Temporary Override token spellings/UI affordance;
-11. whether Line Extension belongs in initial R11 or is deferred;
-12. exact marker/glyph visual treatment.
+The proposal retains only these activation-time decisions/tuning boundaries:
 
-Production implementation must not begin until these decisions are resolved or explicitly delegated as D1 tuning.
+1. final `NONE` one-shot suppression scope from Section 15;
+2. initial logical-pixel acquisition/release aperture values;
+3. tracking dwell duration;
+4. explicit tracking-anchor un-acquire gesture;
+5. exact marker/glyph visual treatment;
+6. concrete keyboard bindings for semantic OSNAP/OTRACK actions, if any.
+
+Items 2–6 may be explicitly delegated as D1 tuning at activation provided they do not change the semantic hierarchy, persistence model or authored-state boundaries in this contract.
+
+The following are no longer open:
+
+- persistent defaults;
+- application/user preference lifetime;
+- OTRACK behavior with Polar OFF/ON;
+- maximum acquired anchors (2, no FIFO eviction);
+- Line Extension inclusion and positive-ray semantics;
+- PER/TAN/Nearest baseline semantics;
+- deterministic resolver hierarchy;
+- exact same-point collapse authority;
+- one semantic `PointResolution` path.
 
 ## 31. Stop conditions
 
@@ -611,16 +790,20 @@ Stop for Owner review if implementation requires:
 
 ## 32. Activation boundary
 
-This file is proposal-only.
+This file remains proposal-only.
 
 Before R11 may become ACTIVE:
 
-- Owner explicitly accepts the R11 contract and resolves Section 30 decisions;
+- Owner explicitly accepts the synchronized R11 contract;
+- Owner explicitly freezes Section 15 `NONE` semantics or delegates a different bounded meaning;
+- any remaining Section 30 tuning items are either resolved or explicitly delegated as D1;
 - `work/ACTIVE.yaml` is updated in a governance-only activation commit;
 - any roadmap wording required by accepted refinements is updated;
 - proposal-only gate passes.
 
-No production code is authorized by this proposal.
+No production code, R11 test skeleton mutation or verification-infrastructure mutation is authorized merely by this proposal.
+
+CI-04 is already completed and available on `main`; R11 implementation must consume that targeted build/test infrastructure rather than reopen CI-04 semantics.
 
 ## 33. Completion boundary
 
