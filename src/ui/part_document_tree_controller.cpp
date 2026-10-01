@@ -167,6 +167,24 @@ bool PartDocumentTreeController::eventFilter(
     if (watched == tree_->viewport() &&
         event != nullptr &&
         event->type() ==
+            QEvent::MouseButtonPress) {
+        auto* mouse_event =
+            static_cast<QMouseEvent*>(event);
+
+        if (mouse_event->button() ==
+                Qt::LeftButton &&
+            tree_->itemAt(
+                mouse_event->position().toPoint()) ==
+                nullptr) {
+            tree_->clearSelection();
+            tree_->setCurrentItem(nullptr);
+            return true;
+        }
+    }
+
+    if (watched == tree_->viewport() &&
+        event != nullptr &&
+        event->type() ==
             QEvent::MouseButtonDblClick) {
         auto* mouse_event =
             static_cast<QMouseEvent*>(event);
