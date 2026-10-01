@@ -1653,5 +1653,318 @@ int main(int argc, char* argv[]) {
         mutual_interaction.end();
     }
 
+    {
+        // R12 Circle Trim UI path: finite Line boundary selection drives the
+        // removed-span preview, then commits one fresh Arc replacement.
+        auto circle_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession circle_session{
+            {},
+            std::move(circle_document)};
+        const auto circle_created =
+            circle_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            circle_created.ok() &&
+            circle_created.sketch_id);
+        const auto circle_sketch_id =
+            *circle_created.sketch_id;
+
+        const auto target_circle =
+            circle_session.execute(
+                application::AddSketchCircleCommand{
+                    circle_sketch_id,
+                    {0.0, 0.0},
+                    10.0,
+                    sketch::EntityRole::construction});
+        const auto circle_boundary =
+            circle_session.execute(
+                application::AddSketchLineCommand{
+                    circle_sketch_id,
+                    {-20.0, 0.0},
+                    {20.0, 0.0}});
+        CHECK(
+            target_circle.ok() &&
+            target_circle.entity_id);
+        CHECK(
+            circle_boundary.ok() &&
+            circle_boundary.entity_id);
+
+        QTreeWidget circle_tree;
+        ui::PartDocumentTreeController
+            circle_tree_controller{circle_tree};
+        TestViewport circle_viewport;
+        ui::PartViewportController
+            circle_viewport_controller{
+                circle_tree_controller,
+                &circle_viewport};
+        circle_viewport_controller
+            .setDocumentSession(&circle_session);
+        circle_viewport_controller
+            .setSketchEditSketch(circle_sketch_id);
+
+        ui::PartSketchInteractionController
+            circle_interaction{
+                circle_viewport_controller};
+        circle_interaction.begin(
+            circle_session,
+            circle_sketch_id);
+
+        CHECK(
+            circle_viewport.sketch_scene_
+                .lines.size() == 1U);
+        CHECK(
+            circle_viewport.sketch_scene_
+                .curves.size() == 1U);
+        const auto boundary_token =
+            circle_viewport.sketch_scene_
+                .lines.front().token;
+        const auto circle_token =
+            circle_viewport.sketch_scene_
+                .curves.front().token;
+
+        circle_viewport.point_query_ = {
+            true,
+            boundary_token};
+        circle_interaction.onPointer(
+            pointer(
+                circle_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                50.0, 50.0,
+                0.0, 0.0));
+        circle_interaction.onPointer(
+            pointer(
+                circle_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_release,
+                50.0, 50.0,
+                0.0, 0.0));
+        CHECK(
+            circle_interaction.selectedCount() ==
+            1U);
+        CHECK(circle_interaction.activateTrim());
+
+        circle_viewport.point_query_ = {
+            true,
+            circle_token};
+        circle_interaction.onPointer(
+            pointer(
+                circle_sketch_id,
+                viewer::SpatialPointerPhase::move,
+                50.0, 90.0,
+                0.0, -10.0));
+        CHECK(
+            !circle_viewport.preview_scene_
+                 .lines.empty());
+
+        const auto circle_undo =
+            circle_session.undoDepth();
+        circle_interaction.onPointer(
+            pointer(
+                circle_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                50.0, 90.0,
+                0.0, -10.0));
+        CHECK(
+            circle_session.undoDepth() ==
+            circle_undo + 1U);
+        const auto* circle_after =
+            circle_session.document()
+                .findSketch(circle_sketch_id);
+        CHECK(circle_after != nullptr);
+        CHECK(
+            circle_after->model.findCircle(
+                *target_circle.entity_id) ==
+            nullptr);
+        CHECK(
+            circle_after->model.entityCount() ==
+            2U);
+        const auto circle_state =
+            circle_after->model.state();
+        CHECK(circle_state.arcs.size() == 1U);
+        const auto replacement =
+            circle_state.arcs.front().id;
+        CHECK(
+            replacement !=
+            *target_circle.entity_id);
+        const auto* replacement_arc =
+            circle_after->model.findArc(
+                replacement);
+        CHECK(replacement_arc != nullptr);
+        CHECK(
+            replacement_arc->role() ==
+            sketch::EntityRole::construction);
+        CHECK(
+            circle_viewport.preview_scene_
+                .lines.empty());
+
+        CHECK(circle_session.undo().changed);
+        const auto* circle_undone =
+            circle_session.document()
+                .findSketch(circle_sketch_id);
+        CHECK(circle_undone != nullptr);
+        CHECK(
+            circle_undone->model.findCircle(
+                *target_circle.entity_id) !=
+            nullptr);
+        CHECK(
+            circle_undone->model.findArc(
+                replacement) == nullptr);
+        circle_interaction.end();
+    }
+
+    {
+        // R12 ordinary Extend UI path: the selected finite boundary stays
+        // unchanged while the clicked target end previews and commits.
+        auto extend_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession extend_session{
+            {},
+            std::move(extend_document)};
+        const auto extend_created =
+            extend_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            extend_created.ok() &&
+            extend_created.sketch_id);
+        const auto extend_sketch_id =
+            *extend_created.sketch_id;
+
+        const auto extend_boundary =
+            extend_session.execute(
+                application::AddSketchLineCommand{
+                    extend_sketch_id,
+                    {5.0, -2.0},
+                    {5.0, 2.0},
+                    sketch::EntityRole::construction});
+        const auto extend_target =
+            extend_session.execute(
+                application::AddSketchLineCommand{
+                    extend_sketch_id,
+                    {0.0, 0.0},
+                    {1.0, 0.0}});
+        CHECK(
+            extend_boundary.ok() &&
+            extend_boundary.entity_id);
+        CHECK(
+            extend_target.ok() &&
+            extend_target.entity_id);
+
+        QTreeWidget extend_tree;
+        ui::PartDocumentTreeController
+            extend_tree_controller{extend_tree};
+        TestViewport extend_viewport;
+        ui::PartViewportController
+            extend_viewport_controller{
+                extend_tree_controller,
+                &extend_viewport};
+        extend_viewport_controller
+            .setDocumentSession(&extend_session);
+        extend_viewport_controller
+            .setSketchEditSketch(extend_sketch_id);
+
+        ui::PartSketchInteractionController
+            extend_interaction{
+                extend_viewport_controller};
+        extend_interaction.begin(
+            extend_session,
+            extend_sketch_id);
+
+        CHECK(
+            extend_viewport.sketch_scene_
+                .lines.size() == 2U);
+        const auto extend_boundary_token =
+            extend_viewport.sketch_scene_
+                .lines[0].token;
+        const auto extend_target_token =
+            extend_viewport.sketch_scene_
+                .lines[1].token;
+
+        extend_viewport.point_query_ = {
+            true,
+            extend_boundary_token};
+        extend_interaction.onPointer(
+            pointer(
+                extend_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                50.0, 20.0,
+                5.0, 0.0));
+        extend_interaction.onPointer(
+            pointer(
+                extend_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_release,
+                50.0, 20.0,
+                5.0, 0.0));
+        CHECK(
+            extend_interaction.selectedCount() ==
+            1U);
+        CHECK(extend_interaction.activateExtend());
+
+        extend_viewport.point_query_ = {
+            true,
+            extend_target_token};
+        extend_interaction.onPointer(
+            pointer(
+                extend_sketch_id,
+                viewer::SpatialPointerPhase::move,
+                10.0, 20.0,
+                1.0, 0.0));
+        CHECK(
+            extend_viewport.preview_scene_
+                .lines.size() == 1U);
+
+        const auto extend_undo =
+            extend_session.undoDepth();
+        extend_interaction.onPointer(
+            pointer(
+                extend_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                10.0, 20.0,
+                1.0, 0.0));
+        CHECK(
+            extend_session.undoDepth() ==
+            extend_undo + 1U);
+
+        const auto* extend_after =
+            extend_session.document()
+                .findSketch(extend_sketch_id);
+        CHECK(extend_after != nullptr);
+        const auto* extended_line =
+            extend_after->model.findLine(
+                *extend_target.entity_id);
+        CHECK(extended_line != nullptr);
+        CHECK((
+            extended_line->end() ==
+            sketch::Point2{5.0, 0.0}));
+        const auto* boundary_line =
+            extend_after->model.findLine(
+                *extend_boundary.entity_id);
+        CHECK(boundary_line != nullptr);
+        CHECK((
+            boundary_line->start() ==
+            sketch::Point2{5.0, -2.0}));
+        CHECK((
+            boundary_line->end() ==
+            sketch::Point2{5.0, 2.0}));
+        CHECK(
+            extend_interaction.tool() ==
+            sketch::SketchTool::extend);
+        CHECK(
+            extend_viewport.preview_scene_
+                .lines.empty());
+        extend_interaction.end();
+    }
+
     return EXIT_SUCCESS;
 }
