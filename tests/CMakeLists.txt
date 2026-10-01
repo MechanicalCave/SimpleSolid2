@@ -1666,3 +1666,79 @@ set(_ss2_ui_test_targets
 foreach(_target IN LISTS _ss2_ui_test_targets)
     target_link_libraries(${_target} PRIVATE simplesolid2_ui)
 endforeach()
+
+# CI-04: the existing CTest membership lists above are the authoritative
+# execution/build registry. Aggregate build targets are derived from those
+# exact lists so tier/subsystem execution metadata cannot drift from the
+# corresponding build graph.
+function(ss2_resolve_test_build_target test_name out_var)
+    string(REPLACE "." "_" _candidate "${test_name}")
+    set(_candidate "${_candidate}_test")
+
+    if(TARGET "${_candidate}")
+        set(${out_var} "${_candidate}" PARENT_SCOPE)
+        return()
+    endif()
+
+    if(test_name STREQUAL "ph01.app_smoke")
+        set(${out_var} "simplesolid2" PARENT_SCOPE)
+        return()
+    endif()
+
+    # Boundary tests intentionally execute CMake scripts and have no compiled
+    # test target. Any other unmapped test is a registry error.
+    if(test_name MATCHES "boundaries$")
+        set(${out_var} "" PARENT_SCOPE)
+        return()
+    endif()
+
+    message(FATAL_ERROR
+        "CI-04 test registry cannot resolve build target for '${test_name}'")
+endfunction()
+
+function(ss2_add_test_aggregate aggregate_name expected_label)
+    get_property(_registered_tests DIRECTORY PROPERTY TESTS)
+    set(_aggregate_targets)
+
+    foreach(_test IN LISTS ARGN)
+        list(FIND _registered_tests "${_test}" _test_index)
+        if(_test_index EQUAL -1)
+            message(FATAL_ERROR
+                "CI-04 aggregate ${aggregate_name} references unknown CTest '${_test}'")
+        endif()
+
+        if(NOT expected_label STREQUAL "")
+            get_property(_labels TEST "${_test}" PROPERTY LABELS)
+            list(FIND _labels "${expected_label}" _label_index)
+            if(_label_index EQUAL -1)
+                message(FATAL_ERROR
+                    "CI-04 registry mismatch: '${_test}' is in ${aggregate_name} "
+                    "but lacks CTest label '${expected_label}'")
+            endif()
+        endif()
+
+        ss2_resolve_test_build_target("${_test}" _build_target)
+        if(NOT _build_target STREQUAL "")
+            list(APPEND _aggregate_targets "${_build_target}")
+        endif()
+    endforeach()
+
+    list(REMOVE_DUPLICATES _aggregate_targets)
+    add_custom_target(${aggregate_name})
+    if(_aggregate_targets)
+        add_dependencies(${aggregate_name} ${_aggregate_targets})
+    endif()
+endfunction()
+
+get_property(_ss2_all_registered_tests DIRECTORY PROPERTY TESTS)
+ss2_add_test_aggregate(ss2_tests_full "" ${_ss2_all_registered_tests})
+ss2_add_test_aggregate(ss2_tests_fast "tier-fast" ${_ss2_fast_tests})
+ss2_add_test_aggregate(ss2_tests_subsystem_core "subsystem-core" ${_ss2_core_tests})
+ss2_add_test_aggregate(ss2_tests_subsystem_application "subsystem-application" ${_ss2_application_tests})
+ss2_add_test_aggregate(ss2_tests_subsystem_persistence "subsystem-persistence" ${_ss2_persistence_tests})
+ss2_add_test_aggregate(ss2_tests_subsystem_part "subsystem-part" ${_ss2_part_tests})
+ss2_add_test_aggregate(ss2_tests_subsystem_sketch "subsystem-sketch" ${_ss2_sketch_tests})
+ss2_add_test_aggregate(ss2_tests_subsystem_viewer "subsystem-viewer" ${_ss2_viewer_tests})
+ss2_add_test_aggregate(ss2_tests_subsystem_ui "subsystem-ui" ${_ss2_ui_tests})
+ss2_add_test_aggregate(ss2_tests_subsystem_project "subsystem-project" ${_ss2_project_tests})
+
