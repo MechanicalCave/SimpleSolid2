@@ -63,6 +63,7 @@ public:
             std::move(provider);
         snap_capture_.clear();
         tracking_hover_.reset();
+        common_tangent_candidate_.reset();
         polar_capture_ = {};
     }
 
@@ -476,6 +477,8 @@ private:
         }};
     std::optional<TrackingHoverState>
         tracking_hover_;
+    std::optional<sketch::CommonTangentCandidate>
+        common_tangent_candidate_;
 
     application::PolarCaptureState
         polar_capture_;

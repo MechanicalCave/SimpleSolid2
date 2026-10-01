@@ -179,6 +179,7 @@ void PartSketchInteractionController::begin(
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
     tracking_hover_.reset();
+    common_tangent_candidate_.reset();
     polar_capture_ = {};
     last_pointer_input_.reset();
     press_anchor_.reset();
@@ -206,6 +207,7 @@ void PartSketchInteractionController::end() {
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
     tracking_hover_.reset();
+    common_tangent_candidate_.reset();
     polar_capture_ = {};
     last_pointer_input_.reset();
     press_anchor_.reset();
@@ -302,6 +304,7 @@ bool PartSketchInteractionController::setTemporarySnapOverride(
     }
     snap_capture_.clear();
     tracking_hover_.reset();
+    common_tangent_candidate_.reset();
     polar_capture_ = {};
     notifyStateChanged();
     return true;
@@ -313,6 +316,7 @@ bool PartSketchInteractionController::clearTemporarySnapOverride() {
     }
     snap_capture_.clear();
     tracking_hover_.reset();
+    common_tangent_candidate_.reset();
     polar_capture_ = {};
     notifyStateChanged();
     return true;
@@ -3679,6 +3683,17 @@ void PartSketchInteractionController::handleLinePointer(
 
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
+        if (common_tangent_candidate_) {
+            static_cast<void>(
+                viewport_controller_->setSketchPreview(
+                    {SketchPreviewLine2D{
+                        common_tangent_candidate_->
+                            first_point,
+                        common_tangent_candidate_->
+                            second_point}}));
+            return;
+        }
+
         const auto preview =
             resolved
                 ? interaction_.previewLine(
@@ -3699,6 +3714,41 @@ void PartSketchInteractionController::handleLinePointer(
     if (input.phase !=
             viewer::SpatialPointerPhase::primary_press ||
         !resolved) {
+        return;
+    }
+
+    if (common_tangent_candidate_) {
+        const auto common =
+            *common_tangent_candidate_;
+        common_tangent_candidate_.reset();
+
+        const auto first =
+            interaction_.acceptLinePoint(
+                common.first_point);
+        if (first.outcome !=
+            sketch::LinePointOutcome::
+                first_point_accepted) {
+            viewport_controller_->clearSketchPreview();
+            notifyStateChanged();
+            return;
+        }
+
+        const auto second_snap =
+            common.secondSnapCandidate();
+        const auto second =
+            interaction_.resolvePointerInput(
+                common.second_point,
+                sketch::PointResolutionSource::
+                    object_snap,
+                second_snap);
+        if (!second) {
+            viewport_controller_->clearSketchPreview();
+            notifyStateChanged();
+            return;
+        }
+
+        static_cast<void>(
+            acceptLineResolvedPoint(*second));
         return;
     }
 
@@ -4660,6 +4710,8 @@ PartSketchInteractionController::resolveTrackingInference(
 std::optional<sketch::ResolvedSketchInput>
 PartSketchInteractionController::resolvePointerInput(
     const SketchPointerInput& input) {
+    common_tangent_candidate_.reset();
+
     const auto raw =
         [this, &input]() {
             polar_capture_ = {};
@@ -4871,6 +4923,203 @@ PartSketchInteractionController::resolvePointerInput(
                             tracking_hover_.reset();
                             polar_capture_ = {};
                             return std::nullopt;
+                        }
+                    }
+                }
+            }
+
+            // TAN before a point base is a deferred/common-tangent flow.
+            // First hover captures only one Circle/Arc semantic source. The
+            // second source yields exact branch pairs; screen-space selection
+            // is performed on the second contact with normal hysteresis.
+            if (eligibility.tangent &&
+                !request->base &&
+                request->temporary_snap_override ==
+                    sketch::TemporarySnapOverrideKind::
+                        tangent) {
+                auto deferred =
+                    interaction_.deferredSnapReference();
+
+                if (!deferred ||
+                    deferred->kind !=
+                        sketch::DeferredSnapReferenceKind::
+                            tangent_curve) {
+                    struct TangentSourceCandidate final {
+                        sketch::EntityId entity;
+                        double screen_distance{};
+                    };
+                    std::optional<TangentSourceCandidate>
+                        best_source;
+
+                    for (const auto entity :
+                         nearby_entities) {
+                        if (hosted->model.findCircle(entity) ==
+                                nullptr &&
+                            hosted->model.findArc(entity) ==
+                                nullptr) {
+                            continue;
+                        }
+
+                        const auto nearest =
+                            sketch::nearestSnapCandidate(
+                                hosted->model,
+                                entity,
+                                input.position);
+                        if (!nearest) {
+                            continue;
+                        }
+                        const auto projected =
+                            viewport_controller_->
+                                projectSketchPointToViewport(
+                                    nearest->point);
+                        if (!projected) {
+                            continue;
+                        }
+                        const double distance =
+                            viewportDistance(
+                                input.viewport_position,
+                                *projected);
+                        if (!std::isfinite(distance) ||
+                            distance >
+                                snap_policy.
+                                    capture_distance) {
+                            continue;
+                        }
+
+                        TangentSourceCandidate candidate{
+                            entity,
+                            distance};
+                        if (!best_source ||
+                            candidate.screen_distance <
+                                best_source->screen_distance ||
+                            (candidate.screen_distance ==
+                                 best_source->screen_distance &&
+                             candidate.entity <
+                                 best_source->entity)) {
+                            best_source = candidate;
+                        }
+                    }
+
+                    if (best_source) {
+                        const auto reference =
+                            sketch::
+                                makeTangentCurveReference(
+                                    hosted->model,
+                                    best_source->entity);
+                        if (reference &&
+                            interaction_.
+                                setDeferredSnapReference(
+                                    *reference)) {
+                            interaction_.
+                                clearPointerResolution();
+                            snap_capture_.clear();
+                            tracking_hover_.reset();
+                            polar_capture_ = {};
+                            return std::nullopt;
+                        }
+                    }
+                } else {
+                    struct CommonBranchScreen final {
+                        sketch::CommonTangentCandidate common;
+                        sketch::SnapCandidate second_snap;
+                        double screen_distance{};
+                    };
+                    std::vector<CommonBranchScreen>
+                        branch_screens;
+
+                    for (const auto entity :
+                         nearby_entities) {
+                        if (deferred->source.first_entity &&
+                            entity ==
+                                *deferred->source.
+                                    first_entity) {
+                            continue;
+                        }
+                        const auto second_reference =
+                            sketch::
+                                makeTangentCurveReference(
+                                    hosted->model,
+                                    entity);
+                        if (!second_reference) {
+                            continue;
+                        }
+
+                        const auto branches =
+                            sketch::
+                                commonTangentCandidates(
+                                    hosted->model,
+                                    *deferred,
+                                    *second_reference);
+                        for (const auto& common :
+                             branches) {
+                            const auto second_snap =
+                                common.
+                                    secondSnapCandidate();
+                            const auto projected =
+                                viewport_controller_->
+                                    projectSketchPointToViewport(
+                                        second_snap.point);
+                            if (!projected) {
+                                continue;
+                            }
+                            const double distance =
+                                viewportDistance(
+                                    input.viewport_position,
+                                    *projected);
+                            if (!std::isfinite(distance)) {
+                                continue;
+                            }
+                            branch_screens.push_back(
+                                {common,
+                                 second_snap,
+                                 distance});
+                        }
+                    }
+
+                    std::vector<
+                        sketch::SnapScreenCandidate>
+                        common_screen;
+                    common_screen.reserve(
+                        branch_screens.size());
+                    for (const auto& branch :
+                         branch_screens) {
+                        common_screen.push_back(
+                            {branch.second_snap,
+                             branch.screen_distance});
+                    }
+
+                    const auto selected =
+                        sketch::resolveScreenSnap(
+                            hosted->model,
+                            snap_capture_,
+                            common_screen,
+                            snap_policy);
+                    if (selected) {
+                        const auto found =
+                            std::find_if(
+                                branch_screens.begin(),
+                                branch_screens.end(),
+                                [&selected](
+                                    const CommonBranchScreen&
+                                        branch) {
+                                    return branch.second_snap ==
+                                           selected->primary;
+                                });
+                        if (found !=
+                            branch_screens.end()) {
+                            common_tangent_candidate_ =
+                                found->common;
+                            polar_capture_ = {};
+                            const auto first_snap =
+                                found->common.
+                                    firstSnapCandidate();
+                            return interaction_.
+                                resolvePointerInput(
+                                    first_snap.point,
+                                    sketch::
+                                        PointResolutionSource::
+                                            object_snap,
+                                    first_snap);
                         }
                     }
                 }
@@ -5418,6 +5667,7 @@ refreshCadInputContextGeneration() {
     cad_input_context_fingerprint_ = current;
     snap_capture_.clear();
     tracking_hover_.reset();
+    common_tangent_candidate_.reset();
     polar_capture_ = {};
     ++cad_input_context_generation_;
 }

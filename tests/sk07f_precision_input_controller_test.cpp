@@ -1685,6 +1685,159 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.escape());
     viewport.rectangle_query_ = {true, {}};
 
+    // Deferred/Common TAN: first TAN hover captures one Circle source but
+    // no point. Second Circle selects an exact common-tangent branch; preview
+    // and commit use the two exact contact points as one ordinary Line.
+    const auto common_first_result =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                {10000.0, 10000.0},
+                10.0,
+                sketch::EntityRole::regular});
+    const auto common_second_result =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                {10040.0, 10000.0},
+                10.0,
+                sketch::EntityRole::construction});
+    CHECK(common_first_result.ok() &&
+          common_first_result.changed);
+    CHECK(common_second_result.ok() &&
+          common_second_result.changed);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    const auto common_first =
+        model_state.circles[
+            model_state.circles.size() - 2U].id;
+    const auto common_second =
+        model_state.circles.back().id;
+    viewport_controller.refreshPresentation();
+    const auto common_first_token =
+        viewport_controller.sketchPresentationFor(
+            common_first);
+    const auto common_second_token =
+        viewport_controller.sketchPresentationFor(
+            common_second);
+    CHECK(common_first_token.has_value());
+    CHECK(common_second_token.has_value());
+
+    application::CadInteractionSettings common_settings;
+    common_settings.polar.enabled = false;
+    common_settings.object_snap.endpoint = false;
+    common_settings.object_snap.midpoint = false;
+    common_settings.object_snap.center = false;
+    common_settings.object_snap.quadrant = false;
+    common_settings.object_snap.intersection = false;
+    common_settings.object_snap.origin = false;
+    interaction.setCadInteractionSettingsProvider(
+        [&common_settings] {
+            return common_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::tangent));
+    viewport.rectangle_query_ = {
+        true,
+        {*common_first_token}};
+    movePointer(
+        interaction,
+        sketch_id,
+        10000.0,
+        10010.0,
+        10000.0,
+        10010.0);
+    CHECK(!interaction.pointResolution().has_value());
+    auto common_request =
+        interaction.activePointRequest();
+    CHECK(common_request.has_value());
+    CHECK(
+        common_request->deferred_snap_reference.
+            has_value());
+    CHECK(
+        common_request->deferred_snap_reference->
+            kind ==
+        sketch::DeferredSnapReferenceKind::
+            tangent_curve);
+
+    const auto lines_before_common =
+        hosted->model.state().lines.size();
+    viewport.rectangle_query_ = {
+        true,
+        {*common_second_token}};
+    movePointer(
+        interaction,
+        sketch_id,
+        10040.0,
+        10010.0,
+        10040.0,
+        10010.0);
+    const auto common_resolution =
+        interaction.pointResolution();
+    CHECK(common_resolution.has_value());
+    CHECK(
+        common_resolution->source ==
+        sketch::PointResolutionSource::object_snap);
+    CHECK(common_resolution->object_snap.has_value());
+    CHECK(
+        common_resolution->object_snap->kind ==
+        sketch::SnapKind::tangent);
+    CHECK(near(
+        common_resolution->position.u,
+        10000.0));
+    CHECK(near(
+        common_resolution->position.v,
+        10010.0));
+    CHECK(viewport.preview_scene_.lines.size() == 1U);
+    CHECK(near(
+        viewport.preview_scene_.lines[0].start.x,
+        10000.0));
+    CHECK(near(
+        viewport.preview_scene_.lines[0].start.y,
+        10010.0));
+    CHECK(near(
+        viewport.preview_scene_.lines[0].end.x,
+        10040.0));
+    CHECK(near(
+        viewport.preview_scene_.lines[0].end.y,
+        10010.0));
+
+    click(
+        interaction,
+        sketch_id,
+        10040.0,
+        10010.0,
+        10040.0,
+        10010.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_common + 1U);
+    CHECK(near(
+        model_state.lines.back().start.u,
+        10000.0));
+    CHECK(near(
+        model_state.lines.back().start.v,
+        10010.0));
+    CHECK(near(
+        model_state.lines.back().end.u,
+        10040.0));
+    CHECK(near(
+        model_state.lines.back().end.v,
+        10010.0));
+    common_request = interaction.activePointRequest();
+    CHECK(common_request.has_value());
+    CHECK(
+        !common_request->deferred_snap_reference.
+             has_value());
+    CHECK(interaction.escape());
+    viewport.rectangle_query_ = {true, {}};
+
     // Polar is a logical-screen-space magnet. With 90-degree Absolute
     // tracks, (20,1) captures +U. Direct Distance owns magnitude only.
     application::CadInteractionSettings polar_settings;

@@ -820,6 +820,26 @@ bool CommonTangentCandidate::valid() const noexcept {
            canonical_branch < 4U;
 }
 
+SnapCandidate CommonTangentCandidate::
+firstSnapCandidate() const noexcept {
+    auto source = first_reference.source;
+    source.canonical_branch = canonical_branch;
+    return {
+        first_point,
+        SnapKind::tangent,
+        source};
+}
+
+SnapCandidate CommonTangentCandidate::
+secondSnapCandidate() const noexcept {
+    auto source = second_reference.source;
+    source.canonical_branch = canonical_branch;
+    return {
+        second_point,
+        SnapKind::tangent,
+        source};
+}
+
 std::vector<CommonTangentCandidate>
 commonTangentCandidates(
     const SketchModel& model,

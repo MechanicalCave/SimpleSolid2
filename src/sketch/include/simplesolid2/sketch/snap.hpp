@@ -161,6 +161,10 @@ struct CommonTangentCandidate final {
     std::uint32_t canonical_branch{};
 
     [[nodiscard]] bool valid() const noexcept;
+    [[nodiscard]] SnapCandidate
+    firstSnapCandidate() const noexcept;
+    [[nodiscard]] SnapCandidate
+    secondSnapCandidate() const noexcept;
 
     friend bool operator==(
         const CommonTangentCandidate&,
