@@ -33,7 +33,7 @@ function Invoke-SS2GitCommand {
     }
 
     if (-not $AllowFailure -and $code -ne 0) {
-        throw "Git command failed with exit code $code: git $($ArgumentList -join ' ')"
+        throw ("Git command failed with exit code {0}: git {1}" -f $code, ($ArgumentList -join " "))
     }
     return $code
 }
