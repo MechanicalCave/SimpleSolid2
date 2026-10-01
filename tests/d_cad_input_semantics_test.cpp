@@ -556,7 +556,7 @@ int main() {
     CHECK(
         target.profile_command->kind ==
         application::ProfileCadInputCommandKind::
-            set_detect_islands);
+            set_show_islands);
     CHECK(target.profile_command->enabled == false);
 
     target.profile_command.reset();
