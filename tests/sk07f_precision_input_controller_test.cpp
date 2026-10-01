@@ -1303,6 +1303,206 @@ int main(int argc, char* argv[]) {
         sketch::PointResolutionSource::raw_pointer);
     CHECK(interaction.escape());
 
+    // OTRACK: deliberate 400 ms dwell acquires semantic anchors. Two
+    // anchors are retained with no FIFO eviction. Their U/V GuideIntersection
+    // outranks Polar/raw and resolves through the same PointResolution path.
+    const auto track_a_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {8000.0, 8000.0},
+                {8040.0, 8000.0},
+                sketch::EntityRole::regular});
+    const auto track_b_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {8100.0, 8100.0},
+                {8140.0, 8100.0},
+                sketch::EntityRole::construction});
+    const auto track_c_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {8200.0, 8200.0},
+                {8240.0, 8200.0},
+                sketch::EntityRole::regular});
+    CHECK(track_a_result.ok() && track_a_result.changed);
+    CHECK(track_b_result.ok() && track_b_result.changed);
+    CHECK(track_c_result.ok() && track_c_result.changed);
+    viewport_controller.refreshPresentation();
+
+    application::CadInteractionSettings tracking_settings;
+    tracking_settings.polar.enabled = false;
+    tracking_settings.object_snap.endpoint = true;
+    tracking_settings.object_snap.midpoint = false;
+    tracking_settings.object_snap.center = false;
+    tracking_settings.object_snap.quadrant = false;
+    tracking_settings.object_snap.intersection = false;
+    tracking_settings.object_snap.origin = false;
+    tracking_settings.object_snap.object_tracking_enabled = true;
+    interaction.setCadInteractionSettingsProvider(
+        [&tracking_settings] {
+            return tracking_settings;
+        });
+
+    auto tracking_now =
+        std::chrono::steady_clock::time_point{};
+    interaction.setTrackingClockProvider(
+        [&tracking_now] {
+            return tracking_now;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            7900.0,
+            7900.0}));
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    CHECK(interaction.trackingAnchorCount() == 0U);
+    tracking_now += std::chrono::milliseconds{400};
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    CHECK(interaction.trackingAnchorCount() == 1U);
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8100.0,
+        8100.0,
+        8100.0,
+        8100.0);
+    tracking_now += std::chrono::milliseconds{400};
+    movePointer(
+        interaction,
+        sketch_id,
+        8100.0,
+        8100.0,
+        8100.0,
+        8100.0);
+    CHECK(interaction.trackingAnchorCount() == 2U);
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8200.0,
+        8200.0,
+        8200.0,
+        8200.0);
+    tracking_now += std::chrono::milliseconds{400};
+    movePointer(
+        interaction,
+        sketch_id,
+        8200.0,
+        8200.0,
+        8200.0,
+        8200.0);
+    CHECK(interaction.trackingAnchorCount() == 2U);
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8004.0,
+        8104.0,
+        8004.0,
+        8104.0);
+    auto tracking_resolution =
+        interaction.pointResolution();
+    CHECK(tracking_resolution.has_value());
+    CHECK(
+        tracking_resolution->source ==
+        sketch::PointResolutionSource::
+            tracking_inference);
+    CHECK((
+        tracking_resolution->position ==
+        sketch::Point2{8000.0, 8100.0}));
+
+    tracking_settings.object_snap.object_tracking_enabled = false;
+    movePointer(
+        interaction,
+        sketch_id,
+        8004.0,
+        8104.0,
+        8004.0,
+        8104.0);
+    tracking_resolution =
+        interaction.pointResolution();
+    CHECK(tracking_resolution.has_value());
+    CHECK(
+        tracking_resolution->source ==
+        sketch::PointResolutionSource::raw_pointer);
+    CHECK(interaction.trackingAnchorCount() == 2U);
+
+    tracking_settings.object_snap.object_tracking_enabled = true;
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::none));
+    movePointer(
+        interaction,
+        sketch_id,
+        8004.0,
+        8104.0,
+        8004.0,
+        8104.0);
+    tracking_resolution =
+        interaction.pointResolution();
+    CHECK(tracking_resolution.has_value());
+    CHECK(
+        tracking_resolution->source ==
+        sketch::PointResolutionSource::raw_pointer);
+    CHECK(interaction.trackingAnchorCount() == 2U);
+    CHECK(interaction.clearTemporarySnapOverride());
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8004.0,
+        8104.0,
+        8004.0,
+        8104.0);
+    tracking_resolution =
+        interaction.pointResolution();
+    CHECK(tracking_resolution.has_value());
+    CHECK(
+        tracking_resolution->source ==
+        sketch::PointResolutionSource::
+            tracking_inference);
+
+    const auto lines_before_tracking_commit =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    click(
+        interaction,
+        sketch_id,
+        8004.0,
+        8104.0,
+        8004.0,
+        8104.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_tracking_commit + 1U);
+    CHECK((
+        model_state.lines.back().end ==
+        sketch::Point2{8000.0, 8100.0}));
+    CHECK(interaction.trackingAnchorCount() == 0U);
+    CHECK(interaction.escape());
+
     // Polar is a logical-screen-space magnet. With 90-degree Absolute
     // tracks, (20,1) captures +U. Direct Distance owns magnitude only.
     application::CadInteractionSettings polar_settings;

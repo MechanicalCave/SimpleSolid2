@@ -120,6 +120,15 @@ staticSnapModes(
            modes.origin;
 }
 
+[[nodiscard]] auto inferenceGuideStableKey(
+    const sketch::InferenceGuide& guide) noexcept {
+    return std::tuple{
+        guide.anchor_key,
+        static_cast<std::uint8_t>(guide.kind),
+        guide.direction.u,
+        guide.direction.v};
+}
+
 [[nodiscard]] std::optional<double>
 viewportPointRayDistance(
     viewer::ViewportPoint2 point,
@@ -169,6 +178,7 @@ void PartSketchInteractionController::begin(
     sketch_id_ = sketch_id;
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
+    tracking_hover_.reset();
     polar_capture_ = {};
     last_pointer_input_.reset();
     press_anchor_.reset();
@@ -195,6 +205,7 @@ void PartSketchInteractionController::begin(
 void PartSketchInteractionController::end() {
     interaction_ = sketch::SketchInteractionState{};
     snap_capture_.clear();
+    tracking_hover_.reset();
     polar_capture_ = {};
     last_pointer_input_.reset();
     press_anchor_.reset();
@@ -290,6 +301,7 @@ bool PartSketchInteractionController::setTemporarySnapOverride(
         return false;
     }
     snap_capture_.clear();
+    tracking_hover_.reset();
     polar_capture_ = {};
     notifyStateChanged();
     return true;
@@ -300,6 +312,7 @@ bool PartSketchInteractionController::clearTemporarySnapOverride() {
         return false;
     }
     snap_capture_.clear();
+    tracking_hover_.reset();
     polar_capture_ = {};
     notifyStateChanged();
     return true;
@@ -4389,6 +4402,261 @@ beginDirectManipulation(
     return true;
 }
 
+void PartSketchInteractionController::observeTrackingSnap(
+    const sketch::SnapEligibility& eligibility,
+    const sketch::SnapCandidate& candidate) {
+    if (!eligibility.object_tracking ||
+        eligibility.suppress_object_assistance ||
+        !sketch::trackingAnchorEligible(
+            candidate.kind) ||
+        !tracking_clock_provider_) {
+        tracking_hover_.reset();
+        return;
+    }
+
+    const auto now =
+        tracking_clock_provider_();
+    const auto key =
+        sketch::snapStableKey(candidate);
+
+    if (!tracking_hover_ ||
+        tracking_hover_->key != key) {
+        tracking_hover_ =
+            TrackingHoverState{
+                key,
+                now};
+        return;
+    }
+
+    if (now - tracking_hover_->started_at <
+        tracking_dwell) {
+        return;
+    }
+
+    static_cast<void>(
+        interaction_.
+            acquireCurrentTrackingAnchor());
+    tracking_hover_.reset();
+}
+
+std::optional<sketch::Point2>
+PartSketchInteractionController::resolveTrackingInference(
+    const SketchPointerInput& input,
+    const application::CadInteractionSettings& settings,
+    const sketch::SnapEligibility& eligibility,
+    const sketch::PointRequest& request) const {
+    if (!eligibility.object_tracking ||
+        eligibility.suppress_object_assistance ||
+        request.temporary_snap_override ||
+        request.tracking_anchors.anchors.empty() ||
+        !input.viewport_position.valid() ||
+        !input.position.finite()) {
+        return std::nullopt;
+    }
+
+    std::vector<sketch::Point2>
+        additional_directions;
+    if (settings.polar.enabled) {
+        std::optional<double> relative_reference;
+        if (settings.polar.reference_mode ==
+            application::PolarReferenceMode::relative) {
+            relative_reference =
+                request.polar_relative_reference;
+        }
+
+        if (settings.polar.reference_mode ==
+                application::PolarReferenceMode::absolute ||
+            relative_reference) {
+            const auto angles =
+                application::generatePolarTrackAngles(
+                    settings.polar,
+                    relative_reference);
+            additional_directions.reserve(
+                angles.size());
+            for (const double angle : angles) {
+                const auto direction =
+                    stablePolarUnitDirection(angle);
+                const sketch::Point2 vector{
+                    direction.first,
+                    direction.second};
+                if (vector.finite() &&
+                    vector != sketch::Point2{0.0, 0.0}) {
+                    additional_directions.push_back(
+                        vector);
+                }
+            }
+        }
+    }
+
+    const auto guides =
+        sketch::trackingGuides(
+            request.tracking_anchors,
+            additional_directions);
+    if (guides.empty()) {
+        return std::nullopt;
+    }
+
+    struct Candidate final {
+        sketch::Point2 point;
+        double screen_distance{};
+        std::uint8_t tier{};
+        std::tuple<
+            sketch::SnapStableKey,
+            std::uint8_t,
+            double,
+            double,
+            sketch::SnapStableKey,
+            std::uint8_t,
+            double,
+            double>
+            key;
+    };
+
+    const sketch::SnapResolutionPolicy policy{};
+    std::vector<Candidate> candidates;
+
+    for (std::size_t first = 0U;
+         first < guides.size();
+         ++first) {
+        for (std::size_t second = first + 1U;
+             second < guides.size();
+             ++second) {
+            if (guides[first].anchor_key ==
+                guides[second].anchor_key) {
+                continue;
+            }
+
+            const auto point =
+                sketch::guideIntersection(
+                    guides[first],
+                    guides[second]);
+            if (!point) {
+                continue;
+            }
+
+            const auto projected =
+                viewport_controller_->
+                    projectSketchPointToViewport(*point);
+            if (!projected) {
+                continue;
+            }
+
+            const double distance =
+                viewportDistance(
+                    input.viewport_position,
+                    *projected);
+            if (!std::isfinite(distance) ||
+                distance >
+                    policy.capture_distance) {
+                continue;
+            }
+
+            const auto first_key =
+                inferenceGuideStableKey(
+                    guides[first]);
+            const auto second_key =
+                inferenceGuideStableKey(
+                    guides[second]);
+            const bool ordered =
+                first_key < second_key;
+            const auto& a =
+                ordered ? guides[first]
+                        : guides[second];
+            const auto& b =
+                ordered ? guides[second]
+                        : guides[first];
+
+            candidates.push_back(
+                {
+                    *point,
+                    distance,
+                    0U,
+                    std::tuple{
+                        a.anchor_key,
+                        static_cast<std::uint8_t>(
+                            a.kind),
+                        a.direction.u,
+                        a.direction.v,
+                        b.anchor_key,
+                        static_cast<std::uint8_t>(
+                            b.kind),
+                        b.direction.u,
+                        b.direction.v}});
+        }
+    }
+
+    for (const auto& guide : guides) {
+        const auto point =
+            sketch::projectPointToGuide(
+                guide,
+                input.position);
+        if (!point) {
+            continue;
+        }
+
+        const auto projected =
+            viewport_controller_->
+                projectSketchPointToViewport(*point);
+        if (!projected) {
+            continue;
+        }
+
+        const double distance =
+            viewportDistance(
+                input.viewport_position,
+                *projected);
+        if (!std::isfinite(distance) ||
+            distance >
+                policy.capture_distance) {
+            continue;
+        }
+
+        candidates.push_back(
+            {
+                *point,
+                distance,
+                1U,
+                std::tuple{
+                    guide.anchor_key,
+                    static_cast<std::uint8_t>(
+                        guide.kind),
+                    guide.direction.u,
+                    guide.direction.v,
+                    guide.anchor_key,
+                    static_cast<std::uint8_t>(
+                        guide.kind),
+                    guide.direction.u,
+                    guide.direction.v}});
+    }
+
+    if (candidates.empty()) {
+        return std::nullopt;
+    }
+
+    const auto best =
+        std::min_element(
+            candidates.begin(),
+            candidates.end(),
+            [](const Candidate& first,
+               const Candidate& second) {
+                if (first.tier != second.tier) {
+                    return first.tier <
+                           second.tier;
+                }
+                if (first.screen_distance !=
+                    second.screen_distance) {
+                    return first.screen_distance <
+                           second.screen_distance;
+                }
+                return first.key < second.key;
+            });
+
+    return best != candidates.end()
+        ? std::optional<sketch::Point2>{
+              best->point}
+        : std::nullopt;
+}
+
 std::optional<sketch::ResolvedSketchInput>
 PartSketchInteractionController::resolvePointerInput(
     const SketchPointerInput& input) {
@@ -4416,17 +4684,18 @@ PartSketchInteractionController::resolvePointerInput(
         return raw();
     }
 
-    // Static OSNAP resolves before Polar. Complete explicit numeric input
+    const auto eligibility =
+        sketch::resolveSnapEligibility(
+            objectSnapPreferences(
+                settings.object_snap),
+            request->temporary_snap_override);
+
+    // OSNAP resolves before tracking/Polar. Complete explicit numeric input
     // bypasses this pointer path. Until lock compatibility is implemented,
     // any active numeric field lock conservatively retains R10 authority.
     const auto* hosted = activeSketch();
     if (hosted != nullptr &&
         interaction_.pointFieldLocks().empty()) {
-        const auto eligibility =
-            sketch::resolveSnapEligibility(
-                objectSnapPreferences(
-                    settings.object_snap),
-                request->temporary_snap_override);
         const auto modes =
             staticSnapModes(eligibility);
 
@@ -4587,11 +4856,18 @@ PartSketchInteractionController::resolvePointerInput(
                     snap_policy);
             if (snap) {
                 polar_capture_ = {};
-                return interaction_.resolvePointerInput(
-                    snap->primary.point,
-                    sketch::PointResolutionSource::
-                        object_snap,
-                    snap->primary);
+                const auto resolved =
+                    interaction_.resolvePointerInput(
+                        snap->primary.point,
+                        sketch::PointResolutionSource::
+                            object_snap,
+                        snap->primary);
+                if (resolved) {
+                    observeTrackingSnap(
+                        eligibility,
+                        snap->primary);
+                }
+                return resolved;
             }
         } else {
             snap_capture_.clear();
@@ -4600,12 +4876,27 @@ PartSketchInteractionController::resolvePointerInput(
         snap_capture_.clear();
     }
 
+    tracking_hover_.reset();
+
     if (request->temporary_snap_override &&
         *request->temporary_snap_override !=
             sketch::TemporarySnapOverrideKind::none) {
         interaction_.clearPointerResolution();
         polar_capture_ = {};
         return std::nullopt;
+    }
+
+    if (const auto tracking =
+            resolveTrackingInference(
+                input,
+                settings,
+                eligibility,
+                *request)) {
+        polar_capture_ = {};
+        return interaction_.resolvePointerInput(
+            *tracking,
+            sketch::PointResolutionSource::
+                tracking_inference);
     }
 
     if (!request->base ||
@@ -4952,6 +5243,7 @@ refreshCadInputContextGeneration() {
 
     cad_input_context_fingerprint_ = current;
     snap_capture_.clear();
+    tracking_hover_.reset();
     polar_capture_ = {};
     ++cad_input_context_generation_;
 }

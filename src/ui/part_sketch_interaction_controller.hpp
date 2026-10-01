@@ -10,6 +10,7 @@
 #include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/sketch/snap.hpp>
 
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -44,6 +45,10 @@ public:
         std::function<
             application::CadInteractionSettings()>;
 
+    using TrackingClockProvider =
+        std::function<
+            std::chrono::steady_clock::time_point()>;
+
     explicit PartSketchInteractionController(
         PartViewportController& viewport_controller);
 
@@ -57,7 +62,21 @@ public:
         cad_interaction_settings_provider_ =
             std::move(provider);
         snap_capture_.clear();
+        tracking_hover_.reset();
         polar_capture_ = {};
+    }
+
+    void setTrackingClockProvider(
+        TrackingClockProvider provider) {
+        tracking_clock_provider_ =
+            std::move(provider);
+        tracking_hover_.reset();
+    }
+
+    [[nodiscard]] std::size_t
+    trackingAnchorCount() const noexcept {
+        return interaction_.
+            trackingAnchors().anchors.size();
     }
 
     [[nodiscard]] bool active() const noexcept;
@@ -324,6 +343,8 @@ public:
 
 private:
     static constexpr double drag_threshold_pixels = 4.0;
+    static constexpr std::chrono::milliseconds
+        tracking_dwell{400};
 
     [[nodiscard]] const part::PartSketch*
     activeSketch() const noexcept;
@@ -352,6 +373,15 @@ private:
         sketch::ResolvedSketchInput>
     resolvePointerInput(
         const SketchPointerInput& input);
+    void observeTrackingSnap(
+        const sketch::SnapEligibility& eligibility,
+        const sketch::SnapCandidate& candidate);
+    [[nodiscard]] std::optional<sketch::Point2>
+    resolveTrackingInference(
+        const SketchPointerInput& input,
+        const application::CadInteractionSettings& settings,
+        const sketch::SnapEligibility& eligibility,
+        const sketch::PointRequest& request) const;
     void updateDirectManipulationPreview(
         const SketchPointerInput& input);
     void updateCommonTransformPreview(
@@ -433,6 +463,20 @@ private:
         cad_interaction_settings_provider_;
     sketch::SnapCaptureState
         snap_capture_;
+
+    struct TrackingHoverState final {
+        sketch::SnapStableKey key;
+        std::chrono::steady_clock::time_point
+            started_at;
+    };
+
+    TrackingClockProvider tracking_clock_provider_{
+        [] {
+            return std::chrono::steady_clock::now();
+        }};
+    std::optional<TrackingHoverState>
+        tracking_hover_;
+
     application::PolarCaptureState
         polar_capture_;
 
