@@ -715,9 +715,7 @@ SketchInteractionState::activePointRequest() const noexcept {
                 true,
                 end_stage,
                 end_stage};
-            return request.valid()
-                ? std::optional<PointRequest>{request}
-                : std::nullopt;
+            return finalized(std::move(request));
         }
     }
 
@@ -1953,6 +1951,7 @@ SketchInteractionState::acceptArcPointer(
     }
 
     pending_arc_request_ = *request;
+    consumeTemporarySnapOverride();
     return {
         ArcPointOutcome::arc_requested,
         request};
@@ -2014,6 +2013,7 @@ SketchInteractionState::acceptArcRadius(
     }
 
     pending_arc_request_ = *request;
+    consumeTemporarySnapOverride();
     return {
         ArcPointOutcome::arc_requested,
         request};
@@ -2166,6 +2166,7 @@ SketchInteractionState::acceptRectangleSize(
     }
 
     pending_rectangle_request_ = *request;
+    consumeTemporarySnapOverride();
     return {
         RectanglePointOutcome::rectangle_requested,
         request};
