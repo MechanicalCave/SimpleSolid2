@@ -1549,6 +1549,8 @@ Esc cancels transient state and preserves the affected/source selection; already
 
 Shared 2D owns the provider-neutral structural-edit evaluator for the current authored `Line`, `Arc` and `Circle` vocabulary. The evaluator consumes semantic `EntityId` values, Sketch-local U/V geometry and explicit finite boundary identities; it has no dependency on Viewer/provider tokens, screen pixels, OSNAP aperture or Part persistence.
 
+The R12 UI adapter supports two equivalent runtime acquisition paths without changing semantic command meaning. Tool-first Trim/Extend enters boundary-selection state, toggles supported finite entities into runtime selection, and snapshots that set only after **Enter** or tool-local **RMB** confirmation; this selection phase creates no authored mutation, revision or Undo entry. If valid geometry is already selected when Trim/Extend starts, that preselection seeds the boundary set immediately and the adapter enters target editing directly. Ordinary Select RMB context remains outside R12.
+
 `Trim` removes exactly one connected target fragment and is accepted only when one authored result remains. Terminal Line and Arc trims update the same primitive and preserve `EntityId` plus Regular/Construction role. A middle Line/Arc trim that would leave two authored pieces is not an R12 operation and fails unchanged. Circle Trim requires at least two distinct exact finite-boundary cut locations. Removing the picked local Circle span authors the connected complement as one Arc, retires the Circle identity and allocates one fresh monotonic non-reused Arc `EntityId` with the source role.
 
 Standard `Extend` supports Line and Arc targets only. The chosen endpoint continues to the nearest exact positive intersection with explicit **finite authored** Line/Arc/Circle boundary geometry. A hit that exists only on a boundary's virtual continuation is ineligible. Line extension preserves the Line identity and opposite endpoint; Arc extension preserves identity, center/radius, role and signed orientation. Circle is not an Extend target.
@@ -2130,7 +2132,9 @@ During Sketch Edit, **Modify** provides **Trim**, **Extend** and **Extend Both**
 
 ### Trim
 
-Select one or more finite Line/Arc/Circle entities to use as boundaries, then start **Trim** and click the target fragment to remove. Regular and Construction geometry can both be targets and boundaries.
+The default workflow is tool-first: start **Trim**, click one or more finite Line/Arc/Circle entities to collect the cutting boundaries, then press **Enter** or **RMB** to accept that boundary set. After confirmation, click target fragments to remove them; Trim remains active for repeated target clicks.
+
+Preselection remains a shortcut: if valid boundaries are already selected before **Trim** starts, they are accepted immediately and the tool opens directly in the target-fragment stage. Regular and Construction geometry can both be targets and boundaries.
 
 Trim is intentionally one-result only:
 
@@ -2144,7 +2148,9 @@ Circle→Arc is a real identity change: the old Circle is retired and the new Ar
 
 ### Extend
 
-Select one or more finite Line/Arc/Circle boundaries, start **Extend**, then click near the end of the target Line or Arc that should continue. The selected end extends to the nearest valid exact intersection in that continuation direction.
+The default workflow is tool-first: start **Extend**, click one or more finite Line/Arc/Circle entities to collect finite boundaries, then press **Enter** or **RMB** to accept them. After confirmation, click near the end of each target Line or Arc that should continue; Extend remains active for repeated targets.
+
+Preselection remains a shortcut: valid boundaries selected before **Extend** starts are accepted immediately, so the tool opens directly in the target-end stage. The selected target end extends to the nearest valid exact intersection in that continuation direction.
 
 Standard Extend uses only the **finite authored boundary geometry**. It does not use a boundary's invisible virtual continuation. Circle is not an Extend target.
 
@@ -2795,7 +2801,9 @@ Podczas Sketch Edit grupa **Modify** udostępnia **Trim**, **Extend** i **Extend
 
 ### Trim
 
-Zaznacz jedną lub więcej skończonych encji Line/Arc/Circle jako boundaries, uruchom **Trim** i kliknij fragment celu, który ma zostać usunięty. Geometria Regular i Construction może być zarówno celem, jak i boundary.
+Domyślny workflow jest tool-first: uruchom **Trim**, kliknij jedną lub więcej skończonych encji Line/Arc/Circle, aby zebrać boundaries cięcia, a następnie naciśnij **Enter** albo **PPM**, aby zatwierdzić ten zestaw. Po zatwierdzeniu klikaj fragmenty targetów do usunięcia; Trim pozostaje aktywny dla kolejnych targetów.
+
+Preselection pozostaje skrótem: jeżeli poprawne boundaries są już zaznaczone przed uruchomieniem **Trim**, zostają zaakceptowane od razu i narzędzie przechodzi bezpośrednio do etapu wyboru fragmentów targetu. Geometria Regular i Construction może być zarówno celem, jak i boundary.
 
 Trim celowo dopuszcza tylko jeden wynik:
 
@@ -2809,7 +2817,9 @@ Circle→Arc jest rzeczywistą zmianą identity: stary Circle zostaje wycofany, 
 
 ### Extend
 
-Zaznacz jedną lub więcej skończonych Line/Arc/Circle jako boundaries, uruchom **Extend**, a następnie kliknij w pobliżu końca docelowej Line lub Arc, który ma być przedłużony. Wybrany koniec jest przedłużany do najbliższego poprawnego exact intersection w tym kierunku.
+Domyślny workflow jest tool-first: uruchom **Extend**, kliknij jedną lub więcej skończonych encji Line/Arc/Circle, aby zebrać finite boundaries, a następnie naciśnij **Enter** albo **PPM**, aby je zatwierdzić. Po zatwierdzeniu klikaj w pobliżu końca każdej docelowej Line lub Arc, która ma być przedłużona; Extend pozostaje aktywny dla kolejnych targetów.
+
+Preselection pozostaje skrótem: poprawne boundaries zaznaczone przed uruchomieniem **Extend** są akceptowane od razu, więc narzędzie przechodzi bezpośrednio do etapu wyboru końca targetu. Wybrany koniec jest przedłużany do najbliższego poprawnego exact intersection w tym kierunku.
 
 Standardowy Extend korzysta wyłącznie ze **skończonej authored boundary geometry**. Nie używa niewidocznego wirtualnego przedłużenia boundary. Circle nie jest celem Extend.
 

@@ -297,7 +297,9 @@ Podczas Sketch Edit grupa **Modify** udostępnia **Trim**, **Extend** i **Extend
 
 ### Trim
 
-Zaznacz jedną lub więcej skończonych encji Line/Arc/Circle jako boundaries, uruchom **Trim** i kliknij fragment celu, który ma zostać usunięty. Geometria Regular i Construction może być zarówno celem, jak i boundary.
+Domyślny workflow jest tool-first: uruchom **Trim**, kliknij jedną lub więcej skończonych encji Line/Arc/Circle, aby zebrać boundaries cięcia, a następnie naciśnij **Enter** albo **PPM**, aby zatwierdzić ten zestaw. Po zatwierdzeniu klikaj fragmenty targetów do usunięcia; Trim pozostaje aktywny dla kolejnych targetów.
+
+Preselection pozostaje skrótem: jeżeli poprawne boundaries są już zaznaczone przed uruchomieniem **Trim**, zostają zaakceptowane od razu i narzędzie przechodzi bezpośrednio do etapu wyboru fragmentów targetu. Geometria Regular i Construction może być zarówno celem, jak i boundary.
 
 Trim celowo dopuszcza tylko jeden wynik:
 
@@ -311,7 +313,9 @@ Circle→Arc jest rzeczywistą zmianą identity: stary Circle zostaje wycofany, 
 
 ### Extend
 
-Zaznacz jedną lub więcej skończonych Line/Arc/Circle jako boundaries, uruchom **Extend**, a następnie kliknij w pobliżu końca docelowej Line lub Arc, który ma być przedłużony. Wybrany koniec jest przedłużany do najbliższego poprawnego exact intersection w tym kierunku.
+Domyślny workflow jest tool-first: uruchom **Extend**, kliknij jedną lub więcej skończonych encji Line/Arc/Circle, aby zebrać finite boundaries, a następnie naciśnij **Enter** albo **PPM**, aby je zatwierdzić. Po zatwierdzeniu klikaj w pobliżu końca każdej docelowej Line lub Arc, która ma być przedłużona; Extend pozostaje aktywny dla kolejnych targetów.
+
+Preselection pozostaje skrótem: poprawne boundaries zaznaczone przed uruchomieniem **Extend** są akceptowane od razu, więc narzędzie przechodzi bezpośrednio do etapu wyboru końca targetu. Wybrany koniec jest przedłużany do najbliższego poprawnego exact intersection w tym kierunku.
 
 Standardowy Extend korzysta wyłącznie ze **skończonej authored boundary geometry**. Nie używa niewidocznego wirtualnego przedłużenia boundary. Circle nie jest celem Extend.
 

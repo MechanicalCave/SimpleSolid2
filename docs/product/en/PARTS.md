@@ -297,7 +297,9 @@ During Sketch Edit, **Modify** provides **Trim**, **Extend** and **Extend Both**
 
 ### Trim
 
-Select one or more finite Line/Arc/Circle entities to use as boundaries, then start **Trim** and click the target fragment to remove. Regular and Construction geometry can both be targets and boundaries.
+The default workflow is tool-first: start **Trim**, click one or more finite Line/Arc/Circle entities to collect the cutting boundaries, then press **Enter** or **RMB** to accept that boundary set. After confirmation, click target fragments to remove them; Trim remains active for repeated target clicks.
+
+Preselection remains a shortcut: if valid boundaries are already selected before **Trim** starts, they are accepted immediately and the tool opens directly in the target-fragment stage. Regular and Construction geometry can both be targets and boundaries.
 
 Trim is intentionally one-result only:
 
@@ -311,7 +313,9 @@ Circle→Arc is a real identity change: the old Circle is retired and the new Ar
 
 ### Extend
 
-Select one or more finite Line/Arc/Circle boundaries, start **Extend**, then click near the end of the target Line or Arc that should continue. The selected end extends to the nearest valid exact intersection in that continuation direction.
+The default workflow is tool-first: start **Extend**, click one or more finite Line/Arc/Circle entities to collect finite boundaries, then press **Enter** or **RMB** to accept them. After confirmation, click near the end of each target Line or Arc that should continue; Extend remains active for repeated targets.
+
+Preselection remains a shortcut: valid boundaries selected before **Extend** starts are accepted immediately, so the tool opens directly in the target-end stage. The selected target end extends to the nearest valid exact intersection in that continuation direction.
 
 Standard Extend uses only the **finite authored boundary geometry**. It does not use a boundary's invisible virtual continuation. Circle is not an Extend target.
 
