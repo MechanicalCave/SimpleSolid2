@@ -1,6 +1,6 @@
 # CI-04 — Build Graph & Warm Verification
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** ACCEPTED — ACTIVE / IMPLEMENTED CANDIDATE  
 **Owner proposal acceptance:** 2026-09-30  
 **Owner activation:** 2026-10-01  
 **Decision class:** D1 repository workflow / build implementation  
@@ -426,3 +426,42 @@ The Owner explicitly activated CI-04 on 2026-10-01.
 CI-04 implementation is authorized only within this accepted D1 repository/build contract. R11 remains separately proposal-only/inactive and no CAD/product semantic mutation is authorized by CI-04.
 
 Implementation must preserve CI-01/CI-02/CI-03 evidence invariants while proceeding through the staged rollout defined above.
+
+## 25. Implementation evidence
+
+CI-04 implementation candidate evidence was collected on 2026-10-01.
+
+Exact timing/clean verification head:
+
+```text
+79e89af2faba96780dab9e85b9f60700a75015c7
+Windows FULL #1040: PASS
+```
+
+#1040 proved:
+
+- documentation/bootstrap/self-tests PASS;
+- test-tier dispatcher PASS;
+- corrected FOCUSED dispatcher self-test PASS;
+- build-tree manager self-test PASS;
+- CLEAN persistent desktop tree preparation PASS;
+- complete desktop test graph build PASS;
+- core-only build/test with Qt/OpenCASCADE discovery disabled PASS;
+- FAST/SUBSYSTEM selector verification PASS;
+- full desktop CTest 78/78 PASS;
+- bounded parallel CTest with native resource locking PASS;
+- comparative timing harness PASS.
+
+Comparative results on runner `DESKTOP-JL6O311`, baseline `8574215c3c73ae015e49ad8a749464c92d81548b` versus exact head above:
+
+| Scenario | Before | After | Speedup |
+|---|---:|---:|---:|
+| clean product | 229.99 s | 78.19 s | 2.94x |
+| no-op product | 6.66 s | 3.88 s | 1.72x |
+| one ordinary Sketch `.cpp` | 11.53 s | 4.16 s | 2.77x |
+| clean FOCUSED | 12.27 s | 12.16 s | 1.01x |
+| clean FAST | 242.32 s | 205.82 s | 1.18x |
+
+Both FOCUSED timing cells executed exactly one test. Both FAST cells executed 62 tests. Timing is evidence only and is not a machine-independent acceptance threshold.
+
+Remaining closure evidence before CI-04 completion: one compatible warm FULL on the same implementation content, followed by work-only completion bookkeeping.

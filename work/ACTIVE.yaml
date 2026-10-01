@@ -26,6 +26,8 @@ next:
   - preserve Roadmap v1.7 sequencing: R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - CI-04 implementation candidate exact head 79e89af2faba96780dab9e85b9f60700a75015c7 passed CLEAN Windows FULL #1040 with desktop 78/78, core-only PASS, corrected FOCUSED exact execution, bounded parallel CTest, and comparative timing evidence.
+  - CI-04 timing evidence on DESKTOP-JL6O311: clean product 229.99s -> 78.19s (2.94x); no-op 6.66s -> 3.88s (1.72x); one Sketch .cpp 11.53s -> 4.16s (2.77x); FOCUSED 12.27s -> 12.16s (1.01x); FAST 242.32s -> 205.82s (1.18x).
   - Owner explicitly activated CI-04 Build Graph & Warm Verification on 2026-10-01; CI-04 is D1 repository/build tooling only and does not activate R11 or authorize CAD/product semantic mutation.
   - CI-04 proposal exact head aab97966e1d0a8de69addd0de63b3bb9f5ed6527 passed CLOSURE in Windows PR gate #1012 before activation.
   - R10 final exact-head candidate 03b171ae91342890013604a8b9d3c8021b639df7 passed Windows FULL #1009 on 2026-09-30; documentation/current Browser candidate 56d9483b13462b98424e26544d20943708070ce0 passed DOCS #1008.
