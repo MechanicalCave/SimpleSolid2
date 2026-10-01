@@ -47,6 +47,9 @@ target_link_libraries(sk07c_copy_command_test PRIVATE simplesolid2_application)
 ss2_core_only_test(sk07f_precision_input_state_test sk07f.precision_input_state sk07f_precision_input_state_test.cpp)
 target_link_libraries(sk07f_precision_input_state_test PRIVATE simplesolid2_sketch)
 
+ss2_core_only_test(r11_snap_core_test r11.snap_core r11_snap_core_test.cpp)
+target_link_libraries(r11_snap_core_test PRIVATE simplesolid2_sketch)
+
 add_test(
     NAME wb02.cad_input_boundaries
     COMMAND ${CMAKE_COMMAND}
