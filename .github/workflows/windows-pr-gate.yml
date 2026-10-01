@@ -387,7 +387,7 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($baseline)) {
               throw "CI-04 timing evidence requires pull-request base SHA."
           }
-          .\scripts\ci\ss2-ci04-timing.ps1 -BaselineRef $baseline -EvidenceRoot (Join-Path $env:SS2_CI_BUILD_ROOT "ci04-evidence")
+          .\scripts\ci\ss2-ci04-timing.ps1 -BaselineRef $baseline -EvidenceRoot (Join-Path $env:SS2_CI_BUILD_ROOT "ci04-evidence") -FocusedOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   docs:
