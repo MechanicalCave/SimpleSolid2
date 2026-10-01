@@ -77,8 +77,9 @@ int main() {
         CHECK(nearPoint(
             line->end(),
             {4.0, 0.0}));
-        CHECK(model.findLine(target)->end() ==
-              Point2{10.0, 0.0});
+        CHECK((
+            model.findLine(target)->end() ==
+            Point2{10.0, 0.0}));
     }
 
     // Middle Line Trim would create two entities and is therefore rejected.
@@ -173,8 +174,9 @@ int main() {
         CHECK(trimmed.result_entity.has_value());
         CHECK(*trimmed.result_entity != circle);
         CHECK(
-            trimmed.result_entity->value() ==
-            cursor_before.nextValue());
+            circle < *trimmed.result_entity);
+        CHECK(
+            cutter < *trimmed.result_entity);
 
         const auto edited =
             resultModel(trimmed);
@@ -199,8 +201,8 @@ int main() {
             edited->entityCount() ==
             model.entityCount());
         CHECK(
-            edited->entityIdCursor().nextValue() >
-            cursor_before.nextValue());
+            edited->entityIdCursor() >
+            cursor_before);
     }
 
     // Circle/Circle and Circle/Arc cutters both provide valid finite cuts.

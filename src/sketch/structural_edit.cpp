@@ -7,6 +7,7 @@
 #include <limits>
 #include <numbers>
 #include <set>
+#include <stdexcept>
 #include <utility>
 #include <vector>
 
@@ -640,21 +641,30 @@ uniqueBoundaries(
         replacement);
 }
 
-[[nodiscard]] SupportIntersections lineSupportLine(
-    const Line& support,
-    const Line& boundary) {
+struct LineSupportsIntersection final {
+    SupportRelationStatus status{
+        SupportRelationStatus::invalid};
+    std::optional<Point2> point;
+    double first_parameter{};
+    double second_parameter{};
+};
+
+[[nodiscard]] LineSupportsIntersection
+lineSupportsIntersection(
+    const Line& first,
+    const Line& second) {
     const double ru =
-        support.end().u - support.start().u;
+        first.end().u - first.start().u;
     const double rv =
-        support.end().v - support.start().v;
+        first.end().v - first.start().v;
     const double su =
-        boundary.end().u - boundary.start().u;
+        second.end().u - second.start().u;
     const double sv =
-        boundary.end().v - boundary.start().v;
+        second.end().v - second.start().v;
     const double qu =
-        boundary.start().u - support.start().u;
+        second.start().u - first.start().u;
     const double qv =
-        boundary.start().v - support.start().v;
+        second.start().v - first.start().v;
 
     const double scale = std::max(
         {std::abs(ru), std::abs(rv),
@@ -681,38 +691,65 @@ uniqueBoundaries(
     }
 
     if (denominator == 0.0) {
-        return SupportIntersections{
+        return LineSupportsIntersection{
             collinearity == 0.0
                 ? SupportRelationStatus::overlap
                 : SupportRelationStatus::disjoint,
-            {}};
+            std::nullopt,
+            0.0,
+            0.0};
     }
 
-    const double target_parameter =
+    const double first_parameter =
         cross(qn_u, qn_v, sn_u, sn_v) /
         denominator;
-    const double boundary_parameter =
+    const double second_parameter =
         cross(qn_u, qn_v, rn_u, rn_v) /
         denominator;
-    if (!std::isfinite(target_parameter) ||
-        !std::isfinite(boundary_parameter)) {
+    if (!std::isfinite(first_parameter) ||
+        !std::isfinite(second_parameter)) {
         return {};
     }
-    if (boundary_parameter < 0.0 ||
-        boundary_parameter > 1.0) {
+
+    const auto point =
+        linePoint(first, first_parameter);
+    if (!point) {
+        return {};
+    }
+
+    return LineSupportsIntersection{
+        SupportRelationStatus::valid,
+        *point,
+        first_parameter,
+        second_parameter};
+}
+
+[[nodiscard]] SupportIntersections lineSupportLine(
+    const Line& support,
+    const Line& boundary) {
+    const auto relation =
+        lineSupportsIntersection(
+            support,
+            boundary);
+    if (relation.status !=
+        SupportRelationStatus::valid) {
+        return {
+            relation.status,
+            {}};
+    }
+    if (!relation.point ||
+        relation.second_parameter < 0.0 ||
+        relation.second_parameter > 1.0) {
         return {
             SupportRelationStatus::disjoint,
             {}};
     }
 
-    const auto point =
-        linePoint(support, target_parameter);
-    if (!point) {
-        return {};
-    }
     return SupportIntersections{
         SupportRelationStatus::valid,
-        {{*point, target_parameter}}};
+        {{
+            *relation.point,
+            relation.first_parameter}}};
 }
 
 [[nodiscard]] SupportIntersections lineSupportCircle(
@@ -1570,7 +1607,7 @@ StructuralEditResult evaluateExtendBoth(
     }
 
     const auto relation =
-        lineSupportLine(
+        lineSupportsIntersection(
             *first,
             *second);
     if (relation.status ==
@@ -1582,28 +1619,17 @@ StructuralEditResult evaluateExtendBoth(
     }
     if (relation.status !=
             SupportRelationStatus::valid ||
-        relation.intersections.size() != 1U) {
+        !relation.point) {
         return {
             StructuralEditStatus::not_applicable,
             std::nullopt,
             std::nullopt};
     }
 
-    const auto& intersection =
-        relation.intersections.front();
-    const auto second_parameter =
-        lineParameter(
-            *second,
-            intersection.point);
-    if (!second_parameter) {
-        return {
-            StructuralEditStatus::invalid_request,
-            std::nullopt,
-            std::nullopt};
-    }
-
     const double first_parameter =
-        intersection.line_parameter;
+        relation.first_parameter;
+    const double second_parameter =
+        relation.second_parameter;
     if (first_parameter >= 0.0 &&
         first_parameter <= 1.0) {
         return {
@@ -1611,8 +1637,8 @@ StructuralEditResult evaluateExtendBoth(
             std::nullopt,
             std::nullopt};
     }
-    if (*second_parameter >= 0.0 &&
-        *second_parameter <= 1.0) {
+    if (second_parameter >= 0.0 &&
+        second_parameter <= 1.0) {
         return {
             StructuralEditStatus::not_applicable,
             std::nullopt,
@@ -1627,7 +1653,7 @@ StructuralEditResult evaluateExtendBoth(
             std::nullopt};
     }
 
-    const Point2 x = intersection.point;
+    const Point2 x = *relation.point;
     const bool first_changed =
         first_parameter < 0.0
             ? edited->updateLine(
@@ -1639,7 +1665,7 @@ StructuralEditResult evaluateExtendBoth(
                   first->start(),
                   x);
     const bool second_changed =
-        *second_parameter < 0.0
+        second_parameter < 0.0
             ? edited->updateLine(
                   second->id(),
                   x,
