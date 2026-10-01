@@ -627,6 +627,17 @@ bool SketchInteractionState::commonTransformTool()
 
 std::optional<PointRequest>
 SketchInteractionState::activePointRequest() const noexcept {
+    const auto finalized =
+        [this](PointRequest request)
+            -> std::optional<PointRequest> {
+            request.temporary_snap_override =
+                temporary_snap_override_;
+            return request.valid()
+                ? std::optional<PointRequest>{
+                      std::move(request)}
+                : std::nullopt;
+        };
+
     if (manipulation_) {
         const bool distance_enabled =
             manipulation_->mode ==
@@ -649,9 +660,7 @@ SketchInteractionState::activePointRequest() const noexcept {
                     *manipulation_->
                         rotate_reference_point);
         }
-        return request.valid()
-            ? std::optional<PointRequest>{request}
-            : std::nullopt;
+        return finalized(std::move(request));
     }
 
     if (tool_ == SketchTool::line &&
@@ -670,9 +679,7 @@ SketchInteractionState::activePointRequest() const noexcept {
             request.polar_relative_reference =
                 line_relative_reference_;
         }
-        return request.valid()
-            ? std::optional<PointRequest>{request}
-            : std::nullopt;
+        return finalized(std::move(request));
     }
 
     if (tool_ == SketchTool::circle &&
@@ -685,9 +692,7 @@ SketchInteractionState::activePointRequest() const noexcept {
             true,
             false,
             false};
-        return request.valid()
-            ? std::optional<PointRequest>{request}
-            : std::nullopt;
+        return finalized(std::move(request));
     }
 
     if (tool_ == SketchTool::arc &&
@@ -730,9 +735,7 @@ SketchInteractionState::activePointRequest() const noexcept {
             first_corner,
             false,
             false};
-        return request.valid()
-            ? std::optional<PointRequest>{request}
-            : std::nullopt;
+        return finalized(std::move(request));
     }
 
     if (!commonTransformTool() ||
@@ -789,9 +792,25 @@ SketchInteractionState::activePointRequest() const noexcept {
                     reference_point);
     }
 
-    return request.valid()
-        ? std::optional<PointRequest>{request}
-        : std::nullopt;
+    return finalized(std::move(request));
+}
+
+bool SketchInteractionState::setTemporarySnapOverride(
+    TemporarySnapOverrideKind value) noexcept {
+    if (!activePointRequest()) {
+        return false;
+    }
+    temporary_snap_override_ = value;
+    return true;
+}
+
+bool SketchInteractionState::clearTemporarySnapOverride()
+    noexcept {
+    if (!temporary_snap_override_) {
+        return false;
+    }
+    temporary_snap_override_.reset();
+    return true;
 }
 
 std::optional<ResolvedSketchInput>
@@ -1406,6 +1425,7 @@ bool SketchInteractionState::acceptTransformPoint(
             transform_session_->current_preview = input;
         }
         clearHover();
+        consumeTemporarySnapOverride();
         return true;
 
     case CommonTransformStage::await_reference_point:
@@ -1425,6 +1445,7 @@ bool SketchInteractionState::acceptTransformPoint(
         transform_session_->stage =
             CommonTransformStage::await_destination;
         clearHover();
+        consumeTemporarySnapOverride();
         return true;
 
     case CommonTransformStage::await_axis_start:
@@ -1439,6 +1460,7 @@ bool SketchInteractionState::acceptTransformPoint(
         transform_session_->stage =
             CommonTransformStage::await_axis_end;
         clearHover();
+        consumeTemporarySnapOverride();
         return true;
 
     default:
@@ -1674,6 +1696,7 @@ SketchInteractionState::acceptLinePoint(
         line_anchor_ = point;
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
+        consumeTemporarySnapOverride();
         line_stage_ =
             LineStage::await_next_point;
         return {
@@ -1710,6 +1733,7 @@ SketchInteractionState::acceptLinePoint(
     }
 
     pending_line_request_ = request;
+    consumeTemporarySnapOverride();
     return {
         LinePointOutcome::segment_requested,
         request};
@@ -1734,6 +1758,7 @@ SketchInteractionState::acceptCirclePoint(
         circle_center_ = point;
         circle_radius_lock_.reset();
         point_field_locks_ = {};
+        consumeTemporarySnapOverride();
         circle_stage_ =
             CircleStage::await_radius;
         return {
@@ -1833,6 +1858,7 @@ SketchInteractionState::acceptArcPoint(
         arc_radius_lock_.reset();
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
+        consumeTemporarySnapOverride();
         arc_stage_ = ArcStage::await_end;
         return {
             ArcPointOutcome::start_accepted,
@@ -1849,6 +1875,7 @@ SketchInteractionState::acceptArcPoint(
         arc_radius_lock_.reset();
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
+        consumeTemporarySnapOverride();
         arc_stage_ = ArcStage::await_arc_point;
         return {
             ArcPointOutcome::end_accepted,
@@ -1881,6 +1908,7 @@ SketchInteractionState::acceptArcPoint(
     }
 
     pending_arc_request_ = *request;
+    consumeTemporarySnapOverride();
     return {
         ArcPointOutcome::arc_requested,
         request};
@@ -2012,6 +2040,7 @@ SketchInteractionState::acceptRectanglePoint(
         rectangle_height_lock_.reset();
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
+        consumeTemporarySnapOverride();
         rectangle_stage_ =
             RectangleStage::await_opposite_corner;
         return {
@@ -2055,6 +2084,7 @@ SketchInteractionState::acceptRectanglePoint(
     }
 
     pending_rectangle_request_ = *request;
+    consumeTemporarySnapOverride();
     return {
         RectanglePointOutcome::rectangle_requested,
         request};
@@ -2367,6 +2397,9 @@ clearRequestLocalNumericLocks() noexcept {
 }
 
 bool SketchInteractionState::escape() noexcept {
+    if (clearTemporarySnapOverride()) {
+        return true;
+    }
     if (clearRequestLocalNumericLocks()) {
         return true;
     }
@@ -3252,6 +3285,7 @@ void SketchInteractionState::finishDirectManipulation()
     manipulation_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    consumeTemporarySnapOverride();
     clearHover();
 }
 
@@ -3260,6 +3294,7 @@ void SketchInteractionState::cancelDirectManipulation()
     manipulation_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
     clearHover();
 }
 
@@ -3294,6 +3329,7 @@ void SketchInteractionState::resetLineStage()
     pending_line_request_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
 }
 
 void SketchInteractionState::resetCircleStage()
@@ -3305,6 +3341,7 @@ void SketchInteractionState::resetCircleStage()
     pending_circle_request_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
 }
 
 void SketchInteractionState::resetArcStage()
@@ -3317,6 +3354,7 @@ void SketchInteractionState::resetArcStage()
     pending_arc_request_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
 }
 
 void SketchInteractionState::resetRectangleStage()
@@ -3329,6 +3367,7 @@ void SketchInteractionState::resetRectangleStage()
     pending_rectangle_request_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
 }
 
 void SketchInteractionState::resetCommonTransform()
@@ -3336,6 +3375,7 @@ void SketchInteractionState::resetCommonTransform()
     transform_session_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
 }
 
 void SketchInteractionState::resetMeasure() noexcept {

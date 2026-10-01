@@ -1,4 +1,5 @@
 #include <simplesolid2/sketch/snap.hpp>
+#include <simplesolid2/sketch/interaction_state.hpp>
 
 #include <cmath>
 #include <iostream>
@@ -635,6 +636,90 @@ int main() {
                  capture,
                  {{endpoint_candidate, 1.0}},
                  {15.0, 9.0})
+                 .has_value());
+    }
+
+    // Temporary override belongs to the active PointRequest. Pointer
+    // preview does not consume it; accepted point, Esc and request/tool
+    // replacement do.
+    {
+        SketchInteractionState interaction;
+        CHECK(
+            !interaction.setTemporarySnapOverride(
+                TemporarySnapOverrideKind::endpoint));
+
+        interaction.activateLine();
+        CHECK(
+            interaction.setTemporarySnapOverride(
+                TemporarySnapOverrideKind::endpoint));
+        auto point_request =
+            interaction.activePointRequest();
+        CHECK(point_request.has_value());
+        CHECK(
+            point_request->temporary_snap_override ==
+            TemporarySnapOverrideKind::endpoint);
+
+        CHECK(
+            interaction.resolvePointerInput(
+                {3.0, 4.0})
+                .has_value());
+        CHECK(
+            interaction.temporarySnapOverride() ==
+            TemporarySnapOverrideKind::endpoint);
+
+        const auto first =
+            interaction.acceptLinePoint(
+                {3.0, 4.0});
+        CHECK(
+            first.outcome ==
+            LinePointOutcome::first_point_accepted);
+        CHECK(
+            !interaction.temporarySnapOverride()
+                 .has_value());
+
+        CHECK(
+            interaction.setTemporarySnapOverride(
+                TemporarySnapOverrideKind::none));
+        const auto degenerate =
+            interaction.acceptLinePoint(
+                {3.0, 4.0});
+        CHECK(
+            degenerate.outcome ==
+            LinePointOutcome::zero_length_ignored);
+        CHECK(
+            interaction.temporarySnapOverride() ==
+            TemporarySnapOverrideKind::none);
+
+        CHECK(interaction.escape());
+        CHECK(
+            !interaction.temporarySnapOverride()
+                 .has_value());
+
+        CHECK(
+            interaction.setTemporarySnapOverride(
+                TemporarySnapOverrideKind::midpoint));
+        CHECK(
+            interaction.setTemporarySnapOverride(
+                TemporarySnapOverrideKind::none));
+        CHECK(
+            interaction.temporarySnapOverride() ==
+            TemporarySnapOverrideKind::none);
+
+        interaction.activateCircle();
+        CHECK(
+            !interaction.temporarySnapOverride()
+                 .has_value());
+        CHECK(
+            interaction.setTemporarySnapOverride(
+                TemporarySnapOverrideKind::center));
+        const auto center_result =
+            interaction.acceptCirclePoint(
+                {20.0, 20.0});
+        CHECK(
+            center_result.outcome ==
+            CirclePointOutcome::center_accepted);
+        CHECK(
+            !interaction.temporarySnapOverride()
                  .has_value());
     }
 

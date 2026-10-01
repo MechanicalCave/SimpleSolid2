@@ -4,6 +4,7 @@
 #include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/sketch/point2.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
+#include <simplesolid2/sketch/snap.hpp>
 #include <simplesolid2/sketch/transform.hpp>
 
 #include <array>
@@ -314,6 +315,8 @@ struct PointRequest final {
     bool relative_cartesian_enabled{};
     bool relative_polar_enabled{};
     std::optional<double> polar_relative_reference;
+    std::optional<TemporarySnapOverrideKind>
+        temporary_snap_override;
 
     [[nodiscard]] bool valid() const noexcept {
         const bool requires_base =
@@ -394,6 +397,15 @@ public:
     [[nodiscard]] const PointFieldLocks&
     pointFieldLocks() const noexcept {
         return point_field_locks_;
+    }
+
+
+    [[nodiscard]] bool setTemporarySnapOverride(
+        TemporarySnapOverrideKind value) noexcept;
+    [[nodiscard]] bool clearTemporarySnapOverride() noexcept;
+    [[nodiscard]] std::optional<TemporarySnapOverrideKind>
+    temporarySnapOverride() const noexcept {
+        return temporary_snap_override_;
     }
 
     [[nodiscard]] std::optional<Point2>
@@ -688,6 +700,9 @@ private:
     [[nodiscard]] bool commonTransformTool() const noexcept;
     [[nodiscard]] bool
     clearRequestLocalNumericLocks() noexcept;
+    void consumeTemporarySnapOverride() noexcept {
+        temporary_snap_override_.reset();
+    }
 
     void resetToSelect() noexcept;
     void resetLineStage() noexcept;
@@ -749,6 +764,8 @@ private:
     // PointRequest. It is never authored or persisted.
     std::optional<Point2> point_pointer_candidate_;
     PointFieldLocks point_field_locks_;
+    std::optional<TemporarySnapOverrideKind>
+        temporary_snap_override_;
 };
 
 } // namespace simplesolid2::sketch
