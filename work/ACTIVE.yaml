@@ -26,6 +26,8 @@ next:
   - preserve Roadmap v1.7 sequencing: R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - R10 merged to main as 8574215c3c73ae015e49ad8a749464c92d81548b on 2026-09-30 after final FULL #1009, Owner manual Windows PASS and CLOSURE #1010.
+  - R11 proposal work on branch proposal-r11-osnap-tracking-inference is governance/design-only and does not activate production scope; ACTIVE remains completed until explicit Owner acceptance.
   - CI-04 completion candidate exact head fbc35c3d9efd96891be8fec5671654cad8ecd473 passed Windows FULL #1044 with CLEAN desktop 78/78 PASS, core-only PASS, immediate warm rebuild 7.60s, warm desktop 78/78 PASS, and final windows-msvc PASS.
   - CI-04 acceptance is satisfied; R11 remains proposal-only/inactive and no CAD/product semantics were changed by CI-04.
   - CI-04 implementation candidate exact head 79e89af2faba96780dab9e85b9f60700a75015c7 passed CLEAN Windows FULL #1040 with desktop 78/78, core-only PASS, corrected FOCUSED exact execution, bounded parallel CTest, and comparative timing evidence.
