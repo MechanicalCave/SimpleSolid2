@@ -27,7 +27,7 @@ enum class ProfileCadInputCommandKind {
     find_all_regions,
     finish,
     cancel,
-    set_detect_islands,
+    set_show_islands,
     set_show_boundaries,
     set_show_problems,
 };
