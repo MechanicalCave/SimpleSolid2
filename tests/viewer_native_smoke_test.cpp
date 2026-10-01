@@ -115,6 +115,49 @@ int main(int argc, char* argv[]) {
                  widget.setSketchPreviewScene(
                      viewer::SketchPreviewScene{});
 
+            // R11 snap/OTRACK presentation is a real provider overlay:
+            // one transient current marker/label plus up to two acquired
+            // tracking anchors, all non-selectable and runtime-only.
+            viewer::SketchSnapInferenceScene
+                snap_scene;
+            snap_scene.current =
+                viewer::SketchSnapMarkerPresentation{
+                    {15.0, 15.0, 0.0},
+                    viewer::SketchSnapMarkerKind::
+                        endpoint,
+                    "Endpoint"};
+            snap_scene.acquired = {
+                {
+                    {10.0, 15.0, 0.0},
+                    viewer::SketchSnapMarkerKind::
+                        midpoint,
+                    "Midpoint"},
+                {
+                    {20.0, 15.0, 0.0},
+                    viewer::SketchSnapMarkerKind::
+                        center,
+                    "Center"},
+            };
+            ok = ok &&
+                 snap_scene.valid() &&
+                 widget.setSketchSnapInferenceScene(
+                     snap_scene);
+
+            snap_scene.current =
+                viewer::SketchSnapMarkerPresentation{
+                    {16.0, 16.0, 0.0},
+                    viewer::SketchSnapMarkerKind::
+                        intersection,
+                    "Intersection"};
+            snap_scene.acquired.resize(1U);
+            ok = ok &&
+                 widget.setSketchSnapInferenceScene(
+                     snap_scene);
+            ok = ok &&
+                 widget.setSketchSnapInferenceScene(
+                     viewer::
+                         SketchSnapInferenceScene{});
+
             viewer::SketchDynamicInputOverlay dyn_overlay{
                 viewer::ViewportPoint2{
                     895.0,

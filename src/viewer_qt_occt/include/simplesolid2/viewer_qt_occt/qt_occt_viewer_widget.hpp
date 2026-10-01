@@ -105,6 +105,9 @@ public:
 
     void clearSketchSelectionBoxOverlay() override;
 
+    [[nodiscard]] bool setSketchSnapInferenceScene(
+        const viewer::SketchSnapInferenceScene& scene) override;
+
     [[nodiscard]] bool setSketchDynamicInputOverlay(
         const viewer::SketchDynamicInputOverlay& overlay) override;
 

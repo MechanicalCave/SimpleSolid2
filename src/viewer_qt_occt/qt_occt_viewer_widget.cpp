@@ -1055,6 +1055,7 @@ public:
         clearSketchMeasureMarkerScene();
         clearSketchMeasureCueScene();
         clearSketchGripScene();
+        clearSketchSnapInferenceScene();
         clearSketchDynamicInputOverlay();
         sketch_interaction_presentation_ = {};
         clearSketchScene();
@@ -2079,6 +2080,104 @@ public:
         context_->UpdateCurrentViewer();
     }
 
+    bool setSketchSnapInferenceScene(
+        const viewer::SketchSnapInferenceScene& scene) {
+        if (!scene.valid()) {
+            return false;
+        }
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        clearSketchSnapInferenceScene();
+        ensureSketchSnapInferenceAspects();
+
+        try {
+            if (scene.current) {
+                Handle(Geom_CartesianPoint) point =
+                    new Geom_CartesianPoint(
+                        toPoint(
+                            scene.current->position));
+                sketch_snap_current_object_ =
+                    new AIS_Point(point);
+                sketch_snap_current_object_->
+                    Attributes()->SetPointAspect(
+                        sketch_snap_current_aspect_);
+                context_->Display(
+                    sketch_snap_current_object_,
+                    false);
+                context_->Deactivate(
+                    sketch_snap_current_object_);
+
+                sketch_snap_current_label_ =
+                    new AIS_TextLabel();
+                sketch_snap_current_label_->
+                    SetText(
+                        TCollection_ExtendedString{
+                            scene.current->label.c_str(),
+                            Standard_True});
+                sketch_snap_current_label_->
+                    SetPosition(
+                        toPoint(
+                            scene.current->position));
+                sketch_snap_current_label_->
+                    SetColor(
+                        Quantity_Color{
+                            1.0,
+                            0.82,
+                            0.22,
+                            Quantity_TOC_RGB});
+                sketch_snap_current_label_->
+                    SetFont("Consolas");
+                sketch_snap_current_label_->
+                    SetHeight(12.0);
+                sketch_snap_current_label_->
+                    SetHJustification(
+                        Graphic3d_HTA_LEFT);
+                sketch_snap_current_label_->
+                    SetVJustification(
+                        Graphic3d_VTA_BOTTOM);
+                sketch_snap_current_label_->
+                    SetZoomable(false);
+                sketch_snap_current_label_->
+                    SetZLayer(
+                        Graphic3d_ZLayerId_Topmost);
+                context_->Display(
+                    sketch_snap_current_label_,
+                    false);
+                context_->Deactivate(
+                    sketch_snap_current_label_);
+            }
+
+            sketch_snap_acquired_objects_.reserve(
+                scene.acquired.size());
+            for (const auto& marker :
+                 scene.acquired) {
+                Handle(Geom_CartesianPoint) point =
+                    new Geom_CartesianPoint(
+                        toPoint(marker.position));
+                Handle(AIS_Point) object =
+                    new AIS_Point(point);
+                object->Attributes()->SetPointAspect(
+                    sketch_snap_acquired_aspect_);
+                context_->Display(object, false);
+                context_->Deactivate(object);
+                sketch_snap_acquired_objects_.
+                    push_back(object);
+            }
+
+            sketch_snap_inference_scene_ = scene;
+            context_->UpdateCurrentViewer();
+            view_->Redraw();
+            return true;
+        } catch (...) {
+            clearSketchSnapInferenceScene();
+            throw;
+        }
+    }
+
     bool setSketchDynamicInputOverlay(
         const viewer::SketchDynamicInputOverlay& overlay) {
         if (!overlay.valid()) {
@@ -3069,6 +3168,54 @@ public:
         sketch_interaction_presentation_ = {};
     }
 
+    void clearSketchSnapInferenceScene() noexcept {
+        if (!context_.IsNull()) {
+            if (!sketch_snap_current_object_.IsNull()) {
+                const auto retained =
+                    sketch_snap_current_object_;
+                guardedVoid(
+                    "removeSketchSnapCurrentMarker",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+
+            for (const auto& object :
+                 sketch_snap_acquired_objects_) {
+                if (object.IsNull()) {
+                    continue;
+                }
+                const auto retained = object;
+                guardedVoid(
+                    "removeSketchSnapAcquiredMarker",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+
+            if (!sketch_snap_current_label_.IsNull()) {
+                const auto retained =
+                    sketch_snap_current_label_;
+                guardedVoid(
+                    "removeSketchSnapCurrentLabel",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+
+        sketch_snap_current_object_.Nullify();
+        sketch_snap_acquired_objects_.clear();
+        sketch_snap_current_label_.Nullify();
+        sketch_snap_inference_scene_ = {};
+    }
+
     void clearSketchMeasureMarkerScene() noexcept {
         if (!context_.IsNull()) {
             for (const auto& entry :
@@ -3522,6 +3669,78 @@ public:
         return true;
     }
 
+    [[nodiscard]] bool
+    ensureSketchSnapInferenceAspects() {
+        double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            dpr = 1.0;
+        }
+
+        if (sketch_snap_aspect_dpr_ == dpr &&
+            !sketch_snap_current_aspect_.IsNull() &&
+            !sketch_snap_acquired_aspect_.IsNull()) {
+            return false;
+        }
+
+        const int current_size =
+            gripMarkerPixelSize(11.0, dpr);
+        const int acquired_size =
+            gripMarkerPixelSize(9.0, dpr);
+
+        sketch_snap_current_aspect_ =
+            new Prs3d_PointAspect(
+                Quantity_Color{
+                    1.0, 0.82, 0.22,
+                    Quantity_TOC_RGB},
+                current_size,
+                current_size,
+                crossMarkerBitmap(
+                    current_size,
+                    true));
+        sketch_snap_acquired_aspect_ =
+            new Prs3d_PointAspect(
+                Quantity_Color{
+                    0.30, 0.92, 0.98,
+                    Quantity_TOC_RGB},
+                acquired_size,
+                acquired_size,
+                squareMarkerBitmap(
+                    acquired_size,
+                    false));
+        sketch_snap_aspect_dpr_ = dpr;
+        return true;
+    }
+
+    void applySketchSnapInferenceStyles() {
+        if (context_.IsNull() ||
+            !ensureSketchSnapInferenceAspects()) {
+            return;
+        }
+
+        if (!sketch_snap_current_object_.IsNull()) {
+            sketch_snap_current_object_->
+                Attributes()->SetPointAspect(
+                    sketch_snap_current_aspect_);
+            context_->Redisplay(
+                sketch_snap_current_object_,
+                false);
+        }
+
+        for (const auto& object :
+             sketch_snap_acquired_objects_) {
+            if (object.IsNull()) {
+                continue;
+            }
+            object->Attributes()->SetPointAspect(
+                sketch_snap_acquired_aspect_);
+            context_->Redisplay(
+                object,
+                false);
+        }
+    }
+
     void applySketchInteractionStyles() {
         if (context_.IsNull()) return;
 
@@ -3579,6 +3798,7 @@ public:
         if (!native_window.IsNull()) native_window->DoResize();
         view_->MustBeResized();
         applySketchInteractionStyles();
+        applySketchSnapInferenceStyles();
         view_->Redraw();
     }
 
@@ -3660,6 +3880,8 @@ private:
         sketch_measure_marker_scene_;
     viewer::SketchMeasureCueScene
         sketch_measure_cue_scene_;
+    viewer::SketchSnapInferenceScene
+        sketch_snap_inference_scene_;
     viewer::PresentationSelection selection_;
     viewer::SelectionIntentHandler selection_intent_handler_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
@@ -3702,6 +3924,17 @@ private:
         sketch_measure_cue_objects_;
     Handle(AIS_InteractiveObject)
         sketch_measure_cue_point_object_;
+    Handle(AIS_Point)
+        sketch_snap_current_object_;
+    std::vector<Handle(AIS_Point)>
+        sketch_snap_acquired_objects_;
+    Handle(AIS_TextLabel)
+        sketch_snap_current_label_;
+    double sketch_snap_aspect_dpr_{};
+    occ::handle<Prs3d_PointAspect>
+        sketch_snap_current_aspect_;
+    occ::handle<Prs3d_PointAspect>
+        sketch_snap_acquired_aspect_;
     double sketch_measure_marker_aspect_dpr_{};
     occ::handle<Prs3d_PointAspect>
         sketch_measure_marker_revealed_aspect_;
@@ -3969,6 +4202,16 @@ void QtOcctViewerWidget::clearSketchSelectionBoxOverlay() {
         "clearSketchSelectionBoxOverlay",
         [this] {
             impl_->clearSketchSelectionBoxOverlay();
+        });
+}
+
+bool QtOcctViewerWidget::setSketchSnapInferenceScene(
+    const viewer::SketchSnapInferenceScene& scene) {
+    return guardedBool(
+        "setSketchSnapInferenceScene",
+        [this, &scene] {
+            return impl_->
+                setSketchSnapInferenceScene(scene);
         });
 }
 
