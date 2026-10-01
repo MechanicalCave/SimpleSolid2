@@ -65,6 +65,30 @@ function Invoke-SS2Timed {
     return $seconds
 }
 
+function Invoke-SS2FocusedEvidenceScenario {
+    param(
+        [Parameter(Mandatory=$true)][string]$SourceRoot,
+        [Parameter(Mandatory=$true)][string]$BuildDir
+    )
+
+    $cmake = Get-SS2CMakeExe
+    $configureArgs = @("-S", $SourceRoot, "-B", $BuildDir)
+    if ($env:CMAKE_PREFIX_PATH) {
+        $configureArgs += "-DCMAKE_PREFIX_PATH=$env:CMAKE_PREFIX_PATH"
+    }
+
+    & $cmake @configureArgs 2>&1 | ForEach-Object { Write-Host "$_" }
+    if ($LASTEXITCODE -ne 0) { throw "FOCUSED evidence configure failed." }
+
+    & $cmake --build $BuildDir --config Debug --target e1_arc_numerical_stability_test 2>&1 |
+        ForEach-Object { Write-Host "$_" }
+    if ($LASTEXITCODE -ne 0) { throw "FOCUSED evidence target build failed." }
+
+    & ctest --test-dir $BuildDir -C Debug --output-on-failure --no-tests=error -R '^e1\.arc_numerical_stability$' 2>&1 |
+        ForEach-Object { Write-Host "$_" }
+    if ($LASTEXITCODE -ne 0) { throw "FOCUSED evidence exact test failed or was not found." }
+}
+
 function Touch-SS2SourceAndMeasure {
     param(
         [Parameter(Mandatory=$true)][string]$SourcePath,
@@ -140,8 +164,7 @@ try {
         }
 
         $results["before_focused_clean_s"] = Invoke-SS2Timed "before.focused.clean" {
-            & .\scripts\ss2-check.ps1 -BuildDir "build\ci04-focused" -Config Debug -Target e1_arc_numerical_stability_test -Test e1.arc_numerical_stability
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Invoke-SS2FocusedEvidenceScenario -SourceRoot $baselineSource -BuildDir $baselineFocused
         }
 
         $results["before_fast_clean_s"] = Invoke-SS2Timed "before.fast.clean" {
@@ -175,8 +198,7 @@ try {
         }
 
         $results["after_focused_clean_s"] = Invoke-SS2Timed "after.focused.clean" {
-            & .\scripts\ss2-check.ps1 -BuildDir $currentFocused -Config Debug -Target e1_arc_numerical_stability_test -Test e1.arc_numerical_stability
-            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+            Invoke-SS2FocusedEvidenceScenario -SourceRoot $root -BuildDir $currentFocused
         }
 
         $results["after_fast_clean_s"] = Invoke-SS2Timed "after.fast.clean" {
