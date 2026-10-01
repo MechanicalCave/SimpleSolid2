@@ -99,7 +99,7 @@ function Get-SS2CacheValue {
     if (-not (Test-Path -LiteralPath $cachePath -PathType Leaf)) { return "" }
     $escaped = [regex]::Escape($Key)
     foreach ($line in Get-Content -LiteralPath $cachePath) {
-        if ("$line" -match "^$escaped:[^=]*=(.*)$") {
+        if ("$line" -match "^${escaped}:[^=]*=(.*)$") {
             return $Matches[1]
         }
     }
