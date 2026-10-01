@@ -29,6 +29,9 @@ permissions:
   contents: read
   actions: read
 
+env:
+  SS2_CI_BUILD_ROOT: D:\SS2Build
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
@@ -46,6 +49,7 @@ jobs:
       head_sha: ${{ steps.classify.outputs.head_sha }}
       focus_targets: ${{ steps.focus.outputs.targets }}
       focus_tests: ${{ steps.focus.outputs.tests }}
+      clean_full: ${{ steps.classify.outputs.clean_full }}
     steps:
       - name: Checkout exact candidate revision with history
         uses: actions/checkout@v4
@@ -150,13 +154,23 @@ jobs:
           .\ss2.ps1 verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Prepare persistent desktop build tree
+        run: |
+          $ErrorActionPreference = "Stop"
+          $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
+          .\scripts\ci\ss2-build-tree.ps1 -Action prepare -BuildDir $build -Mode desktop -Config Debug
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Focused target build and exact tests
         env:
           FOCUS_TARGETS: ${{ needs.classify.outputs.focus_targets }}
           FOCUS_TESTS: ${{ needs.classify.outputs.focus_tests }}
         run: |
           $ErrorActionPreference = "Stop"
-          .\ss2.ps1 check -Target $env:FOCUS_TARGETS -Test $env:FOCUS_TESTS
+          $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
+          .\ss2.ps1 check -BuildDir $build -Target $env:FOCUS_TARGETS -Test $env:FOCUS_TESTS
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\scripts\ci\ss2-build-tree.ps1 -Action record -BuildDir $build -Mode desktop -Config Debug
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   fast:
@@ -209,16 +223,27 @@ jobs:
           .\ss2.ps1 verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build
+      - name: Prepare persistent desktop build tree
         run: |
           $ErrorActionPreference = "Stop"
-          .\ss2.ps1 build -Target ss2_tests_fast
+          $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
+          .\scripts\ci\ss2-build-tree.ps1 -Action prepare -BuildDir $build -Mode desktop -Config Debug
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Build FAST test graph
+        run: |
+          $ErrorActionPreference = "Stop"
+          $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
+          .\ss2.ps1 build -BuildDir $build -Target ss2_tests_fast
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\scripts\ci\ss2-build-tree.ps1 -Action record -BuildDir $build -Mode desktop -Config Debug
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: FAST test
         run: |
           $ErrorActionPreference = "Stop"
-          .\ss2.ps1 test -Tier fast -NoBuild
+          $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
+          .\ss2.ps1 test -BuildDir $build -Tier fast -NoBuild
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   full:
@@ -293,10 +318,27 @@ jobs:
           .\ss2.ps1 check -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Build-tree manager self-test
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\scripts\ci\ss2-build-tree.ps1 -SelfTest
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
+      - name: Prepare persistent desktop build tree
+        run: |
+          $ErrorActionPreference = "Stop"
+          $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
+          $forceClean = "${{ needs.classify.outputs.clean_full }}" -eq "true"
+          .\scripts\ci\ss2-build-tree.ps1 -Action prepare -BuildDir $build -Mode desktop -Config Debug -ForceClean:$forceClean
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Build complete desktop test graph
         run: |
           $ErrorActionPreference = "Stop"
-          .\ss2.ps1 build -Target ss2_tests_full
+          $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
+          .\ss2.ps1 build -BuildDir $build -Target ss2_tests_full
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\scripts\ci\ss2-build-tree.ps1 -Action record -BuildDir $build -Mode desktop -Config Debug
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify core-only build/test without Qt or OCCT
@@ -305,25 +347,31 @@ jobs:
           . .\scripts\ss2-common.ps1
           Import-SS2LocalEnvironment
           $cmake = Get-SS2CMakeExe
-          & $cmake -S . -B build\core-only -DSS2_BUILD_DESKTOP=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_OpenCASCADE=TRUE
+          $coreBuild = Join-Path $env:SS2_CI_BUILD_ROOT "core-release"
+          $forceClean = "${{ needs.classify.outputs.clean_full }}" -eq "true"
+          .\scripts\ci\ss2-build-tree.ps1 -Action prepare -BuildDir $coreBuild -Mode core -Config Release -ForceClean:$forceClean
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $cmake --build build\core-only --config Release
+          & $cmake -S . -B $coreBuild -DSS2_BUILD_DESKTOP=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_OpenCASCADE=TRUE
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $cmake -E chdir build\core-only ctest -C Release --output-on-failure
+          & $cmake --build $coreBuild --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $cmake -E chdir $coreBuild ctest -C Release --output-on-failure
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\scripts\ci\ss2-build-tree.ps1 -Action record -BuildDir $coreBuild -Mode core -Config Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify FAST and SUBSYSTEM selectors
         run: |
           $ErrorActionPreference = "Stop"
-          .\ss2.ps1 test -Tier fast -NoBuild -ListOnly
+          .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug") -Tier fast -NoBuild -ListOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\ss2.ps1 test -Tier subsystem -Subsystem "sketch,viewer,ui" -NoBuild -ListOnly
+          .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug") -Tier subsystem -Subsystem "sketch,viewer,ui" -NoBuild -ListOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test
         run: |
           $ErrorActionPreference = "Stop"
-          .\ss2.ps1 test -Tier full -NoBuild
+          .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug") -Tier full -NoBuild
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
   docs:
@@ -432,10 +480,12 @@ jobs:
           DOCS_RESULT: ${{ needs.docs.result }}
           CLOSURE_RESULT: ${{ needs.closure.result }}
           TRUSTED_FULL_SHA: ${{ needs.classify.outputs.trusted_full_sha }}
+          CLEAN_FULL: ${{ needs.classify.outputs.clean_full }}
         run: |
           set -euo pipefail
           echo "[gate] mode=$MODE"
           echo "[gate] trusted_full_sha=$TRUSTED_FULL_SHA"
+          echo "[gate] clean_full=$CLEAN_FULL"
           echo "[gate] classify=$CLASSIFY_RESULT focused=$FOCUSED_RESULT fast=$FAST_RESULT full=$FULL_RESULT docs=$DOCS_RESULT closure=$CLOSURE_RESULT"
           if [[ "$CLASSIFY_RESULT" != "success" ]]; then
             echo "Classifier did not succeed." >&2
