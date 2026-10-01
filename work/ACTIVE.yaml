@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/R10_PRECISION_UNITS_POLAR_DYNAMIC_INPUT.md"
+status: active
+active_work: "work/CI-04_BUILD_GRAPH_AND_WARM_VERIFICATION.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.7"
@@ -19,13 +19,15 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after R10 completion
-  - prepare a separate Owner-reviewed R11 Object Snap / Tracking / Inference Work Contract before any R11 production implementation
+  - implement only the accepted CI-04 repository/build optimization contract; no CAD/product semantics are authorized
+  - keep R11 Object Snap / Tracking / Inference proposal-only and inactive until CI-04 is completed and R11 is separately activated
   - require R11 to consume the accepted R10 resolver priority, numeric locks, Polar/Dynamic Input semantics and one workspace CAD input path rather than creating a second point-resolution system
   - keep R12+, ordinary RMB context, authored dimensions/constraints/solver and solid modeling inactive until separately accepted
   - preserve Roadmap v1.7 sequencing: R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - Owner explicitly activated CI-04 Build Graph & Warm Verification on 2026-10-01; CI-04 is D1 repository/build tooling only and does not activate R11 or authorize CAD/product semantic mutation.
+  - CI-04 proposal exact head aab97966e1d0a8de69addd0de63b3bb9f5ed6527 passed CLOSURE in Windows PR gate #1012 before activation.
   - R10 final exact-head candidate 03b171ae91342890013604a8b9d3c8021b639df7 passed Windows FULL #1009 on 2026-09-30; documentation/current Browser candidate 56d9483b13462b98424e26544d20943708070ce0 passed DOCS #1008.
   - Owner manual Windows verification for the entire R10 Section 30 checklist passed on 2026-09-30 on runtime candidate d7e73428bf3a9cc81c48ba43e5f9f5ceaa5ca618; the final exact-head candidate adds only current-state documentation/evidence and one non-functional regression-test comment, with no runtime CAD semantic change after manual verification.
   - R10 is completed by this work-only closeout candidate; no production scope is active. R11 Object Snap / Tracking / Inference is next in Roadmap v1.7 but remains inactive until a separate Owner-accepted Work Contract.
