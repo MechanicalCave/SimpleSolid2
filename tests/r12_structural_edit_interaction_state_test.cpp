@@ -63,6 +63,19 @@ int main() {
         state.toggleStructuralBoundarySelection(
             model,
             boundary_line));
+    CHECK(state.selectedEntities().size() == 1U);
+    CHECK(
+        state.toggleStructuralBoundarySelection(
+            model,
+            boundary_line));
+    CHECK(state.selectedEntities().empty());
+    CHECK(
+        !state.completeStructuralBoundarySelection(
+            model));
+    CHECK(
+        state.toggleStructuralBoundarySelection(
+            model,
+            boundary_line));
     CHECK(
         state.toggleStructuralBoundarySelection(
             model,
