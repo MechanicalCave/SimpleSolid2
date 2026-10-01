@@ -130,12 +130,7 @@ $buildTargets = @(Get-SS2TierBuildTargets $Tier $Subsystem)
 Import-SS2LocalEnvironment
 $root = Get-SS2Root
 
-$build =
-    if ([IO.Path]::IsPathRooted($BuildDir)) {
-        [IO.Path]::GetFullPath($BuildDir)
-    } else {
-        [IO.Path]::GetFullPath((Join-Path $root $BuildDir))
-    }
+$build = Resolve-SS2BuildPath $BuildDir
 
 if ($NoBuild) {
     if (-not (Test-Path -LiteralPath $build -PathType Container)) {
