@@ -1731,6 +1731,18 @@ function(ss2_add_test_aggregate aggregate_name expected_label)
 endfunction()
 
 get_property(_ss2_all_registered_tests DIRECTORY PROPERTY TESTS)
+
+# Keep every compiled regression target directly buildable from the top-level
+# Visual Studio solution while excluding it from the normal product ALL build.
+# Product target 'simplesolid2' is intentionally retained in ALL.
+foreach(_test IN LISTS _ss2_all_registered_tests)
+    ss2_resolve_test_build_target("${_test}" _test_build_target)
+    if(NOT _test_build_target STREQUAL "" AND
+       NOT _test_build_target STREQUAL "simplesolid2")
+        set_property(TARGET ${_test_build_target} PROPERTY EXCLUDE_FROM_ALL TRUE)
+    endif()
+endforeach()
+
 ss2_add_test_aggregate(ss2_tests_full "" ${_ss2_all_registered_tests})
 ss2_add_test_aggregate(ss2_tests_fast "tier-fast" ${_ss2_fast_tests})
 ss2_add_test_aggregate(ss2_tests_subsystem_core "subsystem-core" ${_ss2_core_tests})
