@@ -430,7 +430,40 @@ Accepted semantic override tokens:
 
 The exact UI surface for entering/selecting those semantic actions remains D1.
 
-`NONE` is the one remaining behavior requiring explicit Owner freeze before activation. Current proposed meaning: for exactly one point it suppresses OSNAP-derived snapping, acquired-anchor OTRACK use, Extension and request-relative TAN/PER acquisition, while retaining complete explicit numeric input, numeric locks, generic base Sketch U/V inference, Polar and raw pointer. It must not mutate user preferences.
+`NONE` is the one remaining behavior requiring explicit Owner freeze before activation.
+
+Current proposed meaning: **No Object-derived assistance for exactly one point acquisition.**
+
+While `NONE` is active:
+
+- all static Object Snap candidates are ineligible, including Endpoint, Midpoint, Center, Quadrant, Intersection, Origin and Nearest;
+- request-relative Perpendicular/Tangent candidates and explicit Extension are ineligible;
+- OTRACK cannot acquire a new object-derived anchor for that point;
+- already acquired OTRACK anchors are dormant for that point: their guides, guide intersections and projections are ineligible;
+- deferred TAN/PER/EXT runtime references may remain stored request-locally but cannot influence that point;
+- no suppressed object snap/tracking marker may be presented as captured/resolved.
+
+`NONE` deliberately does **not** mean "turn off every drafting aid". The following remain eligible in the normal hierarchy:
+
+- complete explicit numeric point input;
+- explicit numeric/request locks and Direct Distance semantics;
+- generic request-base Sketch U/V inference that has no object-derived provenance;
+- Polar;
+- raw pointer.
+
+The rule is provenance-based: a candidate/guide that depends on an authored or intrinsic OSNAP semantic source is suppressed; a generic base-direction aid is not.
+
+`NONE` does not clear or mutate:
+
+- persistent OSNAP mode preferences;
+- persistent OTRACK master state;
+- existing request-local anchors/deferred references merely by being selected.
+
+Those states are only dormant while `NONE` governs the current point and otherwise follow their normal lifecycle. Accepting the point clears the one-shot override and performs the already-defined request-local acceptance cleanup. Esc/request replacement/tool replacement/Sketch-context exit clear it under the normal Temporary Override lifecycle.
+
+Only one Temporary Snap Override is active at a time. Selecting another override before point acceptance replaces `NONE` (or any previous override) rather than stacking overrides.
+
+If a surviving non-object-derived aid happens to resolve numerically to the same coordinate as existing geometry, the result must not claim OSNAP/OTRACK provenance. There is no hidden fallback to object-derived assistance under `NONE`.
 
 ## 16. Object Snap Tracking acquisition
 
@@ -676,7 +709,10 @@ At minimum automated coverage must prove:
 - preference changes are shared live and create no document history/dirty state;
 - Temporary Override is one-shot and persistent mode set remains unchanged;
 - requested override family fails closed without unrelated fallback;
-- final accepted `NONE` semantics are covered exactly;
+- final accepted `NONE` semantics are covered exactly, including suppression of static OSNAP, request-relative PER/TAN/EXT, OTRACK acquisition/use and object-derived guides while numeric input/locks, generic base U/V inference, Polar and raw remain eligible;
+- `NONE` does not mutate persistent preferences or erase dormant request-local state merely by selection;
+- a later Temporary Override replaces `NONE` rather than stacking;
+- coordinate coincidence reached through a surviving non-object-derived aid does not acquire OSNAP/OTRACK provenance;
 - tracking anchors are limited to 2, third acquisition does not silently evict an anchor, and lifecycle clearing is deterministic;
 - guide intersections and guide projections remain runtime-only;
 - PointRequest replacement/tool replacement/Esc/acceptance clear all request-local R11 state correctly;
