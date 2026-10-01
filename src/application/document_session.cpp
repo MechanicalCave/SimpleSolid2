@@ -892,6 +892,271 @@ DocumentSessionResult DocumentSession::execute(
         "Part transaction failed while updating Sketch geometry");
 }
 
+namespace {
+
+[[nodiscard]] DocumentSessionDiagnostic
+structuralEditFailureDiagnostic(
+    const std::filesystem::path& path,
+    sketch::StructuralEditStatus status,
+    const char* operation) {
+    DocumentSessionDiagnostic diagnostic;
+    diagnostic.code =
+        status ==
+                sketch::StructuralEditStatus::
+                    identity_exhausted
+            ? DocumentSessionErrorCode::
+                  transaction_failure
+            : DocumentSessionErrorCode::
+                  invalid_command;
+    diagnostic.path = path;
+    diagnostic.message =
+        std::string{operation} +
+        " structural edit was rejected";
+    return diagnostic;
+}
+
+} // namespace
+
+SketchStructuralEditCommandResult
+DocumentSession::execute(
+    const TrimSketchCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Trim was started from a stale DocumentRevision",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applySketchEntityIdCursors(after);
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Trim target SketchId does not exist",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::missing_entity,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto evaluated =
+        sketch::evaluateTrim(
+            target->model,
+            sketch::TrimSketchRequest{
+                command.target,
+                command.boundaries,
+                command.pick});
+    if (!evaluated.ready() ||
+        !evaluated.state) {
+        return {
+            false,
+            evaluated.status,
+            std::nullopt,
+            structuralEditFailureDiagnostic(
+                path_,
+                evaluated.status,
+                "Trim")};
+    }
+
+    auto restored =
+        sketch::SketchModel::restore(
+            *evaluated.state);
+    if (!restored) {
+        return {
+            false,
+            sketch::StructuralEditStatus::
+                invalid_request,
+            std::nullopt,
+            structuralEditFailureDiagnostic(
+                path_,
+                sketch::StructuralEditStatus::
+                    invalid_request,
+                "Trim")};
+    }
+    target->model = std::move(*restored);
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while executing Trim");
+    return {
+        committed.changed,
+        evaluated.status,
+        committed.ok() && committed.changed
+            ? evaluated.result_entity
+            : std::nullopt,
+        committed.diagnostic};
+}
+
+SketchStructuralEditCommandResult
+DocumentSession::execute(
+    const ExtendSketchCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Extend was started from a stale DocumentRevision",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applySketchEntityIdCursors(after);
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Extend target SketchId does not exist",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::missing_entity,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto evaluated =
+        sketch::evaluateExtend(
+            target->model,
+            sketch::ExtendSketchRequest{
+                command.target,
+                command.boundaries,
+                command.endpoint});
+    if (!evaluated.ready() ||
+        !evaluated.state) {
+        return {
+            false,
+            evaluated.status,
+            std::nullopt,
+            structuralEditFailureDiagnostic(
+                path_,
+                evaluated.status,
+                "Extend")};
+    }
+
+    auto restored =
+        sketch::SketchModel::restore(
+            *evaluated.state);
+    if (!restored) {
+        return {
+            false,
+            sketch::StructuralEditStatus::
+                invalid_request,
+            std::nullopt,
+            structuralEditFailureDiagnostic(
+                path_,
+                sketch::StructuralEditStatus::
+                    invalid_request,
+                "Extend")};
+    }
+    target->model = std::move(*restored);
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while executing Extend");
+    return {
+        committed.changed,
+        evaluated.status,
+        committed.ok() && committed.changed
+            ? evaluated.result_entity
+            : std::nullopt,
+        committed.diagnostic};
+}
+
+SketchStructuralEditCommandResult
+DocumentSession::execute(
+    const ExtendBothSketchLinesCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::revision_diverged,
+            "Extend Both was started from a stale DocumentRevision",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::invalid_request,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applySketchEntityIdCursors(after);
+    auto* target =
+        findSketch(after, command.sketch_id);
+    if (target == nullptr) {
+        const auto failed = failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Extend Both target SketchId does not exist",
+            path_);
+        return {
+            false,
+            sketch::StructuralEditStatus::missing_entity,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto evaluated =
+        sketch::evaluateExtendBoth(
+            target->model,
+            sketch::ExtendBothLinesRequest{
+                command.first_line,
+                command.second_line});
+    if (!evaluated.ready() ||
+        !evaluated.state) {
+        return {
+            false,
+            evaluated.status,
+            std::nullopt,
+            structuralEditFailureDiagnostic(
+                path_,
+                evaluated.status,
+                "Extend Both")};
+    }
+
+    auto restored =
+        sketch::SketchModel::restore(
+            *evaluated.state);
+    if (!restored) {
+        return {
+            false,
+            sketch::StructuralEditStatus::
+                invalid_request,
+            std::nullopt,
+            structuralEditFailureDiagnostic(
+                path_,
+                sketch::StructuralEditStatus::
+                    invalid_request,
+                "Extend Both")};
+    }
+    target->model = std::move(*restored);
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while executing Extend Both");
+    return {
+        committed.changed,
+        evaluated.status,
+        std::nullopt,
+        committed.diagnostic};
+}
+
 DuplicateSketchGeometryResult DocumentSession::execute(
     const DuplicateSketchGeometryCommand& command) {
     if (command.geometry.empty()) {

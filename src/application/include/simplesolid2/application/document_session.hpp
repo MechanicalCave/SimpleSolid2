@@ -3,6 +3,7 @@
 #include <simplesolid2/core/units.hpp>
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
+#include <simplesolid2/sketch/structural_edit.hpp>
 #include <simplesolid2/sketch/transform.hpp>
 
 #include <cstddef>
@@ -119,6 +120,30 @@ struct UpdateSketchGeometryCommand final {
     std::vector<SketchArcGeometryUpdate> arcs;
 };
 
+struct TrimSketchCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    sketch::EntityId target;
+    std::vector<sketch::EntityId> boundaries;
+    sketch::Point2 pick;
+};
+
+struct ExtendSketchCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    sketch::EntityId target;
+    std::vector<sketch::EntityId> boundaries;
+    sketch::StructuralEndpointRole endpoint{
+        sketch::StructuralEndpointRole::end};
+};
+
+struct ExtendBothSketchLinesCommand final {
+    sketch::SketchId sketch_id;
+    core::DocumentRevision expected_revision;
+    sketch::EntityId first_line;
+    sketch::EntityId second_line;
+};
+
 struct DuplicateSketchGeometryCommand final {
     sketch::SketchId sketch_id;
     core::DocumentRevision expected_revision;
@@ -226,6 +251,19 @@ struct AddSketchRectangleResult final {
     }
 };
 
+struct SketchStructuralEditCommandResult final {
+    bool changed{false};
+    sketch::StructuralEditStatus edit_status{
+        sketch::StructuralEditStatus::invalid_request};
+    std::optional<sketch::EntityId> result_entity;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code ==
+               DocumentSessionErrorCode::none;
+    }
+};
+
 struct DuplicateSketchGeometryResult final {
     bool changed{false};
     std::vector<sketch::EntityId> entity_ids;
@@ -310,6 +348,12 @@ public:
         const UpdateSketchLinesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const UpdateSketchGeometryCommand& command);
+    [[nodiscard]] SketchStructuralEditCommandResult execute(
+        const TrimSketchCommand& command);
+    [[nodiscard]] SketchStructuralEditCommandResult execute(
+        const ExtendSketchCommand& command);
+    [[nodiscard]] SketchStructuralEditCommandResult execute(
+        const ExtendBothSketchLinesCommand& command);
     [[nodiscard]] DuplicateSketchGeometryResult execute(
         const DuplicateSketchGeometryCommand& command);
     [[nodiscard]] CreateProfileResult execute(

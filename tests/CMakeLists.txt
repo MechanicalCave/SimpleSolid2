@@ -1316,6 +1316,22 @@ add_test(
     COMMAND r12_structural_edit_core_test
 )
 
+add_executable(r12_structural_edit_document_session_test
+    r12_structural_edit_document_session_test.cpp
+)
+
+target_link_libraries(r12_structural_edit_document_session_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(r12_structural_edit_document_session_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME r12.structural_edit_document_session
+    COMMAND r12_structural_edit_document_session_test
+)
+
 add_executable(sk07f_precision_input_controller_test
     sk07f_precision_input_controller_test.cpp
 )
