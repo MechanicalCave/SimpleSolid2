@@ -3,6 +3,7 @@
 #include <simplesolid2/viewer/reference_presentation.hpp>
 #include <simplesolid2/viewer/spatial_pointer.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
