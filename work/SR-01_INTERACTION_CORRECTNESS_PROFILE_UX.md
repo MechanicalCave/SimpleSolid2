@@ -224,7 +224,7 @@ The following remain runtime-only and are not persisted into CAD documents:
 
 Application/user settings persistence for a presentation preference is not required by SR-01. If existing generic application settings are reused without changing CAD semantics, that is D1; creating a new cross-domain settings architecture is out of scope.
 
-## 14. Documentation impact
+## Documentation impact
 
 Internal docs: required  
 User/Product docs: required  
