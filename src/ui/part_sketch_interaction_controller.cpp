@@ -1662,7 +1662,7 @@ submitCadInputSemanticProfileCommand(
         cancelProfile();
         return {true, {}};
 
-    case Kind::set_detect_islands:
+    case Kind::set_show_islands:
     case Kind::set_show_boundaries:
     case Kind::set_show_problems:
         if (!profile_session_ ||
@@ -1676,7 +1676,7 @@ submitCadInputSemanticProfileCommand(
             auto options =
                 profileToolOptions();
             if (command.kind ==
-                Kind::set_detect_islands) {
+                Kind::set_show_islands) {
                 options.show_islands =
                     *command.enabled;
             } else if (
