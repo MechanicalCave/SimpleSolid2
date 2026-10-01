@@ -39,7 +39,7 @@ R8  Measure / relational diagnostics — completed
 
 Roadmap v1.6's Show Dimensions decision remains unchanged: standalone Show Dimensions stays deferred until future authored/parametric dimension and constraint architecture is ready.
 
-Four guardrails remain explicit:
+Five guardrails remain explicit:
 
 1. R8A/R8B runtime measurement references remain diagnostic and do not become durable dimension/sub-element identity by implication.
 2. Standalone Show Dimensions is not a prerequisite for profile-authoring readiness; future viewport dimensions should follow the eventual authored/reference dimension architecture rather than pre-empt it.
