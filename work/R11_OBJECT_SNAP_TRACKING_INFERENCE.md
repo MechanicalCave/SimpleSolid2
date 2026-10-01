@@ -3,7 +3,7 @@
 **Status:** PROPOSED — INACTIVE  
 **Proposed:** 2026-09-30  
 **Proposal synchronization:** 2026-10-01 after CI-04 completion  
-**Owner acceptance:** pending  
+**Owner acceptance:** pending activation  
 **Decision class:** D2 runtime point-resolution / snap / tracking / inference grammar + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0010, ADR-0011  
@@ -430,7 +430,7 @@ Accepted semantic override tokens:
 
 The exact UI surface for entering/selecting those semantic actions remains D1.
 
-`NONE` is the one remaining behavior requiring explicit Owner freeze before activation.
+`NONE` semantics were explicitly Owner-frozen on 2026-10-01 before activation.
 
 Current proposed meaning: **No Object-derived assistance for exactly one point acquisition.**
 
@@ -779,20 +779,19 @@ PL/EN Product documentation must explain:
 
 Product Browser must be regenerated and deterministic.
 
-## 30. Remaining Owner/D1 decisions before activation
+## 30. Remaining D1 tuning before activation
 
-Most product semantics are now resolved.
+All product semantics required for activation are now resolved, including the Owner-frozen `NONE` behavior from Section 15.
 
-The proposal retains only these activation-time decisions/tuning boundaries:
+Remaining activation-time tuning boundaries are:
 
-1. final `NONE` one-shot suppression scope from Section 15;
-2. initial logical-pixel acquisition/release aperture values;
-3. tracking dwell duration;
-4. explicit tracking-anchor un-acquire gesture;
-5. exact marker/glyph visual treatment;
-6. concrete keyboard bindings for semantic OSNAP/OTRACK actions, if any.
+1. initial logical-pixel acquisition/release aperture values;
+2. tracking dwell duration;
+3. explicit tracking-anchor un-acquire gesture;
+4. exact marker/glyph visual treatment;
+5. concrete keyboard bindings for semantic OSNAP/OTRACK actions, if any.
 
-Items 2–6 may be explicitly delegated as D1 tuning at activation provided they do not change the semantic hierarchy, persistence model or authored-state boundaries in this contract.
+These items may be explicitly delegated as D1 tuning at activation provided they do not change the semantic hierarchy, persistence model or authored-state boundaries in this contract.
 
 The following are no longer open:
 
@@ -830,9 +829,9 @@ This file remains proposal-only.
 
 Before R11 may become ACTIVE:
 
-- Owner explicitly accepts the synchronized R11 contract;
-- Owner explicitly freezes Section 15 `NONE` semantics or delegates a different bounded meaning;
-- any remaining Section 30 tuning items are either resolved or explicitly delegated as D1;
+- Owner explicitly activates the synchronized R11 contract;
+- Section 15 `NONE` semantics remain exactly as Owner-frozen on 2026-10-01;
+- remaining Section 30 tuning items are either resolved or explicitly delegated as D1;
 - `work/ACTIVE.yaml` is updated in a governance-only activation commit;
 - any roadmap wording required by accepted refinements is updated;
 - proposal-only gate passes.
