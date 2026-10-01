@@ -374,6 +374,144 @@ int main() {
             {0.0, 10.0})
             .empty());
 
+    // Screen-space resolver: specific snaps hard-tier above Nearest,
+    // exact same-coordinate provenance collapses without epsilon, and
+    // capture/release hysteresis only retains the same stable candidate.
+    {
+        SnapCaptureState capture;
+        const SnapCandidate endpoint_candidate{
+            {1.0, 2.0},
+            SnapKind::endpoint,
+            {
+                SnapSourceKind::entity_point,
+                horizontal,
+                std::nullopt,
+                SnapSemanticRole::line_start,
+                0U}};
+        const SnapCandidate intersection_candidate{
+            {1.0, 2.0},
+            SnapKind::intersection,
+            {
+                SnapSourceKind::intersection,
+                horizontal,
+                vertical,
+                SnapSemanticRole::intersection,
+                0U}};
+        const SnapCandidate nearest_candidate{
+            {3.0, 4.0},
+            SnapKind::nearest,
+            {
+                SnapSourceKind::entity_curve,
+                horizontal,
+                std::nullopt,
+                SnapSemanticRole::curve_nearest,
+                0U}};
+
+        auto resolved = resolveScreenSnap(
+            capture,
+            {
+                {nearest_candidate, 1.0},
+                {endpoint_candidate, 8.0},
+                {intersection_candidate, 8.0},
+            });
+        CHECK(resolved.has_value());
+        CHECK(
+            resolved->primary.kind ==
+            SnapKind::endpoint);
+        CHECK(
+            resolved->primary.point ==
+            endpoint_candidate.point);
+        CHECK(
+            resolved->coincident_candidates.size() ==
+            2U);
+        CHECK(capture.captured.has_value());
+
+        // Hysteresis retains the captured specific candidate inside
+        // release distance even if another specific snap becomes closer.
+        const SnapCandidate center_candidate{
+            {9.0, 9.0},
+            SnapKind::center,
+            {
+                SnapSourceKind::entity_point,
+                circle,
+                std::nullopt,
+                SnapSemanticRole::circle_center,
+                0U}};
+        resolved = resolveScreenSnap(
+            capture,
+            {
+                {endpoint_candidate, 12.0},
+                {center_candidate, 1.0},
+            });
+        CHECK(resolved.has_value());
+        CHECK(
+            resolved->primary.kind ==
+            SnapKind::endpoint);
+
+        // Once beyond release, the closer eligible specific candidate wins.
+        resolved = resolveScreenSnap(
+            capture,
+            {
+                {endpoint_candidate, 16.0},
+                {center_candidate, 1.0},
+            });
+        CHECK(resolved.has_value());
+        CHECK(
+            resolved->primary.kind ==
+            SnapKind::center);
+
+        // A captured Nearest cannot block a newly eligible specific snap.
+        capture.captured =
+            snapStableKey(nearest_candidate);
+        resolved = resolveScreenSnap(
+            capture,
+            {
+                {nearest_candidate, 2.0},
+                {center_candidate, 8.0},
+            });
+        CHECK(resolved.has_value());
+        CHECK(
+            resolved->primary.kind ==
+            SnapKind::center);
+
+        // Exact collapse is exact: a merely nearby coordinate remains separate.
+        const SnapCandidate nearby_candidate{
+            {1.0 + 1.0e-12, 2.0},
+            SnapKind::midpoint,
+            {
+                SnapSourceKind::entity_point,
+                vertical,
+                std::nullopt,
+                SnapSemanticRole::line_midpoint,
+                0U}};
+        capture.clear();
+        resolved = resolveScreenSnap(
+            capture,
+            {
+                {endpoint_candidate, 5.0},
+                {intersection_candidate, 5.0},
+                {nearby_candidate, 5.0},
+            });
+        CHECK(resolved.has_value());
+        CHECK(
+            resolved->coincident_candidates.size() ==
+            2U);
+
+        // Release and invalid-policy behavior are fail-closed.
+        CHECK(
+            !resolveScreenSnap(
+                 capture,
+                 {{endpoint_candidate, 16.0}})
+                 .has_value());
+        CHECK(!capture.captured.has_value());
+        CHECK(
+            !resolveScreenSnap(
+                 capture,
+                 {{endpoint_candidate, 1.0}},
+                 {15.0, 9.0})
+                 .has_value());
+    }
+
     std::cout << "r11_snap_core_test passed\n";
     return 0;
 }

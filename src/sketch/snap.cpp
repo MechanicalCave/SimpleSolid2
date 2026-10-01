@@ -181,18 +181,18 @@ radialPoint(
 
 [[nodiscard]] std::optional<SnapCandidate>
 nearestArcCandidate(
-    const SketchArcState& arc,
+    const Arc& arc,
     Point2 pointer) noexcept {
     const Point2 start =
         circlePoint(
-            arc.center,
-            arc.radius,
-            arc.start_angle);
+            arc.center(),
+            arc.radius(),
+            arc.startAngle());
     const Point2 end =
         circlePoint(
-            arc.center,
-            arc.radius,
-            arc.start_angle + arc.sweep_angle);
+            arc.center(),
+            arc.radius(),
+            arc.startAngle() + arc.sweepAngle());
     if (!start.finite() || !end.finite()) {
         return std::nullopt;
     }
@@ -213,16 +213,16 @@ nearestArcCandidate(
 
     if (const auto radial =
             radialPoint(
-                arc.center,
-                arc.radius,
+                arc.center(),
+                arc.radius(),
                 pointer)) {
         const double angle =
             std::atan2(
-                radial->v - arc.center.v,
-                radial->u - arc.center.u);
+                radial->v - arc.center().v,
+                radial->u - arc.center().u);
         if (angleOnArc(
-                arc.start_angle,
-                arc.sweep_angle,
+                arc.startAngle(),
+                arc.sweepAngle(),
                 angle)) {
             const double radial_distance =
                 pointDistance(pointer, *radial);
@@ -237,7 +237,7 @@ nearestArcCandidate(
         best,
         SnapKind::nearest,
         entityCurveSource(
-            arc.id,
+            arc.id(),
             SnapSemanticRole::curve_nearest)};
     return result.valid()
         ? std::optional<SnapCandidate>{result}
@@ -245,15 +245,15 @@ nearestArcCandidate(
 }
 
 [[nodiscard]] bool arcContainsPointDirection(
-    const SketchArcState& arc,
+    const Arc& arc,
     Point2 point) noexcept {
     const double angle =
         std::atan2(
-            point.v - arc.center.v,
-            point.u - arc.center.u);
+            point.v - arc.center().v,
+            point.u - arc.center().u);
     return angleOnArc(
-        arc.start_angle,
-        arc.sweep_angle,
+        arc.startAngle(),
+        arc.sweepAngle(),
         angle);
 }
 
@@ -263,7 +263,7 @@ void appendRadialPerpendicular(
     Point2 center,
     double radius,
     Point2 base,
-    const SketchArcState* arc) {
+    const Arc* arc) {
     for (const double sign : {1.0, -1.0}) {
         const auto point =
             radialPoint(
@@ -297,7 +297,7 @@ void appendTangents(
     Point2 center,
     double radius,
     Point2 base,
-    const SketchArcState* arc) {
+    const Arc* arc) {
     const double du = base.u - center.u;
     const double dv = base.v - center.v;
     const double distance = std::hypot(du, dv);
@@ -435,6 +435,150 @@ SnapStableKey snapStableKey(
         candidate.source.second_entity,
         candidate.source.role,
         candidate.source.canonical_branch};
+}
+
+
+bool SnapScreenCandidate::valid() const noexcept {
+    return candidate.valid() &&
+           std::isfinite(screen_distance) &&
+           screen_distance >= 0.0;
+}
+
+bool SnapResolutionPolicy::valid() const noexcept {
+    return std::isfinite(capture_distance) &&
+           std::isfinite(release_distance) &&
+           capture_distance >= 0.0 &&
+           release_distance >= capture_distance;
+}
+
+std::optional<SnapResolution>
+resolveScreenSnap(
+    SnapCaptureState& state,
+    const std::vector<SnapScreenCandidate>& candidates,
+    SnapResolutionPolicy policy) noexcept {
+    if (!policy.valid()) {
+        state.clear();
+        return std::nullopt;
+    }
+
+    const auto is_nearest =
+        [](const SnapScreenCandidate& item) {
+            return item.candidate.kind ==
+                   SnapKind::nearest;
+        };
+    const auto key =
+        [](const SnapScreenCandidate& item) {
+            return snapStableKey(item.candidate);
+        };
+    const auto better =
+        [&is_nearest, &key](
+            const SnapScreenCandidate& first,
+            const SnapScreenCandidate& second) {
+            const bool first_nearest =
+                is_nearest(first);
+            const bool second_nearest =
+                is_nearest(second);
+            if (first_nearest != second_nearest) {
+                return !first_nearest;
+            }
+            if (first.screen_distance !=
+                second.screen_distance) {
+                return first.screen_distance <
+                       second.screen_distance;
+            }
+            return key(first) < key(second);
+        };
+
+    const SnapScreenCandidate* best{};
+    bool specific_in_capture{};
+    for (const auto& item : candidates) {
+        if (!item.valid() ||
+            item.screen_distance >
+                policy.capture_distance) {
+            continue;
+        }
+        if (!is_nearest(item)) {
+            specific_in_capture = true;
+        }
+        if (best == nullptr ||
+            better(item, *best)) {
+            best = &item;
+        }
+    }
+
+    const SnapScreenCandidate* retained{};
+    if (state.captured) {
+        for (const auto& item : candidates) {
+            if (!item.valid() ||
+                item.screen_distance >
+                    policy.release_distance ||
+                snapStableKey(item.candidate) !=
+                    *state.captured) {
+                continue;
+            }
+
+            // A captured Nearest never blocks a newly eligible
+            // specific snap. Specific capture hysteresis may hold
+            // against other specific candidates until release.
+            if (is_nearest(item) &&
+                specific_in_capture) {
+                break;
+            }
+            retained = &item;
+            break;
+        }
+    }
+
+    const SnapScreenCandidate* selected =
+        retained != nullptr ? retained : best;
+    if (selected == nullptr) {
+        state.clear();
+        return std::nullopt;
+    }
+
+    SnapResolution resolution;
+    resolution.primary =
+        selected->candidate;
+
+    for (const auto& item : candidates) {
+        if (!item.valid() ||
+            item.candidate.point !=
+                resolution.primary.point ||
+            item.screen_distance >
+                policy.release_distance) {
+            continue;
+        }
+        resolution.coincident_candidates.push_back(
+            item.candidate);
+    }
+
+    std::sort(
+        resolution.coincident_candidates.begin(),
+        resolution.coincident_candidates.end(),
+        [](const SnapCandidate& first,
+           const SnapCandidate& second) {
+            return snapStableKey(first) <
+                   snapStableKey(second);
+        });
+    resolution.coincident_candidates.erase(
+        std::unique(
+            resolution.coincident_candidates.begin(),
+            resolution.coincident_candidates.end(),
+            [](const SnapCandidate& first,
+               const SnapCandidate& second) {
+                return snapStableKey(first) ==
+                       snapStableKey(second);
+            }),
+        resolution.coincident_candidates.end());
+
+    if (resolution.coincident_candidates.empty()) {
+        resolution.coincident_candidates.push_back(
+            resolution.primary);
+    }
+
+    state.captured =
+        snapStableKey(resolution.primary);
+    return resolution;
 }
 
 std::vector<SnapCandidate>
@@ -720,17 +864,10 @@ nearestSnapCandidate(
             : std::nullopt;
     }
 
-    const auto state = model.state();
-    const auto found =
-        std::find_if(
-            state.arcs.begin(),
-            state.arcs.end(),
-            [entity](const SketchArcState& arc) {
-                return arc.id == entity;
-            });
-    if (found != state.arcs.end()) {
+    if (const auto* arc =
+            model.findArc(entity)) {
         return nearestArcCandidate(
-            *found,
+            *arc,
             pointer);
     }
 
@@ -780,22 +917,15 @@ perpendicularSnapCandidates(
         return result;
     }
 
-    const auto state = model.state();
-    const auto found =
-        std::find_if(
-            state.arcs.begin(),
-            state.arcs.end(),
-            [entity](const SketchArcState& arc) {
-                return arc.id == entity;
-            });
-    if (found != state.arcs.end()) {
+    if (const auto* arc =
+            model.findArc(entity)) {
         appendRadialPerpendicular(
             result,
             entity,
-            found->center,
-            found->radius,
+            arc->center(),
+            arc->radius(),
             base,
-            &*found);
+            arc);
     }
     return result;
 }
@@ -822,22 +952,15 @@ tangentSnapCandidates(
         return result;
     }
 
-    const auto state = model.state();
-    const auto found =
-        std::find_if(
-            state.arcs.begin(),
-            state.arcs.end(),
-            [entity](const SketchArcState& arc) {
-                return arc.id == entity;
-            });
-    if (found != state.arcs.end()) {
+    if (const auto* arc =
+            model.findArc(entity)) {
         appendTangents(
             result,
             entity,
-            found->center,
-            found->radius,
+            arc->center(),
+            arc->radius(),
             base,
-            &*found);
+            arc);
     }
     return result;
 }

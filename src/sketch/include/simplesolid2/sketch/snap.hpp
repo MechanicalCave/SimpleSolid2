@@ -117,6 +117,49 @@ struct SnapStableKey final {
 [[nodiscard]] SnapStableKey snapStableKey(
     const SnapCandidate& candidate) noexcept;
 
+
+struct SnapScreenCandidate final {
+    SnapCandidate candidate;
+    double screen_distance{};
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const SnapScreenCandidate&,
+        const SnapScreenCandidate&) = default;
+};
+
+struct SnapResolutionPolicy final {
+    double capture_distance{9.0};
+    double release_distance{15.0};
+
+    [[nodiscard]] bool valid() const noexcept;
+};
+
+struct SnapCaptureState final {
+    std::optional<SnapStableKey> captured;
+
+    void clear() noexcept {
+        captured.reset();
+    }
+};
+
+struct SnapResolution final {
+    SnapCandidate primary;
+    std::vector<SnapCandidate> coincident_candidates;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return primary.valid() &&
+               !coincident_candidates.empty();
+    }
+};
+
+[[nodiscard]] std::optional<SnapResolution>
+resolveScreenSnap(
+    SnapCaptureState& state,
+    const std::vector<SnapScreenCandidate>& candidates,
+    SnapResolutionPolicy policy = {}) noexcept;
+
 [[nodiscard]] std::vector<SnapCandidate>
 staticSnapCandidates(
     const SketchModel& model,
