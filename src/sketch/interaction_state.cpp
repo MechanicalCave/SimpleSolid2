@@ -2987,6 +2987,9 @@ bool SketchInteractionState::setHoveredEntity(
     std::optional<EntityId> entity) noexcept {
     const bool hover_allowed =
         tool_ == SketchTool::select ||
+        tool_ == SketchTool::trim ||
+        tool_ == SketchTool::extend ||
+        tool_ == SketchTool::extend_both ||
         (commonTransformTool() &&
          transform_session_ &&
          transform_session_->stage ==

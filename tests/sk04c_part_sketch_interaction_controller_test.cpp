@@ -1369,5 +1369,289 @@ int main(int argc, char* argv[]) {
         rectangle_interaction.end();
     }
 
+    {
+        auto structural_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession
+            structural_session{
+                {},
+                std::move(structural_document)};
+        const auto structural_created =
+            structural_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            structural_created.ok() &&
+            structural_created.sketch_id);
+        const auto structural_sketch_id =
+            *structural_created.sketch_id;
+
+        const auto boundary =
+            structural_session.execute(
+                application::AddSketchLineCommand{
+                    structural_sketch_id,
+                    {4.0, -2.0},
+                    {4.0, 2.0}});
+        const auto target =
+            structural_session.execute(
+                application::AddSketchLineCommand{
+                    structural_sketch_id,
+                    {0.0, 0.0},
+                    {10.0, 0.0}});
+        CHECK(boundary.ok() && boundary.entity_id);
+        CHECK(target.ok() && target.entity_id);
+
+        QTreeWidget structural_tree;
+        ui::PartDocumentTreeController
+            structural_tree_controller{
+                structural_tree};
+        TestViewport structural_viewport;
+        ui::PartViewportController
+            structural_viewport_controller{
+                structural_tree_controller,
+                &structural_viewport};
+        structural_viewport_controller
+            .setDocumentSession(
+                &structural_session);
+        structural_viewport_controller
+            .setSketchEditSketch(
+                structural_sketch_id);
+
+        ui::PartSketchInteractionController
+            structural_interaction{
+                structural_viewport_controller};
+        structural_interaction.begin(
+            structural_session,
+            structural_sketch_id);
+
+        CHECK(
+            structural_viewport.sketch_scene_
+                .lines.size() == 2U);
+        const auto boundary_token =
+            structural_viewport.sketch_scene_
+                .lines[0].token;
+        const auto target_token =
+            structural_viewport.sketch_scene_
+                .lines[1].token;
+
+        structural_viewport.point_query_ = {
+            true,
+            boundary_token};
+        structural_interaction.onPointer(
+            pointer(
+                structural_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                40.0, 20.0,
+                4.0, 0.0));
+        structural_interaction.onPointer(
+            pointer(
+                structural_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_release,
+                40.0, 20.0,
+                4.0, 0.0));
+        CHECK(
+            structural_interaction
+                .selectedCount() == 1U);
+
+        CHECK(
+            structural_interaction.activateTrim());
+        CHECK(
+            structural_interaction.tool() ==
+            sketch::SketchTool::trim);
+        CHECK(
+            structural_interaction
+                .structuralBoundaries()
+                .size() == 1U);
+        CHECK(
+            structural_viewport.cursor_mode_ ==
+            viewer::ViewportCursorMode::
+                create_edit_crosshair);
+
+        structural_viewport.point_query_ = {
+            true,
+            target_token};
+        structural_interaction.onPointer(
+            pointer(
+                structural_sketch_id,
+                viewer::SpatialPointerPhase::move,
+                90.0, 20.0,
+                9.0, 0.0));
+        CHECK(
+            structural_viewport.preview_scene_
+                .lines.size() == 1U);
+
+        const auto trim_undo =
+            structural_session.undoDepth();
+        structural_interaction.onPointer(
+            pointer(
+                structural_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                90.0, 20.0,
+                9.0, 0.0));
+        CHECK(
+            structural_session.undoDepth() ==
+            trim_undo + 1U);
+        const auto* trimmed =
+            structural_session.document()
+                .findSketch(
+                    structural_sketch_id)
+                ->model.findLine(
+                    *target.entity_id);
+        CHECK(trimmed != nullptr);
+        CHECK((
+            trimmed->end() ==
+            sketch::Point2{4.0, 0.0}));
+        CHECK(
+            structural_interaction.tool() ==
+            sketch::SketchTool::trim);
+        CHECK(
+            structural_viewport.preview_scene_
+                .lines.empty());
+
+        CHECK(structural_interaction.escape());
+        CHECK(
+            structural_interaction.tool() ==
+            sketch::SketchTool::select);
+        CHECK(
+            structural_interaction
+                .selectedCount() == 1U);
+        structural_interaction.end();
+    }
+
+    {
+        auto mutual_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession mutual_session{
+            {},
+            std::move(mutual_document)};
+        const auto mutual_created =
+            mutual_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            mutual_created.ok() &&
+            mutual_created.sketch_id);
+        const auto mutual_sketch_id =
+            *mutual_created.sketch_id;
+        const auto first =
+            mutual_session.execute(
+                application::AddSketchLineCommand{
+                    mutual_sketch_id,
+                    {0.0, 0.0},
+                    {1.0, 0.0}});
+        const auto second =
+            mutual_session.execute(
+                application::AddSketchLineCommand{
+                    mutual_sketch_id,
+                    {3.0, 2.0},
+                    {3.0, 1.0}});
+        CHECK(first.ok() && first.entity_id);
+        CHECK(second.ok() && second.entity_id);
+
+        QTreeWidget mutual_tree;
+        ui::PartDocumentTreeController
+            mutual_tree_controller{mutual_tree};
+        TestViewport mutual_viewport;
+        ui::PartViewportController
+            mutual_viewport_controller{
+                mutual_tree_controller,
+                &mutual_viewport};
+        mutual_viewport_controller
+            .setDocumentSession(&mutual_session);
+        mutual_viewport_controller
+            .setSketchEditSketch(
+                mutual_sketch_id);
+
+        ui::PartSketchInteractionController
+            mutual_interaction{
+                mutual_viewport_controller};
+        mutual_interaction.begin(
+            mutual_session,
+            mutual_sketch_id);
+        CHECK(
+            mutual_viewport.sketch_scene_
+                .lines.size() == 2U);
+        const auto first_token =
+            mutual_viewport.sketch_scene_
+                .lines[0].token;
+        const auto second_token =
+            mutual_viewport.sketch_scene_
+                .lines[1].token;
+
+        mutual_interaction.activateExtendBoth();
+        CHECK(
+            mutual_interaction.tool() ==
+            sketch::SketchTool::extend_both);
+
+        mutual_viewport.point_query_ = {
+            true,
+            first_token};
+        mutual_interaction.onPointer(
+            pointer(
+                mutual_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                10.0, 10.0,
+                1.0, 0.0));
+        CHECK(
+            mutual_interaction
+                .extendBothFirstLine() ==
+            *first.entity_id);
+
+        mutual_viewport.point_query_ = {
+            true,
+            second_token};
+        mutual_interaction.onPointer(
+            pointer(
+                mutual_sketch_id,
+                viewer::SpatialPointerPhase::move,
+                30.0, 10.0,
+                3.0, 1.0));
+        CHECK(
+            mutual_viewport.preview_scene_
+                .lines.size() == 2U);
+
+        const auto mutual_undo =
+            mutual_session.undoDepth();
+        mutual_interaction.onPointer(
+            pointer(
+                mutual_sketch_id,
+                viewer::SpatialPointerPhase::
+                    primary_press,
+                30.0, 10.0,
+                3.0, 1.0));
+        CHECK(
+            mutual_session.undoDepth() ==
+            mutual_undo + 1U);
+        CHECK(
+            !mutual_interaction
+                 .extendBothFirstLine());
+        const auto* mutual_sketch =
+            mutual_session.document()
+                .findSketch(mutual_sketch_id);
+        CHECK(mutual_sketch != nullptr);
+        CHECK((
+            mutual_sketch->model
+                .findLine(*first.entity_id)
+                ->end() ==
+            sketch::Point2{3.0, 0.0}));
+        CHECK((
+            mutual_sketch->model
+                .findLine(*second.entity_id)
+                ->end() ==
+            sketch::Point2{3.0, 0.0}));
+        CHECK(
+            mutual_viewport.preview_scene_
+                .lines.empty());
+        mutual_interaction.end();
+    }
+
     return EXIT_SUCCESS;
 }
