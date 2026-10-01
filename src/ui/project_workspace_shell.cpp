@@ -3,6 +3,7 @@
 #include <QAbstractSpinBox>
 #include <QApplication>
 #include <QComboBox>
+#include <QCoreApplication>
 #include <QEvent>
 #include <QFrame>
 #include <QFontMetrics>
@@ -12,12 +13,14 @@
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSettings>
 #include <QStackedWidget>
 #include <QTabBar>
 #include <QTextEdit>
 #include <QVBoxLayout>
 
 #include <algorithm>
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -51,7 +54,19 @@ bool isPrintableText(const QString& text) {
 
 ProjectWorkspaceShell::ProjectWorkspaceShell(
     QWidget* parent)
-    : QWidget{parent} {
+    : ProjectWorkspaceShell(
+          !QCoreApplication::organizationName().isEmpty() &&
+                  !QCoreApplication::applicationName().isEmpty()
+              ? std::make_unique<QSettings>()
+              : nullptr,
+          parent) {}
+
+ProjectWorkspaceShell::ProjectWorkspaceShell(
+    std::unique_ptr<QSettings> user_settings,
+    QWidget* parent)
+    : QWidget{parent},
+      user_settings_{std::move(user_settings)} {
+    loadObjectSnapSettings();
     auto* root = new QVBoxLayout(this);
     root->setContentsMargins(8, 8, 8, 8);
     root->setSpacing(6);
@@ -260,6 +275,121 @@ ProjectWorkspaceShell::ProjectWorkspaceShell(
         qApp->installEventFilter(this);
     }
     refreshCadInputPresentation();
+}
+
+void ProjectWorkspaceShell::loadObjectSnapSettings() {
+    if (!user_settings_) {
+        return;
+    }
+
+    auto settings =
+        cad_input_.interactionSettings();
+    auto& snap = settings.object_snap;
+
+    user_settings_->beginGroup(
+        QStringLiteral("cad/objectSnap/v1"));
+    snap.master_enabled =
+        user_settings_->value(
+            QStringLiteral("masterEnabled"),
+            snap.master_enabled).toBool();
+    snap.endpoint =
+        user_settings_->value(
+            QStringLiteral("endpoint"),
+            snap.endpoint).toBool();
+    snap.midpoint =
+        user_settings_->value(
+            QStringLiteral("midpoint"),
+            snap.midpoint).toBool();
+    snap.center =
+        user_settings_->value(
+            QStringLiteral("center"),
+            snap.center).toBool();
+    snap.quadrant =
+        user_settings_->value(
+            QStringLiteral("quadrant"),
+            snap.quadrant).toBool();
+    snap.intersection =
+        user_settings_->value(
+            QStringLiteral("intersection"),
+            snap.intersection).toBool();
+    snap.origin =
+        user_settings_->value(
+            QStringLiteral("origin"),
+            snap.origin).toBool();
+    snap.perpendicular =
+        user_settings_->value(
+            QStringLiteral("perpendicular"),
+            snap.perpendicular).toBool();
+    snap.tangent =
+        user_settings_->value(
+            QStringLiteral("tangent"),
+            snap.tangent).toBool();
+    snap.nearest =
+        user_settings_->value(
+            QStringLiteral("nearest"),
+            snap.nearest).toBool();
+    snap.extension =
+        user_settings_->value(
+            QStringLiteral("extension"),
+            snap.extension).toBool();
+    snap.object_tracking_enabled =
+        user_settings_->value(
+            QStringLiteral("objectTrackingEnabled"),
+            snap.object_tracking_enabled).toBool();
+    user_settings_->endGroup();
+
+    static_cast<void>(
+        cad_input_.setInteractionSettings(
+            std::move(settings)));
+}
+
+void ProjectWorkspaceShell::persistObjectSnapSettings() {
+    if (!user_settings_) {
+        return;
+    }
+
+    const auto& snap =
+        cad_input_.interactionSettings().object_snap;
+    user_settings_->beginGroup(
+        QStringLiteral("cad/objectSnap/v1"));
+    user_settings_->setValue(
+        QStringLiteral("masterEnabled"),
+        snap.master_enabled);
+    user_settings_->setValue(
+        QStringLiteral("endpoint"),
+        snap.endpoint);
+    user_settings_->setValue(
+        QStringLiteral("midpoint"),
+        snap.midpoint);
+    user_settings_->setValue(
+        QStringLiteral("center"),
+        snap.center);
+    user_settings_->setValue(
+        QStringLiteral("quadrant"),
+        snap.quadrant);
+    user_settings_->setValue(
+        QStringLiteral("intersection"),
+        snap.intersection);
+    user_settings_->setValue(
+        QStringLiteral("origin"),
+        snap.origin);
+    user_settings_->setValue(
+        QStringLiteral("perpendicular"),
+        snap.perpendicular);
+    user_settings_->setValue(
+        QStringLiteral("tangent"),
+        snap.tangent);
+    user_settings_->setValue(
+        QStringLiteral("nearest"),
+        snap.nearest);
+    user_settings_->setValue(
+        QStringLiteral("extension"),
+        snap.extension);
+    user_settings_->setValue(
+        QStringLiteral("objectTrackingEnabled"),
+        snap.object_tracking_enabled);
+    user_settings_->endGroup();
+    user_settings_->sync();
 }
 
 ProjectWorkspaceShell::~ProjectWorkspaceShell() {
