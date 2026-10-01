@@ -288,8 +288,39 @@ Space typed while a text-entry field has focus remains text input; it does not t
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
 
-Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Object Snap/tracking/inference, Grid Snap, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
+Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
 
+<!-- section-id: product.parts.object-snap -->
+## Object Snap, Tracking and temporary overrides
+
+During Sketch Edit, **Operations** exposes **Object Snap**, **Modes**, **Temporary** and **Tracking** alongside Polar and Dynamic Input.
+
+Object Snap is exact semantic snapping. It does not move existing geometry and never creates an automatic Coincident, Tangent, Perpendicular or other authored constraint. The current snap is shown by a screen-space marker/label.
+
+Persistent modes are:
+
+- **END** — Line/Arc endpoints;
+- **MID** — Line midpoint and Arc midpoint along the authored sweep;
+- **CEN** — Circle/Arc center;
+- **QUAD** — Circle ±U/±V quadrants and only Arc quadrants on the authored sweep;
+- **INT** — exact finite discrete intersections of nearby Line/Circle/Arc geometry;
+- **ORG** — intrinsic Sketch Origin `(0,0)`;
+- **PER** — request-relative perpendicular result when the active point request has the required base;
+- **TAN** — request-relative tangent to Circle/Arc and the deferred/common-tangent Line flow;
+- **NEA** — continuous nearest projection on the finite source curve; it is a fallback below more specific eligible snaps;
+- **EXT** — explicit positive Line-extension ray beyond an acquired endpoint; it does not apply on the finite Line segment.
+
+Defaults are **END/MID/CEN/QUAD/INT/ORG ON**, **PER/TAN/NEA/EXT OFF**. The Object Snap master, persistent mode set and Tracking master are application/user preferences that survive application restart. They are not saved in the Part and create no Document dirty state or Undo step.
+
+The **Temporary** selector applies exactly one override to the next point request: `END`, `MID`, `CEN`, `QUAD`, `INT`, `PER`, `TAN`, `NEA`, `ORG`, `EXT` or `NONE`. It clears after one accepted point, Esc, request/tool replacement or Sketch exit without changing persistent modes. `NONE` suppresses object-derived OSNAP, OTRACK and EXT/TAN/PER assistance for that point, while explicit numeric input, numeric locks, generic base U/V inference, Polar and the raw pointer remain available. An unavailable requested family fails closed instead of falling back to another snap.
+
+Object Snap uses the same final point-resolution path as Dynamic Input and Polar. Complete explicit numeric input has highest priority. Numeric locks remain authoritative; a snap may assist a partially locked request only when the locked result remains exactly the advertised snap point. Compatible OSNAP then outranks Tracking/inference, which outranks Polar, which outranks the raw pointer.
+
+**Tracking** (OTRACK) starts OFF. When enabled, pause for about **0.4 s** over an eligible exact `END/MID/CEN/QUAD/INT/ORG` snap to acquire a tracking anchor. At most two anchors are retained; a third is not silently substituted. Move away and deliberately dwell over the same acquired snap again to remove that anchor. Accepted points, Esc, request/tool replacement and Sketch exit clear request-local anchors.
+
+Each anchor can expose exact Sketch U/V tracking guides. When Polar is ON, its accepted directions may also participate. A two-anchor guide intersection outranks a single compatible guide projection and Polar. Tracking markers and guides are runtime-only, non-selectable and non-authored. Tracking OFF or `NONE` makes object-derived guides dormant without changing saved preferences.
+
+There is currently no dedicated F3/F11 binding for Object Snap or Tracking; use the visible Operations controls. Polar remains **F10** and Dynamic Input remains **F12**.
 <!-- section-id: product.parts.measure -->
 ## Inspect — Measure
 
@@ -419,4 +450,3 @@ The current Sketch UI includes keyboard-first precision input, mm/cm/m/in/ft qua
 Profile is not a solid operation. The product still lacks Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, OSNAP/tracking/inference, Grid Snap, authored constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
 
 Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
-

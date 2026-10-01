@@ -288,8 +288,39 @@ Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uru
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję. Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin.
 
-Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Object Snap/tracking/inference, Grid Snap, constraints/solver, authored dimensions, płaszczyzny Datum i płaskie ściany modelu pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
+Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions, płaszczyzny Datum i płaskie ściany modelu pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
 
+<!-- section-id: product.parts.object-snap -->
+## Object Snap, Tracking i temporary overrides
+
+Podczas Sketch Edit panel **Operations** udostępnia **Object Snap**, **Modes**, **Temporary** i **Tracking** obok Polar i Dynamic Input.
+
+Object Snap jest exact snappingiem semantycznym. Nie przesuwa istniejącej geometrii i nigdy nie tworzy automatycznie authored constraintu Coincident, Tangent, Perpendicular ani innego. Bieżący snap pokazuje screen-space marker/label.
+
+Tryby trwałe:
+
+- **END** — endpointy Line/Arc;
+- **MID** — midpoint Line i midpoint Arc po authored sweep;
+- **CEN** — center Circle/Arc;
+- **QUAD** — quadranty Circle ±U/±V i tylko quadranty Arc leżące na authored sweep;
+- **INT** — exact skończone dyskretne przecięcia pobliskiej geometrii Line/Circle/Arc;
+- **ORG** — intrinsic Sketch Origin `(0,0)`;
+- **PER** — request-relative wynik prostopadły, gdy PointRequest ma wymagany base;
+- **TAN** — request-relative tangent do Circle/Arc oraz deferred/common-tangent flow dla Line;
+- **NEA** — ciągła nearest projection na skończoną krzywą źródłową; jest fallbackiem poniżej bardziej szczegółowych snapów;
+- **EXT** — jawny dodatni promień przedłużenia Line poza acquired endpoint; nie działa na skończonym segmencie Line.
+
+Domyślnie **END/MID/CEN/QUAD/INT/ORG są ON**, a **PER/TAN/NEA/EXT są OFF**. Master Object Snap, trwały zestaw trybów i master Tracking są preferencjami application/user i przeżywają restart aplikacji. Nie są zapisywane do Parta i nie tworzą Document dirty ani kroku Undo.
+
+Selektor **Temporary** stosuje dokładnie jeden override do następnego requestu punktu: `END`, `MID`, `CEN`, `QUAD`, `INT`, `PER`, `TAN`, `NEA`, `ORG`, `EXT` albo `NONE`. Czyści się po jednym zaakceptowanym punkcie, Esc, zastąpieniu requestu/narzędzia albo wyjściu ze Sketchu bez zmiany trwałych trybów. `NONE` dla tego punktu wyłącza object-derived OSNAP, OTRACK oraz pomoc EXT/TAN/PER, ale jawny input liczbowy, numeric locks, ogólna bazowa inferencja U/V, Polar i raw pointer pozostają dostępne. Niedostępna żądana rodzina jest odrzucana fail-closed zamiast przejścia na inny snap.
+
+Object Snap używa tego samego finalnego point-resolution path co Dynamic Input i Polar. Pełny jawny input liczbowy ma najwyższy priorytet. Numeric locks pozostają authoritative; snap może wspomóc częściowo zablokowany request tylko wtedy, gdy wynik po lockach nadal jest dokładnie reklamowanym punktem snap. Zgodny OSNAP ma następnie pierwszeństwo przed Tracking/inference, te przed Polar, a Polar przed raw pointer.
+
+**Tracking** (OTRACK) domyślnie jest OFF. Gdy jest włączony, zatrzymaj kursor przez około **0,4 s** nad kwalifikującym się exact snapem `END/MID/CEN/QUAD/INT/ORG`, aby acquired tracking anchor. Zachowywane są maksymalnie dwa anchory; trzeci nie zastępuje po cichu wcześniejszego. Odsuń kursor, a następnie ponownie wykonaj deliberate dwell nad tym samym acquired snapem, aby usunąć anchor. Zaakceptowany punkt, Esc, zastąpienie requestu/narzędzia i wyjście ze Sketchu czyszczą request-local anchory.
+
+Każdy anchor może wystawić exact guide'y Sketch U/V. Gdy Polar jest ON, jego zaakceptowane kierunki mogą także uczestniczyć. Guide intersection z dwóch anchorów ma pierwszeństwo przed pojedynczą zgodną guide projection i Polar. Markery Tracking i guide'y są runtime-only, non-selectable i non-authored. Tracking OFF albo `NONE` usypia object-derived guides bez zmiany zapisanych preferencji.
+
+Obecnie Object Snap i Tracking nie mają osobnych bindingów F3/F11; używaj widocznych kontrolek Operations. Polar pozostaje pod **F10**, a Dynamic Input pod **F12**.
 <!-- section-id: product.parts.measure -->
 ## Inspect — Measure
 
@@ -419,4 +450,3 @@ Bieżący Sketch UI obejmuje keyboard-first precision input, wartości mm/cm/m/i
 Profile nie jest operacją bryłową. Nadal brakuje Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, OSNAP/tracking/inference, Grid Snap, authored constraints/solver, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features/Extrude, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
 
 Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
-
