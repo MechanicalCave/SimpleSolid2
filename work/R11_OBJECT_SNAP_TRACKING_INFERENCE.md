@@ -750,7 +750,7 @@ Final candidate requires Owner verification of at least:
 - deliberate creation of a visible real gap with OSNAP disabled/None and confirmation that Profile does not auto-heal it;
 - regression smoke Measure/Between, Rectangle, Circle/Arc, transforms, grips, Polar/DYN, Profile, Undo/Redo and Save/Reopen.
 
-## 29. Documentation impact
+## Documentation impact
 
 Internal docs: required  
 User/Product docs: required  
