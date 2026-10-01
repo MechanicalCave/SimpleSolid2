@@ -1,9 +1,9 @@
 # R11 — Object Snap / Object Snap Tracking / Inference
 
-**Status:** PROPOSED — INACTIVE  
+**Status:** ACCEPTED — ACTIVE  
 **Proposed:** 2026-09-30  
 **Proposal synchronization:** 2026-10-01 after CI-04 completion  
-**Owner acceptance:** pending activation  
+**Owner acceptance:** 2026-10-01  
 **Decision class:** D2 runtime point-resolution / snap / tracking / inference grammar + bounded D1 implementation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0008, ADR-0009, ADR-0010, ADR-0011  
@@ -779,11 +779,11 @@ PL/EN Product documentation must explain:
 
 Product Browser must be regenerated and deterministic.
 
-## 30. Remaining D1 tuning before activation
+## 30. Delegated D1 tuning during implementation
 
-All product semantics required for activation are now resolved, including the Owner-frozen `NONE` behavior from Section 15.
+All product semantics required for activation are resolved, including the Owner-frozen `NONE` behavior from Section 15.
 
-Remaining activation-time tuning boundaries are:
+At activation on 2026-10-01, the Owner delegated the following bounded items as D1 implementation tuning:
 
 1. initial logical-pixel acquisition/release aperture values;
 2. tracking dwell duration;
@@ -791,7 +791,7 @@ Remaining activation-time tuning boundaries are:
 4. exact marker/glyph visual treatment;
 5. concrete keyboard bindings for semantic OSNAP/OTRACK actions, if any.
 
-These items may be explicitly delegated as D1 tuning at activation provided they do not change the semantic hierarchy, persistence model or authored-state boundaries in this contract.
+These items are delegated as D1 tuning and may be chosen from implementation/manual evidence provided they do not change the semantic hierarchy, persistence model or authored-state boundaries in this contract.
 
 The following are no longer open:
 
@@ -825,20 +825,13 @@ Stop for Owner review if implementation requires:
 
 ## 32. Activation boundary
 
-This file remains proposal-only.
+The Owner explicitly activated the synchronized R11 contract on 2026-10-01.
 
-Before R11 may become ACTIVE:
+Activation authorizes only the R11 scope and boundaries recorded in this contract. Section 15 `NONE` semantics remain exactly as Owner-frozen on 2026-10-01. Section 30 items are delegated as bounded D1 tuning.
 
-- Owner explicitly activates the synchronized R11 contract;
-- Section 15 `NONE` semantics remain exactly as Owner-frozen on 2026-10-01;
-- remaining Section 30 tuning items are either resolved or explicitly delegated as D1;
-- `work/ACTIVE.yaml` is updated in a governance-only activation commit;
-- any roadmap wording required by accepted refinements is updated;
-- proposal-only gate passes.
+R12+, Grid Snap, authored relations/constraints/solver, projected/reference geometry, ordinary Select RMB context and solid modeling remain inactive.
 
-No production code, R11 test skeleton mutation or verification-infrastructure mutation is authorized merely by this proposal.
-
-CI-04 is already completed and available on `main`; R11 implementation must consume that targeted build/test infrastructure rather than reopen CI-04 semantics.
+CI-04 is completed on `main`; R11 implementation must consume the targeted build/test infrastructure rather than reopen CI-04 semantics.
 
 ## 33. Completion boundary
 

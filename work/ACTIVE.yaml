@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/CI-04_BUILD_GRAPH_AND_WARM_VERIFICATION.md"
+status: active
+active_work: "work/R11_OBJECT_SNAP_TRACKING_INFERENCE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.7"
@@ -19,13 +19,14 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after CI-04 completion
-  - keep R11 Object Snap / Tracking / Inference proposal-only and inactive until separately activated by the Owner
+  - implement only the accepted R11 Object Snap / Tracking / Inference contract
   - require R11 to consume the accepted R10 resolver priority, numeric locks, Polar/Dynamic Input semantics and one workspace CAD input path rather than creating a second point-resolution system
+  - use CI-04 targeted build/test infrastructure for R11 iteration and evidence
   - keep R12+, ordinary RMB context, authored dimensions/constraints/solver and solid modeling inactive until separately accepted
   - preserve Roadmap v1.7 sequencing: R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - Owner explicitly activated synchronized R11 Object Snap / Tracking / Inference on 2026-10-01; NONE semantics remain frozen as accepted and aperture/dwell/un-acquire/glyph/shortcut details are delegated as bounded D1 tuning.
   - Owner explicitly froze the synchronized R11 NONE override semantics on 2026-10-01; this decision does not activate R11. Remaining pre-activation items are D1 tuning only plus separate explicit Owner activation.
   - R11 proposal was synchronized after CI-04 on 2026-10-01: one PointResolution path, accepted OSNAP/OTRACK defaults and user-preference lifetime, PER/TAN/NEA/EXT semantics, two-anchor tracking baseline and deterministic exact ranking are recorded; R11 remains proposal-only/inactive and NONE semantics still require final Owner freeze before activation.
   - R10 merged to main as 8574215c3c73ae015e49ad8a749464c92d81548b on 2026-09-30 after final FULL #1009, Owner manual Windows PASS and CLOSURE #1010.
