@@ -169,6 +169,15 @@ struct SnapStableKey final {
 [[nodiscard]] SnapStableKey snapStableKey(
     const SnapCandidate& candidate) noexcept;
 
+// Exact semantic contact equivalence for same-point collapse. Coordinate
+// equality is necessary but not sufficient: unrelated semantic points at the
+// same numeric location remain distinct unless Shared 2D relation authority
+// proves a discrete contact (or the intrinsic Origin is one side).
+[[nodiscard]] bool sameSnapContact(
+    const SketchModel& model,
+    const SnapCandidate& first,
+    const SnapCandidate& second);
+
 
 struct SnapScreenCandidate final {
     SnapCandidate candidate;
@@ -208,9 +217,10 @@ struct SnapResolution final {
 
 [[nodiscard]] std::optional<SnapResolution>
 resolveScreenSnap(
+    const SketchModel& model,
     SnapCaptureState& state,
     const std::vector<SnapScreenCandidate>& candidates,
-    SnapResolutionPolicy policy = {}) noexcept;
+    SnapResolutionPolicy policy = {});
 
 [[nodiscard]] std::vector<SnapCandidate>
 staticSnapCandidates(

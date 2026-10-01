@@ -160,6 +160,10 @@ int main() {
             0.0,
             std::numbers::pi_v<double> / 2.0,
             EntityRole::construction);
+    const auto unrelated_center_endpoint =
+        model.addLine(
+            {20.0, 0.0},
+            {20.0, -10.0});
 
     const auto static_candidates =
         staticSnapCandidates(
@@ -453,23 +457,52 @@ int main() {
     {
         SnapCaptureState capture;
         const SnapCandidate endpoint_candidate{
-            {1.0, 2.0},
+            {10.0, 0.0},
             SnapKind::endpoint,
             {
                 SnapSourceKind::entity_point,
                 horizontal,
                 std::nullopt,
+                SnapSemanticRole::line_end,
+                0U}};
+        const auto exact_intersections =
+            intersectionSnapCandidates(
+                model,
+                horizontal,
+                vertical);
+        CHECK(exact_intersections.size() == 1U);
+        const SnapCandidate intersection_candidate =
+            exact_intersections.front();
+        CHECK(sameSnapContact(
+            model,
+            endpoint_candidate,
+            intersection_candidate));
+
+        const SnapCandidate unrelated_center_candidate{
+            {20.0, 0.0},
+            SnapKind::center,
+            {
+                SnapSourceKind::entity_point,
+                circle,
+                std::nullopt,
+                SnapSemanticRole::circle_center,
+                0U}};
+        const SnapCandidate unrelated_endpoint_candidate{
+            {20.0, 0.0},
+            SnapKind::endpoint,
+            {
+                SnapSourceKind::entity_point,
+                unrelated_center_endpoint,
+                std::nullopt,
                 SnapSemanticRole::line_start,
                 0U}};
-        const SnapCandidate intersection_candidate{
-            {1.0, 2.0},
-            SnapKind::intersection,
-            {
-                SnapSourceKind::intersection,
-                horizontal,
-                vertical,
-                SnapSemanticRole::intersection,
-                0U}};
+        CHECK(
+            unrelated_center_candidate.point ==
+            unrelated_endpoint_candidate.point);
+        CHECK(!sameSnapContact(
+            model,
+            unrelated_center_candidate,
+            unrelated_endpoint_candidate));
         const SnapCandidate nearest_candidate{
             {3.0, 4.0},
             SnapKind::nearest,
@@ -481,6 +514,7 @@ int main() {
                 0U}};
 
         auto resolved = resolveScreenSnap(
+            model,
             capture,
             {
                 {nearest_candidate, 1.0},
@@ -511,6 +545,7 @@ int main() {
                 SnapSemanticRole::circle_center,
                 0U}};
         resolved = resolveScreenSnap(
+            model,
             capture,
             {
                 {endpoint_candidate, 12.0},
@@ -523,6 +558,7 @@ int main() {
 
         // Once beyond release, the closer eligible specific candidate wins.
         resolved = resolveScreenSnap(
+            model,
             capture,
             {
                 {endpoint_candidate, 16.0},
@@ -537,6 +573,7 @@ int main() {
         capture.captured =
             snapStableKey(nearest_candidate);
         resolved = resolveScreenSnap(
+            model,
             capture,
             {
                 {nearest_candidate, 2.0},
@@ -549,7 +586,7 @@ int main() {
 
         // Exact collapse is exact: a merely nearby coordinate remains separate.
         const SnapCandidate nearby_candidate{
-            {1.0 + 1.0e-12, 2.0},
+            {10.0 + 1.0e-12, 0.0},
             SnapKind::midpoint,
             {
                 SnapSourceKind::entity_point,
@@ -559,6 +596,7 @@ int main() {
                 0U}};
         capture.clear();
         resolved = resolveScreenSnap(
+            model,
             capture,
             {
                 {endpoint_candidate, 5.0},
@@ -570,15 +608,30 @@ int main() {
             resolved->coincident_candidates.size() ==
             2U);
 
+        capture.clear();
+        resolved = resolveScreenSnap(
+            model,
+            capture,
+            {
+                {unrelated_center_candidate, 2.0},
+                {unrelated_endpoint_candidate, 2.0},
+            });
+        CHECK(resolved.has_value());
+        CHECK(
+            resolved->coincident_candidates.size() ==
+            1U);
+
         // Release and invalid-policy behavior are fail-closed.
         CHECK(
             !resolveScreenSnap(
+                 model,
                  capture,
                  {{endpoint_candidate, 16.0}})
                  .has_value());
         CHECK(!capture.captured.has_value());
         CHECK(
             !resolveScreenSnap(
+                 model,
                  capture,
                  {{endpoint_candidate, 1.0}},
                  {15.0, 9.0})

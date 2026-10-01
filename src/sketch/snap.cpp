@@ -543,6 +543,90 @@ SnapStableKey snapStableKey(
         candidate.source.canonical_branch};
 }
 
+bool sameSnapContact(
+    const SketchModel& model,
+    const SnapCandidate& first,
+    const SnapCandidate& second) {
+    if (!first.valid() ||
+        !second.valid() ||
+        first.point != second.point) {
+        return false;
+    }
+
+    if (snapStableKey(first) ==
+        snapStableKey(second)) {
+        return true;
+    }
+
+    const bool first_origin =
+        first.source.kind ==
+        SnapSourceKind::intrinsic_origin;
+    const bool second_origin =
+        second.source.kind ==
+        SnapSourceKind::intrinsic_origin;
+    if (first_origin || second_origin) {
+        return first.point == Point2{0.0, 0.0};
+    }
+
+    const auto source_entities =
+        [](const SnapSourceRef& source) {
+            std::array<std::optional<EntityId>, 2U>
+                ids{
+                    source.first_entity,
+                    source.second_entity};
+            return ids;
+        };
+
+    const auto first_entities =
+        source_entities(first.source);
+    const auto second_entities =
+        source_entities(second.source);
+
+    for (const auto& first_id :
+         first_entities) {
+        if (!first_id) {
+            continue;
+        }
+        for (const auto& second_id :
+             second_entities) {
+            if (!second_id) {
+                continue;
+            }
+
+            if (*first_id == *second_id) {
+                return true;
+            }
+
+            const auto relation =
+                analyzeCurveRelation(
+                    model,
+                    *first_id,
+                    *second_id);
+            if (relation.status !=
+                CurveRelationStatus::discrete) {
+                continue;
+            }
+
+            const auto exact_contact =
+                std::find_if(
+                    relation.intersections.begin(),
+                    relation.intersections.end(),
+                    [&first](
+                        const CurveIntersection2D&
+                            intersection) {
+                        return intersection.point ==
+                               first.point;
+                    });
+            if (exact_contact !=
+                relation.intersections.end()) {
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 
 bool SnapScreenCandidate::valid() const noexcept {
     return candidate.valid() &&
@@ -559,9 +643,10 @@ bool SnapResolutionPolicy::valid() const noexcept {
 
 std::optional<SnapResolution>
 resolveScreenSnap(
+    const SketchModel& model,
     SnapCaptureState& state,
     const std::vector<SnapScreenCandidate>& candidates,
-    SnapResolutionPolicy policy) noexcept {
+    SnapResolutionPolicy policy) {
     if (!policy.valid()) {
         state.clear();
         return std::nullopt;
@@ -648,10 +733,12 @@ resolveScreenSnap(
 
     for (const auto& item : candidates) {
         if (!item.valid() ||
-            item.candidate.point !=
-                resolution.primary.point ||
             item.screen_distance >
-                policy.release_distance) {
+                policy.release_distance ||
+            !sameSnapContact(
+                model,
+                resolution.primary,
+                item.candidate)) {
             continue;
         }
         resolution.coincident_candidates.push_back(
