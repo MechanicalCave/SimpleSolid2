@@ -7,7 +7,7 @@ Import-SS2LocalEnvironment
 
 $cmake = Get-SS2CMakeExe
 $root = Get-SS2Root
-$build = Join-Path $root $BuildDir
+$build = Resolve-SS2BuildPath $BuildDir
 
 $args = @("-S", $root, "-B", $build)
 if ($env:CMAKE_PREFIX_PATH) {
