@@ -11,6 +11,7 @@
 #include <QTreeWidget>
 #include <QWidget>
 
+#include <cmath>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
@@ -31,6 +32,10 @@ void check(bool value, const char* expression, int line) {
 }
 
 #define CHECK(expr) check(static_cast<bool>(expr), #expr, __LINE__)
+
+bool near(double first, double second) {
+    return std::abs(first - second) <= 1.0e-10;
+}
 
 class TestViewport final
     : public QWidget,
@@ -1944,9 +1949,12 @@ int main(int argc, char* argv[]) {
             extend_after->model.findLine(
                 *extend_target.entity_id);
         CHECK(extended_line != nullptr);
-        CHECK((
-            extended_line->end() ==
-            sketch::Point2{5.0, 0.0}));
+        CHECK(near(
+            extended_line->end().u,
+            5.0));
+        CHECK(near(
+            extended_line->end().v,
+            0.0));
         const auto* boundary_line =
             extend_after->model.findLine(
                 *extend_boundary.entity_id);
