@@ -135,6 +135,18 @@ int main() {
             std::numbers::pi_v<double> / 4.0) <
         1.0e-12);
     CHECK(defaults.polar.additional_angles.empty());
+    CHECK(defaults.object_snap.master_enabled);
+    CHECK(defaults.object_snap.endpoint);
+    CHECK(defaults.object_snap.midpoint);
+    CHECK(defaults.object_snap.center);
+    CHECK(defaults.object_snap.quadrant);
+    CHECK(defaults.object_snap.intersection);
+    CHECK(defaults.object_snap.origin);
+    CHECK(!defaults.object_snap.perpendicular);
+    CHECK(!defaults.object_snap.tangent);
+    CHECK(!defaults.object_snap.nearest);
+    CHECK(!defaults.object_snap.extension);
+    CHECK(!defaults.object_snap.object_tracking_enabled);
     CHECK(!defaults.dynamic_input_enabled);
 
     auto runtime_settings = defaults;
@@ -146,6 +158,10 @@ int main() {
     runtime_settings.polar.additional_angles = {
         17.0 * std::numbers::pi_v<double> / 180.0,
         std::numbers::pi_v<double> / 6.0};
+    runtime_settings.object_snap.master_enabled = false;
+    runtime_settings.object_snap.endpoint = false;
+    runtime_settings.object_snap.nearest = true;
+    runtime_settings.object_snap.object_tracking_enabled = true;
     CHECK(
         session.setInteractionSettings(
             runtime_settings));
@@ -158,6 +174,26 @@ int main() {
     CHECK(
         session.interactionSettings() ==
         runtime_settings);
+
+    // Master toggling does not destroy per-mode or OTRACK choices.
+    auto reenabled_settings =
+        session.interactionSettings();
+    reenabled_settings.object_snap.master_enabled = true;
+    CHECK(
+        session.setInteractionSettings(
+            reenabled_settings));
+    CHECK(
+        !session.interactionSettings().
+             object_snap.endpoint);
+    CHECK(
+        session.interactionSettings().
+            object_snap.nearest);
+    CHECK(
+        session.interactionSettings().
+            object_snap.object_tracking_enabled);
+    CHECK(
+        session.setInteractionSettings(
+            runtime_settings));
 
     const auto relative_tracks =
         simplesolid2::application::

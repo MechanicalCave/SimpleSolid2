@@ -105,8 +105,31 @@ struct PolarInputSettings final {
         const PolarInputSettings&) = default;
 };
 
+struct ObjectSnapInputSettings final {
+    bool master_enabled{true};
+
+    bool endpoint{true};
+    bool midpoint{true};
+    bool center{true};
+    bool quadrant{true};
+    bool intersection{true};
+    bool origin{true};
+
+    bool perpendicular{false};
+    bool tangent{false};
+    bool nearest{false};
+    bool extension{false};
+
+    bool object_tracking_enabled{false};
+
+    friend bool operator==(
+        const ObjectSnapInputSettings&,
+        const ObjectSnapInputSettings&) = default;
+};
+
 struct CadInteractionSettings final {
     PolarInputSettings polar;
+    ObjectSnapInputSettings object_snap;
     bool dynamic_input_enabled{};
 
     [[nodiscard]] bool valid() const noexcept {
