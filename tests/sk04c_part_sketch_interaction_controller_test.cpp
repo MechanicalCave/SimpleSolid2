@@ -666,7 +666,7 @@ int main(int argc, char* argv[]) {
     CHECK(profile_command.accepted);
     CHECK(
         !interaction.profileToolOptions()
-             .detect_islands);
+             .show_islands);
 
     profile_command =
         profile_command_endpoint.submit(
@@ -679,7 +679,7 @@ int main(int argc, char* argv[]) {
     profile_command =
         profile_command_endpoint.submit(
             "FIND");
-    CHECK(profile_command.accepted);
+    CHECK(!profile_command.accepted);
 
     profile_command =
         profile_command_endpoint.submit(
