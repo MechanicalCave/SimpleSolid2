@@ -218,7 +218,7 @@ The normal Owner workflow starts with `START_SS2.cmd`.
 
 The SS2 PowerShell session provides canonical convenience commands including `ss2-status`, `ss2-run`, `ss2-docs` and `ss2-resume`.
 
-`ss2-run` performs an incremental build and starts `SimpleSolid2.exe`. `ss2-docs` regenerates the Product Browser.
+`ss2-run` configures and incrementally builds only the `simplesolid2` product target plus its dependency closure, then starts `SimpleSolid2.exe`. Ordinary desktop test executables are excluded from the normal product `ALL` graph. `ss2-docs` regenerates the Product Browser.
 
 <!-- section-id: internal.build-test.root-script -->
 ## Canonical repository commands
@@ -279,7 +279,7 @@ The current core-only suite contains 14 focused tests covering generic CAD-input
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The default desktop graph currently registers **77 CTest tests**.
+The default desktop graph currently registers **78 CTest tests**.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
@@ -315,15 +315,18 @@ FOCUSED
 
 FAST
   explicit label: tier-fast
+  → builds only the `ss2_tests_fast` aggregate plus real dependencies
   → broad short-running regression for frequent iteration
   → excludes the long native Workbench stress test
 
 SUBSYSTEM
   explicit labels: subsystem-core/application/persistence/part/sketch/viewer/ui/project
+  → builds the union of matching `ss2_tests_subsystem_*` aggregates plus real dependencies
   → one or more subsystem labels selected as a checkpoint
 
 FULL
   no CTest label filter
+  → builds `ss2_tests_full`
   → every registered test, including tier-full-only/native stress coverage
   → mandatory runtime merge evidence
 ```
@@ -398,6 +401,40 @@ The classifier remains fail-closed. Unknown/mixed verification-sensitive paths s
 PR title/body edits do not trigger or cancel verification. Content synchronization triggers verification, and `ready_for_review` explicitly triggers the merge-candidate FULL transition.
 
 The explicit root `ss2.ps1 docs` dispatcher/freshness regression remains part of FULL and DOCS. FULL builds once; its Test step uses `-NoBuild` to avoid invoking the same build a second time.
+
+<!-- section-id: internal.build-test.ci04 -->
+## CI-04 targeted build graph and warm verification
+
+CI-04 separates the normal product graph from the desktop test graph. The canonical product command:
+
+```powershell
+.\ss2.ps1 build
+```
+
+builds target `simplesolid2` plus its dependency closure. Raw CMake `ALL` remains a diagnostic path rather than the normal local workflow. Desktop tests remain registered with CTest but are excluded from product `ALL` and are built through aggregate targets derived from the authoritative CTest tier/subsystem membership.
+
+The self-hosted Windows gate keeps exact-SHA source checkout cleanup while placing reusable build trees outside the checkout under the configured CI build root. Each tree carries a compatibility fingerprint. Generator/toolchain/dependency/build-mode mismatch invalidates the tree deterministically; ordinary source SHA/branch changes do not. Verification-sensitive changes require CLEAN FULL, while a compatible tree may be reused by ordinary FULL verification. A force-clean path remains available for diagnostics.
+
+CTest execution supports bounded parallelism through `SS2_TEST_PARALLELISM`. Native Viewer tests share the `ss2_native_viewer` resource lock, so independent tests may run concurrently without overlapping the serialized native resource. Build and test parallelism are independent controls.
+
+CI-04 also corrected FOCUSED exact-test selection to use a CTest-compatible anchored regular expression. Focused requests still validate the registered CTest catalog before execution and remain iteration evidence only.
+
+### CI-04 timing evidence
+
+Comparative timing was collected on the same self-hosted Windows machine (`DESKTOP-JL6O311`) using baseline `8574215c3c73ae015e49ad8a749464c92d81548b` and CI-04 exact head `79e89af2faba96780dab9e85b9f60700a75015c7` in Windows FULL #1040. Both FOCUSED measurements configured, built `e1_arc_numerical_stability_test` and executed exactly `e1.arc_numerical_stability`; both FAST measurements executed 62 tests.
+
+| Scenario | Before (s) | After (s) | Speedup |
+|---|---:|---:|---:|
+| clean product build | 229.99 | 78.19 | 2.94x |
+| no-change product rebuild | 6.66 | 3.88 | 1.72x |
+| one `src/sketch/interaction_state.cpp` rebuild | 11.53 | 4.16 | 2.77x |
+| clean FOCUSED exact test | 12.27 | 12.16 | 1.01x |
+| clean FAST | 242.32 | 205.82 | 1.18x |
+
+The measurements are observational evidence, not fixed performance requirements. The dominant improvement is removal of unnecessary test compilation from ordinary product iteration. FOCUSED remains approximately unchanged because it was already target-scoped before CI-04.
+
+Final clean/warm parity was proven on exact SHA `fbc35c3d9efd96891be8fec5671654cad8ecd473` in Windows FULL #1044. The CLEAN pass executed 78/78 desktop tests successfully (111.38 s real CTest time); the immediate warm rebuild of `ss2_tests_full` took 7.60 s and the warm FULL repeated 78/78 successfully (110.31 s real CTest time). This proves identical test outcome between clean and compatible warm verification on the same source revision. The CI-04 timing/parity workflow hooks are commit-trailer gated and add no repeated benchmark work to ordinary FULL runs.
+
 <!-- section-id: internal.build-test.c2-history-benchmark -->
 ## C2 semantic history benchmark
 

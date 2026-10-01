@@ -39,7 +39,7 @@ function Get-SS2ExactTestRegex {
     param([Parameter(Mandatory=$true)][string[]]$Names)
 
     $escaped = @($Names | ForEach-Object { [regex]::Escape($_) })
-    return "^(?:" + ($escaped -join "|") + ")$"
+    return "^(" + ($escaped -join "|") + ")$"
 }
 
 if ($SelfTest) {
@@ -50,7 +50,7 @@ if ($SelfTest) {
 
     $tests = Normalize-SS2FocusedValues @("sk07f.precision_input_state,e1.arc_numerical_stability") "test"
     $regex = Get-SS2ExactTestRegex $tests
-    if ($regex -ne '^(?:sk07f\.precision_input_state|e1\.arc_numerical_stability)$') {
+    if ($regex -ne '^(sk07f\.precision_input_state|e1\.arc_numerical_stability)$') {
         throw "Focused exact-test regex self-test failed: $regex"
     }
 
@@ -80,18 +80,20 @@ $configure = Join-Path $PSScriptRoot "ss2-configure.ps1"
 & $configure -BuildDir $BuildDir
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-$build =
-    if ([IO.Path]::IsPathRooted($BuildDir)) {
-        [IO.Path]::GetFullPath($BuildDir)
-    } else {
-        [IO.Path]::GetFullPath((Join-Path $root $BuildDir))
-    }
+$build = Resolve-SS2BuildPath $BuildDir
 
 Write-Host "[check] targets=$($targets -join ',')"
 Write-Host "[check] tests=$($tests -join ',')"
 Write-Host "[check] build=$build config=$Config"
 
 $buildArgs = @("--build", $build, "--config", $Config, "--target") + $targets
+if ($env:SS2_BUILD_PARALLELISM) {
+    $jobs = 0
+    if (-not [int]::TryParse($env:SS2_BUILD_PARALLELISM, [ref]$jobs) -or $jobs -lt 1) {
+        throw "SS2_BUILD_PARALLELISM must be a positive integer."
+    }
+    $buildArgs += @("--parallel", "$jobs")
+}
 & $cmake @buildArgs
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -124,5 +126,12 @@ $ctestArgs = @(
     "--interactive-debug-mode", "0",
     "-R", $testRegex
 )
+if ($env:SS2_TEST_PARALLELISM) {
+    $jobs = 0
+    if (-not [int]::TryParse($env:SS2_TEST_PARALLELISM, [ref]$jobs) -or $jobs -lt 1) {
+        throw "SS2_TEST_PARALLELISM must be a positive integer."
+    }
+    $ctestArgs += @("--parallel", "$jobs")
+}
 & ctest @ctestArgs
 exit $LASTEXITCODE

@@ -6,6 +6,8 @@ param(
     [string]$RemoteUrl = "",
     [string]$QtRoot = "D:\Qt",
     [string]$OcctRoot = "D:\SimpleSolid2\.simplesolid-env",
+    [string]$BuildDir = "build\dev",
+    [string]$Config = "Debug",
     [switch]$CommitGenesis,
     [switch]$All,
 
@@ -48,8 +50,11 @@ switch ($Command) {
     "setup"    { & $script -QtRoot $QtRoot -OcctRoot $OcctRoot }
     "git-init" { & $script -RemoteUrl $RemoteUrl -CommitGenesis:$CommitGenesis }
     "clean"    { & $script -All:$All }
-    "test"     { & $script -Tier $Tier -Subsystem $Subsystem -NoBuild:$NoBuild -ListOnly:$ListOnly -SelfTest:$SelfTest }
-    "check"    { & $script -Target $Target -Test $Test -SelfTest:$SelfTest }
+    "configure" { & $script -BuildDir $BuildDir }
+    "build"    { & $script -BuildDir $BuildDir -Config $Config -Target $Target -All:$All }
+    "run"      { & $script -BuildDir $BuildDir -Config $Config }
+    "test"     { & $script -BuildDir $BuildDir -Config $Config -Tier $Tier -Subsystem $Subsystem -NoBuild:$NoBuild -ListOnly:$ListOnly -SelfTest:$SelfTest }
+    "check"    { & $script -BuildDir $BuildDir -Config $Config -Target $Target -Test $Test -SelfTest:$SelfTest }
     default    { & $script }
 }
 exit $LASTEXITCODE
