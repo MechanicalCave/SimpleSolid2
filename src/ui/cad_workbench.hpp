@@ -117,6 +117,9 @@ public:
     }
     void refreshCadDynamicInputOverlay();
 
+    void requestUndo() { undo(); }
+    void requestRedo() { redo(); }
+
     [[nodiscard]] std::string cadInputPrompt() const override;
     [[nodiscard]] application::CadInputContextGeneration
     cadInputContextGeneration() const noexcept override;
