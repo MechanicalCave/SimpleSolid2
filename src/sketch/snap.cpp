@@ -507,6 +507,230 @@ SnapEligibility resolveSnapEligibility(
     return result;
 }
 
+bool DeferredSnapReference::valid() const noexcept {
+    if (!source.valid()) {
+        return false;
+    }
+
+    switch (kind) {
+    case DeferredSnapReferenceKind::line_extension:
+        return source.kind ==
+                   SnapSourceKind::entity_point &&
+               (source.role ==
+                    SnapSemanticRole::line_start ||
+                source.role ==
+                    SnapSemanticRole::line_end) &&
+               source.first_entity.has_value() &&
+               !source.second_entity.has_value();
+
+    case DeferredSnapReferenceKind::tangent_curve:
+        return source.kind ==
+                   SnapSourceKind::entity_curve &&
+               source.role ==
+                   SnapSemanticRole::curve_tangent &&
+               source.first_entity.has_value() &&
+               !source.second_entity.has_value();
+    }
+    return false;
+}
+
+bool LineExtensionRay::valid() const noexcept {
+    if (!reference.valid() ||
+        reference.kind !=
+            DeferredSnapReferenceKind::
+                line_extension ||
+        !origin.finite() ||
+        !direction.finite()) {
+        return false;
+    }
+
+    const double length =
+        std::hypot(
+            direction.u,
+            direction.v);
+    return std::isfinite(length) &&
+           length > 0.0;
+}
+
+std::optional<DeferredSnapReference>
+makeLineExtensionReference(
+    const SketchModel& model,
+    EntityId line,
+    SnapSemanticRole endpoint_role) noexcept {
+    if (!line.valid() ||
+        (endpoint_role !=
+             SnapSemanticRole::line_start &&
+         endpoint_role !=
+             SnapSemanticRole::line_end) ||
+        model.findLine(line) == nullptr) {
+        return std::nullopt;
+    }
+
+    DeferredSnapReference result{
+        DeferredSnapReferenceKind::
+            line_extension,
+        {
+            SnapSourceKind::entity_point,
+            line,
+            std::nullopt,
+            endpoint_role,
+            0U}};
+    return result.valid()
+        ? std::optional<DeferredSnapReference>{
+              result}
+        : std::nullopt;
+}
+
+std::optional<DeferredSnapReference>
+makeTangentCurveReference(
+    const SketchModel& model,
+    EntityId entity) noexcept {
+    if (!entity.valid() ||
+        (model.findCircle(entity) == nullptr &&
+         model.findArc(entity) == nullptr)) {
+        return std::nullopt;
+    }
+
+    DeferredSnapReference result{
+        DeferredSnapReferenceKind::
+            tangent_curve,
+        {
+            SnapSourceKind::entity_curve,
+            entity,
+            std::nullopt,
+            SnapSemanticRole::curve_tangent,
+            0U}};
+    return result.valid()
+        ? std::optional<DeferredSnapReference>{
+              result}
+        : std::nullopt;
+}
+
+std::optional<LineExtensionRay>
+lineExtensionRay(
+    const SketchModel& model,
+    const DeferredSnapReference& reference) noexcept {
+    if (!reference.valid() ||
+        reference.kind !=
+            DeferredSnapReferenceKind::
+                line_extension ||
+        !reference.source.first_entity) {
+        return std::nullopt;
+    }
+
+    const auto* line =
+        model.findLine(
+            *reference.source.first_entity);
+    if (line == nullptr) {
+        return std::nullopt;
+    }
+
+    LineExtensionRay result;
+    result.reference = reference;
+    if (reference.source.role ==
+        SnapSemanticRole::line_start) {
+        result.origin = line->start();
+        result.direction = {
+            line->start().u - line->end().u,
+            line->start().v - line->end().v};
+    } else if (
+        reference.source.role ==
+        SnapSemanticRole::line_end) {
+        result.origin = line->end();
+        result.direction = {
+            line->end().u - line->start().u,
+            line->end().v - line->start().v};
+    } else {
+        return std::nullopt;
+    }
+
+    return result.valid()
+        ? std::optional<LineExtensionRay>{
+              result}
+        : std::nullopt;
+}
+
+namespace {
+
+[[nodiscard]] std::optional<Point2>
+projectPointToPositiveRay(
+    const LineExtensionRay& ray,
+    Point2 point) noexcept {
+    if (!ray.valid() || !point.finite()) {
+        return std::nullopt;
+    }
+
+    const double length_squared =
+        ray.direction.u *
+            ray.direction.u +
+        ray.direction.v *
+            ray.direction.v;
+    if (!std::isfinite(length_squared) ||
+        !(length_squared > 0.0)) {
+        return std::nullopt;
+    }
+
+    const double relative_u =
+        point.u - ray.origin.u;
+    const double relative_v =
+        point.v - ray.origin.v;
+    const double parameter =
+        (relative_u * ray.direction.u +
+         relative_v * ray.direction.v) /
+        length_squared;
+    if (!std::isfinite(parameter) ||
+        !(parameter > 0.0)) {
+        return std::nullopt;
+    }
+
+    Point2 result{
+        std::fma(
+            parameter,
+            ray.direction.u,
+            ray.origin.u),
+        std::fma(
+            parameter,
+            ray.direction.v,
+            ray.origin.v)};
+    return result.finite()
+        ? std::optional<Point2>{result}
+        : std::nullopt;
+}
+
+} // namespace
+
+std::optional<Point2>
+projectPointToLineExtension(
+    const SketchModel& model,
+    const DeferredSnapReference& reference,
+    Point2 pointer) noexcept {
+    const auto ray =
+        lineExtensionRay(
+            model,
+            reference);
+    return ray
+        ? projectPointToPositiveRay(
+              *ray,
+              pointer)
+        : std::nullopt;
+}
+
+std::optional<Point2>
+perpendicularPointOnLineExtension(
+    const SketchModel& model,
+    const DeferredSnapReference& reference,
+    Point2 base) noexcept {
+    const auto ray =
+        lineExtensionRay(
+            model,
+            reference);
+    return ray
+        ? projectPointToPositiveRay(
+              *ray,
+              base)
+        : std::nullopt;
+}
+
 bool SnapSourceRef::valid() const noexcept {
     switch (kind) {
     case SnapSourceKind::intrinsic_origin:

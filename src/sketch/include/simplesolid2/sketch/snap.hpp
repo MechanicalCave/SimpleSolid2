@@ -82,6 +82,63 @@ struct SnapCandidate final {
         const SnapCandidate&) = default;
 };
 
+enum class DeferredSnapReferenceKind : std::uint8_t {
+    line_extension,
+    tangent_curve,
+};
+
+struct DeferredSnapReference final {
+    DeferredSnapReferenceKind kind{
+        DeferredSnapReferenceKind::line_extension};
+    SnapSourceRef source;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const DeferredSnapReference&,
+        const DeferredSnapReference&) = default;
+};
+
+struct LineExtensionRay final {
+    DeferredSnapReference reference;
+    Point2 origin;
+    Point2 direction;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const LineExtensionRay&,
+        const LineExtensionRay&) = default;
+};
+
+[[nodiscard]] std::optional<DeferredSnapReference>
+makeLineExtensionReference(
+    const SketchModel& model,
+    EntityId line,
+    SnapSemanticRole endpoint_role) noexcept;
+
+[[nodiscard]] std::optional<DeferredSnapReference>
+makeTangentCurveReference(
+    const SketchModel& model,
+    EntityId entity) noexcept;
+
+[[nodiscard]] std::optional<LineExtensionRay>
+lineExtensionRay(
+    const SketchModel& model,
+    const DeferredSnapReference& reference) noexcept;
+
+[[nodiscard]] std::optional<Point2>
+projectPointToLineExtension(
+    const SketchModel& model,
+    const DeferredSnapReference& reference,
+    Point2 pointer) noexcept;
+
+[[nodiscard]] std::optional<Point2>
+perpendicularPointOnLineExtension(
+    const SketchModel& model,
+    const DeferredSnapReference& reference,
+    Point2 base) noexcept;
+
 struct SnapModeSet final {
     bool endpoint{true};
     bool midpoint{true};

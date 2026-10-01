@@ -907,6 +907,73 @@ int main() {
                  has_value());
     }
 
+    // Deferred R11 semantic references are request-local: NONE leaves them
+    // dormant/preserved, while accepted point and Esc clear them.
+    {
+        sketch::SketchModel deferred_model;
+        const auto line =
+            deferred_model.addLine(
+                {0.0, 0.0},
+                {10.0, 0.0});
+        const auto circle =
+            deferred_model.addCircle(
+                {20.0, 0.0},
+                5.0);
+
+        const auto extension =
+            sketch::makeLineExtensionReference(
+                deferred_model,
+                line,
+                sketch::SnapSemanticRole::line_end);
+        const auto tangent =
+            sketch::makeTangentCurveReference(
+                deferred_model,
+                circle);
+        CHECK(extension.has_value());
+        CHECK(tangent.has_value());
+
+        sketch::SketchInteractionState deferred;
+        deferred.activateLine();
+        CHECK(
+            deferred.setDeferredSnapReference(
+                *extension));
+        auto request =
+            deferred.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->deferred_snap_reference ==
+            extension);
+
+        CHECK(
+            deferred.setTemporarySnapOverride(
+                sketch::TemporarySnapOverrideKind::none));
+        request = deferred.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->deferred_snap_reference ==
+            extension);
+
+        CHECK(
+            deferred.acceptLinePoint(
+                {1.0, 1.0}).outcome ==
+            sketch::LinePointOutcome::
+                first_point_accepted);
+        CHECK(
+            !deferred.deferredSnapReference().
+                 has_value());
+
+        CHECK(
+            deferred.setDeferredSnapReference(
+                *tangent));
+        CHECK(
+            deferred.deferredSnapReference() ==
+            tangent);
+        CHECK(deferred.escape());
+        CHECK(
+            !deferred.deferredSnapReference().
+                 has_value());
+    }
+
     // Esc hierarchy: with an empty live token, request-local numeric
     // locks clear before the existing stage/tool cancellation semantics.
     {

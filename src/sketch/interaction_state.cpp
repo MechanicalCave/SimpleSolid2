@@ -735,6 +735,8 @@ SketchInteractionState::activePointRequest() const noexcept {
             -> std::optional<PointRequest> {
             request.temporary_snap_override =
                 temporary_snap_override_;
+            request.deferred_snap_reference =
+                deferred_snap_reference_;
             request.tracking_anchors =
                 tracking_anchors_;
             request.resolution =
@@ -921,6 +923,26 @@ bool SketchInteractionState::clearTemporarySnapOverride()
     }
     temporary_snap_override_.reset();
     clearPointerResolution();
+    return true;
+}
+
+bool SketchInteractionState::setDeferredSnapReference(
+    DeferredSnapReference reference) noexcept {
+    if (!activePointRequest() ||
+        !reference.valid()) {
+        return false;
+    }
+    deferred_snap_reference_ =
+        std::move(reference);
+    return true;
+}
+
+bool SketchInteractionState::clearDeferredSnapReference()
+    noexcept {
+    if (!deferred_snap_reference_) {
+        return false;
+    }
+    deferred_snap_reference_.reset();
     return true;
 }
 
@@ -3437,6 +3459,7 @@ void SketchInteractionState::resetLineStage()
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
     temporary_snap_override_.reset();
+    deferred_snap_reference_.reset();
     tracking_anchors_.clear();
 }
 
@@ -3450,6 +3473,7 @@ void SketchInteractionState::resetCircleStage()
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
     temporary_snap_override_.reset();
+    deferred_snap_reference_.reset();
     tracking_anchors_.clear();
 }
 
@@ -3464,6 +3488,7 @@ void SketchInteractionState::resetArcStage()
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
     temporary_snap_override_.reset();
+    deferred_snap_reference_.reset();
     tracking_anchors_.clear();
 }
 
@@ -3478,6 +3503,7 @@ void SketchInteractionState::resetRectangleStage()
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
     temporary_snap_override_.reset();
+    deferred_snap_reference_.reset();
     tracking_anchors_.clear();
 }
 
@@ -3487,6 +3513,7 @@ void SketchInteractionState::resetCommonTransform()
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
     temporary_snap_override_.reset();
+    deferred_snap_reference_.reset();
     tracking_anchors_.clear();
 }
 

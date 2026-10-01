@@ -923,6 +923,132 @@ int main() {
         CHECK(tracking.valid());
     }
 
+    // Line Extension is an explicit positive ray beyond one authored
+    // endpoint. The finite segment and endpoint parameter t=0 are not EXT.
+    {
+        const auto start_extension =
+            makeLineExtensionReference(
+                model,
+                horizontal,
+                SnapSemanticRole::line_start);
+        const auto end_extension =
+            makeLineExtensionReference(
+                model,
+                horizontal,
+                SnapSemanticRole::line_end);
+        CHECK(start_extension.has_value());
+        CHECK(end_extension.has_value());
+        CHECK(start_extension->valid());
+        CHECK(end_extension->valid());
+
+        const auto start_ray =
+            lineExtensionRay(
+                model,
+                *start_extension);
+        const auto end_ray =
+            lineExtensionRay(
+                model,
+                *end_extension);
+        CHECK(start_ray.has_value());
+        CHECK(end_ray.has_value());
+        CHECK((
+            start_ray->origin ==
+            Point2{0.0, 0.0}));
+        CHECK((
+            start_ray->direction ==
+            Point2{-10.0, 0.0}));
+        CHECK((
+            end_ray->origin ==
+            Point2{10.0, 0.0}));
+        CHECK((
+            end_ray->direction ==
+            Point2{10.0, 0.0}));
+
+        const auto projected_start =
+            projectPointToLineExtension(
+                model,
+                *start_extension,
+                {-5.0, 3.0});
+        CHECK(projected_start.has_value());
+        CHECK((
+            *projected_start ==
+            Point2{-5.0, 0.0}));
+
+        const auto projected_end =
+            projectPointToLineExtension(
+                model,
+                *end_extension,
+                {15.0, -2.0});
+        CHECK(projected_end.has_value());
+        CHECK((
+            *projected_end ==
+            Point2{15.0, 0.0}));
+
+        CHECK(
+            !projectPointToLineExtension(
+                 model,
+                 *start_extension,
+                 {5.0, 3.0})
+                 .has_value());
+        CHECK(
+            !projectPointToLineExtension(
+                 model,
+                 *start_extension,
+                 {0.0, 4.0})
+                 .has_value());
+
+        const auto ext_perpendicular =
+            perpendicularPointOnLineExtension(
+                model,
+                *end_extension,
+                {15.0, 4.0});
+        CHECK(ext_perpendicular.has_value());
+        CHECK((
+            *ext_perpendicular ==
+            Point2{15.0, 0.0}));
+        CHECK(
+            !perpendicularPointOnLineExtension(
+                 model,
+                 *end_extension,
+                 {5.0, 4.0})
+                 .has_value());
+
+        CHECK(
+            !makeLineExtensionReference(
+                 model,
+                 horizontal,
+                 SnapSemanticRole::line_midpoint)
+                 .has_value());
+        CHECK(
+            !makeLineExtensionReference(
+                 model,
+                 circle,
+                 SnapSemanticRole::line_end)
+                 .has_value());
+
+        const auto tangent_circle_reference =
+            makeTangentCurveReference(
+                model,
+                circle);
+        const auto tangent_arc_reference =
+            makeTangentCurveReference(
+                model,
+                arc);
+        CHECK(tangent_circle_reference.has_value());
+        CHECK(tangent_arc_reference.has_value());
+        CHECK(
+            tangent_circle_reference->kind ==
+            DeferredSnapReferenceKind::tangent_curve);
+        CHECK(
+            tangent_arc_reference->kind ==
+            DeferredSnapReferenceKind::tangent_curve);
+        CHECK(
+            !makeTangentCurveReference(
+                 model,
+                 horizontal)
+                 .has_value());
+    }
+
     std::cout << "r11_snap_core_test passed\n";
     return 0;
 }
