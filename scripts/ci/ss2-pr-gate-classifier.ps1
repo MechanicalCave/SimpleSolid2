@@ -41,6 +41,18 @@ function Test-SS2VerificationInfrastructurePath {
     )
 }
 
+function Test-SS2CleanFullForPaths {
+    param([string[]]$Paths)
+
+    foreach ($path in @($Paths)) {
+        $normalized = Normalize-RepoPath $path
+        if ($normalized -and (Test-SS2VerificationInfrastructurePath $normalized)) {
+            return $true
+        }
+    }
+    return $false
+}
+
 function Get-SS2GateModeForPaths {
     param(
         [string[]]$Paths,
@@ -173,6 +185,16 @@ function Invoke-ClassifierSelfTest {
     Assert-GateMode -Paths @('unknown/runtime.file', 'work/ACTIVE.yaml') -Expected 'full' -Draft $true
     Assert-GateMode -Paths @() -Expected 'closure' -Draft $true
 
+    if (-not (Test-SS2CleanFullForPaths @('tests/CMakeLists.txt'))) {
+        throw "Gate classifier self-test expected tests/CMakeLists.txt to require CLEAN FULL."
+    }
+    if (-not (Test-SS2CleanFullForPaths @('scripts/ss2-build.ps1'))) {
+        throw "Gate classifier self-test expected build script changes to require CLEAN FULL."
+    }
+    if (Test-SS2CleanFullForPaths @('src/sketch/sketch_model.cpp', 'tests/example_test.cpp')) {
+        throw "Gate classifier self-test incorrectly required CLEAN FULL for ordinary source/test content."
+    }
+
     Write-Host '[gate] classifier self-test passed'
 }
 
@@ -180,18 +202,21 @@ function Write-GateOutputs {
     param(
         [string]$Mode,
         [string]$TrustedFullSha,
-        [string]$DiffStartSha
+        [string]$DiffStartSha,
+        [bool]$CleanFull = $false
     )
 
     Write-Host "[gate] selected mode: $Mode"
     Write-Host "[gate] trusted FULL SHA: $TrustedFullSha"
     Write-Host "[gate] diff start SHA: $DiffStartSha"
+    Write-Host "[gate] clean FULL: $CleanFull"
 
     if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
         Add-Content -LiteralPath $OutputPath -Value "mode=$Mode" -Encoding utf8
         Add-Content -LiteralPath $OutputPath -Value "trusted_full_sha=$TrustedFullSha" -Encoding utf8
         Add-Content -LiteralPath $OutputPath -Value "diff_start_sha=$DiffStartSha" -Encoding utf8
         Add-Content -LiteralPath $OutputPath -Value "head_sha=$HeadSha" -Encoding utf8
+        Add-Content -LiteralPath $OutputPath -Value "clean_full=$($CleanFull.ToString().ToLowerInvariant())" -Encoding utf8
     }
 }
 
@@ -259,14 +284,14 @@ if ($SelfTest) {
 
 if ($EventName -ne 'pull_request') {
     Write-Host '[gate] non-PR invocation: FULL is mandatory'
-    Write-GateOutputs -Mode 'full' -TrustedFullSha '' -DiffStartSha $BaseSha
+    Write-GateOutputs -Mode 'full' -TrustedFullSha '' -DiffStartSha $BaseSha -CleanFull $true
     exit 0
 }
 
 if ([string]::IsNullOrWhiteSpace($HeadSha) -or
     [string]::IsNullOrWhiteSpace($BaseSha)) {
     Write-Warning '[gate] missing PR SHA context; failing closed to FULL'
-    Write-GateOutputs -Mode 'full' -TrustedFullSha '' -DiffStartSha $BaseSha
+    Write-GateOutputs -Mode 'full' -TrustedFullSha '' -DiffStartSha $BaseSha -CleanFull $true
     exit 0
 }
 
@@ -302,6 +327,7 @@ $diffStartSha =
         $trustedFullSha
     }
 
+$cleanFull = $false
 try {
     $paths = Get-ChangedPaths -FromSha $diffStartSha -ToSha $HeadSha
     Write-Host '[gate] classified paths:'
@@ -309,10 +335,12 @@ try {
         Write-Host "  $path"
     }
     $mode = Get-SS2GateModeForPaths -Paths $paths -Draft $draft -FocusState $FocusRequestState
+    $cleanFull = Test-SS2CleanFullForPaths $paths
 } catch {
     Write-Warning "[gate] classification failed; failing closed to FULL: $($_.Exception.Message)"
     $mode = 'full'
+    $cleanFull = $true
 }
 
-Write-GateOutputs -Mode $mode -TrustedFullSha $trustedFullSha -DiffStartSha $diffStartSha
+Write-GateOutputs -Mode $mode -TrustedFullSha $trustedFullSha -DiffStartSha $diffStartSha -CleanFull $cleanFull
 exit 0
