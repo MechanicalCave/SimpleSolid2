@@ -908,6 +908,7 @@ bool SketchInteractionState::setTemporarySnapOverride(
         return false;
     }
     temporary_snap_override_ = value;
+    clearPointerResolution();
     return true;
 }
 
@@ -917,6 +918,7 @@ bool SketchInteractionState::clearTemporarySnapOverride()
         return false;
     }
     temporary_snap_override_.reset();
+    clearPointerResolution();
     return true;
 }
 

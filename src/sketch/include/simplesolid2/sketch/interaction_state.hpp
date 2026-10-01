@@ -417,6 +417,13 @@ public:
     [[nodiscard]] std::optional<ResolvedSketchInput>
     resolvedPointRequestCandidate() const noexcept;
 
+    void clearPointerResolution() noexcept {
+        point_pointer_candidate_.reset();
+        point_pointer_source_ =
+            PointResolutionSource::raw_pointer;
+        point_pointer_snap_.reset();
+    }
+
     [[nodiscard]] std::optional<ResolvedSketchInput>
     resolveExplicitPoint(
         ExplicitPointInput input) const noexcept;

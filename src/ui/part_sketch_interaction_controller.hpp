@@ -81,6 +81,9 @@ public:
     pointResolution() const noexcept {
         return interaction_.resolvedPointRequestCandidate();
     }
+    [[nodiscard]] bool setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind value);
+    [[nodiscard]] bool clearTemporarySnapOverride();
     [[nodiscard]] application::CadInputContextGeneration
     cadInputContextGeneration() const noexcept {
         return cad_input_context_generation_;

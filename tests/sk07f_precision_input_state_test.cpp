@@ -786,6 +786,39 @@ int main() {
               sketch::Point2{10.0, -5.0});
     }
 
+    // Changing a one-shot snap override invalidates any previously resolved
+    // pointer candidate so presentation cannot expose stale provenance.
+    {
+        sketch::SketchInteractionState temporary;
+        temporary.activateLine();
+        auto pointer =
+            temporary.resolvePointerInput(
+                {2.0, 3.0});
+        CHECK(pointer.has_value());
+        CHECK(
+            temporary.resolvedPointRequestCandidate().
+                has_value());
+
+        CHECK(temporary.setTemporarySnapOverride(
+            sketch::TemporarySnapOverrideKind::
+                endpoint));
+        CHECK(
+            !temporary.resolvedPointRequestCandidate().
+                 has_value());
+
+        pointer =
+            temporary.resolvePointerInput(
+                {4.0, 5.0});
+        CHECK(pointer.has_value());
+        CHECK(
+            temporary.resolvedPointRequestCandidate().
+                has_value());
+        CHECK(temporary.clearTemporarySnapOverride());
+        CHECK(
+            !temporary.resolvedPointRequestCandidate().
+                 has_value());
+    }
+
     // Esc hierarchy: with an empty live token, request-local numeric
     // locks clear before the existing stage/tool cancellation semantics.
     {

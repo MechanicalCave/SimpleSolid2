@@ -1121,6 +1121,188 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.escape());
     viewport.rectangle_query_ = {true, {}};
 
+    // Request-relative PER uses the active request base and exact finite
+    // source geometry from the bounded nearby-source set.
+    const auto per_source_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {6090.0, 6100.0},
+                {6130.0, 6100.0},
+                sketch::EntityRole::regular});
+    CHECK(per_source_result.ok());
+    CHECK(per_source_result.changed);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    const auto per_source =
+        model_state.lines.back().id;
+    viewport_controller.refreshPresentation();
+    const auto per_token =
+        viewport_controller.sketchPresentationFor(
+            per_source);
+    CHECK(per_token.has_value());
+    viewport.rectangle_query_ = {true, {*per_token}};
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            6105.0,
+            6050.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            perpendicular));
+    movePointer(
+        interaction,
+        sketch_id,
+        6108.0,
+        6103.0,
+        6108.0,
+        6103.0);
+    auto local_resolution =
+        interaction.pointResolution();
+    CHECK(local_resolution.has_value());
+    CHECK(
+        local_resolution->source ==
+        sketch::PointResolutionSource::object_snap);
+    CHECK(local_resolution->object_snap.has_value());
+    CHECK(
+        local_resolution->object_snap->kind ==
+        sketch::SnapKind::perpendicular);
+    CHECK((
+        local_resolution->position ==
+        sketch::Point2{6105.0, 6100.0}));
+    CHECK(interaction.escape());
+
+    // NEA is a continuous finite-curve projection and remains an explicit
+    // one-shot family here because its persistent default is OFF.
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            6000.0,
+            6000.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            nearest));
+    movePointer(
+        interaction,
+        sketch_id,
+        6112.0,
+        6104.0,
+        6112.0,
+        6104.0);
+    local_resolution =
+        interaction.pointResolution();
+    CHECK(local_resolution.has_value());
+    CHECK(local_resolution->object_snap.has_value());
+    CHECK(
+        local_resolution->object_snap->kind ==
+        sketch::SnapKind::nearest);
+    CHECK((
+        local_resolution->position ==
+        sketch::Point2{6112.0, 6100.0}));
+    CHECK(interaction.escape());
+
+    // TAN-from-point uses exact supporting-circle geometry. The pointer only
+    // chooses between admissible tangent branches in screen space.
+    const auto tangent_circle_result =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                {6200.0, 6200.0},
+                10.0,
+                sketch::EntityRole::regular});
+    CHECK(tangent_circle_result.ok());
+    CHECK(tangent_circle_result.changed);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    const auto tangent_circle =
+        model_state.circles.back().id;
+    viewport_controller.refreshPresentation();
+    const auto tangent_token =
+        viewport_controller.sketchPresentationFor(
+            tangent_circle);
+    CHECK(tangent_token.has_value());
+    viewport.rectangle_query_ = {
+        true,
+        {*tangent_token}};
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            6230.0,
+            6200.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            tangent));
+    movePointer(
+        interaction,
+        sketch_id,
+        6204.0,
+        6209.0,
+        6204.0,
+        6209.0);
+    local_resolution =
+        interaction.pointResolution();
+    CHECK(local_resolution.has_value());
+    CHECK(local_resolution->object_snap.has_value());
+    CHECK(
+        local_resolution->object_snap->kind ==
+        sketch::SnapKind::tangent);
+    CHECK(near(
+        local_resolution->position.u,
+        6200.0 + 100.0 / 30.0));
+    CHECK(near(
+        local_resolution->position.v,
+        6200.0 +
+            10.0 * std::sqrt(8.0 / 9.0)));
+    CHECK(interaction.escape());
+
+    // A non-NONE Temporary Override is restrictive. With no requested-family
+    // candidate there is no raw or Polar fallback and stale resolution is
+    // explicitly cleared.
+    viewport.rectangle_query_ = {true, {}};
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            7000.0,
+            7000.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            endpoint));
+    movePointer(
+        interaction,
+        sketch_id,
+        7100.0,
+        7100.0,
+        7100.0,
+        7100.0);
+    CHECK(!interaction.pointResolution().has_value());
+    CHECK(interaction.clearTemporarySnapOverride());
+    movePointer(
+        interaction,
+        sketch_id,
+        7100.0,
+        7100.0,
+        7100.0,
+        7100.0);
+    local_resolution =
+        interaction.pointResolution();
+    CHECK(local_resolution.has_value());
+    CHECK(
+        local_resolution->source ==
+        sketch::PointResolutionSource::raw_pointer);
+    CHECK(interaction.escape());
+
     // Polar is a logical-screen-space magnet. With 90-degree Absolute
     // tracks, (20,1) captures +U. Direct Distance owns magnitude only.
     application::CadInteractionSettings polar_settings;
