@@ -1857,7 +1857,18 @@ int main(int argc, char* argv[]) {
              deferred_snap_reference.has_value());
     CHECK(interaction.escape());
 
-    // EXT never applies to the finite segment itself.
+    // EXT never applies to the finite segment itself. Presentation tokens
+    // are runtime identities, so reacquire the current token after the first
+    // EXT scenario authored geometry and refreshed presentation.
+    viewport_controller.refreshPresentation();
+    const auto extension_token_finite =
+        viewport_controller.sketchPresentationFor(
+            extension_line);
+    CHECK(extension_token_finite.has_value());
+    viewport.rectangle_query_ = {
+        true,
+        {*extension_token_finite}};
+
     interaction.activateLine();
     CHECK(interaction.submitExplicitPoint(
         {
@@ -1875,6 +1886,18 @@ int main(int argc, char* argv[]) {
         9000.0,
         9010.0,
         9000.0);
+    extension_request =
+        interaction.activePointRequest();
+    CHECK(extension_request.has_value());
+    CHECK(
+        extension_request->deferred_snap_reference.
+            has_value());
+    CHECK(
+        extension_request->deferred_snap_reference->
+            kind ==
+        sketch::DeferredSnapReferenceKind::
+            line_extension);
+
     movePointer(
         interaction,
         sketch_id,
@@ -1888,6 +1911,15 @@ int main(int argc, char* argv[]) {
     // Switching the one-shot family EXT -> PER preserves the request-local
     // Extension reference. The exact perpendicular foot may lie outside the
     // finite Line and still resolve on the explicit positive ray.
+    viewport_controller.refreshPresentation();
+    const auto extension_token_per =
+        viewport_controller.sketchPresentationFor(
+            extension_line);
+    CHECK(extension_token_per.has_value());
+    viewport.rectangle_query_ = {
+        true,
+        {*extension_token_per}};
+
     interaction.activateLine();
     CHECK(interaction.submitExplicitPoint(
         {
@@ -1905,6 +1937,18 @@ int main(int argc, char* argv[]) {
         9000.0,
         9010.0,
         9000.0);
+    extension_request =
+        interaction.activePointRequest();
+    CHECK(extension_request.has_value());
+    CHECK(
+        extension_request->deferred_snap_reference.
+            has_value());
+    CHECK(
+        extension_request->deferred_snap_reference->
+            kind ==
+        sketch::DeferredSnapReferenceKind::
+            line_extension);
+
     CHECK(interaction.setTemporarySnapOverride(
         sketch::TemporarySnapOverrideKind::
             perpendicular));
