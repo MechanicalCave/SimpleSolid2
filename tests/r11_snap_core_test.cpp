@@ -723,6 +723,50 @@ int main() {
                  .has_value());
     }
 
+    // Arc request exposes and consumes the override through the
+    // radius-locked pointer path as well.
+    {
+        SketchInteractionState interaction;
+        interaction.activateArc();
+        CHECK(
+            interaction.setTemporarySnapOverride(
+                TemporarySnapOverrideKind::endpoint));
+        CHECK(
+            interaction.acceptArcPoint(
+                {0.0, 0.0})
+                .outcome ==
+            ArcPointOutcome::start_accepted);
+        CHECK(
+            !interaction.temporarySnapOverride()
+                 .has_value());
+
+        CHECK(
+            interaction.setTemporarySnapOverride(
+                TemporarySnapOverrideKind::endpoint));
+        CHECK(
+            interaction.acceptArcPoint(
+                {10.0, 0.0})
+                .outcome ==
+            ArcPointOutcome::end_accepted);
+        CHECK(
+            !interaction.temporarySnapOverride()
+                 .has_value());
+
+        CHECK(interaction.lockArcRadius(10.0));
+        CHECK(
+            interaction.setTemporarySnapOverride(
+                TemporarySnapOverrideKind::tangent));
+        const auto request =
+            interaction.acceptArcPointer(
+                {5.0, 8.0});
+        CHECK(
+            request.outcome ==
+            ArcPointOutcome::arc_requested);
+        CHECK(
+            !interaction.temporarySnapOverride()
+                 .has_value());
+    }
+
     std::cout << "r11_snap_core_test passed\n";
     return 0;
 }

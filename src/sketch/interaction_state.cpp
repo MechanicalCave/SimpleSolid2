@@ -1628,6 +1628,7 @@ bool SketchInteractionState::continueCopyPlacement() noexcept {
 
     transform_session_->current_preview.reset();
     point_pointer_candidate_.reset();
+    consumeTemporarySnapOverride();
     clearHover();
     return true;
 }
@@ -3264,6 +3265,7 @@ continueDirectManipulationCopyPlacement() noexcept {
         ResolvedSketchInput{manipulation_->pivot};
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    consumeTemporarySnapOverride();
     clearHover();
     return true;
 }
