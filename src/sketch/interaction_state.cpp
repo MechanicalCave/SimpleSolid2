@@ -735,6 +735,8 @@ SketchInteractionState::activePointRequest() const noexcept {
             -> std::optional<PointRequest> {
             request.temporary_snap_override =
                 temporary_snap_override_;
+            request.tracking_anchors =
+                tracking_anchors_;
             request.resolution =
                 resolvePointRequestCandidate(
                     request,
@@ -920,6 +922,30 @@ bool SketchInteractionState::clearTemporarySnapOverride()
     temporary_snap_override_.reset();
     clearPointerResolution();
     return true;
+}
+
+TrackingAcquireResult
+SketchInteractionState::acquireCurrentTrackingAnchor()
+    noexcept {
+    const auto resolution =
+        resolvedPointRequestCandidate();
+    if (!resolution ||
+        resolution->source !=
+            PointResolutionSource::object_snap ||
+        !resolution->object_snap) {
+        return TrackingAcquireResult::invalid;
+    }
+
+    return tracking_anchors_.acquire(
+        TrackingAnchor{*resolution->object_snap});
+}
+
+bool SketchInteractionState::removeTrackingAnchor(
+    const SnapStableKey& key) {
+    if (!activePointRequest()) {
+        return false;
+    }
+    return tracking_anchors_.remove(key);
 }
 
 std::optional<ResolvedSketchInput>
@@ -1501,7 +1527,7 @@ bool SketchInteractionState::acceptTransformPoint(
             transform_session_->current_preview = input;
         }
         clearHover();
-        consumeTemporarySnapOverride();
+        completePointAcquisition();
         return true;
 
     case CommonTransformStage::await_reference_point:
@@ -1521,7 +1547,7 @@ bool SketchInteractionState::acceptTransformPoint(
         transform_session_->stage =
             CommonTransformStage::await_destination;
         clearHover();
-        consumeTemporarySnapOverride();
+        completePointAcquisition();
         return true;
 
     case CommonTransformStage::await_axis_start:
@@ -1536,7 +1562,7 @@ bool SketchInteractionState::acceptTransformPoint(
         transform_session_->stage =
             CommonTransformStage::await_axis_end;
         clearHover();
-        consumeTemporarySnapOverride();
+        completePointAcquisition();
         return true;
 
     default:
@@ -1706,7 +1732,7 @@ bool SketchInteractionState::continueCopyPlacement() noexcept {
 
     transform_session_->current_preview.reset();
     point_pointer_candidate_.reset();
-    consumeTemporarySnapOverride();
+    completePointAcquisition();
     clearHover();
     return true;
 }
@@ -1773,7 +1799,7 @@ SketchInteractionState::acceptLinePoint(
         line_anchor_ = point;
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
-        consumeTemporarySnapOverride();
+        completePointAcquisition();
         line_stage_ =
             LineStage::await_next_point;
         return {
@@ -1810,7 +1836,7 @@ SketchInteractionState::acceptLinePoint(
     }
 
     pending_line_request_ = request;
-    consumeTemporarySnapOverride();
+    completePointAcquisition();
     return {
         LinePointOutcome::segment_requested,
         request};
@@ -1835,7 +1861,7 @@ SketchInteractionState::acceptCirclePoint(
         circle_center_ = point;
         circle_radius_lock_.reset();
         point_field_locks_ = {};
-        consumeTemporarySnapOverride();
+        completePointAcquisition();
         circle_stage_ =
             CircleStage::await_radius;
         return {
@@ -1935,7 +1961,7 @@ SketchInteractionState::acceptArcPoint(
         arc_radius_lock_.reset();
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
-        consumeTemporarySnapOverride();
+        completePointAcquisition();
         arc_stage_ = ArcStage::await_end;
         return {
             ArcPointOutcome::start_accepted,
@@ -1952,7 +1978,7 @@ SketchInteractionState::acceptArcPoint(
         arc_radius_lock_.reset();
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
-        consumeTemporarySnapOverride();
+        completePointAcquisition();
         arc_stage_ = ArcStage::await_arc_point;
         return {
             ArcPointOutcome::end_accepted,
@@ -1985,7 +2011,7 @@ SketchInteractionState::acceptArcPoint(
     }
 
     pending_arc_request_ = *request;
-    consumeTemporarySnapOverride();
+    completePointAcquisition();
     return {
         ArcPointOutcome::arc_requested,
         request};
@@ -2030,7 +2056,7 @@ SketchInteractionState::acceptArcPointer(
     }
 
     pending_arc_request_ = *request;
-    consumeTemporarySnapOverride();
+    completePointAcquisition();
     return {
         ArcPointOutcome::arc_requested,
         request};
@@ -2092,7 +2118,7 @@ SketchInteractionState::acceptArcRadius(
     }
 
     pending_arc_request_ = *request;
-    consumeTemporarySnapOverride();
+    completePointAcquisition();
     return {
         ArcPointOutcome::arc_requested,
         request};
@@ -2119,7 +2145,7 @@ SketchInteractionState::acceptRectanglePoint(
         rectangle_height_lock_.reset();
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
-        consumeTemporarySnapOverride();
+        completePointAcquisition();
         rectangle_stage_ =
             RectangleStage::await_opposite_corner;
         return {
@@ -2163,7 +2189,7 @@ SketchInteractionState::acceptRectanglePoint(
     }
 
     pending_rectangle_request_ = *request;
-    consumeTemporarySnapOverride();
+    completePointAcquisition();
     return {
         RectanglePointOutcome::rectangle_requested,
         request};
@@ -2245,7 +2271,7 @@ SketchInteractionState::acceptRectangleSize(
     }
 
     pending_rectangle_request_ = *request;
-    consumeTemporarySnapOverride();
+    completePointAcquisition();
     return {
         RectanglePointOutcome::rectangle_requested,
         request};
@@ -2477,7 +2503,7 @@ clearRequestLocalNumericLocks() noexcept {
 }
 
 bool SketchInteractionState::escape() noexcept {
-    if (clearTemporarySnapOverride()) {
+    if (clearR11RequestState()) {
         return true;
     }
     if (clearRequestLocalNumericLocks()) {
@@ -3343,7 +3369,7 @@ continueDirectManipulationCopyPlacement() noexcept {
         ResolvedSketchInput{manipulation_->pivot};
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
-    consumeTemporarySnapOverride();
+    completePointAcquisition();
     clearHover();
     return true;
 }
@@ -3366,7 +3392,7 @@ void SketchInteractionState::finishDirectManipulation()
     manipulation_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
-    consumeTemporarySnapOverride();
+    completePointAcquisition();
     clearHover();
 }
 
@@ -3411,6 +3437,7 @@ void SketchInteractionState::resetLineStage()
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
     temporary_snap_override_.reset();
+    tracking_anchors_.clear();
 }
 
 void SketchInteractionState::resetCircleStage()
@@ -3423,6 +3450,7 @@ void SketchInteractionState::resetCircleStage()
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
     temporary_snap_override_.reset();
+    tracking_anchors_.clear();
 }
 
 void SketchInteractionState::resetArcStage()
@@ -3436,6 +3464,7 @@ void SketchInteractionState::resetArcStage()
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
     temporary_snap_override_.reset();
+    tracking_anchors_.clear();
 }
 
 void SketchInteractionState::resetRectangleStage()
@@ -3449,6 +3478,7 @@ void SketchInteractionState::resetRectangleStage()
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
     temporary_snap_override_.reset();
+    tracking_anchors_.clear();
 }
 
 void SketchInteractionState::resetCommonTransform()
@@ -3457,6 +3487,7 @@ void SketchInteractionState::resetCommonTransform()
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
     temporary_snap_override_.reset();
+    tracking_anchors_.clear();
 }
 
 void SketchInteractionState::resetMeasure() noexcept {

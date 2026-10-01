@@ -819,6 +819,94 @@ int main() {
                  has_value());
     }
 
+    // OTRACK anchors are PointRequest-local. Acquisition is only allowed
+    // from the current exact object-snap resolution; acceptance and Esc clear
+    // all anchors without authoring persistent geometry.
+    {
+        sketch::SketchInteractionState tracked;
+        tracked.activateLine();
+
+        sketch::SketchModel tracking_model;
+        const auto tracking_line =
+            tracking_model.addLine(
+                {0.0, 0.0},
+                {10.0, 0.0});
+        const auto candidates =
+            sketch::staticSnapCandidates(
+                tracking_model);
+        const auto endpoint =
+            std::find_if(
+                candidates.begin(),
+                candidates.end(),
+                [tracking_line](
+                    const sketch::SnapCandidate& item) {
+                    return item.kind ==
+                               sketch::SnapKind::endpoint &&
+                           item.source.first_entity ==
+                               tracking_line &&
+                           item.point ==
+                               sketch::Point2{0.0, 0.0};
+                });
+        CHECK(endpoint != candidates.end());
+
+        CHECK(
+            tracked.acquireCurrentTrackingAnchor() ==
+            sketch::TrackingAcquireResult::invalid);
+
+        auto resolved =
+            tracked.resolvePointerInput(
+                endpoint->point,
+                sketch::PointResolutionSource::
+                    object_snap,
+                *endpoint);
+        CHECK(resolved.has_value());
+        CHECK(
+            tracked.acquireCurrentTrackingAnchor() ==
+            sketch::TrackingAcquireResult::acquired);
+        CHECK(
+            tracked.acquireCurrentTrackingAnchor() ==
+            sketch::TrackingAcquireResult::
+                already_acquired);
+        auto request =
+            tracked.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->tracking_anchors.anchors.size() ==
+            1U);
+
+        CHECK(
+            tracked.acceptLinePoint(
+                       resolved->position).outcome ==
+            sketch::LinePointOutcome::
+                first_point_accepted);
+        CHECK(tracked.trackingAnchors().anchors.empty());
+        request = tracked.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->tracking_anchors.anchors.empty());
+
+        // A new request may acquire again; one Esc clears R11 request-local
+        // state while preserving the active Line stage.
+        resolved =
+            tracked.resolvePointerInput(
+                endpoint->point,
+                sketch::PointResolutionSource::
+                    object_snap,
+                *endpoint);
+        CHECK(resolved.has_value());
+        CHECK(
+            tracked.acquireCurrentTrackingAnchor() ==
+            sketch::TrackingAcquireResult::acquired);
+        CHECK(tracked.escape());
+        CHECK(tracked.trackingAnchors().anchors.empty());
+        CHECK(
+            tracked.lineStage() ==
+            sketch::LineStage::await_next_point);
+        CHECK(
+            !tracked.resolvedPointRequestCandidate().
+                 has_value());
+    }
+
     // Esc hierarchy: with an empty live token, request-local numeric
     // locks clear before the existing stage/tool cancellation semantics.
     {

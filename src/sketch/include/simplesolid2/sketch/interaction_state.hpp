@@ -342,6 +342,7 @@ struct PointRequest final {
     std::optional<double> polar_relative_reference;
     std::optional<TemporarySnapOverrideKind>
         temporary_snap_override;
+    TrackingAnchorState tracking_anchors;
     std::optional<PointResolution> resolution;
 
     [[nodiscard]] bool valid() const noexcept {
@@ -356,6 +357,7 @@ struct PointRequest final {
                 std::isfinite(
                     *polar_relative_reference)) &&
                (!requires_base || base.has_value()) &&
+               tracking_anchors.valid() &&
                (!resolution ||
                 (pointer_candidate &&
                  resolution->valid()));
@@ -449,6 +451,18 @@ public:
     [[nodiscard]] std::optional<TemporarySnapOverrideKind>
     temporarySnapOverride() const noexcept {
         return temporary_snap_override_;
+    }
+
+    [[nodiscard]] TrackingAcquireResult
+    acquireCurrentTrackingAnchor() noexcept;
+    [[nodiscard]] bool removeTrackingAnchor(
+        const SnapStableKey& key);
+    void clearTrackingAnchors() noexcept {
+        tracking_anchors_.clear();
+    }
+    [[nodiscard]] const TrackingAnchorState&
+    trackingAnchors() const noexcept {
+        return tracking_anchors_;
     }
 
     [[nodiscard]] std::optional<Point2>
@@ -743,11 +757,25 @@ private:
     [[nodiscard]] bool commonTransformTool() const noexcept;
     [[nodiscard]] bool
     clearRequestLocalNumericLocks() noexcept;
-    void consumeTemporarySnapOverride() noexcept {
+    void completePointAcquisition() noexcept {
         temporary_snap_override_.reset();
+        tracking_anchors_.clear();
         point_pointer_source_ =
             PointResolutionSource::raw_pointer;
         point_pointer_snap_.reset();
+    }
+
+    [[nodiscard]] bool clearR11RequestState() noexcept {
+        const bool changed =
+            temporary_snap_override_.has_value() ||
+            !tracking_anchors_.anchors.empty();
+        if (!changed) {
+            return false;
+        }
+        temporary_snap_override_.reset();
+        tracking_anchors_.clear();
+        clearPointerResolution();
+        return true;
     }
 
     void resetToSelect() noexcept;
@@ -815,6 +843,7 @@ private:
     PointFieldLocks point_field_locks_;
     std::optional<TemporarySnapOverrideKind>
         temporary_snap_override_;
+    TrackingAnchorState tracking_anchors_;
 };
 
 } // namespace simplesolid2::sketch
