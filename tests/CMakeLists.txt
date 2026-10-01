@@ -1469,6 +1469,8 @@ set(_ss2_sketch_tests
     sk07f.precision_input_state
     sk07f.precision_input_controller
     r11.snap_core
+    r12.structural_edit_core
+    r12.structural_edit_document_session
 )
 set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
 
@@ -1513,6 +1515,7 @@ set(_ss2_part_tests
     sk07c.copy_controller
     sk07d.repeat_last_command_controller
     sk07f.precision_input_controller
+    r12.structural_edit_document_session
 )
 set_property(TEST ${_ss2_part_tests} APPEND PROPERTY LABELS "subsystem-part")
 
@@ -1607,6 +1610,7 @@ set(_ss2_application_tests
     sk07c.copy_controller
     sk07d.repeat_last_command_controller
     sk07f.precision_input_controller
+    r12.structural_edit_document_session
 )
 set_property(TEST ${_ss2_application_tests} APPEND PROPERTY LABELS "subsystem-application")
 
@@ -1632,6 +1636,7 @@ set(_ss2_core_tests
     ws01.project_workspace_boundaries
     sk02a.shared_2d_boundaries
     r11.snap_core
+    r12.structural_edit_core
 )
 set_property(TEST ${_ss2_core_tests} APPEND PROPERTY LABELS "subsystem-core")
 
