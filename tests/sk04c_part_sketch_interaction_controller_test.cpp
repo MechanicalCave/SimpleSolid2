@@ -1568,7 +1568,6 @@ int main(int argc, char* argv[]) {
         staged_interaction.begin(
             staged_session,
             staged_sketch_id);
-        staged_interaction.clearSelection();
 
         const auto before_state =
             staged_session.document().state();
