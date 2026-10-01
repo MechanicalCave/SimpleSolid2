@@ -395,7 +395,7 @@ At minimum prove on the final CI-04 candidate:
 
 ## Documentation impact
 
-Internal docs: required during implementation  
+Internal docs: required  
 User/Product docs: not required  
 Reason: CI-04 changes repository build/test/verification workflow and maintainer commands, not application behavior.
 
