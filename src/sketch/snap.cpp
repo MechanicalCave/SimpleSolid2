@@ -7,6 +7,7 @@
 #include <cmath>
 #include <numbers>
 #include <numeric>
+#include <utility>
 
 namespace simplesolid2::sketch {
 namespace {
