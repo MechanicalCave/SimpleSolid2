@@ -8,7 +8,7 @@
 **Architecture:** ADR-0008, ADR-0009, ADR-0011, ADR-0012  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Current scheduling:** R0–R11, WB-02 and AUDIT-01 A–F are completed. R12 Trim / Extend / Extend Both to Virtual Intersection is ACTIVE through its Owner-accepted Work Contract. Split/Join remain deferred. The profile-authoring readiness checkpoint follows R12; solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
+**Current scheduling:** R0–R12, WB-02 and AUDIT-01 A–F are completed. The Sketcher profile-authoring readiness checkpoint is NEXT and requires concrete acceptance evidence. Split/Join remain deferred; Part Feature Tree and solid modeling remain inactive behind separate future gates.  
 
 ## 1. Why v1.8 narrows R12 structural editing
 
@@ -27,8 +27,8 @@ R8  Measure / relational diagnostics — completed
 → R9  Rectangle + Construction UI — completed
 → R10 Precision Input / Units / Polar / Dynamic Input — completed
 → R11 OSNAP / Tracking / Inference — completed
-→ R12 Trim / Extend / Extend Both to Virtual Intersection — ACTIVE
-→ Sketcher profile-authoring readiness checkpoint
+→ R12 Trim / Extend / Extend Both to Virtual Intersection — completed
+→ Sketcher profile-authoring readiness checkpoint — NEXT
 → separate Part Feature Tree architecture gate
 → only then may a first solid-operation contract be considered
 ```
@@ -44,7 +44,7 @@ Four guardrails remain explicit:
 
 Ordinary RMB context remains deferred as a later UX-convergence item after the command set is broad enough to design the menu from stable operations. Existing already-accepted RMB semantics in command-first object collection remain unchanged.
 
-Roadmap v1.8 records the Owner-accepted narrowing of R12 and is active together with `work/R12_TRIM_EXTEND_MUTUAL_EXTEND.md`. R12 authorizes only Trim, Extend and Extend Both to Virtual Intersection under that contract. Split/Join and R13+ remain inactive.
+Roadmap v1.8 records the Owner-accepted narrowing and completed delivery of R12. R12 completed after final exact-head Windows FULL #1104 and Owner manual Windows PASS. Split/Join and R13+ remain inactive; the next action is the explicit profile-authoring readiness checkpoint.
 
 ## 2. Preserved accepted invariants
 
@@ -723,7 +723,7 @@ Goal:
 R11 depends on the R10 input-resolution foundation rather than creating a second point-resolution system.
 
 ### R12 — Structural editing: Trim / Extend / Extend Both to Virtual Intersection
-**Status:** ACTIVE through `work/R12_TRIM_EXTEND_MUTUAL_EXTEND.md`; Owner accepted 2026-10-01
+**Status:** completed — final exact-head Windows FULL #1104 + Owner manual Windows PASS on 2026-10-01
 
 Goal:
 
@@ -863,14 +863,14 @@ R8 completed — R8A completed after exact-head FULL #867 and Owner manual PASS;
 R9 completed — exact-head FULL #912 and Owner manual Windows PASS on bfe36544d71593a407bada63c07ae0e4b912808f  
 R10 completed — final exact-head Windows FULL #1009; Owner manual Windows PASS; Polar-only directional assistance retained  
 R11 completed — final exact-head Windows FULL #1088; Owner manual Windows PASS  
-R12 ACTIVE — Owner-accepted `work/R12_TRIM_EXTEND_MUTUAL_EXTEND.md`; Split/Join deferred  
+R12 completed — final exact-head Windows FULL #1104; Owner manual Windows PASS; Split/Join deferred  
 R13–R15 inactive  
-Sketcher profile-authoring readiness checkpoint not yet reached  
+Sketcher profile-authoring readiness checkpoint NEXT — evidence not yet collected  
 Part Feature Tree architecture gate inactive  
 Solid modeling / Extrude inactive  
 Ordinary Select RMB context menu deferred as a later UX-convergence slice
 
-Roadmap v1.8 is authoritative for Sketcher feature sequencing. R9, R10 and R11 are completed. R12 is active only through its Owner-accepted narrowed Work Contract; Split/Join and R13+ remain inactive.
+Roadmap v1.8 is authoritative for Sketcher feature sequencing. R9–R12 are completed. Split/Join and R13+ remain inactive; the program is stopped at the Sketcher profile-authoring readiness checkpoint and no Part Feature Tree or solid-modeling scope is active.
 
 ## AUDIT-01 program interlock — completed
 

@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/R12_TRIM_EXTEND_MUTUAL_EXTEND.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -19,14 +19,16 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - implement only the accepted R12 Trim / Extend / Extend Both to Virtual Intersection contract
-  - preserve the accepted R12 identity matrix: Line->Line and Arc->Arc preserve EntityId; Circle->Arc allocates a fresh non-reused EntityId
-  - keep standard Extend bounded to exact intersections with finite authored boundary geometry; virtual intersection is authorized only by the separate Line+Line Extend Both operation
-  - use existing Command -> Validation -> Transaction -> owning PartDocument -> Evaluation authority and CI-04 targeted verification
-  - keep Split, Join, Offset, Fillet, Chamfer, Break, tolerance/gap healing, constraints/solver, projected/reference geometry, ordinary RMB context and solid modeling inactive
-  - after R12 completion stop at the explicit Sketcher profile-authoring readiness checkpoint before any Part Feature Tree architecture work
+  - keep production CAD mutation inactive after R12 completion
+  - perform only the explicit Sketcher profile-authoring readiness checkpoint defined by Roadmap v1.8; collect concrete acceptance evidence before proposing any Part Feature Tree work
+  - keep Split, Join and other deferred structural-edit operations inactive until a future explicit need and accepted contract
+  - keep authored constraints/solver/dimensions, projected/reference geometry, ordinary Select RMB context, Part Feature Tree and solid modeling inactive until separately accepted
+  - after the profile-authoring readiness checkpoint, require a separate Owner-accepted Part Feature Tree architecture gate before any first solid-operation contract
 
 notes:
+  - R12 completed on 2026-10-01 after exact-head Windows FULL #1104 PASS on 0f62c9f4411264a240a9774c18e11a6a70fdd1b0 with full desktop 83/83 PASS, current docs/Browser and all verification dispatchers/selectors green.
+  - Owner manual Windows verification was accepted on runtime candidate 65d34048db60dae5b2fdec07ebc65e62967881c9 after the final tool-first Trim/Extend workflow correction was re-tested and no further observations remained; the final FULL head differs only by an additional R12 interaction-state regression test.
+  - R12 acceptance conditions are satisfied by this work-only closeout candidate. No production CAD scope is active after completion; the next action is the non-production Sketcher profile-authoring readiness checkpoint.
   - Owner explicitly accepted and activated the narrowed R12 Trim / Extend / Extend Both to Virtual Intersection contract on 2026-10-01 after design review; this acceptance also approves Sketcher Roadmap v1.8 as the bounded replacement of the former Trim/Split/Join R12 scope.
   - R12 is deliberately limited to one-result Trim, one-result Extend and atomic mutual Line extension. Split/Join and any operation producing multiple surviving target entities remain deferred until a future explicit need and contract.
   - R12 Circle Trim is accepted: one connected Circle span is removed between adjacent exact cut locations and the complementary result is one Arc with a fresh EntityId; no automatic Profile rebinding is permitted.

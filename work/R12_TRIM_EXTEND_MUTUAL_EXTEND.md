@@ -1,6 +1,6 @@
 # R12 — Trim / Extend / Extend Both to Virtual Intersection
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-10-01  
 **Owner acceptance:** 2026-10-01  
 **Decision class:** D2 structural-edit identity/reference semantics + bounded D1 implementation  
@@ -616,3 +616,18 @@ Completion requires:
 - work-only CLOSURE closeout.
 
 After R12 completion the program stops at the Sketcher profile-authoring readiness checkpoint. That checkpoint does not activate Part Feature Tree or solid modeling.
+
+## 33. Completion evidence
+
+R12 completion evidence on 2026-10-01:
+
+- final exact-head closeout candidate `0f62c9f4411264a240a9774c18e11a6a70fdd1b0` passed Windows FULL #1104, including exact checkout, deterministic documentation verification, bootstrap/dispatcher checks, complete desktop build graph, core-only and FAST/SUBSYSTEM verification, and full desktop **83/83 PASS**;
+- required internal documentation, PL/EN Product documentation and generated Product Browser are current on the final candidate; the tool-first Trim/Extend workflow with **Enter/RMB** boundary confirmation is documented while valid preselection remains the accepted shortcut;
+- Owner manual Windows verification was accepted on runtime/manual candidate `65d34048db60dae5b2fdec07ebc65e62967881c9` after the corrected classical-CAD Trim/Extend boundary-selection workflow was re-tested and the Owner reported no remaining observations;
+- final FULL candidate `0f62c9f4411264a240a9774c18e11a6a70fdd1b0` differs from that manually verified runtime candidate only by additional regression coverage in `tests/r12_structural_edit_interaction_state_test.cpp`; production code, Product/Internal docs and generated Browser are unchanged across that final test-only delta;
+- accepted R12 structural semantics remain intact: Line→Line and Arc→Arc preserve EntityId, Circle→Arc retires the Circle identity and allocates one fresh non-reused Arc identity, standard Extend uses finite authored boundary geometry only, and virtual supporting geometry is authorized only by atomic two-Line Extend Both;
+- Trim/Extend/Extend Both mutation remains revision-bound Command → Validation → Transaction → owning PartDocument → Evaluation; failures create no partial authored mutation, runtime preview/selection remains non-authored, Profile RegionIntent is never automatically rebound, and Save/Reopen preserves resulting identities/high-water;
+- Split, Join, middle multi-output Trim, Circle Extend, gap/tolerance healing, constraints/solver, projected/reference geometry, ordinary Select RMB context, Part Feature Tree and solid modeling remain outside R12.
+
+All R12 acceptance conditions are satisfied. R12 is complete at this work-only closeout candidate. No production CAD Work Contract is active after R12 completion. The next program action is the explicit **Sketcher profile-authoring readiness checkpoint**; that checkpoint does not activate Part Feature Tree or solid modeling.
+
