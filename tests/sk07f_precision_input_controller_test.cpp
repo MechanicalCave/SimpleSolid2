@@ -893,6 +893,14 @@ int main(int argc, char* argv[]) {
     viewport_controller.refreshPresentation();
 
     application::CadInteractionSettings snap_settings;
+    // Isolate this regression to END-vs-Polar. With the normal persistent
+    // defaults MID is also eligible and is intentionally allowed to win when
+    // it is closer in screen space.
+    snap_settings.object_snap.midpoint = false;
+    snap_settings.object_snap.center = false;
+    snap_settings.object_snap.quadrant = false;
+    snap_settings.object_snap.intersection = false;
+    snap_settings.object_snap.origin = false;
     snap_settings.polar.primary_spacing =
         std::numbers::pi_v<double> / 4.0;
     interaction.setCadInteractionSettingsProvider(
