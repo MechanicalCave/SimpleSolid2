@@ -126,5 +126,12 @@ $ctestArgs = @(
     "--interactive-debug-mode", "0",
     "-R", $testRegex
 )
+if ($env:SS2_TEST_PARALLELISM) {
+    $jobs = 0
+    if (-not [int]::TryParse($env:SS2_TEST_PARALLELISM, [ref]$jobs) -or $jobs -lt 1) {
+        throw "SS2_TEST_PARALLELISM must be a positive integer."
+    }
+    $ctestArgs += @("--parallel", "$jobs")
+}
 & ctest @ctestArgs
 exit $LASTEXITCODE
