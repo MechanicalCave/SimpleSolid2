@@ -731,6 +731,246 @@ perpendicularPointOnLineExtension(
         : std::nullopt;
 }
 
+namespace {
+
+struct TangentCurveGeometry final {
+    EntityId id;
+    Point2 center;
+    double radius{};
+    const Arc* arc{};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return id.valid() &&
+               center.finite() &&
+               std::isfinite(radius) &&
+               radius > 0.0;
+    }
+};
+
+[[nodiscard]] std::optional<TangentCurveGeometry>
+tangentCurveGeometry(
+    const SketchModel& model,
+    const DeferredSnapReference& reference) noexcept {
+    if (!reference.valid() ||
+        reference.kind !=
+            DeferredSnapReferenceKind::
+                tangent_curve ||
+        !reference.source.first_entity) {
+        return std::nullopt;
+    }
+
+    const EntityId id =
+        *reference.source.first_entity;
+    if (const auto* circle =
+            model.findCircle(id)) {
+        TangentCurveGeometry result{
+            id,
+            circle->center(),
+            circle->radius(),
+            nullptr};
+        return result.valid()
+            ? std::optional<TangentCurveGeometry>{
+                  result}
+            : std::nullopt;
+    }
+
+    if (const auto* arc =
+            model.findArc(id)) {
+        TangentCurveGeometry result{
+            id,
+            arc->center(),
+            arc->radius(),
+            arc};
+        return result.valid()
+            ? std::optional<TangentCurveGeometry>{
+                  result}
+            : std::nullopt;
+    }
+
+    return std::nullopt;
+}
+
+[[nodiscard]] bool tangentContactAllowed(
+    const TangentCurveGeometry& geometry,
+    Point2 point) noexcept {
+    return geometry.arc == nullptr ||
+           arcContainsPointDirection(
+               *geometry.arc,
+               point);
+}
+
+} // namespace
+
+bool CommonTangentCandidate::valid() const noexcept {
+    return first_reference.valid() &&
+           second_reference.valid() &&
+           first_reference.kind ==
+               DeferredSnapReferenceKind::
+                   tangent_curve &&
+           second_reference.kind ==
+               DeferredSnapReferenceKind::
+                   tangent_curve &&
+           first_reference.source.first_entity &&
+           second_reference.source.first_entity &&
+           *first_reference.source.first_entity !=
+               *second_reference.source.first_entity &&
+           first_point.finite() &&
+           second_point.finite() &&
+           first_point != second_point &&
+           canonical_branch < 4U;
+}
+
+std::vector<CommonTangentCandidate>
+commonTangentCandidates(
+    const SketchModel& model,
+    const DeferredSnapReference& first,
+    const DeferredSnapReference& second) {
+    const auto first_geometry =
+        tangentCurveGeometry(model, first);
+    const auto second_geometry =
+        tangentCurveGeometry(model, second);
+    if (!first_geometry ||
+        !second_geometry ||
+        first_geometry->id ==
+            second_geometry->id) {
+        return {};
+    }
+
+    const double dx =
+        second_geometry->center.u -
+        first_geometry->center.u;
+    const double dy =
+        second_geometry->center.v -
+        first_geometry->center.v;
+    const double distance_squared =
+        dx * dx + dy * dy;
+    if (!std::isfinite(distance_squared) ||
+        !(distance_squared > 0.0)) {
+        return {};
+    }
+
+    std::vector<CommonTangentCandidate> result;
+    result.reserve(4U);
+
+    // Signed-radius formulation. second_sign=+1 yields the two external
+    // tangents, second_sign=-1 yields the two internal tangents.
+    for (const double second_sign :
+         {1.0, -1.0}) {
+        const CommonTangentFamily family =
+            second_sign > 0.0
+                ? CommonTangentFamily::external
+                : CommonTangentFamily::internal;
+        const double radius_delta =
+            first_geometry->radius -
+            second_sign *
+                second_geometry->radius;
+        const double height_squared =
+            distance_squared -
+            radius_delta * radius_delta;
+
+        if (!std::isfinite(height_squared) ||
+            height_squared < 0.0) {
+            continue;
+        }
+
+        const double height =
+            std::sqrt(height_squared);
+        const std::array<double, 2U> sides{
+            -1.0,
+            1.0};
+        const std::size_t side_count =
+            height == 0.0 ? 1U : 2U;
+
+        for (std::size_t side_index = 0U;
+             side_index < side_count;
+             ++side_index) {
+            const double side =
+                sides[side_index];
+
+            const double normal_u =
+                (dx * radius_delta -
+                 dy * height * side) /
+                distance_squared;
+            const double normal_v =
+                (dy * radius_delta +
+                 dx * height * side) /
+                distance_squared;
+
+            const Point2 first_point{
+                std::fma(
+                    first_geometry->radius,
+                    normal_u,
+                    first_geometry->center.u),
+                std::fma(
+                    first_geometry->radius,
+                    normal_v,
+                    first_geometry->center.v)};
+            const Point2 second_point{
+                std::fma(
+                    second_sign *
+                        second_geometry->radius,
+                    normal_u,
+                    second_geometry->center.u),
+                std::fma(
+                    second_sign *
+                        second_geometry->radius,
+                    normal_v,
+                    second_geometry->center.v)};
+
+            if (!first_point.finite() ||
+                !second_point.finite() ||
+                first_point == second_point ||
+                !tangentContactAllowed(
+                    *first_geometry,
+                    first_point) ||
+                !tangentContactAllowed(
+                    *second_geometry,
+                    second_point)) {
+                continue;
+            }
+
+            const CommonTangentSide tangent_side =
+                side < 0.0
+                    ? CommonTangentSide::negative
+                    : CommonTangentSide::positive;
+            const std::uint32_t family_index =
+                family ==
+                        CommonTangentFamily::external
+                    ? 0U
+                    : 1U;
+            const std::uint32_t side_bit =
+                tangent_side ==
+                        CommonTangentSide::positive
+                    ? 1U
+                    : 0U;
+
+            CommonTangentCandidate candidate{
+                first,
+                second,
+                first_point,
+                second_point,
+                family,
+                tangent_side,
+                family_index * 2U +
+                    side_bit};
+            if (candidate.valid()) {
+                result.push_back(
+                    std::move(candidate));
+            }
+        }
+    }
+
+    std::sort(
+        result.begin(),
+        result.end(),
+        [](const CommonTangentCandidate& first,
+           const CommonTangentCandidate& second) {
+            return first.canonical_branch <
+                   second.canonical_branch;
+        });
+    return result;
+}
+
 bool SnapSourceRef::valid() const noexcept {
     switch (kind) {
     case SnapSourceKind::intrinsic_origin:

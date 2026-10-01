@@ -139,6 +139,40 @@ perpendicularPointOnLineExtension(
     const DeferredSnapReference& reference,
     Point2 base) noexcept;
 
+enum class CommonTangentFamily : std::uint8_t {
+    external,
+    internal,
+};
+
+enum class CommonTangentSide : std::uint8_t {
+    negative,
+    positive,
+};
+
+struct CommonTangentCandidate final {
+    DeferredSnapReference first_reference;
+    DeferredSnapReference second_reference;
+    Point2 first_point;
+    Point2 second_point;
+    CommonTangentFamily family{
+        CommonTangentFamily::external};
+    CommonTangentSide side{
+        CommonTangentSide::negative};
+    std::uint32_t canonical_branch{};
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const CommonTangentCandidate&,
+        const CommonTangentCandidate&) = default;
+};
+
+[[nodiscard]] std::vector<CommonTangentCandidate>
+commonTangentCandidates(
+    const SketchModel& model,
+    const DeferredSnapReference& first,
+    const DeferredSnapReference& second);
+
 struct SnapModeSet final {
     bool endpoint{true};
     bool midpoint{true};

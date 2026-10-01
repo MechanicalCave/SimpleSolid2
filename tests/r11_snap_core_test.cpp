@@ -1049,6 +1049,170 @@ int main() {
                  .has_value());
     }
 
+    // Deferred/Common Tangent: exact branches are deterministic and
+    // Arc references filter supporting-circle branches by authored sweep.
+    {
+        SketchModel tangent_model;
+        const auto first_circle =
+            tangent_model.addCircle(
+                {0.0, 0.0},
+                2.0);
+        const auto second_circle =
+            tangent_model.addCircle(
+                {10.0, 0.0},
+                2.0);
+
+        const auto first_reference =
+            makeTangentCurveReference(
+                tangent_model,
+                first_circle);
+        const auto second_reference =
+            makeTangentCurveReference(
+                tangent_model,
+                second_circle);
+        CHECK(first_reference.has_value());
+        CHECK(second_reference.has_value());
+
+        const auto common =
+            commonTangentCandidates(
+                tangent_model,
+                *first_reference,
+                *second_reference);
+        CHECK(common.size() == 4U);
+        CHECK(common[0].canonical_branch == 0U);
+        CHECK(common[1].canonical_branch == 1U);
+        CHECK(common[2].canonical_branch == 2U);
+        CHECK(common[3].canonical_branch == 3U);
+        CHECK(
+            common[0].family ==
+            CommonTangentFamily::external);
+        CHECK(
+            common[1].family ==
+            CommonTangentFamily::external);
+        CHECK(
+            common[2].family ==
+            CommonTangentFamily::internal);
+        CHECK(
+            common[3].family ==
+            CommonTangentFamily::internal);
+
+        CHECK(near(
+            common[0].first_point.u,
+            0.0));
+        CHECK(near(
+            std::abs(
+                common[0].first_point.v),
+            2.0));
+        CHECK(near(
+            common[0].second_point.u,
+            10.0));
+        CHECK(near(
+            common[0].second_point.v,
+            common[0].first_point.v));
+        CHECK(near(
+            common[1].first_point.v,
+            -common[0].first_point.v));
+
+        // Repeated evaluation is branch-stable.
+        const auto repeated =
+            commonTangentCandidates(
+                tangent_model,
+                *first_reference,
+                *second_reference);
+        CHECK(repeated == common);
+
+        // Nested circles have no common tangents.
+        const auto nested =
+            tangent_model.addCircle(
+                {0.0, 0.0},
+                1.0);
+        const auto nested_reference =
+            makeTangentCurveReference(
+                tangent_model,
+                nested);
+        CHECK(nested_reference.has_value());
+        CHECK(
+            commonTangentCandidates(
+                tangent_model,
+                *first_reference,
+                *nested_reference)
+                .empty());
+
+        // Coincident centers fail closed rather than invent a branch.
+        const auto concentric =
+            tangent_model.addCircle(
+                {0.0, 0.0},
+                4.0);
+        const auto concentric_reference =
+            makeTangentCurveReference(
+                tangent_model,
+                concentric);
+        CHECK(concentric_reference.has_value());
+        CHECK(
+            commonTangentCandidates(
+                tangent_model,
+                *first_reference,
+                *concentric_reference)
+                .empty());
+
+        // A quarter Arc retains only tangent contacts lying on its sweep.
+        const auto first_arc =
+            tangent_model.addArc(
+                {0.0, 0.0},
+                2.0,
+                0.0,
+                std::numbers::pi_v<double> / 2.0);
+        const auto arc_reference =
+            makeTangentCurveReference(
+                tangent_model,
+                first_arc);
+        CHECK(arc_reference.has_value());
+        const auto arc_common =
+            commonTangentCandidates(
+                tangent_model,
+                *arc_reference,
+                *second_reference);
+        CHECK(!arc_common.empty());
+        for (const auto& candidate :
+             arc_common) {
+            CHECK(candidate.valid());
+            const double angle =
+                std::atan2(
+                    candidate.first_point.v,
+                    candidate.first_point.u);
+            CHECK(angle >= 0.0);
+            CHECK(
+                angle <=
+                std::numbers::pi_v<double> /
+                    2.0);
+        }
+
+        // Touching internal tangent has coincident contact points and is
+        // intentionally omitted because it cannot define a non-degenerate
+        // two-point Line placement.
+        const auto touching =
+            tangent_model.addCircle(
+                {4.0, 0.0},
+                2.0);
+        const auto touching_reference =
+            makeTangentCurveReference(
+                tangent_model,
+                touching);
+        CHECK(touching_reference.has_value());
+        const auto touching_common =
+            commonTangentCandidates(
+                tangent_model,
+                *first_reference,
+                *touching_reference);
+        CHECK(touching_common.size() == 2U);
+        for (const auto& candidate :
+             touching_common) {
+            CHECK(
+                candidate.family ==
+                CommonTangentFamily::external);
+        }
+    }
+
     std::cout << "r11_snap_core_test passed\n";
     return 0;
 }
