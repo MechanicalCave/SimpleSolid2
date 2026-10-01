@@ -19,6 +19,7 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <Geom_CartesianPoint.hxx>
+#include <Geom_Line.hxx>
 #include <Graphic3d_Camera.hxx>
 #include <Graphic3d_TypeOfShadingModel.hxx>
 #include <Graphic3d_HorizontalTextAlignment.hxx>
@@ -2168,6 +2169,44 @@ public:
                     push_back(object);
             }
 
+            sketch_snap_guide_objects_.reserve(
+                scene.guides.size());
+            for (const auto& guide :
+                 scene.guides) {
+                Handle(Geom_Line) geometry =
+                    new Geom_Line(
+                        toPoint(guide.anchor),
+                        toDirection(guide.direction));
+                Handle(AIS_Line) object =
+                    new AIS_Line(geometry);
+
+                Quantity_Color color{
+                    0.30,
+                    0.92,
+                    0.98,
+                    Quantity_TOC_RGB};
+                if (guide.kind ==
+                    viewer::SketchInferenceGuideKind::
+                        additional_direction) {
+                    color =
+                        Quantity_Color{
+                            1.0,
+                            0.74,
+                            0.24,
+                            Quantity_TOC_RGB};
+                }
+
+                object->Attributes()->SetLineAspect(
+                    new Prs3d_LineAspect(
+                        color,
+                        Aspect_TOL_DASH,
+                        1.4));
+                context_->Display(object, false);
+                context_->Deactivate(object);
+                sketch_snap_guide_objects_.
+                    push_back(object);
+            }
+
             sketch_snap_inference_scene_ = scene;
             context_->UpdateCurrentViewer();
             view_->Redraw();
@@ -3197,6 +3236,21 @@ public:
                     });
             }
 
+            for (const auto& object :
+                 sketch_snap_guide_objects_) {
+                if (object.IsNull()) {
+                    continue;
+                }
+                const auto retained = object;
+                guardedVoid(
+                    "removeSketchSnapGuide",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+
             if (!sketch_snap_current_label_.IsNull()) {
                 const auto retained =
                     sketch_snap_current_label_;
@@ -3212,6 +3266,7 @@ public:
 
         sketch_snap_current_object_.Nullify();
         sketch_snap_acquired_objects_.clear();
+        sketch_snap_guide_objects_.clear();
         sketch_snap_current_label_.Nullify();
         sketch_snap_inference_scene_ = {};
     }
@@ -3928,6 +3983,8 @@ private:
         sketch_snap_current_object_;
     std::vector<Handle(AIS_Point)>
         sketch_snap_acquired_objects_;
+    std::vector<Handle(AIS_InteractiveObject)>
+        sketch_snap_guide_objects_;
     Handle(AIS_TextLabel)
         sketch_snap_current_label_;
     double sketch_snap_aspect_dpr_{};

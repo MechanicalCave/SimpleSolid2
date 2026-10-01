@@ -185,7 +185,12 @@ public:
             current,
         const sketch::TrackingAnchorState&
             anchors,
-        bool show_anchors);
+        bool show_anchors,
+        const std::vector<sketch::InferenceGuide>&
+            active_guides = {},
+        std::optional<sketch::Point2>
+            inference_point = std::nullopt,
+        bool guide_intersection = false);
 
     void clearSketchSnapInferencePresentation();
 

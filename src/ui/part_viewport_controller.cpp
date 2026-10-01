@@ -134,6 +134,21 @@ semanticGripRole(
     return sketch::SketchGripRole::line_center;
 }
 
+[[nodiscard]] viewer::SketchInferenceGuideKind
+viewerInferenceGuideKind(
+    sketch::InferenceGuideKind kind) noexcept {
+    switch (kind) {
+    case sketch::InferenceGuideKind::sketch_u:
+        return viewer::SketchInferenceGuideKind::sketch_u;
+    case sketch::InferenceGuideKind::sketch_v:
+        return viewer::SketchInferenceGuideKind::sketch_v;
+    case sketch::InferenceGuideKind::additional_direction:
+        return viewer::SketchInferenceGuideKind::
+            additional_direction;
+    }
+    return viewer::SketchInferenceGuideKind::sketch_u;
+}
+
 [[nodiscard]] viewer::SketchSnapMarkerKind
 viewerSnapMarkerKind(
     sketch::SnapKind kind) noexcept {
@@ -1153,13 +1168,21 @@ projectSketchSnapInferencePresentation(
     const std::optional<sketch::SnapCandidate>&
         current,
     const sketch::TrackingAnchorState& anchors,
-    bool show_anchors) {
+    bool show_anchors,
+    const std::vector<sketch::InferenceGuide>&
+        active_guides,
+    std::optional<sketch::Point2>
+        inference_point,
+    bool guide_intersection) {
     if (viewport_ == nullptr) {
         return false;
     }
     const auto* hosted = activeSketch();
     if (hosted == nullptr ||
-        !anchors.valid()) {
+        !anchors.valid() ||
+        active_guides.size() > 2U ||
+        (inference_point &&
+         !inference_point->finite())) {
         return false;
     }
 
@@ -1200,6 +1223,25 @@ projectSketchSnapInferencePresentation(
         if (!scene.current) {
             return false;
         }
+    } else if (inference_point) {
+        const auto world =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                *inference_point);
+        if (!world) {
+            return false;
+        }
+        scene.current =
+            viewer::SketchSnapMarkerPresentation{
+                *world,
+                guide_intersection
+                    ? viewer::SketchSnapMarkerKind::
+                          guide_intersection
+                    : viewer::SketchSnapMarkerKind::
+                          guide_projection,
+                guide_intersection
+                    ? "TRACK INT"
+                    : "TRACK"};
     }
 
     if (show_anchors) {
@@ -1214,6 +1256,49 @@ projectSketchSnapInferencePresentation(
             }
             scene.acquired.push_back(*marker);
         }
+    }
+
+    scene.guides.reserve(active_guides.size());
+    for (const auto& guide :
+         active_guides) {
+        if (!guide.valid()) {
+            return false;
+        }
+
+        const auto anchor_world =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                guide.anchor);
+        const sketch::Point2 direction_point{
+            guide.anchor.u + guide.direction.u,
+            guide.anchor.v + guide.direction.v};
+        const auto direction_world_point =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                direction_point);
+        if (!anchor_world ||
+            !direction_world_point) {
+            return false;
+        }
+
+        viewer::SketchInferenceGuidePresentation
+            presentation{
+                *anchor_world,
+                {
+                    direction_world_point->x -
+                        anchor_world->x,
+                    direction_world_point->y -
+                        anchor_world->y,
+                    direction_world_point->z -
+                        anchor_world->z,
+                },
+                viewerInferenceGuideKind(
+                    guide.kind)};
+        if (!presentation.valid()) {
+            return false;
+        }
+        scene.guides.push_back(
+            std::move(presentation));
     }
 
     return scene.valid() &&

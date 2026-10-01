@@ -424,6 +424,31 @@ enum class SketchSnapMarkerKind : std::uint8_t {
     perpendicular,
     tangent,
     nearest,
+    guide_intersection,
+    guide_projection,
+};
+
+enum class SketchInferenceGuideKind : std::uint8_t {
+    sketch_u,
+    sketch_v,
+    additional_direction,
+};
+
+struct SketchInferenceGuidePresentation final {
+    Point3 anchor{};
+    Vec3 direction{};
+    SketchInferenceGuideKind kind{
+        SketchInferenceGuideKind::sketch_u};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return finite(anchor) &&
+               finite(direction) &&
+               direction.squaredLength() > 1.0e-24;
+    }
+
+    friend bool operator==(
+        const SketchInferenceGuidePresentation&,
+        const SketchInferenceGuidePresentation&) = default;
 };
 
 struct SketchSnapMarkerPresentation final {
@@ -447,25 +472,35 @@ struct SketchSnapInferenceScene final {
         current;
     std::vector<SketchSnapMarkerPresentation>
         acquired;
+    std::vector<SketchInferenceGuidePresentation>
+        guides;
 
     [[nodiscard]] bool empty() const noexcept {
         return !current &&
-               acquired.empty();
+               acquired.empty() &&
+               guides.empty();
     }
 
     [[nodiscard]] bool valid() const noexcept {
         if (current && !current->valid()) {
             return false;
         }
-        if (acquired.size() > 2U) {
+        if (acquired.size() > 2U ||
+            guides.size() > 2U) {
             return false;
         }
         return std::all_of(
-            acquired.begin(),
-            acquired.end(),
-            [](const auto& marker) {
-                return marker.valid();
-            });
+                   acquired.begin(),
+                   acquired.end(),
+                   [](const auto& marker) {
+                       return marker.valid();
+                   }) &&
+               std::all_of(
+                   guides.begin(),
+                   guides.end(),
+                   [](const auto& guide) {
+                       return guide.valid();
+                   });
     }
 
     friend bool operator==(

@@ -1565,6 +1565,40 @@ int main(int argc, char* argv[]) {
     CHECK((
         tracking_resolution->position ==
         sketch::Point2{8000.0, 8100.0}));
+    CHECK(
+        viewport.snap_inference_scene_.current.
+            has_value());
+    CHECK(
+        viewport.snap_inference_scene_.current->
+            kind ==
+        viewer::SketchSnapMarkerKind::
+            guide_intersection);
+    CHECK(
+        viewport.snap_inference_scene_.current->
+            label == "TRACK INT");
+    CHECK(
+        viewport.snap_inference_scene_.guides.
+            size() == 2U);
+    CHECK(
+        std::any_of(
+            viewport.snap_inference_scene_.guides.begin(),
+            viewport.snap_inference_scene_.guides.end(),
+            [](const auto& guide) {
+                return guide.kind ==
+                       viewer::
+                           SketchInferenceGuideKind::
+                               sketch_u;
+            }));
+    CHECK(
+        std::any_of(
+            viewport.snap_inference_scene_.guides.begin(),
+            viewport.snap_inference_scene_.guides.end(),
+            [](const auto& guide) {
+                return guide.kind ==
+                       viewer::
+                           SketchInferenceGuideKind::
+                               sketch_v;
+            }));
 
     tracking_settings.object_snap.object_tracking_enabled = false;
     movePointer(
@@ -1584,6 +1618,12 @@ int main(int argc, char* argv[]) {
     CHECK(
         viewport.snap_inference_scene_.acquired.
             empty());
+    CHECK(
+        viewport.snap_inference_scene_.guides.
+            empty());
+    CHECK(
+        !viewport.snap_inference_scene_.current.
+             has_value());
 
     tracking_settings.object_snap.object_tracking_enabled = true;
     CHECK(interaction.setTemporarySnapOverride(

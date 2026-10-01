@@ -138,6 +138,18 @@ int main(int argc, char* argv[]) {
                         center,
                     "Center"},
             };
+            snap_scene.guides = {
+                {
+                    {10.0, 15.0, 0.0},
+                    {1.0, 0.0, 0.0},
+                    viewer::SketchInferenceGuideKind::
+                        sketch_u},
+                {
+                    {20.0, 15.0, 0.0},
+                    {0.0, 1.0, 0.0},
+                    viewer::SketchInferenceGuideKind::
+                        sketch_v},
+            };
             ok = ok &&
                  snap_scene.valid() &&
                  widget.setSketchSnapInferenceScene(
@@ -150,6 +162,12 @@ int main(int argc, char* argv[]) {
                         intersection,
                     "Intersection"};
             snap_scene.acquired.resize(1U);
+            snap_scene.guides.resize(1U);
+            snap_scene.guides[0].kind =
+                viewer::SketchInferenceGuideKind::
+                    additional_direction;
+            snap_scene.guides[0].direction =
+                {1.0, 1.0, 0.0};
             ok = ok &&
                  widget.setSketchSnapInferenceScene(
                      snap_scene);

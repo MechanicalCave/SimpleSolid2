@@ -10,6 +10,7 @@
 #include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/sketch/snap.hpp>
 
+#include <algorithm>
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
@@ -377,7 +378,28 @@ private:
     void observeTrackingSnap(
         const sketch::SnapEligibility& eligibility,
         const sketch::SnapCandidate& candidate);
-    [[nodiscard]] std::optional<sketch::Point2>
+    struct TrackingInferenceResolution final {
+        sketch::Point2 point;
+        std::vector<sketch::InferenceGuide> guides;
+        bool guide_intersection{};
+
+        [[nodiscard]] bool valid() const noexcept {
+            return point.finite() &&
+                   !guides.empty() &&
+                   guides.size() <= 2U &&
+                   std::all_of(
+                       guides.begin(),
+                       guides.end(),
+                       [](const auto& guide) {
+                           return guide.valid();
+                       }) &&
+                   (!guide_intersection ||
+                    guides.size() == 2U);
+        }
+    };
+
+    [[nodiscard]] std::optional<
+        TrackingInferenceResolution>
     resolveTrackingInference(
         const SketchPointerInput& input,
         const application::CadInteractionSettings& settings,
@@ -480,6 +502,8 @@ private:
         tracking_hover_;
     std::optional<sketch::CommonTangentCandidate>
         common_tangent_candidate_;
+    std::optional<TrackingInferenceResolution>
+        tracking_inference_presentation_;
 
     application::PolarCaptureState
         polar_capture_;
