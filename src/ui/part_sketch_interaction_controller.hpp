@@ -8,6 +8,7 @@
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 #include <simplesolid2/sketch/measurement.hpp>
+#include <simplesolid2/sketch/snap.hpp>
 
 #include <cstddef>
 #include <cstdint>
@@ -55,6 +56,7 @@ public:
         CadInteractionSettingsProvider provider) {
         cad_interaction_settings_provider_ =
             std::move(provider);
+        snap_capture_.clear();
         polar_capture_ = {};
     }
 
@@ -421,6 +423,8 @@ private:
             application::CircleSizeInputMode::diameter};
     CadInteractionSettingsProvider
         cad_interaction_settings_provider_;
+    sketch::SnapCaptureState
+        snap_capture_;
     application::PolarCaptureState
         polar_capture_;
 

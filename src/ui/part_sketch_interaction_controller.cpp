@@ -69,6 +69,57 @@ stablePolarUnitDirection(double angle) noexcept {
     }
 }
 
+[[nodiscard]] sketch::ObjectSnapPreferences
+objectSnapPreferences(
+    const application::ObjectSnapInputSettings& settings) noexcept {
+    sketch::SnapModeSet modes;
+    modes.endpoint = settings.endpoint;
+    modes.midpoint = settings.midpoint;
+    modes.center = settings.center;
+    modes.quadrant = settings.quadrant;
+    modes.intersection = settings.intersection;
+    modes.origin = settings.origin;
+    modes.perpendicular = settings.perpendicular;
+    modes.tangent = settings.tangent;
+    modes.nearest = settings.nearest;
+    modes.extension = settings.extension;
+
+    return {
+        settings.master_enabled,
+        modes,
+        settings.object_tracking_enabled};
+}
+
+[[nodiscard]] sketch::SnapModeSet
+staticSnapModes(
+    const sketch::SnapEligibility& eligibility) noexcept {
+    sketch::SnapModeSet modes;
+    modes.endpoint = eligibility.endpoint;
+    modes.midpoint = eligibility.midpoint;
+    modes.center = eligibility.center;
+    modes.quadrant = eligibility.quadrant;
+
+    // Intersection needs a bounded nearby-source strategy. Do not add an
+    // all-pairs curve scan to the pointer hot path.
+    modes.intersection = false;
+
+    modes.origin = eligibility.origin;
+    modes.perpendicular = false;
+    modes.tangent = false;
+    modes.nearest = false;
+    modes.extension = false;
+    return modes;
+}
+
+[[nodiscard]] bool anyStaticSnapMode(
+    const sketch::SnapModeSet& modes) noexcept {
+    return modes.endpoint ||
+           modes.midpoint ||
+           modes.center ||
+           modes.quadrant ||
+           modes.origin;
+}
+
 [[nodiscard]] std::optional<double>
 viewportPointRayDistance(
     viewer::ViewportPoint2 point,
@@ -117,6 +168,7 @@ void PartSketchInteractionController::begin(
     session_ = &session;
     sketch_id_ = sketch_id;
     interaction_ = sketch::SketchInteractionState{};
+    snap_capture_.clear();
     polar_capture_ = {};
     last_pointer_input_.reset();
     press_anchor_.reset();
@@ -142,6 +194,7 @@ void PartSketchInteractionController::begin(
 
 void PartSketchInteractionController::end() {
     interaction_ = sketch::SketchInteractionState{};
+    snap_capture_.clear();
     polar_capture_ = {};
     last_pointer_input_.reset();
     press_anchor_.reset();
@@ -3672,7 +3725,11 @@ bool PartSketchInteractionController::acceptLineResolvedPoint(
 void PartSketchInteractionController::handleCirclePointer(
     const SketchPointerInput& input) {
     const auto resolved =
-        sketch::resolveSketchInput(input.position);
+        interaction_.circleStage() ==
+                sketch::CircleStage::await_center
+            ? resolvePointerInput(input)
+            : sketch::resolveSketchInput(
+                  input.position);
 
     if (input.phase == viewer::SpatialPointerPhase::move) {
         const auto preview =
@@ -4323,18 +4380,86 @@ PartSketchInteractionController::resolvePointerInput(
     const auto request =
         interaction_.activePointRequest();
     if (!request ||
-        !request->base ||
-        (!request->relative_polar_enabled &&
-         !request->direct_distance_enabled) ||
         !cad_interaction_settings_provider_ ||
         !input.viewport_position.valid() ||
         !input.position.finite()) {
+        snap_capture_.clear();
         return raw();
     }
 
     const auto settings =
         cad_interaction_settings_provider_();
-    if (!settings.valid() ||
+    if (!settings.valid()) {
+        snap_capture_.clear();
+        return raw();
+    }
+
+    // Static OSNAP resolves before Polar. Complete explicit numeric input
+    // bypasses this pointer path. Until lock compatibility is implemented,
+    // any active numeric field lock conservatively retains R10 authority.
+    const auto* hosted = activeSketch();
+    if (hosted != nullptr &&
+        interaction_.pointFieldLocks().empty()) {
+        const auto eligibility =
+            sketch::resolveSnapEligibility(
+                objectSnapPreferences(
+                    settings.object_snap),
+                request->temporary_snap_override);
+        const auto modes =
+            staticSnapModes(eligibility);
+
+        if (!eligibility.suppress_object_assistance &&
+            anyStaticSnapMode(modes)) {
+            const auto semantic_candidates =
+                sketch::staticSnapCandidates(
+                    hosted->model,
+                    modes);
+            std::vector<sketch::SnapScreenCandidate>
+                screen_candidates;
+            screen_candidates.reserve(
+                semantic_candidates.size());
+
+            for (const auto& candidate :
+                 semantic_candidates) {
+                const auto projected =
+                    viewport_controller_->
+                        projectSketchPointToViewport(
+                            candidate.point);
+                if (!projected) {
+                    continue;
+                }
+
+                const double distance =
+                    viewportDistance(
+                        input.viewport_position,
+                        *projected);
+                if (!std::isfinite(distance)) {
+                    continue;
+                }
+                screen_candidates.push_back(
+                    {candidate, distance});
+            }
+
+            const auto snap =
+                sketch::resolveScreenSnap(
+                    hosted->model,
+                    snap_capture_,
+                    screen_candidates);
+            if (snap) {
+                polar_capture_ = {};
+                return interaction_.resolvePointerInput(
+                    snap->primary.point);
+            }
+        } else {
+            snap_capture_.clear();
+        }
+    } else {
+        snap_capture_.clear();
+    }
+
+    if (!request->base ||
+        (!request->relative_polar_enabled &&
+         !request->direct_distance_enabled) ||
         !settings.polar.enabled) {
         return raw();
     }
@@ -4674,6 +4799,7 @@ refreshCadInputContextGeneration() {
     }
 
     cad_input_context_fingerprint_ = current;
+    snap_capture_.clear();
     polar_capture_ = {};
     ++cad_input_context_generation_;
 }

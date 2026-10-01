@@ -864,9 +864,98 @@ int main(int argc, char* argv[]) {
     CHECK(near(moved_source->end().u, 5.0));
     CHECK(near(moved_source->end().v, -10.0));
 
+    // R11 static OSNAP resolves exact Sketch geometry from logical screen
+    // aperture before Polar. A remote target avoids accidental capture from
+    // the earlier precision-input geometry in this integration test.
+    const auto snap_target_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {5000.0, 5007.0},
+                {5010.0, 5007.0},
+                sketch::EntityRole::regular});
+    CHECK(snap_target_result.ok());
+    CHECK(snap_target_result.changed);
+    viewport_controller.refreshPresentation();
+
+    application::CadInteractionSettings snap_settings;
+    snap_settings.polar.primary_spacing =
+        std::numbers::pi_v<double> / 4.0;
+    interaction.setCadInteractionSettingsProvider(
+        [&snap_settings] {
+            return snap_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            4900.0,
+            4900.0}));
+    const auto lines_before_osnap =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+
+    // Raw pointer is closer to a 45-degree Polar ray than to the exact
+    // endpoint, but OSNAP has higher semantic priority.
+    click(
+        interaction,
+        sketch_id,
+        5004.0,
+        5010.0,
+        5004.0,
+        5010.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_osnap + 1U);
+    CHECK((
+        model_state.lines.back().start ==
+        sketch::Point2{4900.0, 4900.0}));
+    CHECK((
+        model_state.lines.back().end ==
+        sketch::Point2{5000.0, 5007.0}));
+    CHECK(interaction.escape());
+
+    // Master OFF preserves mode choices but removes OSNAP from pointer
+    // resolution. With Polar also OFF, the same near-target click stays raw.
+    snap_settings.object_snap.master_enabled = false;
+    snap_settings.polar.enabled = false;
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            4900.0,
+            4900.0}));
+    const auto lines_before_raw =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    click(
+        interaction,
+        sketch_id,
+        5004.0,
+        5010.0,
+        5004.0,
+        5010.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_raw + 1U);
+    CHECK((
+        model_state.lines.back().end ==
+        sketch::Point2{5004.0, 5010.0}));
+    CHECK(interaction.escape());
+
     // Polar is a logical-screen-space magnet. With 90-degree Absolute
     // tracks, (20,1) captures +U. Direct Distance owns magnitude only.
     application::CadInteractionSettings polar_settings;
+    polar_settings.object_snap.master_enabled = false;
     polar_settings.polar.primary_spacing =
         std::numbers::pi_v<double> / 2.0;
     interaction.setCadInteractionSettingsProvider(
