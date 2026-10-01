@@ -4448,7 +4448,10 @@ PartSketchInteractionController::resolvePointerInput(
             if (snap) {
                 polar_capture_ = {};
                 return interaction_.resolvePointerInput(
-                    snap->primary.point);
+                    snap->primary.point,
+                    sketch::PointResolutionSource::
+                        object_snap,
+                    snap->primary);
             }
         } else {
             snap_capture_.clear();
@@ -4565,7 +4568,8 @@ PartSketchInteractionController::resolvePointerInput(
     }
 
     return interaction_.resolvePointerInput(
-        assisted);
+        assisted,
+        sketch::PointResolutionSource::polar);
 }
 
 void PartSketchInteractionController::

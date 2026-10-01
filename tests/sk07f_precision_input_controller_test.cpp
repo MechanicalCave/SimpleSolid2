@@ -899,6 +899,24 @@ int main(int argc, char* argv[]) {
 
     // Raw pointer is closer to a 45-degree Polar ray than to the exact
     // endpoint, but OSNAP has higher semantic priority.
+    movePointer(
+        interaction,
+        sketch_id,
+        5004.0,
+        5010.0,
+        5004.0,
+        5010.0);
+    auto point_resolution =
+        interaction.pointResolution();
+    CHECK(point_resolution.has_value());
+    CHECK(
+        point_resolution->source ==
+        sketch::PointResolutionSource::object_snap);
+    CHECK(point_resolution->object_snap.has_value());
+    CHECK((
+        point_resolution->position ==
+        sketch::Point2{5000.0, 5007.0}));
+
     click(
         interaction,
         sketch_id,
@@ -934,6 +952,21 @@ int main(int argc, char* argv[]) {
     const auto lines_before_raw =
         session.document().findSketch(sketch_id)->
             model.state().lines.size();
+    movePointer(
+        interaction,
+        sketch_id,
+        5004.0,
+        5010.0,
+        5004.0,
+        5010.0);
+    point_resolution =
+        interaction.pointResolution();
+    CHECK(point_resolution.has_value());
+    CHECK(
+        point_resolution->source ==
+        sketch::PointResolutionSource::raw_pointer);
+    CHECK(!point_resolution->object_snap.has_value());
+
     click(
         interaction,
         sketch_id,
@@ -980,6 +1013,14 @@ int main(int argc, char* argv[]) {
         1.0,
         20.0,
         1.0);
+
+    point_resolution =
+        interaction.pointResolution();
+    CHECK(point_resolution.has_value());
+    CHECK(
+        point_resolution->source ==
+        sketch::PointResolutionSource::polar);
+    CHECK(!point_resolution->object_snap.has_value());
 
     auto dyn_snapshots =
         semantic_input.dynamicInputFieldSnapshots();

@@ -76,6 +76,11 @@ public:
     commonTransformStage() const noexcept;
     [[nodiscard]] std::optional<sketch::PointRequest>
     activePointRequest() const noexcept;
+
+    [[nodiscard]] std::optional<sketch::PointResolution>
+    pointResolution() const noexcept {
+        return interaction_.resolvedPointRequestCandidate();
+    }
     [[nodiscard]] application::CadInputContextGeneration
     cadInputContextGeneration() const noexcept {
         return cad_input_context_generation_;
