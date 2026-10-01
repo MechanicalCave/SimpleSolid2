@@ -179,6 +179,25 @@ public:
 
     void clearSketchMeasurePresentation();
 
+    [[nodiscard]] bool
+    projectSketchSnapInferencePresentation(
+        const std::optional<sketch::SnapCandidate>&
+            current,
+        const sketch::TrackingAnchorState&
+            anchors,
+        bool show_anchors,
+        const std::vector<sketch::InferenceGuide>&
+            active_guides = {},
+        std::optional<sketch::Point2>
+            inference_point = std::nullopt,
+        bool guide_intersection = false,
+        std::optional<sketch::LineExtensionRay>
+            extension_ray = std::nullopt,
+        std::optional<sketch::Point2>
+            extension_point = std::nullopt);
+
+    void clearSketchSnapInferencePresentation();
+
     [[nodiscard]] SketchEntityRectangleQueryResult
     querySketchEntities(
         const viewer::ViewportRect2& rectangle,

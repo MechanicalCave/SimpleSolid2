@@ -5,6 +5,7 @@
 #include <QWidget>
 
 #include <functional>
+#include <memory>
 #include <string>
 #include <utility>
 
@@ -13,6 +14,7 @@ class QLabel;
 class QLineEdit;
 class QString;
 class QPushButton;
+class QSettings;
 class QStackedWidget;
 class QTabBar;
 class QWidget;
@@ -22,6 +24,9 @@ namespace simplesolid2::ui {
 class ProjectWorkspaceShell final : public QWidget {
 public:
     explicit ProjectWorkspaceShell(QWidget* parent = nullptr);
+    ProjectWorkspaceShell(
+        std::unique_ptr<QSettings> user_settings,
+        QWidget* parent = nullptr);
     ~ProjectWorkspaceShell() override;
 
     void setProjectInfo(
@@ -78,6 +83,7 @@ public:
             cad_input_.setInteractionSettings(
                 std::move(settings));
         if (accepted) {
+            persistObjectSnapSettings();
             refreshCadInputPresentation();
             if (cad_interaction_settings_changed_handler_) {
                 cad_interaction_settings_changed_handler_();
@@ -98,6 +104,8 @@ private:
         QWidget* focus) const noexcept;
     void syncCadInputLineEdit();
     void submitCadInputFromLineEdit();
+    void loadObjectSnapSettings();
+    void persistObjectSnapSettings();
 
     QLabel* project_name_{};
     QLabel* project_id_{};
@@ -114,6 +122,7 @@ private:
     QWidget* document_workbench_{};
     QTabBar* document_tabs_{};
 
+    std::unique_ptr<QSettings> user_settings_;
     application::CadInputSession cad_input_;
     CadInteractionSettingsChangedHandler
         cad_interaction_settings_changed_handler_;

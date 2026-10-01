@@ -1284,6 +1284,22 @@ add_test(
     COMMAND sk07f_precision_input_state_test
 )
 
+add_executable(r11_snap_core_test
+    r11_snap_core_test.cpp
+)
+
+target_link_libraries(r11_snap_core_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(r11_snap_core_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME r11.snap_core
+    COMMAND r11_snap_core_test
+)
+
 add_executable(sk07f_precision_input_controller_test
     sk07f_precision_input_controller_test.cpp
 )
@@ -1377,6 +1393,7 @@ set(_ss2_fast_tests
     sk07b.transform_core
     sk07b.common_transform_state
     sk07b.transform_controller
+    r11.snap_core
 )
 set_property(TEST ${_ss2_fast_tests} APPEND PROPERTY LABELS "tier-fast")
 set_property(TEST wb01a.workbench_native_stress APPEND PROPERTY LABELS
@@ -1419,6 +1436,7 @@ set(_ss2_sketch_tests
     sk07e.space_cycle_edit_mode
     sk07f.precision_input_state
     sk07f.precision_input_controller
+    r11.snap_core
 )
 set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
 
@@ -1581,6 +1599,7 @@ set(_ss2_core_tests
     wb01.workbench_shell_boundaries
     ws01.project_workspace_boundaries
     sk02a.shared_2d_boundaries
+    r11.snap_core
 )
 set_property(TEST ${_ss2_core_tests} APPEND PROPERTY LABELS "subsystem-core")
 

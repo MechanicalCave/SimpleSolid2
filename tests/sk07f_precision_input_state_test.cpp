@@ -1,5 +1,6 @@
 #include <simplesolid2/sketch/interaction_state.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -44,6 +45,10 @@ int main() {
              20.0});
     CHECK(first.has_value());
     CHECK(
+        first->source ==
+        sketch::PointResolutionSource::explicit_numeric);
+    CHECK(!first->object_snap.has_value());
+    CHECK(
         state.acceptLinePoint(first->position).outcome ==
         sketch::LinePointOutcome::first_point_accepted);
 
@@ -77,10 +82,24 @@ int main() {
     CHECK(near(relative_polar->position.u, 10.0));
     CHECK(near(relative_polar->position.v, 30.0));
 
-    CHECK(state.resolvePointerInput({13.0, 24.0}).has_value());
+    const auto raw_pointer =
+        state.resolvePointerInput({13.0, 24.0});
+    CHECK(raw_pointer.has_value());
+    CHECK(
+        raw_pointer->source ==
+        sketch::PointResolutionSource::raw_pointer);
+    request = state.activePointRequest();
+    CHECK(request.has_value());
+    CHECK(request->resolution.has_value());
+    CHECK(
+        request->resolution->source ==
+        sketch::PointResolutionSource::raw_pointer);
 
     const auto direct = state.resolveDirectDistance(50.0);
     CHECK(direct.has_value());
+    CHECK(
+        direct->source ==
+        sketch::PointResolutionSource::explicit_numeric);
     CHECK(near(direct->position.u, 40.0));
     CHECK(near(direct->position.v, 60.0));
     CHECK(
@@ -94,6 +113,58 @@ int main() {
     CHECK(zero.has_value());
     CHECK(zero->position == sketch::Point2{10.0, 20.0});
     CHECK(!state.resolveDirectDistance(-1.0).has_value());
+
+    // R11 PointResolution is request-owned. Object Snap provenance survives
+    // only when no higher-priority numeric lock changes the point.
+    sketch::SketchModel provenance_model;
+    const auto provenance_line =
+        provenance_model.addLine(
+            {0.0, 0.0},
+            {10.0, 0.0});
+    const auto snap_candidates =
+        sketch::staticSnapCandidates(
+            provenance_model);
+    const auto snap_it =
+        std::find_if(
+            snap_candidates.begin(),
+            snap_candidates.end(),
+            [provenance_line](
+                const sketch::SnapCandidate& item) {
+                return item.kind ==
+                           sketch::SnapKind::endpoint &&
+                       item.source.first_entity ==
+                           provenance_line &&
+                       item.point ==
+                           sketch::Point2{10.0, 0.0};
+            });
+    CHECK(snap_it != snap_candidates.end());
+
+    const auto snapped =
+        state.resolvePointerInput(
+            snap_it->point,
+            sketch::PointResolutionSource::
+                object_snap,
+            *snap_it);
+    CHECK(snapped.has_value());
+    CHECK(
+        snapped->source ==
+        sketch::PointResolutionSource::object_snap);
+    CHECK(snapped->object_snap.has_value());
+    request = state.activePointRequest();
+    CHECK(request.has_value());
+    CHECK(request->resolution == snapped);
+
+    CHECK(state.lockPointField(
+        sketch::PointFieldLockSemantic::distance,
+        25.0));
+    const auto locked_resolution =
+        state.resolvedPointRequestCandidate();
+    CHECK(locked_resolution.has_value());
+    CHECK(
+        locked_resolution->source ==
+        sketch::PointResolutionSource::numeric_lock);
+    CHECK(!locked_resolution->object_snap.has_value());
+    state.clearPointFieldLocks();
 
     const auto line_request =
         state.acceptLinePoint(direct->position);
@@ -713,6 +784,300 @@ int main() {
         CHECK(resolved.has_value());
         CHECK(resolved->position ==
               sketch::Point2{10.0, -5.0});
+    }
+
+    // Partially locked requests accept an exact OSNAP only when the
+    // candidate preserves every locked field. Numeric lock remains the
+    // authority, while compatible snap provenance is retained for display.
+    {
+        sketch::SketchModel locked_snap_model;
+        const auto locked_snap_line =
+            locked_snap_model.addLine(
+                {10.0, 20.0},
+                {30.0, 20.0});
+        const auto candidates =
+            sketch::staticSnapCandidates(
+                locked_snap_model);
+        const auto compatible_endpoint =
+            std::find_if(
+                candidates.begin(),
+                candidates.end(),
+                [locked_snap_line](
+                    const sketch::SnapCandidate& item) {
+                    return item.kind ==
+                               sketch::SnapKind::endpoint &&
+                           item.source.first_entity ==
+                               locked_snap_line &&
+                           item.point ==
+                               sketch::Point2{10.0, 20.0};
+                });
+        const auto incompatible_endpoint =
+            std::find_if(
+                candidates.begin(),
+                candidates.end(),
+                [locked_snap_line](
+                    const sketch::SnapCandidate& item) {
+                    return item.kind ==
+                               sketch::SnapKind::endpoint &&
+                           item.source.first_entity ==
+                               locked_snap_line &&
+                           item.point ==
+                               sketch::Point2{30.0, 20.0};
+                });
+        CHECK(compatible_endpoint != candidates.end());
+        CHECK(incompatible_endpoint != candidates.end());
+
+        sketch::SketchInteractionState locked_snap;
+        locked_snap.activateLine();
+        CHECK(locked_snap.lockPointField(
+            sketch::PointFieldLockSemantic::u,
+            10.0));
+
+        CHECK(locked_snap.pointCandidateCompatible(
+            compatible_endpoint->point,
+            sketch::PointResolutionSource::
+                object_snap,
+            *compatible_endpoint));
+        auto resolved =
+            locked_snap.resolvePointerInput(
+                compatible_endpoint->point,
+                sketch::PointResolutionSource::
+                    object_snap,
+                *compatible_endpoint);
+        CHECK(resolved.has_value());
+        CHECK(
+            resolved->source ==
+            sketch::PointResolutionSource::
+                numeric_lock);
+        CHECK(resolved->object_snap.has_value());
+        CHECK(
+            resolved->object_snap ==
+            *compatible_endpoint);
+        CHECK((
+            resolved->position ==
+            sketch::Point2{10.0, 20.0}));
+
+        CHECK(!locked_snap.pointCandidateCompatible(
+            incompatible_endpoint->point,
+            sketch::PointResolutionSource::
+                object_snap,
+            *incompatible_endpoint));
+        CHECK(
+            !locked_snap.resolvePointerInput(
+                 incompatible_endpoint->point,
+                 sketch::PointResolutionSource::
+                     object_snap,
+                 *incompatible_endpoint)
+                 .has_value());
+        CHECK(
+            !locked_snap.
+                 resolvedPointRequestCandidate().
+                 has_value());
+        CHECK(
+            locked_snap.pointFieldLocks().u ==
+            10.0);
+    }
+
+    // Changing a one-shot snap override invalidates any previously resolved
+    // pointer candidate so presentation cannot expose stale provenance.
+    {
+        sketch::SketchInteractionState temporary;
+        temporary.activateLine();
+        auto pointer =
+            temporary.resolvePointerInput(
+                {2.0, 3.0});
+        CHECK(pointer.has_value());
+        CHECK(
+            temporary.resolvedPointRequestCandidate().
+                has_value());
+
+        CHECK(temporary.setTemporarySnapOverride(
+            sketch::TemporarySnapOverrideKind::
+                endpoint));
+        CHECK(
+            !temporary.resolvedPointRequestCandidate().
+                 has_value());
+
+        pointer =
+            temporary.resolvePointerInput(
+                {4.0, 5.0});
+        CHECK(pointer.has_value());
+        CHECK(
+            temporary.resolvedPointRequestCandidate().
+                has_value());
+        CHECK(temporary.clearTemporarySnapOverride());
+        CHECK(
+            !temporary.resolvedPointRequestCandidate().
+                 has_value());
+    }
+
+    // OTRACK anchors are PointRequest-local. Acquisition is only allowed
+    // from the current exact object-snap resolution; acceptance and Esc clear
+    // all anchors without authoring persistent geometry.
+    {
+        sketch::SketchInteractionState tracked;
+        tracked.activateLine();
+
+        sketch::SketchModel tracking_model;
+        const auto tracking_line =
+            tracking_model.addLine(
+                {0.0, 0.0},
+                {10.0, 0.0});
+        const auto candidates =
+            sketch::staticSnapCandidates(
+                tracking_model);
+        const auto endpoint =
+            std::find_if(
+                candidates.begin(),
+                candidates.end(),
+                [tracking_line](
+                    const sketch::SnapCandidate& item) {
+                    return item.kind ==
+                               sketch::SnapKind::endpoint &&
+                           item.source.first_entity ==
+                               tracking_line &&
+                           item.point ==
+                               sketch::Point2{0.0, 0.0};
+                });
+        CHECK(endpoint != candidates.end());
+
+        CHECK(
+            tracked.acquireCurrentTrackingAnchor() ==
+            sketch::TrackingAcquireResult::invalid);
+
+        auto resolved =
+            tracked.resolvePointerInput(
+                endpoint->point,
+                sketch::PointResolutionSource::
+                    object_snap,
+                *endpoint);
+        CHECK(resolved.has_value());
+        CHECK(
+            tracked.acquireCurrentTrackingAnchor() ==
+            sketch::TrackingAcquireResult::acquired);
+        CHECK(
+            tracked.acquireCurrentTrackingAnchor() ==
+            sketch::TrackingAcquireResult::
+                already_acquired);
+
+        const auto endpoint_key =
+            sketch::snapStableKey(*endpoint);
+        CHECK(
+            tracked.removeTrackingAnchor(
+                endpoint_key));
+        CHECK(tracked.trackingAnchors().anchors.empty());
+        CHECK(
+            !tracked.removeTrackingAnchor(
+                endpoint_key));
+        CHECK(
+            tracked.acquireCurrentTrackingAnchor() ==
+            sketch::TrackingAcquireResult::acquired);
+
+        auto request =
+            tracked.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->tracking_anchors.anchors.size() ==
+            1U);
+
+        CHECK(
+            tracked.acceptLinePoint(
+                       resolved->position).outcome ==
+            sketch::LinePointOutcome::
+                first_point_accepted);
+        CHECK(tracked.trackingAnchors().anchors.empty());
+        request = tracked.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->tracking_anchors.anchors.empty());
+
+        // A new request may acquire again; one Esc clears R11 request-local
+        // state while preserving the active Line stage.
+        resolved =
+            tracked.resolvePointerInput(
+                endpoint->point,
+                sketch::PointResolutionSource::
+                    object_snap,
+                *endpoint);
+        CHECK(resolved.has_value());
+        CHECK(
+            tracked.acquireCurrentTrackingAnchor() ==
+            sketch::TrackingAcquireResult::acquired);
+        CHECK(tracked.escape());
+        CHECK(tracked.trackingAnchors().anchors.empty());
+        CHECK(
+            tracked.lineStage() ==
+            sketch::LineStage::await_next_point);
+        CHECK(
+            !tracked.resolvedPointRequestCandidate().
+                 has_value());
+    }
+
+    // Deferred R11 semantic references are request-local: NONE leaves them
+    // dormant/preserved, while accepted point and Esc clear them.
+    {
+        sketch::SketchModel deferred_model;
+        const auto line =
+            deferred_model.addLine(
+                {0.0, 0.0},
+                {10.0, 0.0});
+        const auto circle =
+            deferred_model.addCircle(
+                {20.0, 0.0},
+                5.0);
+
+        const auto extension =
+            sketch::makeLineExtensionReference(
+                deferred_model,
+                line,
+                sketch::SnapSemanticRole::line_end);
+        const auto tangent =
+            sketch::makeTangentCurveReference(
+                deferred_model,
+                circle);
+        CHECK(extension.has_value());
+        CHECK(tangent.has_value());
+
+        sketch::SketchInteractionState deferred;
+        deferred.activateLine();
+        CHECK(
+            deferred.setDeferredSnapReference(
+                *extension));
+        auto request =
+            deferred.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->deferred_snap_reference ==
+            extension);
+
+        CHECK(
+            deferred.setTemporarySnapOverride(
+                sketch::TemporarySnapOverrideKind::none));
+        request = deferred.activePointRequest();
+        CHECK(request.has_value());
+        CHECK(
+            request->deferred_snap_reference ==
+            extension);
+
+        CHECK(
+            deferred.acceptLinePoint(
+                {1.0, 1.0}).outcome ==
+            sketch::LinePointOutcome::
+                first_point_accepted);
+        CHECK(
+            !deferred.deferredSnapReference().
+                 has_value());
+
+        CHECK(
+            deferred.setDeferredSnapReference(
+                *tangent));
+        CHECK(
+            deferred.deferredSnapReference() ==
+            tangent);
+        CHECK(deferred.escape());
+        CHECK(
+            !deferred.deferredSnapReference().
+                 has_value());
     }
 
     // Esc hierarchy: with an empty live token, request-local numeric

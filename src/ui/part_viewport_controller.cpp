@@ -134,6 +134,63 @@ semanticGripRole(
     return sketch::SketchGripRole::line_center;
 }
 
+[[nodiscard]] viewer::SketchInferenceGuideKind
+viewerInferenceGuideKind(
+    sketch::InferenceGuideKind kind) noexcept {
+    switch (kind) {
+    case sketch::InferenceGuideKind::sketch_u:
+        return viewer::SketchInferenceGuideKind::sketch_u;
+    case sketch::InferenceGuideKind::sketch_v:
+        return viewer::SketchInferenceGuideKind::sketch_v;
+    case sketch::InferenceGuideKind::additional_direction:
+        return viewer::SketchInferenceGuideKind::
+            additional_direction;
+    }
+    return viewer::SketchInferenceGuideKind::sketch_u;
+}
+
+[[nodiscard]] viewer::SketchSnapMarkerKind
+viewerSnapMarkerKind(
+    sketch::SnapKind kind) noexcept {
+    switch (kind) {
+    case sketch::SnapKind::endpoint:
+        return viewer::SketchSnapMarkerKind::endpoint;
+    case sketch::SnapKind::midpoint:
+        return viewer::SketchSnapMarkerKind::midpoint;
+    case sketch::SnapKind::center:
+        return viewer::SketchSnapMarkerKind::center;
+    case sketch::SnapKind::quadrant:
+        return viewer::SketchSnapMarkerKind::quadrant;
+    case sketch::SnapKind::intersection:
+        return viewer::SketchSnapMarkerKind::intersection;
+    case sketch::SnapKind::origin:
+        return viewer::SketchSnapMarkerKind::origin;
+    case sketch::SnapKind::perpendicular:
+        return viewer::SketchSnapMarkerKind::perpendicular;
+    case sketch::SnapKind::tangent:
+        return viewer::SketchSnapMarkerKind::tangent;
+    case sketch::SnapKind::nearest:
+        return viewer::SketchSnapMarkerKind::nearest;
+    }
+    return viewer::SketchSnapMarkerKind::endpoint;
+}
+
+[[nodiscard]] std::string snapMarkerLabel(
+    sketch::SnapKind kind) {
+    switch (kind) {
+    case sketch::SnapKind::endpoint: return "END";
+    case sketch::SnapKind::midpoint: return "MID";
+    case sketch::SnapKind::center: return "CEN";
+    case sketch::SnapKind::quadrant: return "QUAD";
+    case sketch::SnapKind::intersection: return "INT";
+    case sketch::SnapKind::origin: return "ORG";
+    case sketch::SnapKind::perpendicular: return "PER";
+    case sketch::SnapKind::tangent: return "TAN";
+    case sketch::SnapKind::nearest: return "NEA";
+    }
+    return {};
+}
+
 [[nodiscard]] viewer::SketchMeasureMarkerRole
 viewerMeasureMarkerRole(
     sketch::MeasurePointRole role) noexcept {
@@ -1104,6 +1161,226 @@ void PartViewportController::clearSketchMeasurePresentation() {
     static_cast<void>(
         viewport_->setSketchMeasureCueScene(
             viewer::SketchMeasureCueScene{}));
+}
+
+bool PartViewportController::
+projectSketchSnapInferencePresentation(
+    const std::optional<sketch::SnapCandidate>&
+        current,
+    const sketch::TrackingAnchorState& anchors,
+    bool show_anchors,
+    const std::vector<sketch::InferenceGuide>&
+        active_guides,
+    std::optional<sketch::Point2>
+        inference_point,
+    bool guide_intersection,
+    std::optional<sketch::LineExtensionRay>
+        extension_ray,
+    std::optional<sketch::Point2>
+        extension_point) {
+    if (viewport_ == nullptr) {
+        return false;
+    }
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr ||
+        !anchors.valid() ||
+        active_guides.size() > 2U ||
+        (inference_point &&
+         !inference_point->finite()) ||
+        (extension_ray &&
+         !extension_ray->valid()) ||
+        (extension_point &&
+         (!extension_ray ||
+          !extension_point->finite()))) {
+        return false;
+    }
+
+    viewer::SketchSnapInferenceScene scene;
+    const auto make_marker =
+        [hosted](
+            const sketch::SnapCandidate& candidate)
+            -> std::optional<
+                viewer::SketchSnapMarkerPresentation> {
+            if (!candidate.valid()) {
+                return std::nullopt;
+            }
+            const auto world =
+                detail::sketchPointToWorld(
+                    hosted->placement,
+                    candidate.point);
+            const auto label =
+                snapMarkerLabel(candidate.kind);
+            if (!world || label.empty()) {
+                return std::nullopt;
+            }
+            viewer::SketchSnapMarkerPresentation
+                marker{
+                    *world,
+                    viewerSnapMarkerKind(
+                        candidate.kind),
+                    label};
+            return marker.valid()
+                ? std::optional<
+                      viewer::
+                          SketchSnapMarkerPresentation>{
+                      std::move(marker)}
+                : std::nullopt;
+        };
+
+    if (current) {
+        scene.current = make_marker(*current);
+        if (!scene.current) {
+            return false;
+        }
+    } else if (inference_point) {
+        const auto world =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                *inference_point);
+        if (!world) {
+            return false;
+        }
+        scene.current =
+            viewer::SketchSnapMarkerPresentation{
+                *world,
+                guide_intersection
+                    ? viewer::SketchSnapMarkerKind::
+                          guide_intersection
+                    : viewer::SketchSnapMarkerKind::
+                          guide_projection,
+                guide_intersection
+                    ? "TRACK INT"
+                    : "TRACK"};
+    }
+
+    if (extension_ray) {
+        const auto origin_world =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                extension_ray->origin);
+        const sketch::Point2 direction_point{
+            extension_ray->origin.u +
+                extension_ray->direction.u,
+            extension_ray->origin.v +
+                extension_ray->direction.v};
+        const auto direction_world_point =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                direction_point);
+        if (!origin_world ||
+            !direction_world_point) {
+            return false;
+        }
+
+        std::optional<viewer::Point3>
+            resolved_world;
+        if (extension_point) {
+            resolved_world =
+                detail::sketchPointToWorld(
+                    hosted->placement,
+                    *extension_point);
+            if (!resolved_world) {
+                return false;
+            }
+        }
+
+        scene.extension_guide =
+            viewer::SketchExtensionGuidePresentation{
+                *origin_world,
+                {
+                    direction_world_point->x -
+                        origin_world->x,
+                    direction_world_point->y -
+                        origin_world->y,
+                    direction_world_point->z -
+                        origin_world->z,
+                },
+                resolved_world};
+        if (!scene.extension_guide->valid()) {
+            return false;
+        }
+
+        if (!scene.current) {
+            scene.current =
+                viewer::SketchSnapMarkerPresentation{
+                    resolved_world
+                        ? *resolved_world
+                        : *origin_world,
+                    viewer::SketchSnapMarkerKind::
+                        extension,
+                    "EXT"};
+        }
+    }
+
+    if (show_anchors) {
+        scene.acquired.reserve(
+            anchors.anchors.size());
+        for (const auto& anchor :
+             anchors.anchors) {
+            const auto marker =
+                make_marker(anchor.snap);
+            if (!marker) {
+                return false;
+            }
+            scene.acquired.push_back(*marker);
+        }
+    }
+
+    scene.guides.reserve(active_guides.size());
+    for (const auto& guide :
+         active_guides) {
+        if (!guide.valid()) {
+            return false;
+        }
+
+        const auto anchor_world =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                guide.anchor);
+        const sketch::Point2 direction_point{
+            guide.anchor.u + guide.direction.u,
+            guide.anchor.v + guide.direction.v};
+        const auto direction_world_point =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                direction_point);
+        if (!anchor_world ||
+            !direction_world_point) {
+            return false;
+        }
+
+        viewer::SketchInferenceGuidePresentation
+            presentation{
+                *anchor_world,
+                {
+                    direction_world_point->x -
+                        anchor_world->x,
+                    direction_world_point->y -
+                        anchor_world->y,
+                    direction_world_point->z -
+                        anchor_world->z,
+                },
+                viewerInferenceGuideKind(
+                    guide.kind)};
+        if (!presentation.valid()) {
+            return false;
+        }
+        scene.guides.push_back(
+            std::move(presentation));
+    }
+
+    return scene.valid() &&
+           viewport_->
+               setSketchSnapInferenceScene(scene);
+}
+
+void PartViewportController::
+clearSketchSnapInferencePresentation() {
+    if (viewport_ != nullptr) {
+        static_cast<void>(
+            viewport_->setSketchSnapInferenceScene(
+                viewer::SketchSnapInferenceScene{}));
+    }
 }
 
 SketchEntityRectangleQueryResult

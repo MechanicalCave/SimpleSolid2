@@ -115,6 +115,75 @@ int main(int argc, char* argv[]) {
                  widget.setSketchPreviewScene(
                      viewer::SketchPreviewScene{});
 
+            // R11 snap/OTRACK presentation is a real provider overlay:
+            // one transient current marker/label plus up to two acquired
+            // tracking anchors, all non-selectable and runtime-only.
+            viewer::SketchSnapInferenceScene
+                snap_scene;
+            snap_scene.current =
+                viewer::SketchSnapMarkerPresentation{
+                    {15.0, 15.0, 0.0},
+                    viewer::SketchSnapMarkerKind::
+                        endpoint,
+                    "Endpoint"};
+            snap_scene.acquired = {
+                {
+                    {10.0, 15.0, 0.0},
+                    viewer::SketchSnapMarkerKind::
+                        midpoint,
+                    "Midpoint"},
+                {
+                    {20.0, 15.0, 0.0},
+                    viewer::SketchSnapMarkerKind::
+                        center,
+                    "Center"},
+            };
+            snap_scene.guides = {
+                {
+                    {10.0, 15.0, 0.0},
+                    {1.0, 0.0, 0.0},
+                    viewer::SketchInferenceGuideKind::
+                        sketch_u},
+                {
+                    {20.0, 15.0, 0.0},
+                    {0.0, 1.0, 0.0},
+                    viewer::SketchInferenceGuideKind::
+                        sketch_v},
+            };
+            ok = ok &&
+                 snap_scene.valid() &&
+                 widget.setSketchSnapInferenceScene(
+                     snap_scene);
+
+            snap_scene.current =
+                viewer::SketchSnapMarkerPresentation{
+                    {28.0, 16.0, 0.0},
+                    viewer::SketchSnapMarkerKind::
+                        extension,
+                    "EXT"};
+            snap_scene.extension_guide =
+                viewer::SketchExtensionGuidePresentation{
+                    {20.0, 16.0, 0.0},
+                    {10.0, 0.0, 0.0},
+                    viewer::Point3{
+                        28.0,
+                        16.0,
+                        0.0}};
+            snap_scene.acquired.resize(1U);
+            snap_scene.guides.resize(1U);
+            snap_scene.guides[0].kind =
+                viewer::SketchInferenceGuideKind::
+                    additional_direction;
+            snap_scene.guides[0].direction =
+                {1.0, 1.0, 0.0};
+            ok = ok &&
+                 widget.setSketchSnapInferenceScene(
+                     snap_scene);
+            ok = ok &&
+                 widget.setSketchSnapInferenceScene(
+                     viewer::
+                         SketchSnapInferenceScene{});
+
             viewer::SketchDynamicInputOverlay dyn_overlay{
                 viewer::ViewportPoint2{
                     895.0,

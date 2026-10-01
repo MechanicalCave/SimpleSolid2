@@ -1,6 +1,6 @@
 version: 1
 status: completed
-active_work: "work/CI-04_BUILD_GRAPH_AND_WARM_VERIFICATION.md"
+active_work: "work/R11_OBJECT_SNAP_TRACKING_INFERENCE.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.7"
@@ -19,13 +19,21 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production mutation inactive after CI-04 completion
-  - keep R11 Object Snap / Tracking / Inference proposal-only and inactive until separately activated by the Owner
-  - require R11 to consume the accepted R10 resolver priority, numeric locks, Polar/Dynamic Input semantics and one workspace CAD input path rather than creating a second point-resolution system
-  - keep R12+, ordinary RMB context, authored dimensions/constraints/solver and solid modeling inactive until separately accepted
-  - preserve Roadmap v1.7 sequencing: R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
+  - keep production CAD mutation inactive after R11 completion
+  - R12 Trim / Split / Join remains inactive until a separate Owner-accepted Work Contract freezes explicit identity/reference outcomes for topology-changing edits
+  - after any future R12 completion, stop at the profile-authoring readiness checkpoint before Part Feature Tree architecture work
+  - keep ordinary RMB context, authored dimensions/constraints/solver, Grid Snap, projected/reference geometry and solid modeling inactive until separately accepted
+  - preserve Roadmap v1.7 sequencing: completed R11 -> separately accepted R12 identity gate -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - R11 completed on 2026-10-01 at exact runtime/manual candidate 7f1b3d70a3976f40f5e0652824cada1f5ed67164 after Windows FULL #1088 PASS, including desktop 79/79, core-only 16/16, selector verification and final windows-msvc aggregation.
+  - Owner manual Windows verification passed on 2026-10-01 on exact head 7f1b3d70a3976f40f5e0652824cada1f5ed67164; the Section 28 workflow was accepted after the final Line Extension presentation retest showed the EXT guide/capture behavior working as intended.
+  - R11 acceptance conditions are satisfied by this work-only closeout candidate; after completion no production scope is active. R12 remains inactive and requires a separate Owner-accepted identity/reference outcome gate before Trim/Split/Join implementation.
+  - Owner explicitly activated synchronized R11 Object Snap / Tracking / Inference on 2026-10-01; NONE semantics remain frozen as accepted and aperture/dwell/un-acquire/glyph/shortcut details are delegated as bounded D1 tuning.
+  - Owner explicitly froze the synchronized R11 NONE override semantics on 2026-10-01; this decision does not activate R11. Remaining pre-activation items are D1 tuning only plus separate explicit Owner activation.
+  - R11 proposal was synchronized after CI-04 on 2026-10-01: one PointResolution path, accepted OSNAP/OTRACK defaults and user-preference lifetime, PER/TAN/NEA/EXT semantics, two-anchor tracking baseline and deterministic exact ranking are recorded; R11 remains proposal-only/inactive and NONE semantics still require final Owner freeze before activation.
+  - R10 merged to main as 8574215c3c73ae015e49ad8a749464c92d81548b on 2026-09-30 after final FULL #1009, Owner manual Windows PASS and CLOSURE #1010.
+  - R11 proposal work on branch proposal-r11-osnap-tracking-inference is governance/design-only and does not activate production scope; ACTIVE remains completed until explicit Owner acceptance.
   - CI-04 completion candidate exact head fbc35c3d9efd96891be8fec5671654cad8ecd473 passed Windows FULL #1044 with CLEAN desktop 78/78 PASS, core-only PASS, immediate warm rebuild 7.60s, warm desktop 78/78 PASS, and final windows-msvc PASS.
   - CI-04 acceptance is satisfied; R11 remains proposal-only/inactive and no CAD/product semantics were changed by CI-04.
   - CI-04 implementation candidate exact head 79e89af2faba96780dab9e85b9f60700a75015c7 passed CLEAN Windows FULL #1040 with desktop 78/78, core-only PASS, corrected FOCUSED exact execution, bounded parallel CTest, and comparative timing evidence.

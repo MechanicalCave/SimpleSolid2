@@ -625,8 +625,142 @@ bool SketchInteractionState::commonTransformTool()
            tool_ == SketchTool::mirror;
 }
 
+namespace {
+
+[[nodiscard]] std::optional<PointResolution>
+resolvePointRequestCandidate(
+    const PointRequest& request,
+    const PointFieldLocks& locks,
+    PointResolutionSource pointer_source,
+    const std::optional<SnapCandidate>& pointer_snap)
+    noexcept {
+    if (!request.pointer_candidate) {
+        return std::nullopt;
+    }
+
+    const auto raw = *request.pointer_candidate;
+    Point2 resolved = raw;
+    const bool locked = !locks.empty();
+
+    const auto finish =
+        [&](Point2 point)
+            -> std::optional<PointResolution> {
+            if (!point.finite()) {
+                return std::nullopt;
+            }
+
+            const bool compatible_snap =
+                locked &&
+                pointer_source ==
+                    PointResolutionSource::
+                        object_snap &&
+                pointer_snap &&
+                point == raw;
+
+            PointResolution result{
+                point,
+                locked
+                    ? PointResolutionSource::numeric_lock
+                    : pointer_source,
+                compatible_snap
+                    ? pointer_snap
+                    : (locked
+                           ? std::nullopt
+                           : pointer_snap)};
+
+            return result.valid()
+                ? std::optional<PointResolution>{
+                      std::move(result)}
+                : std::nullopt;
+        };
+
+    if (!request.base) {
+        if (locks.u) {
+            resolved.u = *locks.u;
+        }
+        if (locks.v) {
+            resolved.v = *locks.v;
+        }
+        return finish(resolved);
+    }
+
+    const auto base = *request.base;
+    const double raw_du = raw.u - base.u;
+    const double raw_dv = raw.v - base.v;
+
+    if (locks.delta_u ||
+        locks.delta_v) {
+        resolved = {
+            base.u +
+                locks.delta_u.value_or(raw_du),
+            base.v +
+                locks.delta_v.value_or(raw_dv)};
+        return finish(resolved);
+    }
+
+    if (locks.distance ||
+        locks.angle) {
+        const double raw_distance =
+            std::hypot(raw_du, raw_dv);
+
+        double resolved_angle{};
+        if (locks.angle) {
+            resolved_angle = *locks.angle;
+        } else {
+            if (!std::isfinite(raw_distance) ||
+                raw_distance <= 0.0) {
+                return std::nullopt;
+            }
+            resolved_angle =
+                std::atan2(raw_dv, raw_du);
+        }
+
+        const double resolved_distance =
+            locks.distance.value_or(
+                raw_distance);
+        if (!std::isfinite(resolved_distance) ||
+            resolved_distance < 0.0 ||
+            !std::isfinite(resolved_angle)) {
+            return std::nullopt;
+        }
+
+        resolved = {
+            base.u +
+                resolved_distance *
+                    std::cos(resolved_angle),
+            base.v +
+                resolved_distance *
+                    std::sin(resolved_angle)};
+    }
+
+    return finish(resolved);
+}
+
+} // namespace
+
 std::optional<PointRequest>
 SketchInteractionState::activePointRequest() const noexcept {
+    const auto finalized =
+        [this](PointRequest request)
+            -> std::optional<PointRequest> {
+            request.temporary_snap_override =
+                temporary_snap_override_;
+            request.deferred_snap_reference =
+                deferred_snap_reference_;
+            request.tracking_anchors =
+                tracking_anchors_;
+            request.resolution =
+                resolvePointRequestCandidate(
+                    request,
+                    point_field_locks_,
+                    point_pointer_source_,
+                    point_pointer_snap_);
+            return request.valid()
+                ? std::optional<PointRequest>{
+                      std::move(request)}
+                : std::nullopt;
+        };
+
     if (manipulation_) {
         const bool distance_enabled =
             manipulation_->mode ==
@@ -649,9 +783,7 @@ SketchInteractionState::activePointRequest() const noexcept {
                     *manipulation_->
                         rotate_reference_point);
         }
-        return request.valid()
-            ? std::optional<PointRequest>{request}
-            : std::nullopt;
+        return finalized(std::move(request));
     }
 
     if (tool_ == SketchTool::line &&
@@ -670,9 +802,7 @@ SketchInteractionState::activePointRequest() const noexcept {
             request.polar_relative_reference =
                 line_relative_reference_;
         }
-        return request.valid()
-            ? std::optional<PointRequest>{request}
-            : std::nullopt;
+        return finalized(std::move(request));
     }
 
     if (tool_ == SketchTool::circle &&
@@ -685,9 +815,7 @@ SketchInteractionState::activePointRequest() const noexcept {
             true,
             false,
             false};
-        return request.valid()
-            ? std::optional<PointRequest>{request}
-            : std::nullopt;
+        return finalized(std::move(request));
     }
 
     if (tool_ == SketchTool::arc &&
@@ -710,9 +838,7 @@ SketchInteractionState::activePointRequest() const noexcept {
                 true,
                 end_stage,
                 end_stage};
-            return request.valid()
-                ? std::optional<PointRequest>{request}
-                : std::nullopt;
+            return finalized(std::move(request));
         }
     }
 
@@ -730,9 +856,7 @@ SketchInteractionState::activePointRequest() const noexcept {
             first_corner,
             false,
             false};
-        return request.valid()
-            ? std::optional<PointRequest>{request}
-            : std::nullopt;
+        return finalized(std::move(request));
     }
 
     if (!commonTransformTool() ||
@@ -789,9 +913,71 @@ SketchInteractionState::activePointRequest() const noexcept {
                     reference_point);
     }
 
-    return request.valid()
-        ? std::optional<PointRequest>{request}
-        : std::nullopt;
+    return finalized(std::move(request));
+}
+
+bool SketchInteractionState::setTemporarySnapOverride(
+    TemporarySnapOverrideKind value) noexcept {
+    if (!activePointRequest()) {
+        return false;
+    }
+    temporary_snap_override_ = value;
+    clearPointerResolution();
+    return true;
+}
+
+bool SketchInteractionState::clearTemporarySnapOverride()
+    noexcept {
+    if (!temporary_snap_override_) {
+        return false;
+    }
+    temporary_snap_override_.reset();
+    clearPointerResolution();
+    return true;
+}
+
+bool SketchInteractionState::setDeferredSnapReference(
+    DeferredSnapReference reference) noexcept {
+    if (!activePointRequest() ||
+        !reference.valid()) {
+        return false;
+    }
+    deferred_snap_reference_ =
+        std::move(reference);
+    return true;
+}
+
+bool SketchInteractionState::clearDeferredSnapReference()
+    noexcept {
+    if (!deferred_snap_reference_) {
+        return false;
+    }
+    deferred_snap_reference_.reset();
+    return true;
+}
+
+TrackingAcquireResult
+SketchInteractionState::acquireCurrentTrackingAnchor()
+    noexcept {
+    const auto resolution =
+        resolvedPointRequestCandidate();
+    if (!resolution ||
+        resolution->source !=
+            PointResolutionSource::object_snap ||
+        !resolution->object_snap) {
+        return TrackingAcquireResult::invalid;
+    }
+
+    return tracking_anchors_.acquire(
+        TrackingAnchor{*resolution->object_snap});
+}
+
+bool SketchInteractionState::removeTrackingAnchor(
+    const SnapStableKey& key) {
+    if (!activePointRequest()) {
+        return false;
+    }
+    return tracking_anchors_.remove(key);
 }
 
 std::optional<ResolvedSketchInput>
@@ -842,108 +1028,137 @@ SketchInteractionState::resolveExplicitPoint(
         break;
     }
 
-    return resolved.finite()
+    PointResolution result{
+        resolved,
+        PointResolutionSource::explicit_numeric,
+        std::nullopt};
+    return result.valid()
         ? std::optional<ResolvedSketchInput>{
-              ResolvedSketchInput{resolved}}
+              result}
         : std::nullopt;
 }
 
 std::optional<ResolvedSketchInput>
 SketchInteractionState::resolvePointerInput(
     Point2 raw) noexcept {
+    return resolvePointerInput(
+        raw,
+        PointResolutionSource::raw_pointer);
+}
+
+std::optional<ResolvedSketchInput>
+SketchInteractionState::resolvePointerInput(
+    Point2 raw,
+    PointResolutionSource source,
+    std::optional<SnapCandidate> object_snap) noexcept {
     if (!raw.finite() || !activePointRequest()) {
         return std::nullopt;
     }
 
+    const bool pointer_source =
+        source ==
+            PointResolutionSource::raw_pointer ||
+        source ==
+            PointResolutionSource::polar ||
+        source ==
+            PointResolutionSource::object_snap ||
+        source ==
+            PointResolutionSource::tracking_inference;
+    if (!pointer_source) {
+        return std::nullopt;
+    }
+
+    if (source ==
+        PointResolutionSource::object_snap) {
+        if (!object_snap ||
+            !object_snap->valid() ||
+            object_snap->point != raw) {
+            return std::nullopt;
+        }
+    } else if (object_snap) {
+        return std::nullopt;
+    }
+
     point_pointer_candidate_ = raw;
-    return resolvedPointRequestCandidate();
+    point_pointer_source_ = source;
+    point_pointer_snap_ =
+        std::move(object_snap);
+
+    const auto resolved =
+        resolvedPointRequestCandidate();
+    const bool exact_assistance =
+        source ==
+            PointResolutionSource::object_snap ||
+        source ==
+            PointResolutionSource::
+                tracking_inference;
+    if (exact_assistance &&
+        (!resolved ||
+         resolved->position != raw)) {
+        clearPointerResolution();
+        return std::nullopt;
+    }
+    return resolved;
 }
 
 std::optional<ResolvedSketchInput>
 SketchInteractionState::
 resolvedPointRequestCandidate() const noexcept {
     const auto request = activePointRequest();
-    if (!request ||
-        !request->pointer_candidate) {
-        return std::nullopt;
-    }
-
-    const auto raw =
-        *request->pointer_candidate;
-    Point2 resolved = raw;
-
-    if (!request->base) {
-        if (point_field_locks_.u) {
-            resolved.u = *point_field_locks_.u;
-        }
-        if (point_field_locks_.v) {
-            resolved.v = *point_field_locks_.v;
-        }
-        return resolved.finite()
-            ? std::optional<ResolvedSketchInput>{
-                  ResolvedSketchInput{resolved}}
-            : std::nullopt;
-    }
-
-    const auto base = *request->base;
-    const double raw_du = raw.u - base.u;
-    const double raw_dv = raw.v - base.v;
-
-    if (point_field_locks_.delta_u ||
-        point_field_locks_.delta_v) {
-        resolved = {
-            base.u +
-                point_field_locks_.delta_u
-                    .value_or(raw_du),
-            base.v +
-                point_field_locks_.delta_v
-                    .value_or(raw_dv)};
-        return resolved.finite()
-            ? std::optional<ResolvedSketchInput>{
-                  ResolvedSketchInput{resolved}}
-            : std::nullopt;
-    }
-
-    if (point_field_locks_.distance ||
-        point_field_locks_.angle) {
-        const double raw_distance =
-            std::hypot(raw_du, raw_dv);
-
-        double resolved_angle{};
-        if (point_field_locks_.angle) {
-            resolved_angle =
-                *point_field_locks_.angle;
-        } else {
-            if (!std::isfinite(raw_distance) ||
-                raw_distance <= 0.0) {
-                return std::nullopt;
-            }
-            resolved_angle =
-                std::atan2(raw_dv, raw_du);
-        }
-
-        const double resolved_distance =
-            point_field_locks_.distance
-                .value_or(raw_distance);
-        if (!std::isfinite(resolved_distance) ||
-            resolved_distance < 0.0 ||
-            !std::isfinite(resolved_angle)) {
-            return std::nullopt;
-        }
-
-        resolved = {
-            base.u +
-                resolved_distance *
-                    std::cos(resolved_angle),
-            base.v +
-                resolved_distance *
-                    std::sin(resolved_angle)};
-    }
-
-    return resolved.finite()
-        ? std::optional<ResolvedSketchInput>{
-              ResolvedSketchInput{resolved}}
+    return request
+        ? request->resolution
         : std::nullopt;
+}
+
+bool SketchInteractionState::pointCandidateCompatible(
+    Point2 raw,
+    PointResolutionSource source,
+    std::optional<SnapCandidate> object_snap)
+    const noexcept {
+    if (!raw.finite()) {
+        return false;
+    }
+
+    const bool pointer_source =
+        source ==
+            PointResolutionSource::raw_pointer ||
+        source ==
+            PointResolutionSource::polar ||
+        source ==
+            PointResolutionSource::object_snap ||
+        source ==
+            PointResolutionSource::
+                tracking_inference;
+    if (!pointer_source) {
+        return false;
+    }
+
+    if (source ==
+        PointResolutionSource::object_snap) {
+        if (!object_snap ||
+            !object_snap->valid() ||
+            object_snap->point != raw) {
+            return false;
+        }
+    } else if (object_snap) {
+        return false;
+    }
+
+    auto request = activePointRequest();
+    if (!request) {
+        return false;
+    }
+    request->pointer_candidate = raw;
+    request->resolution.reset();
+
+    const auto resolved =
+        resolvePointRequestCandidate(
+            *request,
+            point_field_locks_,
+            source,
+            object_snap);
+    return resolved &&
+           resolved->position == raw;
 }
 
 bool SketchInteractionState::lockPointField(
@@ -1049,9 +1264,13 @@ SketchInteractionState::resolveDirectDistance(
     const Point2 resolved{
         base.u + (du / length) * requested_distance,
         base.v + (dv / length) * requested_distance};
-    return resolved.finite()
+    PointResolution result{
+        resolved,
+        PointResolutionSource::explicit_numeric,
+        std::nullopt};
+    return result.valid()
         ? std::optional<ResolvedSketchInput>{
-              ResolvedSketchInput{resolved}}
+              result}
         : std::nullopt;
 }
 
@@ -1406,6 +1625,7 @@ bool SketchInteractionState::acceptTransformPoint(
             transform_session_->current_preview = input;
         }
         clearHover();
+        completePointAcquisition();
         return true;
 
     case CommonTransformStage::await_reference_point:
@@ -1425,6 +1645,7 @@ bool SketchInteractionState::acceptTransformPoint(
         transform_session_->stage =
             CommonTransformStage::await_destination;
         clearHover();
+        completePointAcquisition();
         return true;
 
     case CommonTransformStage::await_axis_start:
@@ -1439,6 +1660,7 @@ bool SketchInteractionState::acceptTransformPoint(
         transform_session_->stage =
             CommonTransformStage::await_axis_end;
         clearHover();
+        completePointAcquisition();
         return true;
 
     default:
@@ -1608,6 +1830,7 @@ bool SketchInteractionState::continueCopyPlacement() noexcept {
 
     transform_session_->current_preview.reset();
     point_pointer_candidate_.reset();
+    completePointAcquisition();
     clearHover();
     return true;
 }
@@ -1674,6 +1897,7 @@ SketchInteractionState::acceptLinePoint(
         line_anchor_ = point;
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
+        completePointAcquisition();
         line_stage_ =
             LineStage::await_next_point;
         return {
@@ -1710,6 +1934,7 @@ SketchInteractionState::acceptLinePoint(
     }
 
     pending_line_request_ = request;
+    completePointAcquisition();
     return {
         LinePointOutcome::segment_requested,
         request};
@@ -1734,6 +1959,7 @@ SketchInteractionState::acceptCirclePoint(
         circle_center_ = point;
         circle_radius_lock_.reset();
         point_field_locks_ = {};
+        completePointAcquisition();
         circle_stage_ =
             CircleStage::await_radius;
         return {
@@ -1833,6 +2059,7 @@ SketchInteractionState::acceptArcPoint(
         arc_radius_lock_.reset();
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
+        completePointAcquisition();
         arc_stage_ = ArcStage::await_end;
         return {
             ArcPointOutcome::start_accepted,
@@ -1849,6 +2076,7 @@ SketchInteractionState::acceptArcPoint(
         arc_radius_lock_.reset();
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
+        completePointAcquisition();
         arc_stage_ = ArcStage::await_arc_point;
         return {
             ArcPointOutcome::end_accepted,
@@ -1881,6 +2109,7 @@ SketchInteractionState::acceptArcPoint(
     }
 
     pending_arc_request_ = *request;
+    completePointAcquisition();
     return {
         ArcPointOutcome::arc_requested,
         request};
@@ -1925,6 +2154,7 @@ SketchInteractionState::acceptArcPointer(
     }
 
     pending_arc_request_ = *request;
+    completePointAcquisition();
     return {
         ArcPointOutcome::arc_requested,
         request};
@@ -1986,6 +2216,7 @@ SketchInteractionState::acceptArcRadius(
     }
 
     pending_arc_request_ = *request;
+    completePointAcquisition();
     return {
         ArcPointOutcome::arc_requested,
         request};
@@ -2012,6 +2243,7 @@ SketchInteractionState::acceptRectanglePoint(
         rectangle_height_lock_.reset();
         point_pointer_candidate_ = point;
         point_field_locks_ = {};
+        completePointAcquisition();
         rectangle_stage_ =
             RectangleStage::await_opposite_corner;
         return {
@@ -2055,6 +2287,7 @@ SketchInteractionState::acceptRectanglePoint(
     }
 
     pending_rectangle_request_ = *request;
+    completePointAcquisition();
     return {
         RectanglePointOutcome::rectangle_requested,
         request};
@@ -2136,6 +2369,7 @@ SketchInteractionState::acceptRectangleSize(
     }
 
     pending_rectangle_request_ = *request;
+    completePointAcquisition();
     return {
         RectanglePointOutcome::rectangle_requested,
         request};
@@ -2367,6 +2601,9 @@ clearRequestLocalNumericLocks() noexcept {
 }
 
 bool SketchInteractionState::escape() noexcept {
+    if (clearR11RequestState()) {
+        return true;
+    }
     if (clearRequestLocalNumericLocks()) {
         return true;
     }
@@ -3230,6 +3467,7 @@ continueDirectManipulationCopyPlacement() noexcept {
         ResolvedSketchInput{manipulation_->pivot};
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    completePointAcquisition();
     clearHover();
     return true;
 }
@@ -3252,6 +3490,7 @@ void SketchInteractionState::finishDirectManipulation()
     manipulation_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    completePointAcquisition();
     clearHover();
 }
 
@@ -3260,6 +3499,7 @@ void SketchInteractionState::cancelDirectManipulation()
     manipulation_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
     clearHover();
 }
 
@@ -3294,6 +3534,9 @@ void SketchInteractionState::resetLineStage()
     pending_line_request_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
+    deferred_snap_reference_.reset();
+    tracking_anchors_.clear();
 }
 
 void SketchInteractionState::resetCircleStage()
@@ -3305,6 +3548,9 @@ void SketchInteractionState::resetCircleStage()
     pending_circle_request_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
+    deferred_snap_reference_.reset();
+    tracking_anchors_.clear();
 }
 
 void SketchInteractionState::resetArcStage()
@@ -3317,6 +3563,9 @@ void SketchInteractionState::resetArcStage()
     pending_arc_request_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
+    deferred_snap_reference_.reset();
+    tracking_anchors_.clear();
 }
 
 void SketchInteractionState::resetRectangleStage()
@@ -3329,6 +3578,9 @@ void SketchInteractionState::resetRectangleStage()
     pending_rectangle_request_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
+    deferred_snap_reference_.reset();
+    tracking_anchors_.clear();
 }
 
 void SketchInteractionState::resetCommonTransform()
@@ -3336,6 +3588,9 @@ void SketchInteractionState::resetCommonTransform()
     transform_session_.reset();
     point_pointer_candidate_.reset();
     point_field_locks_ = {};
+    temporary_snap_override_.reset();
+    deferred_snap_reference_.reset();
+    tracking_anchors_.clear();
 }
 
 void SketchInteractionState::resetMeasure() noexcept {

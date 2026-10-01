@@ -7,12 +7,15 @@
 #include <QLineEdit>
 #include <QMenu>
 #include <QPoint>
+#include <QSettings>
+#include <QTemporaryDir>
 #include <QTest>
 #include <QVBoxLayout>
 #include <QWidget>
 
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <string_view>
 
@@ -116,6 +119,78 @@ public:
 
 int main(int argc, char* argv[]) {
     QApplication app{argc, argv};
+
+    // R11 user preference persistence is application/user-level and stores
+    // only OSNAP/OTRACK choices. The test uses a private INI backend so the
+    // self-hosted runner's real user settings are never read or changed.
+    QTemporaryDir preference_root;
+    CHECK(preference_root.isValid());
+    const auto preference_path =
+        preference_root.filePath(
+            QStringLiteral("cad-preferences.ini"));
+
+    {
+        auto store =
+            std::make_unique<QSettings>(
+                preference_path,
+                QSettings::IniFormat);
+        simplesolid2::ui::ProjectWorkspaceShell
+            preference_writer{
+                std::move(store)};
+
+        auto settings =
+            preference_writer.cadInteractionSettings();
+        settings.object_snap.master_enabled = false;
+        settings.object_snap.endpoint = false;
+        settings.object_snap.midpoint = false;
+        settings.object_snap.center = true;
+        settings.object_snap.quadrant = false;
+        settings.object_snap.intersection = true;
+        settings.object_snap.origin = false;
+        settings.object_snap.perpendicular = true;
+        settings.object_snap.tangent = true;
+        settings.object_snap.nearest = true;
+        settings.object_snap.extension = true;
+        settings.object_snap.object_tracking_enabled = true;
+
+        // These R10 runtime aids intentionally do not belong to the R11
+        // persisted OSNAP/OTRACK preference payload.
+        settings.polar.enabled = false;
+        settings.dynamic_input_enabled = true;
+        CHECK(
+            preference_writer.setCadInteractionSettings(
+                settings));
+    }
+
+    {
+        auto store =
+            std::make_unique<QSettings>(
+                preference_path,
+                QSettings::IniFormat);
+        simplesolid2::ui::ProjectWorkspaceShell
+            preference_reader{
+                std::move(store)};
+        const auto restored =
+            preference_reader.cadInteractionSettings();
+
+        CHECK(!restored.object_snap.master_enabled);
+        CHECK(!restored.object_snap.endpoint);
+        CHECK(!restored.object_snap.midpoint);
+        CHECK(restored.object_snap.center);
+        CHECK(!restored.object_snap.quadrant);
+        CHECK(restored.object_snap.intersection);
+        CHECK(!restored.object_snap.origin);
+        CHECK(restored.object_snap.perpendicular);
+        CHECK(restored.object_snap.tangent);
+        CHECK(restored.object_snap.nearest);
+        CHECK(restored.object_snap.extension);
+        CHECK(
+            restored.object_snap.
+                object_tracking_enabled);
+
+        CHECK(restored.polar.enabled);
+        CHECK(!restored.dynamic_input_enabled);
+    }
 
     simplesolid2::ui::ProjectWorkspaceShell shell;
     QWidget workbench;

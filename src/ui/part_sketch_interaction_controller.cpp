@@ -69,6 +69,66 @@ stablePolarUnitDirection(double angle) noexcept {
     }
 }
 
+[[nodiscard]] sketch::ObjectSnapPreferences
+objectSnapPreferences(
+    const application::ObjectSnapInputSettings& settings) noexcept {
+    sketch::SnapModeSet modes;
+    modes.endpoint = settings.endpoint;
+    modes.midpoint = settings.midpoint;
+    modes.center = settings.center;
+    modes.quadrant = settings.quadrant;
+    modes.intersection = settings.intersection;
+    modes.origin = settings.origin;
+    modes.perpendicular = settings.perpendicular;
+    modes.tangent = settings.tangent;
+    modes.nearest = settings.nearest;
+    modes.extension = settings.extension;
+
+    return {
+        settings.master_enabled,
+        modes,
+        settings.object_tracking_enabled};
+}
+
+[[nodiscard]] sketch::SnapModeSet
+staticSnapModes(
+    const sketch::SnapEligibility& eligibility) noexcept {
+    sketch::SnapModeSet modes;
+    modes.endpoint = eligibility.endpoint;
+    modes.midpoint = eligibility.midpoint;
+    modes.center = eligibility.center;
+    modes.quadrant = eligibility.quadrant;
+
+    // Intersection needs a bounded nearby-source strategy. Do not add an
+    // all-pairs curve scan to the pointer hot path.
+    modes.intersection = false;
+
+    modes.origin = eligibility.origin;
+    modes.perpendicular = false;
+    modes.tangent = false;
+    modes.nearest = false;
+    modes.extension = false;
+    return modes;
+}
+
+[[nodiscard]] bool anyStaticSnapMode(
+    const sketch::SnapModeSet& modes) noexcept {
+    return modes.endpoint ||
+           modes.midpoint ||
+           modes.center ||
+           modes.quadrant ||
+           modes.origin;
+}
+
+[[nodiscard]] auto inferenceGuideStableKey(
+    const sketch::InferenceGuide& guide) noexcept {
+    return std::tuple{
+        guide.anchor_key,
+        static_cast<std::uint8_t>(guide.kind),
+        guide.direction.u,
+        guide.direction.v};
+}
+
 [[nodiscard]] std::optional<double>
 viewportPointRayDistance(
     viewer::ViewportPoint2 point,
@@ -117,6 +177,11 @@ void PartSketchInteractionController::begin(
     session_ = &session;
     sketch_id_ = sketch_id;
     interaction_ = sketch::SketchInteractionState{};
+    snap_capture_.clear();
+    tracking_hover_.reset();
+    common_tangent_candidate_.reset();
+    tracking_inference_presentation_.reset();
+    extension_inference_point_.reset();
     polar_capture_ = {};
     last_pointer_input_.reset();
     press_anchor_.reset();
@@ -142,6 +207,11 @@ void PartSketchInteractionController::begin(
 
 void PartSketchInteractionController::end() {
     interaction_ = sketch::SketchInteractionState{};
+    snap_capture_.clear();
+    tracking_hover_.reset();
+    common_tangent_candidate_.reset();
+    tracking_inference_presentation_.reset();
+    extension_inference_point_.reset();
     polar_capture_ = {};
     last_pointer_input_.reset();
     press_anchor_.reset();
@@ -228,6 +298,36 @@ PartSketchInteractionController::activePointRequest()
         return std::nullopt;
     }
     return interaction_.activePointRequest();
+}
+
+bool PartSketchInteractionController::setTemporarySnapOverride(
+    sketch::TemporarySnapOverrideKind value) {
+    if (profile_session_ ||
+        !interaction_.setTemporarySnapOverride(value)) {
+        return false;
+    }
+    snap_capture_.clear();
+    tracking_hover_.reset();
+    common_tangent_candidate_.reset();
+    tracking_inference_presentation_.reset();
+    extension_inference_point_.reset();
+    polar_capture_ = {};
+    notifyStateChanged();
+    return true;
+}
+
+bool PartSketchInteractionController::clearTemporarySnapOverride() {
+    if (!interaction_.clearTemporarySnapOverride()) {
+        return false;
+    }
+    snap_capture_.clear();
+    tracking_hover_.reset();
+    common_tangent_candidate_.reset();
+    tracking_inference_presentation_.reset();
+    extension_inference_point_.reset();
+    polar_capture_ = {};
+    notifyStateChanged();
+    return true;
 }
 
 std::optional<ProfileToolSessionKind>
@@ -2918,36 +3018,39 @@ void PartSketchInteractionController::onPointer(
 
     if (profile_session_) {
         handleProfilePointer(input);
+        refreshSnapInferencePresentation();
         return;
     }
 
     switch (interaction_.tool()) {
     case sketch::SketchTool::select:
         handleSelectPointer(input);
-        return;
+        break;
     case sketch::SketchTool::line:
         handleLinePointer(input);
-        return;
+        break;
     case sketch::SketchTool::circle:
         handleCirclePointer(input);
-        return;
+        break;
     case sketch::SketchTool::arc:
         handleArcPointer(input);
-        return;
+        break;
     case sketch::SketchTool::rectangle:
         handleRectanglePointer(input);
-        return;
+        break;
     case sketch::SketchTool::measure:
         handleMeasurePointer(input);
-        return;
+        break;
     case sketch::SketchTool::move:
     case sketch::SketchTool::copy:
     case sketch::SketchTool::rotate:
     case sketch::SketchTool::scale:
     case sketch::SketchTool::mirror:
         handleCommonTransformPointer(input);
-        return;
+        break;
     }
+
+    refreshSnapInferencePresentation();
 }
 
 const part::PartSketch*
@@ -3591,6 +3694,17 @@ void PartSketchInteractionController::handleLinePointer(
 
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
+        if (common_tangent_candidate_) {
+            static_cast<void>(
+                viewport_controller_->setSketchPreview(
+                    {SketchPreviewLine2D{
+                        common_tangent_candidate_->
+                            first_point,
+                        common_tangent_candidate_->
+                            second_point}}));
+            return;
+        }
+
         const auto preview =
             resolved
                 ? interaction_.previewLine(
@@ -3611,6 +3725,41 @@ void PartSketchInteractionController::handleLinePointer(
     if (input.phase !=
             viewer::SpatialPointerPhase::primary_press ||
         !resolved) {
+        return;
+    }
+
+    if (common_tangent_candidate_) {
+        const auto common =
+            *common_tangent_candidate_;
+        common_tangent_candidate_.reset();
+
+        const auto first =
+            interaction_.acceptLinePoint(
+                common.first_point);
+        if (first.outcome !=
+            sketch::LinePointOutcome::
+                first_point_accepted) {
+            viewport_controller_->clearSketchPreview();
+            notifyStateChanged();
+            return;
+        }
+
+        const auto second_snap =
+            common.secondSnapCandidate();
+        const auto second =
+            interaction_.resolvePointerInput(
+                common.second_point,
+                sketch::PointResolutionSource::
+                    object_snap,
+                second_snap);
+        if (!second) {
+            viewport_controller_->clearSketchPreview();
+            notifyStateChanged();
+            return;
+        }
+
+        static_cast<void>(
+            acceptLineResolvedPoint(*second));
         return;
     }
 
@@ -3672,7 +3821,11 @@ bool PartSketchInteractionController::acceptLineResolvedPoint(
 void PartSketchInteractionController::handleCirclePointer(
     const SketchPointerInput& input) {
     const auto resolved =
-        sketch::resolveSketchInput(input.position);
+        interaction_.circleStage() ==
+                sketch::CircleStage::await_center
+            ? resolvePointerInput(input)
+            : sketch::resolveSketchInput(
+                  input.position);
 
     if (input.phase == viewer::SpatialPointerPhase::move) {
         const auto preview =
@@ -4310,9 +4463,330 @@ beginDirectManipulation(
     return true;
 }
 
+void PartSketchInteractionController::observeTrackingSnap(
+    const sketch::SnapEligibility& eligibility,
+    const sketch::SnapCandidate& candidate) {
+    if (!eligibility.object_tracking ||
+        eligibility.suppress_object_assistance ||
+        !sketch::trackingAnchorEligible(
+            candidate.kind) ||
+        !tracking_clock_provider_) {
+        tracking_hover_.reset();
+        return;
+    }
+
+    const auto now =
+        tracking_clock_provider_();
+    const auto key =
+        sketch::snapStableKey(candidate);
+
+    if (!tracking_hover_ ||
+        tracking_hover_->key != key) {
+        tracking_hover_ =
+            TrackingHoverState{
+                key,
+                now};
+        return;
+    }
+
+    if (now - tracking_hover_->started_at <
+        tracking_dwell) {
+        return;
+    }
+
+    const auto acquired =
+        std::find_if(
+            interaction_.trackingAnchors().
+                anchors.begin(),
+            interaction_.trackingAnchors().
+                anchors.end(),
+            [&key](
+                const sketch::TrackingAnchor& anchor) {
+                return sketch::snapStableKey(
+                           anchor.snap) ==
+                       key;
+            });
+
+    if (acquired !=
+        interaction_.trackingAnchors().
+            anchors.end()) {
+        static_cast<void>(
+            interaction_.removeTrackingAnchor(
+                key));
+    } else {
+        static_cast<void>(
+            interaction_.
+                acquireCurrentTrackingAnchor());
+    }
+    tracking_hover_.reset();
+}
+
+std::optional<
+    PartSketchInteractionController::
+        TrackingInferenceResolution>
+PartSketchInteractionController::resolveTrackingInference(
+    const SketchPointerInput& input,
+    const application::CadInteractionSettings& settings,
+    const sketch::SnapEligibility& eligibility,
+    const sketch::PointRequest& request) const {
+    if (!eligibility.object_tracking ||
+        eligibility.suppress_object_assistance ||
+        request.temporary_snap_override ||
+        request.tracking_anchors.anchors.empty() ||
+        !input.viewport_position.valid() ||
+        !input.position.finite()) {
+        return std::nullopt;
+    }
+
+    std::vector<sketch::Point2>
+        additional_directions;
+    if (settings.polar.enabled) {
+        std::optional<double> relative_reference;
+        if (settings.polar.reference_mode ==
+            application::PolarReferenceMode::relative) {
+            relative_reference =
+                request.polar_relative_reference;
+        }
+
+        if (settings.polar.reference_mode ==
+                application::PolarReferenceMode::absolute ||
+            relative_reference) {
+            const auto angles =
+                application::generatePolarTrackAngles(
+                    settings.polar,
+                    relative_reference);
+            additional_directions.reserve(
+                angles.size());
+            for (const double angle : angles) {
+                const auto direction =
+                    stablePolarUnitDirection(angle);
+                const sketch::Point2 vector{
+                    direction.first,
+                    direction.second};
+                if (vector.finite() &&
+                    vector != sketch::Point2{0.0, 0.0}) {
+                    additional_directions.push_back(
+                        vector);
+                }
+            }
+        }
+    }
+
+    const auto guides =
+        sketch::trackingGuides(
+            request.tracking_anchors,
+            additional_directions);
+    if (guides.empty()) {
+        return std::nullopt;
+    }
+
+    struct Candidate final {
+        sketch::Point2 point;
+        double screen_distance{};
+        std::uint8_t tier{};
+        std::tuple<
+            sketch::SnapStableKey,
+            std::uint8_t,
+            double,
+            double,
+            sketch::SnapStableKey,
+            std::uint8_t,
+            double,
+            double>
+            key;
+        sketch::InferenceGuide primary_guide;
+        std::optional<sketch::InferenceGuide>
+            secondary_guide;
+    };
+
+    const sketch::SnapResolutionPolicy policy{};
+    std::vector<Candidate> candidates;
+
+    for (std::size_t first = 0U;
+         first < guides.size();
+         ++first) {
+        for (std::size_t second = first + 1U;
+             second < guides.size();
+             ++second) {
+            if (guides[first].anchor_key ==
+                guides[second].anchor_key) {
+                continue;
+            }
+
+            const auto point =
+                sketch::guideIntersection(
+                    guides[first],
+                    guides[second]);
+            if (!point) {
+                continue;
+            }
+
+            const auto projected =
+                viewport_controller_->
+                    projectSketchPointToViewport(*point);
+            if (!projected) {
+                continue;
+            }
+
+            const double distance =
+                viewportDistance(
+                    input.viewport_position,
+                    *projected);
+            if (!std::isfinite(distance) ||
+                distance >
+                    policy.capture_distance) {
+                continue;
+            }
+
+            const auto first_key =
+                inferenceGuideStableKey(
+                    guides[first]);
+            const auto second_key =
+                inferenceGuideStableKey(
+                    guides[second]);
+            const bool ordered =
+                first_key < second_key;
+            const auto& a =
+                ordered ? guides[first]
+                        : guides[second];
+            const auto& b =
+                ordered ? guides[second]
+                        : guides[first];
+
+            if (!interaction_.
+                    pointCandidateCompatible(
+                        *point,
+                        sketch::
+                            PointResolutionSource::
+                                tracking_inference)) {
+                continue;
+            }
+
+            candidates.push_back(
+                {
+                    *point,
+                    distance,
+                    0U,
+                    std::tuple{
+                        a.anchor_key,
+                        static_cast<std::uint8_t>(
+                            a.kind),
+                        a.direction.u,
+                        a.direction.v,
+                        b.anchor_key,
+                        static_cast<std::uint8_t>(
+                            b.kind),
+                        b.direction.u,
+                        b.direction.v},
+                    a,
+                    b});
+        }
+    }
+
+    for (const auto& guide : guides) {
+        const auto point =
+            sketch::projectPointToGuide(
+                guide,
+                input.position);
+        if (!point) {
+            continue;
+        }
+
+        const auto projected =
+            viewport_controller_->
+                projectSketchPointToViewport(*point);
+        if (!projected) {
+            continue;
+        }
+
+        const double distance =
+            viewportDistance(
+                input.viewport_position,
+                *projected);
+        if (!std::isfinite(distance) ||
+            distance >
+                policy.capture_distance) {
+            continue;
+        }
+
+        if (!interaction_.
+                pointCandidateCompatible(
+                    *point,
+                    sketch::
+                        PointResolutionSource::
+                            tracking_inference)) {
+            continue;
+        }
+
+        candidates.push_back(
+            {
+                *point,
+                distance,
+                1U,
+                std::tuple{
+                    guide.anchor_key,
+                    static_cast<std::uint8_t>(
+                        guide.kind),
+                    guide.direction.u,
+                    guide.direction.v,
+                    guide.anchor_key,
+                    static_cast<std::uint8_t>(
+                        guide.kind),
+                    guide.direction.u,
+                    guide.direction.v},
+                guide,
+                std::nullopt});
+    }
+
+    if (candidates.empty()) {
+        return std::nullopt;
+    }
+
+    const auto best =
+        std::min_element(
+            candidates.begin(),
+            candidates.end(),
+            [](const Candidate& first,
+               const Candidate& second) {
+                if (first.tier != second.tier) {
+                    return first.tier <
+                           second.tier;
+                }
+                if (first.screen_distance !=
+                    second.screen_distance) {
+                    return first.screen_distance <
+                           second.screen_distance;
+                }
+                return first.key < second.key;
+            });
+
+    if (best == candidates.end()) {
+        return std::nullopt;
+    }
+
+    TrackingInferenceResolution result;
+    result.point = best->point;
+    result.guide_intersection =
+        best->secondary_guide.has_value();
+    result.guides.push_back(
+        best->primary_guide);
+    if (best->secondary_guide) {
+        result.guides.push_back(
+            *best->secondary_guide);
+    }
+    return result.valid()
+        ? std::optional<
+              TrackingInferenceResolution>{
+              std::move(result)}
+        : std::nullopt;
+}
+
 std::optional<sketch::ResolvedSketchInput>
 PartSketchInteractionController::resolvePointerInput(
     const SketchPointerInput& input) {
+    common_tangent_candidate_.reset();
+    tracking_inference_presentation_.reset();
+
     const auto raw =
         [this, &input]() {
             polar_capture_ = {};
@@ -4323,18 +4797,650 @@ PartSketchInteractionController::resolvePointerInput(
     const auto request =
         interaction_.activePointRequest();
     if (!request ||
-        !request->base ||
-        (!request->relative_polar_enabled &&
-         !request->direct_distance_enabled) ||
         !cad_interaction_settings_provider_ ||
         !input.viewport_position.valid() ||
         !input.position.finite()) {
+        snap_capture_.clear();
         return raw();
     }
 
     const auto settings =
         cad_interaction_settings_provider_();
-    if (!settings.valid() ||
+    if (!settings.valid()) {
+        snap_capture_.clear();
+        return raw();
+    }
+
+    const auto eligibility =
+        sketch::resolveSnapEligibility(
+            objectSnapPreferences(
+                settings.object_snap),
+            request->temporary_snap_override);
+
+    // OSNAP resolves before tracking/Polar. Complete explicit numeric input
+    // bypasses this pointer path. Numeric locks retain authority: exact
+    // assistance participates only when Shared2D proves the candidate leaves
+    // the locked result at the same advertised point.
+    const auto* hosted = activeSketch();
+    if (hosted != nullptr) {
+        const auto modes =
+            staticSnapModes(eligibility);
+
+        const bool needs_nearby_entities =
+            eligibility.intersection ||
+            eligibility.perpendicular ||
+            eligibility.tangent ||
+            eligibility.nearest ||
+            eligibility.extension;
+
+        if (!eligibility.suppress_object_assistance &&
+            (anyStaticSnapMode(modes) ||
+             needs_nearby_entities)) {
+            const sketch::SnapResolutionPolicy
+                snap_policy{};
+            auto semantic_candidates =
+                sketch::staticSnapCandidates(
+                    hosted->model,
+                    modes);
+
+            std::vector<sketch::EntityId>
+                nearby_entities;
+            if (needs_nearby_entities) {
+                const double aperture =
+                    snap_policy.capture_distance;
+                const viewer::ViewportRect2
+                    nearby_rectangle{
+                        {
+                            input.viewport_position.x -
+                                aperture,
+                            input.viewport_position.y -
+                                aperture,
+                        },
+                        {
+                            input.viewport_position.x +
+                                aperture,
+                            input.viewport_position.y +
+                                aperture,
+                        }};
+
+                const auto nearby =
+                    viewport_controller_->
+                        querySketchEntities(
+                            nearby_rectangle,
+                            viewer::
+                                SketchRectangleSelectionRule::
+                                    crossing);
+                if (nearby.completed) {
+                    nearby_entities.reserve(
+                        nearby.hits.size());
+                    for (const auto& hit :
+                         nearby.hits) {
+                        nearby_entities.push_back(
+                            hit.entity_id);
+                    }
+                    std::sort(
+                        nearby_entities.begin(),
+                        nearby_entities.end());
+                }
+            }
+
+            // EXT is an explicit request-local reference acquisition, not a
+            // static SnapKind. Pick only authored Line endpoints from the
+            // bounded nearby set. Acquisition itself does not accept a point.
+            if (eligibility.extension &&
+                (!request->deferred_snap_reference ||
+                 request->deferred_snap_reference->kind !=
+                     sketch::DeferredSnapReferenceKind::
+                         line_extension)) {
+                struct ExtensionEndpointCandidate final {
+                    sketch::EntityId entity;
+                    sketch::SnapSemanticRole role;
+                    double screen_distance{};
+                };
+                std::optional<ExtensionEndpointCandidate>
+                    best_extension_endpoint;
+
+                for (const auto entity :
+                     nearby_entities) {
+                    const auto* line =
+                        hosted->model.findLine(entity);
+                    if (line == nullptr) {
+                        continue;
+                    }
+
+                    const std::array<
+                        std::pair<
+                            sketch::Point2,
+                            sketch::SnapSemanticRole>,
+                        2U>
+                        endpoints{{
+                            {
+                                line->start(),
+                                sketch::SnapSemanticRole::
+                                    line_start},
+                            {
+                                line->end(),
+                                sketch::SnapSemanticRole::
+                                    line_end},
+                        }};
+
+                    for (const auto& [point, role] :
+                         endpoints) {
+                        const auto projected =
+                            viewport_controller_->
+                                projectSketchPointToViewport(
+                                    point);
+                        if (!projected) {
+                            continue;
+                        }
+                        const double distance =
+                            viewportDistance(
+                                input.viewport_position,
+                                *projected);
+                        if (!std::isfinite(distance) ||
+                            distance >
+                                snap_policy.
+                                    capture_distance) {
+                            continue;
+                        }
+
+                        const ExtensionEndpointCandidate
+                            candidate{
+                                entity,
+                                role,
+                                distance};
+                        if (!best_extension_endpoint ||
+                            candidate.screen_distance <
+                                best_extension_endpoint->
+                                    screen_distance ||
+                            (candidate.screen_distance ==
+                                 best_extension_endpoint->
+                                     screen_distance &&
+                             std::tuple{
+                                 candidate.entity,
+                                 static_cast<std::uint8_t>(
+                                     candidate.role)} <
+                                 std::tuple{
+                                     best_extension_endpoint->
+                                         entity,
+                                     static_cast<std::uint8_t>(
+                                         best_extension_endpoint->
+                                             role)})) {
+                            best_extension_endpoint =
+                                candidate;
+                        }
+                    }
+                }
+
+                if (best_extension_endpoint) {
+                    const auto reference =
+                        sketch::
+                            makeLineExtensionReference(
+                                hosted->model,
+                                best_extension_endpoint->
+                                    entity,
+                                best_extension_endpoint->
+                                    role);
+                    if (reference) {
+                        static_cast<void>(
+                            interaction_.
+                                setDeferredSnapReference(
+                                    *reference));
+
+                        if (request->
+                                temporary_snap_override ==
+                            sketch::
+                                TemporarySnapOverrideKind::
+                                    extension) {
+                            interaction_.
+                                clearPointerResolution();
+                            snap_capture_.clear();
+                            tracking_hover_.reset();
+                            polar_capture_ = {};
+                            return std::nullopt;
+                        }
+                    }
+                }
+            }
+
+            // TAN before a point base is a deferred/common-tangent flow.
+            // First hover captures only one Circle/Arc semantic source. The
+            // second source yields exact branch pairs; screen-space selection
+            // is performed on the second contact with normal hysteresis.
+            if (eligibility.tangent &&
+                !request->base &&
+                request->temporary_snap_override ==
+                    sketch::TemporarySnapOverrideKind::
+                        tangent) {
+                auto deferred =
+                    interaction_.deferredSnapReference();
+
+                if (!deferred ||
+                    deferred->kind !=
+                        sketch::DeferredSnapReferenceKind::
+                            tangent_curve) {
+                    struct TangentSourceCandidate final {
+                        sketch::EntityId entity;
+                        double screen_distance{};
+                    };
+                    std::optional<TangentSourceCandidate>
+                        best_source;
+
+                    for (const auto entity :
+                         nearby_entities) {
+                        if (hosted->model.findCircle(entity) ==
+                                nullptr &&
+                            hosted->model.findArc(entity) ==
+                                nullptr) {
+                            continue;
+                        }
+
+                        const auto nearest =
+                            sketch::nearestSnapCandidate(
+                                hosted->model,
+                                entity,
+                                input.position);
+                        if (!nearest) {
+                            continue;
+                        }
+                        const auto projected =
+                            viewport_controller_->
+                                projectSketchPointToViewport(
+                                    nearest->point);
+                        if (!projected) {
+                            continue;
+                        }
+                        const double distance =
+                            viewportDistance(
+                                input.viewport_position,
+                                *projected);
+                        if (!std::isfinite(distance) ||
+                            distance >
+                                snap_policy.
+                                    capture_distance) {
+                            continue;
+                        }
+
+                        TangentSourceCandidate candidate{
+                            entity,
+                            distance};
+                        if (!best_source ||
+                            candidate.screen_distance <
+                                best_source->screen_distance ||
+                            (candidate.screen_distance ==
+                                 best_source->screen_distance &&
+                             candidate.entity <
+                                 best_source->entity)) {
+                            best_source = candidate;
+                        }
+                    }
+
+                    if (best_source) {
+                        const auto reference =
+                            sketch::
+                                makeTangentCurveReference(
+                                    hosted->model,
+                                    best_source->entity);
+                        if (reference &&
+                            interaction_.
+                                setDeferredSnapReference(
+                                    *reference)) {
+                            interaction_.
+                                clearPointerResolution();
+                            snap_capture_.clear();
+                            tracking_hover_.reset();
+                            polar_capture_ = {};
+                            return std::nullopt;
+                        }
+                    }
+                } else {
+                    struct CommonBranchScreen final {
+                        sketch::CommonTangentCandidate common;
+                        sketch::SnapCandidate second_snap;
+                        double screen_distance{};
+                    };
+                    std::vector<CommonBranchScreen>
+                        branch_screens;
+
+                    for (const auto entity :
+                         nearby_entities) {
+                        if (deferred->source.first_entity &&
+                            entity ==
+                                *deferred->source.
+                                    first_entity) {
+                            continue;
+                        }
+                        const auto second_reference =
+                            sketch::
+                                makeTangentCurveReference(
+                                    hosted->model,
+                                    entity);
+                        if (!second_reference) {
+                            continue;
+                        }
+
+                        const auto branches =
+                            sketch::
+                                commonTangentCandidates(
+                                    hosted->model,
+                                    *deferred,
+                                    *second_reference);
+                        for (const auto& common :
+                             branches) {
+                            const auto first_snap =
+                                common.
+                                    firstSnapCandidate();
+                            if (!interaction_.
+                                    pointCandidateCompatible(
+                                        first_snap.point,
+                                        sketch::
+                                            PointResolutionSource::
+                                                object_snap,
+                                        first_snap)) {
+                                continue;
+                            }
+
+                            const auto second_snap =
+                                common.
+                                    secondSnapCandidate();
+                            const auto projected =
+                                viewport_controller_->
+                                    projectSketchPointToViewport(
+                                        second_snap.point);
+                            if (!projected) {
+                                continue;
+                            }
+                            const double distance =
+                                viewportDistance(
+                                    input.viewport_position,
+                                    *projected);
+                            if (!std::isfinite(distance)) {
+                                continue;
+                            }
+                            branch_screens.push_back(
+                                {common,
+                                 second_snap,
+                                 distance});
+                        }
+                    }
+
+                    std::vector<
+                        sketch::SnapScreenCandidate>
+                        common_screen;
+                    common_screen.reserve(
+                        branch_screens.size());
+                    for (const auto& branch :
+                         branch_screens) {
+                        common_screen.push_back(
+                            {branch.second_snap,
+                             branch.screen_distance});
+                    }
+
+                    const auto selected =
+                        sketch::resolveScreenSnap(
+                            hosted->model,
+                            snap_capture_,
+                            common_screen,
+                            snap_policy);
+                    if (selected) {
+                        const auto found =
+                            std::find_if(
+                                branch_screens.begin(),
+                                branch_screens.end(),
+                                [&selected](
+                                    const CommonBranchScreen&
+                                        branch) {
+                                    return branch.second_snap ==
+                                           selected->primary;
+                                });
+                        if (found !=
+                            branch_screens.end()) {
+                            common_tangent_candidate_ =
+                                found->common;
+                            polar_capture_ = {};
+                            const auto first_snap =
+                                found->common.
+                                    firstSnapCandidate();
+                            return interaction_.
+                                resolvePointerInput(
+                                    first_snap.point,
+                                    sketch::
+                                        PointResolutionSource::
+                                            object_snap,
+                                    first_snap);
+                        }
+                    }
+                }
+            }
+
+            if (eligibility.intersection) {
+                for (std::size_t first = 0U;
+                     first < nearby_entities.size();
+                     ++first) {
+                    for (std::size_t second =
+                             first + 1U;
+                         second <
+                             nearby_entities.size();
+                         ++second) {
+                        auto intersections =
+                            sketch::
+                                intersectionSnapCandidates(
+                                    hosted->model,
+                                    nearby_entities[first],
+                                    nearby_entities[second]);
+                        semantic_candidates.insert(
+                            semantic_candidates.end(),
+                            intersections.begin(),
+                            intersections.end());
+                    }
+                }
+            }
+
+            for (const auto entity :
+                 nearby_entities) {
+                if (eligibility.nearest) {
+                    if (const auto nearest =
+                            sketch::
+                                nearestSnapCandidate(
+                                    hosted->model,
+                                    entity,
+                                    input.position)) {
+                        semantic_candidates.push_back(
+                            *nearest);
+                    }
+                }
+
+                if (request->base &&
+                    eligibility.perpendicular) {
+                    auto perpendicular =
+                        sketch::
+                            perpendicularSnapCandidates(
+                                hosted->model,
+                                entity,
+                                *request->base);
+                    semantic_candidates.insert(
+                        semantic_candidates.end(),
+                        perpendicular.begin(),
+                        perpendicular.end());
+                }
+
+                if (request->base &&
+                    eligibility.tangent) {
+                    auto tangent =
+                        sketch::
+                            tangentSnapCandidates(
+                                hosted->model,
+                                entity,
+                                *request->base);
+                    semantic_candidates.insert(
+                        semantic_candidates.end(),
+                        tangent.begin(),
+                        tangent.end());
+                }
+            }
+
+            std::vector<sketch::SnapScreenCandidate>
+                screen_candidates;
+            screen_candidates.reserve(
+                semantic_candidates.size());
+
+            for (const auto& candidate :
+                 semantic_candidates) {
+                if (!interaction_.
+                        pointCandidateCompatible(
+                            candidate.point,
+                            sketch::
+                                PointResolutionSource::
+                                    object_snap,
+                            candidate)) {
+                    continue;
+                }
+
+                const auto projected =
+                    viewport_controller_->
+                        projectSketchPointToViewport(
+                            candidate.point);
+                if (!projected) {
+                    continue;
+                }
+
+                const double distance =
+                    viewportDistance(
+                        input.viewport_position,
+                        *projected);
+                if (!std::isfinite(distance)) {
+                    continue;
+                }
+                screen_candidates.push_back(
+                    {candidate, distance});
+            }
+
+            const auto snap =
+                sketch::resolveScreenSnap(
+                    hosted->model,
+                    snap_capture_,
+                    screen_candidates,
+                    snap_policy);
+            if (snap) {
+                polar_capture_ = {};
+                const auto resolved =
+                    interaction_.resolvePointerInput(
+                        snap->primary.point,
+                        sketch::PointResolutionSource::
+                            object_snap,
+                        snap->primary);
+                if (resolved) {
+                    observeTrackingSnap(
+                        eligibility,
+                        snap->primary);
+                }
+                return resolved;
+            }
+        } else {
+            snap_capture_.clear();
+        }
+    } else {
+        snap_capture_.clear();
+    }
+
+    tracking_hover_.reset();
+
+    const auto deferred_reference =
+        interaction_.deferredSnapReference();
+    if (!eligibility.suppress_object_assistance &&
+        deferred_reference &&
+        deferred_reference->kind ==
+            sketch::DeferredSnapReferenceKind::
+                line_extension) {
+        std::optional<sketch::Point2>
+            extension_point;
+
+        if (eligibility.extension) {
+            extension_point =
+                sketch::projectPointToLineExtension(
+                    hosted->model,
+                    *deferred_reference,
+                    input.position);
+        } else if (
+            eligibility.perpendicular &&
+            request->base) {
+            extension_point =
+                sketch::
+                    perpendicularPointOnLineExtension(
+                        hosted->model,
+                        *deferred_reference,
+                        *request->base);
+        }
+
+        if (extension_point) {
+            const auto projected =
+                viewport_controller_->
+                    projectSketchPointToViewport(
+                        *extension_point);
+            if (projected) {
+                const double distance =
+                    viewportDistance(
+                        input.viewport_position,
+                        *projected);
+                const sketch::SnapResolutionPolicy
+                    policy{};
+                if (std::isfinite(distance) &&
+                    distance <=
+                        policy.capture_distance &&
+                    interaction_.
+                        pointCandidateCompatible(
+                            *extension_point,
+                            sketch::
+                                PointResolutionSource::
+                                    tracking_inference)) {
+                    polar_capture_ = {};
+                    const auto resolved =
+                        interaction_.resolvePointerInput(
+                            *extension_point,
+                            sketch::
+                                PointResolutionSource::
+                                    tracking_inference);
+                    if (resolved &&
+                        eligibility.extension) {
+                        extension_inference_point_ =
+                            *extension_point;
+                    }
+                    return resolved;
+                }
+            }
+        }
+    }
+
+    if (request->temporary_snap_override &&
+        *request->temporary_snap_override !=
+            sketch::TemporarySnapOverrideKind::none) {
+        interaction_.clearPointerResolution();
+        polar_capture_ = {};
+        return std::nullopt;
+    }
+
+    if (const auto tracking =
+            resolveTrackingInference(
+                input,
+                settings,
+                eligibility,
+                *request)) {
+        polar_capture_ = {};
+        const auto resolved =
+            interaction_.resolvePointerInput(
+                tracking->point,
+                sketch::PointResolutionSource::
+                    tracking_inference);
+        if (resolved) {
+            tracking_inference_presentation_ =
+                *tracking;
+        }
+        return resolved;
+    }
+
+    if (!request->base ||
+        (!request->relative_polar_enabled &&
+         !request->direct_distance_enabled) ||
         !settings.polar.enabled) {
         return raw();
     }
@@ -4440,7 +5546,8 @@ PartSketchInteractionController::resolvePointerInput(
     }
 
     return interaction_.resolvePointerInput(
-        assisted);
+        assisted,
+        sketch::PointResolutionSource::polar);
 }
 
 void PartSketchInteractionController::
@@ -4674,12 +5781,18 @@ refreshCadInputContextGeneration() {
     }
 
     cad_input_context_fingerprint_ = current;
+    snap_capture_.clear();
+    tracking_hover_.reset();
+    common_tangent_candidate_.reset();
+    tracking_inference_presentation_.reset();
+    extension_inference_point_.reset();
     polar_capture_ = {};
     ++cad_input_context_generation_;
 }
 
 void PartSketchInteractionController::notifyStateChanged() {
     refreshCadInputContextGeneration();
+    refreshSnapInferencePresentation();
 
     if (viewport_controller_ != nullptr) {
         if (!profile_session_) {
@@ -4749,6 +5862,131 @@ void PartSketchInteractionController::notifyStateChanged() {
 
     if (state_changed_handler_) {
         state_changed_handler_();
+    }
+}
+
+void PartSketchInteractionController::
+refreshSnapInferencePresentation() {
+    if (viewport_controller_ == nullptr ||
+        !active() ||
+        profile_session_ ||
+        !cad_interaction_settings_provider_) {
+        if (viewport_controller_ != nullptr) {
+            viewport_controller_->
+                clearSketchSnapInferencePresentation();
+        }
+        return;
+    }
+
+    const auto request =
+        interaction_.activePointRequest();
+    if (!request) {
+        viewport_controller_->
+            clearSketchSnapInferencePresentation();
+        return;
+    }
+
+    const auto settings =
+        cad_interaction_settings_provider_();
+    if (!settings.valid()) {
+        viewport_controller_->
+            clearSketchSnapInferencePresentation();
+        return;
+    }
+
+    const auto eligibility =
+        sketch::resolveSnapEligibility(
+            objectSnapPreferences(
+                settings.object_snap),
+            request->temporary_snap_override);
+
+    std::optional<sketch::SnapCandidate>
+        current;
+    if (request->resolution &&
+        request->resolution->object_snap) {
+        current =
+            request->resolution->object_snap;
+    }
+
+    const bool show_anchors =
+        eligibility.object_tracking &&
+        !eligibility.suppress_object_assistance;
+
+    std::vector<sketch::InferenceGuide>
+        active_guides;
+    std::optional<sketch::Point2>
+        inference_point;
+    bool guide_intersection = false;
+    if (request->resolution &&
+        request->resolution->source ==
+            sketch::PointResolutionSource::
+                tracking_inference &&
+        tracking_inference_presentation_ &&
+        tracking_inference_presentation_->valid() &&
+        tracking_inference_presentation_->point ==
+            request->resolution->position) {
+        active_guides =
+            tracking_inference_presentation_->guides;
+        inference_point =
+            tracking_inference_presentation_->point;
+        guide_intersection =
+            tracking_inference_presentation_->
+                guide_intersection;
+    }
+
+    std::optional<sketch::LineExtensionRay>
+        extension_ray;
+    std::optional<sketch::Point2>
+        extension_point;
+    if (!eligibility.suppress_object_assistance &&
+        eligibility.extension &&
+        request->deferred_snap_reference &&
+        request->deferred_snap_reference->kind ==
+            sketch::DeferredSnapReferenceKind::
+                line_extension) {
+        const auto* hosted = activeSketch();
+        if (hosted != nullptr) {
+            extension_ray =
+                sketch::lineExtensionRay(
+                    hosted->model,
+                    *request->deferred_snap_reference);
+            if (extension_ray &&
+                extension_inference_point_ &&
+                request->resolution &&
+                request->resolution->source ==
+                    sketch::PointResolutionSource::
+                        tracking_inference &&
+                request->resolution->position ==
+                    *extension_inference_point_) {
+                extension_point =
+                    *extension_inference_point_;
+            }
+        }
+    }
+
+    if (!current &&
+        !inference_point &&
+        active_guides.empty() &&
+        !extension_ray &&
+        (!show_anchors ||
+         request->tracking_anchors.anchors.empty())) {
+        viewport_controller_->
+            clearSketchSnapInferencePresentation();
+        return;
+    }
+
+    if (!viewport_controller_->
+            projectSketchSnapInferencePresentation(
+                current,
+                request->tracking_anchors,
+                show_anchors,
+                active_guides,
+                inference_point,
+                guide_intersection,
+                extension_ray,
+                extension_point)) {
+        viewport_controller_->
+            clearSketchSnapInferencePresentation();
     }
 }
 

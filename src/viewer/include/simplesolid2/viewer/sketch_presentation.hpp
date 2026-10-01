@@ -3,6 +3,7 @@
 #include <simplesolid2/viewer/reference_presentation.hpp>
 #include <simplesolid2/viewer/spatial_pointer.hpp>
 
+#include <algorithm>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -411,6 +412,127 @@ struct SketchMeasureCueScene final {
         }
         return true;
     }
+};
+
+enum class SketchSnapMarkerKind : std::uint8_t {
+    endpoint,
+    midpoint,
+    center,
+    quadrant,
+    intersection,
+    origin,
+    perpendicular,
+    tangent,
+    nearest,
+    extension,
+    guide_intersection,
+    guide_projection,
+};
+
+enum class SketchInferenceGuideKind : std::uint8_t {
+    sketch_u,
+    sketch_v,
+    additional_direction,
+};
+
+struct SketchInferenceGuidePresentation final {
+    Point3 anchor{};
+    Vec3 direction{};
+    SketchInferenceGuideKind kind{
+        SketchInferenceGuideKind::sketch_u};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return finite(anchor) &&
+               finite(direction) &&
+               direction.squaredLength() > 1.0e-24;
+    }
+
+    friend bool operator==(
+        const SketchInferenceGuidePresentation&,
+        const SketchInferenceGuidePresentation&) = default;
+};
+
+struct SketchExtensionGuidePresentation final {
+    Point3 origin{};
+    Vec3 direction{};
+    std::optional<Point3> resolved_point;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return finite(origin) &&
+               finite(direction) &&
+               direction.squaredLength() > 1.0e-24 &&
+               (!resolved_point ||
+                (finite(*resolved_point) &&
+                 *resolved_point != origin));
+    }
+
+    friend bool operator==(
+        const SketchExtensionGuidePresentation&,
+        const SketchExtensionGuidePresentation&) = default;
+};
+
+struct SketchSnapMarkerPresentation final {
+    Point3 position{};
+    SketchSnapMarkerKind kind{
+        SketchSnapMarkerKind::endpoint};
+    std::string label;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return finite(position) &&
+               !label.empty();
+    }
+
+    friend bool operator==(
+        const SketchSnapMarkerPresentation&,
+        const SketchSnapMarkerPresentation&) = default;
+};
+
+struct SketchSnapInferenceScene final {
+    std::optional<SketchSnapMarkerPresentation>
+        current;
+    std::vector<SketchSnapMarkerPresentation>
+        acquired;
+    std::vector<SketchInferenceGuidePresentation>
+        guides;
+    std::optional<SketchExtensionGuidePresentation>
+        extension_guide;
+
+    [[nodiscard]] bool empty() const noexcept {
+        return !current &&
+               acquired.empty() &&
+               guides.empty() &&
+               !extension_guide;
+    }
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (current && !current->valid()) {
+            return false;
+        }
+        if (acquired.size() > 2U ||
+            guides.size() > 2U) {
+            return false;
+        }
+        if (extension_guide &&
+            !extension_guide->valid()) {
+            return false;
+        }
+        return std::all_of(
+                   acquired.begin(),
+                   acquired.end(),
+                   [](const auto& marker) {
+                       return marker.valid();
+                   }) &&
+               std::all_of(
+                   guides.begin(),
+                   guides.end(),
+                   [](const auto& guide) {
+                       return guide.valid();
+                   });
+    }
+
+    friend bool operator==(
+        const SketchSnapInferenceScene&,
+        const SketchSnapInferenceScene&) = default;
 };
 
 enum class SketchDynamicInputValueState : std::uint8_t {

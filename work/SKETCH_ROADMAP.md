@@ -8,7 +8,7 @@
 **Architecture:** ADR-0008, ADR-0009, ADR-0011  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Current scheduling:** R0–R9, WB-02 and AUDIT-01 A–F are completed. R10 Precision Input / Units / Polar / Dynamic Input is ACTIVE through its Owner-accepted Work Contract. R11 OSNAP/Inference and R12 Trim/Split/Join remain inactive, followed by the profile-authoring readiness checkpoint. Solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
+**Current scheduling:** R0–R11, WB-02 and AUDIT-01 A–F are completed. R12 Trim/Split/Join remains inactive behind its mandatory explicit identity/reference outcome gate, followed by the profile-authoring readiness checkpoint. Solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
 
 ## 1. Why v1.7 changes R10 directional assistance
 
@@ -21,9 +21,9 @@ This is a bounded R10 interaction amendment, not a sequencing change. The accept
 ```text
 R8  Measure / relational diagnostics — completed
 → R9  Rectangle + Construction UI — completed
-→ R10 Precision Input / Units / Polar / Dynamic Input — ACTIVE
-→ R11 OSNAP / Tracking / Inference
-→ R12 Trim / Split / Join with explicit identity outcomes
+→ R10 Precision Input / Units / Polar / Dynamic Input — completed
+→ R11 OSNAP / Tracking / Inference — completed
+→ R12 Trim / Split / Join with explicit identity outcomes — inactive
 → Sketcher profile-authoring readiness checkpoint
 → separate Part Feature Tree architecture gate
 → only then may a first solid-operation contract be considered
@@ -40,7 +40,7 @@ Four guardrails remain explicit:
 
 Ordinary RMB context remains deferred as a later UX-convergence item after the command set is broad enough to design the menu from stable operations. Existing already-accepted RMB semantics in command-first object collection remain unchanged.
 
-Roadmap v1.7 activates no scope beyond the separately Owner-accepted R10 Work Contract. R11+ remain inactive.
+Roadmap v1.7 does not itself activate scope. R11 is completed after final exact-head Windows FULL #1088 and Owner manual Windows PASS. R12+ remain inactive; R12 requires a separate Owner-accepted Work Contract that freezes the mandatory identity/reference outcomes before structural editing begins.
 
 ## 2. Preserved accepted invariants
 
@@ -685,7 +685,7 @@ Delivered:
 Owner accepted one non-blocking visual follow-up for a later suitable Sketcher milestone: Construction dash-gap cadence should not stretch/normalize with entity length. The exact screen-space versus model-space cadence policy remains a later bounded presentation decision and does not reopen R9.
 
 ### R10 — Precision input expansion, Units, Polar and Dynamic Input
-**Status:** ACTIVE through `work/R10_PRECISION_UNITS_POLAR_DYNAMIC_INPUT.md`; Owner accepted 2026-09-29
+**Status:** completed — final exact-head Windows FULL #1009 + Owner manual Windows PASS
 
 Goal:
 
@@ -700,10 +700,10 @@ Goal:
 - accepted precision workflows for current creation tools, transforms and grip manipulation;
 - Command Line and Dynamic Input feed the same semantic request.
 
-Exact R10 semantics, defaults, scope exclusions, persistence behavior and completion evidence are owned by the active Work Contract.
+Exact R10 semantics, defaults, scope exclusions, persistence behavior and completion evidence are owned by the completed `work/R10_PRECISION_UNITS_POLAR_DYNAMIC_INPUT.md` Work Contract.
 
 ### R11 — Object Snap, Object Snap Tracking and inference
-**Status:** planned; inactive
+**Status:** completed — final exact-head Windows FULL #1088 + Owner manual Windows PASS on 2026-10-01
 
 Goal:
 
@@ -853,14 +853,15 @@ R7 completed — SK-07A through SK-07G plus WB-02; ordinary RMB menu deferred by
 AUDIT-01 A–F completed — Package F already supplies the region/Profile foundation previously scheduled later  
 R8 completed — R8A completed after exact-head FULL #867 and Owner manual PASS; R8B completed after exact-head FULL #889 and Owner manual PASS; standalone R8C Show Dimensions deferred by v1.6  
 R9 completed — exact-head FULL #912 and Owner manual Windows PASS on bfe36544d71593a407bada63c07ae0e4b912808f  
-R10 ACTIVE — Owner-accepted `work/R10_PRECISION_UNITS_POLAR_DYNAMIC_INPUT.md`; Roadmap v1.7 uses Polar-only directional assistance  
-R11–R15 inactive  
+R10 completed — final exact-head Windows FULL #1009; Owner manual Windows PASS; Polar-only directional assistance retained  
+R11 completed — final exact-head Windows FULL #1088; Owner manual Windows PASS  
+R12–R15 inactive  
 Sketcher profile-authoring readiness checkpoint not yet reached  
 Part Feature Tree architecture gate inactive  
 Solid modeling / Extrude inactive  
 Ordinary Select RMB context menu deferred as a later UX-convergence slice
 
-Roadmap v1.7 is authoritative for Sketcher feature sequencing. The v1.5 expectation that R8C precede R9 remains superseded by v1.6. R9 is completed. R10 is now active only through its Owner-accepted Work Contract; R11+ remain inactive.
+Roadmap v1.7 is authoritative for Sketcher feature sequencing. The v1.5 expectation that R8C precede R9 remains superseded by v1.6. R9, R10 and R11 are completed. R12+ remain inactive; R12 cannot begin implementation until its mandatory identity/reference outcome gate is explicitly Owner-accepted.
 
 ## AUDIT-01 program interlock — completed
 

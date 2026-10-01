@@ -8,7 +8,10 @@
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 #include <simplesolid2/sketch/measurement.hpp>
+#include <simplesolid2/sketch/snap.hpp>
 
+#include <algorithm>
+#include <chrono>
 #include <cstddef>
 #include <cstdint>
 #include <functional>
@@ -43,6 +46,10 @@ public:
         std::function<
             application::CadInteractionSettings()>;
 
+    using TrackingClockProvider =
+        std::function<
+            std::chrono::steady_clock::time_point()>;
+
     explicit PartSketchInteractionController(
         PartViewportController& viewport_controller);
 
@@ -55,7 +62,23 @@ public:
         CadInteractionSettingsProvider provider) {
         cad_interaction_settings_provider_ =
             std::move(provider);
+        snap_capture_.clear();
+        tracking_hover_.reset();
+        common_tangent_candidate_.reset();
         polar_capture_ = {};
+    }
+
+    void setTrackingClockProvider(
+        TrackingClockProvider provider) {
+        tracking_clock_provider_ =
+            std::move(provider);
+        tracking_hover_.reset();
+    }
+
+    [[nodiscard]] std::size_t
+    trackingAnchorCount() const noexcept {
+        return interaction_.
+            trackingAnchors().anchors.size();
     }
 
     [[nodiscard]] bool active() const noexcept;
@@ -74,6 +97,14 @@ public:
     commonTransformStage() const noexcept;
     [[nodiscard]] std::optional<sketch::PointRequest>
     activePointRequest() const noexcept;
+
+    [[nodiscard]] std::optional<sketch::PointResolution>
+    pointResolution() const noexcept {
+        return interaction_.resolvedPointRequestCandidate();
+    }
+    [[nodiscard]] bool setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind value);
+    [[nodiscard]] bool clearTemporarySnapOverride();
     [[nodiscard]] application::CadInputContextGeneration
     cadInputContextGeneration() const noexcept {
         return cad_input_context_generation_;
@@ -314,6 +345,8 @@ public:
 
 private:
     static constexpr double drag_threshold_pixels = 4.0;
+    static constexpr std::chrono::milliseconds
+        tracking_dwell{400};
 
     [[nodiscard]] const part::PartSketch*
     activeSketch() const noexcept;
@@ -342,6 +375,36 @@ private:
         sketch::ResolvedSketchInput>
     resolvePointerInput(
         const SketchPointerInput& input);
+    void observeTrackingSnap(
+        const sketch::SnapEligibility& eligibility,
+        const sketch::SnapCandidate& candidate);
+    struct TrackingInferenceResolution final {
+        sketch::Point2 point;
+        std::vector<sketch::InferenceGuide> guides;
+        bool guide_intersection{};
+
+        [[nodiscard]] bool valid() const noexcept {
+            return point.finite() &&
+                   !guides.empty() &&
+                   guides.size() <= 2U &&
+                   std::all_of(
+                       guides.begin(),
+                       guides.end(),
+                       [](const auto& guide) {
+                           return guide.valid();
+                       }) &&
+                   (!guide_intersection ||
+                    guides.size() == 2U);
+        }
+    };
+
+    [[nodiscard]] std::optional<
+        TrackingInferenceResolution>
+    resolveTrackingInference(
+        const SketchPointerInput& input,
+        const application::CadInteractionSettings& settings,
+        const sketch::SnapEligibility& eligibility,
+        const sketch::PointRequest& request) const;
     void updateDirectManipulationPreview(
         const SketchPointerInput& input);
     void updateCommonTransformPreview(
@@ -395,6 +458,7 @@ private:
     currentCadInputContextFingerprint() const noexcept;
     void refreshCadInputContextGeneration();
     void notifyStateChanged();
+    void refreshSnapInferencePresentation();
     void reportStatus(std::string message);
 
     PartViewportController* viewport_controller_{};
@@ -421,6 +485,28 @@ private:
             application::CircleSizeInputMode::diameter};
     CadInteractionSettingsProvider
         cad_interaction_settings_provider_;
+    sketch::SnapCaptureState
+        snap_capture_;
+
+    struct TrackingHoverState final {
+        sketch::SnapStableKey key;
+        std::chrono::steady_clock::time_point
+            started_at;
+    };
+
+    TrackingClockProvider tracking_clock_provider_{
+        [] {
+            return std::chrono::steady_clock::now();
+        }};
+    std::optional<TrackingHoverState>
+        tracking_hover_;
+    std::optional<sketch::CommonTangentCandidate>
+        common_tangent_candidate_;
+    std::optional<TrackingInferenceResolution>
+        tracking_inference_presentation_;
+    std::optional<sketch::Point2>
+        extension_inference_point_;
+
     application::PolarCaptureState
         polar_capture_;
 

@@ -98,6 +98,13 @@ public:
         if (!point.valid()) return {};
         return grip_query_;
     }
+    bool setSketchSnapInferenceScene(
+        const viewer::SketchSnapInferenceScene& scene) override {
+        if (!scene.valid()) return false;
+        snap_inference_scene_ = scene;
+        return true;
+    }
+
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override {
         if (!selection.valid()) return false;
@@ -111,9 +118,11 @@ public:
     }
     viewer::SketchRectangleQueryResult querySketchPresentations(
         const viewer::ViewportRect2& rectangle,
-        viewer::SketchRectangleSelectionRule) override {
+        viewer::SketchRectangleSelectionRule rule) override {
         if (!rectangle.valid()) return {};
-        return {true, {}};
+        last_rectangle_query_ = rectangle;
+        last_rectangle_rule_ = rule;
+        return rectangle_query_;
     }
     bool setSketchSelectionBoxOverlay(
         const viewer::SketchSelectionBoxOverlay& overlay) override {
@@ -143,9 +152,14 @@ public:
     viewer::SketchPreviewScene preview_scene_;
     viewer::SketchGripScene grip_scene_;
     viewer::SketchInteractionPresentation interaction_presentation_;
+    viewer::SketchSnapInferenceScene snap_inference_scene_;
     viewer::SketchGripQueryResult grip_query_{true, std::nullopt};
     viewer::PresentationSelection selection_;
     viewer::SketchPointQueryResult point_query_{true, std::nullopt};
+    viewer::SketchRectangleQueryResult rectangle_query_{true, {}};
+    std::optional<viewer::ViewportRect2> last_rectangle_query_;
+    std::optional<viewer::SketchRectangleSelectionRule>
+        last_rectangle_rule_;
     viewer::SelectionIntentHandler selection_handler_;
     viewer::SpatialPointerHandler spatial_handler_;
     viewer::PrimaryPointerRouting routing_{
@@ -864,9 +878,1305 @@ int main(int argc, char* argv[]) {
     CHECK(near(moved_source->end().u, 5.0));
     CHECK(near(moved_source->end().v, -10.0));
 
+    // R11 static OSNAP resolves exact Sketch geometry from logical screen
+    // aperture before Polar. A remote target avoids accidental capture from
+    // the earlier precision-input geometry in this integration test.
+    const auto snap_target_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {5000.0, 5007.0},
+                {5010.0, 5007.0},
+                sketch::EntityRole::regular});
+    CHECK(snap_target_result.ok());
+    CHECK(snap_target_result.changed);
+    viewport_controller.refreshPresentation();
+
+    application::CadInteractionSettings snap_settings;
+    // Isolate this regression to END-vs-Polar. With the normal persistent
+    // defaults MID is also eligible and is intentionally allowed to win when
+    // it is closer in screen space.
+    snap_settings.object_snap.midpoint = false;
+    snap_settings.object_snap.center = false;
+    snap_settings.object_snap.quadrant = false;
+    snap_settings.object_snap.intersection = false;
+    snap_settings.object_snap.origin = false;
+    snap_settings.polar.primary_spacing =
+        std::numbers::pi_v<double> / 4.0;
+    interaction.setCadInteractionSettingsProvider(
+        [&snap_settings] {
+            return snap_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            4900.0,
+            4900.0}));
+    const auto lines_before_osnap =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+
+    // Raw pointer is closer to a 45-degree Polar ray than to the exact
+    // endpoint, but OSNAP has higher semantic priority.
+    movePointer(
+        interaction,
+        sketch_id,
+        5004.0,
+        5010.0,
+        5004.0,
+        5010.0);
+    auto point_resolution =
+        interaction.pointResolution();
+    CHECK(point_resolution.has_value());
+    CHECK(
+        point_resolution->source ==
+        sketch::PointResolutionSource::object_snap);
+    CHECK(point_resolution->object_snap.has_value());
+    CHECK((
+        point_resolution->position ==
+        sketch::Point2{5000.0, 5007.0}));
+    CHECK(
+        viewport.snap_inference_scene_.current.
+            has_value());
+    CHECK(
+        viewport.snap_inference_scene_.current->
+            kind ==
+        viewer::SketchSnapMarkerKind::endpoint);
+    CHECK(
+        viewport.snap_inference_scene_.current->
+            label == "END");
+    CHECK(near(
+        viewport.snap_inference_scene_.current->
+            position.x,
+        5000.0));
+    CHECK(near(
+        viewport.snap_inference_scene_.current->
+            position.y,
+        5007.0));
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            empty());
+
+    click(
+        interaction,
+        sketch_id,
+        5004.0,
+        5010.0,
+        5004.0,
+        5010.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_osnap + 1U);
+    CHECK((
+        model_state.lines.back().start ==
+        sketch::Point2{4900.0, 4900.0}));
+    CHECK((
+        model_state.lines.back().end ==
+        sketch::Point2{5000.0, 5007.0}));
+    CHECK(interaction.escape());
+
+    // Master OFF preserves mode choices but removes OSNAP from pointer
+    // resolution. With Polar also OFF, the same near-target click stays raw.
+    snap_settings.object_snap.master_enabled = false;
+    snap_settings.polar.enabled = false;
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            4900.0,
+            4900.0}));
+    const auto lines_before_raw =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    movePointer(
+        interaction,
+        sketch_id,
+        5004.0,
+        5010.0,
+        5004.0,
+        5010.0);
+    point_resolution =
+        interaction.pointResolution();
+    CHECK(point_resolution.has_value());
+    CHECK(
+        point_resolution->source ==
+        sketch::PointResolutionSource::raw_pointer);
+    CHECK(!point_resolution->object_snap.has_value());
+    CHECK(
+        !viewport.snap_inference_scene_.current.
+             has_value());
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            empty());
+
+    click(
+        interaction,
+        sketch_id,
+        5004.0,
+        5010.0,
+        5004.0,
+        5010.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_raw + 1U);
+    CHECK((
+        model_state.lines.back().end ==
+        sketch::Point2{5004.0, 5010.0}));
+    CHECK(interaction.escape());
+
+    // Intersection uses a bounded crossing query around the logical-pixel
+    // aperture, then exact Shared2D finite-curve relation authority.
+    const auto int_horizontal_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {5190.0, 5200.0},
+                {5230.0, 5200.0},
+                sketch::EntityRole::regular});
+    const auto int_vertical_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {5200.0, 5170.0},
+                {5200.0, 5220.0},
+                sketch::EntityRole::construction});
+    CHECK(int_horizontal_result.ok());
+    CHECK(int_horizontal_result.changed);
+    CHECK(int_vertical_result.ok());
+    CHECK(int_vertical_result.changed);
+
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    const auto int_horizontal =
+        model_state.lines[
+            model_state.lines.size() - 2U].id;
+    const auto int_vertical =
+        model_state.lines.back().id;
+
+    viewport_controller.refreshPresentation();
+    const auto int_horizontal_token =
+        viewport_controller.sketchPresentationFor(
+            int_horizontal);
+    const auto int_vertical_token =
+        viewport_controller.sketchPresentationFor(
+            int_vertical);
+    CHECK(int_horizontal_token.has_value());
+    CHECK(int_vertical_token.has_value());
+    viewport.rectangle_query_ = {
+        true,
+        {
+            *int_vertical_token,
+            *int_horizontal_token,
+        }};
+
+    application::CadInteractionSettings int_settings;
+    int_settings.polar.enabled = false;
+    int_settings.object_snap.endpoint = false;
+    int_settings.object_snap.midpoint = false;
+    int_settings.object_snap.center = false;
+    int_settings.object_snap.quadrant = false;
+    int_settings.object_snap.origin = false;
+    int_settings.object_snap.intersection = true;
+    interaction.setCadInteractionSettingsProvider(
+        [&int_settings] {
+            return int_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            5100.0,
+            5100.0}));
+
+    movePointer(
+        interaction,
+        sketch_id,
+        5204.0,
+        5203.0,
+        5204.0,
+        5203.0);
+    const auto int_resolution =
+        interaction.pointResolution();
+    CHECK(int_resolution.has_value());
+    CHECK(
+        int_resolution->source ==
+        sketch::PointResolutionSource::object_snap);
+    CHECK(int_resolution->object_snap.has_value());
+    CHECK(
+        int_resolution->object_snap->kind ==
+        sketch::SnapKind::intersection);
+    CHECK((
+        int_resolution->position ==
+        sketch::Point2{5200.0, 5200.0}));
+    CHECK(viewport.last_rectangle_query_.has_value());
+    CHECK(viewport.last_rectangle_rule_.has_value());
+    CHECK(
+        *viewport.last_rectangle_rule_ ==
+        viewer::SketchRectangleSelectionRule::crossing);
+    CHECK(near(
+        viewport.last_rectangle_query_->
+            minimum.x,
+        5195.0));
+    CHECK(near(
+        viewport.last_rectangle_query_->
+            minimum.y,
+        5194.0));
+    CHECK(near(
+        viewport.last_rectangle_query_->
+            maximum.x,
+        5213.0));
+    CHECK(near(
+        viewport.last_rectangle_query_->
+            maximum.y,
+        5212.0));
+
+    const auto lines_before_int =
+        hosted->model.state().lines.size();
+    click(
+        interaction,
+        sketch_id,
+        5204.0,
+        5203.0,
+        5204.0,
+        5203.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_int + 1U);
+    CHECK((
+        model_state.lines.back().end ==
+        sketch::Point2{5200.0, 5200.0}));
+    CHECK(interaction.escape());
+    viewport.rectangle_query_ = {true, {}};
+
+    // OSNAP remains available under partial Dynamic Input locks. A compatible
+    // Endpoint fills the free coordinate and keeps exact snap provenance;
+    // an incompatible Endpoint is rejected and cannot advertise a marker.
+    const auto locked_snap_source_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {11000.0, 11020.0},
+                {11030.0, 11020.0},
+                sketch::EntityRole::regular});
+    CHECK(
+        locked_snap_source_result.ok() &&
+        locked_snap_source_result.changed);
+    viewport_controller.refreshPresentation();
+
+    application::CadInteractionSettings locked_snap_settings;
+    locked_snap_settings.polar.enabled = false;
+    locked_snap_settings.object_snap.endpoint = true;
+    locked_snap_settings.object_snap.midpoint = false;
+    locked_snap_settings.object_snap.center = false;
+    locked_snap_settings.object_snap.quadrant = false;
+    locked_snap_settings.object_snap.intersection = false;
+    locked_snap_settings.object_snap.origin = false;
+    interaction.setCadInteractionSettingsProvider(
+        [&locked_snap_settings] {
+            return locked_snap_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.lockCadInputSemanticPointField(
+        application::CadDynamicInputFieldSemantic::u,
+        11000.0));
+    movePointer(
+        interaction,
+        sketch_id,
+        11004.0,
+        11023.0,
+        11004.0,
+        11023.0);
+    auto locked_snap_resolution =
+        interaction.pointResolution();
+    CHECK(locked_snap_resolution.has_value());
+    CHECK(
+        locked_snap_resolution->source ==
+        sketch::PointResolutionSource::
+            numeric_lock);
+    CHECK(
+        locked_snap_resolution->object_snap.
+            has_value());
+    CHECK(
+        locked_snap_resolution->object_snap->kind ==
+        sketch::SnapKind::endpoint);
+    CHECK((
+        locked_snap_resolution->position ==
+        sketch::Point2{11000.0, 11020.0}));
+
+    CHECK(interaction.lockCadInputSemanticPointField(
+        application::CadDynamicInputFieldSemantic::u,
+        11001.0));
+    movePointer(
+        interaction,
+        sketch_id,
+        11004.0,
+        11023.0,
+        11004.0,
+        11023.0);
+    locked_snap_resolution =
+        interaction.pointResolution();
+    CHECK(locked_snap_resolution.has_value());
+    CHECK(
+        locked_snap_resolution->source ==
+        sketch::PointResolutionSource::
+            numeric_lock);
+    CHECK(
+        !locked_snap_resolution->object_snap.
+             has_value());
+    CHECK((
+        locked_snap_resolution->position ==
+        sketch::Point2{11001.0, 11023.0}));
+    CHECK(interaction.escape());
+    CHECK(interaction.escape());
+
+    // Request-relative PER uses the active request base and exact finite
+    // source geometry from the bounded nearby-source set.
+    const auto per_source_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {6090.0, 6100.0},
+                {6130.0, 6100.0},
+                sketch::EntityRole::regular});
+    CHECK(per_source_result.ok());
+    CHECK(per_source_result.changed);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    const auto per_source =
+        model_state.lines.back().id;
+    viewport_controller.refreshPresentation();
+    const auto per_token =
+        viewport_controller.sketchPresentationFor(
+            per_source);
+    CHECK(per_token.has_value());
+    viewport.rectangle_query_ = {true, {*per_token}};
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            6105.0,
+            6050.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            perpendicular));
+    movePointer(
+        interaction,
+        sketch_id,
+        6108.0,
+        6103.0,
+        6108.0,
+        6103.0);
+    auto local_resolution =
+        interaction.pointResolution();
+    CHECK(local_resolution.has_value());
+    CHECK(
+        local_resolution->source ==
+        sketch::PointResolutionSource::object_snap);
+    CHECK(local_resolution->object_snap.has_value());
+    CHECK(
+        local_resolution->object_snap->kind ==
+        sketch::SnapKind::perpendicular);
+    CHECK((
+        local_resolution->position ==
+        sketch::Point2{6105.0, 6100.0}));
+    CHECK(interaction.escape());
+
+    // NEA is a continuous finite-curve projection and remains an explicit
+    // one-shot family here because its persistent default is OFF.
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            6000.0,
+            6000.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            nearest));
+    movePointer(
+        interaction,
+        sketch_id,
+        6112.0,
+        6104.0,
+        6112.0,
+        6104.0);
+    local_resolution =
+        interaction.pointResolution();
+    CHECK(local_resolution.has_value());
+    CHECK(local_resolution->object_snap.has_value());
+    CHECK(
+        local_resolution->object_snap->kind ==
+        sketch::SnapKind::nearest);
+    CHECK((
+        local_resolution->position ==
+        sketch::Point2{6112.0, 6100.0}));
+    CHECK(interaction.escape());
+
+    // TAN-from-point uses exact supporting-circle geometry. The pointer only
+    // chooses between admissible tangent branches in screen space.
+    const auto tangent_circle_result =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                {6200.0, 6200.0},
+                10.0,
+                sketch::EntityRole::regular});
+    CHECK(tangent_circle_result.ok());
+    CHECK(tangent_circle_result.changed);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    const auto tangent_circle =
+        model_state.circles.back().id;
+    viewport_controller.refreshPresentation();
+    const auto tangent_token =
+        viewport_controller.sketchPresentationFor(
+            tangent_circle);
+    CHECK(tangent_token.has_value());
+    viewport.rectangle_query_ = {
+        true,
+        {*tangent_token}};
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            6230.0,
+            6200.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            tangent));
+    movePointer(
+        interaction,
+        sketch_id,
+        6204.0,
+        6209.0,
+        6204.0,
+        6209.0);
+    local_resolution =
+        interaction.pointResolution();
+    CHECK(local_resolution.has_value());
+    CHECK(local_resolution->object_snap.has_value());
+    CHECK(
+        local_resolution->object_snap->kind ==
+        sketch::SnapKind::tangent);
+    CHECK(near(
+        local_resolution->position.u,
+        6200.0 + 100.0 / 30.0));
+    CHECK(near(
+        local_resolution->position.v,
+        6200.0 +
+            10.0 * std::sqrt(8.0 / 9.0)));
+    CHECK(interaction.escape());
+
+    // A non-NONE Temporary Override is restrictive. With no requested-family
+    // candidate there is no raw or Polar fallback and stale resolution is
+    // explicitly cleared.
+    viewport.rectangle_query_ = {true, {}};
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            7000.0,
+            7000.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            endpoint));
+    movePointer(
+        interaction,
+        sketch_id,
+        7100.0,
+        7100.0,
+        7100.0,
+        7100.0);
+    CHECK(!interaction.pointResolution().has_value());
+    CHECK(interaction.clearTemporarySnapOverride());
+    movePointer(
+        interaction,
+        sketch_id,
+        7100.0,
+        7100.0,
+        7100.0,
+        7100.0);
+    local_resolution =
+        interaction.pointResolution();
+    CHECK(local_resolution.has_value());
+    CHECK(
+        local_resolution->source ==
+        sketch::PointResolutionSource::raw_pointer);
+    CHECK(interaction.escape());
+
+    // OTRACK: deliberate 400 ms dwell acquires semantic anchors. Two
+    // anchors are retained with no FIFO eviction. Their U/V GuideIntersection
+    // outranks Polar/raw and resolves through the same PointResolution path.
+    const auto track_a_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {8000.0, 8000.0},
+                {8040.0, 8000.0},
+                sketch::EntityRole::regular});
+    const auto track_b_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {8100.0, 8100.0},
+                {8140.0, 8100.0},
+                sketch::EntityRole::construction});
+    const auto track_c_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {8200.0, 8200.0},
+                {8240.0, 8200.0},
+                sketch::EntityRole::regular});
+    CHECK(track_a_result.ok() && track_a_result.changed);
+    CHECK(track_b_result.ok() && track_b_result.changed);
+    CHECK(track_c_result.ok() && track_c_result.changed);
+    viewport_controller.refreshPresentation();
+
+    application::CadInteractionSettings tracking_settings;
+    tracking_settings.polar.enabled = false;
+    tracking_settings.object_snap.endpoint = true;
+    tracking_settings.object_snap.midpoint = false;
+    tracking_settings.object_snap.center = false;
+    tracking_settings.object_snap.quadrant = false;
+    tracking_settings.object_snap.intersection = false;
+    tracking_settings.object_snap.origin = false;
+    tracking_settings.object_snap.object_tracking_enabled = true;
+    interaction.setCadInteractionSettingsProvider(
+        [&tracking_settings] {
+            return tracking_settings;
+        });
+
+    auto tracking_now =
+        std::chrono::steady_clock::time_point{};
+    interaction.setTrackingClockProvider(
+        [&tracking_now] {
+            return tracking_now;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            7900.0,
+            7900.0}));
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    CHECK(interaction.trackingAnchorCount() == 0U);
+    tracking_now += std::chrono::milliseconds{400};
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    CHECK(interaction.trackingAnchorCount() == 1U);
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            size() == 1U);
+    CHECK(
+        viewport.snap_inference_scene_.acquired[0].
+            kind ==
+        viewer::SketchSnapMarkerKind::endpoint);
+    CHECK(
+        viewport.snap_inference_scene_.acquired[0].
+            label == "END");
+    CHECK(near(
+        viewport.snap_inference_scene_.acquired[0].
+            position.x,
+        8000.0));
+    CHECK(near(
+        viewport.snap_inference_scene_.acquired[0].
+            position.y,
+        8000.0));
+
+    // D1 un-acquire gesture: leave the snap, then deliberately dwell over the
+    // same already-acquired semantic point again. The request-owned anchor is
+    // removed; repeating the same dwell acquires it again.
+    movePointer(
+        interaction,
+        sketch_id,
+        8050.0,
+        8050.0,
+        8050.0,
+        8050.0);
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    tracking_now += std::chrono::milliseconds{400};
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    CHECK(interaction.trackingAnchorCount() == 0U);
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            empty());
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8050.0,
+        8050.0,
+        8050.0,
+        8050.0);
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    tracking_now += std::chrono::milliseconds{400};
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    CHECK(interaction.trackingAnchorCount() == 1U);
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            size() == 1U);
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8100.0,
+        8100.0,
+        8100.0,
+        8100.0);
+    tracking_now += std::chrono::milliseconds{400};
+    movePointer(
+        interaction,
+        sketch_id,
+        8100.0,
+        8100.0,
+        8100.0,
+        8100.0);
+    CHECK(interaction.trackingAnchorCount() == 2U);
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8200.0,
+        8200.0,
+        8200.0,
+        8200.0);
+    tracking_now += std::chrono::milliseconds{400};
+    movePointer(
+        interaction,
+        sketch_id,
+        8200.0,
+        8200.0,
+        8200.0,
+        8200.0);
+    CHECK(interaction.trackingAnchorCount() == 2U);
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8004.0,
+        8104.0,
+        8004.0,
+        8104.0);
+    auto tracking_resolution =
+        interaction.pointResolution();
+    CHECK(tracking_resolution.has_value());
+    CHECK(
+        tracking_resolution->source ==
+        sketch::PointResolutionSource::
+            tracking_inference);
+    CHECK((
+        tracking_resolution->position ==
+        sketch::Point2{8000.0, 8100.0}));
+    CHECK(
+        viewport.snap_inference_scene_.current.
+            has_value());
+    CHECK(
+        viewport.snap_inference_scene_.current->
+            kind ==
+        viewer::SketchSnapMarkerKind::
+            guide_intersection);
+    CHECK(
+        viewport.snap_inference_scene_.current->
+            label == "TRACK INT");
+    CHECK(
+        viewport.snap_inference_scene_.guides.
+            size() == 2U);
+    CHECK(
+        std::any_of(
+            viewport.snap_inference_scene_.guides.begin(),
+            viewport.snap_inference_scene_.guides.end(),
+            [](const auto& guide) {
+                return guide.kind ==
+                       viewer::
+                           SketchInferenceGuideKind::
+                               sketch_u;
+            }));
+    CHECK(
+        std::any_of(
+            viewport.snap_inference_scene_.guides.begin(),
+            viewport.snap_inference_scene_.guides.end(),
+            [](const auto& guide) {
+                return guide.kind ==
+                       viewer::
+                           SketchInferenceGuideKind::
+                               sketch_v;
+            }));
+
+    tracking_settings.object_snap.object_tracking_enabled = false;
+    movePointer(
+        interaction,
+        sketch_id,
+        8004.0,
+        8104.0,
+        8004.0,
+        8104.0);
+    tracking_resolution =
+        interaction.pointResolution();
+    CHECK(tracking_resolution.has_value());
+    CHECK(
+        tracking_resolution->source ==
+        sketch::PointResolutionSource::raw_pointer);
+    CHECK(interaction.trackingAnchorCount() == 2U);
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            empty());
+    CHECK(
+        viewport.snap_inference_scene_.guides.
+            empty());
+    CHECK(
+        !viewport.snap_inference_scene_.current.
+             has_value());
+
+    tracking_settings.object_snap.object_tracking_enabled = true;
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::none));
+    movePointer(
+        interaction,
+        sketch_id,
+        8004.0,
+        8104.0,
+        8004.0,
+        8104.0);
+    tracking_resolution =
+        interaction.pointResolution();
+    CHECK(tracking_resolution.has_value());
+    CHECK(
+        tracking_resolution->source ==
+        sketch::PointResolutionSource::raw_pointer);
+    CHECK(interaction.trackingAnchorCount() == 2U);
+    CHECK(interaction.clearTemporarySnapOverride());
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8004.0,
+        8104.0,
+        8004.0,
+        8104.0);
+    tracking_resolution =
+        interaction.pointResolution();
+    CHECK(tracking_resolution.has_value());
+    CHECK(
+        tracking_resolution->source ==
+        sketch::PointResolutionSource::
+            tracking_inference);
+
+    const auto lines_before_tracking_commit =
+        session.document().findSketch(sketch_id)->
+            model.state().lines.size();
+    click(
+        interaction,
+        sketch_id,
+        8004.0,
+        8104.0,
+        8004.0,
+        8104.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_tracking_commit + 1U);
+    CHECK((
+        model_state.lines.back().end ==
+        sketch::Point2{8000.0, 8100.0}));
+    CHECK(interaction.trackingAnchorCount() == 0U);
+    CHECK(interaction.escape());
+
+    // EXT is two-phase runtime inference: acquire one Line endpoint
+    // reference, then resolve only the positive ray beyond that endpoint.
+    const auto extension_line_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {9000.0, 9000.0},
+                {9010.0, 9000.0},
+                sketch::EntityRole::regular});
+    CHECK(
+        extension_line_result.ok() &&
+        extension_line_result.changed);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    const auto extension_line =
+        model_state.lines.back().id;
+    viewport_controller.refreshPresentation();
+    const auto extension_token =
+        viewport_controller.sketchPresentationFor(
+            extension_line);
+    CHECK(extension_token.has_value());
+    viewport.rectangle_query_ = {
+        true,
+        {*extension_token}};
+
+    application::CadInteractionSettings extension_settings;
+    extension_settings.polar.enabled = false;
+    extension_settings.object_snap.endpoint = false;
+    extension_settings.object_snap.midpoint = false;
+    extension_settings.object_snap.center = false;
+    extension_settings.object_snap.quadrant = false;
+    extension_settings.object_snap.intersection = false;
+    extension_settings.object_snap.origin = false;
+    interaction.setCadInteractionSettingsProvider(
+        [&extension_settings] {
+            return extension_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            8900.0,
+            8900.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            extension));
+
+    movePointer(
+        interaction,
+        sketch_id,
+        9010.0,
+        9000.0,
+        9010.0,
+        9000.0);
+    CHECK(!interaction.pointResolution().has_value());
+    auto extension_request =
+        interaction.activePointRequest();
+    CHECK(extension_request.has_value());
+    CHECK(
+        extension_request->deferred_snap_reference.
+            has_value());
+    CHECK(
+        extension_request->deferred_snap_reference->
+            kind ==
+        sketch::DeferredSnapReferenceKind::
+            line_extension);
+    CHECK(
+        viewport.snap_inference_scene_.
+            extension_guide.has_value());
+    CHECK(
+        viewport.snap_inference_scene_.current.
+            has_value());
+    CHECK(
+        viewport.snap_inference_scene_.current->kind ==
+        viewer::SketchSnapMarkerKind::extension);
+    CHECK(
+        viewport.snap_inference_scene_.current->label ==
+        "EXT");
+    CHECK(near(
+        viewport.snap_inference_scene_.
+            extension_guide->origin.x,
+        9010.0));
+    CHECK(near(
+        viewport.snap_inference_scene_.
+            extension_guide->origin.y,
+        9000.0));
+    CHECK(
+        !viewport.snap_inference_scene_.
+             extension_guide->resolved_point.
+             has_value());
+
+    movePointer(
+        interaction,
+        sketch_id,
+        9020.0,
+        9004.0,
+        9020.0,
+        9004.0);
+    auto extension_resolution =
+        interaction.pointResolution();
+    CHECK(extension_resolution.has_value());
+    CHECK(
+        extension_resolution->source ==
+        sketch::PointResolutionSource::
+            tracking_inference);
+    CHECK((
+        extension_resolution->position ==
+        sketch::Point2{9020.0, 9000.0}));
+    CHECK(
+        viewport.snap_inference_scene_.
+            extension_guide.has_value());
+    CHECK(
+        viewport.snap_inference_scene_.
+            extension_guide->resolved_point.
+            has_value());
+    CHECK(near(
+        viewport.snap_inference_scene_.
+            extension_guide->resolved_point->x,
+        9020.0));
+    CHECK(near(
+        viewport.snap_inference_scene_.
+            extension_guide->resolved_point->y,
+        9000.0));
+    CHECK(
+        viewport.snap_inference_scene_.current.
+            has_value());
+    CHECK(
+        viewport.snap_inference_scene_.current->kind ==
+        viewer::SketchSnapMarkerKind::extension);
+    CHECK(
+        viewport.snap_inference_scene_.current->label ==
+        "EXT");
+
+    const auto lines_before_extension =
+        hosted->model.state().lines.size();
+    click(
+        interaction,
+        sketch_id,
+        9020.0,
+        9004.0,
+        9020.0,
+        9004.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_extension + 1U);
+    CHECK((
+        model_state.lines.back().end ==
+        sketch::Point2{9020.0, 9000.0}));
+    CHECK(
+        !interaction.activePointRequest()->
+             deferred_snap_reference.has_value());
+    CHECK(interaction.escape());
+
+    // EXT never applies to the finite segment itself. Presentation tokens
+    // are runtime identities, so reacquire the current token after the first
+    // EXT scenario authored geometry and refreshed presentation.
+    viewport_controller.refreshPresentation();
+    const auto extension_token_finite =
+        viewport_controller.sketchPresentationFor(
+            extension_line);
+    CHECK(extension_token_finite.has_value());
+    viewport.rectangle_query_ = {
+        true,
+        {*extension_token_finite}};
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            8900.0,
+            8900.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            extension));
+    movePointer(
+        interaction,
+        sketch_id,
+        9010.0,
+        9000.0,
+        9010.0,
+        9000.0);
+    extension_request =
+        interaction.activePointRequest();
+    CHECK(extension_request.has_value());
+    CHECK(
+        extension_request->deferred_snap_reference.
+            has_value());
+    CHECK(
+        extension_request->deferred_snap_reference->
+            kind ==
+        sketch::DeferredSnapReferenceKind::
+            line_extension);
+
+    movePointer(
+        interaction,
+        sketch_id,
+        9005.0,
+        9003.0,
+        9005.0,
+        9003.0);
+    CHECK(!interaction.pointResolution().has_value());
+    CHECK(interaction.escape());
+
+    // Switching the one-shot family EXT -> PER preserves the request-local
+    // Extension reference. The exact perpendicular foot may lie outside the
+    // finite Line and still resolve on the explicit positive ray.
+    viewport_controller.refreshPresentation();
+    const auto extension_token_per =
+        viewport_controller.sketchPresentationFor(
+            extension_line);
+    CHECK(extension_token_per.has_value());
+    viewport.rectangle_query_ = {
+        true,
+        {*extension_token_per}};
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            9020.0,
+            9010.0}));
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            extension));
+    movePointer(
+        interaction,
+        sketch_id,
+        9010.0,
+        9000.0,
+        9010.0,
+        9000.0);
+    extension_request =
+        interaction.activePointRequest();
+    CHECK(extension_request.has_value());
+    CHECK(
+        extension_request->deferred_snap_reference.
+            has_value());
+    CHECK(
+        extension_request->deferred_snap_reference->
+            kind ==
+        sketch::DeferredSnapReferenceKind::
+            line_extension);
+
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::
+            perpendicular));
+    movePointer(
+        interaction,
+        sketch_id,
+        9020.0,
+        9004.0,
+        9020.0,
+        9004.0);
+    extension_resolution =
+        interaction.pointResolution();
+    CHECK(extension_resolution.has_value());
+    CHECK(
+        extension_resolution->source ==
+        sketch::PointResolutionSource::
+            tracking_inference);
+    CHECK((
+        extension_resolution->position ==
+        sketch::Point2{9020.0, 9000.0}));
+    CHECK(interaction.escape());
+    viewport.rectangle_query_ = {true, {}};
+
+    // Deferred/Common TAN: first TAN hover captures one Circle source but
+    // no point. Second Circle selects an exact common-tangent branch; preview
+    // and commit use the two exact contact points as one ordinary Line.
+    const auto common_first_result =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                {10000.0, 10000.0},
+                10.0,
+                sketch::EntityRole::regular});
+    const auto common_second_result =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                {10040.0, 10000.0},
+                10.0,
+                sketch::EntityRole::construction});
+    CHECK(common_first_result.ok() &&
+          common_first_result.changed);
+    CHECK(common_second_result.ok() &&
+          common_second_result.changed);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    const auto common_first =
+        model_state.circles[
+            model_state.circles.size() - 2U].id;
+    const auto common_second =
+        model_state.circles.back().id;
+    viewport_controller.refreshPresentation();
+    const auto common_first_token =
+        viewport_controller.sketchPresentationFor(
+            common_first);
+    const auto common_second_token =
+        viewport_controller.sketchPresentationFor(
+            common_second);
+    CHECK(common_first_token.has_value());
+    CHECK(common_second_token.has_value());
+
+    application::CadInteractionSettings common_settings;
+    common_settings.polar.enabled = false;
+    common_settings.object_snap.endpoint = false;
+    common_settings.object_snap.midpoint = false;
+    common_settings.object_snap.center = false;
+    common_settings.object_snap.quadrant = false;
+    common_settings.object_snap.intersection = false;
+    common_settings.object_snap.origin = false;
+    interaction.setCadInteractionSettingsProvider(
+        [&common_settings] {
+            return common_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.setTemporarySnapOverride(
+        sketch::TemporarySnapOverrideKind::tangent));
+    viewport.rectangle_query_ = {
+        true,
+        {*common_first_token}};
+    movePointer(
+        interaction,
+        sketch_id,
+        10000.0,
+        10010.0,
+        10000.0,
+        10010.0);
+    CHECK(!interaction.pointResolution().has_value());
+    auto common_request =
+        interaction.activePointRequest();
+    CHECK(common_request.has_value());
+    CHECK(
+        common_request->deferred_snap_reference.
+            has_value());
+    CHECK(
+        common_request->deferred_snap_reference->
+            kind ==
+        sketch::DeferredSnapReferenceKind::
+            tangent_curve);
+
+    const auto lines_before_common =
+        hosted->model.state().lines.size();
+    viewport.rectangle_query_ = {
+        true,
+        {*common_second_token}};
+    movePointer(
+        interaction,
+        sketch_id,
+        10040.0,
+        10010.0,
+        10040.0,
+        10010.0);
+    const auto common_resolution =
+        interaction.pointResolution();
+    CHECK(common_resolution.has_value());
+    CHECK(
+        common_resolution->source ==
+        sketch::PointResolutionSource::object_snap);
+    CHECK(common_resolution->object_snap.has_value());
+    CHECK(
+        common_resolution->object_snap->kind ==
+        sketch::SnapKind::tangent);
+    CHECK(near(
+        common_resolution->position.u,
+        10000.0));
+    CHECK(near(
+        common_resolution->position.v,
+        10010.0));
+    CHECK(viewport.preview_scene_.lines.size() == 1U);
+    CHECK(near(
+        viewport.preview_scene_.lines[0].start.x,
+        10000.0));
+    CHECK(near(
+        viewport.preview_scene_.lines[0].start.y,
+        10010.0));
+    CHECK(near(
+        viewport.preview_scene_.lines[0].end.x,
+        10040.0));
+    CHECK(near(
+        viewport.preview_scene_.lines[0].end.y,
+        10010.0));
+
+    click(
+        interaction,
+        sketch_id,
+        10040.0,
+        10010.0,
+        10040.0,
+        10010.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_common + 1U);
+    CHECK(near(
+        model_state.lines.back().start.u,
+        10000.0));
+    CHECK(near(
+        model_state.lines.back().start.v,
+        10010.0));
+    CHECK(near(
+        model_state.lines.back().end.u,
+        10040.0));
+    CHECK(near(
+        model_state.lines.back().end.v,
+        10010.0));
+    common_request = interaction.activePointRequest();
+    CHECK(common_request.has_value());
+    CHECK(
+        !common_request->deferred_snap_reference.
+             has_value());
+    CHECK(interaction.escape());
+    viewport.rectangle_query_ = {true, {}};
+
     // Polar is a logical-screen-space magnet. With 90-degree Absolute
     // tracks, (20,1) captures +U. Direct Distance owns magnitude only.
     application::CadInteractionSettings polar_settings;
+    polar_settings.object_snap.master_enabled = false;
     polar_settings.polar.primary_spacing =
         std::numbers::pi_v<double> / 2.0;
     interaction.setCadInteractionSettingsProvider(
@@ -891,6 +2201,14 @@ int main(int argc, char* argv[]) {
         1.0,
         20.0,
         1.0);
+
+    point_resolution =
+        interaction.pointResolution();
+    CHECK(point_resolution.has_value());
+    CHECK(
+        point_resolution->source ==
+        sketch::PointResolutionSource::polar);
+    CHECK(!point_resolution->object_snap.has_value());
 
     auto dyn_snapshots =
         semantic_input.dynamicInputFieldSnapshots();

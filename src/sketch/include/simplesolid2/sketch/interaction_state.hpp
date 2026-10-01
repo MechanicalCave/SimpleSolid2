@@ -4,6 +4,7 @@
 #include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/sketch/point2.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
+#include <simplesolid2/sketch/snap.hpp>
 #include <simplesolid2/sketch/transform.hpp>
 
 #include <array>
@@ -242,17 +243,47 @@ using LineGripRef = SketchGripRef;
 using DirectManipulationGeometry =
     SketchTransformGeometry;
 
-struct ResolvedSketchInput final {
+enum class PointResolutionSource : std::uint8_t {
+    raw_pointer,
+    polar,
+    object_snap,
+    tracking_inference,
+    explicit_numeric,
+    numeric_lock,
+};
+
+struct PointResolution final {
     Point2 position;
+    PointResolutionSource source{
+        PointResolutionSource::raw_pointer};
+    std::optional<SnapCandidate> object_snap;
 
     [[nodiscard]] bool valid() const noexcept {
-        return position.finite();
+        if (!position.finite()) {
+            return false;
+        }
+        if (object_snap) {
+            return object_snap->valid() &&
+                   object_snap->point == position &&
+                   (source ==
+                        PointResolutionSource::
+                            object_snap ||
+                    source ==
+                        PointResolutionSource::
+                            numeric_lock);
+        }
+        return source !=
+               PointResolutionSource::object_snap;
     }
 
     friend bool operator==(
-        const ResolvedSketchInput&,
-        const ResolvedSketchInput&) = default;
+        const PointResolution&,
+        const PointResolution&) = default;
 };
+
+// Source compatibility: pre-R11 code consumes the same final semantic point
+// object under its historical name.
+using ResolvedSketchInput = PointResolution;
 
 enum class ExplicitPointInputKind : std::uint8_t {
     absolute_cartesian,
@@ -314,6 +345,12 @@ struct PointRequest final {
     bool relative_cartesian_enabled{};
     bool relative_polar_enabled{};
     std::optional<double> polar_relative_reference;
+    std::optional<TemporarySnapOverrideKind>
+        temporary_snap_override;
+    std::optional<DeferredSnapReference>
+        deferred_snap_reference;
+    TrackingAnchorState tracking_anchors;
+    std::optional<PointResolution> resolution;
 
     [[nodiscard]] bool valid() const noexcept {
         const bool requires_base =
@@ -326,7 +363,13 @@ struct PointRequest final {
                (!polar_relative_reference ||
                 std::isfinite(
                     *polar_relative_reference)) &&
-               (!requires_base || base.has_value());
+               (!requires_base || base.has_value()) &&
+               (!deferred_snap_reference ||
+                deferred_snap_reference->valid()) &&
+               tracking_anchors.valid() &&
+               (!resolution ||
+                (pointer_candidate &&
+                 resolution->valid()));
     }
 
     friend bool operator==(
@@ -376,7 +419,27 @@ public:
     resolvePointerInput(Point2 raw) noexcept;
 
     [[nodiscard]] std::optional<ResolvedSketchInput>
+    resolvePointerInput(
+        Point2 raw,
+        PointResolutionSource source,
+        std::optional<SnapCandidate> object_snap =
+            std::nullopt) noexcept;
+
+    [[nodiscard]] std::optional<ResolvedSketchInput>
     resolvedPointRequestCandidate() const noexcept;
+
+    [[nodiscard]] bool pointCandidateCompatible(
+        Point2 raw,
+        PointResolutionSource source,
+        std::optional<SnapCandidate> object_snap =
+            std::nullopt) const noexcept;
+
+    void clearPointerResolution() noexcept {
+        point_pointer_candidate_.reset();
+        point_pointer_source_ =
+            PointResolutionSource::raw_pointer;
+        point_pointer_snap_.reset();
+    }
 
     [[nodiscard]] std::optional<ResolvedSketchInput>
     resolveExplicitPoint(
@@ -394,6 +457,35 @@ public:
     [[nodiscard]] const PointFieldLocks&
     pointFieldLocks() const noexcept {
         return point_field_locks_;
+    }
+
+
+    [[nodiscard]] bool setTemporarySnapOverride(
+        TemporarySnapOverrideKind value) noexcept;
+    [[nodiscard]] bool clearTemporarySnapOverride() noexcept;
+    [[nodiscard]] std::optional<TemporarySnapOverrideKind>
+    temporarySnapOverride() const noexcept {
+        return temporary_snap_override_;
+    }
+
+    [[nodiscard]] bool setDeferredSnapReference(
+        DeferredSnapReference reference) noexcept;
+    [[nodiscard]] bool clearDeferredSnapReference() noexcept;
+    [[nodiscard]] std::optional<DeferredSnapReference>
+    deferredSnapReference() const noexcept {
+        return deferred_snap_reference_;
+    }
+
+    [[nodiscard]] TrackingAcquireResult
+    acquireCurrentTrackingAnchor() noexcept;
+    [[nodiscard]] bool removeTrackingAnchor(
+        const SnapStableKey& key);
+    void clearTrackingAnchors() noexcept {
+        tracking_anchors_.clear();
+    }
+    [[nodiscard]] const TrackingAnchorState&
+    trackingAnchors() const noexcept {
+        return tracking_anchors_;
     }
 
     [[nodiscard]] std::optional<Point2>
@@ -688,6 +780,29 @@ private:
     [[nodiscard]] bool commonTransformTool() const noexcept;
     [[nodiscard]] bool
     clearRequestLocalNumericLocks() noexcept;
+    void completePointAcquisition() noexcept {
+        temporary_snap_override_.reset();
+        deferred_snap_reference_.reset();
+        tracking_anchors_.clear();
+        point_pointer_source_ =
+            PointResolutionSource::raw_pointer;
+        point_pointer_snap_.reset();
+    }
+
+    [[nodiscard]] bool clearR11RequestState() noexcept {
+        const bool changed =
+            temporary_snap_override_.has_value() ||
+            deferred_snap_reference_.has_value() ||
+            !tracking_anchors_.anchors.empty();
+        if (!changed) {
+            return false;
+        }
+        temporary_snap_override_.reset();
+        deferred_snap_reference_.reset();
+        tracking_anchors_.clear();
+        clearPointerResolution();
+        return true;
+    }
 
     void resetToSelect() noexcept;
     void resetLineStage() noexcept;
@@ -748,7 +863,15 @@ private:
     // One shared runtime pointer candidate feeds the active semantic
     // PointRequest. It is never authored or persisted.
     std::optional<Point2> point_pointer_candidate_;
+    PointResolutionSource point_pointer_source_{
+        PointResolutionSource::raw_pointer};
+    std::optional<SnapCandidate> point_pointer_snap_;
     PointFieldLocks point_field_locks_;
+    std::optional<TemporarySnapOverrideKind>
+        temporary_snap_override_;
+    std::optional<DeferredSnapReference>
+        deferred_snap_reference_;
+    TrackingAnchorState tracking_anchors_;
 };
 
 } // namespace simplesolid2::sketch
