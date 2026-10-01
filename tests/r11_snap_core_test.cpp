@@ -66,6 +66,79 @@ int main() {
     CHECK(!defaults.nearest);
     CHECK(!defaults.extension);
 
+    const ObjectSnapPreferences preference_defaults;
+    CHECK(preference_defaults.master_enabled);
+    CHECK(!preference_defaults.object_tracking_enabled);
+
+    const auto default_eligibility =
+        resolveSnapEligibility(
+            preference_defaults);
+    CHECK(default_eligibility.endpoint);
+    CHECK(default_eligibility.midpoint);
+    CHECK(default_eligibility.center);
+    CHECK(default_eligibility.quadrant);
+    CHECK(default_eligibility.intersection);
+    CHECK(default_eligibility.origin);
+    CHECK(!default_eligibility.perpendicular);
+    CHECK(!default_eligibility.tangent);
+    CHECK(!default_eligibility.nearest);
+    CHECK(!default_eligibility.extension);
+    CHECK(!default_eligibility.object_tracking);
+    CHECK(!default_eligibility.suppress_object_assistance);
+
+    ObjectSnapPreferences disabled_preferences =
+        preference_defaults;
+    disabled_preferences.master_enabled = false;
+    disabled_preferences.object_tracking_enabled = true;
+    const auto disabled_eligibility =
+        resolveSnapEligibility(
+            disabled_preferences);
+    CHECK(!disabled_eligibility.endpoint);
+    CHECK(!disabled_eligibility.origin);
+    CHECK(disabled_eligibility.object_tracking);
+
+    const auto endpoint_override =
+        resolveSnapEligibility(
+            disabled_preferences,
+            TemporarySnapOverrideKind::endpoint);
+    CHECK(endpoint_override.endpoint);
+    CHECK(!endpoint_override.midpoint);
+    CHECK(!endpoint_override.object_tracking);
+    CHECK(
+        endpoint_override.enabled(
+            SnapKind::endpoint));
+    CHECK(
+        !endpoint_override.enabled(
+            SnapKind::nearest));
+
+    const auto extension_override =
+        resolveSnapEligibility(
+            preference_defaults,
+            TemporarySnapOverrideKind::extension);
+    CHECK(extension_override.extension);
+    CHECK(!extension_override.endpoint);
+    CHECK(!extension_override.object_tracking);
+
+    const auto none_override =
+        resolveSnapEligibility(
+            ObjectSnapPreferences{
+                true,
+                SnapModeSet{},
+                true},
+            TemporarySnapOverrideKind::none);
+    CHECK(none_override.suppress_object_assistance);
+    CHECK(!none_override.endpoint);
+    CHECK(!none_override.midpoint);
+    CHECK(!none_override.center);
+    CHECK(!none_override.quadrant);
+    CHECK(!none_override.intersection);
+    CHECK(!none_override.origin);
+    CHECK(!none_override.perpendicular);
+    CHECK(!none_override.tangent);
+    CHECK(!none_override.nearest);
+    CHECK(!none_override.extension);
+    CHECK(!none_override.object_tracking);
+
     SketchModel model;
     const auto horizontal =
         model.addLine(

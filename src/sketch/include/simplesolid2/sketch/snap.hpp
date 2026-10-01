@@ -99,6 +99,58 @@ struct SnapModeSet final {
         const SnapModeSet&) = default;
 };
 
+
+enum class TemporarySnapOverrideKind : std::uint8_t {
+    endpoint,
+    midpoint,
+    center,
+    quadrant,
+    intersection,
+    perpendicular,
+    tangent,
+    nearest,
+    origin,
+    extension,
+    none,
+};
+
+struct ObjectSnapPreferences final {
+    bool master_enabled{true};
+    SnapModeSet modes;
+    bool object_tracking_enabled{false};
+
+    friend bool operator==(
+        const ObjectSnapPreferences&,
+        const ObjectSnapPreferences&) = default;
+};
+
+struct SnapEligibility final {
+    bool endpoint{};
+    bool midpoint{};
+    bool center{};
+    bool quadrant{};
+    bool intersection{};
+    bool origin{};
+    bool perpendicular{};
+    bool tangent{};
+    bool nearest{};
+    bool extension{};
+    bool object_tracking{};
+    bool suppress_object_assistance{};
+
+    [[nodiscard]] bool enabled(
+        SnapKind kind) const noexcept;
+
+    friend bool operator==(
+        const SnapEligibility&,
+        const SnapEligibility&) = default;
+};
+
+[[nodiscard]] SnapEligibility resolveSnapEligibility(
+    const ObjectSnapPreferences& preferences,
+    std::optional<TemporarySnapOverrideKind>
+        temporary_override = std::nullopt) noexcept;
+
 struct SnapStableKey final {
     std::uint8_t kind_rank{};
     SnapSourceKind source_kind{

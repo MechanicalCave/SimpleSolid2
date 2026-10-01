@@ -401,6 +401,112 @@ void appendTangents(
 
 } // namespace
 
+bool SnapEligibility::enabled(
+    SnapKind kind) const noexcept {
+    switch (kind) {
+    case SnapKind::endpoint:
+        return endpoint;
+    case SnapKind::midpoint:
+        return midpoint;
+    case SnapKind::center:
+        return center;
+    case SnapKind::quadrant:
+        return quadrant;
+    case SnapKind::intersection:
+        return intersection;
+    case SnapKind::origin:
+        return origin;
+    case SnapKind::perpendicular:
+        return perpendicular;
+    case SnapKind::tangent:
+        return tangent;
+    case SnapKind::nearest:
+        return nearest;
+    }
+    return false;
+}
+
+SnapEligibility resolveSnapEligibility(
+    const ObjectSnapPreferences& preferences,
+    std::optional<TemporarySnapOverrideKind>
+        temporary_override) noexcept {
+    if (temporary_override) {
+        SnapEligibility result;
+        switch (*temporary_override) {
+        case TemporarySnapOverrideKind::endpoint:
+            result.endpoint = true;
+            break;
+        case TemporarySnapOverrideKind::midpoint:
+            result.midpoint = true;
+            break;
+        case TemporarySnapOverrideKind::center:
+            result.center = true;
+            break;
+        case TemporarySnapOverrideKind::quadrant:
+            result.quadrant = true;
+            break;
+        case TemporarySnapOverrideKind::intersection:
+            result.intersection = true;
+            break;
+        case TemporarySnapOverrideKind::perpendicular:
+            result.perpendicular = true;
+            break;
+        case TemporarySnapOverrideKind::tangent:
+            result.tangent = true;
+            break;
+        case TemporarySnapOverrideKind::nearest:
+            result.nearest = true;
+            break;
+        case TemporarySnapOverrideKind::origin:
+            result.origin = true;
+            break;
+        case TemporarySnapOverrideKind::extension:
+            result.extension = true;
+            break;
+        case TemporarySnapOverrideKind::none:
+            result.suppress_object_assistance = true;
+            break;
+        }
+
+        // A temporary override is a restricted one-point family, not a
+        // preference mutation and not a request for unrelated OTRACK
+        // fallback. NONE is the fully object-derived suppression family.
+        return result;
+    }
+
+    SnapEligibility result;
+    if (preferences.master_enabled) {
+        result.endpoint =
+            preferences.modes.endpoint;
+        result.midpoint =
+            preferences.modes.midpoint;
+        result.center =
+            preferences.modes.center;
+        result.quadrant =
+            preferences.modes.quadrant;
+        result.intersection =
+            preferences.modes.intersection;
+        result.origin =
+            preferences.modes.origin;
+        result.perpendicular =
+            preferences.modes.perpendicular;
+        result.tangent =
+            preferences.modes.tangent;
+        result.nearest =
+            preferences.modes.nearest;
+        result.extension =
+            preferences.modes.extension;
+    }
+
+    // OTRACK has a separate master. Acquisition still needs an eligible
+    // semantic anchor at the integration layer; keeping this flag separate
+    // prevents the OSNAP master from silently mutating the user OTRACK
+    // preference.
+    result.object_tracking =
+        preferences.object_tracking_enabled;
+    return result;
+}
+
 bool SnapSourceRef::valid() const noexcept {
     switch (kind) {
     case SnapSourceKind::intrinsic_origin:
