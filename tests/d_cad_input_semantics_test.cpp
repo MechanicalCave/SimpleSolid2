@@ -514,6 +514,23 @@ int main() {
     CHECK(result.accepted);
     CHECK(target.activated == sketch::SketchTool::copy);
 
+    target.activated.reset();
+    result = dot.submit("trim");
+    CHECK(result.accepted);
+    CHECK(target.activated == sketch::SketchTool::trim);
+
+    target.activated.reset();
+    result = dot.submit("EXTEND");
+    CHECK(result.accepted);
+    CHECK(target.activated == sketch::SketchTool::extend);
+
+    target.activated.reset();
+    result = dot.submit("extend both");
+    CHECK(result.accepted);
+    CHECK(
+        target.activated ==
+        sketch::SketchTool::extend_both);
+
     target.profile_command.reset();
     result = dot.submit("PROFILE");
     CHECK(result.accepted);

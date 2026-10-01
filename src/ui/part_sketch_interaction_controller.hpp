@@ -18,6 +18,7 @@
 #include <optional>
 #include <string>
 #include <utility>
+#include <vector>
 
 namespace simplesolid2::ui {
 
@@ -203,6 +204,20 @@ public:
             command) override;
 
     [[nodiscard]] std::size_t selectedCount() const noexcept;
+    [[nodiscard]] const std::vector<sketch::EntityId>&
+    structuralBoundaries() const noexcept {
+        return interaction_.structuralBoundaries();
+    }
+    [[nodiscard]] bool
+    structuralBoundarySelectionPending() const noexcept {
+        return interaction_.structuralBoundarySelectionPending();
+    }
+    [[nodiscard]] bool completeStructuralBoundarySelection();
+
+    [[nodiscard]] std::optional<sketch::EntityId>
+    extendBothFirstLine() const noexcept {
+        return interaction_.extendBothFirstLine();
+    }
 
     [[nodiscard]] sketch::EntityRole
     creationRole() const noexcept {
@@ -312,6 +327,9 @@ public:
     void activateCircle();
     void activateArc();
     void activateRectangle();
+    [[nodiscard]] bool activateTrim();
+    [[nodiscard]] bool activateExtend();
+    void activateExtendBoth();
     [[nodiscard]] bool activateMove();
     [[nodiscard]] bool activateCopy();
     [[nodiscard]] bool activateRotate();
@@ -357,6 +375,19 @@ private:
     void handleArcPointer(const SketchPointerInput& input);
     void handleRectanglePointer(const SketchPointerInput& input);
     void handleMeasurePointer(const SketchPointerInput& input);
+    void handleStructuralEditPointer(
+        const SketchPointerInput& input);
+    [[nodiscard]] std::optional<
+        sketch::StructuralEndpointRole>
+    structuralEndpointFor(
+        const sketch::SketchModel& model,
+        sketch::EntityId target,
+        sketch::Point2 pick) const noexcept;
+    [[nodiscard]] bool projectStructuralEditPreview(
+        sketch::SketchTool tool,
+        std::optional<sketch::EntityId> target,
+        std::optional<sketch::StructuralEndpointRole> endpoint,
+        const sketch::StructuralEditResult& result);
     void handleCommonTransformPointer(
         const SketchPointerInput& input);
     void handleProfilePointer(
@@ -475,6 +506,8 @@ private:
         transform_revision_;
     std::optional<core::DocumentRevision>
         rectangle_revision_;
+    std::optional<core::DocumentRevision>
+        structural_revision_;
     std::optional<sketch::SketchTool>
         last_repeatable_command_;
     sketch::EntityRole creation_role_{

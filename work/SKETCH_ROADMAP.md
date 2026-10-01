@@ -1,30 +1,34 @@
 # Sketcher Program Roadmap
 
 **Status:** ACCEPTED  
-**Version:** 1.7  
-**Owner acceptance:** 2026-09-29  
-**Previous accepted version:** 1.6 — 2026-09-29  
+**Version:** 1.8  
+**Owner acceptance:** 2026-10-01  
+**Previous accepted version:** 1.7 — 2026-09-29  
 **Foundation:** 1.0 (foundation-v1.0)  
-**Architecture:** ADR-0008, ADR-0009, ADR-0011  
+**Architecture:** ADR-0008, ADR-0009, ADR-0011, ADR-0012  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Current scheduling:** R0–R11, WB-02 and AUDIT-01 A–F are completed. R12 Trim/Split/Join remains inactive behind its mandatory explicit identity/reference outcome gate, followed by the profile-authoring readiness checkpoint. Solid modeling remains inactive behind a separate Part Feature Tree architecture gate.  
+**Current scheduling:** R0–R12, WB-02 and AUDIT-01 A–F are completed. The Sketcher profile-authoring readiness checkpoint is NEXT and requires concrete acceptance evidence. Split/Join remain deferred; Part Feature Tree and solid modeling remain inactive behind separate future gates.  
 
-## 1. Why v1.7 changes R10 directional assistance
+## 1. Why v1.8 narrows R12 structural editing
 
-Roadmap v1.6 established the current sequence, closed R8 through R8A + R8B, deferred standalone Show Dimensions, and placed R10 Precision before R11 OSNAP/Inference and R12 structural editing.
+Roadmap v1.7 completed the R10 directional amendment and placed structural editing after R11. After R11 completion, Owner design review narrowed R12 to the three engineering operations actually required for current profile authoring:
 
-During Owner review of the R10 Work Contract, the separate Ortho + Polar model was deliberately simplified. R10 now has one directional-assistance mechanism: **Polar**. Classic orthogonal-only behavior is represented by Polar spacing `360/4 = 90°`; there is no second Ortho toggle or resolver path.
+- Trim;
+- Extend;
+- Extend Both to Virtual Intersection for two Lines.
 
-This is a bounded R10 interaction amendment, not a sequencing change. The accepted sequence is:
+Split and Join are no longer R12 requirements. They remain deferred until a concrete product need justifies reopening topology-branching or merge identity semantics.
+
+This is a bounded R12 sequencing/scope amendment. The accepted sequence is:
 
 ```text
 R8  Measure / relational diagnostics — completed
 → R9  Rectangle + Construction UI — completed
 → R10 Precision Input / Units / Polar / Dynamic Input — completed
 → R11 OSNAP / Tracking / Inference — completed
-→ R12 Trim / Split / Join with explicit identity outcomes — inactive
-→ Sketcher profile-authoring readiness checkpoint
+→ R12 Trim / Extend / Extend Both to Virtual Intersection — completed
+→ Sketcher profile-authoring readiness checkpoint — NEXT
 → separate Part Feature Tree architecture gate
 → only then may a first solid-operation contract be considered
 ```
@@ -35,12 +39,12 @@ Four guardrails remain explicit:
 
 1. R8A/R8B runtime measurement references remain diagnostic and do not become durable dimension/sub-element identity by implication.
 2. Standalone Show Dimensions is not a prerequisite for profile-authoring readiness; future viewport dimensions should follow the eventual authored/reference dimension architecture rather than pre-empt it.
-3. R12 cannot implement Trim/Split/Join until identity/reference outcomes are explicitly accepted; structural editing must be stable before authored relations/dimensions/solver work depends on it.
+3. R12 structural editing is authorized only by the accepted `work/R12_TRIM_EXTEND_MUTUAL_EXTEND.md` identity/reference rules; Split/Join remain deferred and must not be inferred from Trim implementation.
 4. The profile-authoring checkpoint must have concrete acceptance evidence; it is not satisfied by a subjective statement that the Sketcher “feels sufficient”.
 
 Ordinary RMB context remains deferred as a later UX-convergence item after the command set is broad enough to design the menu from stable operations. Existing already-accepted RMB semantics in command-first object collection remain unchanged.
 
-Roadmap v1.7 does not itself activate scope. R11 is completed after final exact-head Windows FULL #1088 and Owner manual Windows PASS. R12+ remain inactive; R12 requires a separate Owner-accepted Work Contract that freezes the mandatory identity/reference outcomes before structural editing begins.
+Roadmap v1.8 records the Owner-accepted narrowing and completed delivery of R12. R12 completed after final exact-head Windows FULL #1104 and Owner manual Windows PASS. Split/Join and R13+ remain inactive; the next action is the explicit profile-authoring readiness checkpoint.
 
 ## 2. Preserved accepted invariants
 
@@ -718,19 +722,23 @@ Goal:
 
 R11 depends on the R10 input-resolution foundation rather than creating a second point-resolution system.
 
-### R12 — Structural editing: Trim / Split / Join
-**Status:** planned; inactive
+### R12 — Structural editing: Trim / Extend / Extend Both to Virtual Intersection
+**Status:** completed — final exact-head Windows FULL #1104 + Owner manual Windows PASS on 2026-10-01
 
 Goal:
 
-- implement the minimum structural editing operations needed for practical profile authoring;
-- define Trim, Split and Join as semantic operations over authored geometry rather than Viewer/provider edits;
-- establish explicit EntityId, sub-element/reference, selection, Profile-reference, Undo/Redo and persistence outcomes before production implementation;
-- fail closed where an operation would make identity/reference meaning ambiguous;
+- implement the minimum structural editing operations currently required for practical engineering profile authoring;
+- Trim exactly one connected target fragment only when the result remains exactly one representable authored primitive;
+- Extend one Line/Arc endpoint to an exact intersection with finite authored boundary geometry;
+- Extend two Lines atomically to the unique virtual intersection of their infinite supporting lines when both finite Lines require extension;
+- preserve explicit EntityId/reference outcomes: Line→Line and Arc→Arc preserve identity; Circle→Arc allocates fresh identity;
+- keep Profile live-reference behavior fail-closed with no automatic RegionIntent rebinding;
 - preserve atomic Command → Validation → Transaction → owning Document → Evaluation authority;
-- do not introduce authored constraints/solver as an implicit side effect.
+- introduce no authored constraints/solver, tolerance healing or hidden Split/Join semantics.
 
-**Mandatory gate:** before the first production Trim/Split/Join mutation, an Owner-accepted D2 contract must define identity/reference outcomes. Implementation is not authorized by this roadmap text alone.
+Current R12 does **not** include Split, Join, middle-fragment removal that leaves two target entities, Offset, Fillet, Chamfer, Break, Polyline or general topology genealogy.
+
+The Work Contract is authoritative for exact operation/failure/identity rules.
 
 ### Sketcher profile-authoring readiness checkpoint
 After R8–R12 are completed, the program must stop and verify that Sketcher can be used deliberately to author real Profiles.
@@ -743,7 +751,7 @@ Minimum checkpoint evidence must demonstrate, on supported Windows:
 - precise numeric/unit-aware point entry;
 - Polar and Dynamic Input;
 - OSNAP/Tracking/Inference sufficient for deliberate geometric placement;
-- Trim/Split/Join with accepted stable identity/history behavior;
+- Trim/Extend/Extend-Both with accepted stable identity/history behavior;
 - Undo/Redo and Save/Close/Reopen across representative workflows;
 - deliberate creation of valid Profile geometry without automatic gap healing or Viewer-dependent closure.
 
@@ -830,7 +838,7 @@ The following remain future contract decisions because current evidence does not
 - exact numeric tolerances for snap/intersection/solver/region analysis;
 - whether future measurement sub-element references ever need durable identity beyond runtime diagnostics;
 - exact Polyline durable semantics;
-- exact Trim/Split/Join identity rules — these must be decided by the mandatory R12 gate before implementation;
+- R12 Trim/Extend identity rules are frozen by the accepted R12 contract; Split/Join identity semantics remain deliberately deferred;
 - exact future constraint vocabulary/solver technology;
 - authored driving/reference dimension model;
 - exact later curve primitive ordering;
@@ -855,16 +863,17 @@ R8 completed — R8A completed after exact-head FULL #867 and Owner manual PASS;
 R9 completed — exact-head FULL #912 and Owner manual Windows PASS on bfe36544d71593a407bada63c07ae0e4b912808f  
 R10 completed — final exact-head Windows FULL #1009; Owner manual Windows PASS; Polar-only directional assistance retained  
 R11 completed — final exact-head Windows FULL #1088; Owner manual Windows PASS  
-R12–R15 inactive  
-Sketcher profile-authoring readiness checkpoint not yet reached  
+R12 completed — final exact-head Windows FULL #1104; Owner manual Windows PASS; Split/Join deferred  
+R13–R15 inactive  
+Sketcher profile-authoring readiness checkpoint NEXT — evidence not yet collected  
 Part Feature Tree architecture gate inactive  
 Solid modeling / Extrude inactive  
 Ordinary Select RMB context menu deferred as a later UX-convergence slice
 
-Roadmap v1.7 is authoritative for Sketcher feature sequencing. The v1.5 expectation that R8C precede R9 remains superseded by v1.6. R9, R10 and R11 are completed. R12+ remain inactive; R12 cannot begin implementation until its mandatory identity/reference outcome gate is explicitly Owner-accepted.
+Roadmap v1.8 is authoritative for Sketcher feature sequencing. R9–R12 are completed. Split/Join and R13+ remain inactive; the program is stopped at the Sketcher profile-authoring readiness checkpoint and no Part Feature Tree or solid-modeling scope is active.
 
 ## AUDIT-01 program interlock — completed
 
 AUDIT-01 A-F is completed and no longer has scheduling precedence over Sketcher feature work.
 
-The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29, and SK-07G is completed after FULL #849 and Owner manual PASS. Roadmap v1.7 keeps ordinary RMB context deferred, retains R8 complete through R8A/R8B, and places R9–R12 before the explicit profile-authoring readiness checkpoint. Package F technical readiness does not activate solid modeling; a separate Part Feature Tree architecture gate and later solid-operation Work Contract remain mandatory.
+The audit did not itself activate later Sketcher features. R7 resumed only by explicit Owner acceptance of SK-07G on 2026-09-29, and SK-07G is completed after FULL #849 and Owner manual PASS. Roadmap v1.8 keeps ordinary RMB context deferred, retains R8 complete through R8A/R8B, and places the narrowed R12 before the explicit profile-authoring readiness checkpoint. Package F technical readiness does not activate solid modeling; a separate Part Feature Tree architecture gate and later solid-operation Work Contract remain mandatory.

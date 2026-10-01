@@ -165,6 +165,61 @@ viewportPointRayDistance(
         : std::nullopt;
 }
 
+[[nodiscard]] double sketchDistanceSquared(
+    sketch::Point2 first,
+    sketch::Point2 second) noexcept {
+    const double du = second.u - first.u;
+    const double dv = second.v - first.v;
+    return std::fma(du, du, dv * dv);
+}
+
+[[nodiscard]] std::optional<sketch::Point2>
+arcPointAt(
+    const sketch::Arc& arc,
+    double angle) noexcept {
+    const double cosine = std::cos(angle);
+    const double sine = std::sin(angle);
+    if (!std::isfinite(cosine) ||
+        !std::isfinite(sine)) {
+        return std::nullopt;
+    }
+    const sketch::Point2 point{
+        std::fma(
+            arc.radius(),
+            cosine,
+            arc.center().u),
+        std::fma(
+            arc.radius(),
+            sine,
+            arc.center().v)};
+    return point.finite()
+        ? std::optional<sketch::Point2>{point}
+        : std::nullopt;
+}
+
+[[nodiscard]] const char* structuralStatusText(
+    sketch::StructuralEditStatus status) noexcept {
+    switch (status) {
+    case sketch::StructuralEditStatus::ready:
+        return "ready";
+    case sketch::StructuralEditStatus::invalid_request:
+        return "invalid request";
+    case sketch::StructuralEditStatus::missing_entity:
+        return "missing entity";
+    case sketch::StructuralEditStatus::unsupported:
+        return "unsupported target";
+    case sketch::StructuralEditStatus::no_intersection:
+        return "no eligible intersection";
+    case sketch::StructuralEditStatus::ambiguous_topology:
+        return "ambiguous topology";
+    case sketch::StructuralEditStatus::not_applicable:
+        return "not applicable";
+    case sketch::StructuralEditStatus::identity_exhausted:
+        return "EntityId space exhausted";
+    }
+    return "unknown structural edit status";
+}
+
 } // namespace
 
 PartSketchInteractionController::PartSketchInteractionController(
@@ -189,6 +244,7 @@ void PartSketchInteractionController::begin(
     manipulation_revision_.reset();
     transform_revision_.reset();
     rectangle_revision_.reset();
+    structural_revision_.reset();
     last_repeatable_command_.reset();
     creation_role_ = sketch::EntityRole::regular;
     rectangle_draw_diagonals_ = false;
@@ -219,6 +275,7 @@ void PartSketchInteractionController::end() {
     manipulation_revision_.reset();
     transform_revision_.reset();
     rectangle_revision_.reset();
+    structural_revision_.reset();
     last_repeatable_command_.reset();
     creation_role_ = sketch::EntityRole::regular;
     rectangle_draw_diagonals_ = false;
@@ -1500,6 +1557,13 @@ bool PartSketchInteractionController::activateCadInputSemanticTool(
         return activateScale();
     case sketch::SketchTool::mirror:
         return activateMirror();
+    case sketch::SketchTool::trim:
+        return activateTrim();
+    case sketch::SketchTool::extend:
+        return activateExtend();
+    case sketch::SketchTool::extend_both:
+        activateExtendBoth();
+        return this->tool() == tool;
     }
     return false;
 }
@@ -1919,6 +1983,9 @@ bool PartSketchInteractionController::repeatLastCommand() {
         return activateMirror();
     case sketch::SketchTool::measure:
     case sketch::SketchTool::select:
+    case sketch::SketchTool::trim:
+    case sketch::SketchTool::extend:
+    case sketch::SketchTool::extend_both:
         return false;
     }
 
@@ -2229,6 +2296,124 @@ void PartSketchInteractionController::activateRectangle() {
     last_repeatable_command_ =
         sketch::SketchTool::rectangle;
     notifyStateChanged();
+}
+
+bool PartSketchInteractionController::activateTrim() {
+    resetProfileRuntime();
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr ||
+        session_ == nullptr ||
+        !interaction_.activateTrim(hosted->model)) {
+        reportStatus(
+            "TRIM could not start with the current preselection.");
+        return false;
+    }
+
+    structural_revision_ =
+        interaction_.structuralBoundarySelectionPending()
+            ? std::nullopt
+            : std::optional<core::DocumentRevision>{
+                  session_->document().revision()};
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_.reset();
+    rectangle_revision_.reset();
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    reportStatus(
+        interaction_.structuralBoundarySelectionPending()
+            ? "TRIM active — select finite boundaries; Enter/RMB continues."
+            : "TRIM active — preselected entities are finite boundaries; click the target fragment.");
+    return true;
+}
+
+bool PartSketchInteractionController::activateExtend() {
+    resetProfileRuntime();
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr ||
+        session_ == nullptr ||
+        !interaction_.activateExtend(hosted->model)) {
+        reportStatus(
+            "EXTEND could not start with the current preselection.");
+        return false;
+    }
+
+    structural_revision_ =
+        interaction_.structuralBoundarySelectionPending()
+            ? std::nullopt
+            : std::optional<core::DocumentRevision>{
+                  session_->document().revision()};
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_.reset();
+    rectangle_revision_.reset();
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    reportStatus(
+        interaction_.structuralBoundarySelectionPending()
+            ? "EXTEND active — select finite boundaries; Enter/RMB continues."
+            : "EXTEND active — preselected entities are finite boundaries; click the target end.");
+    return true;
+}
+
+bool PartSketchInteractionController::
+completeStructuralBoundarySelection() {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr ||
+        session_ == nullptr ||
+        !interaction_.completeStructuralBoundarySelection(
+            hosted->model)) {
+        reportStatus(
+            "Select at least one finite Line/Arc/Circle boundary before continuing.");
+        return false;
+    }
+
+    structural_revision_ =
+        session_->document().revision();
+    interaction_.clearHover();
+    viewport_controller_->clearSketchPreview();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    reportStatus(
+        interaction_.tool() == sketch::SketchTool::trim
+            ? "TRIM boundaries accepted — click target fragments."
+            : "EXTEND boundaries accepted — click target ends.");
+    return true;
+}
+
+void PartSketchInteractionController::activateExtendBoth() {
+    if (!active() || session_ == nullptr) {
+        return;
+    }
+
+    resetProfileRuntime();
+    interaction_.activateExtendBoth();
+    structural_revision_.reset();
+    press_anchor_.reset();
+    rectangle_drag_active_ = false;
+    manipulation_revision_.reset();
+    transform_revision_.reset();
+    rectangle_revision_.reset();
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->clearSketchSelectionBoxOverlay();
+    projectSelection();
+    projectInteraction();
+    configureForCurrentTool();
+    notifyStateChanged();
+    reportStatus(
+        "EXTEND BOTH active — choose the first Line, then the second Line.");
 }
 
 bool PartSketchInteractionController::activateMeasure() {
@@ -3003,6 +3188,607 @@ bool PartSketchInteractionController::reconcileAfterHistory() {
     return true;
 }
 
+std::optional<sketch::StructuralEndpointRole>
+PartSketchInteractionController::structuralEndpointFor(
+    const sketch::SketchModel& model,
+    sketch::EntityId target,
+    sketch::Point2 pick) const noexcept {
+    if (!pick.finite()) {
+        return std::nullopt;
+    }
+
+    sketch::Point2 start;
+    sketch::Point2 end;
+    if (const auto* line = model.findLine(target)) {
+        start = line->start();
+        end = line->end();
+    } else if (const auto* arc = model.findArc(target)) {
+        const auto arc_start =
+            arcPointAt(*arc, arc->startAngle());
+        const auto arc_end =
+            arcPointAt(
+                *arc,
+                arc->startAngle() +
+                    arc->sweepAngle());
+        if (!arc_start || !arc_end) {
+            return std::nullopt;
+        }
+        start = *arc_start;
+        end = *arc_end;
+    } else {
+        return std::nullopt;
+    }
+
+    const double start_distance =
+        sketchDistanceSquared(pick, start);
+    const double end_distance =
+        sketchDistanceSquared(pick, end);
+    if (!std::isfinite(start_distance) ||
+        !std::isfinite(end_distance) ||
+        start_distance == end_distance) {
+        return std::nullopt;
+    }
+
+    return start_distance < end_distance
+        ? sketch::StructuralEndpointRole::start
+        : sketch::StructuralEndpointRole::end;
+}
+
+bool PartSketchInteractionController::
+projectStructuralEditPreview(
+    sketch::SketchTool tool,
+    std::optional<sketch::EntityId> target,
+    std::optional<sketch::StructuralEndpointRole> endpoint,
+    const sketch::StructuralEditResult& result) {
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr ||
+        !result.ready() ||
+        !result.state) {
+        viewport_controller_->clearSketchPreview();
+        return false;
+    }
+
+    auto restored =
+        sketch::SketchModel::restore(*result.state);
+    if (!restored) {
+        viewport_controller_->clearSketchPreview();
+        return false;
+    }
+
+    if (tool == sketch::SketchTool::trim && target) {
+        if (const auto* before =
+                hosted->model.findLine(*target)) {
+            const auto* after =
+                restored->findLine(*target);
+            if (after == nullptr) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+            std::optional<SketchPreviewLine2D> removed;
+            if (before->start() != after->start() &&
+                before->end() == after->end()) {
+                removed = SketchPreviewLine2D{
+                    before->start(),
+                    after->start(),
+                    before->role() ==
+                        sketch::EntityRole::construction};
+            } else if (
+                before->start() == after->start() &&
+                before->end() != after->end()) {
+                removed = SketchPreviewLine2D{
+                    after->end(),
+                    before->end(),
+                    before->role() ==
+                        sketch::EntityRole::construction};
+            }
+            if (!removed || !removed->valid()) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+            return viewport_controller_->setSketchPreview(
+                {*removed});
+        }
+
+        if (const auto* before =
+                hosted->model.findArc(*target)) {
+            const auto* after =
+                restored->findArc(*target);
+            if (after == nullptr) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+
+            const double removed_sweep =
+                before->sweepAngle() -
+                after->sweepAngle();
+            const double removed_start =
+                before->startAngle() !=
+                        after->startAngle()
+                    ? before->startAngle()
+                    : before->startAngle() +
+                          after->sweepAngle();
+            const sketch::ArcIntent preview{
+                before->center(),
+                before->radius(),
+                removed_start,
+                removed_sweep};
+            if (!preview.valid()) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+            return viewport_controller_->
+                setSketchArcPreview(preview);
+        }
+
+        if (const auto* before =
+                hosted->model.findCircle(*target)) {
+            if (!result.result_entity) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+            const auto* survivor =
+                restored->findArc(
+                    *result.result_entity);
+            if (survivor == nullptr) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+            constexpr double full_turn =
+                2.0 *
+                std::numbers::pi_v<double>;
+            const double removed_sweep =
+                full_turn -
+                survivor->sweepAngle();
+            const sketch::ArcIntent preview{
+                before->center(),
+                before->radius(),
+                survivor->startAngle() +
+                    survivor->sweepAngle(),
+                removed_sweep};
+            if (!preview.valid()) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+            return viewport_controller_->
+                setSketchArcPreview(preview);
+        }
+    }
+
+    if (tool == sketch::SketchTool::extend &&
+        target && endpoint) {
+        if (const auto* before =
+                hosted->model.findLine(*target)) {
+            const auto* after =
+                restored->findLine(*target);
+            if (after == nullptr) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+            const auto added =
+                *endpoint ==
+                        sketch::StructuralEndpointRole::start
+                    ? SketchPreviewLine2D{
+                          before->start(),
+                          after->start(),
+                          before->role() ==
+                              sketch::EntityRole::construction}
+                    : SketchPreviewLine2D{
+                          before->end(),
+                          after->end(),
+                          before->role() ==
+                              sketch::EntityRole::construction};
+            if (!added.valid()) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+            return viewport_controller_->setSketchPreview(
+                {added});
+        }
+
+        if (const auto* before =
+                hosted->model.findArc(*target)) {
+            const auto* after =
+                restored->findArc(*target);
+            if (after == nullptr) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+            const double added_sweep =
+                after->sweepAngle() -
+                before->sweepAngle();
+            const double added_start =
+                *endpoint ==
+                        sketch::StructuralEndpointRole::start
+                    ? after->startAngle()
+                    : before->startAngle() +
+                          before->sweepAngle();
+            const sketch::ArcIntent preview{
+                before->center(),
+                before->radius(),
+                added_start,
+                added_sweep};
+            if (!preview.valid()) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+            return viewport_controller_->
+                setSketchArcPreview(preview);
+        }
+    }
+
+    if (tool == sketch::SketchTool::extend_both) {
+        const auto first =
+            interaction_.extendBothFirstLine();
+        if (!first || !target) {
+            viewport_controller_->clearSketchPreview();
+            return false;
+        }
+
+        std::vector<SketchPreviewLine2D> additions;
+        additions.reserve(2U);
+        for (const auto id : {*first, *target}) {
+            const auto* before =
+                hosted->model.findLine(id);
+            const auto* after =
+                restored->findLine(id);
+            if (before == nullptr ||
+                after == nullptr) {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+
+            if (before->start() != after->start() &&
+                before->end() == after->end()) {
+                additions.push_back(
+                    {
+                        before->start(),
+                        after->start(),
+                        before->role() ==
+                            sketch::EntityRole::construction});
+            } else if (
+                before->start() == after->start() &&
+                before->end() != after->end()) {
+                additions.push_back(
+                    {
+                        before->end(),
+                        after->end(),
+                        before->role() ==
+                            sketch::EntityRole::construction});
+            } else {
+                viewport_controller_->clearSketchPreview();
+                return false;
+            }
+        }
+
+        return additions.size() == 2U &&
+               viewport_controller_->
+                   setSketchPreview(additions);
+    }
+
+    viewport_controller_->clearSketchPreview();
+    return false;
+}
+
+void PartSketchInteractionController::
+handleStructuralEditPointer(
+    const SketchPointerInput& input) {
+    const auto tool = interaction_.tool();
+    if (tool != sketch::SketchTool::trim &&
+        tool != sketch::SketchTool::extend &&
+        tool != sketch::SketchTool::extend_both) {
+        return;
+    }
+
+    const auto* hosted = activeSketch();
+    if (hosted == nullptr ||
+        session_ == nullptr ||
+        !sketch_id_) {
+        return;
+    }
+
+    if (input.phase !=
+            viewer::SpatialPointerPhase::move &&
+        input.phase !=
+            viewer::SpatialPointerPhase::primary_press) {
+        return;
+    }
+
+    const auto queried =
+        viewport_controller_->querySketchEntityAt(
+            input.viewport_position);
+    if (!queried.completed ||
+        !queried.hit ||
+        queried.hit->sketch_id != *sketch_id_) {
+        interaction_.clearHover();
+        viewport_controller_->clearSketchPreview();
+        projectInteraction();
+        return;
+    }
+
+    const auto candidate =
+        queried.hit->entity_id;
+    static_cast<void>(
+        interaction_.setHoveredEntity(candidate));
+    projectInteraction();
+
+    if ((tool == sketch::SketchTool::trim ||
+         tool == sketch::SketchTool::extend) &&
+        interaction_.structuralBoundarySelectionPending()) {
+        viewport_controller_->clearSketchPreview();
+        if (input.phase ==
+            viewer::SpatialPointerPhase::primary_press) {
+            if (!interaction_.toggleStructuralBoundarySelection(
+                    hosted->model,
+                    candidate)) {
+                reportStatus(
+                    "Structural boundary must be a finite Line, Arc or Circle.");
+                return;
+            }
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            reportStatus(
+                std::string{
+                    tool == sketch::SketchTool::trim
+                        ? "TRIM"
+                        : "EXTEND"} +
+                " — " +
+                std::to_string(
+                    interaction_.selectedEntities().size()) +
+                " boundary entities selected; Enter/RMB continues.");
+        }
+        return;
+    }
+
+    if (tool == sketch::SketchTool::extend_both) {
+        const auto first =
+            interaction_.extendBothFirstLine();
+
+        if (!first) {
+            viewport_controller_->clearSketchPreview();
+            if (input.phase ==
+                viewer::SpatialPointerPhase::primary_press) {
+                if (!interaction_.setExtendBothFirstLine(
+                        hosted->model,
+                        candidate)) {
+                    reportStatus(
+                        "EXTEND BOTH first target must be a Line.");
+                    return;
+                }
+                structural_revision_ =
+                    session_->document().revision();
+                reportStatus(
+                    "EXTEND BOTH — choose the second Line.");
+                notifyStateChanged();
+            }
+            return;
+        }
+
+        if (candidate == *first ||
+            hosted->model.findLine(candidate) ==
+                nullptr) {
+            viewport_controller_->clearSketchPreview();
+            return;
+        }
+
+        const auto evaluated =
+            sketch::evaluateExtendBoth(
+                hosted->model,
+                {*first, candidate});
+        if (!evaluated.ready()) {
+            viewport_controller_->clearSketchPreview();
+            if (input.phase ==
+                viewer::SpatialPointerPhase::primary_press) {
+                reportStatus(
+                    std::string{
+                        "EXTEND BOTH rejected: "} +
+                    structuralStatusText(
+                        evaluated.status) +
+                    ".");
+            }
+            return;
+        }
+
+        static_cast<void>(
+            projectStructuralEditPreview(
+                tool,
+                candidate,
+                std::nullopt,
+                evaluated));
+        if (input.phase !=
+            viewer::SpatialPointerPhase::primary_press) {
+            return;
+        }
+
+        if (!structural_revision_) {
+            reportStatus(
+                "EXTEND BOTH has no captured DocumentRevision.");
+            interaction_.clearExtendBothFirstLine();
+            viewport_controller_->clearSketchPreview();
+            return;
+        }
+
+        const auto result =
+            session_->execute(
+                application::ExtendBothSketchLinesCommand{
+                    *sketch_id_,
+                    *structural_revision_,
+                    *first,
+                    candidate});
+        if (!result.ok() || !result.changed) {
+            reportStatus(
+                result.diagnostic.message.empty()
+                    ? std::string{
+                          "EXTEND BOTH commit failed."}
+                    : result.diagnostic.message);
+            if (result.diagnostic.code ==
+                application::DocumentSessionErrorCode::
+                    revision_diverged) {
+                interaction_.finishTool();
+            } else {
+                interaction_.clearExtendBothFirstLine();
+            }
+            structural_revision_.reset();
+            viewport_controller_->clearSketchPreview();
+            configureForCurrentTool();
+            projectSelection();
+            projectInteraction();
+            notifyStateChanged();
+            return;
+        }
+
+        interaction_.clearExtendBothFirstLine();
+        structural_revision_.reset();
+        interaction_.clearHover();
+        viewport_controller_->clearSketchPreview();
+        viewport_controller_->refreshPresentation();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        reportStatus(
+            "EXTEND BOTH committed.");
+        return;
+    }
+
+    const auto& boundaries =
+        interaction_.structuralBoundaries();
+    if (std::find(
+            boundaries.begin(),
+            boundaries.end(),
+            candidate) != boundaries.end()) {
+        viewport_controller_->clearSketchPreview();
+        return;
+    }
+
+    std::optional<
+        sketch::StructuralEndpointRole> endpoint;
+    sketch::StructuralEditResult evaluated;
+    if (tool == sketch::SketchTool::trim) {
+        evaluated =
+            sketch::evaluateTrim(
+                hosted->model,
+                {
+                    candidate,
+                    boundaries,
+                    input.position});
+    } else {
+        endpoint =
+            structuralEndpointFor(
+                hosted->model,
+                candidate,
+                input.position);
+        if (!endpoint) {
+            viewport_controller_->clearSketchPreview();
+            if (input.phase ==
+                viewer::SpatialPointerPhase::primary_press) {
+                reportStatus(
+                    "EXTEND target must be a Line or Arc with an unambiguous selected end.");
+            }
+            return;
+        }
+        evaluated =
+            sketch::evaluateExtend(
+                hosted->model,
+                {
+                    candidate,
+                    boundaries,
+                    *endpoint});
+    }
+
+    if (!evaluated.ready()) {
+        viewport_controller_->clearSketchPreview();
+        if (input.phase ==
+            viewer::SpatialPointerPhase::primary_press) {
+            reportStatus(
+                std::string{
+                    tool == sketch::SketchTool::trim
+                        ? "TRIM rejected: "
+                        : "EXTEND rejected: "} +
+                structuralStatusText(
+                    evaluated.status) +
+                ".");
+        }
+        return;
+    }
+
+    static_cast<void>(
+        projectStructuralEditPreview(
+            tool,
+            candidate,
+            endpoint,
+            evaluated));
+    if (input.phase !=
+        viewer::SpatialPointerPhase::primary_press) {
+        return;
+    }
+
+    if (!structural_revision_) {
+        reportStatus(
+            "Structural edit has no captured DocumentRevision.");
+        interaction_.finishTool();
+        viewport_controller_->clearSketchPreview();
+        configureForCurrentTool();
+        notifyStateChanged();
+        return;
+    }
+
+    application::SketchStructuralEditCommandResult result;
+    if (tool == sketch::SketchTool::trim) {
+        result =
+            session_->execute(
+                application::TrimSketchCommand{
+                    *sketch_id_,
+                    *structural_revision_,
+                    candidate,
+                    boundaries,
+                    input.position});
+    } else {
+        result =
+            session_->execute(
+                application::ExtendSketchCommand{
+                    *sketch_id_,
+                    *structural_revision_,
+                    candidate,
+                    boundaries,
+                    *endpoint});
+    }
+
+    if (!result.ok() || !result.changed) {
+        reportStatus(
+            result.diagnostic.message.empty()
+                ? std::string{
+                      tool == sketch::SketchTool::trim
+                          ? "TRIM commit failed."
+                          : "EXTEND commit failed."}
+                : result.diagnostic.message);
+        if (result.diagnostic.code ==
+            application::DocumentSessionErrorCode::
+                revision_diverged) {
+            interaction_.finishTool();
+            structural_revision_.reset();
+            configureForCurrentTool();
+        }
+        viewport_controller_->clearSketchPreview();
+        projectSelection();
+        projectInteraction();
+        notifyStateChanged();
+        return;
+    }
+
+    structural_revision_ =
+        session_->document().revision();
+    interaction_.clearHover();
+    viewport_controller_->clearSketchPreview();
+    viewport_controller_->refreshPresentation();
+    projectSelection();
+    projectInteraction();
+    notifyStateChanged();
+    reportStatus(
+        tool == sketch::SketchTool::trim
+            ? "TRIM committed."
+            : "EXTEND committed.");
+}
+
 void PartSketchInteractionController::onPointer(
     const SketchPointerInput& input) {
     if (!active() ||
@@ -3040,6 +3826,11 @@ void PartSketchInteractionController::onPointer(
         break;
     case sketch::SketchTool::measure:
         handleMeasurePointer(input);
+        break;
+    case sketch::SketchTool::trim:
+    case sketch::SketchTool::extend:
+    case sketch::SketchTool::extend_both:
+        handleStructuralEditPointer(input);
         break;
     case sketch::SketchTool::move:
     case sketch::SketchTool::copy:
@@ -5696,6 +6487,16 @@ void PartSketchInteractionController::projectMeasureInteraction() {
 
 void PartSketchInteractionController::configureForCurrentTool() {
     if (!active()) return;
+
+    const auto current_tool =
+        interaction_.tool();
+    const bool structural_tool =
+        current_tool == sketch::SketchTool::trim ||
+        current_tool == sketch::SketchTool::extend ||
+        current_tool == sketch::SketchTool::extend_both;
+    if (!structural_tool) {
+        structural_revision_.reset();
+    }
 
     static_cast<void>(
         viewport_controller_->setSketchPrimaryPointerRouting(

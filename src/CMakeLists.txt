@@ -16,6 +16,7 @@ add_library(simplesolid2_sketch STATIC
     sketch/snap.cpp
     sketch/sketch_id.cpp
     sketch/sketch_model.cpp
+    sketch/structural_edit.cpp
     sketch/transform.cpp
 )
 

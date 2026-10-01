@@ -1300,6 +1300,70 @@ add_test(
     COMMAND r11_snap_core_test
 )
 
+add_executable(r12_structural_edit_core_test
+    r12_structural_edit_core_test.cpp
+)
+
+target_link_libraries(r12_structural_edit_core_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(r12_structural_edit_core_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME r12.structural_edit_core
+    COMMAND r12_structural_edit_core_test
+)
+
+add_executable(r12_structural_edit_document_session_test
+    r12_structural_edit_document_session_test.cpp
+)
+
+target_link_libraries(r12_structural_edit_document_session_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(r12_structural_edit_document_session_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME r12.structural_edit_document_session
+    COMMAND r12_structural_edit_document_session_test
+)
+
+add_executable(r12_structural_edit_persistence_test
+    r12_structural_edit_persistence_test.cpp
+)
+
+target_link_libraries(r12_structural_edit_persistence_test
+    PRIVATE
+        simplesolid2_application
+)
+
+target_compile_features(r12_structural_edit_persistence_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME r12.structural_edit_persistence
+    COMMAND r12_structural_edit_persistence_test
+)
+
+add_executable(r12_structural_edit_interaction_state_test
+    r12_structural_edit_interaction_state_test.cpp
+)
+
+target_link_libraries(r12_structural_edit_interaction_state_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(r12_structural_edit_interaction_state_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME r12.structural_edit_interaction_state
+    COMMAND r12_structural_edit_interaction_state_test
+)
+
 add_executable(sk07f_precision_input_controller_test
     sk07f_precision_input_controller_test.cpp
 )
@@ -1437,6 +1501,10 @@ set(_ss2_sketch_tests
     sk07f.precision_input_state
     sk07f.precision_input_controller
     r11.snap_core
+    r12.structural_edit_core
+    r12.structural_edit_document_session
+    r12.structural_edit_persistence
+    r12.structural_edit_interaction_state
 )
 set_property(TEST ${_ss2_sketch_tests} APPEND PROPERTY LABELS "subsystem-sketch")
 
@@ -1481,6 +1549,8 @@ set(_ss2_part_tests
     sk07c.copy_controller
     sk07d.repeat_last_command_controller
     sk07f.precision_input_controller
+    r12.structural_edit_document_session
+    r12.structural_edit_persistence
 )
 set_property(TEST ${_ss2_part_tests} APPEND PROPERTY LABELS "subsystem-part")
 
@@ -1575,6 +1645,8 @@ set(_ss2_application_tests
     sk07c.copy_controller
     sk07d.repeat_last_command_controller
     sk07f.precision_input_controller
+    r12.structural_edit_document_session
+    r12.structural_edit_persistence
 )
 set_property(TEST ${_ss2_application_tests} APPEND PROPERTY LABELS "subsystem-application")
 
@@ -1586,6 +1658,7 @@ set(_ss2_persistence_tests
     sk05a.line_geometry_command
     sk06a.circle_arc_model_persistence
     sk07c.copy_command
+    r12.structural_edit_persistence
 )
 set_property(TEST ${_ss2_persistence_tests} APPEND PROPERTY LABELS "subsystem-persistence")
 
@@ -1600,6 +1673,7 @@ set(_ss2_core_tests
     ws01.project_workspace_boundaries
     sk02a.shared_2d_boundaries
     r11.snap_core
+    r12.structural_edit_core
 )
 set_property(TEST ${_ss2_core_tests} APPEND PROPERTY LABELS "subsystem-core")
 
