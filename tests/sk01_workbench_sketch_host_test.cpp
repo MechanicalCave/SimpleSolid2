@@ -651,6 +651,42 @@ int main(int argc, char* argv[]) {
     auto* precision_status =
         workbench.findChild<QLabel*>(
             QStringLiteral("precisionCadAidStatus"));
+    auto* osnap_toggle =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("objectSnapToggleButton"));
+    auto* otrack_toggle =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("objectTrackingToggleButton"));
+    auto* osnap_endpoint =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("objectSnapEndpointCheck"));
+    auto* osnap_midpoint =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("objectSnapMidpointCheck"));
+    auto* osnap_center =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("objectSnapCenterCheck"));
+    auto* osnap_quadrant =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("objectSnapQuadrantCheck"));
+    auto* osnap_intersection =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("objectSnapIntersectionCheck"));
+    auto* osnap_origin =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("objectSnapOriginCheck"));
+    auto* osnap_perpendicular =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("objectSnapPerpendicularCheck"));
+    auto* osnap_tangent =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("objectSnapTangentCheck"));
+    auto* osnap_nearest =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("objectSnapNearestCheck"));
+    auto* osnap_extension =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral("objectSnapExtensionCheck"));
     auto* polar_toggle =
         workbench.findChild<QPushButton*>(
             QStringLiteral("polarToggleButton"));
@@ -736,6 +772,18 @@ int main(int argc, char* argv[]) {
     CHECK(length_unit_combo != nullptr);
     CHECK(precision_widget != nullptr);
     CHECK(precision_status != nullptr);
+    CHECK(osnap_toggle != nullptr);
+    CHECK(otrack_toggle != nullptr);
+    CHECK(osnap_endpoint != nullptr);
+    CHECK(osnap_midpoint != nullptr);
+    CHECK(osnap_center != nullptr);
+    CHECK(osnap_quadrant != nullptr);
+    CHECK(osnap_intersection != nullptr);
+    CHECK(osnap_origin != nullptr);
+    CHECK(osnap_perpendicular != nullptr);
+    CHECK(osnap_tangent != nullptr);
+    CHECK(osnap_nearest != nullptr);
+    CHECK(osnap_extension != nullptr);
     CHECK(polar_toggle != nullptr);
     CHECK(dyn_toggle != nullptr);
     CHECK(polar_step != nullptr);
@@ -819,6 +867,18 @@ int main(int argc, char* argv[]) {
     CHECK(viewport->fitAllCount() > 0);
 
     CHECK(!precision_widget->isHidden());
+    CHECK(osnap_toggle->isChecked());
+    CHECK(!otrack_toggle->isChecked());
+    CHECK(osnap_endpoint->isChecked());
+    CHECK(osnap_midpoint->isChecked());
+    CHECK(osnap_center->isChecked());
+    CHECK(osnap_quadrant->isChecked());
+    CHECK(osnap_intersection->isChecked());
+    CHECK(osnap_origin->isChecked());
+    CHECK(!osnap_perpendicular->isChecked());
+    CHECK(!osnap_tangent->isChecked());
+    CHECK(!osnap_nearest->isChecked());
+    CHECK(!osnap_extension->isChecked());
     CHECK(polar_toggle->isChecked());
     CHECK(!dyn_toggle->isChecked());
     CHECK(
@@ -832,6 +892,52 @@ int main(int argc, char* argv[]) {
         session->document().revision();
     const auto precision_undo_before =
         session->undoDepth();
+
+    // R11 settings are live user preferences only. Master OFF keeps mode
+    // choices editable/preserved and changing modes/OTRACK creates no CAD
+    // document mutation, revision or Undo entry.
+    osnap_toggle->click();
+    osnap_endpoint->click();
+    osnap_perpendicular->click();
+    otrack_toggle->click();
+    QApplication::processEvents();
+
+    CHECK(
+        !workspace_shell.cadInteractionSettings().
+             object_snap.master_enabled);
+    CHECK(
+        !workspace_shell.cadInteractionSettings().
+             object_snap.endpoint);
+    CHECK(
+        workspace_shell.cadInteractionSettings().
+            object_snap.perpendicular);
+    CHECK(
+        workspace_shell.cadInteractionSettings().
+            object_snap.object_tracking_enabled);
+    CHECK(!osnap_toggle->isChecked());
+    CHECK(!osnap_endpoint->isChecked());
+    CHECK(osnap_perpendicular->isChecked());
+    CHECK(otrack_toggle->isChecked());
+    CHECK(
+        session->document().state() ==
+        precision_state_before);
+    CHECK(
+        session->document().revision() ==
+        precision_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        precision_undo_before);
+
+    // Restore baseline for the remaining broad workbench regression.
+    osnap_toggle->click();
+    osnap_endpoint->click();
+    osnap_perpendicular->click();
+    otrack_toggle->click();
+    QApplication::processEvents();
+    CHECK(osnap_toggle->isChecked());
+    CHECK(osnap_endpoint->isChecked());
+    CHECK(!osnap_perpendicular->isChecked());
+    CHECK(!otrack_toggle->isChecked());
 
     polar_toggle->click();
     dyn_toggle->click();

@@ -1247,6 +1247,112 @@ void CadWorkbench::buildUi() {
 
     auto* precision_form =
         new QFormLayout;
+
+    object_snap_toggle_button_ =
+        new QPushButton(
+            precision_operations_widget_);
+    object_snap_toggle_button_->setObjectName(
+        QStringLiteral("objectSnapToggleButton"));
+    object_snap_toggle_button_->setCheckable(true);
+    precision_form->addRow(
+        QStringLiteral("Object Snap"),
+        object_snap_toggle_button_);
+
+    auto* object_snap_modes =
+        new QWidget(
+            precision_operations_widget_);
+    object_snap_modes->setObjectName(
+        QStringLiteral("objectSnapModes"));
+    auto* object_snap_modes_layout =
+        new QGridLayout(object_snap_modes);
+    object_snap_modes_layout->setContentsMargins(
+        0, 0, 0, 0);
+    object_snap_modes_layout->setHorizontalSpacing(8);
+    object_snap_modes_layout->setVerticalSpacing(2);
+
+    const auto make_snap_mode =
+        [object_snap_modes,
+         object_snap_modes_layout](
+            const QString& text,
+            const QString& object_name,
+            int row,
+            int column) {
+            auto* check =
+                new QCheckBox(
+                    text,
+                    object_snap_modes);
+            check->setObjectName(object_name);
+            object_snap_modes_layout->addWidget(
+                check,
+                row,
+                column);
+            return check;
+        };
+
+    object_snap_endpoint_check_ =
+        make_snap_mode(
+            QStringLiteral("END"),
+            QStringLiteral("objectSnapEndpointCheck"),
+            0, 0);
+    object_snap_midpoint_check_ =
+        make_snap_mode(
+            QStringLiteral("MID"),
+            QStringLiteral("objectSnapMidpointCheck"),
+            0, 1);
+    object_snap_center_check_ =
+        make_snap_mode(
+            QStringLiteral("CEN"),
+            QStringLiteral("objectSnapCenterCheck"),
+            0, 2);
+    object_snap_quadrant_check_ =
+        make_snap_mode(
+            QStringLiteral("QUAD"),
+            QStringLiteral("objectSnapQuadrantCheck"),
+            0, 3);
+    object_snap_intersection_check_ =
+        make_snap_mode(
+            QStringLiteral("INT"),
+            QStringLiteral("objectSnapIntersectionCheck"),
+            1, 0);
+    object_snap_origin_check_ =
+        make_snap_mode(
+            QStringLiteral("ORG"),
+            QStringLiteral("objectSnapOriginCheck"),
+            1, 1);
+    object_snap_perpendicular_check_ =
+        make_snap_mode(
+            QStringLiteral("PER"),
+            QStringLiteral("objectSnapPerpendicularCheck"),
+            1, 2);
+    object_snap_tangent_check_ =
+        make_snap_mode(
+            QStringLiteral("TAN"),
+            QStringLiteral("objectSnapTangentCheck"),
+            1, 3);
+    object_snap_nearest_check_ =
+        make_snap_mode(
+            QStringLiteral("NEA"),
+            QStringLiteral("objectSnapNearestCheck"),
+            2, 0);
+    object_snap_extension_check_ =
+        make_snap_mode(
+            QStringLiteral("EXT"),
+            QStringLiteral("objectSnapExtensionCheck"),
+            2, 1);
+    precision_form->addRow(
+        QStringLiteral("Modes"),
+        object_snap_modes);
+
+    object_tracking_toggle_button_ =
+        new QPushButton(
+            precision_operations_widget_);
+    object_tracking_toggle_button_->setObjectName(
+        QStringLiteral("objectTrackingToggleButton"));
+    object_tracking_toggle_button_->setCheckable(true);
+    precision_form->addRow(
+        QStringLiteral("Tracking"),
+        object_tracking_toggle_button_);
+
     polar_toggle_button_ =
         new QPushButton(
             precision_operations_widget_);
@@ -1627,6 +1733,114 @@ void CadWorkbench::buildUi() {
                 setPartLengthUnit(*unit);
             }
         });
+    QObject::connect(
+        object_snap_toggle_button_,
+        &QPushButton::clicked,
+        this,
+        [this](bool checked) {
+            if (syncing_precision_ui_ ||
+                !cad_interaction_settings_provider_ ||
+                !cad_interaction_settings_updater_) {
+                return;
+            }
+            auto settings =
+                cad_interaction_settings_provider_();
+            settings.object_snap.master_enabled =
+                checked;
+            if (!cad_interaction_settings_updater_(
+                    std::move(settings))) {
+                refreshCadInteractionSettingsUi();
+            }
+        });
+
+    QObject::connect(
+        object_tracking_toggle_button_,
+        &QPushButton::clicked,
+        this,
+        [this](bool checked) {
+            if (syncing_precision_ui_ ||
+                !cad_interaction_settings_provider_ ||
+                !cad_interaction_settings_updater_) {
+                return;
+            }
+            auto settings =
+                cad_interaction_settings_provider_();
+            settings.object_snap.
+                object_tracking_enabled =
+                checked;
+            if (!cad_interaction_settings_updater_(
+                    std::move(settings))) {
+                refreshCadInteractionSettingsUi();
+            }
+        });
+
+    const auto connect_snap_mode =
+        [this](
+            QCheckBox* check,
+            bool application::ObjectSnapInputSettings::*
+                member) {
+            QObject::connect(
+                check,
+                &QCheckBox::toggled,
+                this,
+                [this, member](bool checked) {
+                    if (syncing_precision_ui_ ||
+                        !cad_interaction_settings_provider_ ||
+                        !cad_interaction_settings_updater_) {
+                        return;
+                    }
+                    auto settings =
+                        cad_interaction_settings_provider_();
+                    settings.object_snap.*member =
+                        checked;
+                    if (!cad_interaction_settings_updater_(
+                            std::move(settings))) {
+                        refreshCadInteractionSettingsUi();
+                    }
+                });
+        };
+
+    connect_snap_mode(
+        object_snap_endpoint_check_,
+        &application::ObjectSnapInputSettings::
+            endpoint);
+    connect_snap_mode(
+        object_snap_midpoint_check_,
+        &application::ObjectSnapInputSettings::
+            midpoint);
+    connect_snap_mode(
+        object_snap_center_check_,
+        &application::ObjectSnapInputSettings::
+            center);
+    connect_snap_mode(
+        object_snap_quadrant_check_,
+        &application::ObjectSnapInputSettings::
+            quadrant);
+    connect_snap_mode(
+        object_snap_intersection_check_,
+        &application::ObjectSnapInputSettings::
+            intersection);
+    connect_snap_mode(
+        object_snap_origin_check_,
+        &application::ObjectSnapInputSettings::
+            origin);
+    connect_snap_mode(
+        object_snap_perpendicular_check_,
+        &application::ObjectSnapInputSettings::
+            perpendicular);
+    connect_snap_mode(
+        object_snap_tangent_check_,
+        &application::ObjectSnapInputSettings::
+            tangent);
+    connect_snap_mode(
+        object_snap_nearest_check_,
+        &application::ObjectSnapInputSettings::
+            nearest);
+    connect_snap_mode(
+        object_snap_extension_check_,
+        &application::ObjectSnapInputSettings::
+            extension);
+
     QObject::connect(
         polar_toggle_button_,
         &QPushButton::clicked,
@@ -3928,6 +4142,42 @@ void CadWorkbench::refreshCadInteractionSettingsUi() {
     if (editing && settings_available) {
         const auto settings =
             cad_interaction_settings_provider_();
+
+        object_snap_toggle_button_->setChecked(
+            settings.object_snap.master_enabled);
+        object_snap_toggle_button_->setText(
+            settings.object_snap.master_enabled
+                ? QStringLiteral("ON")
+                : QStringLiteral("OFF"));
+        object_tracking_toggle_button_->setChecked(
+            settings.object_snap.
+                object_tracking_enabled);
+        object_tracking_toggle_button_->setText(
+            settings.object_snap.
+                    object_tracking_enabled
+                ? QStringLiteral("ON")
+                : QStringLiteral("OFF"));
+
+        object_snap_endpoint_check_->setChecked(
+            settings.object_snap.endpoint);
+        object_snap_midpoint_check_->setChecked(
+            settings.object_snap.midpoint);
+        object_snap_center_check_->setChecked(
+            settings.object_snap.center);
+        object_snap_quadrant_check_->setChecked(
+            settings.object_snap.quadrant);
+        object_snap_intersection_check_->setChecked(
+            settings.object_snap.intersection);
+        object_snap_origin_check_->setChecked(
+            settings.object_snap.origin);
+        object_snap_perpendicular_check_->setChecked(
+            settings.object_snap.perpendicular);
+        object_snap_tangent_check_->setChecked(
+            settings.object_snap.tangent);
+        object_snap_nearest_check_->setChecked(
+            settings.object_snap.nearest);
+        object_snap_extension_check_->setChecked(
+            settings.object_snap.extension);
 
         polar_toggle_button_->setChecked(
             settings.polar.enabled);

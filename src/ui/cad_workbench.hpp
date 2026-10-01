@@ -290,6 +290,18 @@ private:
     QLabel* operations_placeholder_{};
     QWidget* precision_operations_widget_{};
     QLabel* precision_status_label_{};
+    QPushButton* object_snap_toggle_button_{};
+    QCheckBox* object_snap_endpoint_check_{};
+    QCheckBox* object_snap_midpoint_check_{};
+    QCheckBox* object_snap_center_check_{};
+    QCheckBox* object_snap_quadrant_check_{};
+    QCheckBox* object_snap_intersection_check_{};
+    QCheckBox* object_snap_origin_check_{};
+    QCheckBox* object_snap_perpendicular_check_{};
+    QCheckBox* object_snap_tangent_check_{};
+    QCheckBox* object_snap_nearest_check_{};
+    QCheckBox* object_snap_extension_check_{};
+    QPushButton* object_tracking_toggle_button_{};
     QPushButton* polar_toggle_button_{};
     QLineEdit* polar_step_edit_{};
     QComboBox* polar_reference_combo_{};
