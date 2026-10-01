@@ -4409,11 +4409,77 @@ PartSketchInteractionController::resolvePointerInput(
             staticSnapModes(eligibility);
 
         if (!eligibility.suppress_object_assistance &&
-            anyStaticSnapMode(modes)) {
-            const auto semantic_candidates =
+            (anyStaticSnapMode(modes) ||
+             eligibility.intersection)) {
+            const sketch::SnapResolutionPolicy
+                snap_policy{};
+            auto semantic_candidates =
                 sketch::staticSnapCandidates(
                     hosted->model,
                     modes);
+
+            if (eligibility.intersection) {
+                const double aperture =
+                    snap_policy.capture_distance;
+                const viewer::ViewportRect2
+                    nearby_rectangle{
+                        {
+                            input.viewport_position.x -
+                                aperture,
+                            input.viewport_position.y -
+                                aperture,
+                        },
+                        {
+                            input.viewport_position.x +
+                                aperture,
+                            input.viewport_position.y +
+                                aperture,
+                        }};
+
+                const auto nearby =
+                    viewport_controller_->
+                        querySketchEntities(
+                            nearby_rectangle,
+                            viewer::
+                                SketchRectangleSelectionRule::
+                                    crossing);
+                if (nearby.completed) {
+                    std::vector<sketch::EntityId>
+                        nearby_entities;
+                    nearby_entities.reserve(
+                        nearby.hits.size());
+                    for (const auto& hit :
+                         nearby.hits) {
+                        nearby_entities.push_back(
+                            hit.entity_id);
+                    }
+                    std::sort(
+                        nearby_entities.begin(),
+                        nearby_entities.end());
+
+                    for (std::size_t first = 0U;
+                         first < nearby_entities.size();
+                         ++first) {
+                        for (std::size_t second =
+                                 first + 1U;
+                             second <
+                                 nearby_entities.size();
+                             ++second) {
+                            auto intersections =
+                                sketch::
+                                    intersectionSnapCandidates(
+                                        hosted->model,
+                                        nearby_entities[first],
+                                        nearby_entities[second]);
+                            semantic_candidates.insert(
+                                semantic_candidates.end(),
+                                intersections.begin(),
+                                intersections.end());
+                        }
+                    }
+                }
+            }
+
             std::vector<sketch::SnapScreenCandidate>
                 screen_candidates;
             screen_candidates.reserve(
@@ -4444,7 +4510,8 @@ PartSketchInteractionController::resolvePointerInput(
                 sketch::resolveScreenSnap(
                     hosted->model,
                     snap_capture_,
-                    screen_candidates);
+                    screen_candidates,
+                    snap_policy);
             if (snap) {
                 polar_capture_ = {};
                 return interaction_.resolvePointerInput(

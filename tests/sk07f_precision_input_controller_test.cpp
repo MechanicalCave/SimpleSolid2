@@ -111,9 +111,11 @@ public:
     }
     viewer::SketchRectangleQueryResult querySketchPresentations(
         const viewer::ViewportRect2& rectangle,
-        viewer::SketchRectangleSelectionRule) override {
+        viewer::SketchRectangleSelectionRule rule) override {
         if (!rectangle.valid()) return {};
-        return {true, {}};
+        last_rectangle_query_ = rectangle;
+        last_rectangle_rule_ = rule;
+        return rectangle_query_;
     }
     bool setSketchSelectionBoxOverlay(
         const viewer::SketchSelectionBoxOverlay& overlay) override {
@@ -146,6 +148,10 @@ public:
     viewer::SketchGripQueryResult grip_query_{true, std::nullopt};
     viewer::PresentationSelection selection_;
     viewer::SketchPointQueryResult point_query_{true, std::nullopt};
+    viewer::SketchRectangleQueryResult rectangle_query_{true, {}};
+    std::optional<viewer::ViewportRect2> last_rectangle_query_;
+    std::optional<viewer::SketchRectangleSelectionRule>
+        last_rectangle_rule_;
     viewer::SelectionIntentHandler selection_handler_;
     viewer::SpatialPointerHandler spatial_handler_;
     viewer::PrimaryPointerRouting routing_{
@@ -984,6 +990,136 @@ int main(int argc, char* argv[]) {
         model_state.lines.back().end ==
         sketch::Point2{5004.0, 5010.0}));
     CHECK(interaction.escape());
+
+    // Intersection uses a bounded crossing query around the logical-pixel
+    // aperture, then exact Shared2D finite-curve relation authority.
+    const auto int_horizontal_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {5190.0, 5200.0},
+                {5230.0, 5200.0},
+                sketch::EntityRole::regular});
+    const auto int_vertical_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {5200.0, 5170.0},
+                {5200.0, 5220.0},
+                sketch::EntityRole::construction});
+    CHECK(int_horizontal_result.ok());
+    CHECK(int_horizontal_result.changed);
+    CHECK(int_vertical_result.ok());
+    CHECK(int_vertical_result.changed);
+
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    const auto int_horizontal =
+        model_state.lines[
+            model_state.lines.size() - 2U].id;
+    const auto int_vertical =
+        model_state.lines.back().id;
+
+    viewport_controller.refreshPresentation();
+    const auto int_horizontal_token =
+        viewport_controller.sketchPresentationFor(
+            int_horizontal);
+    const auto int_vertical_token =
+        viewport_controller.sketchPresentationFor(
+            int_vertical);
+    CHECK(int_horizontal_token.has_value());
+    CHECK(int_vertical_token.has_value());
+    viewport.rectangle_query_ = {
+        true,
+        {
+            *int_vertical_token,
+            *int_horizontal_token,
+        }};
+
+    application::CadInteractionSettings int_settings;
+    int_settings.polar.enabled = false;
+    int_settings.object_snap.endpoint = false;
+    int_settings.object_snap.midpoint = false;
+    int_settings.object_snap.center = false;
+    int_settings.object_snap.quadrant = false;
+    int_settings.object_snap.origin = false;
+    int_settings.object_snap.intersection = true;
+    interaction.setCadInteractionSettingsProvider(
+        [&int_settings] {
+            return int_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.submitExplicitPoint(
+        {
+            sketch::ExplicitPointInputKind::
+                absolute_cartesian,
+            5100.0,
+            5100.0}));
+
+    movePointer(
+        interaction,
+        sketch_id,
+        5204.0,
+        5203.0,
+        5204.0,
+        5203.0);
+    const auto int_resolution =
+        interaction.pointResolution();
+    CHECK(int_resolution.has_value());
+    CHECK(
+        int_resolution->source ==
+        sketch::PointResolutionSource::object_snap);
+    CHECK(int_resolution->object_snap.has_value());
+    CHECK(
+        int_resolution->object_snap->kind ==
+        sketch::SnapKind::intersection);
+    CHECK((
+        int_resolution->position ==
+        sketch::Point2{5200.0, 5200.0}));
+    CHECK(viewport.last_rectangle_query_.has_value());
+    CHECK(viewport.last_rectangle_rule_.has_value());
+    CHECK(
+        *viewport.last_rectangle_rule_ ==
+        viewer::SketchRectangleSelectionRule::crossing);
+    CHECK(near(
+        viewport.last_rectangle_query_->
+            minimum.x,
+        5195.0));
+    CHECK(near(
+        viewport.last_rectangle_query_->
+            minimum.y,
+        5194.0));
+    CHECK(near(
+        viewport.last_rectangle_query_->
+            maximum.x,
+        5213.0));
+    CHECK(near(
+        viewport.last_rectangle_query_->
+            maximum.y,
+        5212.0));
+
+    const auto lines_before_int =
+        hosted->model.state().lines.size();
+    click(
+        interaction,
+        sketch_id,
+        5204.0,
+        5203.0,
+        5204.0,
+        5203.0);
+    hosted = session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    model_state = hosted->model.state();
+    CHECK(
+        model_state.lines.size() ==
+        lines_before_int + 1U);
+    CHECK((
+        model_state.lines.back().end ==
+        sketch::Point2{5200.0, 5200.0}));
+    CHECK(interaction.escape());
+    viewport.rectangle_query_ = {true, {}};
 
     // Polar is a logical-screen-space magnet. With 90-degree Absolute
     // tracks, (20,1) captures +U. Direct Distance owns magnitude only.
