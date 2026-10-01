@@ -145,7 +145,7 @@ profileCommand(std::string_view token) noexcept {
     if (token == "ISLANDS ON" ||
         token == "ISLANDS OFF") {
         return ProfileCadInputCommand{
-            ProfileCadInputCommandKind::set_detect_islands,
+            ProfileCadInputCommandKind::set_show_islands,
             token == "ISLANDS ON"};
     }
     if (token == "BOUNDARIES ON" ||
