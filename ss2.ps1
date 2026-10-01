@@ -48,6 +48,7 @@ switch ($Command) {
     "setup"    { & $script -QtRoot $QtRoot -OcctRoot $OcctRoot }
     "git-init" { & $script -RemoteUrl $RemoteUrl -CommitGenesis:$CommitGenesis }
     "clean"    { & $script -All:$All }
+    "build"    { & $script -Target $Target -All:$All }
     "test"     { & $script -Tier $Tier -Subsystem $Subsystem -NoBuild:$NoBuild -ListOnly:$ListOnly -SelfTest:$SelfTest }
     "check"    { & $script -Target $Target -Test $Test -SelfTest:$SelfTest }
     default    { & $script }

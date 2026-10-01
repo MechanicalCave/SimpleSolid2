@@ -35,7 +35,9 @@ if(SS2_ENABLE_C2_HISTORY_BENCHMARK OR
     add_subdirectory(benchmarks)
 endif()
 if(SS2_BUILD_DESKTOP)
-    add_subdirectory(tests)
+    # Desktop tests remain registered with CTest but are not part of the
+    # normal product ALL build. CI-04 aggregate targets build them explicitly.
+    add_subdirectory(tests EXCLUDE_FROM_ALL)
 else()
     add_subdirectory(tests/core_only)
 endif()

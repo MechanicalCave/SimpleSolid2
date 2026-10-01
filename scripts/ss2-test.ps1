@@ -22,7 +22,7 @@ $knownSubsystems = @(
     "project"
 )
 
-function Get-SS2SubsystemLabelRegex {
+function Get-SS2RequestedSubsystems {
     param([Parameter(Mandatory=$true)][string[]]$Value)
 
     $requested = @(
@@ -43,11 +43,43 @@ function Get-SS2SubsystemLabelRegex {
         }
     }
 
+    return $requested
+}
+
+function Get-SS2SubsystemLabelRegex {
+    param([Parameter(Mandatory=$true)][string[]]$Value)
+
+    $requested = @(Get-SS2RequestedSubsystems $Value)
     $escaped = @(
         $requested |
             ForEach-Object { [regex]::Escape($_) }
     )
     return "^subsystem-(" + ($escaped -join "|") + ")$"
+}
+
+function Get-SS2TierBuildTargets {
+    param(
+        [Parameter(Mandatory=$true)][string]$SelectedTier,
+        [string[]]$SelectedSubsystem = @()
+    )
+
+    switch ($SelectedTier) {
+        "fast" {
+            return @("ss2_tests_fast")
+        }
+        "subsystem" {
+            return @(
+                Get-SS2RequestedSubsystems $SelectedSubsystem |
+                    ForEach-Object { "ss2_tests_subsystem_$_" }
+            )
+        }
+        "full" {
+            return @("ss2_tests_full")
+        }
+        default {
+            throw "Unknown SS2 test tier '$SelectedTier'."
+        }
+    }
 }
 
 if ($SelfTest) {
@@ -58,6 +90,18 @@ if ($SelfTest) {
     $probe = Get-SS2SubsystemLabelRegex "sketch, viewer,ui,sketch"
     if ($probe -ne "^subsystem-(sketch|viewer|ui)$") {
         throw "Subsystem selector self-test produced unexpected regex: $probe"
+    }
+
+    $probeTargets = @(Get-SS2TierBuildTargets "subsystem" @("sketch,viewer", "ui"))
+    if (($probeTargets -join ",") -ne "ss2_tests_subsystem_sketch,ss2_tests_subsystem_viewer,ss2_tests_subsystem_ui") {
+        throw "Subsystem build-target self-test produced unexpected targets: $($probeTargets -join ',')"
+    }
+
+    if ((@(Get-SS2TierBuildTargets "fast") -join ",") -ne "ss2_tests_fast") {
+        throw "FAST build-target self-test failed."
+    }
+    if ((@(Get-SS2TierBuildTargets "full") -join ",") -ne "ss2_tests_full") {
+        throw "FULL build-target self-test failed."
     }
 
     $rejected = $false
@@ -73,6 +117,14 @@ if ($SelfTest) {
     Write-Host "[test] tier dispatcher self-test passed"
     exit 0
 }
+
+$nonEmptySubsystem = @($Subsystem | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+if ($Tier -ne "subsystem" -and $nonEmptySubsystem.Count -gt 0) {
+    Write-Error "-Subsystem is valid only with -Tier subsystem."
+    exit 2
+}
+
+$buildTargets = @(Get-SS2TierBuildTargets $Tier $Subsystem)
 
 . (Join-Path $PSScriptRoot "ss2-common.ps1")
 Import-SS2LocalEnvironment
@@ -91,7 +143,7 @@ if ($NoBuild) {
         exit 2
     }
 } else {
-    & (Join-Path $PSScriptRoot "ss2-build.ps1") -BuildDir $BuildDir -Config $Config
+    & (Join-Path $PSScriptRoot "ss2-build.ps1") -BuildDir $BuildDir -Config $Config -Target $buildTargets
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 }
 
@@ -110,11 +162,7 @@ switch ($Tier) {
         $ctestArgs += @("-L", (Get-SS2SubsystemLabelRegex $Subsystem))
     }
     "full" {
-        $nonEmptySubsystem = @($Subsystem | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-        if ($nonEmptySubsystem.Count -gt 0) {
-            Write-Error "-Subsystem is valid only with -Tier subsystem."
-            exit 2
-        }
+        # Intentionally unfiltered.
     }
 }
 
@@ -122,6 +170,6 @@ if ($ListOnly) {
     $ctestArgs += "-N"
 }
 
-Write-Host "[test] tier=$Tier build=$build noBuild=$NoBuild listOnly=$ListOnly"
+Write-Host "[test] tier=$Tier build=$build buildTargets=$($buildTargets -join ',') noBuild=$NoBuild listOnly=$ListOnly"
 & ctest @ctestArgs
 exit $LASTEXITCODE

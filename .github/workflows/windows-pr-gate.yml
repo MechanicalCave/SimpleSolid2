@@ -212,7 +212,7 @@ jobs:
       - name: Build
         run: |
           $ErrorActionPreference = "Stop"
-          .\ss2.ps1 build
+          .\ss2.ps1 build -Target ss2_tests_fast
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: FAST test
@@ -293,10 +293,10 @@ jobs:
           .\ss2.ps1 check -SelfTest
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Build
+      - name: Build complete desktop test graph
         run: |
           $ErrorActionPreference = "Stop"
-          .\ss2.ps1 build
+          .\ss2.ps1 build -Target ss2_tests_full
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Verify core-only build/test without Qt or OCCT
