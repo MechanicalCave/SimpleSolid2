@@ -31,6 +31,7 @@ permissions:
 
 env:
   SS2_CI_BUILD_ROOT: D:\SS2Build
+  SS2_TEST_PARALLELISM: 4
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -355,7 +356,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $cmake --build $coreBuild --config Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $cmake -E chdir $coreBuild ctest -C Release --output-on-failure
+          & $cmake -E chdir $coreBuild ctest -C Release --output-on-failure --parallel $env:SS2_TEST_PARALLELISM
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\scripts\ci\ss2-build-tree.ps1 -Action record -BuildDir $coreBuild -Mode core -Config Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
