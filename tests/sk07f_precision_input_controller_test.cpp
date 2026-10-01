@@ -1514,6 +1514,63 @@ int main(int argc, char* argv[]) {
             position.y,
         8000.0));
 
+    // D1 un-acquire gesture: leave the snap, then deliberately dwell over the
+    // same already-acquired semantic point again. The request-owned anchor is
+    // removed; repeating the same dwell acquires it again.
+    movePointer(
+        interaction,
+        sketch_id,
+        8050.0,
+        8050.0,
+        8050.0,
+        8050.0);
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    tracking_now += std::chrono::milliseconds{400};
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    CHECK(interaction.trackingAnchorCount() == 0U);
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            empty());
+
+    movePointer(
+        interaction,
+        sketch_id,
+        8050.0,
+        8050.0,
+        8050.0,
+        8050.0);
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    tracking_now += std::chrono::milliseconds{400};
+    movePointer(
+        interaction,
+        sketch_id,
+        8000.0,
+        8000.0,
+        8000.0,
+        8000.0);
+    CHECK(interaction.trackingAnchorCount() == 1U);
+    CHECK(
+        viewport.snap_inference_scene_.acquired.
+            size() == 1U);
+
     movePointer(
         interaction,
         sketch_id,

@@ -959,6 +959,20 @@ int main() {
             tracked.acquireCurrentTrackingAnchor() ==
             sketch::TrackingAcquireResult::
                 already_acquired);
+
+        const auto endpoint_key =
+            sketch::snapStableKey(*endpoint);
+        CHECK(
+            tracked.removeTrackingAnchor(
+                endpoint_key));
+        CHECK(tracked.trackingAnchors().anchors.empty());
+        CHECK(
+            !tracked.removeTrackingAnchor(
+                endpoint_key));
+        CHECK(
+            tracked.acquireCurrentTrackingAnchor() ==
+            sketch::TrackingAcquireResult::acquired);
+
         auto request =
             tracked.activePointRequest();
         CHECK(request.has_value());

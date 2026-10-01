@@ -4490,9 +4490,30 @@ void PartSketchInteractionController::observeTrackingSnap(
         return;
     }
 
-    static_cast<void>(
-        interaction_.
-            acquireCurrentTrackingAnchor());
+    const auto acquired =
+        std::find_if(
+            interaction_.trackingAnchors().
+                anchors.begin(),
+            interaction_.trackingAnchors().
+                anchors.end(),
+            [&key](
+                const sketch::TrackingAnchor& anchor) {
+                return sketch::snapStableKey(
+                           anchor.snap) ==
+                       key;
+            });
+
+    if (acquired !=
+        interaction_.trackingAnchors().
+            anchors.end()) {
+        static_cast<void>(
+            interaction_.removeTrackingAnchor(
+                key));
+    } else {
+        static_cast<void>(
+            interaction_.
+                acquireCurrentTrackingAnchor());
+    }
     tracking_hover_.reset();
 }
 
