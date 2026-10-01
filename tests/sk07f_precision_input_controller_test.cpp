@@ -1121,6 +1121,88 @@ int main(int argc, char* argv[]) {
     CHECK(interaction.escape());
     viewport.rectangle_query_ = {true, {}};
 
+    // OSNAP remains available under partial Dynamic Input locks. A compatible
+    // Endpoint fills the free coordinate and keeps exact snap provenance;
+    // an incompatible Endpoint is rejected and cannot advertise a marker.
+    const auto locked_snap_source_result =
+        session.execute(
+            application::AddSketchLineCommand{
+                sketch_id,
+                {11000.0, 11020.0},
+                {11030.0, 11020.0},
+                sketch::EntityRole::regular});
+    CHECK(
+        locked_snap_source_result.ok() &&
+        locked_snap_source_result.changed);
+    viewport_controller.refreshPresentation();
+
+    application::CadInteractionSettings locked_snap_settings;
+    locked_snap_settings.polar.enabled = false;
+    locked_snap_settings.object_snap.endpoint = true;
+    locked_snap_settings.object_snap.midpoint = false;
+    locked_snap_settings.object_snap.center = false;
+    locked_snap_settings.object_snap.quadrant = false;
+    locked_snap_settings.object_snap.intersection = false;
+    locked_snap_settings.object_snap.origin = false;
+    interaction.setCadInteractionSettingsProvider(
+        [&locked_snap_settings] {
+            return locked_snap_settings;
+        });
+
+    interaction.activateLine();
+    CHECK(interaction.lockCadInputSemanticPointField(
+        application::CadDynamicInputFieldSemantic::u,
+        11000.0));
+    movePointer(
+        interaction,
+        sketch_id,
+        11004.0,
+        11023.0,
+        11004.0,
+        11023.0);
+    auto locked_snap_resolution =
+        interaction.pointResolution();
+    CHECK(locked_snap_resolution.has_value());
+    CHECK(
+        locked_snap_resolution->source ==
+        sketch::PointResolutionSource::
+            numeric_lock);
+    CHECK(
+        locked_snap_resolution->object_snap.
+            has_value());
+    CHECK(
+        locked_snap_resolution->object_snap->kind ==
+        sketch::SnapKind::endpoint);
+    CHECK((
+        locked_snap_resolution->position ==
+        sketch::Point2{11000.0, 11020.0}));
+
+    CHECK(interaction.lockCadInputSemanticPointField(
+        application::CadDynamicInputFieldSemantic::u,
+        11001.0));
+    movePointer(
+        interaction,
+        sketch_id,
+        11004.0,
+        11023.0,
+        11004.0,
+        11023.0);
+    locked_snap_resolution =
+        interaction.pointResolution();
+    CHECK(locked_snap_resolution.has_value());
+    CHECK(
+        locked_snap_resolution->source ==
+        sketch::PointResolutionSource::
+            numeric_lock);
+    CHECK(
+        !locked_snap_resolution->object_snap.
+             has_value());
+    CHECK((
+        locked_snap_resolution->position ==
+        sketch::Point2{11001.0, 11023.0}));
+    CHECK(interaction.escape());
+    CHECK(interaction.escape());
+
     // Request-relative PER uses the active request base and exact finite
     // source geometry from the bounded nearby-source set.
     const auto per_source_result =

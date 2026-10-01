@@ -262,13 +262,18 @@ struct PointResolution final {
         if (!position.finite()) {
             return false;
         }
-        if (source ==
-            PointResolutionSource::object_snap) {
-            return object_snap &&
-                   object_snap->valid() &&
-                   object_snap->point == position;
+        if (object_snap) {
+            return object_snap->valid() &&
+                   object_snap->point == position &&
+                   (source ==
+                        PointResolutionSource::
+                            object_snap ||
+                    source ==
+                        PointResolutionSource::
+                            numeric_lock);
         }
-        return !object_snap.has_value();
+        return source !=
+               PointResolutionSource::object_snap;
     }
 
     friend bool operator==(
@@ -422,6 +427,12 @@ public:
 
     [[nodiscard]] std::optional<ResolvedSketchInput>
     resolvedPointRequestCandidate() const noexcept;
+
+    [[nodiscard]] bool pointCandidateCompatible(
+        Point2 raw,
+        PointResolutionSource source,
+        std::optional<SnapCandidate> object_snap =
+            std::nullopt) const noexcept;
 
     void clearPointerResolution() noexcept {
         point_pointer_candidate_.reset();

@@ -4616,6 +4616,15 @@ PartSketchInteractionController::resolveTrackingInference(
                 ordered ? guides[second]
                         : guides[first];
 
+            if (!interaction_.
+                    pointCandidateCompatible(
+                        *point,
+                        sketch::
+                            PointResolutionSource::
+                                tracking_inference)) {
+                continue;
+            }
+
             candidates.push_back(
                 {
                     *point,
@@ -4658,6 +4667,15 @@ PartSketchInteractionController::resolveTrackingInference(
         if (!std::isfinite(distance) ||
             distance >
                 policy.capture_distance) {
+            continue;
+        }
+
+        if (!interaction_.
+                pointCandidateCompatible(
+                    *point,
+                    sketch::
+                        PointResolutionSource::
+                            tracking_inference)) {
             continue;
         }
 
@@ -4743,11 +4761,11 @@ PartSketchInteractionController::resolvePointerInput(
             request->temporary_snap_override);
 
     // OSNAP resolves before tracking/Polar. Complete explicit numeric input
-    // bypasses this pointer path. Until lock compatibility is implemented,
-    // any active numeric field lock conservatively retains R10 authority.
+    // bypasses this pointer path. Numeric locks retain authority: exact
+    // assistance participates only when Shared2D proves the candidate leaves
+    // the locked result at the same advertised point.
     const auto* hosted = activeSketch();
-    if (hosted != nullptr &&
-        interaction_.pointFieldLocks().empty()) {
+    if (hosted != nullptr) {
         const auto modes =
             staticSnapModes(eligibility);
 
@@ -5052,6 +5070,19 @@ PartSketchInteractionController::resolvePointerInput(
                                     *second_reference);
                         for (const auto& common :
                              branches) {
+                            const auto first_snap =
+                                common.
+                                    firstSnapCandidate();
+                            if (!interaction_.
+                                    pointCandidateCompatible(
+                                        first_snap.point,
+                                        sketch::
+                                            PointResolutionSource::
+                                                object_snap,
+                                        first_snap)) {
+                                continue;
+                            }
+
                             const auto second_snap =
                                 common.
                                     secondSnapCandidate();
@@ -5198,6 +5229,16 @@ PartSketchInteractionController::resolvePointerInput(
 
             for (const auto& candidate :
                  semantic_candidates) {
+                if (!interaction_.
+                        pointCandidateCompatible(
+                            candidate.point,
+                            sketch::
+                                PointResolutionSource::
+                                    object_snap,
+                            candidate)) {
+                    continue;
+                }
+
                 const auto projected =
                     viewport_controller_->
                         projectSketchPointToViewport(
@@ -5288,7 +5329,13 @@ PartSketchInteractionController::resolvePointerInput(
                     policy{};
                 if (std::isfinite(distance) &&
                     distance <=
-                        policy.capture_distance) {
+                        policy.capture_distance &&
+                    interaction_.
+                        pointCandidateCompatible(
+                            *extension_point,
+                            sketch::
+                                PointResolutionSource::
+                                    tracking_inference)) {
                     polar_capture_ = {};
                     return interaction_.
                         resolvePointerInput(

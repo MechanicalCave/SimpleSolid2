@@ -649,14 +649,24 @@ resolvePointRequestCandidate(
                 return std::nullopt;
             }
 
+            const bool compatible_snap =
+                locked &&
+                pointer_source ==
+                    PointResolutionSource::
+                        object_snap &&
+                pointer_snap &&
+                point == raw;
+
             PointResolution result{
                 point,
                 locked
                     ? PointResolutionSource::numeric_lock
                     : pointer_source,
-                locked
-                    ? std::nullopt
-                    : pointer_snap};
+                compatible_snap
+                    ? pointer_snap
+                    : (locked
+                           ? std::nullopt
+                           : pointer_snap)};
 
             return result.valid()
                 ? std::optional<PointResolution>{
@@ -1073,7 +1083,22 @@ SketchInteractionState::resolvePointerInput(
     point_pointer_source_ = source;
     point_pointer_snap_ =
         std::move(object_snap);
-    return resolvedPointRequestCandidate();
+
+    const auto resolved =
+        resolvedPointRequestCandidate();
+    const bool exact_assistance =
+        source ==
+            PointResolutionSource::object_snap ||
+        source ==
+            PointResolutionSource::
+                tracking_inference;
+    if (exact_assistance &&
+        (!resolved ||
+         resolved->position != raw)) {
+        clearPointerResolution();
+        return std::nullopt;
+    }
+    return resolved;
 }
 
 std::optional<ResolvedSketchInput>
@@ -1083,6 +1108,57 @@ resolvedPointRequestCandidate() const noexcept {
     return request
         ? request->resolution
         : std::nullopt;
+}
+
+bool SketchInteractionState::pointCandidateCompatible(
+    Point2 raw,
+    PointResolutionSource source,
+    std::optional<SnapCandidate> object_snap)
+    const noexcept {
+    if (!raw.finite()) {
+        return false;
+    }
+
+    const bool pointer_source =
+        source ==
+            PointResolutionSource::raw_pointer ||
+        source ==
+            PointResolutionSource::polar ||
+        source ==
+            PointResolutionSource::object_snap ||
+        source ==
+            PointResolutionSource::
+                tracking_inference;
+    if (!pointer_source) {
+        return false;
+    }
+
+    if (source ==
+        PointResolutionSource::object_snap) {
+        if (!object_snap ||
+            !object_snap->valid() ||
+            object_snap->point != raw) {
+            return false;
+        }
+    } else if (object_snap) {
+        return false;
+    }
+
+    auto request = activePointRequest();
+    if (!request) {
+        return false;
+    }
+    request->pointer_candidate = raw;
+    request->resolution.reset();
+
+    const auto resolved =
+        resolvePointRequestCandidate(
+            *request,
+            point_field_locks_,
+            source,
+            object_snap);
+    return resolved &&
+           resolved->position == raw;
 }
 
 bool SketchInteractionState::lockPointField(

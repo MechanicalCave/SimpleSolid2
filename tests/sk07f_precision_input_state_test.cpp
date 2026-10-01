@@ -786,6 +786,98 @@ int main() {
               sketch::Point2{10.0, -5.0});
     }
 
+    // Partially locked requests accept an exact OSNAP only when the
+    // candidate preserves every locked field. Numeric lock remains the
+    // authority, while compatible snap provenance is retained for display.
+    {
+        sketch::SketchModel locked_snap_model;
+        const auto locked_snap_line =
+            locked_snap_model.addLine(
+                {10.0, 20.0},
+                {30.0, 20.0});
+        const auto candidates =
+            sketch::staticSnapCandidates(
+                locked_snap_model);
+        const auto compatible_endpoint =
+            std::find_if(
+                candidates.begin(),
+                candidates.end(),
+                [locked_snap_line](
+                    const sketch::SnapCandidate& item) {
+                    return item.kind ==
+                               sketch::SnapKind::endpoint &&
+                           item.source.first_entity ==
+                               locked_snap_line &&
+                           item.point ==
+                               sketch::Point2{10.0, 20.0};
+                });
+        const auto incompatible_endpoint =
+            std::find_if(
+                candidates.begin(),
+                candidates.end(),
+                [locked_snap_line](
+                    const sketch::SnapCandidate& item) {
+                    return item.kind ==
+                               sketch::SnapKind::endpoint &&
+                           item.source.first_entity ==
+                               locked_snap_line &&
+                           item.point ==
+                               sketch::Point2{30.0, 20.0};
+                });
+        CHECK(compatible_endpoint != candidates.end());
+        CHECK(incompatible_endpoint != candidates.end());
+
+        sketch::SketchInteractionState locked_snap;
+        locked_snap.activateLine();
+        CHECK(locked_snap.lockPointField(
+            sketch::PointFieldLockSemantic::u,
+            10.0));
+
+        CHECK(locked_snap.pointCandidateCompatible(
+            compatible_endpoint->point,
+            sketch::PointResolutionSource::
+                object_snap,
+            *compatible_endpoint));
+        auto resolved =
+            locked_snap.resolvePointerInput(
+                compatible_endpoint->point,
+                sketch::PointResolutionSource::
+                    object_snap,
+                *compatible_endpoint);
+        CHECK(resolved.has_value());
+        CHECK(
+            resolved->source ==
+            sketch::PointResolutionSource::
+                numeric_lock);
+        CHECK(resolved->object_snap.has_value());
+        CHECK(
+            resolved->object_snap ==
+            *compatible_endpoint);
+        CHECK((
+            resolved->position ==
+            sketch::Point2{10.0, 20.0}));
+
+        CHECK(!locked_snap.pointCandidateCompatible(
+            incompatible_endpoint->point,
+            sketch::PointResolutionSource::
+                object_snap,
+            *incompatible_endpoint));
+        CHECK(
+            !locked_snap.resolvePointerInput(
+                 incompatible_endpoint->point,
+                 sketch::PointResolutionSource::
+                     object_snap,
+                 *incompatible_endpoint)
+                 .has_value());
+        CHECK(
+            !locked_snap.
+                 resolvedPointRequestCandidate().
+                 has_value());
+        CHECK(
+            locked_snap.pointFieldLocks().u ==
+            10.0);
+    }
+
     // Changing a one-shot snap override invalidates any previously resolved
     // pointer candidate so presentation cannot expose stale provenance.
     {
