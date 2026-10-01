@@ -768,6 +768,39 @@ void CadWorkbench::buildUi() {
         8,
         modify_tools_label_);
 
+    trim_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Trim"),
+            shell_);
+    trim_sketch_button_->setObjectName(
+        QStringLiteral("trimSketchToolButton"));
+    trim_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        9,
+        trim_sketch_button_);
+
+    extend_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Extend"),
+            shell_);
+    extend_sketch_button_->setObjectName(
+        QStringLiteral("extendSketchToolButton"));
+    extend_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        10,
+        extend_sketch_button_);
+
+    extend_both_sketch_button_ =
+        new QPushButton(
+            QStringLiteral("Extend Both"),
+            shell_);
+    extend_both_sketch_button_->setObjectName(
+        QStringLiteral("extendBothSketchToolButton"));
+    extend_both_sketch_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        11,
+        extend_both_sketch_button_);
+
     move_sketch_button_ =
         new QPushButton(
             QStringLiteral("Move"),
@@ -776,7 +809,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("moveSketchToolButton"));
     move_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        9,
+        12,
         move_sketch_button_);
 
     copy_sketch_button_ =
@@ -787,7 +820,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("copySketchToolButton"));
     copy_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        10,
+        13,
         copy_sketch_button_);
 
     rotate_sketch_button_ =
@@ -798,7 +831,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("rotateSketchToolButton"));
     rotate_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        11,
+        14,
         rotate_sketch_button_);
 
     scale_sketch_button_ =
@@ -809,7 +842,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("scaleSketchToolButton"));
     scale_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        12,
+        15,
         scale_sketch_button_);
 
     mirror_sketch_button_ =
@@ -820,7 +853,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("mirrorSketchToolButton"));
     mirror_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        13,
+        16,
         mirror_sketch_button_);
 
     inspect_tools_label_ =
@@ -830,7 +863,7 @@ void CadWorkbench::buildUi() {
     inspect_tools_label_->setObjectName(
         QStringLiteral("sketchInspectToolsLabel"));
     shell_->editorToolsLayout().insertWidget(
-        14,
+        17,
         inspect_tools_label_);
 
     measure_sketch_button_ =
@@ -841,7 +874,7 @@ void CadWorkbench::buildUi() {
         QStringLiteral("measureSketchToolButton"));
     measure_sketch_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
-        15,
+        18,
         measure_sketch_button_);
 
     rectangle_sketch_button_ =
@@ -2250,6 +2283,21 @@ void CadWorkbench::buildUi() {
             }
         });
     QObject::connect(
+        trim_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchTrim(); });
+    QObject::connect(
+        extend_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchExtend(); });
+    QObject::connect(
+        extend_both_sketch_button_,
+        &QPushButton::clicked,
+        this,
+        [this] { activateSketchExtendBoth(); });
+    QObject::connect(
         move_sketch_button_,
         &QPushButton::clicked,
         this,
@@ -2947,6 +2995,47 @@ void CadWorkbench::activateSketchRectangle() {
     }
 }
 
+void CadWorkbench::activateSketchTrim() {
+    if (!sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->activateTrim()) {
+        setStatusText(
+            QStringLiteral(
+                "TRIM requires selected finite boundary geometry."));
+        syncSketchInteractionUi();
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::activateSketchExtend() {
+    if (!sketch_interaction_controller_ ||
+        !sketch_interaction_controller_->activateExtend()) {
+        setStatusText(
+            QStringLiteral(
+                "EXTEND requires selected finite boundary geometry."));
+        syncSketchInteractionUi();
+        return;
+    }
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::activateSketchExtendBoth() {
+    if (!sketch_interaction_controller_) {
+        return;
+    }
+    sketch_interaction_controller_->activateExtendBoth();
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
 void CadWorkbench::activateSketchMove() {
     if (sketch_interaction_controller_ &&
         !sketch_interaction_controller_->activateMove()) {
@@ -3084,6 +3173,18 @@ void CadWorkbench::finishSketchLine() {
         setStatusText(
             QStringLiteral("Measure finished — Select active."));
         break;
+    case sketch::SketchTool::trim:
+        setStatusText(
+            QStringLiteral("Trim finished — Select active."));
+        break;
+    case sketch::SketchTool::extend:
+        setStatusText(
+            QStringLiteral("Extend finished — Select active."));
+        break;
+    case sketch::SketchTool::extend_both:
+        setStatusText(
+            QStringLiteral("Extend Both finished — Select active."));
+        break;
     case sketch::SketchTool::select:
         break;
     }
@@ -3142,6 +3243,18 @@ void CadWorkbench::cancelSketchLine() {
     case sketch::SketchTool::measure:
         setStatusText(
             QStringLiteral("Measure cancelled — selection preserved."));
+        break;
+    case sketch::SketchTool::trim:
+        setStatusText(
+            QStringLiteral("Trim cancelled — committed edits and boundary selection preserved."));
+        break;
+    case sketch::SketchTool::extend:
+        setStatusText(
+            QStringLiteral("Extend cancelled — committed edits and boundary selection preserved."));
+        break;
+    case sketch::SketchTool::extend_both:
+        setStatusText(
+            QStringLiteral("Extend Both cancelled — committed edits preserved."));
         break;
     case sketch::SketchTool::select:
         break;
@@ -3468,6 +3581,25 @@ QString CadWorkbench::cadInputPromptText() const {
         }
         return QStringLiteral(
             "Command: MEASURE — Click Line/Circle/Arc; BETWEEN for relational; Esc ends");
+    }
+
+    if (tool == sketch::SketchTool::trim) {
+        return QStringLiteral(
+            "Command: TRIM — Click target fragment; selected entities are finite boundaries");
+    }
+
+    if (tool == sketch::SketchTool::extend) {
+        return QStringLiteral(
+            "Command: EXTEND — Click target end; selected entities are finite boundaries");
+    }
+
+    if (tool == sketch::SketchTool::extend_both) {
+        return sketch_interaction_controller_->
+                       extendBothFirstLine()
+                   ? QStringLiteral(
+                         "Command: EXTEND BOTH — Choose second Line")
+                   : QStringLiteral(
+                         "Command: EXTEND BOTH — Choose first Line");
     }
 
     const bool common_transform =
@@ -4493,6 +4625,30 @@ void CadWorkbench::syncSketchInteractionUi() {
                 rectangleDrawDiagonals());
     }
 
+    if (trim_sketch_button_ != nullptr) {
+        trim_sketch_button_->setVisible(editing);
+        trim_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::trim);
+    }
+
+    if (extend_sketch_button_ != nullptr) {
+        extend_sketch_button_->setVisible(editing);
+        extend_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::extend);
+    }
+
+    if (extend_both_sketch_button_ != nullptr) {
+        extend_both_sketch_button_->setVisible(editing);
+        extend_both_sketch_button_->setChecked(
+            editing &&
+            sketch_interaction_controller_->tool() ==
+                sketch::SketchTool::extend_both);
+    }
+
     if (move_sketch_button_ != nullptr) {
         move_sketch_button_->setVisible(editing);
         move_sketch_button_->setChecked(
@@ -4896,6 +5052,57 @@ void CadWorkbench::syncSketchInteractionUi() {
         return;
     }
 
+    const bool structural_tool =
+        tool == sketch::SketchTool::trim ||
+        tool == sketch::SketchTool::extend ||
+        tool == sketch::SketchTool::extend_both;
+
+    if (structural_tool) {
+        delete_selection_button_->setVisible(false);
+        finish_line_button_->setVisible(true);
+        cancel_line_button_->setVisible(true);
+
+        if (tool == sketch::SketchTool::trim) {
+            finish_line_button_->setText(
+                QStringLiteral("Finish Trim"));
+            cancel_line_button_->setText(
+                QStringLiteral("Cancel Trim"));
+            operations_placeholder_->setText(
+                QStringLiteral(
+                    "Trim — %1 finite boundary entities; click target fragment")
+                    .arg(
+                        static_cast<qulonglong>(
+                            sketch_interaction_controller_->
+                                structuralBoundaries().size())));
+        } else if (
+            tool == sketch::SketchTool::extend) {
+            finish_line_button_->setText(
+                QStringLiteral("Finish Extend"));
+            cancel_line_button_->setText(
+                QStringLiteral("Cancel Extend"));
+            operations_placeholder_->setText(
+                QStringLiteral(
+                    "Extend — %1 finite boundary entities; click target end")
+                    .arg(
+                        static_cast<qulonglong>(
+                            sketch_interaction_controller_->
+                                structuralBoundaries().size())));
+        } else {
+            finish_line_button_->setText(
+                QStringLiteral("Finish Extend Both"));
+            cancel_line_button_->setText(
+                QStringLiteral("Cancel Extend Both"));
+            operations_placeholder_->setText(
+                sketch_interaction_controller_->
+                        extendBothFirstLine()
+                    ? QStringLiteral(
+                          "Extend Both — Choose second Line")
+                    : QStringLiteral(
+                          "Extend Both — Choose first Line"));
+        }
+        return;
+    }
+
     const bool common_transform =
         tool == sketch::SketchTool::move ||
         tool == sketch::SketchTool::copy ||
@@ -5164,6 +5371,12 @@ void CadWorkbench::syncActionState() {
     rectangle_sketch_button_->setVisible(
         editing_sketch);
     modify_tools_label_->setVisible(
+        editing_sketch);
+    trim_sketch_button_->setVisible(
+        editing_sketch);
+    extend_sketch_button_->setVisible(
+        editing_sketch);
+    extend_both_sketch_button_->setVisible(
         editing_sketch);
     move_sketch_button_->setVisible(
         editing_sketch);

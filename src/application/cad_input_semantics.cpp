@@ -181,6 +181,12 @@ commandTool(std::string_view token) noexcept {
     if (token == "ROTATE") return sketch::SketchTool::rotate;
     if (token == "SCALE") return sketch::SketchTool::scale;
     if (token == "MIRROR") return sketch::SketchTool::mirror;
+    if (token == "TRIM") return sketch::SketchTool::trim;
+    if (token == "EXTEND") return sketch::SketchTool::extend;
+    if (token == "EXTENDBOTH" ||
+        token == "EXTEND BOTH") {
+        return sketch::SketchTool::extend_both;
+    }
     return std::nullopt;
 }
 

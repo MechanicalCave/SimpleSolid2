@@ -168,6 +168,9 @@ private:
     void activateSketchCircle();
     void activateSketchArc();
     void activateSketchRectangle();
+    void activateSketchTrim();
+    void activateSketchExtend();
+    void activateSketchExtendBoth();
     void activateSketchMove();
     void activateSketchCopy();
     void activateSketchRotate();
@@ -326,6 +329,9 @@ private:
     QLabel* profile_tools_label_{};
     QPushButton* profile_sketch_button_{};
     QLabel* modify_tools_label_{};
+    QPushButton* trim_sketch_button_{};
+    QPushButton* extend_sketch_button_{};
+    QPushButton* extend_both_sketch_button_{};
     QPushButton* move_sketch_button_{};
     QPushButton* copy_sketch_button_{};
     QPushButton* rotate_sketch_button_{};

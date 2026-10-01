@@ -606,6 +606,15 @@ int main(int argc, char* argv[]) {
     auto* profile_cancel_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("profileCancelButton"));
+    auto* trim_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("trimSketchToolButton"));
+    auto* extend_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extendSketchToolButton"));
+    auto* extend_both_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("extendBothSketchToolButton"));
     auto* move_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("moveSketchToolButton"));
@@ -760,6 +769,9 @@ int main(int argc, char* argv[]) {
     CHECK(profile_find_button != nullptr);
     CHECK(profile_finish_button != nullptr);
     CHECK(profile_cancel_button != nullptr);
+    CHECK(trim_button != nullptr);
+    CHECK(extend_button != nullptr);
+    CHECK(extend_both_button != nullptr);
     CHECK(move_button != nullptr);
     CHECK(copy_button != nullptr);
     CHECK(create_tools_label != nullptr);
@@ -868,6 +880,76 @@ int main(int argc, char* argv[]) {
         viewport->lastStandardView() ==
         viewer::StandardView::front);
     CHECK(viewport->fitAllCount() > 0);
+
+    // R12 structural-edit controls are explicit Modify tools. Trim/Extend
+    // fail closed without a boundary selection; Extend Both may enter its
+    // first-Line acquisition state without authored mutation.
+    CHECK(!trim_button->isHidden());
+    CHECK(!extend_button->isHidden());
+    CHECK(!extend_both_button->isHidden());
+
+    const auto structural_ui_state =
+        session->document().state();
+    const auto structural_ui_revision =
+        session->document().revision();
+    const auto structural_ui_undo =
+        session->undoDepth();
+
+    trim_button->click();
+    QApplication::processEvents();
+    CHECK(!trim_button->isChecked());
+    CHECK(
+        session->document().state() ==
+        structural_ui_state);
+
+    extend_button->click();
+    QApplication::processEvents();
+    CHECK(!extend_button->isChecked());
+    CHECK(
+        session->document().state() ==
+        structural_ui_state);
+
+    extend_both_button->click();
+    QApplication::processEvents();
+    CHECK(extend_both_button->isChecked());
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral(
+            "Extend Both — Choose first Line"));
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: EXTEND BOTH — Choose first Line"));
+    CHECK(
+        session->document().state() ==
+        structural_ui_state);
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!extend_both_button->isChecked());
+
+    command_input->setText(
+        QStringLiteral("EXTEND BOTH"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(extend_both_button->isChecked());
+    CHECK(
+        command_prompt->text() ==
+        QStringLiteral(
+            "Command: EXTEND BOTH — Choose first Line"));
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    CHECK(!extend_both_button->isChecked());
+    CHECK(
+        session->document().state() ==
+        structural_ui_state);
+    CHECK(
+        session->document().revision() ==
+        structural_ui_revision);
+    CHECK(
+        session->undoDepth() ==
+        structural_ui_undo);
 
     CHECK(!precision_widget->isHidden());
     CHECK(osnap_toggle->isChecked());
