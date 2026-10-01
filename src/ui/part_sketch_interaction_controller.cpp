@@ -181,6 +181,7 @@ void PartSketchInteractionController::begin(
     tracking_hover_.reset();
     common_tangent_candidate_.reset();
     tracking_inference_presentation_.reset();
+    extension_inference_point_.reset();
     polar_capture_ = {};
     last_pointer_input_.reset();
     press_anchor_.reset();
@@ -210,6 +211,7 @@ void PartSketchInteractionController::end() {
     tracking_hover_.reset();
     common_tangent_candidate_.reset();
     tracking_inference_presentation_.reset();
+    extension_inference_point_.reset();
     polar_capture_ = {};
     last_pointer_input_.reset();
     press_anchor_.reset();
@@ -308,6 +310,7 @@ bool PartSketchInteractionController::setTemporarySnapOverride(
     tracking_hover_.reset();
     common_tangent_candidate_.reset();
     tracking_inference_presentation_.reset();
+    extension_inference_point_.reset();
     polar_capture_ = {};
     notifyStateChanged();
     return true;
@@ -321,6 +324,7 @@ bool PartSketchInteractionController::clearTemporarySnapOverride() {
     tracking_hover_.reset();
     common_tangent_candidate_.reset();
     tracking_inference_presentation_.reset();
+    extension_inference_point_.reset();
     polar_capture_ = {};
     notifyStateChanged();
     return true;
@@ -5390,12 +5394,18 @@ PartSketchInteractionController::resolvePointerInput(
                                 PointResolutionSource::
                                     tracking_inference)) {
                     polar_capture_ = {};
-                    return interaction_.
-                        resolvePointerInput(
+                    const auto resolved =
+                        interaction_.resolvePointerInput(
                             *extension_point,
                             sketch::
                                 PointResolutionSource::
                                     tracking_inference);
+                    if (resolved &&
+                        eligibility.extension) {
+                        extension_inference_point_ =
+                            *extension_point;
+                    }
+                    return resolved;
                 }
             }
         }
@@ -5775,6 +5785,7 @@ refreshCadInputContextGeneration() {
     tracking_hover_.reset();
     common_tangent_candidate_.reset();
     tracking_inference_presentation_.reset();
+    extension_inference_point_.reset();
     polar_capture_ = {};
     ++cad_input_context_generation_;
 }
@@ -5923,9 +5934,40 @@ refreshSnapInferencePresentation() {
                 guide_intersection;
     }
 
+    std::optional<sketch::LineExtensionRay>
+        extension_ray;
+    std::optional<sketch::Point2>
+        extension_point;
+    if (!eligibility.suppress_object_assistance &&
+        eligibility.extension &&
+        request->deferred_snap_reference &&
+        request->deferred_snap_reference->kind ==
+            sketch::DeferredSnapReferenceKind::
+                line_extension) {
+        const auto* hosted = activeSketch();
+        if (hosted != nullptr) {
+            extension_ray =
+                sketch::lineExtensionRay(
+                    hosted->model,
+                    *request->deferred_snap_reference);
+            if (extension_ray &&
+                extension_inference_point_ &&
+                request->resolution &&
+                request->resolution->source ==
+                    sketch::PointResolutionSource::
+                        tracking_inference &&
+                request->resolution->position ==
+                    *extension_inference_point_) {
+                extension_point =
+                    *extension_inference_point_;
+            }
+        }
+    }
+
     if (!current &&
         !inference_point &&
         active_guides.empty() &&
+        !extension_ray &&
         (!show_anchors ||
          request->tracking_anchors.anchors.empty())) {
         viewport_controller_->
@@ -5940,7 +5982,9 @@ refreshSnapInferencePresentation() {
                 show_anchors,
                 active_guides,
                 inference_point,
-                guide_intersection)) {
+                guide_intersection,
+                extension_ray,
+                extension_point)) {
         viewport_controller_->
             clearSketchSnapInferencePresentation();
     }

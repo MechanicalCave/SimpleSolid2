@@ -157,10 +157,18 @@ int main(int argc, char* argv[]) {
 
             snap_scene.current =
                 viewer::SketchSnapMarkerPresentation{
-                    {16.0, 16.0, 0.0},
+                    {28.0, 16.0, 0.0},
                     viewer::SketchSnapMarkerKind::
-                        intersection,
-                    "Intersection"};
+                        extension,
+                    "EXT"};
+            snap_scene.extension_guide =
+                viewer::SketchExtensionGuidePresentation{
+                    {20.0, 16.0, 0.0},
+                    {10.0, 0.0, 0.0},
+                    viewer::Point3{
+                        28.0,
+                        16.0,
+                        0.0}};
             snap_scene.acquired.resize(1U);
             snap_scene.guides.resize(1U);
             snap_scene.guides[0].kind =

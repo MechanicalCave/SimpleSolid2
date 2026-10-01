@@ -190,7 +190,11 @@ public:
             active_guides = {},
         std::optional<sketch::Point2>
             inference_point = std::nullopt,
-        bool guide_intersection = false);
+        bool guide_intersection = false,
+        std::optional<sketch::LineExtensionRay>
+            extension_ray = std::nullopt,
+        std::optional<sketch::Point2>
+            extension_point = std::nullopt);
 
     void clearSketchSnapInferencePresentation();
 

@@ -424,6 +424,7 @@ enum class SketchSnapMarkerKind : std::uint8_t {
     perpendicular,
     tangent,
     nearest,
+    extension,
     guide_intersection,
     guide_projection,
 };
@@ -451,6 +452,25 @@ struct SketchInferenceGuidePresentation final {
         const SketchInferenceGuidePresentation&) = default;
 };
 
+struct SketchExtensionGuidePresentation final {
+    Point3 origin{};
+    Vec3 direction{};
+    std::optional<Point3> resolved_point;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return finite(origin) &&
+               finite(direction) &&
+               direction.squaredLength() > 1.0e-24 &&
+               (!resolved_point ||
+                (finite(*resolved_point) &&
+                 *resolved_point != origin));
+    }
+
+    friend bool operator==(
+        const SketchExtensionGuidePresentation&,
+        const SketchExtensionGuidePresentation&) = default;
+};
+
 struct SketchSnapMarkerPresentation final {
     Point3 position{};
     SketchSnapMarkerKind kind{
@@ -474,11 +494,14 @@ struct SketchSnapInferenceScene final {
         acquired;
     std::vector<SketchInferenceGuidePresentation>
         guides;
+    std::optional<SketchExtensionGuidePresentation>
+        extension_guide;
 
     [[nodiscard]] bool empty() const noexcept {
         return !current &&
                acquired.empty() &&
-               guides.empty();
+               guides.empty() &&
+               !extension_guide;
     }
 
     [[nodiscard]] bool valid() const noexcept {
@@ -487,6 +510,10 @@ struct SketchSnapInferenceScene final {
         }
         if (acquired.size() > 2U ||
             guides.size() > 2U) {
+            return false;
+        }
+        if (extension_guide &&
+            !extension_guide->valid()) {
             return false;
         }
         return std::all_of(

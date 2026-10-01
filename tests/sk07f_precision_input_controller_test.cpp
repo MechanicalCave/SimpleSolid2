@@ -1815,6 +1815,30 @@ int main(int argc, char* argv[]) {
             kind ==
         sketch::DeferredSnapReferenceKind::
             line_extension);
+    CHECK(
+        viewport.snap_inference_scene_.
+            extension_guide.has_value());
+    CHECK(
+        viewport.snap_inference_scene_.current.
+            has_value());
+    CHECK(
+        viewport.snap_inference_scene_.current->kind ==
+        viewer::SketchSnapMarkerKind::extension);
+    CHECK(
+        viewport.snap_inference_scene_.current->label ==
+        "EXT");
+    CHECK(near(
+        viewport.snap_inference_scene_.
+            extension_guide->origin.x,
+        9010.0));
+    CHECK(near(
+        viewport.snap_inference_scene_.
+            extension_guide->origin.y,
+        9000.0));
+    CHECK(
+        !viewport.snap_inference_scene_.
+             extension_guide->resolved_point.
+             has_value());
 
     movePointer(
         interaction,
@@ -1833,6 +1857,30 @@ int main(int argc, char* argv[]) {
     CHECK((
         extension_resolution->position ==
         sketch::Point2{9020.0, 9000.0}));
+    CHECK(
+        viewport.snap_inference_scene_.
+            extension_guide.has_value());
+    CHECK(
+        viewport.snap_inference_scene_.
+            extension_guide->resolved_point.
+            has_value());
+    CHECK(near(
+        viewport.snap_inference_scene_.
+            extension_guide->resolved_point->x,
+        9020.0));
+    CHECK(near(
+        viewport.snap_inference_scene_.
+            extension_guide->resolved_point->y,
+        9000.0));
+    CHECK(
+        viewport.snap_inference_scene_.current.
+            has_value());
+    CHECK(
+        viewport.snap_inference_scene_.current->kind ==
+        viewer::SketchSnapMarkerKind::extension);
+    CHECK(
+        viewport.snap_inference_scene_.current->label ==
+        "EXT");
 
     const auto lines_before_extension =
         hosted->model.state().lines.size();

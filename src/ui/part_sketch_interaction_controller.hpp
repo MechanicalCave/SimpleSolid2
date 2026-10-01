@@ -504,6 +504,8 @@ private:
         common_tangent_candidate_;
     std::optional<TrackingInferenceResolution>
         tracking_inference_presentation_;
+    std::optional<sketch::Point2>
+        extension_inference_point_;
 
     application::PolarCaptureState
         polar_capture_;

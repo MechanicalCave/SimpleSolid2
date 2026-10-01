@@ -1173,7 +1173,11 @@ projectSketchSnapInferencePresentation(
         active_guides,
     std::optional<sketch::Point2>
         inference_point,
-    bool guide_intersection) {
+    bool guide_intersection,
+    std::optional<sketch::LineExtensionRay>
+        extension_ray,
+    std::optional<sketch::Point2>
+        extension_point) {
     if (viewport_ == nullptr) {
         return false;
     }
@@ -1182,7 +1186,12 @@ projectSketchSnapInferencePresentation(
         !anchors.valid() ||
         active_guides.size() > 2U ||
         (inference_point &&
-         !inference_point->finite())) {
+         !inference_point->finite()) ||
+        (extension_ray &&
+         !extension_ray->valid()) ||
+        (extension_point &&
+         (!extension_ray ||
+          !extension_point->finite()))) {
         return false;
     }
 
@@ -1242,6 +1251,65 @@ projectSketchSnapInferencePresentation(
                 guide_intersection
                     ? "TRACK INT"
                     : "TRACK"};
+    }
+
+    if (extension_ray) {
+        const auto origin_world =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                extension_ray->origin);
+        const sketch::Point2 direction_point{
+            extension_ray->origin.u +
+                extension_ray->direction.u,
+            extension_ray->origin.v +
+                extension_ray->direction.v};
+        const auto direction_world_point =
+            detail::sketchPointToWorld(
+                hosted->placement,
+                direction_point);
+        if (!origin_world ||
+            !direction_world_point) {
+            return false;
+        }
+
+        std::optional<viewer::Point3>
+            resolved_world;
+        if (extension_point) {
+            resolved_world =
+                detail::sketchPointToWorld(
+                    hosted->placement,
+                    *extension_point);
+            if (!resolved_world) {
+                return false;
+            }
+        }
+
+        scene.extension_guide =
+            viewer::SketchExtensionGuidePresentation{
+                *origin_world,
+                {
+                    direction_world_point->x -
+                        origin_world->x,
+                    direction_world_point->y -
+                        origin_world->y,
+                    direction_world_point->z -
+                        origin_world->z,
+                },
+                resolved_world};
+        if (!scene.extension_guide->valid()) {
+            return false;
+        }
+
+        if (!scene.current) {
+            scene.current =
+                viewer::SketchSnapMarkerPresentation{
+                    resolved_world
+                        ? *resolved_world
+                        : *origin_world,
+                    viewer::SketchSnapMarkerKind::
+                        extension,
+                    "EXT"};
+        }
     }
 
     if (show_anchors) {

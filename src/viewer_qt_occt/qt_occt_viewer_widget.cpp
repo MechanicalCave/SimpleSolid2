@@ -2170,7 +2170,8 @@ public:
             }
 
             sketch_snap_guide_objects_.reserve(
-                scene.guides.size());
+                scene.guides.size() +
+                (scene.extension_guide ? 1U : 0U));
             for (const auto& guide :
                  scene.guides) {
                 Handle(Geom_Line) geometry =
@@ -2201,6 +2202,47 @@ public:
                         color,
                         Aspect_TOL_DASH,
                         1.4));
+                context_->Display(object, false);
+                context_->Deactivate(object);
+                sketch_snap_guide_objects_.
+                    push_back(object);
+            }
+
+            if (scene.extension_guide) {
+                const auto& extension =
+                    *scene.extension_guide;
+                const viewer::Point3 end =
+                    extension.resolved_point
+                        ? *extension.resolved_point
+                        : viewer::Point3{
+                              extension.origin.x +
+                                  extension.direction.x,
+                              extension.origin.y +
+                                  extension.direction.y,
+                              extension.origin.z +
+                                  extension.direction.z};
+
+                Handle(Geom_CartesianPoint)
+                    start_point =
+                        new Geom_CartesianPoint(
+                            toPoint(extension.origin));
+                Handle(Geom_CartesianPoint)
+                    end_point =
+                        new Geom_CartesianPoint(
+                            toPoint(end));
+                Handle(AIS_Line) object =
+                    new AIS_Line(
+                        start_point,
+                        end_point);
+                object->Attributes()->SetLineAspect(
+                    new Prs3d_LineAspect(
+                        Quantity_Color{
+                            0.52,
+                            1.0,
+                            0.58,
+                            Quantity_TOC_RGB},
+                        Aspect_TOL_DASH,
+                        1.6));
                 context_->Display(object, false);
                 context_->Deactivate(object);
                 sketch_snap_guide_objects_.
