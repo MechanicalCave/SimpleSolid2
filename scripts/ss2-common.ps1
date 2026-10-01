@@ -282,3 +282,14 @@ function Get-SS2CMakeExe {
     if ($cmd) { return $cmd.Source }
     throw "CMake executable not found. Run: .\ss2.ps1 setup"
 }
+
+
+function Resolve-SS2BuildPath {
+    param([Parameter(Mandatory=$true)][string]$BuildDir)
+
+    if ([IO.Path]::IsPathRooted($BuildDir)) {
+        return [IO.Path]::GetFullPath($BuildDir)
+    }
+
+    return [IO.Path]::GetFullPath((Join-Path (Get-SS2Root) $BuildDir))
+}
