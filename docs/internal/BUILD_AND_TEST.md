@@ -234,6 +234,8 @@ Comparative timing was collected on the same self-hosted Windows machine (`DESKT
 
 The measurements are observational evidence, not fixed performance requirements. The dominant improvement is removal of unnecessary test compilation from ordinary product iteration. FOCUSED remains approximately unchanged because it was already target-scoped before CI-04.
 
+Final clean/warm parity was proven on exact SHA `fbc35c3d9efd96891be8fec5671654cad8ecd473` in Windows FULL #1044. The CLEAN pass executed 78/78 desktop tests successfully (111.38 s real CTest time); the immediate warm rebuild of `ss2_tests_full` took 7.60 s and the warm FULL repeated 78/78 successfully (110.31 s real CTest time). This proves identical test outcome between clean and compatible warm verification on the same source revision. The CI-04 timing/parity workflow hooks are commit-trailer gated and add no repeated benchmark work to ordinary FULL runs.
+
 <!-- section-id: internal.build-test.c2-history-benchmark -->
 ## C2 semantic history benchmark
 

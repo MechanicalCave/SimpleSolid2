@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/CI-04_BUILD_GRAPH_AND_WARM_VERIFICATION.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -19,13 +19,15 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - implement only the accepted CI-04 repository/build optimization contract; no CAD/product semantics are authorized
-  - keep R11 Object Snap / Tracking / Inference proposal-only and inactive until CI-04 is completed and R11 is separately activated
+  - keep production mutation inactive after CI-04 completion
+  - keep R11 Object Snap / Tracking / Inference proposal-only and inactive until separately activated by the Owner
   - require R11 to consume the accepted R10 resolver priority, numeric locks, Polar/Dynamic Input semantics and one workspace CAD input path rather than creating a second point-resolution system
   - keep R12+, ordinary RMB context, authored dimensions/constraints/solver and solid modeling inactive until separately accepted
   - preserve Roadmap v1.7 sequencing: R11 -> R12 -> profile-authoring readiness checkpoint -> separate Part Feature Tree architecture gate
 
 notes:
+  - CI-04 completion candidate exact head fbc35c3d9efd96891be8fec5671654cad8ecd473 passed Windows FULL #1044 with CLEAN desktop 78/78 PASS, core-only PASS, immediate warm rebuild 7.60s, warm desktop 78/78 PASS, and final windows-msvc PASS.
+  - CI-04 acceptance is satisfied; R11 remains proposal-only/inactive and no CAD/product semantics were changed by CI-04.
   - CI-04 implementation candidate exact head 79e89af2faba96780dab9e85b9f60700a75015c7 passed CLEAN Windows FULL #1040 with desktop 78/78, core-only PASS, corrected FOCUSED exact execution, bounded parallel CTest, and comparative timing evidence.
   - CI-04 timing evidence on DESKTOP-JL6O311: clean product 229.99s -> 78.19s (2.94x); no-op 6.66s -> 3.88s (1.72x); one Sketch .cpp 11.53s -> 4.16s (2.77x); FOCUSED 12.27s -> 12.16s (1.01x); FAST 242.32s -> 205.82s (1.18x).
   - Owner explicitly activated CI-04 Build Graph & Warm Verification on 2026-10-01; CI-04 is D1 repository/build tooling only and does not activate R11 or authorize CAD/product semantic mutation.

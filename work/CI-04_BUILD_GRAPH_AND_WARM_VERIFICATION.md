@@ -1,6 +1,6 @@
 # CI-04 — Build Graph & Warm Verification
 
-**Status:** ACCEPTED — ACTIVE / IMPLEMENTED CANDIDATE  
+**Status:** COMPLETED  
 **Owner proposal acceptance:** 2026-09-30  
 **Owner activation:** 2026-10-01  
 **Decision class:** D1 repository workflow / build implementation  
@@ -464,4 +464,38 @@ Comparative results on runner `DESKTOP-JL6O311`, baseline `8574215c3c73ae015e49a
 
 Both FOCUSED timing cells executed exactly one test. Both FAST cells executed 62 tests. Timing is evidence only and is not a machine-independent acceptance threshold.
 
-Remaining closure evidence before CI-04 completion: one compatible warm FULL on the same implementation content, followed by work-only completion bookkeeping.
+Final parity/closure evidence:
+
+```text
+fbc35c3d9efd96891be8fec5671654cad8ecd473
+Windows FULL #1044: PASS
+classifier: full
+clean FULL: true
+CLEAN desktop CTest: 78/78 PASS (111.38 s)
+warm ss2_tests_full rebuild: 7.60 s
+warm desktop CTest: 78/78 PASS (110.31 s)
+final windows-msvc summary: PASS
+```
+
+The CLEAN and warm verification passes used the same exact SHA and produced the same complete desktop test outcome. CI-04 acceptance is therefore satisfied.
+
+## 26. Completion
+
+CI-04 is completed on 2026-10-01.
+
+Delivered:
+
+- normal `ss2 build` / `ss2 run` product-targeted compilation;
+- desktop tests excluded from normal product ALL;
+- FAST/FULL/SUBSYSTEM aggregate build graph derived from authoritative test membership;
+- exact FOCUSED target/test execution, including correction of the CTest exact-match regex;
+- fingerprinted persistent external self-hosted Windows build trees with force-clean escape hatch;
+- CLEAN FULL policy for verification-infrastructure changes;
+- bounded parallel CTest with native Viewer resource serialization;
+- comparative before/after timing evidence;
+- same-SHA CLEAN FULL / warm FULL parity evidence;
+- current internal build/test documentation and generated Product Browser.
+
+Deferred/out of scope by design: Ninja migration, sccache, PCH, Unity Build and further compiler/toolchain optimization. Any such optimization requires a separate measured decision.
+
+R11 remains separately proposal-only/inactive and was not implemented by CI-04.
