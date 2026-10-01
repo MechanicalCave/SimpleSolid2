@@ -1300,6 +1300,22 @@ add_test(
     COMMAND r11_snap_core_test
 )
 
+add_executable(r12_structural_edit_core_test
+    r12_structural_edit_core_test.cpp
+)
+
+target_link_libraries(r12_structural_edit_core_test
+    PRIVATE
+        simplesolid2_sketch
+)
+
+target_compile_features(r12_structural_edit_core_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME r12.structural_edit_core
+    COMMAND r12_structural_edit_core_test
+)
+
 add_executable(sk07f_precision_input_controller_test
     sk07f_precision_input_controller_test.cpp
 )
