@@ -1,6 +1,6 @@
 # R11 — Object Snap / Object Snap Tracking / Inference
 
-**Status:** ACCEPTED — ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-09-30  
 **Proposal synchronization:** 2026-10-01 after CI-04 completion  
 **Owner acceptance:** 2026-10-01  
@@ -846,3 +846,17 @@ After activation, R11 completion requires:
 - work-only CLOSURE closeout.
 
 R12+ remain inactive after R11 completion unless separately accepted.
+
+
+## 34. Completion evidence
+
+R11 completion evidence on 2026-10-01:
+
+- final exact-head runtime/manual candidate `7f1b3d70a3976f40f5e0652824cada1f5ed67164` passed Windows FULL #1088, including documentation verification, bootstrap/dispatcher checks, complete desktop build graph, core-only 16/16, FAST/SUBSYSTEM selector verification, full desktop 79/79 and final `windows-msvc` aggregation;
+- the final candidate includes the bounded D1 Line Extension presentation correction discovered during Owner verification: the accepted positive-ray EXT semantics are unchanged, while the provider-neutral runtime scene now exposes an explicit EXT marker/guide so the acquired Line endpoint and active extension are visible instead of being inferred only from creation-preview disappearance/reappearance;
+- `sk07f.precision_input_controller` and `wb01.viewer_native_smoke` both passed inside FULL #1088 with explicit regression coverage for EXT acquisition, resolved-point presentation and native guide rendering;
+- Owner manual Windows verification passed on the same exact head on 2026-10-01. The Owner had found no other missing or incorrect R11 behavior in the Section 28 checklist; after updating to the final candidate, the previously blocking EXT presentation/capture workflow was re-tested and accepted as working correctly;
+- required internal documentation, PL/EN Product documentation and deterministic Product Browser were current and passed the exact-head FULL verification;
+- accepted R11 boundaries remain intact: one `PointResolution` path, exact Sketch-local geometry, screen-space acquisition only, deterministic candidate resolution, runtime-only OSNAP/OTRACK/inference state, application/user preference persistence only, no authored constraint creation, no gap healing/world tolerance leakage and no R12 structural editing.
+
+All R11 acceptance conditions are satisfied. R11 is complete at this work-only closeout candidate. No production Work Contract is active after R11 completion. R12 Trim / Split / Join remains inactive until a separate Owner-accepted Work Contract explicitly freezes the required topology-edit identity/reference outcomes.
