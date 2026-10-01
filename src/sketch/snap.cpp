@@ -1158,4 +1158,305 @@ tangentSnapCandidates(
     return result;
 }
 
+
+bool trackingAnchorEligible(
+    SnapKind kind) noexcept {
+    switch (kind) {
+    case SnapKind::endpoint:
+    case SnapKind::midpoint:
+    case SnapKind::center:
+    case SnapKind::quadrant:
+    case SnapKind::intersection:
+    case SnapKind::origin:
+        return true;
+    case SnapKind::perpendicular:
+    case SnapKind::tangent:
+    case SnapKind::nearest:
+        return false;
+    }
+    return false;
+}
+
+TrackingAcquireResult TrackingAnchorState::acquire(
+    TrackingAnchor anchor) {
+    if (!anchor.valid() || !valid()) {
+        return TrackingAcquireResult::invalid;
+    }
+
+    const auto key =
+        snapStableKey(anchor.snap);
+    const auto duplicate =
+        std::find_if(
+            anchors.begin(),
+            anchors.end(),
+            [&key](const TrackingAnchor& item) {
+                return snapStableKey(item.snap) ==
+                       key;
+            });
+    if (duplicate != anchors.end()) {
+        return TrackingAcquireResult::
+            already_acquired;
+    }
+
+    if (anchors.size() >= 2U) {
+        return TrackingAcquireResult::full;
+    }
+
+    anchors.push_back(std::move(anchor));
+    return TrackingAcquireResult::acquired;
+}
+
+bool TrackingAnchorState::remove(
+    const SnapStableKey& key) {
+    const auto found =
+        std::find_if(
+            anchors.begin(),
+            anchors.end(),
+            [&key](const TrackingAnchor& item) {
+                return snapStableKey(item.snap) ==
+                       key;
+            });
+    if (found == anchors.end()) {
+        return false;
+    }
+    anchors.erase(found);
+    return true;
+}
+
+bool TrackingAnchorState::valid() const noexcept {
+    if (anchors.size() > 2U) {
+        return false;
+    }
+    for (std::size_t i = 0U;
+         i < anchors.size();
+         ++i) {
+        if (!anchors[i].valid()) {
+            return false;
+        }
+        for (std::size_t j = i + 1U;
+             j < anchors.size();
+             ++j) {
+            if (snapStableKey(anchors[i].snap) ==
+                snapStableKey(anchors[j].snap)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool InferenceGuide::valid() const noexcept {
+    if (!anchor.finite() ||
+        !direction.finite()) {
+        return false;
+    }
+    const double length =
+        std::hypot(
+            direction.u,
+            direction.v);
+    return std::isfinite(length) &&
+           length > 0.0;
+}
+
+namespace {
+
+[[nodiscard]] std::optional<Point2>
+canonicalGuideDirection(
+    Point2 direction) noexcept {
+    if (!direction.finite()) {
+        return std::nullopt;
+    }
+
+    const double length =
+        std::hypot(
+            direction.u,
+            direction.v);
+    if (!std::isfinite(length) ||
+        !(length > 0.0)) {
+        return std::nullopt;
+    }
+
+    Point2 unit{
+        direction.u / length,
+        direction.v / length};
+
+    // A guide is an undirected line. Canonical sign avoids duplicate +d/-d
+    // directions without a geometric tolerance.
+    if (unit.u < 0.0 ||
+        (unit.u == 0.0 &&
+         unit.v < 0.0)) {
+        unit.u = -unit.u;
+        unit.v = -unit.v;
+    }
+    return unit.finite()
+        ? std::optional<Point2>{unit}
+        : std::nullopt;
+}
+
+} // namespace
+
+std::vector<InferenceGuide>
+trackingGuides(
+    const TrackingAnchorState& state,
+    const std::vector<Point2>&
+        additional_directions) {
+    if (!state.valid()) {
+        return {};
+    }
+
+    struct DirectionSpec final {
+        Point2 direction;
+        InferenceGuideKind kind;
+    };
+
+    std::vector<DirectionSpec> directions{
+        {{1.0, 0.0},
+         InferenceGuideKind::sketch_u},
+        {{0.0, 1.0},
+         InferenceGuideKind::sketch_v},
+    };
+
+    for (const auto direction :
+         additional_directions) {
+        const auto canonical =
+            canonicalGuideDirection(direction);
+        if (!canonical) {
+            continue;
+        }
+
+        const auto duplicate =
+            std::find_if(
+                directions.begin(),
+                directions.end(),
+                [&canonical](
+                    const DirectionSpec& item) {
+                    return item.direction ==
+                           *canonical;
+                });
+        if (duplicate != directions.end()) {
+            continue;
+        }
+
+        directions.push_back(
+            {*canonical,
+             InferenceGuideKind::
+                 additional_direction});
+    }
+
+    std::vector<InferenceGuide> result;
+    result.reserve(
+        state.anchors.size() *
+        directions.size());
+
+    for (const auto& anchor :
+         state.anchors) {
+        const auto key =
+            snapStableKey(anchor.snap);
+        for (const auto& direction :
+             directions) {
+            InferenceGuide guide{
+                key,
+                anchor.snap.point,
+                direction.direction,
+                direction.kind};
+            if (guide.valid()) {
+                result.push_back(
+                    std::move(guide));
+            }
+        }
+    }
+
+    return result;
+}
+
+std::optional<Point2>
+guideIntersection(
+    const InferenceGuide& first,
+    const InferenceGuide& second) noexcept {
+    if (!first.valid() ||
+        !second.valid()) {
+        return std::nullopt;
+    }
+
+    const double determinant =
+        first.direction.u *
+            second.direction.v -
+        first.direction.v *
+            second.direction.u;
+    if (!std::isfinite(determinant) ||
+        determinant == 0.0) {
+        return std::nullopt;
+    }
+
+    const double delta_u =
+        second.anchor.u - first.anchor.u;
+    const double delta_v =
+        second.anchor.v - first.anchor.v;
+    const double parameter =
+        (delta_u * second.direction.v -
+         delta_v * second.direction.u) /
+        determinant;
+    if (!std::isfinite(parameter)) {
+        return std::nullopt;
+    }
+
+    Point2 result{
+        std::fma(
+            parameter,
+            first.direction.u,
+            first.anchor.u),
+        std::fma(
+            parameter,
+            first.direction.v,
+            first.anchor.v)};
+    return result.finite()
+        ? std::optional<Point2>{result}
+        : std::nullopt;
+}
+
+std::optional<Point2>
+projectPointToGuide(
+    const InferenceGuide& guide,
+    Point2 point) noexcept {
+    if (!guide.valid() ||
+        !point.finite()) {
+        return std::nullopt;
+    }
+
+    const double length_squared =
+        guide.direction.u *
+            guide.direction.u +
+        guide.direction.v *
+            guide.direction.v;
+    if (!std::isfinite(length_squared) ||
+        !(length_squared > 0.0)) {
+        return std::nullopt;
+    }
+
+    const double relative_u =
+        point.u - guide.anchor.u;
+    const double relative_v =
+        point.v - guide.anchor.v;
+    const double parameter =
+        (relative_u * guide.direction.u +
+         relative_v * guide.direction.v) /
+        length_squared;
+    if (!std::isfinite(parameter)) {
+        return std::nullopt;
+    }
+
+    Point2 result{
+        std::fma(
+            parameter,
+            guide.direction.u,
+            guide.anchor.u),
+        std::fma(
+            parameter,
+            guide.direction.v,
+            guide.anchor.v)};
+    return result.finite()
+        ? std::optional<Point2>{result}
+        : std::nullopt;
+}
+
 } // namespace simplesolid2::sketch

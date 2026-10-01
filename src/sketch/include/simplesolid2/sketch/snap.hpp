@@ -251,4 +251,77 @@ tangentSnapCandidates(
     EntityId entity,
     Point2 base) noexcept;
 
+[[nodiscard]] bool trackingAnchorEligible(
+    SnapKind kind) noexcept;
+
+struct TrackingAnchor final {
+    SnapCandidate snap;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return snap.valid() &&
+               trackingAnchorEligible(snap.kind);
+    }
+
+    friend bool operator==(
+        const TrackingAnchor&,
+        const TrackingAnchor&) = default;
+};
+
+enum class TrackingAcquireResult : std::uint8_t {
+    acquired,
+    already_acquired,
+    full,
+    invalid,
+};
+
+struct TrackingAnchorState final {
+    std::vector<TrackingAnchor> anchors;
+
+    [[nodiscard]] TrackingAcquireResult acquire(
+        TrackingAnchor anchor);
+    [[nodiscard]] bool remove(
+        const SnapStableKey& key);
+    void clear() noexcept {
+        anchors.clear();
+    }
+
+    [[nodiscard]] bool valid() const noexcept;
+};
+
+enum class InferenceGuideKind : std::uint8_t {
+    sketch_u,
+    sketch_v,
+    additional_direction,
+};
+
+struct InferenceGuide final {
+    SnapStableKey anchor_key;
+    Point2 anchor;
+    Point2 direction;
+    InferenceGuideKind kind{
+        InferenceGuideKind::sketch_u};
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const InferenceGuide&,
+        const InferenceGuide&) = default;
+};
+
+[[nodiscard]] std::vector<InferenceGuide>
+trackingGuides(
+    const TrackingAnchorState& state,
+    const std::vector<Point2>&
+        additional_directions = {});
+
+[[nodiscard]] std::optional<Point2>
+guideIntersection(
+    const InferenceGuide& first,
+    const InferenceGuide& second) noexcept;
+
+[[nodiscard]] std::optional<Point2>
+projectPointToGuide(
+    const InferenceGuide& guide,
+    Point2 point) noexcept;
+
 } // namespace simplesolid2::sketch

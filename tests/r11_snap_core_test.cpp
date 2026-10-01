@@ -767,6 +767,162 @@ int main() {
                  .has_value());
     }
 
+    // OTRACK core is runtime-only: exactly two semantic anchors, no FIFO
+    // eviction, and only stable semantic snap-point families are eligible.
+    {
+        TrackingAnchorState tracking;
+
+        const SnapCandidate first_anchor{
+            {1.0, 2.0},
+            SnapKind::endpoint,
+            {
+                SnapSourceKind::entity_point,
+                horizontal,
+                std::nullopt,
+                SnapSemanticRole::line_start,
+                0U}};
+        const SnapCandidate second_anchor{
+            {5.0, 7.0},
+            SnapKind::intersection,
+            {
+                SnapSourceKind::intersection,
+                horizontal,
+                vertical,
+                SnapSemanticRole::intersection,
+                0U}};
+        const SnapCandidate third_anchor{
+            {20.0, 0.0},
+            SnapKind::center,
+            {
+                SnapSourceKind::entity_point,
+                circle,
+                std::nullopt,
+                SnapSemanticRole::circle_center,
+                0U}};
+        const SnapCandidate invalid_tracking_anchor{
+            {4.0, 0.0},
+            SnapKind::nearest,
+            {
+                SnapSourceKind::entity_curve,
+                horizontal,
+                std::nullopt,
+                SnapSemanticRole::curve_nearest,
+                0U}};
+
+        CHECK(
+            tracking.acquire({first_anchor}) ==
+            TrackingAcquireResult::acquired);
+        CHECK(
+            tracking.acquire({first_anchor}) ==
+            TrackingAcquireResult::
+                already_acquired);
+        CHECK(
+            tracking.acquire(
+                {invalid_tracking_anchor}) ==
+            TrackingAcquireResult::invalid);
+        CHECK(
+            tracking.acquire({second_anchor}) ==
+            TrackingAcquireResult::acquired);
+        CHECK(tracking.anchors.size() == 2U);
+        CHECK(
+            tracking.acquire({third_anchor}) ==
+            TrackingAcquireResult::full);
+        CHECK(tracking.anchors.size() == 2U);
+        CHECK(
+            tracking.anchors[0].snap ==
+            first_anchor);
+        CHECK(
+            tracking.anchors[1].snap ==
+            second_anchor);
+
+        const auto guides =
+            trackingGuides(
+                tracking,
+                {
+                    {1.0, 1.0},
+                    {-1.0, -1.0},
+                    {1.0, 0.0},
+                });
+        // U/V + one canonical diagonal per anchor. Negative duplicate and
+        // explicit +U duplicate are removed.
+        CHECK(guides.size() == 6U);
+
+        const auto first_u =
+            std::find_if(
+                guides.begin(),
+                guides.end(),
+                [&first_anchor](
+                    const InferenceGuide& guide) {
+                    return guide.anchor ==
+                               first_anchor.point &&
+                           guide.kind ==
+                               InferenceGuideKind::
+                                   sketch_u;
+                });
+        const auto first_v =
+            std::find_if(
+                guides.begin(),
+                guides.end(),
+                [&first_anchor](
+                    const InferenceGuide& guide) {
+                    return guide.anchor ==
+                               first_anchor.point &&
+                           guide.kind ==
+                               InferenceGuideKind::
+                                   sketch_v;
+                });
+        const auto second_u =
+            std::find_if(
+                guides.begin(),
+                guides.end(),
+                [&second_anchor](
+                    const InferenceGuide& guide) {
+                    return guide.anchor ==
+                               second_anchor.point &&
+                           guide.kind ==
+                               InferenceGuideKind::
+                                   sketch_u;
+                });
+        CHECK(first_u != guides.end());
+        CHECK(first_v != guides.end());
+        CHECK(second_u != guides.end());
+
+        const auto intersection =
+            guideIntersection(
+                *first_v,
+                *second_u);
+        CHECK(intersection.has_value());
+        CHECK((
+            *intersection ==
+            Point2{1.0, 7.0}));
+
+        const auto projection =
+            projectPointToGuide(
+                *first_u,
+                {9.0, 10.0});
+        CHECK(projection.has_value());
+        CHECK((
+            *projection ==
+            Point2{9.0, 2.0}));
+
+        CHECK(
+            !guideIntersection(
+                 *first_u,
+                 *second_u)
+                 .has_value());
+
+        CHECK(tracking.remove(
+            snapStableKey(first_anchor)));
+        CHECK(tracking.anchors.size() == 1U);
+        CHECK(
+            tracking.acquire({third_anchor}) ==
+            TrackingAcquireResult::acquired);
+        CHECK(tracking.anchors.size() == 2U);
+        tracking.clear();
+        CHECK(tracking.anchors.empty());
+        CHECK(tracking.valid());
+    }
+
     std::cout << "r11_snap_core_test passed\n";
     return 0;
 }
