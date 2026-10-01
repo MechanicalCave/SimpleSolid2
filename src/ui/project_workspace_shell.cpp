@@ -738,11 +738,26 @@ bool ProjectWorkspaceShell::eventFilter(
             event);
     }
 
+    const auto modifiers = key_event->modifiers();
+    const auto standard_history_modifiers =
+        modifiers == Qt::ControlModifier;
+    if (standard_history_modifiers &&
+        key_event->key() == Qt::Key_Z &&
+        document_undo_handler_) {
+        document_undo_handler_();
+        return true;
+    }
+    if (standard_history_modifiers &&
+        key_event->key() == Qt::Key_Y &&
+        document_redo_handler_) {
+        document_redo_handler_();
+        return true;
+    }
+
     if (cad_input_.synchronizeContext()) {
         refreshCadInputPresentation();
     }
 
-    const auto modifiers = key_event->modifiers();
     if ((modifiers & Qt::ControlModifier) ||
         (modifiers & Qt::AltModifier) ||
         (modifiers & Qt::MetaModifier)) {
