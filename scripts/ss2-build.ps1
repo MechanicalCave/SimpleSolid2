@@ -36,12 +36,19 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 . (Join-Path $PSScriptRoot "ss2-common.ps1")
 Import-SS2LocalEnvironment
 $cmake = Get-SS2CMakeExe
-$root = Get-SS2Root
-$build = Join-Path $root $BuildDir
+$build = Resolve-SS2BuildPath $BuildDir
 
 $buildArgs = @("--build", $build, "--config", $Config)
 if (-not $All) {
     $buildArgs += @("--target") + $targets
+}
+
+if ($env:SS2_BUILD_PARALLELISM) {
+    $jobs = 0
+    if (-not [int]::TryParse($env:SS2_BUILD_PARALLELISM, [ref]$jobs) -or $jobs -lt 1) {
+        throw "SS2_BUILD_PARALLELISM must be a positive integer."
+    }
+    $buildArgs += @("--parallel", "$jobs")
 }
 
 $mode = if ($All) { "ALL" } else { $targets -join "," }
