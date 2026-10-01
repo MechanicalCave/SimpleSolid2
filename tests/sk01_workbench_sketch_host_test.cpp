@@ -687,6 +687,9 @@ int main(int argc, char* argv[]) {
     auto* osnap_extension =
         workbench.findChild<QCheckBox*>(
             QStringLiteral("objectSnapExtensionCheck"));
+    auto* osnap_override =
+        workbench.findChild<QComboBox*>(
+            QStringLiteral("objectSnapOverrideCombo"));
     auto* polar_toggle =
         workbench.findChild<QPushButton*>(
             QStringLiteral("polarToggleButton"));
@@ -879,6 +882,11 @@ int main(int argc, char* argv[]) {
     CHECK(!osnap_tangent->isChecked());
     CHECK(!osnap_nearest->isChecked());
     CHECK(!osnap_extension->isChecked());
+    CHECK(osnap_override != nullptr);
+    CHECK(!osnap_override->isEnabled());
+    CHECK(
+        osnap_override->currentText() ==
+        QStringLiteral("Persistent"));
     CHECK(polar_toggle->isChecked());
     CHECK(!dyn_toggle->isChecked());
     CHECK(
@@ -1985,10 +1993,53 @@ int main(int argc, char* argv[]) {
     // Return to LINE for the existing Direct Distance scenarios.
     line_button->click();
     QApplication::processEvents();
+    CHECK(osnap_override->isEnabled());
+
+    // R11 Temporary Override is request-local only: selecting a family never
+    // mutates persistent modes/document history, a later choice replaces the
+    // earlier one, and acceptance consumes the one-shot override.
+    const auto override_settings_before =
+        workspace_shell.cadInteractionSettings();
+    const auto override_state_before =
+        session->document().state();
+    const auto override_revision_before =
+        session->document().revision();
+    const auto override_undo_before =
+        session->undoDepth();
+
+    osnap_override->setCurrentText(
+        QStringLiteral("INT"));
+    QApplication::processEvents();
+    CHECK(
+        osnap_override->currentText() ==
+        QStringLiteral("INT"));
+    osnap_override->setCurrentText(
+        QStringLiteral("NONE"));
+    QApplication::processEvents();
+    CHECK(
+        osnap_override->currentText() ==
+        QStringLiteral("NONE"));
+    CHECK(
+        workspace_shell.cadInteractionSettings() ==
+        override_settings_before);
+    CHECK(
+        session->document().state() ==
+        override_state_before);
+    CHECK(
+        session->document().revision() ==
+        override_revision_before);
+    CHECK(
+        session->undoDepth() ==
+        override_undo_before);
+
     viewport->emitSketchPointerXZ(
         viewer::SpatialPointerPhase::primary_press,
         100.0, 100.0,
         0.0, 0.0);
+    QApplication::processEvents();
+    CHECK(
+        osnap_override->currentText() ==
+        QStringLiteral("Persistent"));
     viewport->emitSketchPointerXZ(
         viewer::SpatialPointerPhase::move,
         140.0, 100.0,

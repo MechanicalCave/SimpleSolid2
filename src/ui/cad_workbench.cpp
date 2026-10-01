@@ -1343,6 +1343,59 @@ void CadWorkbench::buildUi() {
         QStringLiteral("Modes"),
         object_snap_modes);
 
+    object_snap_override_combo_ =
+        new QComboBox(
+            precision_operations_widget_);
+    object_snap_override_combo_->setObjectName(
+        QStringLiteral("objectSnapOverrideCombo"));
+    object_snap_override_combo_->addItem(
+        QStringLiteral("Persistent"),
+        -1);
+    const auto add_override =
+        [this](
+            const QString& text,
+            sketch::TemporarySnapOverrideKind value) {
+            object_snap_override_combo_->addItem(
+                text,
+                static_cast<int>(value));
+        };
+    add_override(
+        QStringLiteral("END"),
+        sketch::TemporarySnapOverrideKind::endpoint);
+    add_override(
+        QStringLiteral("MID"),
+        sketch::TemporarySnapOverrideKind::midpoint);
+    add_override(
+        QStringLiteral("CEN"),
+        sketch::TemporarySnapOverrideKind::center);
+    add_override(
+        QStringLiteral("QUAD"),
+        sketch::TemporarySnapOverrideKind::quadrant);
+    add_override(
+        QStringLiteral("INT"),
+        sketch::TemporarySnapOverrideKind::intersection);
+    add_override(
+        QStringLiteral("ORG"),
+        sketch::TemporarySnapOverrideKind::origin);
+    add_override(
+        QStringLiteral("PER"),
+        sketch::TemporarySnapOverrideKind::perpendicular);
+    add_override(
+        QStringLiteral("TAN"),
+        sketch::TemporarySnapOverrideKind::tangent);
+    add_override(
+        QStringLiteral("NEA"),
+        sketch::TemporarySnapOverrideKind::nearest);
+    add_override(
+        QStringLiteral("EXT"),
+        sketch::TemporarySnapOverrideKind::extension);
+    add_override(
+        QStringLiteral("NONE"),
+        sketch::TemporarySnapOverrideKind::none);
+    precision_form->addRow(
+        QStringLiteral("Temporary"),
+        object_snap_override_combo_);
+
     object_tracking_toggle_button_ =
         new QPushButton(
             precision_operations_widget_);
@@ -1749,6 +1802,49 @@ void CadWorkbench::buildUi() {
                 checked;
             if (!cad_interaction_settings_updater_(
                     std::move(settings))) {
+                refreshCadInteractionSettingsUi();
+            }
+        });
+
+    QObject::connect(
+        object_snap_override_combo_,
+        &QComboBox::currentIndexChanged,
+        this,
+        [this](int index) {
+            if (syncing_precision_ui_ ||
+                sketch_interaction_controller_ ==
+                    nullptr) {
+                return;
+            }
+
+            const auto request =
+                sketch_interaction_controller_->
+                    activePointRequest();
+            if (!request) {
+                refreshCadInteractionSettingsUi();
+                return;
+            }
+
+            const int value =
+                object_snap_override_combo_->
+                    itemData(index).toInt();
+            if (value < 0) {
+                if (request->temporary_snap_override) {
+                    if (!sketch_interaction_controller_->
+                            clearTemporarySnapOverride()) {
+                        refreshCadInteractionSettingsUi();
+                    }
+                }
+                return;
+            }
+
+            const auto override_kind =
+                static_cast<
+                    sketch::TemporarySnapOverrideKind>(
+                    value);
+            if (!sketch_interaction_controller_->
+                    setTemporarySnapOverride(
+                        override_kind)) {
                 refreshCadInteractionSettingsUi();
             }
         });
@@ -4179,6 +4275,27 @@ void CadWorkbench::refreshCadInteractionSettingsUi() {
         object_snap_extension_check_->setChecked(
             settings.object_snap.extension);
 
+        const auto point_request =
+            sketch_interaction_controller_->
+                activePointRequest();
+        object_snap_override_combo_->setEnabled(
+            point_request.has_value());
+        int override_index = 0;
+        if (point_request &&
+            point_request->temporary_snap_override) {
+            const int found =
+                object_snap_override_combo_->
+                    findData(
+                        static_cast<int>(
+                            *point_request->
+                                temporary_snap_override));
+            if (found >= 0) {
+                override_index = found;
+            }
+        }
+        object_snap_override_combo_->
+            setCurrentIndex(override_index);
+
         polar_toggle_button_->setChecked(
             settings.polar.enabled);
         polar_toggle_button_->setText(
@@ -4254,6 +4371,10 @@ void CadWorkbench::refreshCadInteractionSettingsUi() {
     } else {
         if (precision_status_label_ != nullptr) {
             precision_status_label_->clear();
+        }
+        if (object_snap_override_combo_ != nullptr) {
+            object_snap_override_combo_->setEnabled(false);
+            object_snap_override_combo_->setCurrentIndex(0);
         }
         if (circle_size_mode_label_ != nullptr) {
             circle_size_mode_label_->setVisible(false);

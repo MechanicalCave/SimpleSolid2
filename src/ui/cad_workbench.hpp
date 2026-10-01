@@ -301,6 +301,7 @@ private:
     QCheckBox* object_snap_tangent_check_{};
     QCheckBox* object_snap_nearest_check_{};
     QCheckBox* object_snap_extension_check_{};
+    QComboBox* object_snap_override_combo_{};
     QPushButton* object_tracking_toggle_button_{};
     QPushButton* polar_toggle_button_{};
     QLineEdit* polar_step_edit_{};
