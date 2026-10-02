@@ -375,7 +375,23 @@ E05 proves that geometry similarity is diagnostic only. Equal-area/same-axis dec
 
 The added neutral face diagnostics are transient evidence and do not freeze a durable selector schema.
 
-**Next:** execute E03 + E04 as one bounded split/merge cardinality package, then use those semantics in E02 multi-stage lineage.
+**Next:** execute E02 multi-stage Extrude -> Cut -> Fillet-style lineage using the accepted E03/E04 split/merge semantics.
+
+### E03 + E04 — split/merge cardinality
+
+**Status:** COMPLETED — PASS  
+**Exact source candidate:** `30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25`  
+**Kernel-focused:** #1274 — PASS  
+**Windows FULL:** #1275 — PASS  
+**False-Resolved:** 0
+
+See `work/PM-00A_E03_E04_SPLIT_MERGE_CARDINALITY_EVIDENCE.md`.
+
+E03/E04 establish fail-closed singular-reference cardinality across real OCCT Boolean history: split -> Ambiguous, deletion -> Missing, merge collapse -> Ambiguous without independent semantic meaning, and undeclared aggregate semantics -> Unsupported.
+
+They also prove that provider history asymmetry is not identity authority: Modified/Deleted bookkeeping can support diagnostics and reconstruction evidence but cannot choose a semantic winner by itself.
+
+**Next:** execute E02 multi-stage Extrude -> Cut -> Fillet-style lineage using the accepted E03/E04 split/merge semantics. E07 cold-rebuild matrix follows after E02.
 
 ## 8. Acceptance asymmetry
 
