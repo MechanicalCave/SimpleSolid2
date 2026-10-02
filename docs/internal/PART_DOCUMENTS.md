@@ -120,6 +120,33 @@ That provider edge is runtime evidence only. The semantic meaning remains the Pa
 
 E01 exact source candidate `476258b74751a251c1c4fdf7dabaa03b3da63976` passed Windows FULL #1228, including cold replay after Save/Close/Reopen and zero false-Resolved outcomes for the accepted E01 matrix.
 
+<!-- section-id: internal.part-documents.pm00a-e05-similarity -->
+## PM-00A E05 similarity guardrail evidence
+
+PM-00A E05 adds optional provider-neutral face geometry diagnostics to the transient Extrude evidence surface:
+
+- surface kind;
+- area;
+- centroid;
+- canonical surface axis.
+
+These values exist only to construct and inspect deliberately similar topology during architecture evidence. They are not semantic selectors, are not persisted, and cannot independently produce `Resolved`.
+
+E05 proves the following fail-closed behavior:
+
+- two equal coplanar side faces with the same diagnostic surface class, area and axis remain separate semantic targets because their Profile boundary-use provenance differs;
+- erasing one source EntityId and recreating the same geometric Line under a new EntityId does not transfer the old side identity; the old semantic target is `Missing`;
+- a surviving semantic side remains `Resolved` through provenance even when another face is geometrically closer to the target's previous centroid;
+- with semantic provenance intentionally omitted, multiple geometry-only candidates are `Ambiguous` and a unique geometry-only candidate is `Unsupported`; geometry similarity alone is never sufficient for `Resolved`.
+
+The cold E05 replay reconstructs these outcomes after Save/Close/Reopen without previous-process OCCT handles, provider caches, Viewer tokens or topology ordinals.
+
+The E01 regression was also tightened so semantic stability across an Extrude distance edit compares role/provenance/status/candidate cardinality rather than mutable geometry diagnostics.
+
+E05 exact source candidate `7e0d6109cf927a2e8d85d2794b5718dcc2feab22` passed Windows FULL #1252 with zero false-Resolved outcomes.
+
+This remains architecture evidence only. It does not add a persisted topology-reference schema, Body/Feature persistence, a Part Feature Tree or a product solid-modeling command.
+
 <!-- section-id: internal.part-documents.persistence -->
 ## Native Part persistence
 
