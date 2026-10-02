@@ -149,6 +149,28 @@ E01–E10 evidence may be accepted only after A0 PASS is recorded on an exact re
 
 A0 PASS does not activate durable Part schema or product solid modeling.
 
+## 5A. Phase A0 progress record
+
+### A0.1 — Build/Test Architecture
+
+**Status:** COMPLETED — PASS  
+**Exact candidate:** `5a3dc358a4e3c9828789db6294d0b8a140d6207a`  
+**Windows FULL:** #1199 — PASS
+
+A0.1 established and proved on one exact revision:
+
+- desktop build/test graph: PASS;
+- semantic/core Release with Qt and OCCT disabled: PASS;
+- kernel-native Release with OCCT required and Qt disabled: PASS;
+- `subsystem-kernel` selection: PASS;
+- fail-closed tier/subsystem metadata validation: PASS;
+- distinct CI-04 persistent build-tree fingerprint mode for kernel-native: PASS;
+- first real OCCT B-Rep construction/validity smoke evidence: PASS.
+
+No durable Body/Feature schema, persistent topology reference, Part Feature Tree behavior or user-facing solid operation was introduced.
+
+**A0 remains INCOMPLETE.** The next required slice is A0.2 — Evidence Harness Foundation: the minimal provider-neutral Kernel boundary, bounded OCCT adapter/evidence surface, B-Rep validation/lineage harness foundation and cold-model-rebuild harness. E01–E10 remain blocked until the full A0 completion gate passes.
+
 ## 6. Evidence model and invariants
 
 ### 6.1 Authored intent versus evaluated geometry
