@@ -33,7 +33,12 @@ void check(bool value, const char* expression, int line) {
         std::cerr
             << "SK-01 Workbench Sketch CHECK failed at line "
             << line << ": " << expression << '\n';
-        std::abort();
+        // The self-hosted Windows runner is interactive. MSVC Debug
+        // abort() opens a modal CRT dialog and turns a normal assertion
+        // failure into a 30 s CTest timeout. Exit with failure instead so
+        // CI reports the actual CHECK immediately without blocking the
+        // runner desktop.
+        std::exit(EXIT_FAILURE);
     }
 }
 
@@ -1875,10 +1880,14 @@ int main(int argc, char* argv[]) {
             ->model.entityCount() ==
         entities_before_profile_delete);
 
-    // Edit Profile deliberately clears Sketch entity selection. Re-select
-    // one current authored curve so the following regression proves the
-    // generic Delete key is owned by Sketch selection even while stale
-    // Profile presentation is re-established in the Tree.
+    // Edit Profile deliberately clears Sketch entity selection. Put the
+    // editor back into ordinary Select explicitly, then re-select one
+    // current authored curve. This freezes the intended precondition for
+    // the generic Delete ownership regression instead of relying on
+    // transient tool state left by Profile Edit + history restoration.
+    select_sketch_button_->click();
+    QApplication::processEvents();
+    CHECK(select_sketch_button_->isChecked());
     CHECK(!viewport->sketchScene().curves.empty());
     viewport->setSketchGripHit(std::nullopt);
     viewport->setSketchPointHit(
@@ -1892,6 +1901,9 @@ int main(int argc, char* argv[]) {
         120.0, 120.0,
         50.0, 50.0);
     QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
 
     // Re-establish stale Profile presentation while the Sketch selection
     // remains authoritative. Delete must remove only the selected Sketch
