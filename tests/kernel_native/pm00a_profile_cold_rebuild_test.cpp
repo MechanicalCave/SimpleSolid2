@@ -179,7 +179,7 @@ int main() {
 
     part::PartDocumentStore store;
     part::ProfileId profile_id;
-    sketch::SketchId sketch_id;
+    std::optional<sketch::SketchId> sketch_id;
     std::string before_fingerprint;
     EvidenceSnapshot before_evidence;
 
@@ -209,7 +209,7 @@ int main() {
         const auto rectangle =
             session.execute(
                 application::AddSketchRectangleCommand{
-                    sketch_id,
+                    *sketch_id,
                     session.document().revision(),
                     {0.0, 0.0},
                     {40.0, 30.0},
@@ -222,7 +222,7 @@ int main() {
         const auto circle =
             session.execute(
                 application::AddSketchCircleCommand{
-                    sketch_id,
+                    *sketch_id,
                     {20.0, 15.0},
                     5.0});
         CHECK(
@@ -231,7 +231,7 @@ int main() {
 
         const auto* source =
             session.document().findSketch(
-                sketch_id);
+                *sketch_id);
         CHECK(source != nullptr);
 
         const auto analysis =
@@ -268,7 +268,7 @@ int main() {
         const auto created =
             session.execute(
                 application::CreateProfileCommand{
-                    sketch_id,
+                    *sketch_id,
                     session.document().revision(),
                     *intent});
         CHECK(
@@ -328,7 +328,7 @@ int main() {
     CHECK(loaded.ok());
     CHECK(
         loaded.document->findSketch(
-            sketch_id) != nullptr);
+            *sketch_id) != nullptr);
     CHECK(
         loaded.document->findProfile(
             profile_id) != nullptr);
