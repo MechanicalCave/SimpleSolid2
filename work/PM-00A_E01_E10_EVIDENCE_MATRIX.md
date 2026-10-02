@@ -138,6 +138,25 @@ Goal: prove that similarity is diagnostic only.
 
 E05 is a mandatory zero-false-Resolved guardrail.
 
+## 9A. E05 execution result
+
+**E05 status:** COMPLETED — PASS  
+**Exact source candidate:** `7e0d6109cf927a2e8d85d2794b5718dcc2feab22`  
+**Windows FULL:** #1252 — PASS  
+**False-Resolved:** 0  
+**Evidence report:** `work/PM-00A_E05_SIMILARITY_FALSE_POSITIVE_EVIDENCE.md`
+
+All E05-01…E05-04 expectations are satisfied.
+
+The evidence deliberately separates diagnostic geometry from identity:
+
+- two equal coplanar side faces with the same surface class/area/axis remain distinct because their Profile boundary-use provenance differs;
+- deleting a semantic source and recreating the same geometry under a new EntityId leaves the old target Missing, including after cold reopen;
+- a surviving semantic target remains Resolved even when another side is geometrically closer to its previous centroid;
+- similarity-only evidence returns Ambiguous when multiple diagnostic matches exist and Unsupported when only one diagnostic match exists; it never returns Resolved.
+
+The neutral face diagnostics added for E05 are evidence-only and are not selector semantics or persistence.
+
 ## 10. E06 — full Revolve / periodic seam
 
 Goal: expose provider periodic/seam behavior without making the seam semantic identity.
