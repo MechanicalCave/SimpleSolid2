@@ -65,6 +65,16 @@ int main(int argc, char* argv[]) {
 
             bool ok = scene.valid();
             ok = ok && widget.setReferenceScene(scene);
+
+            widget.resetRuntimeDiagnostics();
+            ok = ok && widget.setReferenceScene(scene);
+            const auto same_reference_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 same_reference_metrics.
+                         update_current_viewer_calls == 0U &&
+                 same_reference_metrics.redraw_calls == 0U;
+
             ok = ok && widget.setStandardView(
                            viewer::StandardView::isometric);
             ok = ok && widget.setProjection(
@@ -235,7 +245,9 @@ int main(int argc, char* argv[]) {
                  widget.setProfilePreviewScene(
                      viewer::ProfilePreviewScene{}) &&
                  widget.setPresentationSelection(
-                     viewer::PresentationSelection{});
+                     viewer::PresentationSelection{}) &&
+                 widget.setProfileScene(
+                     viewer::ProfileScene{});
             const auto empty_runtime_metrics =
                 widget.runtimeDiagnostics();
             ok = ok &&
@@ -278,6 +290,22 @@ int main(int argc, char* argv[]) {
                  widget.setSketchDynamicInputOverlay(
                      dyn_overlay);
             widget.clearSketchDynamicInputOverlay();
+
+            // Empty authored Sketch replacement still clears a real scene
+            // once, then a repeated empty request is an exact no-op.
+            ok = ok &&
+                 widget.setSketchScene(
+                     viewer::SketchScene{});
+            widget.resetRuntimeDiagnostics();
+            ok = ok &&
+                 widget.setSketchScene(
+                     viewer::SketchScene{});
+            const auto empty_sketch_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 empty_sketch_metrics.
+                         update_current_viewer_calls == 0U &&
+                 empty_sketch_metrics.redraw_calls == 0U;
 
             result = ok ? EXIT_SUCCESS : EXIT_FAILURE;
             widget.close();
