@@ -8,6 +8,7 @@
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepGProp.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepSweep_Prism.hxx>
@@ -567,6 +568,46 @@ findEdgeByEndpoints(
         }
     }
     return std::nullopt;
+}
+
+[[nodiscard]] std::vector<TopoDS_Edge>
+findEdgesByEndpoints(
+    const TopoDS_Shape& shape,
+    const gp_Pnt& first,
+    const gp_Pnt& second) {
+    std::vector<TopoDS_Edge> matches;
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        const auto edge =
+            TopoDS::Edge(
+                explorer.Current());
+
+        TopoDS_Vertex v1;
+        TopoDS_Vertex v2;
+        TopExp::Vertices(
+            edge,
+            v1,
+            v2);
+        if (v1.IsNull() || v2.IsNull()) {
+            continue;
+        }
+
+        const auto p1 =
+            BRep_Tool::Pnt(v1);
+        const auto p2 =
+            BRep_Tool::Pnt(v2);
+
+        if ((nearPoint(p1, first) &&
+             nearPoint(p2, second)) ||
+            (nearPoint(p1, second) &&
+             nearPoint(p2, first))) {
+            matches.push_back(edge);
+        }
+    }
+    return matches;
 }
 
 [[nodiscard]] std::optional<TopoDS_Face>
