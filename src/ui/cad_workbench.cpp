@@ -2622,30 +2622,42 @@ void CadWorkbench::applyProfileProperties() {
 
 void CadWorkbench::deleteSelectedProfile() {
     auto* document_session = activeDocumentSession();
-    if (document_session == nullptr ||
-        !selected_profile_id_) {
+    if (document_session == nullptr) {
         return;
     }
 
-    const auto profile_id =
-        *selected_profile_id_;
+    std::optional<part::ProfileId> explicit_target =
+        selected_profile_id_;
 
     // SR-01: generic Delete remains owned by the active Sketch context,
     // but the explicitly named Delete Profile action remains a deliberate
     // Part command even while the source Sketch is open for editing.
+    //
+    // During Edit Profile, the semantic edit target remains authoritative
+    // even if Viewer/Tree selection presentation is cleared while entering
+    // the Profile tool. This is not a generic Delete fallback.
     if (sketch_interaction_controller_ &&
         sketch_interaction_controller_->active() &&
         sketch_interaction_controller_->profileToolActive()) {
         const auto edited_profile_id =
             sketch_interaction_controller_->
                 editedProfileId();
-        if (!edited_profile_id ||
-            *edited_profile_id != profile_id) {
+        if (!edited_profile_id) {
+            setStatusText(
+                QStringLiteral(
+                    "Finish or cancel the active Profile creation before deleting a Profile."));
+            return;
+        }
+
+        if (explicit_target &&
+            *explicit_target != *edited_profile_id) {
             setStatusText(
                 QStringLiteral(
                     "Finish or cancel the active Profile operation before deleting another Profile."));
             return;
         }
+
+        explicit_target = edited_profile_id;
 
         // Deleting the Profile currently being edited first discards only
         // its transient draft. The authored deletion below is still one
@@ -2653,6 +2665,11 @@ void CadWorkbench::deleteSelectedProfile() {
         sketch_interaction_controller_->
             cancelProfile();
     }
+
+    if (!explicit_target) {
+        return;
+    }
+    const auto profile_id = *explicit_target;
 
     if (sketch_interaction_controller_ &&
         sketch_interaction_controller_->active()) {
@@ -2825,6 +2842,13 @@ void CadWorkbench::requestEditProfile(
                 "Profile edit could not be activated."));
         return;
     }
+
+    // The Profile edit target is a semantic context of its own. Keep its
+    // Properties surface bound to that target even if entering the tool
+    // clears incidental Viewer/Tree presentation selection.
+    sketch_interaction_controller_->
+        setSelectedProfileForCadInput(profile_id);
+    refreshProfileProperties(profile_id);
 
     if (viewport_widget_ != nullptr) {
         viewport_widget_->setFocus(
