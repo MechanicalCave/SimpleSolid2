@@ -1,10 +1,10 @@
 # PM-00A — Part Modeling Architecture Evidence Gate
 
-**Status:** PROPOSED — INACTIVE  
-**Owner acceptance:** PENDING  
+**Status:** ACTIVE  
+**Owner acceptance:** 2026-10-02  
 **Decision class:** D2 architecture-evidence contract; no durable Part Feature schema or user-facing solid-modeling activation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.2  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.3  
 **Entry gate:** G0 Sketcher profile-authoring readiness PASS on `16df8d1940a1f438a66cbd6964a881ba24718c0d`  
 **Activation rule:** production/evidence implementation begins only after explicit Owner acceptance and synchronization through `work/ACTIVE.yaml`
 
@@ -428,15 +428,10 @@ After PM-00A:
 
 ## 16. Activation boundary
 
-This file is currently **PROPOSED — INACTIVE**.
+This file is **ACTIVE** after explicit Owner acceptance on 2026-10-02.
 
-Creating, reviewing or merging this proposal does not authorize implementation.
+Activation is authorized only after the synchronized activation candidate passes the repository governance gate.
 
-Activation requires explicit Owner acceptance followed by:
+The accepted implementation order begins with **Phase A0 — Verification Topology**. E01–E10 evidence may not be accepted before A0 PASS.
 
-- status transition to ACTIVE;
-- `work/ACTIVE.yaml -> active_work` set to this contract;
-- roadmap synchronization;
-- repository governance gate PASS.
-
-Only then may Phase A0 implementation begin.
+No acceptance of PM-00A authorizes durable Body/Feature schema, Part Feature Tree product behavior or user-facing solid modeling.
