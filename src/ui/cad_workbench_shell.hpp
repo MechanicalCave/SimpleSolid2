@@ -4,6 +4,7 @@
 
 class QHBoxLayout;
 class QLabel;
+class QSplitter;
 class QTreeWidget;
 class QVBoxLayout;
 class QWidget;
@@ -37,6 +38,7 @@ private:
     QVBoxLayout* properties_host_layout_{};
     QVBoxLayout* operations_host_layout_{};
     QLabel* status_{};
+    QSplitter* splitter_{};
 
     QWidget* editor_surface_{};
     QWidget* command_line_content_{};
