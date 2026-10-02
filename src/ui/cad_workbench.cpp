@@ -2623,15 +2623,44 @@ void CadWorkbench::applyProfileProperties() {
 void CadWorkbench::deleteSelectedProfile() {
     auto* document_session = activeDocumentSession();
     if (document_session == nullptr ||
-        !selected_profile_id_ ||
-        (sketch_interaction_controller_ &&
-         sketch_interaction_controller_->
-             active())) {
+        !selected_profile_id_) {
         return;
     }
 
     const auto profile_id =
         *selected_profile_id_;
+
+    // SR-01: generic Delete remains owned by the active Sketch context,
+    // but the explicitly named Delete Profile action remains a deliberate
+    // Part command even while the source Sketch is open for editing.
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active() &&
+        sketch_interaction_controller_->profileToolActive()) {
+        const auto edited_profile_id =
+            sketch_interaction_controller_->
+                editedProfileId();
+        if (!edited_profile_id ||
+            *edited_profile_id != profile_id) {
+            setStatusText(
+                QStringLiteral(
+                    "Finish or cancel the active Profile operation before deleting another Profile."));
+            return;
+        }
+
+        // Deleting the Profile currently being edited first discards only
+        // its transient draft. The authored deletion below is still one
+        // normal DeleteProfileCommand / history entry.
+        sketch_interaction_controller_->
+            cancelProfile();
+    }
+
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active()) {
+        sketch_interaction_controller_->
+            setSelectedProfileForCadInput(
+                std::nullopt);
+    }
+
     const auto result =
         document_session->execute(
             application::DeleteProfileCommand{
@@ -4169,10 +4198,19 @@ void CadWorkbench::refreshProfileProperties(
             QStringLiteral("—"));
     }
 
+    bool explicit_profile_delete_enabled = true;
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active() &&
+        sketch_interaction_controller_->profileToolActive()) {
+        const auto edited_profile_id =
+            sketch_interaction_controller_->
+                editedProfileId();
+        explicit_profile_delete_enabled =
+            edited_profile_id &&
+            *edited_profile_id == profile_id;
+    }
     delete_profile_button_->setEnabled(
-        !sketch_interaction_controller_ ||
-        !sketch_interaction_controller_->
-             active());
+        explicit_profile_delete_enabled);
 
     properties_stack_->setCurrentWidget(
         profile_properties_page_);
