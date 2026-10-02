@@ -76,6 +76,16 @@ Goal: prove exact Profile input can produce a valid solid while preserving usefu
 E01 completion evidence must include an explicit mapping table:
 `Profile boundary-use provenance -> generated side semantic role -> provider evidence`.
 
+## 5A. E01 execution result
+
+**E01 status:** COMPLETED — PASS  
+**Exact source candidate:** `476258b74751a251c1c4fdf7dabaa03b3da63976`  
+**Windows FULL:** #1228 — PASS  
+**False-Resolved:** 0  
+**Evidence report:** `work/PM-00A_E01_PROFILE_EXTRUDE_EVIDENCE.md`
+
+All E01-01…E01-06 expectations are satisfied. The provider-specific finding is that side-lineage collection must use the exact transient edge accepted by the provider's wire builder; that edge remains runtime evidence and is not semantic/durable identity.
+
 ## 6. E02 — Extrude → Cut → Fillet-style lineage
 
 Goal: determine what remains stable across multiple producer stages and an upstream edit.

@@ -19,15 +19,15 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - PM-00A Phase A0 Verification Topology is COMPLETED — PASS; A0.1 source FULL #1199 and A0.2/Phase A0 source FULL #1206 are recorded in the active contract
-  - work/PM-00A_E01_E10_EVIDENCE_MATRIX.md v1.0 freezes expected evidence outcomes before probe implementation
-  - implement E01 first: Profile with hole -> Extrude evidence, including start/end caps and side provenance from exact Profile boundary uses
-  - immediately follow E01 with E05 false-positive similarity probes before expanding the resolver
+  - PM-00A E01 Profile with hole -> Extrude evidence is COMPLETED — PASS on exact source candidate 476258b74751a251c1c4fdf7dabaa03b3da63976 with Windows FULL #1228 PASS and false-Resolved count 0
+  - implement E05 next: geometrically similar topology / false-positive protection, before split/merge and multi-stage lineage
+  - E05 must prove that provenance/semantic lineage, not area/normal/shape/proximity, determines Resolved; removed targets with similar decoys remain Missing
+  - preserve E01 provider finding: exact provider edges are transient lineage evidence only and never durable SS2 identity
   - preserve zero-false-Resolved, cold-rebuild parity, and separation of authored validity / reference resolution / geometric validity
-  - reuse the bounded neutral Kernel/OCCT evidence seams established by A0; do not expand them into durable Body/Feature schema or product solid-modeling behavior
   - PM-00B Part Feature Architecture Freeze remains separate after PM-00A evidence
   - PM-01 First Solid Vertical Slice, Body/Feature persistence, Part Feature Tree product behavior, Assembly/Drawing and multi-body remain inactive
 notes:
+  - E01 completed on exact source candidate 476258b74751a251c1c4fdf7dabaa03b3da63976 with Windows FULL #1228 PASS. Rectangle + Circle-hole Extrude roles, distance edit, dimension edit, cold replay and missing-source fail-closed behavior all passed with zero false Resolved.
   - PM-00A is ACTIVE under Part Modeling v1 Roadmap v1.3 after explicit Owner acceptance on 2026-10-02.
   - G0 Sketcher profile-authoring readiness is COMPLETED — PASS on exact candidate 16df8d1940a1f438a66cbd6964a881ba24718c0d.
   - Phase A0 completed on exact source candidate 8438cd739e55a390b1df8d4b7ddaa9e6c070e237 with Windows FULL #1206 PASS. Desktop, core-only no-Qt/no-OCCT and kernel-native Release OCCT-without-Qt all passed on that SHA.
