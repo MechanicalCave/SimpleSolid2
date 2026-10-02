@@ -8,7 +8,7 @@
 **Architecture:** ADR-0008, ADR-0009, ADR-0011, ADR-0012  
 **Current program:** Shared 2D Authoring / Part-hosted Sketcher with cross-cutting CAD Input dependency  
 **UX direction:** classical CAD interaction grammar, adapted to SS2 semantic ownership and command/transaction rules
-**Current scheduling:** R0–R12, WB-02, AUDIT-01 A–F and SR-01 are completed. Initial profile-authoring readiness evidence exposed bounded interaction-correctness, latency and shell-layout blockers. SR-02 is NEXT but inactive pending a separate accepted measurement-first Work Contract; SR-03 remains queued/inactive. The readiness checkpoint must be re-tested after SR-02 → SR-03. Split/Join remain deferred; Part Feature Tree and solid modeling remain inactive behind separate future gates.  
+**Current scheduling:** R0–R12, WB-02, AUDIT-01 A–F and SR-01 are completed. Initial profile-authoring readiness evidence exposed bounded interaction-correctness, latency and shell-layout blockers. SR-02 is ACTIVE by Owner acceptance on 2026-10-02 under its audit-amended measurement-first Work Contract; SR-03 remains queued/inactive. The readiness checkpoint must be re-tested after SR-02 → SR-03. Split/Join remain deferred; Part Feature Tree and solid modeling remain inactive behind separate future gates.  
 
 ## 1. Why v1.8 narrows R12 structural editing
 
@@ -30,7 +30,7 @@ R8  Measure / relational diagnostics — completed
 → R12 Trim / Extend / Extend Both to Virtual Intersection — completed
 → initial Sketcher profile-authoring readiness review — concrete blockers found
 → SR-01 Interaction Correctness and Profile UX — completed
-→ SR-02 Sketch Interaction & Presentation Latency — NEXT, inactive until separate contract acceptance
+→ SR-02 Sketch Interaction & Presentation Latency — ACTIVE, measurement-first
 → SR-03 Responsive Workbench Shell — queued, separate contract required
 → Sketcher profile-authoring readiness re-test
 → separate Part Feature Tree architecture gate
@@ -45,11 +45,11 @@ Five guardrails remain explicit:
 2. Standalone Show Dimensions is not a prerequisite for profile-authoring readiness; future viewport dimensions should follow the eventual authored/reference dimension architecture rather than pre-empt it.
 3. R12 structural editing is authorized only by the accepted `work/R12_TRIM_EXTEND_MUTUAL_EXTEND.md` identity/reference rules; Split/Join remain deferred and must not be inferred from Trim implementation.
 4. The profile-authoring checkpoint must have concrete acceptance evidence; it is not satisfied by a subjective statement that the Sketcher “feels sufficient”.
-5. Readiness findings are closed only through the bounded SR-01 → SR-02 → SR-03 stabilization sequence. SR-02 and SR-03 remain inactive until separately accepted, and none of these packages activates Part Feature Tree or solid modeling.
+5. Readiness findings are closed only through the bounded SR-01 → SR-02 → SR-03 stabilization sequence. SR-02 is active by separate Owner acceptance; SR-03 remains inactive until separately accepted. None of these packages activates Part Feature Tree or solid modeling.
 
 Ordinary RMB context remains deferred as a later UX-convergence item after the command set is broad enough to design the menu from stable operations. Existing already-accepted RMB semantics in command-first object collection remain unchanged.
 
-Roadmap v1.8 recorded the Owner-accepted narrowing and completed delivery of R12. R12 completed after final exact-head Windows FULL #1104 and Owner manual Windows PASS. Roadmap v1.9 records concrete post-R12 readiness findings and the bounded pre-Part stabilization sequence SR-01 → SR-02 → SR-03 → readiness re-test. SR-01 completed on 2026-10-02 after exact-head Windows FULL #1128 and Owner manual Windows PASS on the same runtime candidate. SR-02 is next but remains inactive until separately accepted; SR-03 also remains inactive. Split/Join and R13+ remain inactive.
+Roadmap v1.8 recorded the Owner-accepted narrowing and completed delivery of R12. R12 completed after final exact-head Windows FULL #1104 and Owner manual Windows PASS. Roadmap v1.9 records concrete post-R12 readiness findings and the bounded pre-Part stabilization sequence SR-01 → SR-02 → SR-03 → readiness re-test. SR-01 completed on 2026-10-02 after exact-head Windows FULL #1128 and Owner manual Windows PASS on the same runtime candidate. SR-02 is active by explicit Owner acceptance on 2026-10-02; SR-03 remains inactive. Split/Join and R13+ remain inactive.
 
 ## 2. Preserved accepted invariants
 
@@ -872,14 +872,14 @@ R12 completed — final exact-head Windows FULL #1104; Owner manual Windows PASS
 R13–R15 inactive  
 Initial Sketcher profile-authoring readiness review — concrete blockers recorded; checkpoint not passed  
 SR-01 Interaction Correctness and Profile UX — completed 2026-10-02 after Windows FULL #1128 and Owner manual Windows PASS  
-SR-02 Sketch Interaction & Presentation Latency — NEXT/inactive; separate measurement-first Work Contract required  
+SR-02 Sketch Interaction & Presentation Latency — ACTIVE by Owner acceptance 2026-10-02; audit-amended measurement-first contract  
 SR-03 Responsive Workbench Shell — queued/inactive; separate Work Contract required  
 Sketcher profile-authoring readiness re-test — blocked until SR-01, SR-02 and SR-03 complete  
 Part Feature Tree architecture gate inactive  
 Solid modeling / Extrude inactive  
 Ordinary Select RMB context menu deferred as a later UX-convergence slice
 
-Roadmap v1.9 is authoritative for Sketcher feature sequencing. R9–R12 and SR-01 are completed. Concrete readiness evidence still requires SR-02 → SR-03 before the readiness re-test. No production stabilization package is active; SR-02 is next but inactive pending its separate accepted Work Contract. Split/Join and R13+ remain inactive; no Part Feature Tree or solid-modeling scope is active.
+Roadmap v1.9 is authoritative for Sketcher feature sequencing. R9–R12 and SR-01 are completed. Concrete readiness evidence still requires SR-02 → SR-03 before the readiness re-test. SR-02 is the only active production stabilization package; its audit-amended measurement-first Work Contract is authoritative. Split/Join and R13+ remain inactive; no Part Feature Tree or solid-modeling scope is active.
 
 ## AUDIT-01 program interlock — completed
 

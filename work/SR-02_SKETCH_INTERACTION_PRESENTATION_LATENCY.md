@@ -1,8 +1,8 @@
 # SR-02 — Sketch Interaction & Presentation Latency Stabilization
 
-**Status:** PROPOSED / INACTIVE  
+**Status:** ACTIVE  
 **Proposed:** 2026-10-02  
-**Owner acceptance:** pending  
+**Owner acceptance:** 2026-10-02  
 **Decision class:** bounded D1 measurement/runtime optimization under existing ownership; STOP for D2 if a public Viewer mutation protocol, differential authored-scene architecture, new subsystem ownership or CAD semantic change is required  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Architecture:** ADR-0003, ADR-0006, ADR-0008, ADR-0009, ADR-0010, ADR-0011, ADR-0012  
@@ -58,6 +58,14 @@ The current codebase contains several plausible hot paths that must be measured 
 
 These are investigation hypotheses, not pre-approved root-cause conclusions.
 
+The accepted pre-activation audit also confirmed three concrete pieces of repeated work that Phase A must measure explicitly:
+
+- `QtOcctViewerWidget::querySketchPresentations()` accumulates semantic rectangle-query hits in a vector and performs a linear token lookup for every presentation segment. With 5,000 distinct Line tokens this implies `0 + 1 + ... + 4,999 = 12,497,500` token comparisons for one full query pass. This is a static algorithmic count, not a latency measurement.
+- Profile hover can call `part::applyProfileAreaEdit()`, which performs its own `sketch::analyzeRegions(model)` even when the controller's outer Profile-analysis cache is fresh. `resolveProfileRegionIntent()` can also fall back to region analysis on invalid boundary reconstruction. The local Profile cache rebuild counter is therefore not a complete measure of region-analysis work.
+- common-transform preview currently resolves the same pointer event before preview-stage dispatch and again inside `updateCommonTransformPreview()`. Removing this duplication is allowed only with event-sequence tests because pointer resolution updates OSNAP/OTRACK runtime state.
+
+These findings strengthen the measurement plan; they do not pre-authorize a particular implementation beyond the D1 boundaries below.
+
 ## 4. Historical E2 evidence
 
 E2 measured the earlier presentation stack on the supported Windows runner and classified the then-current design KEEP CURRENT REBUILD.
@@ -76,41 +84,55 @@ Those measurements predate the later R10–R12 interaction stack and SR-01. SR-0
 
 Before performance-changing production code, create durable measurement evidence for the current SR-01-complete baseline.
 
-Measure at minimum:
+Measure the complete user-relevant pipeline, not only isolated setter duration.
 
-- pointer move → resolved semantic point/candidate → preview submission → provider presentation completion for Line;
-- the same for Circle and Arc preview;
-- a representative selection/direct-manipulation or common-transform preview;
-- accepted Sketch mutation → authored presentation refresh;
-- `Finish Sketch` request → transient teardown → stable non-edit presentation;
-- Profile hover/analysis interaction where Profile tooling is active.
+At minimum measure:
+
+- Line pointer event → semantic resolution/snap/query work → preview geometry → provider scene submission → final redraw completion;
+- the same full path for Circle and Arc preview;
+- one common-transform/direct-manipulation preview from input event through transform calculation and final redraw;
+- accepted Sketch mutation → authoritative authored refresh → final redraw completion;
+- `Finish Sketch` request → transient teardown → final non-edit scene → final redraw completion;
+- Profile hover with no draft and with an existing draft, including all region-analysis work reached through controller, `applyProfileAreaEdit()` and any fallback resolution paths;
+- representative rectangle/nearby queries at increasing scene sizes.
+
+The end of a provider setter is not automatically the end of presentation latency. If rendering is deferred or coalesced, evidence must include the execution of the final redraw and must verify that the intended frame becomes visible. Setter-return timing may be recorded separately but cannot substitute for event-to-visible evidence.
 
 Record for each scenario, where practical:
 
 - semantic entity count;
-- derived presentation segment/object count;
-- relevant cache rebuild/hit counts;
-- nearby-query candidate count;
+- derived presentation segment/native-object count;
+- total `resolvePointerInput` invocation count per logical event;
+- total `analyzeRegions` invocation count across the complete call path;
+- Profile hover cache hit/miss count;
+- static snap cache hit/miss count;
+- nearby/rectangle-query candidate count, presentation segments scanned and semantic-token comparisons where relevant;
 - provider scene-set call count;
-- provider redraw/update count;
-- median, p95 and max elapsed time over a bounded sample set.
+- `UpdateCurrentViewer` and `Redraw` call counts;
+- semantic/controller CPU time, provider/presentation time and complete event-to-visible elapsed time where measurable;
+- p50/median, p95 and max over a bounded but meaningful sample set.
+
+Where p95 is reported, sample count must be materially more representative than the historical E2 3–7 sample timing cells; exact sample counts remain D1 but must be recorded with the result and justified if bounded by runner timeout.
 
 Measurements must distinguish semantic/controller work from provider/presentation work enough to prevent optimizing the wrong layer.
 
 ## 6. Phase A workloads
 
-Use deterministic fixtures that include:
+Use deterministic fixtures that include, where the scenario is applicable:
 
-- small ordinary engineering Sketch;
-- medium Line-heavy Sketch;
-- medium mixed Line/Circle/Arc Sketch;
-- a larger bounded fixture sufficient to expose scaling without exceeding normal CI timeout;
-- at least one Profile-capable closed-region fixture;
-- the Owner-reported manual workflow: active drawing followed by Finish Sketch.
+- approximately 100 / 1,000 / 5,000 Line entities so current results can be compared with E2 scale evidence;
+- a mixed Line/Circle/Arc fixture that exposes presentation-segment/native-object multiplication;
+- a dense-intersection fixture that exercises intersection-capable snapping/query behavior;
+- a Profile-capable closed-region fixture with no draft;
+- a Profile-capable fixture with an existing draft and repeated hover in Add/Subtract modes;
+- transform/direct-manipulation preview;
+- the Owner-reported workflow: active drawing → Finish Sketch → re-enter Sketch Edit.
 
-The existing E2 benchmark harness may be reused or extended.
+Record cold-cache and warm-cache behavior separately where caching applies.
 
-Exact fixture sizes are D1, but results must retain semantic entity counts and derived/native object counts so old E2 evidence and current evidence can be compared honestly.
+The existing E2 benchmark harness may be reused or extended, but E2's prepared-geometry transform preview is not sufficient by itself because SR-02 requires the current full input → snap/query → transform calculation → presentation path.
+
+Exact fixture sizes and sample counts are D1 if runner constraints require adjustment, but results must retain semantic entity counts, native/derived object counts and enough samples to support any reported percentile honestly.
 
 ## 7. Optimization rule
 
@@ -119,62 +141,89 @@ No production optimization is accepted solely from static inspection.
 Each changed hot path must have:
 
 - a measured or deterministic call-count baseline;
-- a specific hypothesis;
+- a specific hypothesis tied to its measured share of delay or proven repeated work;
 - a bounded implementation;
 - equivalent semantic/result tests;
-- before/after evidence.
+- before/after evidence on the same scenario.
 
-An optimization that merely moves cost elsewhere or changes interaction semantics is not an SR-02 success.
+Optimization order is driven by measured contribution to user-visible delay. The list below is a risk-minimizing default, not a requirement to optimize a low-impact cache before a dominant redraw or query cost.
+
+An optimization that merely moves cost elsewhere, makes a setter return earlier while the visible frame remains late, or changes interaction semantics is not an SR-02 success.
 
 ## 8. Authorized optimization order
 
-After Phase A evidence, optimize in this order unless measurements clearly disprove an earlier hypothesis.
+After Phase A, prefer the smallest independently measurable changes that remove proven repeated work. Re-measure after each class before escalating.
 
-### 8.1 Revision-keyed semantic/runtime caches
+### 8.1 Remove proven repeated work first
 
-Allowed:
+Allowed and specifically targeted:
 
-- cache static snap candidate catalogs by active `SketchId`, current Document/Sketch revision-equivalent generation and relevant snap-mode set;
-- reuse cached read-only semantic data across pointer samples while authored state and eligibility inputs are unchanged;
-- invalidate deterministically on authored mutation, Sketch/context change or settings change;
-- key Profile analysis cache by authoritative revision/generation data rather than copying/comparing complete Sketch state when equivalent freshness can be proven.
+- resolve one common-transform/direct-manipulation preview event once and pass that resolved semantic result through the remaining transform-preview path; do not silently re-resolve the same event;
+- replace the current quadratic semantic-token accumulation in rectangle query with a fast accumulator while preserving stable result order and exact window/crossing semantics;
+- cache static snap candidate catalogs while authored state and relevant snap eligibility/settings are unchanged;
+- avoid full `SketchModel::state()` copies used only to prove freshness when an authoritative generation/revision key can prove the same condition;
+- reuse already-computed Profile analysis and Profile-hover results when the complete semantic cache key is unchanged.
+
+Removing a duplicate resolver requires regression evidence for event sequences, snap capture, OTRACK acquisition/hysteresis and temporary overrides because pointer resolution mutates runtime inference state.
+
+Replacing token accumulation must preserve deterministic token/result ordering. An unordered lookup may be used as an index only if output order remains equivalent to the baseline.
+
+### 8.2 Cache keys and invalidation are semantic preconditions
+
+A cache keyed only by a raw revision number is insufficient.
+
+At minimum semantic/runtime caches must bind the relevant combination of:
+
+- owning Document/session context identity;
+- active `SketchId`;
+- authoritative Document revision or equivalent Sketch generation;
+- relevant OSNAP/OTRACK/Polar/DYN or tool-mode settings;
+- any request-local override or eligibility state that changes the computed result.
+
+Profile hover reuse additionally binds:
+
+- current draft `RegionIntent` or absence of draft;
+- hovered/target region identity/index as applicable;
+- Add/Subtract mode;
+- any Profile presentation/runtime option that changes the computed hover result rather than presentation only.
+
+A screen-space projection or spatial index additionally depends on camera/projection state, viewport dimensions and device-pixel-ratio/DPI. A Profile draft or edit-session change has its own invalidation even when authored revision is unchanged.
 
 Caches are runtime-only. Cache contents never become authored identity, persistence or topology authority.
 
-### 8.2 Avoid unnecessary full-state copies
+### 8.3 Coalesce private presentation work without hiding latency
 
-Where a hot path currently calls `SketchModel::state()` only to inspect unchanged authored geometry, SR-02 may replace that use with:
+SR-02 may introduce one private provider-side render-request/coalescing mechanism if Phase A shows redundant flushes.
 
-- existing direct semantic lookup;
-- bounded const traversal/view helpers exposing the already-authored Line/Circle/Arc entities;
-- revision-keyed cached derived data.
+Allowed behavior:
 
-Any new read-only Shared-2D accessor must expose existing semantic entities only. It must not create a second model, alternate identity or mutable bypass around commands/transactions.
+- setters synchronously validate and update their runtime scene/object state;
+- exact no-op scene replacement may be suppressed;
+- multiple render requests created by one logical interaction may be coalesced into the necessary final redraw;
+- private object replacement may be batched before that redraw;
+- semantic pointer/event processing is **not** dropped or coalesced merely to reduce rendering work.
 
-### 8.3 Conservative spatial acceleration
+Deferring rendering is allowed only while E2 provider-failure reporting remains truthful. If a setter can return success before a later redraw that may fail and the existing bool-returning boundary can no longer report that failure coherently, STOP for Owner review. A new public completion callback/batch API or changed `IDocumentViewport` success semantics is D2.
 
-A private runtime spatial prefilter/index may accelerate nearby Sketch presentation/entity queries if:
+Performance evidence must measure final redraw/visible completion, not only faster setter return.
 
+### 8.4 Conservative spatial acceleration only after re-measurement
+
+Do not introduce a spatial index merely because a full scan exists.
+
+After the repeated-work and render-coalescing changes above are measured, a private runtime spatial prefilter/index may accelerate remaining nearby/rectangle queries if:
+
+- evidence shows query scanning is still material;
 - it is conservative and cannot omit an entity that the existing full scan would consider;
-- exact semantic snap eligibility/ranking remains unchanged after candidate reduction;
-- it is rebuilt/invalidated from current authored/presentation state deterministically;
+- exact semantic snap eligibility/ranking remains the final arbiter;
+- no fixed "first N objects" cutoff is used;
+- it is rebuilt/invalidated deterministically from current authored/presentation/camera state;
 - it is not persisted;
 - provider/runtime identity remains non-authoritative.
 
-A changed snap result, changed aperture meaning or changed exact intersection semantics is outside D1.
+Tests must cover camera/zoom/DPI changes, window/crossing selection and equal/ranking-sensitive hits where applicable.
 
-### 8.4 Coalesced transient presentation
-
-SR-02 may reduce redundant clear/set/redraw work so one logical pointer sample causes only the necessary final transient presentation update.
-
-Allowed private changes include:
-
-- suppressing exact no-op transient scene replacement;
-- batching internal provider object replacement before one redraw/update;
-- avoiding multiple viewer flushes generated by one logical preview/snap/inference state update;
-- reusing private runtime provider objects where their identity has no semantic meaning.
-
-This may not change public `IDocumentViewport` ownership or make provider objects stable CAD identity.
+A changed snap result, aperture meaning, selection result or exact intersection semantics is outside D1.
 
 ### 8.5 Finish Sketch presentation batching
 
@@ -182,20 +231,22 @@ Leaving Sketch edit should not visually dismantle the scene in multiple external
 
 SR-02 may:
 
-- clear transient preview/selection/profile-edit overlays as one bounded runtime transition;
-- avoid redundant intermediate redraws;
+- prepare transient preview/selection/profile-edit cleanup before requesting the final frame;
+- avoid intermediate redraws during teardown;
 - perform one final authoritative refresh from the current Document after edit context closes;
 - preserve the existing final selection/visibility/camera semantics.
+
+Success requires both no externally visible intermediate teardown frame **and** acceptable measured latency. Replacing several visible stages with one equally long blocking pause is not by itself a performance success.
 
 No authored operation may be deferred, skipped or fused across transaction/history boundaries merely to improve appearance.
 
 ### 8.6 Native object multiplication
 
-If Phase A confirms Circle/Arc segmentation/native-object multiplication materially contributes to latency, SR-02 may apply bounded presentation-only optimization inside the existing provider contract.
+If remeasurement shows Circle/Arc segmentation/native-object multiplication still dominates after lower-risk work, SR-02 may apply bounded presentation-only optimization inside the existing provider contract.
 
-Allowed examples include private batching/aggregation or adaptive derived presentation detail that preserves the accepted visual/selection semantics.
+Prefer reducing native-object count by grouping/aggregating the already-derived segments before changing curve sampling density, because changing segmentation can alter current selection/query approximation and requires a stronger equivalence proof.
 
-If this requires a new public curve primitive protocol, new durable sub-element identity or changed semantic picking, STOP for Owner review.
+If optimization requires a new public curve primitive protocol, new durable sub-element identity or changed semantic picking, STOP for Owner review.
 
 ## 9. Public Viewer architecture boundary
 
@@ -228,14 +279,15 @@ Faster but semantically different is a failure.
 
 ## 11. Scope IN
 
-- current-stack Windows latency/call-count instrumentation and durable benchmark evidence;
-- pointer-resolution hot-path profiling;
+- current-stack Windows event-to-visible latency/call-count instrumentation and durable benchmark evidence;
+- pointer-resolution hot-path profiling and removal of same-event duplicate resolver work;
+- linear-or-better semantic-token accumulation for rectangle query while preserving deterministic result order;
 - static snap candidate cache/reuse where evidence supports it;
 - removal of unnecessary hot-path full-state copies;
-- Profile-analysis freshness optimization without topology change;
-- conservative private spatial prefilter/index for presentation/entity queries;
+- complete Profile-analysis/hover freshness optimization, including work reached through `applyProfileAreaEdit()`, without topology change;
+- conservative private spatial prefilter/index for presentation/entity queries only after remeasurement justifies it;
 - transient preview no-op suppression/coalescing;
-- private Qt/OCCT redraw/update batching;
+- private Qt/OCCT redraw/update batching that preserves E2 failure reporting;
 - Finish Sketch transient teardown/final-refresh batching;
 - bounded presentation-only Circle/Arc native-object optimization if measured necessary;
 - automated semantic-equivalence and call-count regressions;
@@ -284,16 +336,22 @@ Broad `cad_workbench.cpp` UI composition/layout changes belong to SR-03 and are 
 At minimum, prove:
 
 - passive pointer movement still does not rebuild unchanged authored Sketch scene;
-- cached static snap candidates are reused while revision/context/modes are unchanged and are invalidated on every relevant change;
+- one logical common-transform/direct-manipulation preview event invokes semantic pointer resolution once after the accepted optimization;
+- the one-resolver path preserves OSNAP/OTRACK/Polar/DYN result, ranking, capture/acquisition/hysteresis and temporary-override behavior for representative event sequences;
+- rectangle-query semantic token accumulation is linear-or-better in token lookup work and produces the same ordered token/result set as the baseline for window and crossing rules;
+- cached static snap candidates are reused while the complete context/revision/settings key is unchanged and are invalidated on every relevant change;
 - cached and uncached snap resolution produce identical semantic result/ranking for representative fixtures;
-- any spatial prefilter returns a conservative candidate superset/equivalent result versus the existing brute-force semantics;
-- Profile analysis cache freshness produces the same RegionCandidate/Profile diagnostic truth as the baseline implementation;
-- one logical transient preview sample does not create redundant provider redraw/update work after the accepted optimization;
+- total `analyzeRegions` call counts are observed across the entire Profile-hover call path, not only controller cache rebuilds;
+- repeated Profile hover with unchanged Document/Sketch revision, draft, target region and Add/Subtract mode performs no new region analysis after the accepted cache/reuse optimization;
+- cached and uncached Profile hover produce identical RegionCandidate/Profile diagnostic/composition truth;
+- any later spatial prefilter returns a conservative candidate superset/equivalent result versus brute-force semantics across camera/zoom/DPI and window/crossing cases;
+- one logical transient presentation batch does not create redundant provider redraw/update work after the accepted optimization;
 - exact no-op preview suppression creates no stale visible state;
 - accepted authored mutation still refreshes from authoritative Document state;
-- Finish Sketch leaves the same final authored/presentation/selection/camera state as baseline while reducing redundant intermediate presentation work where measured;
+- Finish Sketch leaves the same final authored/presentation/selection/camera state as baseline and emits no intermediate visible teardown frame after batching;
 - provider rejection still leaves authored revision/dirty/history state committed and recoverable exactly as E2 requires;
-- no runtime cache/index survives Document/Sketch context replacement incorrectly;
+- deferred/coalesced presentation, if used, cannot lose a provider failure because the setter returned before the failing work;
+- no runtime cache/index survives Document/Sketch/context/camera replacement incorrectly;
 - full existing desktop regressions remain green.
 
 ## 15. Performance evidence and acceptance
@@ -304,17 +362,22 @@ The evidence must show:
 
 - baseline and final exact SHAs;
 - machine/build configuration;
-- scenario/workload sizes;
-- median/p95/max where timing is meaningful;
-- relevant call counts;
-- native/derived object counts where material;
+- matched before/after scenario/workload sizes, including approximately 100/1,000/5,000 Lines where applicable, mixed curves, dense intersections, Profile-with-draft and drawing → Finish → re-enter;
+- cold-cache and warm-cache measurements where caching applies;
+- p50/median, p95 and max where timing is meaningful, with sample counts recorded;
+- semantic/controller CPU time and provider/presentation time where separable;
+- complete event-to-final-redraw/visible elapsed time for interactive scenarios;
+- resolver, region-analysis, query, setter, `UpdateCurrentViewer` and `Redraw` call counts relevant to the scenario;
+- presentation segments scanned, token-comparison counts and native/derived object counts where material;
 - a written explanation of which costs improved and which remain.
 
-No single timing number is a Product guarantee.
+No single timing number is a Product guarantee, and historical E2 ~33 ms observations must not be described as an unavoidable OCCT floor unless current evidence actually isolates such a floor.
 
-The package is accepted only if the reported interactive lag and Finish Sketch staging are materially improved in the Owner's manual Windows verification **and** the measurements show that the change reduced the intended runtime work rather than hiding it.
+The package is accepted only if the reported interactive lag and Finish Sketch staging are materially improved in the Owner's manual Windows verification **and** the measurements show that the change reduced the intended runtime work rather than merely making an API return earlier.
 
-If measured work is already dominated by an unavoidable provider frame floor and bounded D1 changes do not materially improve the Owner workflow, stop with evidence rather than introducing unaccepted architecture.
+A coherent Finish Sketch with no intermediate frames is necessary but not sufficient: one long blocking pause is still a latency problem.
+
+If bounded D1 changes do not materially improve the Owner workflow and the remaining cost requires a public/differential Viewer redesign, stop with evidence rather than introducing unaccepted architecture.
 
 ## 16. Manual Windows verification
 
@@ -338,11 +401,14 @@ All new caches, indexes, counters, timing instrumentation and provider batching 
 
 They must be cleared or invalidated on the appropriate:
 
+- owning Document/session context change;
 - authored revision/generation change;
 - Sketch context change;
+- Profile draft/edit-session or Add/Subtract-mode change where relevant;
+- OSNAP/OTRACK/Polar/DYN/tool/request-local settings change where relevant;
+- camera/projection, viewport-size or device-pixel-ratio/DPI change for screen-space caches/indexes;
 - Document switch/close;
-- Viewer/provider reset;
-- relevant runtime settings change.
+- Viewer/provider reset.
 
 No performance structure is serialized into CAD documents.
 
@@ -382,6 +448,7 @@ D1 may not alter CAD semantics, snap ranking/meaning, persistence, public Viewer
 Stop for Owner review if implementation requires or attempts:
 
 - a new public `IDocumentViewport` mutation API;
+- a new public render-completion callback/batch contract or changed setter-success semantics required to make deferred redraw failure reporting truthful;
 - provider-neutral differential authored-scene protocol;
 - stable provider/runtime token identity as semantic state;
 - persistence of caches/indexes/presentation state;
@@ -395,11 +462,11 @@ Stop for Owner review if implementation requires or attempts:
 
 ## 21. Activation and completion boundary
 
-This file is proposal-only and inactive.
+The Owner explicitly accepted SR-02 on 2026-10-02 together with the pre-activation audit amendments recorded in this contract: full event-to-visible measurement, complete Profile-hover region-analysis accounting, one-resolver transform-preview target, deterministic fast token accumulation, complete cache-key invalidation, redraw-completion evidence and evidence-driven optimization ordering.
 
-No SR-02 production implementation is authorized until the Owner explicitly accepts this exact Work Contract and the synchronized activation candidate updates `work/ACTIVE.yaml` to SR-02 and passes repository work/governance verification.
+The synchronized activation candidate must update `work/ACTIVE.yaml` and Roadmap v1.9 current state to SR-02 and pass repository work/governance verification before any performance-changing production implementation.
 
-After activation, Phase A measurement is the first production task. Phase B optimizations must follow the evidence and remain inside the D1 boundaries above.
+After that gate passes, Phase A measurement is the first production task. Optimization work must follow the measured contribution to latency and remain inside the D1 boundaries above.
 
 Completion requires:
 

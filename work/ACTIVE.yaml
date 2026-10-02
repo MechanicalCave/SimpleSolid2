@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SR-01_INTERACTION_CORRECTNESS_PROFILE_UX.md"
+status: active
+active_work: "work/SR-02_SKETCH_INTERACTION_PRESENTATION_LATENCY.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.9"
@@ -19,13 +19,20 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - SR-01 is complete; no production CAD Work Contract is active
-  - prepare the separate measurement-first SR-02 Sketch Interaction & Presentation Latency Work Contract for explicit Owner review and acceptance
-  - do not begin SR-02 production implementation until its synchronized activation candidate passes repository work/governance verification
+  - SR-02 is the only active production scope after the synchronized activation candidate passes work/governance verification
+  - execute Phase A first: measure full event-to-final-redraw latency and call counts on the current SR-01-complete Windows/Qt/OCCT stack before performance-changing code
+  - include approximately 100/1000/5000 Line workloads where applicable, mixed curves, dense intersections, Profile hover with an existing draft, transform preview and drawing -> Finish Sketch -> re-enter
+  - count complete-path resolvePointerInput and analyzeRegions invocations, rectangle/nearby query work, token comparisons, provider setters, UpdateCurrentViewer and Redraw calls; distinguish setter return from final visible presentation
+  - after baseline, remove proven repeated work first and re-measure each bounded change; spatial acceleration comes only after remeasurement shows remaining query cost
+  - preserve E2 provider-failure reporting; if deferred/coalesced redraw requires a new public completion/batch contract or changed IDocumentViewport success semantics, STOP for Owner D2 review
   - keep SR-03 responsive-shell work inactive until a separate Owner-accepted Work Contract
   - keep Split, Join, authored constraints/solver/dimensions, projected/reference geometry, ordinary Select RMB context, Axis/Centerline semantics, Part Feature Tree and solid modeling inactive
   - after SR-02 and SR-03 complete, perform the Sketcher profile-authoring readiness re-test before any Part Feature Tree architecture gate
 notes:
+  - Owner explicitly accepted the audit-amended SR-02 Sketch Interaction & Presentation Latency Work Contract on 2026-10-02.
+  - The accepted amendment makes optimization order evidence-driven and adds complete event-to-visible measurement, total region-analysis accounting across Profile hover, one-resolver transform-preview evidence, deterministic fast token accumulation, complete cache-key invalidation and redraw-completion/failure-reporting requirements.
+  - Static pre-activation findings include 12,497,500 token comparisons for one 5,000-distinct-Line rectangle-query accumulation pass in the current vector/find_if implementation, repeated analyzeRegions work reachable through applyProfileAreaEdit despite the outer Profile cache, and duplicate pointer resolution in current common-transform preview. These are investigation baselines, not timing claims.
+  - Production performance changes remain forbidden until this synchronized activation candidate passes work/governance verification.
   - SR-01 completed on 2026-10-02. Exact runtime/manual candidate 92d096c396ba0d3ba144d0626c8e96aa667b01af passed Windows FULL #1128 with core-only 16/16, desktop 83/83, warm FULL parity/comparative timing evidence and final windows-msvc PASS.
   - Owner manual Windows verification passed on the same exact runtime candidate 92d096c396ba0d3ba144d0626c8e96aa667b01af and confirmed the accepted generic Delete / explicit Delete Profile behavior works as intended.
   - This closeout candidate is work-only. SR-02 remains inactive and requires a separate measurement-first Owner-accepted Work Contract before production implementation.
