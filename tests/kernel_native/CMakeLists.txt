@@ -155,6 +155,13 @@ target_link_libraries(pm00a_e07_cold_parity_test
 
 target_compile_features(pm00a_e07_cold_parity_test PRIVATE cxx_std_20)
 
+add_dependencies(pm00a_e07_cold_parity_test
+    pm00a_e01_extrude_evidence_test
+    pm00a_e02_multistage_lineage_test
+    pm00a_e03_e04_cardinality_evidence_test
+    pm00a_e05_similarity_evidence_test
+)
+
 add_test(
     NAME pm00a.e07_cold_parity
     COMMAND pm00a_e07_cold_parity_test
