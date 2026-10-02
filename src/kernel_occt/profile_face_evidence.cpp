@@ -612,66 +612,6 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                 std::cerr << '\n';
             }
 
-            if (face_count != 1U) {
-                std::cerr
-                    << "E01_PROVIDER_DIAG source="
-                    << source.provenance.source_entity
-                    << " hole="
-                    << source.provenance.hole
-                    << " basis_matches="
-                    << basis_edges.size()
-                    << " generated_shapes="
-                    << generated_shape_count;
-
-                for (std::size_t index = 0U;
-                     index < basis_edges.size();
-                     ++index) {
-                    const auto& basis_edge =
-                        basis_edges[index];
-                    const TopoDS_Shape generated =
-                        sweep.Shape(basis_edge);
-                    const TopoDS_Shape first =
-                        sweep.FirstShape(basis_edge);
-                    const TopoDS_Shape last =
-                        sweep.LastShape(basis_edge);
-
-                    std::cerr
-                        << " edge[" << index << "]"
-                        << " is_used="
-                        << sweep.IsUsed(basis_edge)
-                        << " gen_is_used="
-                        << sweep.GenIsUsed(basis_edge)
-                        << " generated_null="
-                        << generated.IsNull()
-                        << " generated_type="
-                        << (generated.IsNull()
-                                ? -1
-                                : static_cast<int>(
-                                      generated.ShapeType()))
-                        << " generated_faces="
-                        << (generated.IsNull()
-                                ? 0U
-                                : countShapeOrSubshapes(
-                                      generated,
-                                      TopAbs_FACE))
-                        << " first_null="
-                        << first.IsNull()
-                        << " first_type="
-                        << (first.IsNull()
-                                ? -1
-                                : static_cast<int>(
-                                      first.ShapeType()))
-                        << " last_null="
-                        << last.IsNull()
-                        << " last_type="
-                        << (last.IsNull()
-                                ? -1
-                                : static_cast<int>(
-                                      last.ShapeType()));
-                }
-                std::cerr << '\n';
-            }
-
             evidence.sides.push_back({
                 kernel::ExtrudeFaceRoleKind::side,
                 referenceStatus(face_count),
