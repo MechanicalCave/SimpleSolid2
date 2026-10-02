@@ -258,7 +258,7 @@ CLOSURE
 
 Draft status is an iteration signal only. FAST is never accepted as merge evidence. Marking a runtime PR ready for review triggers FULL; every later runtime change on a ready PR also requires FULL.
 
-Ordinary root-level `tests/*_test.cpp` files are product regression content and may participate in FOCUSED/FAST draft iteration. Verification machinery remains FULL-sensitive, including `tests/CMakeLists.txt`, boundary/check scripts, `scripts/**`, any `CMakeLists.txt`, `ss2.ps1`, `ss2.cmd` and `.github/workflows/**`. Malformed focus trailers fail closed to FULL.
+Ordinary regression source files `tests/*_test.cpp` and `tests/kernel_native/*_test.cpp` may participate in FOCUSED/FAST draft iteration. Kernel-native test sources still require `SS2-Focus-Mode: kernel` to execute in the correct build tree. Verification machinery remains FULL-sensitive, including `tests/CMakeLists.txt`, `tests/kernel_native/CMakeLists.txt`, boundary/check scripts, `scripts/**`, any `CMakeLists.txt`, `ss2.ps1`, `ss2.cmd` and `.github/workflows/**`. Malformed focus trailers fail closed to FULL.
 
 For a PR that already has a successful `windows-msvc-full` job on an exact ancestor SHA, the classifier may still examine only the suffix after that trusted FULL SHA for DOCS/CLOSURE. FOCUSED and FAST results never become trusted FULL evidence.
 

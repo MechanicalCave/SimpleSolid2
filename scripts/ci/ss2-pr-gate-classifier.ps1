@@ -21,7 +21,10 @@ function Normalize-RepoPath {
 
 function Test-SS2OrdinaryTestContentPath {
     param([Parameter(Mandatory=$true)][string]$Path)
-    return $Path -match '^tests/[^/]+_test\.cpp$'
+    return (
+        $Path -match '^tests/[^/]+_test\.cpp$' -or
+        $Path -match '^tests/kernel_native/[^/]+_test\.cpp$'
+    )
 }
 
 function Test-SS2VerificationInfrastructurePath {
@@ -175,6 +178,9 @@ function Invoke-ClassifierSelfTest {
 
     Assert-GateMode -Paths @('tests/example_test.cpp') -Expected 'fast' -Draft $true
     Assert-GateMode -Paths @('tests/example_test.cpp') -Expected 'focused' -Draft $true -FocusState 'valid'
+    Assert-GateMode -Paths @('tests/kernel_native/pm00a_e05_similarity_evidence_test.cpp') -Expected 'fast' -Draft $true
+    Assert-GateMode -Paths @('tests/kernel_native/pm00a_e05_similarity_evidence_test.cpp') -Expected 'focused' -Draft $true -FocusState 'valid'
+    Assert-GateMode -Paths @('tests/kernel_native/CMakeLists.txt') -Expected 'full' -Draft $true
     Assert-GateMode -Paths @('tests/CMakeLists.txt') -Expected 'full' -Draft $true
     Assert-GateMode -Paths @('tests/verify_viewer_boundaries.cmake') -Expected 'full' -Draft $true
     Assert-GateMode -Paths @('scripts/ss2-build.ps1') -Expected 'full' -Draft $true
@@ -193,6 +199,10 @@ function Invoke-ClassifierSelfTest {
     }
     if (Test-SS2CleanFullForPaths @('src/sketch/sketch_model.cpp', 'tests/example_test.cpp')) {
         throw "Gate classifier self-test incorrectly required CLEAN FULL for ordinary source/test content."
+    }
+
+    if (Test-SS2CleanFullForPaths @('tests/kernel_native/pm00a_e05_similarity_evidence_test.cpp')) {
+        throw "Gate classifier self-test incorrectly required CLEAN FULL for ordinary kernel-native test content."
     }
 
     Write-Host '[gate] classifier self-test passed'
