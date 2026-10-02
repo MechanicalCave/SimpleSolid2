@@ -446,9 +446,39 @@ int main(int argc, char* argv[]) {
     CHECK(contains(after_orbit.tokens, long_token));
     CHECK(selection_intents == 0);
 
+    // SR-02: a semantic curve is presented as one OCCT wire object even
+    // though its neutral scene retains the exact derived segment chain.
+    // Native detection must still map the wire back to the one curve token.
+    CHECK(widget.setReferenceScene(
+        viewer::ReferenceScene{}));
+    const viewer::PresentationToken curve_token{
+        0x4201U};
+    viewer::SketchScene curve_scene;
+    curve_scene.curves.push_back(
+        viewer::SketchCurvePresentation{
+            curve_token,
+            {
+                {-20.0, 0.0, 0.0},
+                {-10.0, 0.0, 0.0},
+                {0.0, 0.0, 0.0},
+                {10.0, 0.0, 0.0},
+                {20.0, 0.0, 0.0},
+            },
+            false});
+    CHECK(curve_scene.valid());
+    CHECK(widget.setSketchScene(curve_scene));
+    CHECK(
+        widget.runtimeDiagnostics().
+            sketch_native_objects_current == 1U);
+    const auto curve_hit =
+        widget.querySketchPresentation(center);
+    CHECK(curve_hit.completed);
+    CHECK(curve_hit.token.has_value());
+    CHECK(*curve_hit.token == curve_token);
+
     // Package F: Construction is provider presentation only but must be
     // visibly distinct even when nothing is selected. Replacing the drawer
-    // aspect after Display() requires Redisplay() for AIS_Line.
+    // aspect after Display() requires Redisplay() for the Sketch object.
     viewer::SketchScene role_scene;
     role_scene.lines.push_back(
         viewer::SketchLinePresentation{
