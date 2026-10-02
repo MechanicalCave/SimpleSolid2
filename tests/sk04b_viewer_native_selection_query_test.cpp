@@ -507,6 +507,12 @@ int main(int argc, char* argv[]) {
             true});
     CHECK(curve_style_scene.valid());
 
+    // Isolate this diagnostic from the previous one-curve scene. The
+    // authored-scene setter first clears transient Measure cues, whose
+    // cleanup intentionally reapplies styles to the currently installed
+    // Sketch objects before replacing them.
+    CHECK(widget.setSketchScene(
+        viewer::SketchScene{}));
     widget.resetRuntimeDiagnostics();
     CHECK(widget.setSketchScene(
         curve_style_scene));
