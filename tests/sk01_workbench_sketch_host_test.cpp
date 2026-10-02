@@ -1875,6 +1875,24 @@ int main(int argc, char* argv[]) {
             ->model.entityCount() ==
         entities_before_profile_delete);
 
+    // Edit Profile deliberately clears Sketch entity selection. Re-select
+    // one current authored curve so the following regression proves the
+    // generic Delete key is owned by Sketch selection even while stale
+    // Profile presentation is re-established in the Tree.
+    CHECK(!viewport->sketchScene().curves.empty());
+    viewport->setSketchGripHit(std::nullopt);
+    viewport->setSketchPointHit(
+        viewport->sketchScene().curves.front().token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        120.0, 120.0,
+        50.0, 50.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        120.0, 120.0,
+        50.0, 50.0);
+    QApplication::processEvents();
+
     // Re-establish stale Profile presentation while the Sketch selection
     // remains authoritative. Delete must remove only the selected Sketch
     // entity, never the Profile.
