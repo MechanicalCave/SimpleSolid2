@@ -493,6 +493,47 @@ faceGeometryDiagnostics(
         axis};
 }
 
+[[nodiscard]] std::optional<TopoDS_Edge>
+makeEvidenceLineEdge(
+    double x0,
+    double y0,
+    double x1,
+    double y1) {
+    BRepBuilderAPI_MakeEdge make_edge{
+        gp_Pnt{x0, y0, 0.0},
+        gp_Pnt{x1, y1, 0.0}};
+    if (!make_edge.IsDone()) {
+        return std::nullopt;
+    }
+    return make_edge.Edge();
+}
+
+[[nodiscard]] bool validEvidenceEdge(
+    const TopoDS_Edge& edge) {
+    return BRepCheck_Analyzer{edge}.IsValid();
+}
+
+[[nodiscard]] double edgeLength(
+    const TopoDS_Edge& edge) {
+    GProp_GProps properties;
+    BRepGProp::LinearProperties(
+        edge,
+        properties);
+    return properties.Mass();
+}
+
+[[nodiscard]] bool nearMeasure(
+    double first,
+    double second) noexcept {
+    const double scale =
+        std::max({
+            1.0,
+            std::abs(first),
+            std::abs(second)});
+    return std::abs(first - second) <=
+           1.0e-9 * scale;
+}
+
 [[nodiscard]] std::vector<TopoDS_Edge>
 matchingFaceEdges(
     const TopoDS_Face& face,
@@ -735,6 +776,298 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
         evidence.shape.status =
             kernel::EvidenceStatus::provider_failure;
         return evidence;
+    }
+}
+
+
+kernel::CardinalityFixtureEvidence
+buildSplitEdgeCardinalityFixture(
+    const kernel::BoundaryUseProvenance& target,
+    SplitCardinalityFixture fixture) noexcept {
+    kernel::CardinalityFixtureEvidence result;
+    result.source_edge_count = 1U;
+
+    try {
+        const auto source =
+            makeEvidenceLineEdge(
+                0.0,
+                0.0,
+                100.0,
+                0.0);
+        if (!source ||
+            !validEvidenceEdge(*source)) {
+            return result;
+        }
+
+        const double source_length =
+            edgeLength(*source);
+
+        switch (fixture) {
+        case SplitCardinalityFixture::
+            two_semantic_descendants: {
+            const auto first =
+                makeEvidenceLineEdge(
+                    0.0,
+                    0.0,
+                    50.0,
+                    0.0);
+            const auto second =
+                makeEvidenceLineEdge(
+                    50.0,
+                    0.0,
+                    100.0,
+                    0.0);
+            if (!first || !second ||
+                !validEvidenceEdge(*first) ||
+                !validEvidenceEdge(*second)) {
+                return result;
+            }
+
+            result.physical_candidate_count =
+                2U;
+            result.provider_geometry_valid =
+                nearMeasure(
+                    edgeLength(*first) +
+                        edgeLength(*second),
+                    source_length);
+            result.candidates = {
+                {
+                    {target},
+                    true,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+                {
+                    {target},
+                    true,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+            };
+            result.source_history = {
+                {
+                    target,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+            };
+            break;
+        }
+
+        case SplitCardinalityFixture::
+            semantic_plus_technical: {
+            const auto intended =
+                makeEvidenceLineEdge(
+                    0.0,
+                    0.0,
+                    100.0,
+                    0.0);
+            const auto technical =
+                makeEvidenceLineEdge(
+                    50.0,
+                    0.0,
+                    50.0,
+                    10.0);
+            if (!intended || !technical ||
+                !validEvidenceEdge(*intended) ||
+                !validEvidenceEdge(*technical)) {
+                return result;
+            }
+
+            result.physical_candidate_count =
+                2U;
+            result.provider_geometry_valid =
+                nearMeasure(
+                    edgeLength(*intended),
+                    source_length) &&
+                edgeLength(*technical) > 0.0;
+            result.candidates = {
+                {
+                    {target},
+                    true,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+                {
+                    {target},
+                    false,
+                    kernel::
+                        ProviderLineageObservation::
+                            generated,
+                },
+            };
+            result.source_history = {
+                {
+                    target,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+            };
+            break;
+        }
+
+        case SplitCardinalityFixture::
+            deleted_target:
+            result.physical_candidate_count =
+                0U;
+            result.provider_geometry_valid =
+                true;
+            result.source_history = {
+                {
+                    target,
+                    kernel::
+                        ProviderLineageObservation::
+                            deleted,
+                },
+            };
+            break;
+        }
+
+        return result;
+    } catch (const Standard_Failure&) {
+        return result;
+    } catch (...) {
+        return result;
+    }
+}
+
+kernel::CardinalityFixtureEvidence
+buildMergeEdgeCardinalityFixture(
+    const kernel::BoundaryUseProvenance& first,
+    const kernel::BoundaryUseProvenance& second,
+    MergeCardinalityFixture fixture) noexcept {
+    kernel::CardinalityFixtureEvidence result;
+    result.source_edge_count = 2U;
+
+    try {
+        const auto first_source =
+            makeEvidenceLineEdge(
+                0.0,
+                0.0,
+                50.0,
+                0.0);
+        const auto second_source =
+            makeEvidenceLineEdge(
+                50.0,
+                0.0,
+                100.0,
+                0.0);
+        const auto merged =
+            makeEvidenceLineEdge(
+                0.0,
+                0.0,
+                100.0,
+                0.0);
+
+        if (!first_source ||
+            !second_source ||
+            !merged ||
+            !validEvidenceEdge(*first_source) ||
+            !validEvidenceEdge(*second_source) ||
+            !validEvidenceEdge(*merged)) {
+            return result;
+        }
+
+        result.physical_candidate_count = 1U;
+        result.provider_geometry_valid =
+            nearMeasure(
+                edgeLength(*first_source) +
+                    edgeLength(*second_source),
+                edgeLength(*merged));
+
+        switch (fixture) {
+        case MergeCardinalityFixture::
+            lost_distinction:
+            result.candidates = {
+                {
+                    {first, second},
+                    true,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+            };
+            result.source_history = {
+                {
+                    first,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+                {
+                    second,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+            };
+            break;
+
+        case MergeCardinalityFixture::
+            modified_deleted_same_output:
+            result.candidates = {
+                {
+                    {first, second},
+                    true,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+            };
+            result.source_history = {
+                {
+                    first,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+                {
+                    second,
+                    kernel::
+                        ProviderLineageObservation::
+                            deleted,
+                },
+            };
+            break;
+
+        case MergeCardinalityFixture::
+            preserve_first_remove_second:
+            result.candidates = {
+                {
+                    {first},
+                    true,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+            };
+            result.source_history = {
+                {
+                    first,
+                    kernel::
+                        ProviderLineageObservation::
+                            modified,
+                },
+                {
+                    second,
+                    kernel::
+                        ProviderLineageObservation::
+                            deleted,
+                },
+            };
+            break;
+        }
+
+        return result;
+    } catch (const Standard_Failure&) {
+        return result;
+    } catch (...) {
+        return result;
     }
 }
 
