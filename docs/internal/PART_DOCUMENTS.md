@@ -147,6 +147,35 @@ E05 exact source candidate `7e0d6109cf927a2e8d85d2794b5718dcc2feab22` passed Win
 
 This remains architecture evidence only. It does not add a persisted topology-reference schema, Body/Feature persistence, a Part Feature Tree or a product solid-modeling command.
 
+<!-- section-id: internal.part-documents.pm00a-e02-multistage -->
+## PM-00A E02 multi-stage lineage evidence
+
+PM-00A E02 extends the transient evidence surface across a bounded OCCT operation chain:
+
+```text
+Extrude-like producer
+→ Cut
+→ Fillet-style downstream operation
+```
+
+The evidence is stage-aware. A semantic target is interpreted relative to the producer/consumed stage where it is used. The same semantic meaning may be observable on Extrude output, Cut output and downstream output; omitting stage can therefore be ambiguous and must not silently trigger a search of the current/final Body.
+
+The E02 probe establishes:
+
+- a selected Extrude-side meaning can survive an unrelated Cut as one unique descendant and remain `Resolved`;
+- independent upstream rebuilds with different extrusion heights preserve accepted semantic stage outcomes without provider-handle continuity;
+- complete removal by Cut yields `Missing`, not retargeting to a new nearby/replacement face;
+- a Fillet input is addressed on the immediate Cut output inside an already `Resolved` semantic Cut-face context;
+- when Fillet becomes geometrically infeasible after an upstream thin-dimension edit, the Cut-stage input reference remains `Resolved` while the operation outcome is recorded separately as geometric failure;
+- provider Boolean/Fillet Modified/Generated/Deleted/unchanged history remains transient evidence only;
+- endpoint geometry used by the test harness to choose one concrete transient edge inside the already resolved Cut-face context is fixture plumbing and is not a proposed durable selector.
+
+The cold evidence replay destroys all B-Rep, Boolean, Fillet and provider-history objects before reevaluation and reproduces the same stage/reference/failure outcomes from the declared scenario inputs. The broader persisted-document parity matrix remains owned by E07.
+
+E02 exact source candidate `953cdca42978916754f6ae6cc68d86352aad35ac` passed kernel-focused #1285 and Windows FULL #1286 with zero false-Resolved outcomes.
+
+This remains architecture evidence only. It does not add Body/Feature persistence, persisted topology references, product Extrude/Cut/Fillet commands, a Part Feature Tree or UI behavior.
+
 <!-- section-id: internal.part-documents.pm00a-e03-e04-cardinality -->
 ## PM-00A E03/E04 split/merge cardinality evidence
 
