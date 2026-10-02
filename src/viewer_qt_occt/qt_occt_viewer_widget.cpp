@@ -3853,13 +3853,54 @@ public:
                                   ? 3.2
                                   : (hovered ? 3.0 : 2.0)));
 
-            entry.object->Attributes()->SetLineAspect(
-                new Prs3d_LineAspect(
+            const auto line_type =
+                entry.construction
+                    ? Aspect_TOL_DASH
+                    : Aspect_TOL_SOLID;
+
+            // AIS_Line consumes LineAspect, while the SR-02 aggregated
+            // Circle/Arc AIS_Shape wire consumes Wire/Boundary aspects.
+            // Without the shape-specific aspects OCCT falls back to its
+            // native wire color (red on the supported Windows stack).
+            // Keep one semantic style policy across both provider objects.
+            const Handle(AIS_Shape) shape =
+                Handle(AIS_Shape)::DownCast(
+                    entry.object);
+            if (!shape.IsNull()) {
+                context_->SetColor(
+                    entry.object,
                     color,
-                    entry.construction
-                        ? Aspect_TOL_DASH
-                        : Aspect_TOL_SOLID,
-                    width));
+                    false);
+                context_->SetWidth(
+                    entry.object,
+                    width,
+                    false);
+            }
+
+            const auto make_line_aspect =
+                [&]() {
+                    return occ::handle<Prs3d_LineAspect>{
+                        new Prs3d_LineAspect(
+                            color,
+                            line_type,
+                            width)};
+                };
+
+            entry.object->Attributes()->SetLineAspect(
+                make_line_aspect());
+
+            if (!shape.IsNull()) {
+                entry.object->Attributes()->SetWireAspect(
+                    make_line_aspect());
+                entry.object->Attributes()->
+                    SetFreeBoundaryAspect(
+                        make_line_aspect());
+                entry.object->Attributes()->
+                    SetUnFreeBoundaryAspect(
+                        make_line_aspect());
+                ++runtime_diagnostics_.
+                    sketch_wire_style_applications;
+            }
 
             // Construction cadence is a provider presentation style, not
             // authored/tessellated geometry. Preserve DASH through all
