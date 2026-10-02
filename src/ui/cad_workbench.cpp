@@ -547,7 +547,6 @@ void CadWorkbench::buildUi() {
     close_document_button_->setObjectName(
         QStringLiteral("closeDocumentButton"));
 
-    lifecycle_actions.addStretch(1);
     lifecycle_actions.addWidget(undo_button_);
     lifecycle_actions.addWidget(redo_button_);
     lifecycle_actions.addWidget(save_button_);
