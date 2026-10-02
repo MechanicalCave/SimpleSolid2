@@ -2,9 +2,13 @@
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepGProp.hxx>
 #include <BRepSweep_Prism.hxx>
+#include <GProp_GProps.hxx>
+#include <GeomAbs_SurfaceType.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
@@ -363,6 +367,132 @@ buildProfileFace(
     return countSubshapes(shape, kind);
 }
 
+[[nodiscard]] std::vector<TopoDS_Face>
+facesFromGeneratedShape(
+    const TopoDS_Shape& shape) {
+    std::vector<TopoDS_Face> faces;
+    if (shape.IsNull()) {
+        return faces;
+    }
+
+    if (shape.ShapeType() == TopAbs_FACE) {
+        faces.push_back(TopoDS::Face(shape));
+        return faces;
+    }
+
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_FACE};
+         explorer.More();
+         explorer.Next()) {
+        faces.push_back(
+            TopoDS::Face(
+                explorer.Current()));
+    }
+    return faces;
+}
+
+[[nodiscard]] kernel::FaceSurfaceKind
+surfaceKind(
+    GeomAbs_SurfaceType type) noexcept {
+    switch (type) {
+    case GeomAbs_Plane:
+        return kernel::FaceSurfaceKind::plane;
+    case GeomAbs_Cylinder:
+        return kernel::FaceSurfaceKind::cylinder;
+    case GeomAbs_Cone:
+        return kernel::FaceSurfaceKind::cone;
+    case GeomAbs_Sphere:
+        return kernel::FaceSurfaceKind::sphere;
+    case GeomAbs_Torus:
+        return kernel::FaceSurfaceKind::torus;
+    default:
+        return kernel::FaceSurfaceKind::other;
+    }
+}
+
+[[nodiscard]] kernel::Point3 canonicalAxis(
+    const gp_Dir& direction) noexcept {
+    double x = direction.X();
+    double y = direction.Y();
+    double z = direction.Z();
+
+    const double ax = std::abs(x);
+    const double ay = std::abs(y);
+    const double az = std::abs(z);
+
+    bool flip = false;
+    if (ax >= ay && ax >= az) {
+        flip = x < 0.0;
+    } else if (ay >= az) {
+        flip = y < 0.0;
+    } else {
+        flip = z < 0.0;
+    }
+
+    if (flip) {
+        x = -x;
+        y = -y;
+        z = -z;
+    }
+
+    return {x, y, z};
+}
+
+[[nodiscard]] kernel::FaceGeometryDiagnostics
+faceGeometryDiagnostics(
+    const TopoDS_Face& face) {
+    GProp_GProps properties;
+    BRepGProp::SurfaceProperties(
+        face,
+        properties);
+
+    const auto center =
+        properties.CentreOfMass();
+
+    BRepAdaptor_Surface surface{
+        face,
+        true};
+    const auto type =
+        surface.GetType();
+
+    kernel::Point3 axis{};
+    switch (type) {
+    case GeomAbs_Plane:
+        axis = canonicalAxis(
+            surface.Plane()
+                .Axis()
+                .Direction());
+        break;
+    case GeomAbs_Cylinder:
+        axis = canonicalAxis(
+            surface.Cylinder()
+                .Axis()
+                .Direction());
+        break;
+    case GeomAbs_Cone:
+        axis = canonicalAxis(
+            surface.Cone()
+                .Axis()
+                .Direction());
+        break;
+    case GeomAbs_Torus:
+        axis = canonicalAxis(
+            surface.Torus()
+                .Axis()
+                .Direction());
+        break;
+    default:
+        break;
+    }
+
+    return {
+        surfaceKind(type),
+        properties.Mass(),
+        {center.X(), center.Y(), center.Z()},
+        axis};
+}
+
 [[nodiscard]] std::vector<TopoDS_Edge>
 matchingFaceEdges(
     const TopoDS_Face& face,
@@ -531,7 +661,8 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
             built->source_edges.size());
         for (const auto& source :
              built->source_edges) {
-            std::size_t face_count = 0U;
+            std::vector<TopoDS_Face>
+                candidate_faces;
             std::size_t generated_shape_count = 0U;
             const auto basis_edges =
                 matchingFaceEdges(
@@ -548,12 +679,18 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                         basis_edge);
                 if (!generated.IsNull()) {
                     ++generated_shape_count;
-                    face_count +=
-                        countShapeOrSubshapes(
-                            generated,
-                            TopAbs_FACE);
+                    auto generated_faces =
+                        facesFromGeneratedShape(
+                            generated);
+                    candidate_faces.insert(
+                        candidate_faces.end(),
+                        generated_faces.begin(),
+                        generated_faces.end());
                 }
             }
+
+            const auto face_count =
+                candidate_faces.size();
 
             if (face_count != 1U) {
                 std::cerr
@@ -564,56 +701,19 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                     << " basis_matches="
                     << basis_edges.size()
                     << " generated_shapes="
-                    << generated_shape_count;
+                    << generated_shape_count
+                    << " generated_faces="
+                    << face_count
+                    << '\n';
+            }
 
-                for (std::size_t index = 0U;
-                     index < basis_edges.size();
-                     ++index) {
-                    const auto& basis_edge =
-                        basis_edges[index];
-                    const TopoDS_Shape generated =
-                        sweep.Shape(basis_edge);
-                    const TopoDS_Shape first =
-                        sweep.FirstShape(basis_edge);
-                    const TopoDS_Shape last =
-                        sweep.LastShape(basis_edge);
-
-                    std::cerr
-                        << " edge[" << index << "]"
-                        << " is_used="
-                        << sweep.IsUsed(basis_edge)
-                        << " gen_is_used="
-                        << sweep.GenIsUsed(basis_edge)
-                        << " generated_null="
-                        << generated.IsNull()
-                        << " generated_type="
-                        << (generated.IsNull()
-                                ? -1
-                                : static_cast<int>(
-                                      generated.ShapeType()))
-                        << " generated_faces="
-                        << (generated.IsNull()
-                                ? 0U
-                                : countShapeOrSubshapes(
-                                      generated,
-                                      TopAbs_FACE))
-                        << " first_null="
-                        << first.IsNull()
-                        << " first_type="
-                        << (first.IsNull()
-                                ? -1
-                                : static_cast<int>(
-                                      first.ShapeType()))
-                        << " last_null="
-                        << last.IsNull()
-                        << " last_type="
-                        << (last.IsNull()
-                                ? -1
-                                : static_cast<int>(
-                                      last.ShapeType()));
-                }
-
-                std::cerr << '\n';
+            std::optional<
+                kernel::FaceGeometryDiagnostics>
+                diagnostics;
+            if (candidate_faces.size() == 1U) {
+                diagnostics =
+                    faceGeometryDiagnostics(
+                        candidate_faces.front());
             }
 
             evidence.sides.push_back({
@@ -622,7 +722,8 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                 face_count,
                 source.provenance,
                 basis_edges.size(),
-                generated_shape_count});
+                generated_shape_count,
+                diagnostics});
         }
 
         return evidence;

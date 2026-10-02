@@ -97,6 +97,32 @@ SideMap sideMap(
     return result;
 }
 
+bool sameSemanticSides(
+    const SideMap& first,
+    const SideMap& second) {
+    if (first.size() != second.size()) {
+        return false;
+    }
+
+    for (const auto& [key, before] : first) {
+        const auto found = second.find(key);
+        if (found == second.end()) {
+            return false;
+        }
+
+        const auto& after = found->second;
+        if (before.role != after.role ||
+            before.status != after.status ||
+            before.candidate_face_count !=
+                after.candidate_face_count ||
+            before.provenance != after.provenance) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 kernel::ExtrudeEvidence extrude(
     const part::PartDocument& document,
     part::ProfileId profile_id,
@@ -361,7 +387,7 @@ int main() {
                 *ids.profile_id,
                 25.0);
         verifyExpectedSides(longer, ids);
-        CHECK(sideMap(longer) == baseline_sides);
+        CHECK(sameSemanticSides(sideMap(longer), baseline_sides));
 
         CHECK(session.save().ok());
     }
@@ -378,7 +404,7 @@ int main() {
             *ids.profile_id,
             10.0);
     verifyExpectedSides(cold_initial, ids);
-    CHECK(sideMap(cold_initial) == baseline_sides);
+    CHECK(sameSemanticSides(sideMap(cold_initial), baseline_sides));
 
     {
         application::DocumentSession session{
