@@ -471,6 +471,37 @@ int main(int argc, char* argv[]) {
     CHECK(compact_widths[1] > compact_widths[0]);
     CHECK(compact_widths[1] > compact_widths[2]);
 
+    // Breakpoint hysteresis: compact does not enter narrow until the lower
+    // threshold is crossed, and narrow does not leave until the distinct
+    // upper threshold is crossed.
+    workbench.resize(790, 800);
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(tree_recovery->isHidden());
+    CHECK(right_recovery->isHidden());
+
+    workbench.resize(750, 800);
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(right_panel->isHidden());
+    CHECK(!tree_recovery->isHidden());
+    CHECK(!right_recovery->isHidden());
+
+    workbench.resize(790, 800);
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(right_panel->isHidden());
+    CHECK(!tree_recovery->isHidden());
+    CHECK(!right_recovery->isHidden());
+
+    workbench.resize(830, 800);
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(tree_recovery->isHidden());
+    CHECK(right_recovery->isHidden());
+
     workbench.resize(720, 800);
     QApplication::processEvents();
     CHECK(tree_panel->isHidden());
