@@ -99,12 +99,46 @@ set_tests_properties(pm00a.e05_similarity_guardrails PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;subsystem-part;subsystem-persistence;native"
 )
 
+add_executable(pm00a_e03_e04_cardinality_evidence_test
+    pm00a_e03_e04_cardinality_evidence_test.cpp
+)
+
+target_include_directories(pm00a_e03_e04_cardinality_evidence_test
+    PRIVATE
+        ${OpenCASCADE_INCLUDE_DIR}
+)
+
+target_link_libraries(pm00a_e03_e04_cardinality_evidence_test
+    PRIVATE
+        simplesolid2_kernel
+        TKernel
+        TKMath
+        TKG3d
+        TKGeomBase
+        TKBRep
+        TKTopAlgo
+        TKBO
+        TKShHealing
+)
+
+target_compile_features(pm00a_e03_e04_cardinality_evidence_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm00a.e03_e04_cardinality
+    COMMAND pm00a_e03_e04_cardinality_evidence_test
+)
+
+set_tests_properties(pm00a.e03_e04_cardinality PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
         pm00a_profile_cold_rebuild_test
         pm00a_e01_extrude_evidence_test
         pm00a_e05_similarity_evidence_test
+        pm00a_e03_e04_cardinality_evidence_test
 )
 
 foreach(_forbidden_target IN ITEMS
