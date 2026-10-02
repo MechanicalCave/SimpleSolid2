@@ -161,7 +161,8 @@ foreach(_target IN ITEMS
         TKBRep
         TKTopAlgo
         TKPrim
-        TKBO)
+        TKBO
+        TKFillet)
     if(NOT TARGET ${_target})
         message(FATAL_ERROR "OpenCASCADE package is missing required kernel-native target ${_target}")
     endif()
@@ -191,6 +192,7 @@ target_link_libraries(simplesolid2_kernel_occt
         TKTopAlgo
         TKPrim
         TKBO
+        TKFillet
 )
 
 target_compile_features(simplesolid2_kernel_occt PUBLIC cxx_std_20)
