@@ -375,7 +375,6 @@ E05 proves that geometry similarity is diagnostic only. Equal-area/same-axis dec
 
 The added neutral face diagnostics are transient evidence and do not freeze a durable selector schema.
 
-**Next:** execute E02 multi-stage Extrude -> Cut -> Fillet-style lineage using the accepted E03/E04 split/merge semantics.
 
 ### E03 + E04 — split/merge cardinality
 
@@ -391,7 +390,22 @@ E03/E04 establish fail-closed singular-reference cardinality across real OCCT Bo
 
 They also prove that provider history asymmetry is not identity authority: Modified/Deleted bookkeeping can support diagnostics and reconstruction evidence but cannot choose a semantic winner by itself.
 
-**Next:** execute E02 multi-stage Extrude -> Cut -> Fillet-style lineage using the accepted E03/E04 split/merge semantics. E07 cold-rebuild matrix follows after E02.
+
+### E02 — multi-stage Extrude -> Cut -> Fillet-style lineage
+
+**Status:** COMPLETED — PASS  
+**Exact source candidate:** `953cdca42978916754f6ae6cc68d86352aad35ac`  
+**Kernel-focused:** #1285 — PASS  
+**Windows FULL:** #1286 — PASS  
+**False-Resolved:** 0
+
+See `work/PM-00A_E02_MULTISTAGE_LINEAGE_EVIDENCE.md`.
+
+E02 proves stage-scoped resolution across bounded producer/Cut/Fillet evidence, preserves Missing on semantic source removal, keeps downstream geometric failure separate from reference status, and rejects final-Body-wide geometry search as identity.
+
+The representative initial prism in E02 is an evidence fixture, not the production Extrude implementation. E01 remains the exact Profile-to-Extrude provenance evidence.
+
+**Next:** execute accumulated E07 cold-rebuild parity for E07-01…E07-05 using the now-completed E01/E02/E03/E04/E05 evidence. E07-06 remains pending until E06 provides the full-Revolve periodic-seam case; this staging does not change the frozen E07 expectation.
 
 ## 8. Acceptance asymmetry
 

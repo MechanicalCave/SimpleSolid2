@@ -188,6 +188,35 @@ E03/E04 exact source candidate `30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25` passed
 
 This remains architecture evidence only. It does not add a durable topology-reference schema, Body/Feature persistence, a product Boolean operation, Part Feature Tree behavior or reference-repair UI.
 
+<!-- section-id: internal.part-documents.pm00a-e02-multistage -->
+## PM-00A E02 multi-stage lineage evidence
+
+PM-00A E02 extends the transient Kernel evidence surface with explicit producer-stage reference observations across a bounded Extrude-stage prism, real OCCT Cut and real OCCT Fillet.
+
+The evidence distinguishes:
+
+- Extrude-output reference status;
+- Cut-output reference status;
+- downstream/Fillet-output reference status;
+- provider Modified/Generated/Deleted/unchanged observations between stages;
+- downstream operation outcome, including a separate geometric-failure state.
+
+Producer/consumed stage is semantic context. A reference intended for an earlier stage is not resolved by searching only the final Body. When the same semantic meaning is uniquely present at more than one stage, omitting the intended stage is Ambiguous rather than permission to select a final-shape match.
+
+For downstream Fillet input, candidate search is bounded by the already-resolved semantic Cut face. A first probe that searched the complete Cut result found multiple endpoint-compatible edges and failed. The accepted evidence does not choose a first, nearest or otherwise geometry-preferred candidate; it narrows the search by semantic context and then requires cardinality one.
+
+Reference resolution and geometric feasibility remain separate. In the thin-geometry E02 scenario the Cut-stage reference remains Resolved and its Fillet input edge remains unique, while the unchanged Fillet radius fails geometrically. That geometric failure does not rewrite the input reference as Missing or Ambiguous.
+
+The initial E02 “Extrude stage” is a deterministic one-solid prism fixture built for multi-stage topology evidence. It is not the production Extrude implementation. E01 remains the exact Profile-to-Extrude provenance evidence.
+
+Known centroid/endpoint helpers are used only to construct deterministic provider fixtures. They are not authored identity, persistent selectors or automatic geometry-similarity resolution.
+
+All E02 provider/B-Rep/history objects are transient. The evidence set is rebuilt after first-pass operation objects leave scope and must reproduce identical neutral outcomes.
+
+E02 exact source candidate `953cdca42978916754f6ae6cc68d86352aad35ac` passed Kernel-focused #1285 and Windows FULL #1286 with zero false-Resolved outcomes.
+
+This remains architecture evidence only. It does not add a durable topology-reference schema, Body/Feature persistence, Part Feature Tree behavior or product Extrude/Cut/Fillet commands.
+
 <!-- section-id: internal.part-documents.persistence -->
 ## Native Part persistence
 

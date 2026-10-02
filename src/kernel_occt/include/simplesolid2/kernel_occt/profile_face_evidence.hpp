@@ -24,4 +24,9 @@ buildEdgeSplitHistoryEvidence(
 buildFaceMergeHistoryEvidence(
     kernel::FaceMergeProbeScenario scenario) noexcept;
 
+[[nodiscard]] kernel::MultiStageLineageEvidence
+buildMultiStageLineageEvidence(
+    kernel::MultiStageProbeScenario scenario,
+    double extrusion_height) noexcept;
+
 } // namespace simplesolid2::kernel_occt
