@@ -2111,6 +2111,14 @@ public:
             return false;
         }
 
+        // SR-02: this setter is called after every logical Sketch pointer
+        // sample, including cases where no snap/inference overlay changed.
+        // Preserve synchronous validation/failure semantics but avoid
+        // rebuilding and flushing an identical runtime-only scene.
+        if (scene == sketch_snap_inference_scene_) {
+            return true;
+        }
+
         clearSketchSnapInferenceScene();
         ensureSketchSnapInferenceAspects();
 
