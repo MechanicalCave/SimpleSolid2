@@ -155,8 +155,11 @@ void verifyMergeRows(
     const kernel::FaceMergeHistoryEvidence&
         merged,
     const kernel::FaceMergeHistoryEvidence&
+        asymmetric,
+    const kernel::FaceMergeHistoryEvidence&
         absorbed) {
     CHECK(merged.ok());
+    CHECK(asymmetric.ok());
     CHECK(absorbed.ok());
 
     printHistory(
@@ -168,6 +171,19 @@ void verifyMergeRows(
     std::cerr
         << "E04_MERGED shared_descendants="
         << merged.shared_descendant_count
+        << '\n';
+
+    printHistory(
+        "E04_ASYMMETRIC_FIRST",
+        asymmetric.first);
+    printHistory(
+        "E04_ASYMMETRIC_SECOND",
+        asymmetric.second);
+    std::cerr
+        << "E04_ASYMMETRIC shared_descendants="
+        << asymmetric.shared_descendant_count
+        << " result_faces="
+        << asymmetric.shape.face_count
         << '\n';
 
     printHistory(
@@ -199,13 +215,15 @@ void verifyMergeRows(
     // E04-02: provider bookkeeping may be asymmetric (one source receives
     // surviving/modified history while the other is deleted). That asymmetry
     // is evidence only and must not choose a semantic winner.
+    CHECK(asymmetric.shape.face_count == 6U);
+
     const bool asymmetric_history =
-        ((merged.first.modified_count > 0U ||
-          merged.first.unchanged_present) &&
-         merged.second.deleted) ||
-        ((merged.second.modified_count > 0U ||
-          merged.second.unchanged_present) &&
-         merged.first.deleted);
+        asymmetric.first.modified_count > 0U &&
+        !asymmetric.first.deleted &&
+        !asymmetric.first.unchanged_present &&
+        asymmetric.first.unique_descendant_count == 1U &&
+        asymmetric.second.deleted &&
+        asymmetric.second.unique_descendant_count == 0U;
     CHECK(asymmetric_history);
 
     const auto still_no_winner =
@@ -257,6 +275,7 @@ int main() {
     kernel::EdgeSplitHistoryEvidence split;
     kernel::EdgeSplitHistoryEvidence removed;
     kernel::FaceMergeHistoryEvidence merged;
+    kernel::FaceMergeHistoryEvidence asymmetric;
     kernel::FaceMergeHistoryEvidence absorbed;
 
     {
@@ -272,6 +291,10 @@ int main() {
             kernel_occt::buildFaceMergeHistoryEvidence(
                 kernel::FaceMergeProbeScenario::
                     overlapping_coplanar);
+        asymmetric =
+            kernel_occt::buildFaceMergeHistoryEvidence(
+                kernel::FaceMergeProbeScenario::
+                    asymmetric_history);
         absorbed =
             kernel_occt::buildFaceMergeHistoryEvidence(
                 kernel::FaceMergeProbeScenario::
@@ -282,6 +305,7 @@ int main() {
             removed);
         verifyMergeRows(
             merged,
+            asymmetric,
             absorbed);
     }
 
@@ -300,6 +324,10 @@ int main() {
         kernel_occt::buildFaceMergeHistoryEvidence(
             kernel::FaceMergeProbeScenario::
                 overlapping_coplanar);
+    const auto cold_asymmetric =
+        kernel_occt::buildFaceMergeHistoryEvidence(
+            kernel::FaceMergeProbeScenario::
+                asymmetric_history);
     const auto cold_absorbed =
         kernel_occt::buildFaceMergeHistoryEvidence(
             kernel::FaceMergeProbeScenario::
@@ -308,6 +336,7 @@ int main() {
     CHECK(cold_split == split);
     CHECK(cold_removed == removed);
     CHECK(cold_merged == merged);
+    CHECK(cold_asymmetric == asymmetric);
     CHECK(cold_absorbed == absorbed);
 
     verifySplitRows(
@@ -315,6 +344,7 @@ int main() {
         cold_removed);
     verifyMergeRows(
         cold_merged,
+        cold_asymmetric,
         cold_absorbed);
 
     std::cout
