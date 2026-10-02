@@ -11,4 +11,9 @@ namespace simplesolid2::kernel_occt {
 buildProfileFaceEvidence(
     const kernel::PlanarProfileInput& input) noexcept;
 
+[[nodiscard]] kernel::ExtrudeEvidence
+buildProfileExtrudeEvidence(
+    const kernel::PlanarProfileInput& input,
+    double distance) noexcept;
+
 } // namespace simplesolid2::kernel_occt
