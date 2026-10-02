@@ -5574,6 +5574,7 @@ PartSketchInteractionController::resolveTrackingInference(
 std::optional<sketch::ResolvedSketchInput>
 PartSketchInteractionController::resolvePointerInput(
     const SketchPointerInput& input) {
+    ++pointer_resolution_count_;
     common_tangent_candidate_.reset();
     tracking_inference_presentation_.reset();
 
