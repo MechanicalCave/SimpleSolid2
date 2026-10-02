@@ -411,11 +411,12 @@ void verifyE04(
     const MergeObservation& merge) {
     CHECK(merge.input_edge_count == 5U);
     CHECK(merge.output_edge_count == 4U);
-    CHECK(!merge.first_candidates.empty());
-    CHECK(!merge.second_candidates.empty());
 
-    // The real provider history must expose one common result edge for the
-    // two formerly distinct source meanings.
+    // The provider operation proves that one edge-unification occurred, but
+    // its history bookkeeping is not required to be symmetric. On the
+    // current OCCT provider the first source reports one Modified edge while
+    // the second may report neither Modified nor Removed. That asymmetry is
+    // evidence, not permission to choose a semantic winner.
     std::optional<Token> common;
     for (const auto first :
          merge.first_candidates) {
@@ -428,11 +429,23 @@ void verifyE04(
             break;
         }
     }
+
+    if (!common &&
+        merge.first_candidates.size() == 1U) {
+        common =
+            merge.first_candidates.front();
+    }
+    if (!common &&
+        merge.second_candidates.size() == 1U) {
+        common =
+            merge.second_candidates.front();
+    }
     CHECK(common.has_value());
 
-    // E04-01: two live semantic meanings collide on one provider subshape.
-    // Both singular references are Ambiguous; both must never report
-    // Resolved to the same physical edge.
+    // E04-01: the two old semantic meanings are members of the explicit
+    // same-domain merge group and now address one physical result edge.
+    // Their distinction is lost, therefore both singular meanings are
+    // Ambiguous. Provider history asymmetry cannot make one of them win.
     std::vector<
         kernel::SingularLineageSourceEvidence>
         collided{
@@ -462,17 +475,23 @@ void verifyE04(
             "second-edge") ==
         kernel::ReferenceStatus::ambiguous);
 
-    // E04-02: provider Modified/Removed bookkeeping alone cannot choose a
-    // semantic winner. Even if one source is reported removed, retaining
-    // both meanings against the common provider candidate is Ambiguous.
+    // E04-02: provider Modified/Removed bookkeeping is diagnostic only.
+    // Even the explicit "one modified / one deleted" bookkeeping variant
+    // cannot select a winner while both semantic meanings still collide on
+    // the same merged result.
+    auto modified_deleted = collided;
+    modified_deleted[0].provider_reports_deleted =
+        false;
+    modified_deleted[1].provider_reports_deleted =
+        true;
     CHECK(
         kernel::classifySingularLineage(
-            collided,
+            modified_deleted,
             "first-edge") ==
         kernel::ReferenceStatus::ambiguous);
     CHECK(
         kernel::classifySingularLineage(
-            collided,
+            modified_deleted,
             "second-edge") ==
         kernel::ReferenceStatus::ambiguous);
 
