@@ -395,6 +395,23 @@ void verifyBaselineSimilarity(
             evidence,
             *first->geometry_diagnostics) ==
         kernel::ReferenceStatus::ambiguous);
+
+    // E05-04 also proves that a unique geometry-only diagnostic class still
+    // cannot create identity. Without semantic provenance it is Unsupported,
+    // never Resolved.
+    const auto* unique =
+        sideBySource(
+            evidence,
+            ids.edges[3].serialized());
+    CHECK(unique != nullptr);
+    CHECK(
+        unique->geometry_diagnostics
+            .has_value());
+    CHECK(
+        resolveSimilarityOnly(
+            evidence,
+            *unique->geometry_diagnostics) ==
+        kernel::ReferenceStatus::unsupported);
 }
 
 void scenarioStableAndCloserDecoy(
