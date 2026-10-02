@@ -82,8 +82,10 @@ add_executable(pm00a_e05_similarity_evidence_test
 
 target_link_libraries(pm00a_e05_similarity_evidence_test
     PRIVATE
+        simplesolid2_application
         simplesolid2_kernel
         simplesolid2_kernel_occt
+        simplesolid2_part
 )
 
 target_compile_features(pm00a_e05_similarity_evidence_test PRIVATE cxx_std_20)
@@ -94,7 +96,7 @@ add_test(
 )
 
 set_tests_properties(pm00a.e05_similarity_guardrails PROPERTIES
-    LABELS "tier-full-only;subsystem-kernel;native"
+    LABELS "tier-full-only;subsystem-kernel;subsystem-part;subsystem-persistence;native"
 )
 
 add_custom_target(ss2_tests_subsystem_kernel
