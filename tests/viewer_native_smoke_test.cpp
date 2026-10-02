@@ -117,13 +117,28 @@ int main(int argc, char* argv[]) {
                     {100.0, 10.0, 0.0},
                     true},
             };
+            widget.resetRuntimeDiagnostics();
             ok = ok &&
                  construction_preview.valid() &&
                  widget.setSketchPreviewScene(
                      construction_preview);
+            const auto changed_preview_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 changed_preview_metrics.
+                         update_current_viewer_calls == 1U &&
+                 changed_preview_metrics.redraw_calls == 0U;
+
+            widget.resetRuntimeDiagnostics();
             ok = ok &&
                  widget.setSketchPreviewScene(
                      viewer::SketchPreviewScene{});
+            const auto cleared_preview_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 cleared_preview_metrics.
+                         update_current_viewer_calls == 1U &&
+                 cleared_preview_metrics.redraw_calls == 0U;
 
             // R11 snap/OTRACK presentation is a real provider overlay:
             // one transient current marker/label plus up to two acquired
