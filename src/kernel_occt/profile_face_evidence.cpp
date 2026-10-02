@@ -1117,16 +1117,16 @@ buildFaceMergeHistoryEvidence(
             kernel::FaceMergeProbeScenario::
                 asymmetric_history) {
             // One argument is a compound:
-            //  - a redundant, fully contained box whose top face should
-            //    disappear;
+            //  - a fully internal lower box whose selected top face is
+            //    removed from the final boundary;
             //  - an extension box that expands the first box.
             // The result is one 50x20x10 box. The first source top face is
-            // therefore modified while the redundant top face is deleted.
-            BRepPrimAPI_MakeBox redundant_box{
+            // therefore Modified while the internal selected face is Deleted.
+            BRepPrimAPI_MakeBox internal_box{
                 gp_Pnt{10.0, 5.0, 0.0},
                 10.0,
                 10.0,
-                10.0};
+                5.0};
             BRepPrimAPI_MakeBox extension_box{
                 gp_Pnt{40.0, 0.0, 0.0},
                 10.0,
@@ -1135,15 +1135,15 @@ buildFaceMergeHistoryEvidence(
 
             second_face =
                 findFaceByCentroid(
-                    redundant_box.Shape(),
-                    {15.0, 10.0, 10.0});
+                    internal_box.Shape(),
+                    {15.0, 10.0, 5.0});
 
             BRep_Builder builder;
             TopoDS_Compound compound;
             builder.MakeCompound(compound);
             builder.Add(
                 compound,
-                redundant_box.Shape());
+                internal_box.Shape());
             builder.Add(
                 compound,
                 extension_box.Shape());
