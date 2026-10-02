@@ -188,6 +188,7 @@ target_link_libraries(simplesolid2_kernel_occt
         TKGeomBase
         TKBRep
         TKTopAlgo
+        TKPrim
 )
 
 target_compile_features(simplesolid2_kernel_occt PUBLIC cxx_std_20)
