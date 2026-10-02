@@ -667,6 +667,9 @@ void measureRectangleQuery(
     QApplication::processEvents();
 }
 
+// Historical scenario name retained for stable before/after parsing.
+// This times authoritative refreshPresentation() plus Qt event drain; the
+// timed interval does not itself perform an authored Document mutation.
 void measureAuthoredRefresh(
     viewer_qt_occt::QtOcctViewerWidget& viewport,
     Fixture& fixture,
