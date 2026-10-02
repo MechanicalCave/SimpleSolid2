@@ -362,7 +362,20 @@ See `work/PM-00A_E01_PROFILE_EXTRUDE_EVIDENCE.md`.
 
 E01 supports semantic cap roles and side roles derived from exact Profile boundary-use provenance. OCCT topology remains transient provider evidence; no durable selector schema is frozen by this result.
 
-**Next:** E05 false-positive similarity guardrails, before expanding the resolver to split/merge or multi-stage lineage.
+### E05 — geometrically similar topology
+
+**Status:** COMPLETED — PASS  
+**Exact source candidate:** `7e0d6109cf927a2e8d85d2794b5718dcc2feab22`  
+**Windows FULL:** #1252 — PASS  
+**False-Resolved:** 0
+
+See `work/PM-00A_E05_SIMILARITY_FALSE_POSITIVE_EVIDENCE.md`.
+
+E05 proves that geometry similarity is diagnostic only. Equal-area/same-axis decoys do not determine identity; an exact-geometry replacement under a new semantic source remains a different target; proximity does not override surviving provenance; and similarity-only evidence cannot return Resolved.
+
+The added neutral face diagnostics are transient evidence and do not freeze a durable selector schema.
+
+**Next:** execute E03 + E04 as one bounded split/merge cardinality package, then use those semantics in E02 multi-stage lineage.
 
 ## 8. Acceptance asymmetry
 
