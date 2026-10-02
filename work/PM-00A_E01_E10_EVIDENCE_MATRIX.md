@@ -231,6 +231,28 @@ Every row below destroys DocumentSession/evidence inputs/B-Rep/provider objects/
 
 Any status change caused solely by loss of previous-process provider history is an E07 failure.
 
+## 11A. E07 accumulated execution result
+
+**E07 status:** PARTIAL — E07-01…E07-05 COMPLETED — PASS; E07-06 PENDING E06  
+**Accumulated source candidate:** `953cdca42978916754f6ae6cc68d86352aad35ac`  
+**Windows FULL:** #1286 — PASS  
+**False-Resolved:** 0 in the accumulated accepted rows  
+**Evidence report:** `work/PM-00A_E07_ACCUMULATED_COLD_REBUILD_EVIDENCE.md`
+
+E07-01 through E07-05 satisfy the frozen cold-rebuild expectations on one combined exact source candidate.
+
+The accepted owning regressions already contain the required teardown/reconstruction:
+
+- E01 and E05 use real Part Save/Close/Reopen from durable authored state;
+- E02 destroys B-Rep/Boolean/Fillet/provider-history state and reevaluates from declared stage/scenario inputs;
+- E03/E04 destroy Boolean/provider-history state and recreate split/merge probes from declared scenario inputs.
+
+Windows FULL #1286 executed `pm00a.e01_extrude_evidence`, `pm00a.e05_similarity_guardrails`, `pm00a.e03_e04_cardinality` and `pm00a.e02_multistage_lineage` together on `953cdca42978916754f6ae6cc68d86352aad35ac`.
+
+No status changed merely because previous-process provider state was absent. Ambiguous remained Ambiguous, Missing remained Missing, supported stage-scoped meanings remained Resolved, and geometry similarity did not repair a missing semantic target.
+
+**E07-06 remains PENDING.** It cannot be executed before E06 establishes the accepted full-Revolve semantic-side and periodic-seam evidence case. The overall E07 package must not be marked complete before that row passes.
+
 ## 12. E08 — support-frame stability
 
 Goal: prove support orientation is semantic and deterministic.
