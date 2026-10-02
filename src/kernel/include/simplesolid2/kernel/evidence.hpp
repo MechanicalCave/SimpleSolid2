@@ -94,6 +94,128 @@ struct ExtrudeFaceEvidence final {
         const ExtrudeFaceEvidence&) = default;
 };
 
+enum class ProviderLineageObservation {
+    unchanged,
+    modified,
+    generated,
+    deleted,
+};
+
+struct ProviderSourceLineageEvidence final {
+    BoundaryUseProvenance provenance;
+    ProviderLineageObservation observation{
+        ProviderLineageObservation::unchanged};
+
+    friend bool operator==(
+        const ProviderSourceLineageEvidence&,
+        const ProviderSourceLineageEvidence&) = default;
+};
+
+struct CardinalityCandidateEvidence final {
+    std::vector<BoundaryUseProvenance>
+        source_provenance;
+    bool semantic_role_match{true};
+    ProviderLineageObservation observation{
+        ProviderLineageObservation::modified};
+
+    friend bool operator==(
+        const CardinalityCandidateEvidence&,
+        const CardinalityCandidateEvidence&) = default;
+};
+
+struct CardinalityFixtureEvidence final {
+    std::size_t source_edge_count{};
+    std::size_t physical_candidate_count{};
+    bool provider_geometry_valid{false};
+    std::vector<CardinalityCandidateEvidence>
+        candidates;
+    std::vector<ProviderSourceLineageEvidence>
+        source_history;
+
+    friend bool operator==(
+        const CardinalityFixtureEvidence&,
+        const CardinalityFixtureEvidence&) = default;
+};
+
+struct SingularReferenceCardinalityEvidence final {
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    std::size_t physical_candidate_count{};
+    std::size_t semantic_candidate_count{};
+    std::size_t merged_source_count{};
+    bool aggregate_requested{false};
+
+    friend bool operator==(
+        const SingularReferenceCardinalityEvidence&,
+        const SingularReferenceCardinalityEvidence&) = default;
+};
+
+[[nodiscard]] inline bool
+sameBoundaryProvenance(
+    const BoundaryUseProvenance& first,
+    const BoundaryUseProvenance& second) noexcept {
+    return first == second;
+}
+
+[[nodiscard]] inline SingularReferenceCardinalityEvidence
+classifySingularReferenceCardinality(
+    const BoundaryUseProvenance& target,
+    const std::vector<CardinalityCandidateEvidence>&
+        candidates,
+    bool aggregate_requested = false) {
+    SingularReferenceCardinalityEvidence result;
+    result.physical_candidate_count =
+        candidates.size();
+    result.aggregate_requested =
+        aggregate_requested;
+
+    for (const auto& candidate : candidates) {
+        if (!candidate.semantic_role_match) {
+            continue;
+        }
+
+        bool contains_target = false;
+        for (const auto& provenance :
+             candidate.source_provenance) {
+            if (sameBoundaryProvenance(
+                    provenance,
+                    target)) {
+                contains_target = true;
+                break;
+            }
+        }
+        if (!contains_target) {
+            continue;
+        }
+
+        ++result.semantic_candidate_count;
+        if (candidate.source_provenance.size() >
+            result.merged_source_count) {
+            result.merged_source_count =
+                candidate.source_provenance.size();
+        }
+    }
+
+    if (aggregate_requested) {
+        result.status =
+            ReferenceStatus::unsupported;
+    } else if (
+        result.semantic_candidate_count == 0U) {
+        result.status =
+            ReferenceStatus::missing;
+    } else if (
+        result.semantic_candidate_count != 1U ||
+        result.merged_source_count != 1U) {
+        result.status =
+            ReferenceStatus::ambiguous;
+    } else {
+        result.status =
+            ReferenceStatus::resolved;
+    }
+
+    return result;
+}
+
 struct ExtrudeEvidence final {
     ShapeEvidence shape;
     ExtrudeFaceEvidence start_cap{
