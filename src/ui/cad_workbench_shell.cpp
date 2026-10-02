@@ -16,8 +16,29 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     root->setContentsMargins(6, 6, 6, 6);
     root->setSpacing(5);
 
+    auto* document_top_row = new QWidget(this);
+    document_top_row->setObjectName(
+        QStringLiteral("documentTopRow"));
+    auto* document_top_layout =
+        new QHBoxLayout(document_top_row);
+    document_top_layout->setContentsMargins(0, 0, 0, 0);
+    document_top_layout->setSpacing(6);
+
+    editor_tools_layout_ = new QHBoxLayout;
+    editor_tools_layout_->setContentsMargins(0, 0, 0, 0);
+    editor_tools_layout_->addStretch(1);
+
     document_actions_ = new QHBoxLayout;
-    root->addLayout(document_actions_);
+    document_actions_->setContentsMargins(0, 0, 0, 0);
+    document_actions_->setSpacing(4);
+
+    document_top_layout->addLayout(
+        editor_tools_layout_,
+        1);
+    document_top_layout->addLayout(
+        document_actions_,
+        0);
+    root->addWidget(document_top_row, 0);
 
     auto* splitter = new QSplitter(Qt::Horizontal, this);
     splitter->setObjectName(QStringLiteral("workbenchSplitter"));
@@ -25,6 +46,8 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
 
     auto* tree_group =
         new QGroupBox(QStringLiteral("Document Tree"), splitter);
+    tree_group->setObjectName(
+        QStringLiteral("documentTreePanel"));
     auto* tree_layout = new QVBoxLayout(tree_group);
 
     document_tree_ = new QTreeWidget(tree_group);
@@ -42,14 +65,11 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     editor_host_layout_->setContentsMargins(0, 0, 0, 0);
     editor_host_layout_->setSpacing(4);
 
-    editor_tools_layout_ = new QHBoxLayout;
-    editor_tools_layout_->setContentsMargins(0, 0, 0, 0);
-    editor_tools_layout_->addStretch(1);
-    editor_host_layout_->addLayout(editor_tools_layout_);
-
     splitter->addWidget(editor_host);
 
     auto* right_panel = new QWidget(splitter);
+    right_panel->setObjectName(
+        QStringLiteral("workbenchRightPanel"));
     auto* right_layout = new QVBoxLayout(right_panel);
     right_layout->setContentsMargins(0, 0, 0, 0);
 
@@ -65,10 +85,10 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
 
     splitter->addWidget(right_panel);
 
-    splitter->setStretchFactor(0, 1);
-    splitter->setStretchFactor(1, 4);
-    splitter->setStretchFactor(2, 2);
-    splitter->setSizes({220, 620, 300});
+    splitter->setStretchFactor(0, 0);
+    splitter->setStretchFactor(1, 1);
+    splitter->setStretchFactor(2, 0);
+    splitter->setSizes({150, 900, 270});
 
     root->addWidget(splitter, 1);
 
