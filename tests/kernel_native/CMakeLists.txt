@@ -2,6 +2,11 @@ add_executable(pm00a_kernel_native_smoke_test
     pm00a_kernel_native_smoke_test.cpp
 )
 
+target_include_directories(pm00a_kernel_native_smoke_test
+    PRIVATE
+        ${OpenCASCADE_INCLUDE_DIR}
+)
+
 target_link_libraries(pm00a_kernel_native_smoke_test
     PRIVATE
         TKernel
