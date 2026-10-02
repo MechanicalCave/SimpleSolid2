@@ -1,10 +1,10 @@
 # PM-00A — Part Modeling Architecture Evidence Gate
 
-**Status:** PROPOSED — INACTIVE  
-**Owner acceptance:** PENDING  
+**Status:** ACTIVE  
+**Owner acceptance:** 2026-10-02  
 **Decision class:** D2 architecture-evidence contract; no durable Part Feature schema or user-facing solid-modeling activation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.2  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.3  
 **Entry gate:** G0 Sketcher profile-authoring readiness PASS on `16df8d1940a1f438a66cbd6964a881ba24718c0d`  
 **Activation rule:** production/evidence implementation begins only after explicit Owner acceptance and synchronization through `work/ACTIVE.yaml`
 
@@ -380,20 +380,23 @@ Before PM-00A completion:
 
 Because PM-00A changes verification infrastructure and Kernel architecture seams, the final implementation candidate requires an exact-head Windows FULL. A later work-only completion suffix may use CLOSURE only under existing trusted-FULL rules.
 
-## 13. Documentation impact
+## Documentation impact
 
-Internal docs: required.
+Internal docs: required  
+User/Product docs: not required  
+Reason: PM-00A changes architecture evidence, Kernel/provider boundaries and repository verification topology without activating user-visible solid modeling.
 
-Expected topics:
+Internal documentation must cover, as delivered:
 
 - Kernel provider boundary;
-- build/test topology;
+- semantic/core versus kernel-native versus desktop build/test topology;
 - Part/reference architecture evidence;
+- cold-model-rebuild evidence;
 - numerical/modeling-semantics evidence.
 
-Product PL/EN docs: normally not required because PM-00A does not activate user-visible solid modeling. If an as-built user-visible behavior unexpectedly changes, STOP and reclassify scope before documenting it.
+If implementation would change user-visible product behavior, STOP and reclassify scope before proceeding.
 
-Generated Product Browser remains deterministic/current where canonical docs require regeneration.
+The deterministic Product Browser must remain current where canonical documentation changes require regeneration.
 
 ## 14. Deliverables
 
@@ -428,15 +431,10 @@ After PM-00A:
 
 ## 16. Activation boundary
 
-This file is currently **PROPOSED — INACTIVE**.
+This file is **ACTIVE** after explicit Owner acceptance on 2026-10-02.
 
-Creating, reviewing or merging this proposal does not authorize implementation.
+Activation is authorized only after the synchronized activation candidate passes the repository governance gate.
 
-Activation requires explicit Owner acceptance followed by:
+The accepted implementation order begins with **Phase A0 — Verification Topology**. E01–E10 evidence may not be accepted before A0 PASS.
 
-- status transition to ACTIVE;
-- `work/ACTIVE.yaml -> active_work` set to this contract;
-- roadmap synchronization;
-- repository governance gate PASS.
-
-Only then may Phase A0 implementation begin.
+No acceptance of PM-00A authorizes durable Body/Feature schema, Part Feature Tree product behavior or user-facing solid modeling.
