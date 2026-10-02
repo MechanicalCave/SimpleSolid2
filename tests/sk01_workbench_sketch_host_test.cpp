@@ -1740,6 +1740,123 @@ int main(int argc, char* argv[]) {
     CHECK(entities_before_profile_delete > 0U);
     CHECK(!profile_properties_page->isHidden());
 
+    // SR-01 Owner refinement: generic Delete remains Sketch-owned, but
+    // the explicitly named Delete Profile action is intentionally usable
+    // while the source Sketch remains in edit. It deletes only the Part
+    // Profile and one Undo restores the same Profile identity.
+    CHECK(delete_profile_button->isEnabled());
+    const auto explicit_delete_undo_before =
+        session->undoDepth();
+    delete_profile_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findProfile(tree_profile_id) == nullptr);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() ==
+        entities_before_profile_delete);
+    CHECK(
+        session->undoDepth() ==
+        explicit_delete_undo_before + 1U);
+
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Z,
+        Qt::ControlModifier);
+    QApplication::processEvents();
+    const auto* explicitly_restored_profile =
+        session->document()
+            .findProfile(tree_profile_id);
+    CHECK(explicitly_restored_profile != nullptr);
+    CHECK(
+        explicitly_restored_profile->name ==
+        "Main Profile");
+    CHECK(
+        explicitly_restored_profile->
+            source_sketch_id == sketch_id);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() ==
+        entities_before_profile_delete);
+    CHECK(
+        session->undoDepth() ==
+        explicit_delete_undo_before);
+
+    // The same explicit action may delete the Profile currently open in
+    // Edit Profile. Only the transient Profile draft is cancelled first;
+    // source Sketch geometry and the single authored delete boundary stay
+    // unchanged.
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    tree->clearSelection();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+
+    command_input->setText(
+        QStringLiteral("EDITPROFILE"));
+    QTest::keyClick(
+        command_input,
+        Qt::Key_Return);
+    QApplication::processEvents();
+    CHECK(profile_button->isChecked());
+    CHECK(!profile_operations->isHidden());
+    CHECK(delete_profile_button->isEnabled());
+
+    const auto edit_profile_delete_undo_before =
+        session->undoDepth();
+    delete_profile_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findProfile(tree_profile_id) == nullptr);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() ==
+        entities_before_profile_delete);
+    CHECK(
+        session->undoDepth() ==
+        edit_profile_delete_undo_before + 1U);
+    CHECK(!profile_button->isChecked());
+    CHECK(profile_operations->isHidden());
+
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Z,
+        Qt::ControlModifier);
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findProfile(tree_profile_id) != nullptr);
+    CHECK(
+        session->undoDepth() ==
+        edit_profile_delete_undo_before);
+
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    tree->clearSelection();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+
     const QPoint blank_tree_point{
         tree->viewport()->width() - 2,
         tree->viewport()->height() - 2};
