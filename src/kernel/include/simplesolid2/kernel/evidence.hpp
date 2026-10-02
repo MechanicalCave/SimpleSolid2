@@ -202,8 +202,6 @@ struct StageReferenceEvidence final {
     ReferenceStatus status{
         ReferenceStatus::unsupported};
     std::size_t candidate_count{};
-    std::optional<BoundaryUseProvenance>
-        provenance;
 
     friend bool operator==(
         const StageReferenceEvidence&,
@@ -232,7 +230,6 @@ struct MultiStageLineageEvidence final {
     BooleanSubshapeHistoryEvidence cut_to_downstream;
 
     std::size_t downstream_input_edge_candidate_count{};
-    bool cut_reuses_extrude_target_shape{false};
     EvidenceOperationOutcome downstream_outcome{
         EvidenceOperationOutcome::not_run};
 
