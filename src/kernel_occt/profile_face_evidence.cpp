@@ -4,7 +4,6 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepCheck_Analyzer.hxx>
-#include <BRepPrimAPI_MakePrism.hxx>
 #include <BRepSweep_Prism.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
@@ -470,19 +469,20 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
             input.frame.normal.y * distance,
             input.frame.normal.z * distance};
 
-        BRepPrimAPI_MakePrism make_prism{
+        BRepSweep_Prism sweep{
             built->face,
             vector,
             false,
             true};
-        if (!make_prism.IsDone()) {
+
+        const TopoDS_Shape shape =
+            sweep.Shape();
+        if (shape.IsNull()) {
             evidence.shape.status =
                 kernel::EvidenceStatus::provider_failure;
             return evidence;
         }
 
-        const TopoDS_Shape shape =
-            make_prism.Shape();
         populateShapeEvidence(
             evidence.shape,
             shape);
@@ -492,11 +492,11 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
 
         const auto start_count =
             countSubshapes(
-                make_prism.FirstShape(),
+                sweep.FirstShape(),
                 TopAbs_FACE);
         const auto end_count =
             countSubshapes(
-                make_prism.LastShape(),
+                sweep.LastShape(),
                 TopAbs_FACE);
 
         evidence.start_cap = {
@@ -521,13 +521,12 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                     source.edge);
             for (const auto& basis_edge :
                  basis_edges) {
-                // BRepPrimAPI_MakePrism::Generated(edge) can omit history
-                // even for an exact basis edge. Query the concrete sweep
-                // algorithm for the shape generated from that exact edge.
-                // The returned TopoDS shape remains transient provider
-                // evidence; semantic identity is source.provenance.
+                // The high-level MakePrism Generated(edge) history can omit
+                // an exact basis edge. Query the concrete transient sweep
+                // directly for the shape generated from that exact edge.
+                // Semantic identity remains source.provenance.
                 const TopoDS_Shape generated =
-                    make_prism.Prism().Shape(
+                    sweep.Shape(
                         basis_edge);
                 if (!generated.IsNull()) {
                     face_count +=
