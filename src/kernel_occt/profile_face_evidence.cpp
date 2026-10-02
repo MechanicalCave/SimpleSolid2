@@ -515,6 +515,7 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
         for (const auto& source :
              built->source_edges) {
             std::size_t face_count = 0U;
+            std::size_t generated_shape_count = 0U;
             const auto basis_edges =
                 matchingFaceEdges(
                     built->face,
@@ -529,6 +530,7 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                     sweep.Shape(
                         basis_edge);
                 if (!generated.IsNull()) {
+                    ++generated_shape_count;
                     face_count +=
                         countSubshapes(
                             generated,
@@ -540,7 +542,9 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                 kernel::ExtrudeFaceRoleKind::side,
                 referenceStatus(face_count),
                 face_count,
-                source.provenance});
+                source.provenance,
+                basis_edges.size(),
+                generated_shape_count});
         }
 
         return evidence;
