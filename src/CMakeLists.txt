@@ -138,9 +138,28 @@ target_link_libraries(simplesolid2_application
 
 target_compile_features(simplesolid2_application PUBLIC cxx_std_20)
 
+if(SS2_BUILD_DESKTOP OR SS2_BUILD_KERNEL_NATIVE)
+find_package(OpenCASCADE CONFIG REQUIRED)
+endif()
+
+if(SS2_BUILD_KERNEL_NATIVE)
+foreach(_target IN ITEMS
+        TKernel
+        TKMath
+        TKG2d
+        TKG3d
+        TKGeomBase
+        TKBRep
+        TKTopAlgo
+        TKPrim)
+    if(NOT TARGET ${_target})
+        message(FATAL_ERROR "OpenCASCADE package is missing required kernel-native target ${_target}")
+    endif()
+endforeach()
+endif()
+
 if(SS2_BUILD_DESKTOP)
 find_package(Qt6 6 REQUIRED COMPONENTS Widgets)
-find_package(OpenCASCADE CONFIG REQUIRED)
 
 foreach(_target IN ITEMS TKernel TKMath TKG3d TKGeomBase TKService TKV3d TKOpenGl)
     if(NOT TARGET ${_target})
