@@ -10,11 +10,14 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSplitter>
 #include <QStackedWidget>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QWidget>
 
 #include <cstdlib>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -28,7 +31,11 @@ void check(bool value, const char* expression, int line) {
     if (!value) {
         std::cerr << "WB-01 CAD Workbench CHECK failed at line "
                   << line << ": " << expression << '\n';
-        std::abort();
+        // The self-hosted Windows runner is interactive. MSVC Debug
+        // abort() opens a modal CRT dialog and turns a normal assertion
+        // failure into a blocking desktop prompt. Exit with failure instead
+        // so CTest reports the CHECK immediately without user intervention.
+        std::exit(EXIT_FAILURE);
     }
 }
 
@@ -318,6 +325,30 @@ int main(int argc, char* argv[]) {
     auto* editor =
         workbench.findChild<QWidget*>(
             QStringLiteral("editorSurface"));
+    auto* editor_host =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("editorSurfaceHost"));
+    auto* document_top_row =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("documentTopRow"));
+    auto* tree_panel =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("documentTreePanel"));
+    auto* right_panel =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("workbenchRightPanel"));
+    auto* splitter =
+        workbench.findChild<QSplitter*>(
+            QStringLiteral("workbenchSplitter"));
+    auto* tree_recovery =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchTreeRecoveryButton"));
+    auto* right_recovery =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchRightPanelRecoveryButton"));
+    auto* sketch_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("sketchToolButton"));
     auto* operations =
         workbench.findChild<QLabel*>(
             QStringLiteral("operationsPlaceholder"));
@@ -360,6 +391,14 @@ int main(int argc, char* argv[]) {
 
     CHECK(tree != nullptr);
     CHECK(editor != nullptr);
+    CHECK(editor_host != nullptr);
+    CHECK(document_top_row != nullptr);
+    CHECK(tree_panel != nullptr);
+    CHECK(right_panel != nullptr);
+    CHECK(splitter != nullptr);
+    CHECK(tree_recovery != nullptr);
+    CHECK(right_recovery != nullptr);
+    CHECK(sketch_tool != nullptr);
     CHECK(operations != nullptr);
     CHECK(title != nullptr);
     CHECK(apply != nullptr);
@@ -374,6 +413,147 @@ int main(int argc, char* argv[]) {
     CHECK(reference_visibility != nullptr);
     CHECK(status != nullptr);
 
+    workbench.resize(1400, 800);
+    workbench.show();
+    QApplication::processEvents();
+
+    CHECK(document_top_row->isAncestorOf(sketch_tool));
+    CHECK(document_top_row->isAncestorOf(undo));
+
+    const auto sketch_top =
+        sketch_tool->mapTo(
+            document_top_row,
+            QPoint{0, 0}).y();
+    const auto undo_top =
+        undo->mapTo(
+            document_top_row,
+            QPoint{0, 0}).y();
+    CHECK(std::abs(sketch_top - undo_top) <= 4);
+
+    CHECK(tree_panel->width() >= 110);
+    CHECK(tree_panel->width() <= 210);
+    CHECK(right_panel->width() >= 210);
+    CHECK(right_panel->width() <= 340);
+    CHECK(editor_host->width() > tree_panel->width());
+    CHECK(editor_host->width() > right_panel->width());
+
+    const auto initial_side_widths = splitter->sizes();
+    CHECK(initial_side_widths.size() == 3);
+    workbench.resize(1800, 800);
+    QApplication::processEvents();
+    const auto wider_side_widths = splitter->sizes();
+    CHECK(wider_side_widths.size() == 3);
+    CHECK(
+        wider_side_widths[1] >
+        initial_side_widths[1]);
+    CHECK(
+        std::abs(
+            wider_side_widths[0] -
+            initial_side_widths[0]) <= 30);
+    CHECK(
+        std::abs(
+            wider_side_widths[2] -
+            initial_side_widths[2]) <= 30);
+
+    // Compact keeps all three surfaces but deliberately gives the center
+    // Editor priority. Narrow collapses side surfaces and exposes bounded,
+    // local recovery controls rather than introducing a docking framework.
+    workbench.resize(980, 800);
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(tree_recovery->isHidden());
+    CHECK(right_recovery->isHidden());
+    const auto compact_widths = splitter->sizes();
+    CHECK(compact_widths.size() == 3);
+    CHECK(compact_widths[0] <= 170);
+    CHECK(compact_widths[2] <= 280);
+    CHECK(compact_widths[1] > compact_widths[0]);
+    CHECK(compact_widths[1] > compact_widths[2]);
+
+    // Breakpoint hysteresis: compact does not enter narrow until the lower
+    // threshold is crossed, and narrow does not leave until the distinct
+    // upper threshold is crossed.
+    workbench.resize(790, 800);
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(tree_recovery->isHidden());
+    CHECK(right_recovery->isHidden());
+
+    workbench.resize(750, 800);
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(right_panel->isHidden());
+    CHECK(!tree_recovery->isHidden());
+    CHECK(!right_recovery->isHidden());
+
+    workbench.resize(790, 800);
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(right_panel->isHidden());
+    CHECK(!tree_recovery->isHidden());
+    CHECK(!right_recovery->isHidden());
+
+    workbench.resize(830, 800);
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(tree_recovery->isHidden());
+    CHECK(right_recovery->isHidden());
+
+    workbench.resize(720, 800);
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(right_panel->isHidden());
+    CHECK(!tree_recovery->isHidden());
+    CHECK(!right_recovery->isHidden());
+    CHECK(!editor_host->isHidden());
+    CHECK(
+        tree_recovery->toolTip() ==
+        QStringLiteral("Show Document Tree"));
+    CHECK(
+        right_recovery->toolTip() ==
+        QStringLiteral("Show Properties and Operations"));
+
+    tree_recovery->click();
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(right_panel->isHidden());
+    CHECK(tree_recovery->isChecked());
+    CHECK(!right_recovery->isChecked());
+    CHECK(
+        tree_recovery->toolTip() ==
+        QStringLiteral("Hide Document Tree"));
+    CHECK(
+        right_recovery->toolTip() ==
+        QStringLiteral("Show Properties and Operations"));
+
+    right_recovery->click();
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(!tree_recovery->isChecked());
+    CHECK(right_recovery->isChecked());
+    CHECK(
+        tree_recovery->toolTip() ==
+        QStringLiteral("Show Document Tree"));
+    CHECK(
+        right_recovery->toolTip() ==
+        QStringLiteral("Hide Properties and Operations"));
+
+    right_recovery->click();
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(right_panel->isHidden());
+
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(tree_recovery->isHidden());
+    CHECK(right_recovery->isHidden());
+
     CHECK(operations->text() ==
           QStringLiteral("Part modeling context."));
 
@@ -384,6 +564,46 @@ int main(int argc, char* argv[]) {
     CHECK(*workbench.activeDocumentId() == first_id);
     CHECK(title->text() == QStringLiteral("Drive Shaft"));
     CHECK(save->isEnabled());
+
+    auto* responsive_session =
+        opened.session->documentSession(first_id);
+    CHECK(responsive_session != nullptr);
+    const auto responsive_revision =
+        responsive_session->document().revision();
+    const auto responsive_undo =
+        responsive_session->undoDepth();
+    const bool responsive_dirty =
+        responsive_session->needsSave();
+
+    // A focused editor retains keyboard ownership when narrow reflow occurs;
+    // the owning right panel remains recovered instead of disappearing.
+    title->setFocus(Qt::OtherFocusReason);
+    QApplication::processEvents();
+    CHECK(title->hasFocus());
+    workbench.resize(720, 800);
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(title->hasFocus());
+    CHECK(
+        responsive_session->document().revision() ==
+        responsive_revision);
+    CHECK(responsive_session->undoDepth() ==
+          responsive_undo);
+    CHECK(responsive_session->needsSave() ==
+          responsive_dirty);
+
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(
+        responsive_session->document().revision() ==
+        responsive_revision);
+    CHECK(responsive_session->undoDepth() ==
+          responsive_undo);
+    CHECK(responsive_session->needsSave() ==
+          responsive_dirty);
 
     viewer::CameraState first_camera;
     first_camera.eye = {20.0, -10.0, 15.0};

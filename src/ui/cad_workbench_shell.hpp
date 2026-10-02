@@ -4,6 +4,9 @@
 
 class QHBoxLayout;
 class QLabel;
+class QResizeEvent;
+class QSplitter;
+class QToolButton;
 class QTreeWidget;
 class QVBoxLayout;
 class QWidget;
@@ -24,7 +27,21 @@ public:
     void setPropertiesContent(QWidget* widget);
     void setOperationsContent(QWidget* widget);
 
+protected:
+    void resizeEvent(QResizeEvent* event) override;
+
 private:
+    enum class ResponsiveRegime {
+        normal,
+        compact,
+        narrow,
+    };
+
+    void updateResponsiveLayout(bool force = false);
+    void setNarrowPanel(QWidget* panel);
+    [[nodiscard]] bool panelContainsFocus(
+        const QWidget* panel) const;
+
     static void replaceContent(
         QVBoxLayout& layout,
         QWidget*& current,
@@ -37,6 +54,15 @@ private:
     QVBoxLayout* properties_host_layout_{};
     QVBoxLayout* operations_host_layout_{};
     QLabel* status_{};
+    QSplitter* splitter_{};
+    QWidget* tree_panel_{};
+    QWidget* editor_host_{};
+    QWidget* right_panel_{};
+    QToolButton* tree_recovery_button_{};
+    QToolButton* right_recovery_button_{};
+    ResponsiveRegime responsive_regime_{
+        ResponsiveRegime::normal};
+    bool responsive_initialized_{};
 
     QWidget* editor_surface_{};
     QWidget* command_line_content_{};

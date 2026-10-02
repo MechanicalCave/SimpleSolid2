@@ -48,7 +48,9 @@ Several Parts can remain open at once. The bottom Document Tabs belong to Projec
 
 Use `Workspace` on the top toolbar to return to the Project Workspace Dashboard without closing any open Documents. Their tabs remain available, and clicking a tab returns to that Part. Navigating to Workspace does not Save or change authored state. Closing the last Document also returns to Workspace without closing the Project.
 
-In the active Part Workbench, the left side contains Document Tree. The center contains the 3D Viewport with a tool-launch strip above it. The right side contains Properties and contextual Operations. Status/diagnostic information belongs to the active Workbench.
+In the active Part Workbench, one top row compositionally aligns the current Document/context tools on the left with `Undo`, `Redo`, `Save` and `Close` on the right. Below it, the left side contains Document Tree, the center contains the 3D Viewport, and the right side contains Properties and contextual Operations. Status/diagnostic information belongs to the active Workbench.
+
+At normal width the side panels start with narrow proportions (about 150 px for Tree and 270 px for Properties/Operations), while additional space primarily goes to the Viewport. Smaller widths pass through a compact layout. In a narrow window the side panels collapse in a controlled way; `Tree` and `Panel` controls in the top row deliberately recover the side you need. Resizing or collapsing a panel does not change geometry, selection, Undo/Redo or the active Sketch/Profile context.
 
 <!-- section-id: product.parts.edit -->
 ## Editing Document properties
@@ -96,7 +98,7 @@ After `Save`, Origin visibility survives closing and restarting the application.
 <!-- section-id: product.parts.sketch-host -->
 ## Creating and viewing a Sketch
 
-Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when visible, in the 3D Viewport.
+Use `Sketch` in the expanding left side of the active-Document top row, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when visible, in the 3D Viewport.
 
 During Sketch Edit the tools are grouped as:
 

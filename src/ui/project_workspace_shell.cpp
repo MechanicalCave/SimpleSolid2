@@ -13,6 +13,7 @@
 #include <QLineEdit>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSizePolicy>
 #include <QSettings>
 #include <QStackedWidget>
 #include <QTabBar>
@@ -82,20 +83,55 @@ ProjectWorkspaceShell::ProjectWorkspaceShell(
     title->setFont(title_font);
     root->addWidget(title);
 
-    project_name_ = new QLabel(this);
+    auto* project_info_strip = new QWidget(this);
+    project_info_strip->setObjectName(
+        QStringLiteral("workspaceInfoStrip"));
+    auto* project_info_layout =
+        new QHBoxLayout(project_info_strip);
+    project_info_layout->setContentsMargins(0, 0, 0, 0);
+    project_info_layout->setSpacing(6);
+
+    project_name_ = new QLabel(project_info_strip);
     project_name_->setObjectName(
         QStringLiteral("workspaceProjectName"));
-    project_id_ = new QLabel(this);
+    project_name_->setWordWrap(false);
+    project_info_layout->addWidget(project_name_, 0);
+
+    auto* project_separator =
+        new QLabel(
+            QStringLiteral("|"),
+            project_info_strip);
+    project_separator->setObjectName(
+        QStringLiteral("workspaceProjectSeparator"));
+    project_info_layout->addWidget(project_separator, 0);
+
+    project_id_ = new QLabel(project_info_strip);
     project_id_->setObjectName(
         QStringLiteral("workspaceProjectId"));
-    workspace_path_ = new QLabel(this);
+    project_id_->setWordWrap(false);
+    project_id_->setSizePolicy(
+        QSizePolicy::Ignored,
+        QSizePolicy::Preferred);
+    project_info_layout->addWidget(project_id_, 1);
+
+    auto* workspace_separator =
+        new QLabel(
+            QStringLiteral("|"),
+            project_info_strip);
+    workspace_separator->setObjectName(
+        QStringLiteral("workspacePathSeparator"));
+    project_info_layout->addWidget(workspace_separator, 0);
+
+    workspace_path_ = new QLabel(project_info_strip);
     workspace_path_->setObjectName(
         QStringLiteral("workspaceProjectPath"));
-    workspace_path_->setWordWrap(true);
+    workspace_path_->setWordWrap(false);
+    workspace_path_->setSizePolicy(
+        QSizePolicy::Ignored,
+        QSizePolicy::Preferred);
+    project_info_layout->addWidget(workspace_path_, 2);
 
-    root->addWidget(project_name_);
-    root->addWidget(project_id_);
-    root->addWidget(workspace_path_);
+    root->addWidget(project_info_strip);
 
     auto* toolbar_frame = new QFrame(this);
     toolbar_frame->setObjectName(
@@ -405,12 +441,20 @@ void ProjectWorkspaceShell::setProjectInfo(
     project_name_->setText(
         QStringLiteral("Project: ") +
         display_name);
+    project_name_->setToolTip(
+        project_name_->text());
+
     project_id_->setText(
         QStringLiteral("ProjectId: ") +
         project_id);
+    project_id_->setToolTip(
+        project_id_->text());
+
     workspace_path_->setText(
         QStringLiteral("Workspace: ") +
         workspace_path);
+    workspace_path_->setToolTip(
+        workspace_path_->text());
 }
 
 QPushButton&

@@ -113,6 +113,8 @@ The Project can later be opened again using `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Current limits
 
+After a Project is opened, its name, `ProjectId` and Workspace path are shown in one compact information row. Long values do not wrap into extra rows by default; the complete value remains available in a tooltip.
+
 The Workspace Shell contains the persistent native `.ss2part` Part document type with Document Properties, Undo/Redo, conditional Save and several simultaneously open Part sessions.
 
 The shared CAD Workbench and 3D Viewer support Part Origin/reference work, durable Origin-plane Sketches and the current Sketch editing workflow. Body/Feature solid modeling, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.

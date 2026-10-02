@@ -6,9 +6,11 @@
 <!-- section-id: internal.cad-workbench-viewer.shell -->
 ## Shared Workbench shell
 
-`CadWorkbenchShell` is the reusable one-document editor layout containing Document Tree, an editor tool-launch strip above the Editor Surface, Properties, contextual Operations and Status/Diagnostics. Project-level Document Tabs live outside it in `ProjectWorkspaceShell`, so the Workbench shell represents only one active CAD Document editor.
+`CadWorkbenchShell` is the reusable one-document editor layout. Its active-Document top row contains the domain/context tool surface on the left and the existing Undo / Redo / Save / Close Document actions on the right; visual alignment does not merge their ownership. The body contains Document Tree, the Editor Surface, Properties plus contextual Operations, followed by Status/Diagnostics. Project-level Document Tabs live outside it in `ProjectWorkspaceShell`, so the Workbench shell represents only one active CAD Document editor.
 
-The shell owns layout only. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
+The shell owns layout only. At normal desktop width it targets about 150 px for Document Tree and 270 px for Properties/Operations while the center Editor receives stretch surplus. Compact mode keeps all three surfaces with smaller side targets (currently 120/230 px). Narrow mode collapses the side surfaces and exposes local `Tree` and `Panel` recovery controls in the active-Document row; recovering one side keeps the Editor present and does not introduce docking/window ownership. Separate enter/leave thresholds provide resize hysteresis. If focus is inside a side-panel text/property editor when narrow mode is entered, that owning panel remains recovered so text focus is not discarded by reflow.
+
+Responsive transitions are presentation-only: they do not mutate the Document, revision, dirty state, Undo/Redo, semantic selection or active Sketch/Profile context. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
 
 `ProjectWorkspaceShell` owns one visible global Command Line surface plus the Qt keyboard/focus adapter. A provider-neutral `CadInputSession` owns only the runtime text buffer, active generic endpoint and submission transport. The active Workbench/tool owns semantic interpretation. `CadWorkbench` is currently the Part endpoint and adapts the Sketch interaction state; Project Workspace does not know Sketch commands or `PointRequest`.
 

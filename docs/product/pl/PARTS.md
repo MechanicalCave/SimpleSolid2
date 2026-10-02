@@ -48,7 +48,9 @@ Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs nal
 
 Przycisk `Workspace` na górnym pasku wraca do Project Workspace Dashboard bez zamykania otwartych Dokumentów. Ich taby pozostają dostępne i możesz wrócić do dowolnego Parta klikając jego zakładkę. Sam powrót do Workspace nie wykonuje Save i nie zmienia authored state. Zamknięcie ostatniego Dokumentu również wraca do Workspace bez zamykania Projektu.
 
-W aktywnym Part Workbench po lewej znajduje się Document Tree, pośrodku viewport 3D z paskiem narzędzi nad nim, a po prawej Properties i kontekstowy panel Operations. Status/diagnostyka należy do aktywnego Workbench.
+W aktywnym Part Workbench jeden górny wiersz łączy kompozycyjnie narzędzia bieżącego Dokumentu/kontekstu po lewej z `Undo`, `Redo`, `Save` i `Close` po prawej. Poniżej po lewej znajduje się Document Tree, pośrodku viewport 3D, a po prawej Properties i kontekstowy panel Operations. Status/diagnostyka należy do aktywnego Workbench.
+
+Przy normalnej szerokości panele boczne startują w wąskich proporcjach (około 150 px dla Tree i 270 px dla Properties/Operations), a dodatkową przestrzeń otrzymuje przede wszystkim viewport. Przy mniejszej szerokości układ przechodzi przez tryb kompaktowy. W wąskim oknie panele boczne są kontrolowanie zwijane; przyciski `Tree` i `Panel` w górnym wierszu pozwalają świadomie przywrócić potrzebną stronę. Zmiana szerokości lub zwinięcie panelu nie zmienia geometrii, zaznaczenia, Undo/Redo ani aktywnego Sketch/Profile.
 
 <!-- section-id: product.parts.edit -->
 ## Edycja właściwości Dokumentu
@@ -96,7 +98,7 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie i wyświetlanie Sketchu
 
-Na pasku nad viewportem 3D użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin. Płaszczyznę możesz wybrać w Document Tree lub — gdy jest widoczna — w viewporcie 3D.
+W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin. Płaszczyznę możesz wybrać w Document Tree lub — gdy jest widoczna — w viewporcie 3D.
 
 Podczas Sketch Edit narzędzia są uporządkowane w grupy:
 

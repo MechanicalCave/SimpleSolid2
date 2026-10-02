@@ -113,6 +113,8 @@ Projekt można później ponownie otworzyć przez `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Aktualne ograniczenia
 
+Po otwarciu Projektu jego nazwa, `ProjectId` i ścieżka Workspace są pokazane w jednym kompaktowym wierszu informacji. Długie wartości nie przechodzą domyślnie do kolejnych linii; pełna wartość pozostaje dostępna w podpowiedzi.
+
 Workspace Shell zawiera trwały typ dokumentu Part `.ss2part` z właściwościami Dokumentu, Undo/Redo, warunkowym Save i możliwością utrzymywania kilku otwartych Partów jednocześnie.
 
 Wspólny CAD Workbench i Viewer 3D obsługują Origin/referencje Parta, trwałe Sketche na płaszczyznach Origin oraz bieżący workflow edycji Sketchu. Modelowanie bryłowe Body/Feature, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Dokumenty Part`.

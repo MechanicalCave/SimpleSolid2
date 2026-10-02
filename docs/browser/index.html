@@ -483,9 +483,11 @@ The Product Browser must be regenerated with `.\ss2.ps1 docs` whenever canonical
 <!-- section-id: internal.cad-workbench-viewer.shell -->
 ## Shared Workbench shell
 
-`CadWorkbenchShell` is the reusable one-document editor layout containing Document Tree, an editor tool-launch strip above the Editor Surface, Properties, contextual Operations and Status/Diagnostics. Project-level Document Tabs live outside it in `ProjectWorkspaceShell`, so the Workbench shell represents only one active CAD Document editor.
+`CadWorkbenchShell` is the reusable one-document editor layout. Its active-Document top row contains the domain/context tool surface on the left and the existing Undo / Redo / Save / Close Document actions on the right; visual alignment does not merge their ownership. The body contains Document Tree, the Editor Surface, Properties plus contextual Operations, followed by Status/Diagnostics. Project-level Document Tabs live outside it in `ProjectWorkspaceShell`, so the Workbench shell represents only one active CAD Document editor.
 
-The shell owns layout only. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
+The shell owns layout only. At normal desktop width it targets about 150 px for Document Tree and 270 px for Properties/Operations while the center Editor receives stretch surplus. Compact mode keeps all three surfaces with smaller side targets (currently 120/230 px). Narrow mode collapses the side surfaces and exposes local `Tree` and `Panel` recovery controls in the active-Document row; recovering one side keeps the Editor present and does not introduce docking/window ownership. Separate enter/leave thresholds provide resize hysteresis. If focus is inside a side-panel text/property editor when narrow mode is entered, that owning panel remains recovered so text focus is not discarded by reflow.
+
+Responsive transitions are presentation-only: they do not mutate the Document, revision, dirty state, Undo/Redo, semantic selection or active Sketch/Profile context. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
 
 `ProjectWorkspaceShell` owns one visible global Command Line surface plus the Qt keyboard/focus adapter. A provider-neutral `CadInputSession` owns only the runtime text buffer, active generic endpoint and submission transport. The active Workbench/tool owns semantic interpretation. `CadWorkbench` is currently the Part endpoint and adapts the Sketch interaction state; Project Workspace does not know Sketch commands or `PointRequest`.
 
@@ -1690,9 +1692,10 @@ Work-item completion uses the repository's exact-head Windows gate; current-stat
 
 The Qt application uses a `QStackedWidget` with Project Hub and Workspace pages.
 
-The Workspace page contains a persistent Project Workspace Shell. It shows Project name, ProjectId and Workspace path and owns the Project-level navigation surfaces:
+The Workspace page contains a persistent Project Workspace Shell. Project display name, ProjectId and Workspace path are presented in one compact non-wrapping information strip; complete values remain available through read-only tooltips when the visible text is constrained. The shell owns the Project-level navigation surfaces:
 
 ```text
+HEADER    compact Project / ProjectId / Workspace information strip
 TOP       Project toolbar
 CONTENT   Workspace Dashboard or active Document Workbench
 BELOW     Workspace-global Command Line
@@ -1707,14 +1710,17 @@ The Project Workspace Shell owns one visible Command Line surface and one runtim
 
 The Qt adapter captures printable unmodified keys from normal CAD surfaces without moving focus, mirrors them into Command Line and yields to real text editors, popup/menu ownership, modal dialogs, foreign windows and application shortcuts. Enter consumes a non-empty submitted token whether accepted or rejected; a rejected token creates no authored mutation, leaves the semantic context active, clears the editable buffer and publishes a bounded diagnostic. Buffer/prompt/diagnostic state is runtime-only and does not dirty a CAD Document or create Undo history.
 
-`CadWorkbenchShell` owns only fixed presentation regions for the active Part Document:
+`CadWorkbenchShell` owns only presentation regions for the active Part Document:
 
 ```text
+TOP       domain/context tools | Undo Redo Save Close
 LEFT      Document Tree
-CENTER    tool-launch strip + Editor Surface / 3D Viewport
+CENTER    Editor Surface / 3D Viewport
 RIGHT     Properties + contextual Operations
 BELOW     Status / Diagnostics
 ```
+
+Normal desktop layout starts near 150 px left / center stretch / 270 px right. Compact layout reduces the side targets while keeping all three columns. In narrow layout the center remains authoritative and the side surfaces collapse behind local `Tree` / `Panel` recovery controls. Responsive reflow is runtime presentation only and does not mutate authored state, selection, history or edit context.
 
 Document Tabs are deliberately outside `CadWorkbenchShell`. Future Assembly/Drawing editors can therefore use the same Project-level navigation without making Part Workbench their owner.
 
@@ -1746,7 +1752,7 @@ The persistent Project toolbar exposes `Workspace`, `New Part…`, neutral `Open
 
 `Workspace` switches only the runtime navigation context to Project Dashboard. It does not close, save or mutate open Documents.
 
-Once a Part is active, its Workbench exposes `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, the editor tool-launch strip and contextual Operations. Project-level Document Tabs remain owned by Project Workspace Shell.
+Once a Part is active, its Workbench exposes `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, the active-Document domain/context tool surface and contextual Operations. Domain/context tools occupy the expanding left side of one top row while the four Document actions remain a fixed right-side zone. Project-level Document Tabs remain owned by Project Workspace Shell.
 
 `New Part…` opens `WorkspaceLocationDialog`. It shows the current Workspace folder hierarchy, allows the user to choose a folder, enter the filename and explicitly `Create Folder`.
 
@@ -1769,7 +1775,7 @@ Tree and Viewport are adapters of one document-scoped selected set plus primary 
 
 Properties shows common Document fields when no semantic object is primary. When a built-in Origin reference is primary, Properties switches to a read-only reference context showing role/type/identity/visibility.
 
-The central Editor Surface hosts the provider-neutral Document Viewport. A tool-launch strip immediately above it contains the current Part `Sketch` launcher. Production composition injects the Windows Qt/OCCT provider.
+The central Editor Surface hosts the provider-neutral Document Viewport. The current Part `Sketch` launcher and, during Sketch Edit, the Sketch tool family live in the expanding domain/context zone of the active-Document top row. Production composition injects the Windows Qt/OCCT provider.
 
 Operations is contextual to the active tool/edit mode: it is idle when no tool is active, shows Sketch support-pick controls while creating a Sketch, and shows `Finish Sketch` while a Sketch is being edited.
 
@@ -1909,7 +1915,9 @@ Several Parts can remain open at once. The bottom Document Tabs belong to Projec
 
 Use `Workspace` on the top toolbar to return to the Project Workspace Dashboard without closing any open Documents. Their tabs remain available, and clicking a tab returns to that Part. Navigating to Workspace does not Save or change authored state. Closing the last Document also returns to Workspace without closing the Project.
 
-In the active Part Workbench, the left side contains Document Tree. The center contains the 3D Viewport with a tool-launch strip above it. The right side contains Properties and contextual Operations. Status/diagnostic information belongs to the active Workbench.
+In the active Part Workbench, one top row compositionally aligns the current Document/context tools on the left with `Undo`, `Redo`, `Save` and `Close` on the right. Below it, the left side contains Document Tree, the center contains the 3D Viewport, and the right side contains Properties and contextual Operations. Status/diagnostic information belongs to the active Workbench.
+
+At normal width the side panels start with narrow proportions (about 150 px for Tree and 270 px for Properties/Operations), while additional space primarily goes to the Viewport. Smaller widths pass through a compact layout. In a narrow window the side panels collapse in a controlled way; `Tree` and `Panel` controls in the top row deliberately recover the side you need. Resizing or collapsing a panel does not change geometry, selection, Undo/Redo or the active Sketch/Profile context.
 
 <!-- section-id: product.parts.edit -->
 ## Editing Document properties
@@ -1957,7 +1965,7 @@ After `Save`, Origin visibility survives closing and restarting the application.
 <!-- section-id: product.parts.sketch-host -->
 ## Creating and viewing a Sketch
 
-Use `Sketch` in the tool strip directly above the 3D Viewport, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when visible, in the 3D Viewport.
+Use `Sketch` in the expanding left side of the active-Document top row, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when visible, in the 3D Viewport.
 
 During Sketch Edit the tools are grouped as:
 
@@ -2471,6 +2479,8 @@ The Project can later be opened again using `Open Project…`.
 <!-- section-id: product.projects.current-limits -->
 ## Current limits
 
+After a Project is opened, its name, `ProjectId` and Workspace path are shown in one compact information row. Long values do not wrap into extra rows by default; the complete value remains available in a tooltip.
+
 The Workspace Shell contains the persistent native `.ss2part` Part document type with Document Properties, Undo/Redo, conditional Save and several simultaneously open Part sessions.
 
 The shared CAD Workbench and 3D Viewer support Part Origin/reference work, durable Origin-plane Sketches and the current Sketch editing workflow. Body/Feature solid modeling, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.
@@ -2578,7 +2588,9 @@ Kilka Partów może pozostawać otwartych jednocześnie. Dolne Document Tabs nal
 
 Przycisk `Workspace` na górnym pasku wraca do Project Workspace Dashboard bez zamykania otwartych Dokumentów. Ich taby pozostają dostępne i możesz wrócić do dowolnego Parta klikając jego zakładkę. Sam powrót do Workspace nie wykonuje Save i nie zmienia authored state. Zamknięcie ostatniego Dokumentu również wraca do Workspace bez zamykania Projektu.
 
-W aktywnym Part Workbench po lewej znajduje się Document Tree, pośrodku viewport 3D z paskiem narzędzi nad nim, a po prawej Properties i kontekstowy panel Operations. Status/diagnostyka należy do aktywnego Workbench.
+W aktywnym Part Workbench jeden górny wiersz łączy kompozycyjnie narzędzia bieżącego Dokumentu/kontekstu po lewej z `Undo`, `Redo`, `Save` i `Close` po prawej. Poniżej po lewej znajduje się Document Tree, pośrodku viewport 3D, a po prawej Properties i kontekstowy panel Operations. Status/diagnostyka należy do aktywnego Workbench.
+
+Przy normalnej szerokości panele boczne startują w wąskich proporcjach (około 150 px dla Tree i 270 px dla Properties/Operations), a dodatkową przestrzeń otrzymuje przede wszystkim viewport. Przy mniejszej szerokości układ przechodzi przez tryb kompaktowy. W wąskim oknie panele boczne są kontrolowanie zwijane; przyciski `Tree` i `Panel` w górnym wierszu pozwalają świadomie przywrócić potrzebną stronę. Zmiana szerokości lub zwinięcie panelu nie zmienia geometrii, zaznaczenia, Undo/Redo ani aktywnego Sketch/Profile.
 
 <!-- section-id: product.parts.edit -->
 ## Edycja właściwości Dokumentu
@@ -2626,7 +2638,7 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie i wyświetlanie Sketchu
 
-Na pasku nad viewportem 3D użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin. Płaszczyznę możesz wybrać w Document Tree lub — gdy jest widoczna — w viewporcie 3D.
+W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin. Płaszczyznę możesz wybrać w Document Tree lub — gdy jest widoczna — w viewporcie 3D.
 
 Podczas Sketch Edit narzędzia są uporządkowane w grupy:
 
@@ -3139,6 +3151,8 @@ Projekt można później ponownie otworzyć przez `Open Project…`.
 
 <!-- section-id: product.projects.current-limits -->
 ## Aktualne ograniczenia
+
+Po otwarciu Projektu jego nazwa, `ProjectId` i ścieżka Workspace są pokazane w jednym kompaktowym wierszu informacji. Długie wartości nie przechodzą domyślnie do kolejnych linii; pełna wartość pozostaje dostępna w podpowiedzi.
 
 Workspace Shell zawiera trwały typ dokumentu Part `.ss2part` z właściwościami Dokumentu, Undo/Redo, warunkowym Save i możliwością utrzymywania kilku otwartych Partów jednocześnie.
 
