@@ -1,6 +1,6 @@
 version: 1
-status: completed
-active_work: "work/SR-02_SKETCH_INTERACTION_PRESENTATION_LATENCY.md"
+status: active
+active_work: "work/SR-03_RESPONSIVE_WORKBENCH_SHELL.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.9"
@@ -19,12 +19,18 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - SR-02 is complete; no production CAD Work Contract is active
-  - prepare the separate SR-03 Responsive Workbench Shell Work Contract for explicit Owner review and acceptance
-  - do not begin SR-03 production implementation until its synchronized activation candidate passes repository work/governance verification
-  - keep Split, Join, authored constraints/solver/dimensions, projected/reference geometry, ordinary Select RMB context, Axis/Centerline semantics, Part Feature Tree and solid modeling inactive
+  - SR-03 Responsive Workbench Shell is the only active production scope after this synchronized activation candidate passes work/governance verification
+  - implement the accepted compact one-row Workspace information strip
+  - align active Document domain/context tools in one top row with Undo/Redo/Save/Close while preserving separate ownership zones
+  - use approximately 150 px left Tree and 270 px right Properties/Operations defaults at normal desktop width; center Editor/Viewport owns stretch surplus
+  - implement controlled normal/compact/narrow responsive behavior with exact thresholds/mechanics delegated as bounded D1
+  - preserve ADR-0006 Workbench ownership, ADR-0011 CAD input/focus semantics and ADR-0010 native Viewer/Navigation Cube composition
+  - keep Assembly/Drawing implementation, general docking framework, Split/Join, authored constraints/solver/dimensions, ordinary Select RMB context, Part Feature Tree and solid modeling inactive
   - after SR-03 completes, perform the Sketcher profile-authoring readiness re-test before any Part Feature Tree architecture gate
 notes:
+  - Owner explicitly accepted SR-03 Responsive Workbench Shell on 2026-10-02, including the compact one-row Workspace information strip, unified active-Document top row, common geometric Workbench template direction, approximately 150/270 px normal side-panel defaults and center-Viewport stretch priority.
+  - Exact responsive breakpoint pixels and the smallest bounded compact/narrow Qt composition mechanism are delegated D1; ownership, required-control recoverability and no semantic mutation on reflow are frozen.
+  - Production layout changes remain forbidden until this synchronized activation candidate passes repository work/governance verification.
   - SR-02 completed on 2026-10-02. Exact final runtime/manual candidate 9b42fe2065e34801875b9fc45cd13820a784b55f passed Windows FULL #1169 with core-only 16/16, desktop 83/83, native curve-style regression PASS, SR02_BENCHMARK_PASS and final windows-msvc PASS.
   - Owner manual Windows verification passed on the same exact candidate after confirming the large drawing/interaction responsiveness improvement, fast/unobtrusive Finish Sketch behavior and corrected Circle/Arc Regular/Construction presentation.
   - Final durable before/after evidence is recorded in work/SR-02_FINAL_RESULTS.md; remaining scale risks are documented rather than hidden.
