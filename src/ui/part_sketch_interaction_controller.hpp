@@ -554,6 +554,21 @@ private:
     application::PolarCaptureState
         polar_capture_;
 
+    struct ProfileHoverReuseKey final {
+        core::DocumentId document_id;
+        sketch::SketchId sketch_id;
+        core::DocumentRevision document_revision;
+        std::optional<part::ProfileRegionIntent>
+            draft_intent;
+        std::uint32_t region_index{};
+        part::ProfileAreaEditMode area_mode{
+            part::ProfileAreaEditMode::add_area};
+
+        friend bool operator==(
+            const ProfileHoverReuseKey&,
+            const ProfileHoverReuseKey&) = default;
+    };
+
     struct ProfileToolSession final {
         ProfileToolSessionKind kind{
             ProfileToolSessionKind::create};
@@ -568,9 +583,14 @@ private:
         std::optional<part::ProfileAreaEditResult>
             hover_result;
         core::DocumentRevision expected_revision;
+        std::optional<ProfileHoverReuseKey>
+            hover_reuse_key;
     };
 
     struct ProfileAnalysisCache final {
+        core::DocumentId document_id;
+        sketch::SketchId sketch_id;
+        core::DocumentRevision observed_revision;
         sketch::SketchModelState model_state;
         sketch::RegionAnalysis2D analysis;
     };
