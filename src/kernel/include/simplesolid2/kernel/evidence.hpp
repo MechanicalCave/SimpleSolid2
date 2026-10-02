@@ -122,4 +122,60 @@ struct ExtrudeEvidence final {
         const ExtrudeEvidence&) = default;
 };
 
+
+enum class EdgeSplitProbeScenario {
+    middle_notch,
+    remove_target,
+};
+
+enum class FaceMergeProbeScenario {
+    overlapping_coplanar,
+    asymmetric_history,
+    absorbed_inner,
+};
+
+// PM-00A E03/E04 raw provider-history evidence. These values are transient
+// observations only; they are not a persistent selector or identity format.
+struct BooleanSubshapeHistoryEvidence final {
+    std::size_t modified_count{};
+    std::size_t generated_count{};
+    bool deleted{false};
+    bool unchanged_present{false};
+    std::size_t unique_descendant_count{};
+
+    friend bool operator==(
+        const BooleanSubshapeHistoryEvidence&,
+        const BooleanSubshapeHistoryEvidence&) = default;
+};
+
+struct EdgeSplitHistoryEvidence final {
+    ShapeEvidence shape;
+    BooleanSubshapeHistoryEvidence target;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return shape.ok() &&
+               shape.solid_count == 1U;
+    }
+
+    friend bool operator==(
+        const EdgeSplitHistoryEvidence&,
+        const EdgeSplitHistoryEvidence&) = default;
+};
+
+struct FaceMergeHistoryEvidence final {
+    ShapeEvidence shape;
+    BooleanSubshapeHistoryEvidence first;
+    BooleanSubshapeHistoryEvidence second;
+    std::size_t shared_descendant_count{};
+
+    [[nodiscard]] bool ok() const noexcept {
+        return shape.ok() &&
+               shape.solid_count == 1U;
+    }
+
+    friend bool operator==(
+        const FaceMergeHistoryEvidence&,
+        const FaceMergeHistoryEvidence&) = default;
+};
+
 } // namespace simplesolid2::kernel

@@ -1236,6 +1236,47 @@ E05 exact source candidate `7e0d6109cf927a2e8d85d2794b5718dcc2feab22` passed Win
 
 This remains architecture evidence only. It does not add a persisted topology-reference schema, Body/Feature persistence, a Part Feature Tree or a product solid-modeling command.
 
+<!-- section-id: internal.part-documents.pm00a-e03-e04-cardinality -->
+## PM-00A E03/E04 split/merge cardinality evidence
+
+PM-00A E03/E04 extends the transient Kernel evidence surface with neutral Boolean subshape-history observations:
+
+- Modified count;
+- Generated count;
+- Deleted flag;
+- unchanged-present flag;
+- unique descendant count;
+- shared-descendant count for bounded merge probes.
+
+These values are runtime evidence only. They are not persisted reference selectors and do not give provider history authority to choose semantic identity.
+
+The accepted fail-closed interpretation is:
+
+```text
+0 semantic candidates  -> Missing
+1 semantic candidate   -> Resolved
+>1 semantic candidates -> Ambiguous
+undeclared aggregate   -> Unsupported
+```
+
+The evidence proves:
+
+- a real OCCT Cut that splits one source edge into two descendants is Ambiguous for a singular reference;
+- a completely removed source edge is Missing;
+- independent semantic-role evidence may exclude technical candidates without using order, length or proximity;
+- two prior face meanings that collapse onto one provider result remain Ambiguous without an independent semantic winner;
+- Modified/Deleted provider-history asymmetry alone cannot select identity;
+- independent producer/role meaning may preserve one target as Resolved while a genuinely removed target is Missing;
+- aggregate split/merge meanings remain Unsupported unless a future contract explicitly declares such a reference type.
+
+All E03/E04 provider probes are rebuilt after previous operation/history objects leave scope and must reproduce identical neutral history/cardinality evidence.
+
+The synthetic fixture locates its known source subshapes by endpoint/centroid only to construct deterministic test inputs. Those lookup helpers are not topology resolution, not authored identity and not proposed persistent-reference semantics.
+
+E03/E04 exact source candidate `30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25` passed Kernel-focused #1274 and Windows FULL #1275 with zero false-Resolved outcomes.
+
+This remains architecture evidence only. It does not add a durable topology-reference schema, Body/Feature persistence, a product Boolean operation, Part Feature Tree behavior or reference-repair UI.
+
 <!-- section-id: internal.part-documents.persistence -->
 ## Native Part persistence
 

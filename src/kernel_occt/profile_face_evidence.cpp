@@ -1,28 +1,38 @@
 #include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepAlgoAPI_Cut.hxx>
+#include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepGProp.hxx>
+#include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepSweep_Prism.hxx>
+#include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
 #include <GeomAbs_SurfaceType.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
+#include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Compound.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
+#include <TopoDS_Vertex.hxx>
 #include <TopoDS_Wire.hxx>
+#include <TopTools_ListOfShape.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <numbers>
@@ -513,6 +523,243 @@ matchingFaceEdges(
     return matches;
 }
 
+[[nodiscard]] bool nearPoint(
+    const gp_Pnt& first,
+    const gp_Pnt& second,
+    double tolerance = 1.0e-7) noexcept {
+    return first.Distance(second) <= tolerance;
+}
+
+[[nodiscard]] std::optional<TopoDS_Edge>
+findEdgeByEndpoints(
+    const TopoDS_Shape& shape,
+    const gp_Pnt& first,
+    const gp_Pnt& second) {
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        const auto edge =
+            TopoDS::Edge(
+                explorer.Current());
+
+        TopoDS_Vertex v1;
+        TopoDS_Vertex v2;
+        TopExp::Vertices(
+            edge,
+            v1,
+            v2);
+        if (v1.IsNull() || v2.IsNull()) {
+            continue;
+        }
+
+        const auto p1 =
+            BRep_Tool::Pnt(v1);
+        const auto p2 =
+            BRep_Tool::Pnt(v2);
+
+        if ((nearPoint(p1, first) &&
+             nearPoint(p2, second)) ||
+            (nearPoint(p1, second) &&
+             nearPoint(p2, first))) {
+            return edge;
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<TopoDS_Face>
+findFaceByCentroid(
+    const TopoDS_Shape& shape,
+    const kernel::Point3& expected,
+    double tolerance = 1.0e-7) {
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_FACE};
+         explorer.More();
+         explorer.Next()) {
+        const auto face =
+            TopoDS::Face(
+                explorer.Current());
+        GProp_GProps properties;
+        BRepGProp::SurfaceProperties(
+            face,
+            properties);
+        const auto center =
+            properties.CentreOfMass();
+
+        if (std::abs(center.X() - expected.x) <=
+                tolerance &&
+            std::abs(center.Y() - expected.y) <=
+                tolerance &&
+            std::abs(center.Z() - expected.z) <=
+                tolerance) {
+            return face;
+        }
+    }
+    return std::nullopt;
+}
+
+void appendUniqueShape(
+    std::vector<TopoDS_Shape>& shapes,
+    const TopoDS_Shape& candidate) {
+    if (candidate.IsNull()) {
+        return;
+    }
+    const auto found =
+        std::find_if(
+            shapes.begin(),
+            shapes.end(),
+            [&candidate](
+                const TopoDS_Shape& existing) {
+                return existing.IsSame(candidate);
+            });
+    if (found == shapes.end()) {
+        shapes.push_back(candidate);
+    }
+}
+
+[[nodiscard]] std::vector<TopoDS_Shape>
+collectHistoryShapes(
+    const TopTools_ListOfShape& history,
+    TopAbs_ShapeEnum kind) {
+    std::vector<TopoDS_Shape> result;
+    for (TopTools_ListOfShape::Iterator it{
+             history};
+         it.More();
+         it.Next()) {
+        const auto& item = it.Value();
+        if (item.ShapeType() == kind) {
+            appendUniqueShape(
+                result,
+                item);
+            continue;
+        }
+
+        for (TopExp_Explorer explorer{
+                 item,
+                 kind};
+             explorer.More();
+             explorer.Next()) {
+            appendUniqueShape(
+                result,
+                explorer.Current());
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] bool containsSameSubshape(
+    const TopoDS_Shape& result,
+    const TopoDS_Shape& source,
+    TopAbs_ShapeEnum kind) {
+    for (TopExp_Explorer explorer{
+             result,
+             kind};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(source)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <typename Operation>
+[[nodiscard]] kernel::BooleanSubshapeHistoryEvidence
+historyEvidence(
+    Operation& operation,
+    const TopoDS_Shape& source,
+    TopAbs_ShapeEnum kind,
+    const TopoDS_Shape& result) {
+    const auto modified =
+        collectHistoryShapes(
+            operation.Modified(source),
+            kind);
+    const auto generated =
+        collectHistoryShapes(
+            operation.Generated(source),
+            kind);
+    const bool unchanged =
+        containsSameSubshape(
+            result,
+            source,
+            kind);
+
+    std::vector<TopoDS_Shape> unique;
+    unique.reserve(
+        modified.size() +
+        generated.size() +
+        (unchanged ? 1U : 0U));
+
+    for (const auto& shape : modified) {
+        appendUniqueShape(unique, shape);
+    }
+    for (const auto& shape : generated) {
+        appendUniqueShape(unique, shape);
+    }
+    if (unchanged) {
+        appendUniqueShape(unique, source);
+    }
+
+    return {
+        modified.size(),
+        generated.size(),
+        operation.IsDeleted(source),
+        unchanged,
+        unique.size()};
+}
+
+template <typename Operation>
+[[nodiscard]] std::vector<TopoDS_Shape>
+historyDescendants(
+    Operation& operation,
+    const TopoDS_Shape& source,
+    TopAbs_ShapeEnum kind,
+    const TopoDS_Shape& result) {
+    auto unique =
+        collectHistoryShapes(
+            operation.Modified(source),
+            kind);
+    const auto generated =
+        collectHistoryShapes(
+            operation.Generated(source),
+            kind);
+    for (const auto& shape : generated) {
+        appendUniqueShape(unique, shape);
+    }
+    if (containsSameSubshape(
+            result,
+            source,
+            kind)) {
+        appendUniqueShape(
+            unique,
+            source);
+    }
+    return unique;
+}
+
+[[nodiscard]] std::size_t sharedShapeCount(
+    const std::vector<TopoDS_Shape>& first,
+    const std::vector<TopoDS_Shape>& second) {
+    std::size_t count = 0U;
+    for (const auto& left : first) {
+        const auto found =
+            std::find_if(
+                second.begin(),
+                second.end(),
+                [&left](
+                    const TopoDS_Shape& right) {
+                    return left.IsSame(right);
+                });
+        if (found != second.end()) {
+            ++count;
+        }
+    }
+    return count;
+}
+
 [[nodiscard]] kernel::ReferenceStatus
 referenceStatus(
     std::size_t candidate_count) noexcept {
@@ -726,6 +973,260 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                 diagnostics});
         }
 
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::EdgeSplitHistoryEvidence
+buildEdgeSplitHistoryEvidence(
+    kernel::EdgeSplitProbeScenario scenario) noexcept {
+    kernel::EdgeSplitHistoryEvidence evidence;
+
+    try {
+        BRepPrimAPI_MakeBox base{
+            gp_Pnt{0.0, 0.0, 0.0},
+            40.0,
+            20.0,
+            10.0};
+        const TopoDS_Shape base_shape =
+            base.Shape();
+
+        const auto target =
+            findEdgeByEndpoints(
+                base_shape,
+                gp_Pnt{0.0, 0.0, 10.0},
+                gp_Pnt{40.0, 0.0, 10.0});
+        if (!target) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const bool middle_notch =
+            scenario ==
+            kernel::EdgeSplitProbeScenario::
+                middle_notch;
+        const gp_Pnt tool_origin =
+            middle_notch
+                ? gp_Pnt{15.0, -5.0, 5.0}
+                : gp_Pnt{-5.0, -5.0, 5.0};
+        const double tool_dx =
+            middle_notch ? 10.0 : 50.0;
+        const double tool_dy =
+            middle_notch ? 10.0 : 30.0;
+
+        BRepPrimAPI_MakeBox tool{
+            tool_origin,
+            tool_dx,
+            tool_dy,
+            10.0};
+
+        BRepAlgoAPI_Cut cut{
+            base_shape,
+            tool.Shape()};
+        cut.Build();
+        if (!cut.IsDone()) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const TopoDS_Shape result =
+            cut.Shape();
+        if (result.IsNull()) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.shape,
+            result);
+        evidence.target =
+            historyEvidence(
+                cut,
+                *target,
+                TopAbs_EDGE,
+                result);
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::FaceMergeHistoryEvidence
+buildFaceMergeHistoryEvidence(
+    kernel::FaceMergeProbeScenario scenario) noexcept {
+    kernel::FaceMergeHistoryEvidence evidence;
+
+    try {
+        BRepPrimAPI_MakeBox first_box{
+            gp_Pnt{0.0, 0.0, 0.0},
+            40.0,
+            20.0,
+            10.0};
+
+        const TopoDS_Shape first_shape =
+            first_box.Shape();
+        const auto first_face =
+            findFaceByCentroid(
+                first_shape,
+                {20.0, 10.0, 10.0});
+        if (!first_face) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        TopoDS_Shape second_shape;
+        std::optional<TopoDS_Face>
+            second_face;
+
+        if (scenario ==
+            kernel::FaceMergeProbeScenario::
+                overlapping_coplanar) {
+            // Fully redundant coplanar top region. OCCT reports both source
+            // faces Modified to the same physical result face.
+            BRepPrimAPI_MakeBox second_box{
+                gp_Pnt{20.0, 0.0, 0.0},
+                20.0,
+                20.0,
+                10.0};
+            second_shape =
+                second_box.Shape();
+            second_face =
+                findFaceByCentroid(
+                    second_shape,
+                    {30.0, 10.0, 10.0});
+        } else if (
+            scenario ==
+            kernel::FaceMergeProbeScenario::
+                asymmetric_history) {
+            // One argument is a compound:
+            //  - a fully internal lower box whose selected top face is
+            //    removed from the final boundary;
+            //  - an extension box that expands the first box.
+            // The result is one 50x20x10 box. The first source top face is
+            // therefore Modified while the internal selected face is Deleted.
+            BRepPrimAPI_MakeBox internal_box{
+                gp_Pnt{10.0, 5.0, 0.0},
+                10.0,
+                10.0,
+                5.0};
+            BRepPrimAPI_MakeBox extension_box{
+                gp_Pnt{40.0, 0.0, 0.0},
+                10.0,
+                20.0,
+                10.0};
+
+            second_face =
+                findFaceByCentroid(
+                    internal_box.Shape(),
+                    {15.0, 10.0, 5.0});
+
+            BRep_Builder builder;
+            TopoDS_Compound compound;
+            builder.MakeCompound(compound);
+            builder.Add(
+                compound,
+                internal_box.Shape());
+            builder.Add(
+                compound,
+                extension_box.Shape());
+            second_shape = compound;
+        } else {
+            // Fully internal lower box: outer top role survives unchanged,
+            // inner top role disappears.
+            BRepPrimAPI_MakeBox second_box{
+                gp_Pnt{10.0, 5.0, 0.0},
+                10.0,
+                10.0,
+                5.0};
+            second_shape =
+                second_box.Shape();
+            second_face =
+                findFaceByCentroid(
+                    second_shape,
+                    {15.0, 10.0, 5.0});
+        }
+
+        if (second_shape.IsNull() ||
+            !second_face) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        BRepAlgoAPI_Fuse fuse{
+            first_shape,
+            second_shape};
+        fuse.Build();
+        if (!fuse.IsDone()) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        fuse.SimplifyResult(
+            true,
+            true);
+
+        const TopoDS_Shape result =
+            fuse.Shape();
+        if (result.IsNull()) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.shape,
+            result);
+
+        evidence.first =
+            historyEvidence(
+                fuse,
+                *first_face,
+                TopAbs_FACE,
+                result);
+        evidence.second =
+            historyEvidence(
+                fuse,
+                *second_face,
+                TopAbs_FACE,
+                result);
+
+        const auto first_descendants =
+            historyDescendants(
+                fuse,
+                *first_face,
+                TopAbs_FACE,
+                result);
+        const auto second_descendants =
+            historyDescendants(
+                fuse,
+                *second_face,
+                TopAbs_FACE,
+                result);
+
+        evidence.shared_descendant_count =
+            sharedShapeCount(
+                first_descendants,
+                second_descendants);
         return evidence;
     } catch (const Standard_Failure&) {
         evidence.shape.status =
