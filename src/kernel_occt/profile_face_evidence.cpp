@@ -12,7 +12,7 @@
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
-#include <TopTools_ListIteratorOfListOfShape.hxx>
+#include <TopTools_ListOfShape.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Dir.hxx>
@@ -352,7 +352,7 @@ buildProfileFace(
 [[nodiscard]] std::size_t countGeneratedFaces(
     const TopTools_ListOfShape& generated) {
     std::size_t count = 0U;
-    for (TopTools_ListIteratorOfListOfShape it{
+    for (TopTools_ListOfShape::Iterator it{
              generated};
          it.More();
          it.Next()) {
