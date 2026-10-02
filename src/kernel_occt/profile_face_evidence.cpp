@@ -1429,12 +1429,13 @@ buildMultiStageLineageEvidence(
             TopoDS::Face(
                 cut_descendants.front());
 
-        // The Fillet input is addressed on the immediate Cut output.
-        // This fixture edge is selected by exact scenario geometry only;
-        // candidate cardinality is checked before the operation is allowed.
+        // The Fillet input is addressed on the immediate Cut output
+        // inside the already-resolved semantic Cut-face context. Candidate
+        // cardinality is checked there before the operation is allowed; the
+        // whole Body is not searched for a geometry-similar edge.
         const auto input_edges =
             findEdgesByEndpoints(
-                cut_shape,
+                cut_face,
                 gp_Pnt{0.0, 0.0, 0.0},
                 gp_Pnt{
                     0.0,
