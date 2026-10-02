@@ -12,6 +12,8 @@
 #include <BRepGProp.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepSweep_Prism.hxx>
+#include <BRepSweep_Revol.hxx>
+#include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
 #include <GeomAbs_SurfaceType.hxx>
@@ -27,6 +29,7 @@
 #include <TopoDS_Vertex.hxx>
 #include <TopoDS_Wire.hxx>
 #include <TopTools_ListOfShape.hxx>
+#include <gp_Ax1.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Dir.hxx>
@@ -61,6 +64,19 @@ constexpr double full_turn =
         frame.origin.z +
             frame.u_axis.z * point.u +
             frame.v_axis.z * point.v,
+    };
+}
+
+[[nodiscard]] gp_Vec vector3(
+    const kernel::Frame3& frame,
+    const kernel::Point2& direction) {
+    return {
+        frame.u_axis.x * direction.u +
+            frame.v_axis.x * direction.v,
+        frame.u_axis.y * direction.u +
+            frame.v_axis.y * direction.v,
+        frame.u_axis.z * direction.u +
+            frame.v_axis.z * direction.v,
     };
 }
 
@@ -502,6 +518,59 @@ faceGeometryDiagnostics(
         properties.Mass(),
         {center.X(), center.Y(), center.Z()},
         axis};
+}
+
+struct SeamDiagnostics final {
+    std::size_t edge_count{};
+    double total_length{};
+};
+
+[[nodiscard]] SeamDiagnostics
+seamDiagnostics(
+    const TopoDS_Face& face) {
+    SeamDiagnostics result;
+    std::vector<TopoDS_Edge> unique;
+
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        const auto edge =
+            TopoDS::Edge(
+                explorer.Current());
+
+        if (!BRepTools::IsReallyClosed(
+                edge,
+                face)) {
+            continue;
+        }
+
+        const bool seen =
+            std::any_of(
+                unique.begin(),
+                unique.end(),
+                [&edge](
+                    const TopoDS_Edge&
+                        existing) {
+                    return existing.IsSame(edge);
+                });
+        if (seen) {
+            continue;
+        }
+
+        unique.push_back(edge);
+        ++result.edge_count;
+
+        GProp_GProps properties;
+        BRepGProp::LinearProperties(
+            edge,
+            properties);
+        result.total_length +=
+            properties.Mass();
+    }
+
+    return result;
 }
 
 [[nodiscard]] std::vector<TopoDS_Edge>
@@ -1013,6 +1082,150 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                 generated_shape_count,
                 diagnostics});
         }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::FullRevolveEvidence
+buildProfileFullRevolveEvidence(
+    const kernel::PlanarProfileInput& input,
+    kernel::Point2 axis_origin,
+    kernel::Point2 axis_direction) noexcept {
+    kernel::FullRevolveEvidence evidence;
+
+    if (!input.valid() ||
+        !std::isfinite(axis_origin.u) ||
+        !std::isfinite(axis_origin.v) ||
+        !std::isfinite(axis_direction.u) ||
+        !std::isfinite(axis_direction.v)) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::invalid_input;
+        return evidence;
+    }
+
+    try {
+        const auto direction =
+            vector3(
+                input.frame,
+                axis_direction);
+        if (!(direction.SquareMagnitude() > 0.0)) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::invalid_input;
+            return evidence;
+        }
+
+        const auto built =
+            buildProfileFace(input);
+        if (!built) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const gp_Ax1 axis{
+            point3(
+                input.frame,
+                axis_origin),
+            gp_Dir{direction}};
+
+        BRepSweep_Revol sweep{
+            built->face,
+            axis,
+            false};
+
+        const TopoDS_Shape shape =
+            sweep.Shape();
+        if (shape.IsNull()) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.shape,
+            shape);
+        if (!evidence.shape.ok()) {
+            return evidence;
+        }
+
+        evidence.boundary_faces.reserve(
+            built->source_edges.size());
+
+        for (const auto& source :
+             built->source_edges) {
+            std::vector<TopoDS_Face>
+                candidate_faces;
+
+            const auto basis_edges =
+                matchingFaceEdges(
+                    built->face,
+                    source.edge);
+            for (const auto& basis_edge :
+                 basis_edges) {
+                const TopoDS_Shape generated =
+                    sweep.Shape(
+                        basis_edge);
+                if (generated.IsNull()) {
+                    continue;
+                }
+
+                auto generated_faces =
+                    facesFromGeneratedShape(
+                        generated);
+                candidate_faces.insert(
+                    candidate_faces.end(),
+                    generated_faces.begin(),
+                    generated_faces.end());
+            }
+
+            kernel::RevolveBoundaryFaceEvidence
+                boundary;
+            boundary.status =
+                referenceStatus(
+                    candidate_faces.size());
+            boundary.candidate_face_count =
+                candidate_faces.size();
+            boundary.provenance =
+                source.provenance;
+
+            if (candidate_faces.size() == 1U) {
+                const auto& face =
+                    candidate_faces.front();
+                boundary.geometry_diagnostics =
+                    faceGeometryDiagnostics(face);
+
+                const auto seams =
+                    seamDiagnostics(face);
+                boundary.periodic_surface =
+                    seams.edge_count > 0U;
+                boundary.seam_edge_count =
+                    seams.edge_count;
+                boundary.seam_total_length =
+                    seams.total_length;
+
+                evidence.provider_seam_edge_count +=
+                    seams.edge_count;
+                evidence.provider_seam_total_length +=
+                    seams.total_length;
+            }
+
+            evidence.boundary_faces.push_back(
+                std::move(boundary));
+        }
+
+        // The seam is provider-created periodic topology with no semantic
+        // source record. It remains deliberately non-addressable.
+        evidence.periodic_seam_reference_status =
+            kernel::ReferenceStatus::unsupported;
 
         return evidence;
     } catch (const Standard_Failure&) {
