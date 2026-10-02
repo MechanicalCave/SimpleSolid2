@@ -308,6 +308,16 @@ public:
         return profile_analysis_build_count_;
     }
 
+    // SR-02 runtime-only measurement. Counts entry into the complete
+    // controller pointer resolver, not lower-level semantic helper calls.
+    void resetLatencyDiagnostics() noexcept {
+        pointer_resolution_count_ = 0U;
+    }
+    [[nodiscard]] std::size_t
+    pointerResolutionCount() const noexcept {
+        return pointer_resolution_count_;
+    }
+
     [[nodiscard]] bool activateProfileCreate();
     [[nodiscard]] bool activateProfileEdit(
         part::ProfileId profile_id);
@@ -569,6 +579,7 @@ private:
     std::optional<ProfileAnalysisCache>
         profile_analysis_cache_;
     std::size_t profile_analysis_build_count_{};
+    std::size_t pointer_resolution_count_{};
     std::optional<part::ProfileId>
         selected_profile_id_;
 
