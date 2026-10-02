@@ -142,6 +142,10 @@ kernel::ExtrudeEvidence extrude(
                 << (side.provenance
                         ? side.provenance->hole
                         : false)
+                << " basis_matches="
+                << side.basis_edge_match_count
+                << " generated_shapes="
+                << side.generated_shape_count
                 << " candidates="
                 << side.candidate_face_count
                 << " status="
