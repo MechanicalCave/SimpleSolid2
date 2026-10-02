@@ -141,6 +141,29 @@ set_tests_properties(pm00a.e02_multistage_lineage PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;native"
 )
 
+add_executable(pm00a_e07_cold_parity_test
+    pm00a_e07_cold_parity_test.cpp
+)
+
+target_link_libraries(pm00a_e07_cold_parity_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+        simplesolid2_part
+)
+
+target_compile_features(pm00a_e07_cold_parity_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm00a.e07_cold_parity
+    COMMAND pm00a_e07_cold_parity_test
+)
+
+set_tests_properties(pm00a.e07_cold_parity PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;subsystem-part;subsystem-persistence;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
@@ -149,6 +172,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm00a_e05_similarity_evidence_test
         pm00a_e03_e04_cardinality_evidence_test
         pm00a_e02_multistage_lineage_test
+        pm00a_e07_cold_parity_test
 )
 
 foreach(_forbidden_target IN ITEMS
