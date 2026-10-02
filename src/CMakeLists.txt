@@ -72,11 +72,23 @@ target_link_libraries(simplesolid2_persistence
 
 target_compile_features(simplesolid2_persistence PUBLIC cxx_std_20)
 
+add_library(simplesolid2_kernel STATIC
+    kernel/profile_input.cpp
+)
+
+target_include_directories(simplesolid2_kernel
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/kernel/include
+)
+
+target_compile_features(simplesolid2_kernel PUBLIC cxx_std_20)
+
 add_library(simplesolid2_part STATIC
     part/part_document.cpp
     part/part_document_store.cpp
     part/part_sketch.cpp
     part/profile.cpp
+    part/profile_kernel_input.cpp
     part/profile_id.cpp
 )
 
@@ -88,6 +100,7 @@ target_include_directories(simplesolid2_part
 target_link_libraries(simplesolid2_part
     PUBLIC
         simplesolid2_core
+        simplesolid2_kernel
         simplesolid2_persistence
         simplesolid2_sketch
 )
@@ -152,6 +165,32 @@ foreach(_target IN ITEMS
         message(FATAL_ERROR "OpenCASCADE package is missing required kernel-native target ${_target}")
     endif()
 endforeach()
+
+add_library(simplesolid2_kernel_occt STATIC
+    kernel_occt/profile_face_evidence.cpp
+)
+
+target_include_directories(simplesolid2_kernel_occt
+    PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/kernel_occt/include
+    PRIVATE
+        ${OpenCASCADE_INCLUDE_DIR}
+)
+
+target_link_libraries(simplesolid2_kernel_occt
+    PUBLIC
+        simplesolid2_kernel
+    PRIVATE
+        TKernel
+        TKMath
+        TKG2d
+        TKG3d
+        TKGeomBase
+        TKBRep
+        TKTopAlgo
+)
+
+target_compile_features(simplesolid2_kernel_occt PUBLIC cxx_std_20)
 endif()
 
 if(SS2_BUILD_DESKTOP)
