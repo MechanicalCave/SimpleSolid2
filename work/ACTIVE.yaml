@@ -19,20 +19,22 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - PM-00A E01 Profile with hole -> Extrude evidence is COMPLETED — PASS on exact source candidate 476258b74751a251c1c4fdf7dabaa03b3da63976 with Windows FULL #1228 PASS and false-Resolved count 0
-  - PM-00A E05 geometrically similar topology evidence is COMPLETED — PASS on exact source candidate 7e0d6109cf927a2e8d85d2794b5718dcc2feab22 with Windows FULL #1252 PASS and false-Resolved count 0
-  - PM-00A E03 + E04 split/merge cardinality evidence is COMPLETED — PASS on exact source candidate 30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25 with Kernel-focused #1274 PASS, Windows FULL #1275 PASS and false-Resolved count 0
-  - PM-00A E02 multi-stage lineage evidence is COMPLETED — PASS on exact source candidate 953cdca42978916754f6ae6cc68d86352aad35ac with Kernel-focused #1285 PASS, Windows FULL #1286 PASS and false-Resolved count 0
-  - execute accumulated E07 cold-rebuild parity next for E07-01 through E07-05 using the completed E01/E02/E03/E04/E05 evidence
-  - keep E07-06 explicitly pending until E06 full-Revolve / periodic-seam evidence exists; do not call the whole E07 package complete before that row is executed
-  - preserve E02 finding: producer/consumed stage is semantic context; downstream candidate search is bounded by an already-resolved input context rather than the final Body
-  - preserve E02 finding: downstream geometric failure does not change a still-Resolved input reference into Missing/Ambiguous
-  - preserve E03/E04 finding: provider Modified/Generated/Deleted/unchanged history is transient evidence only and can never choose a semantic winner by itself
-  - preserve E05 finding: surface kind, area, centroid, axis, distance and other geometry-similarity signals are diagnostics only and can never create Resolved
-  - preserve E01 provider finding: exact provider edges are transient lineage evidence only and never durable SS2 identity
+  - PM-00A E01 is COMPLETED — PASS; source candidate 476258b74751a251c1c4fdf7dabaa03b3da63976, Windows FULL #1228, false-Resolved 0
+  - PM-00A E05 is COMPLETED — PASS; source candidate 7e0d6109cf927a2e8d85d2794b5718dcc2feab22, Windows FULL #1252, false-Resolved 0
+  - PM-00A E03 + E04 are COMPLETED — PASS; source candidate 30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25, Kernel-focused #1274, Windows FULL #1275, false-Resolved 0
+  - PM-00A E02 is COMPLETED — PASS; source candidate 953cdca42978916754f6ae6cc68d86352aad35ac, Kernel-focused #1285, Windows FULL #1286, false-Resolved 0
+  - PM-00A E07 Phase 1 is COMPLETED — PASS for E07-01 through E07-05 on accumulated source candidate 953cdca42978916754f6ae6cc68d86352aad35ac / Windows FULL #1286; E07-06 remains PENDING
+  - execute E06 next: full-Revolve / periodic-seam evidence, including cold replay sufficient to close E07-06
+  - E06 must keep provider periodic seam non-semantic and must resolve supported revolved side roles by semantic source/provenance rather than seam/topology ordinals
+  - after E06, record E07-06 and only then mark the whole E07 package COMPLETED
+  - preserve E02 stage-scoped resolution and separation of reference status from geometric failure
+  - preserve E03/E04 fail-closed cardinality and provider-history-as-evidence-only rule
+  - preserve E05 similarity-as-diagnostics-only rule
+  - preserve E01 provider-edge-as-transient-evidence-only rule
   - PM-00B Part Feature Architecture Freeze remains separate after PM-00A evidence
   - PM-01 First Solid Vertical Slice, Body/Feature persistence, Part Feature Tree product behavior, Assembly/Drawing and multi-body remain inactive
 notes:
+  - E07 Phase 1 completed E07-01 through E07-05 using the existing cold-replay assertions executed together on source candidate 953cdca42978916754f6ae6cc68d86352aad35ac in Windows FULL #1286. Kernel-native 23/23 PASS. E07-06 remains pending E06 and the whole E07 package is not yet complete.
   - E02 completed on exact source candidate 953cdca42978916754f6ae6cc68d86352aad35ac with Kernel-focused #1285 PASS and Windows FULL #1286 PASS. Stable stage-scoped lineage, upstream height rebuild, source-face removal, real Cut->Fillet lineage, geometric-failure separation and stage ambiguity all passed with false-Resolved count 0.
   - E02 focused #1284 exposed a whole-Cut-result edge-cardinality error; the accepted fix scopes Fillet input candidates to the already-resolved Cut face instead of choosing among geometry-similar edges in the whole Body.
   - E03/E04 completed on exact source candidate 30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25 with Kernel-focused #1274 PASS and Windows FULL #1275 PASS. Split -> Ambiguous, deletion -> Missing, merge collapse -> Ambiguous without independent semantic winner, semantic winner -> Resolved/Missing, aggregate requests -> Unsupported. False-Resolved count 0.

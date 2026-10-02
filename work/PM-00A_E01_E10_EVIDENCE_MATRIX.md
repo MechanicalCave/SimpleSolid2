@@ -231,6 +231,25 @@ Every row below destroys DocumentSession/evidence inputs/B-Rep/provider objects/
 
 Any status change caused solely by loss of previous-process provider history is an E07 failure.
 
+## 11A. E07 accumulated execution result — Phase 1
+
+**E07 status:** PARTIAL — E07-01…E07-05 COMPLETED — PASS; E07-06 PENDING E06  
+**Accumulated source candidate:** `953cdca42978916754f6ae6cc68d86352aad35ac`  
+**Windows FULL:** #1286 — PASS  
+**Kernel-native:** 23/23 PASS  
+**False-Resolved across completed rows:** 0  
+**Evidence report:** `work/PM-00A_E07_ACCUMULATED_COLD_REBUILD_EVIDENCE.md`
+
+E07-01…E07-05 are satisfied by the owning cold-replay regressions executed together on the accumulated #1286 candidate:
+
+- E01 stable cap/side meanings remain Resolved after authored Save/Close/Reopen;
+- E02 stable downstream meaning remains Resolved at the same producer/consumed stage after provider teardown/rebuild;
+- E03 split remains Ambiguous after provider-history teardown;
+- E04 lost distinction remains Ambiguous/Missing according to the source-row semantic meaning;
+- E05 removed target remains Missing after reopen even with a geometry-similar/identical decoy.
+
+E07-06 is not executed yet because E06 periodic/full-Revolve evidence does not yet exist. The frozen E07 expectation is unchanged and E07 is not marked complete until E07-06 PASS.
+
 ## 12. E08 — support-frame stability
 
 Goal: prove support orientation is semantic and deterministic.

@@ -1306,6 +1306,27 @@ E02 exact source candidate `953cdca42978916754f6ae6cc68d86352aad35ac` passed Ker
 
 This remains architecture evidence only. It does not add a durable topology-reference schema, Body/Feature persistence, Part Feature Tree behavior or product Extrude/Cut/Fillet commands.
 
+<!-- section-id: internal.part-documents.pm00a-e07-cold-replay -->
+## PM-00A E07 accumulated cold-rebuild parity
+
+PM-00A E07 replays accepted topology-reference outcomes after previous runtime/provider state is destroyed.
+
+Phase 1 covers E07-01 through E07-05. No new duplicate harness is added because the owning E01/E02/E03/E04/E05 regressions already perform the required cold boundary. Windows FULL #1286 runs those regressions together on one exact source candidate.
+
+The accumulated kernel-native result on `953cdca42978916754f6ae6cc68d86352aad35ac` is 23/23 PASS, including:
+
+- E01 authored Profile Save/Close/Reopen with stable Extrude cap/side semantic roles;
+- E02 provider/B-Rep/history teardown followed by the same stage-scoped multi-stage outcomes;
+- E03 split replay remaining Ambiguous;
+- E04 merge/lost-distinction replay remaining Ambiguous/Missing according to the accepted source-row meaning;
+- E05 authored reopen preserving Missing for a removed target despite a geometry-similar/identical decoy.
+
+Cold rebuild therefore does not depend on previous-process OCCT handles, provider ordering or history caches, and it does not repair Missing/Ambiguous references by geometry similarity.
+
+E07-06 is still pending because it depends on E06 full-Revolve / periodic-seam evidence. The whole E07 package is not considered completed until the revolved semantic side also reconstructs as Resolved while the provider seam remains non-semantic.
+
+This is evidence synthesis only. It does not introduce a persistent topology-reference schema, Body/Feature persistence or product solid-modeling behavior.
+
 <!-- section-id: internal.part-documents.persistence -->
 ## Native Part persistence
 
