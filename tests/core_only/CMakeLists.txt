@@ -64,6 +64,47 @@ add_test(
         -P ${_ss2_core_only_test_root}/verify_cad_input_semantic_boundaries.cmake
 )
 
+set_tests_properties(d.cad_input_semantics PROPERTIES LABELS "tier-fast;subsystem-application")
+set_tests_properties(r10.quantity_input PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-core")
+set_tests_properties(wb02.cad_input_session PROPERTIES LABELS "tier-fast;subsystem-application")
+set_tests_properties(part01.document_primitives PROPERTIES LABELS "tier-fast;subsystem-core")
+set_tests_properties(part01.part_document_transaction PROPERTIES LABELS "tier-fast;subsystem-part")
+set_tests_properties(part01.document_session PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-part")
+set_tests_properties(sk04a.line_commit_protocol PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-sketch")
+set_tests_properties(sk05a.line_geometry_command PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-persistence;subsystem-part;subsystem-sketch")
+set_tests_properties(e1.arc_numerical_stability PROPERTIES LABELS "tier-fast;subsystem-sketch")
+set_tests_properties(sk07a.transform_core PROPERTIES LABELS "tier-fast;subsystem-sketch")
+set_tests_properties(sk07c.copy_interaction_state PROPERTIES LABELS "tier-fast;subsystem-sketch")
+set_tests_properties(sk07c.copy_command PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-persistence;subsystem-part;subsystem-sketch")
+set_tests_properties(sk07f.precision_input_state PROPERTIES LABELS "tier-fast;subsystem-sketch")
+set_tests_properties(r11.snap_core PROPERTIES LABELS "tier-fast;subsystem-core;subsystem-sketch")
+set_tests_properties(wb02.cad_input_boundaries PROPERTIES LABELS "tier-fast;subsystem-core")
+set_tests_properties(d.cad_input_semantic_boundaries PROPERTIES LABELS "tier-fast;subsystem-core")
+
+get_property(_ss2_core_only_registered_tests DIRECTORY PROPERTY TESTS)
+foreach(_test IN LISTS _ss2_core_only_registered_tests)
+    get_property(_labels TEST "${_test}" PROPERTY LABELS)
+
+    list(FIND _labels "tier-fast" _fast_label)
+    list(FIND _labels "tier-full-only" _full_only_label)
+    if((_fast_label EQUAL -1 AND _full_only_label EQUAL -1) OR
+       (NOT _fast_label EQUAL -1 AND NOT _full_only_label EQUAL -1))
+        message(FATAL_ERROR
+            "Core-only regression '${_test}' must have exactly one tier classification")
+    endif()
+
+    set(_has_subsystem FALSE)
+    foreach(_label IN LISTS _labels)
+        if(_label MATCHES "^subsystem-[a-z0-9_-]+$")
+            set(_has_subsystem TRUE)
+        endif()
+    endforeach()
+    if(NOT _has_subsystem)
+        message(FATAL_ERROR
+            "Core-only regression '${_test}' is missing subsystem metadata")
+    endif()
+endforeach()
+
 foreach(_forbidden_target IN ITEMS
         simplesolid2_ui
         simplesolid2_viewer_qt_occt

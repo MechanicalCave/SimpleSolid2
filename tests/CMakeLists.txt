@@ -1452,6 +1452,7 @@ set(_ss2_fast_tests
     sk05a.part_sketch_direct_manipulation
     sk06a.circle_arc_model_persistence
     sk06a.circle_arc_interaction_state
+    e1.arc_numerical_stability
     sk07a.transform_core
     sk07a.move_controller
     sk07b.transform_core
@@ -1488,6 +1489,7 @@ set(_ss2_sketch_tests
     sk05a.part_sketch_direct_manipulation
     sk06a.circle_arc_model_persistence
     sk06a.circle_arc_interaction_state
+    e1.arc_numerical_stability
     sk07a.transform_core
     sk07a.move_controller
     sk07b.transform_core
@@ -1528,6 +1530,7 @@ set(_ss2_project_tests
 set_property(TEST ${_ss2_project_tests} APPEND PROPERTY LABELS "subsystem-project")
 
 set(_ss2_part_tests
+    b1.save_conflict
     part01.document_primitives
     part01.part_document_transaction
     part01.part_document_store
@@ -1619,6 +1622,7 @@ set_tests_properties(wb02.global_cad_input_ui PROPERTIES
 
 
 set(_ss2_application_tests
+    b1.save_conflict
     d.cad_input_semantics
     r10.quantity_input
     wb02.cad_input_session
@@ -1651,6 +1655,7 @@ set(_ss2_application_tests
 set_property(TEST ${_ss2_application_tests} APPEND PROPERTY LABELS "subsystem-application")
 
 set(_ss2_persistence_tests
+    b1.save_conflict
     part01.part_document_store
     persist01.native_document_container
     part01.project_document_lifecycle
@@ -1685,6 +1690,7 @@ set(_ss2_viewer_tests
     wb01.viewer_boundaries
     wb01.viewer_selection
     wb01.viewer_native_smoke
+    wb01a.workbench_native_stress
     wb01b.navigation_cube_semantics
     wb01b.navigation_cube_native
     sk03a.viewer_sketch_contracts
@@ -1711,6 +1717,7 @@ set(_ss2_ui_tests
     ph02c.project_creation_dialog
     wb01.cad_workbench
     wb01.workbench_shell_boundaries
+    wb01a.workbench_native_stress
     wb01a.document_dialog_ux
     wb01a.workbench_document_dialog_integration
     sk01.workbench_sketch_host
@@ -1735,6 +1742,37 @@ set(_ss2_native_tests
 )
 set_property(TEST ${_ss2_native_tests} APPEND PROPERTY LABELS "native")
 set_property(TEST ${_ss2_native_tests} APPEND PROPERTY RESOURCE_LOCK "ss2_native_viewer")
+
+# PM-00A A0: make verification metadata fail closed. FAST membership remains
+# explicitly curated; every other regression is automatically classified
+# tier-full-only so a newly registered test cannot silently fall out of tier
+# metadata. Every regression must also belong to at least one subsystem.
+get_property(_ss2_metadata_tests DIRECTORY PROPERTY TESTS)
+foreach(_test IN LISTS _ss2_metadata_tests)
+    get_property(_labels TEST "${_test}" PROPERTY LABELS)
+
+    list(FIND _labels "tier-fast" _fast_label)
+    list(FIND _labels "tier-full-only" _full_only_label)
+    if(NOT _fast_label EQUAL -1 AND NOT _full_only_label EQUAL -1)
+        message(FATAL_ERROR
+            "Regression '${_test}' cannot be both tier-fast and tier-full-only")
+    endif()
+    if(_fast_label EQUAL -1 AND _full_only_label EQUAL -1)
+        set_property(TEST "${_test}" APPEND PROPERTY LABELS "tier-full-only")
+        get_property(_labels TEST "${_test}" PROPERTY LABELS)
+    endif()
+
+    set(_has_subsystem FALSE)
+    foreach(_label IN LISTS _labels)
+        if(_label MATCHES "^subsystem-[a-z0-9_-]+$")
+            set(_has_subsystem TRUE)
+        endif()
+    endforeach()
+    if(NOT _has_subsystem)
+        message(FATAL_ERROR
+            "Regression '${_test}' is missing subsystem metadata")
+    endif()
+endforeach()
 
 # Production UI implementation is compiled once in src/simplesolid2_ui and linked here.
 set(_ss2_ui_test_targets

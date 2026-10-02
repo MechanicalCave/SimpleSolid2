@@ -2,7 +2,7 @@ param(
     [ValidateSet("prepare","record")]
     [string]$Action = "prepare",
     [string]$BuildDir = "",
-    [ValidateSet("desktop","core")]
+    [ValidateSet("desktop","core","kernel")]
     [string]$Mode = "desktop",
     [string]$Config = "Debug",
     [switch]$ForceClean,
@@ -58,7 +58,7 @@ if ($SelfTest) {
     if (Compare-SS2Fingerprint $a $b) {
         throw "Build-tree fingerprint self-test rejected equal fingerprints."
     }
-    $b.mode = "core"
+    $b.mode = "kernel"
     if ((Compare-SS2Fingerprint $a $b) -ne "fingerprint:mode") {
         throw "Build-tree fingerprint self-test did not detect mode mismatch."
     }
@@ -118,6 +118,22 @@ function Get-SS2FileVersion {
 
 function New-SS2StaticFingerprint {
     $desktop = $Mode -eq "desktop"
+    $kernel = $Mode -eq "kernel"
+    $buildOptions = switch ($Mode) {
+        "desktop" {
+            "SS2_BUILD_DESKTOP=ON;SS2_BUILD_KERNEL_NATIVE=OFF"
+        }
+        "kernel" {
+            "SS2_BUILD_DESKTOP=OFF;SS2_BUILD_KERNEL_NATIVE=ON;CMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE"
+        }
+        "core" {
+            "SS2_BUILD_DESKTOP=OFF;SS2_BUILD_KERNEL_NATIVE=OFF;CMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE;CMAKE_DISABLE_FIND_PACKAGE_OpenCASCADE=TRUE"
+        }
+        default {
+            throw "Unknown SS2 build-tree mode '$Mode'."
+        }
+    }
+
     return [ordered]@{
         schema = 1
         sourceRoot = $root
@@ -126,14 +142,10 @@ function New-SS2StaticFingerprint {
         generatorHint = Get-SS2DefaultGeneratorHint
         architecture = "$env:PROCESSOR_ARCHITECTURE"
         qtPrefix = if ($desktop) { "$env:SS2_QT_PREFIX" } else { "" }
-        occtPrefix = if ($desktop) { "$env:SS2_OCCT_PREFIX" } else { "" }
+        occtPrefix = if ($desktop -or $kernel) { "$env:SS2_OCCT_PREFIX" } else { "" }
         mode = $Mode
         config = $Config
-        buildOptions = if ($desktop) {
-            "SS2_BUILD_DESKTOP=ON"
-        } else {
-            "SS2_BUILD_DESKTOP=OFF;CMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE;CMAKE_DISABLE_FIND_PACKAGE_OpenCASCADE=TRUE"
-        }
+        buildOptions = $buildOptions
     }
 }
 

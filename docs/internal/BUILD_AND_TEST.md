@@ -6,9 +6,9 @@
 <!-- section-id: internal.build-test.baseline -->
 ## Toolchain baseline
 
-The repository baseline is C++20, CMake 3.24+, Qt 6 Widgets/Test, OpenCASCADE for the native CAD Viewer, Windows-first development and the self-hosted Windows/MSVC PR gate.
+The repository baseline is C++20, CMake 3.24+, Qt 6 Widgets/Test, OpenCASCADE for native CAD provider work, Windows-first development and the self-hosted Windows/MSVC PR gate.
 
-OCCT is a required machine-local product-build dependency. Public Viewer contracts remain provider-neutral.
+OCCT is a required machine-local dependency for desktop and kernel-native verification. Qt is required only by the desktop mode. Public Viewer and Part/domain contracts remain provider-neutral.
 
 The canonical local environment adds Qt and OCCT runtime DLL directories to PATH so the product and native Viewer tests can execute after build.
 
@@ -47,9 +47,35 @@ Relevant commands are:
 Machine-local configuration is written under `.ss2-local/` and is not committed.
 
 <!-- section-id: internal.build-test.core-only -->
-## Core-only semantic build
+## Verification build modes
 
 The default product build remains `SS2_BUILD_DESKTOP=ON` and requires Qt 6 plus OpenCASCADE.
+
+PM-00A Phase A0 establishes three explicit verification modes:
+
+```text
+semantic/core
+    SS2_BUILD_DESKTOP=OFF
+    SS2_BUILD_KERNEL_NATIVE=OFF
+    Qt forbidden
+    OCCT forbidden
+
+kernel-native
+    SS2_BUILD_DESKTOP=OFF
+    SS2_BUILD_KERNEL_NATIVE=ON
+    Qt forbidden
+    OCCT required
+
+desktop
+    SS2_BUILD_DESKTOP=ON
+    SS2_BUILD_KERNEL_NATIVE=OFF
+    Qt required
+    OCCT required
+```
+
+The modes are verification/build topology, not product distributions. `SS2_BUILD_DESKTOP` and `SS2_BUILD_KERNEL_NATIVE` are mutually exclusive.
+
+### Core-only semantic build
 
 AUDIT-01 Package D adds an explicit verification-only semantic build mode:
 
@@ -75,12 +101,34 @@ $cmake = Get-SS2CMakeExe
 & $cmake -E chdir build\core-only ctest -C Release --output-on-failure
 ```
 
-The current core-only suite contains 14 focused tests covering generic CAD-input transport, neutral D token semantics/boundaries, authored Core/Part/DocumentSession behavior, Line command protocol, MOVE transform semantics, COPY interaction/command semantics, Direct Distance state and E1 3-Point Arc numerical stability. This mode is an architecture/test boundary; it is not a separate product distribution and does not declare Linux desktop support.
+The current core-only suite contains 16 focused tests covering generic CAD-input transport, neutral D token semantics/boundaries, authored Core/Part/DocumentSession behavior, Line command protocol, MOVE transform semantics, COPY interaction/command semantics, Direct Distance state and E1 3-Point Arc numerical stability. This mode is an architecture/test boundary; it is not a separate product distribution and does not declare Linux desktop support.
+### Kernel-native Release build
+
+PM-00A A0 adds a dedicated OCCT-backed build that deliberately does not discover Qt:
+
+```powershell
+. .\scripts\ss2-common.ps1
+Import-SS2LocalEnvironment
+$cmake = Get-SS2CMakeExe
+
+& $cmake -S . -B build\kernel-release \
+  -DSS2_BUILD_DESKTOP=OFF \
+  -DSS2_BUILD_KERNEL_NATIVE=ON \
+  -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE
+
+& $cmake --build build\kernel-release --config Release
+& $cmake -E chdir build\kernel-release ctest -C Release --output-on-failure
+```
+
+The kernel-native graph reuses the provider-independent core-only regressions and adds OCCT-backed Kernel evidence. Its first native regression, `pm00a.kernel_native_smoke`, constructs a real B-Rep solid and validates it with OCCT while no Qt target is present.
+
+The CI-04 persistent build-tree fingerprint has a distinct `kernel` mode so desktop, core-only and kernel-native trees cannot be reused across incompatible dependency topologies.
+
 
 <!-- section-id: internal.build-test.tests -->
 ## Current executable/test gate
 
-The default desktop graph currently registers **78 CTest tests**.
+The default desktop graph currently registers **83 CTest tests**. PM-00A kernel-native evidence is registered in its separate build tree and does not inflate the desktop CTest graph.
 
 All earlier Project/Hub, Part, Persistence, Workbench/Viewer and Sketch regressions remain active. The long native Workbench stress test remains FULL-only.
 
@@ -121,7 +169,7 @@ FAST
   → excludes the long native Workbench stress test
 
 SUBSYSTEM
-  explicit labels: subsystem-core/application/persistence/part/sketch/viewer/ui/project
+  explicit labels: subsystem-core/application/persistence/part/kernel/sketch/viewer/ui/project
   → builds the union of matching `ss2_tests_subsystem_*` aggregates plus real dependencies
   → one or more subsystem labels selected as a checkpoint
 
@@ -147,7 +195,7 @@ It configures the normal development build, builds only the requested target set
 
 The GitHub workflow is `.github/workflows/windows-pr-gate.yml`. CI-01 exact-head DOCS/CLOSURE behavior remains intact; CI-02 provides FAST/SUBSYSTEM/FULL and CI-03 adds a bounded draft-only FOCUSED tier.
 
-For Package D and later verification-infrastructure changes, the FULL job also configures, builds and runs the explicit `SS2_BUILD_DESKTOP=OFF` suite with Qt/OpenCASCADE package discovery disabled before running the ordinary unfiltered desktop CTest suite. A core-only PASS therefore supplements rather than replaces the GUI/provider FULL gate.
+For Package D and later verification-infrastructure changes, the FULL job configures, builds and runs the explicit core-only suite with Qt/OpenCASCADE package discovery disabled. PM-00A A0 additionally configures, builds and runs the kernel-native Release suite with Qt disabled and OCCT required. These supplement rather than replace the ordinary unfiltered desktop CTest suite.
 
 ```text
 FOCUSED
@@ -174,8 +222,11 @@ FULL
   → docs dispatcher/freshness
   → machine-local setup
   → ss2 verify
-  → Build once
-  → full unfiltered CTest with -NoBuild
+  → desktop complete test-graph build
+  → core-only Release build/test with Qt and OCCT disabled
+  → kernel-native Release build/test with Qt disabled and OCCT enabled
+  → FAST/SUBSYSTEM selector validation, including subsystem-kernel
+  → full unfiltered desktop CTest with -NoBuild
 
 DOCS
   docs/governance-only suffix
@@ -217,6 +268,10 @@ builds target `simplesolid2` plus its dependency closure. Raw CMake `ALL` remain
 The self-hosted Windows gate keeps exact-SHA source checkout cleanup while placing reusable build trees outside the checkout under the configured CI build root. Each tree carries a compatibility fingerprint. Generator/toolchain/dependency/build-mode mismatch invalidates the tree deterministically; ordinary source SHA/branch changes do not. Verification-sensitive changes require CLEAN FULL, while a compatible tree may be reused by ordinary FULL verification. A force-clean path remains available for diagnostics.
 
 CTest execution supports bounded parallelism through `SS2_TEST_PARALLELISM`. Native Viewer tests share the `ss2_native_viewer` resource lock, so independent tests may run concurrently without overlapping the serialized native resource. Build and test parallelism are independent controls.
+
+PM-00A A0 extends CI-04 build-tree compatibility fingerprints with a third `kernel` mode. The FULL gate therefore retains reusable but mutually incompatible `desktop-debug`, `core-release` and `kernel-release` trees under the CI build root.
+
+Regression verification metadata is fail-closed. Every desktop/core/kernel regression must have exactly one tier classification (`tier-fast` or `tier-full-only`) and at least one subsystem label. Tests outside the curated FAST list are classified `tier-full-only` automatically, so a newly registered test cannot silently fall outside tier metadata. The kernel-native registry additionally requires `subsystem-kernel`.
 
 CI-04 also corrected FOCUSED exact-test selection to use a CTest-compatible anchored regular expression. Focused requests still validate the registered CTest catalog before execution and remain iteration evidence only.
 
