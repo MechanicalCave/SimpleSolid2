@@ -1,6 +1,7 @@
 #include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
 
 #include <BRepBuilderAPI_MakeEdge.hxx>
+#include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
@@ -18,6 +19,7 @@
 #include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
+#include <TopoDS_Compound.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
@@ -1078,42 +1080,92 @@ buildFaceMergeHistoryEvidence(
             20.0,
             10.0};
 
-        const bool overlapping =
-            scenario ==
-            kernel::FaceMergeProbeScenario::
-                overlapping_coplanar;
-        const gp_Pnt second_origin =
-            overlapping
-                ? gp_Pnt{20.0, 0.0, 0.0}
-                : gp_Pnt{10.0, 5.0, 0.0};
-
-        BRepPrimAPI_MakeBox second_box{
-            second_origin,
-            overlapping ? 20.0 : 10.0,
-            overlapping ? 20.0 : 10.0,
-            overlapping ? 10.0 : 5.0};
-
         const TopoDS_Shape first_shape =
             first_box.Shape();
-        const TopoDS_Shape second_shape =
-            second_box.Shape();
-
         const auto first_face =
             findFaceByCentroid(
                 first_shape,
                 {20.0, 10.0, 10.0});
-        const auto second_face =
-            scenario ==
-                    kernel::FaceMergeProbeScenario::
-                        overlapping_coplanar
-                ? findFaceByCentroid(
-                      second_shape,
-                      {30.0, 10.0, 10.0})
-                : findFaceByCentroid(
-                      second_shape,
-                      {15.0, 10.0, 5.0});
+        if (!first_face) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
 
-        if (!first_face || !second_face) {
+        TopoDS_Shape second_shape;
+        std::optional<TopoDS_Face>
+            second_face;
+
+        if (scenario ==
+            kernel::FaceMergeProbeScenario::
+                overlapping_coplanar) {
+            // Fully redundant coplanar top region. OCCT reports both source
+            // faces Modified to the same physical result face.
+            BRepPrimAPI_MakeBox second_box{
+                gp_Pnt{20.0, 0.0, 0.0},
+                20.0,
+                20.0,
+                10.0};
+            second_shape =
+                second_box.Shape();
+            second_face =
+                findFaceByCentroid(
+                    second_shape,
+                    {30.0, 10.0, 10.0});
+        } else if (
+            scenario ==
+            kernel::FaceMergeProbeScenario::
+                asymmetric_history) {
+            // One argument is a compound:
+            //  - a redundant, fully contained box whose top face should
+            //    disappear;
+            //  - an extension box that expands the first box.
+            // The result is one 50x20x10 box. The first source top face is
+            // therefore modified while the redundant top face is deleted.
+            BRepPrimAPI_MakeBox redundant_box{
+                gp_Pnt{10.0, 5.0, 0.0},
+                10.0,
+                10.0,
+                10.0};
+            BRepPrimAPI_MakeBox extension_box{
+                gp_Pnt{40.0, 0.0, 0.0},
+                10.0,
+                20.0,
+                10.0};
+
+            second_face =
+                findFaceByCentroid(
+                    redundant_box.Shape(),
+                    {15.0, 10.0, 10.0});
+
+            BRep_Builder builder;
+            TopoDS_Compound compound;
+            builder.MakeCompound(compound);
+            builder.Add(
+                compound,
+                redundant_box.Shape());
+            builder.Add(
+                compound,
+                extension_box.Shape());
+            second_shape = compound;
+        } else {
+            // Fully internal lower box: outer top role survives unchanged,
+            // inner top role disappears.
+            BRepPrimAPI_MakeBox second_box{
+                gp_Pnt{10.0, 5.0, 0.0},
+                10.0,
+                10.0,
+                5.0};
+            second_shape =
+                second_box.Shape();
+            second_face =
+                findFaceByCentroid(
+                    second_shape,
+                    {15.0, 10.0, 5.0});
+        }
+
+        if (second_shape.IsNull() ||
+            !second_face) {
             evidence.shape.status =
                 kernel::EvidenceStatus::provider_failure;
             return evidence;
