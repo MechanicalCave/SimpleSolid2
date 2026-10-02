@@ -130,6 +130,24 @@ kernel::ExtrudeEvidence extrude(
     CHECK(evidence.sides.size() == 5U);
 
     for (const auto& side : evidence.sides) {
+        if (side.status !=
+                kernel::ReferenceStatus::resolved ||
+            side.candidate_face_count != 1U) {
+            std::cerr
+                << "E01 side lineage: source="
+                << (side.provenance
+                        ? side.provenance->source_entity
+                        : std::string{"<none>"})
+                << " hole="
+                << (side.provenance
+                        ? side.provenance->hole
+                        : false)
+                << " candidates="
+                << side.candidate_face_count
+                << " status="
+                << static_cast<int>(side.status)
+                << '\n';
+        }
         CHECK(
             side.status ==
             kernel::ReferenceStatus::resolved);
