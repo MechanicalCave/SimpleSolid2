@@ -495,6 +495,21 @@ public:
             });
     }
 
+    void resetRuntimeDiagnostics() noexcept {
+        runtime_diagnostics_ = {};
+    }
+
+    [[nodiscard]] QtOcctRuntimeDiagnostics
+    runtimeDiagnostics() const noexcept {
+        return runtime_diagnostics_;
+    }
+
+    void updateCurrentViewer() {
+        if (context_.IsNull()) return;
+        ++runtime_diagnostics_.update_current_viewer_calls;
+        context_->UpdateCurrentViewer();
+    }
+
     void ensureInitialized() {
         if (!view_.IsNull()) return;
 
@@ -561,8 +576,8 @@ public:
         createNavigationControlLabels();
         syncNavigationControlVisibility();
 
-        context_->UpdateCurrentViewer();
-        view_->Redraw();
+        updateCurrentViewer();
+        redraw();
     }
 
     std::optional<viewer::CameraState> cameraState() const {
@@ -610,7 +625,7 @@ public:
         camera->SetUp(gp_Dir{state.up.x, state.up.y, state.up.z});
         camera->OrthogonalizeUp();
         camera->SetScale(state.scale);
-        view_->Redraw();
+        redraw();
         syncNavigationControlVisibility();
         return true;
     }
@@ -635,7 +650,7 @@ public:
         ensureInitialized();
         if (view_.IsNull()) return;
         view_->FitAll(0.05, false);
-        view_->Redraw();
+        redraw();
     }
 
     struct NavigationControl final {
@@ -971,7 +986,7 @@ public:
 
         static_cast<void>(
             navigation_animation_->UpdateTimer());
-        view_->Redraw();
+        redraw();
 
         if (!navigation_animation_->IsStopped()) {
             return;
@@ -987,7 +1002,7 @@ public:
 
         if (navigation_animation_fit_all_) {
             view_->FitAll(0.05, false);
-            view_->Redraw();
+            redraw();
         }
 
         syncNavigationControlVisibility();
@@ -1032,8 +1047,8 @@ public:
             }
 
             applySelectionStyles();
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             reference_scene_ = scene;
             return true;
         } catch (...) {
@@ -1127,8 +1142,8 @@ public:
 
             sketch_scene_ = scene;
             applySelectionStyles();
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearSketchScene();
@@ -1173,8 +1188,8 @@ public:
 
             profile_scene_ = scene;
             applySelectionStyles();
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearProfileScene();
@@ -1196,8 +1211,8 @@ public:
         if (!scene.region &&
             !scene.emphasis_region) {
             profile_preview_scene_ = scene;
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         }
 
@@ -1279,8 +1294,8 @@ public:
             }
 
             profile_preview_scene_ = scene;
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearProfilePreviewScene();
@@ -1337,8 +1352,8 @@ public:
             }
 
             sketch_preview_scene_ = scene;
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearSketchPreviewScene();
@@ -1379,8 +1394,8 @@ public:
 
             sketch_grip_scene_ = scene;
             applySketchInteractionStyles();
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearSketchGripScene();
@@ -1397,10 +1412,10 @@ public:
         if (!context_.IsNull()) {
             applySelectionStyles();
             applySketchInteractionStyles();
-            context_->UpdateCurrentViewer();
+            updateCurrentViewer();
         }
         if (!view_.IsNull()) {
-            view_->Redraw();
+            redraw();
         }
         return true;
     }
@@ -1530,8 +1545,8 @@ public:
             }
 
             sketch_measure_marker_scene_ = scene;
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearSketchMeasureMarkerScene();
@@ -1634,8 +1649,8 @@ public:
         }
 
         if (changed) {
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
         }
         return true;
     }
@@ -1758,8 +1773,8 @@ public:
             }
 
             applySelectionStyles();
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearSketchMeasureCueScene();
@@ -1774,9 +1789,9 @@ public:
         selection_ = selection;
         if (!context_.IsNull()) {
             applySelectionStyles();
-            context_->UpdateCurrentViewer();
+            updateCurrentViewer();
         }
-        if (!view_.IsNull()) view_->Redraw();
+        if (!view_.IsNull()) redraw();
         return true;
     }
 
@@ -1871,6 +1886,7 @@ public:
     querySketchPresentations(
         const viewer::ViewportRect2& rectangle,
         viewer::SketchRectangleSelectionRule rule) {
+        ++runtime_diagnostics_.sketch_rectangle_queries;
         if (!rectangle.valid()) {
             return {};
         }
@@ -1910,6 +1926,7 @@ public:
             [&](viewer::PresentationToken token,
                 const viewer::Point3& start_point,
                 const viewer::Point3& end_point) {
+                ++runtime_diagnostics_.sketch_rectangle_segments;
                 const auto start =
                     projectToScreen(start_point);
                 const auto end =
@@ -1919,8 +1936,10 @@ public:
                 auto found = std::find_if(
                     semantic.begin(),
                     semantic.end(),
-                    [token](
+                    [this, token](
                         const SemanticHitState& state) {
+                        ++runtime_diagnostics_.
+                            sketch_rectangle_token_comparisons;
                         return state.token == token;
                     });
                 if (found == semantic.end()) {
@@ -2063,7 +2082,7 @@ public:
                 false);
         }
 
-        context_->UpdateCurrentViewer();
+        updateCurrentViewer();
         return true;
     }
 
@@ -2078,7 +2097,7 @@ public:
             selection_rubber_band_,
             false);
         selection_rubber_band_visible_ = false;
-        context_->UpdateCurrentViewer();
+        updateCurrentViewer();
     }
 
     bool setSketchSnapInferenceScene(
@@ -2250,8 +2269,8 @@ public:
             }
 
             sketch_snap_inference_scene_ = scene;
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearSketchSnapInferenceScene();
@@ -2465,7 +2484,7 @@ public:
                 overlay;
             // One provider update per pointer sample. Reusing labels avoids
             // remove/create churn and the previous double redraw flicker.
-            context_->UpdateCurrentViewer();
+            updateCurrentViewer();
             return true;
         } catch (...) {
             clearSketchDynamicInputOverlay();
@@ -2498,7 +2517,7 @@ public:
         sketch_dynamic_input_overlay_.reset();
 
         if (!context_.IsNull()) {
-            context_->UpdateCurrentViewer();
+            updateCurrentViewer();
         }
     }
 
@@ -2528,7 +2547,7 @@ public:
             // Spatial tool callbacks may synchronously rebuild presentation.
             // Drop stale provider detection before entering that route.
             context_->ClearDetected(false);
-            context_->UpdateCurrentViewer();
+            updateCurrentViewer();
         }
     }
 
@@ -2680,7 +2699,7 @@ public:
         // highlight into Sketch hover presentation. Sketch hover is owned
         // by the semantic spatial-input path and is restyled explicitly.
         context_->ClearDetected(false);
-        context_->UpdateCurrentViewer();
+        updateCurrentViewer();
         return false;
     }
 
@@ -2839,7 +2858,7 @@ public:
         ensureInitialized();
         if (view_.IsNull() || !std::isfinite(factor) || factor <= 0.0) return;
         view_->SetZoom(factor, true);
-        view_->Redraw();
+        redraw();
     }
 
     void panByPixels(int delta_x, int delta_y) {
@@ -2852,7 +2871,7 @@ public:
         const auto dy = view_->Convert(
             static_cast<int>(std::lround(delta_y * dpr)));
         view_->Panning(-dx, dy, 1.0, true);
-        view_->Redraw();
+        redraw();
     }
 
     void orbitByScreenAngles(const detail::OrbitScreenAngles& angles) {
@@ -2865,7 +2884,7 @@ public:
         }
 
         view_->Rotate(angles.x, angles.y, angles.z, true);
-        view_->Redraw();
+        redraw();
         syncNavigationControlVisibility();
     }
 
@@ -3896,11 +3915,13 @@ public:
         view_->MustBeResized();
         applySketchInteractionStyles();
         applySketchSnapInferenceStyles();
-        view_->Redraw();
+        redraw();
     }
 
     void redraw() {
-        if (!view_.IsNull()) view_->Redraw();
+        if (view_.IsNull()) return;
+        ++runtime_diagnostics_.redraw_calls;
+        view_->Redraw();
     }
 
     void beginMiddleDrag(int x, int y, bool orbit) noexcept {
@@ -3955,11 +3976,12 @@ public:
 
         view_->StartZoomAtPoint(x, y);
         view_->ZoomAtPoint(x, y, x + dx, y + dy);
-        view_->Redraw();
+        redraw();
     }
 
 private:
     QtOcctViewerWidget& owner_;
+    QtOcctRuntimeDiagnostics runtime_diagnostics_;
     bool middle_dragging_{};
     bool middle_orbit_{};
     int last_mouse_x_{};
@@ -4071,6 +4093,19 @@ QtOcctViewerWidget::QtOcctViewerWidget(QWidget* parent)
 }
 
 QtOcctViewerWidget::~QtOcctViewerWidget() = default;
+
+void QtOcctViewerWidget::resetRuntimeDiagnostics() noexcept {
+    if (impl_) {
+        impl_->resetRuntimeDiagnostics();
+    }
+}
+
+QtOcctRuntimeDiagnostics
+QtOcctViewerWidget::runtimeDiagnostics() const noexcept {
+    return impl_
+        ? impl_->runtimeDiagnostics()
+        : QtOcctRuntimeDiagnostics{};
+}
 
 std::optional<viewer::CameraState> QtOcctViewerWidget::cameraState() const {
     return guardedCameraState(
