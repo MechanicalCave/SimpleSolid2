@@ -1,9 +1,9 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; IMPLEMENTATION NOT ACTIVATED  
-**Version:** 1.1  
+**Version:** 1.2  
 **Owner acceptance:** 2026-10-02  
-**Previous accepted version:** 1.0 — 2026-10-02  
+**Previous accepted version:** 1.1 — 2026-10-02  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Current baseline:** `main` after merged SR-03, `6bc83dc47dd4b101c881bd7df4455e6bcdba80f0`  
@@ -121,8 +121,8 @@ The order is strict unless the Owner explicitly amends this roadmap:
 
 | Order | Gate / package | Required outcome | Activation |
 | --- | --- | --- | --- |
-| G0 | **Sketcher profile-authoring readiness re-test** | prove current Sketcher can deliberately author practical Profiles after SR-01/02/03 | **NEXT; evidence checkpoint only** |
-| 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | future separate Work Contract |
+| G0 | **Sketcher profile-authoring readiness re-test** | prove current Sketcher can deliberately author practical Profiles after SR-01/02/03 | **COMPLETED — PASS on `16df8d1940a1f438a66cbd6964a881ba24718c0d`** |
+| 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | **NEXT proposal; separate Owner acceptance required** |
 | 2 | **PM-00B — Part Feature Architecture Freeze** | Owner-approved ADR/contract freeze for first solid workflow based on PM-00A evidence | future separate Work Contract / governance gate |
 | 3 | **PM-01 — First Solid Vertical Slice: Body / Feature / Extrude Add** | minimum durable Body/Feature architecture plus one complete Extrude Add lifecycle | future separate Work Contract |
 | 4 | **PM-02 — Datum Plane / Sketch Support / Extrude Cut** | offset datum from stable source, Sketch on datum, Cut, downstream recompute/failure behavior | future separate Work Contract |
@@ -144,6 +144,8 @@ Architecture that cannot be justified by PM-01's concrete workflow remains out o
 ## 7. G0 — Sketcher profile-authoring readiness re-test
 
 G0 is the entry gate for Part architecture work. It is not a solid-modeling Work Contract.
+
+**G0 result:** COMPLETED — PASS on 2026-10-02 on exact candidate `16df8d1940a1f438a66cbd6964a881ba24718c0d`. Evidence is recorded in `work/G0_SKETCHER_PROFILE_AUTHORING_READINESS_RETEST.md`.
 
 Use the accepted criteria in `work/SKETCH_ROADMAP.md` v1.9. At minimum the supported Windows evidence must cover:
 
@@ -575,13 +577,13 @@ Planned Part features must not be documented as already implemented.
 
 ## 23. Activation boundary
 
-Program v1.1 is accepted and frozen, but **no PM package is active by this acceptance**.
+Program v1.2 is accepted and frozen, but **no PM package is active by this acceptance**.
 
 Current legal next action:
 
-**G0 — Sketcher profile-authoring readiness re-test.**
+**Owner review/acceptance of the proposed PM-00A — Part Modeling Architecture Evidence Gate Work Contract.**
 
-After G0 PASS, PM-00A still requires its own Owner-accepted Work Contract and repository activation gate.
+G0 is complete. `work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md` is prepared as PROPOSED — INACTIVE. PM-00A still requires explicit Owner acceptance and repository activation before any Phase A0 implementation.
 
 After PM-00A evidence, PM-00B still requires explicit Owner architecture acceptance.
 
