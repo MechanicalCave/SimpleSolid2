@@ -8,6 +8,7 @@
 
 #include <QApplication>
 #include <QDialog>
+#include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
 #include <QMetaObject>
@@ -302,6 +303,22 @@ int main(int argc, char* argv[]) {
         window.findChild<QWidget*>(
             QStringLiteral(
                 "projectToolbar"));
+    auto* workspace_info =
+        window.findChild<QWidget*>(
+            QStringLiteral(
+                "workspaceInfoStrip"));
+    auto* workspace_project_name =
+        window.findChild<QLabel*>(
+            QStringLiteral(
+                "workspaceProjectName"));
+    auto* workspace_project_id =
+        window.findChild<QLabel*>(
+            QStringLiteral(
+                "workspaceProjectId"));
+    auto* workspace_path_label =
+        window.findChild<QLabel*>(
+            QStringLiteral(
+                "workspaceProjectPath"));
 
     EXPECT(tabs != nullptr);
     EXPECT(workspace_button != nullptr);
@@ -312,6 +329,28 @@ int main(int argc, char* argv[]) {
     EXPECT(dashboard != nullptr);
     EXPECT(workbench != nullptr);
     EXPECT(toolbar != nullptr);
+    EXPECT(workspace_info != nullptr);
+    EXPECT(workspace_project_name != nullptr);
+    EXPECT(workspace_project_id != nullptr);
+    EXPECT(workspace_path_label != nullptr);
+    EXPECT(
+        workspace_project_name->parentWidget() ==
+        workspace_info);
+    EXPECT(
+        workspace_project_id->parentWidget() ==
+        workspace_info);
+    EXPECT(
+        workspace_path_label->parentWidget() ==
+        workspace_info);
+    EXPECT(!workspace_project_name->wordWrap());
+    EXPECT(!workspace_project_id->wordWrap());
+    EXPECT(!workspace_path_label->wordWrap());
+    EXPECT(
+        !workspace_project_name->toolTip().isEmpty());
+    EXPECT(
+        !workspace_project_id->toolTip().isEmpty());
+    EXPECT(
+        !workspace_path_label->toolTip().isEmpty());
 
     EXPECT(content->currentWidget() == dashboard);
     EXPECT(tabs->count() == 0);
