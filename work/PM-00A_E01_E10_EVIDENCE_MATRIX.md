@@ -101,6 +101,29 @@ This remains evidence-only: the operations are bounded probes, not Part Features
 | E02-05 | Upstream edit makes downstream geometric operation fail while its input references still resolve | reference status remains **Resolved**; operation result is recorded separately as **Geometric failure** | YES | geometric failure is misreported as Missing/Ambiguous |
 | E02-06 | Same semantic source exists at more than one producer stage | selector must include/derive consumed producer stage; cross-stage accidental match is **not Resolved** | YES | current-final-shape search ignores intended stage |
 
+## 6A. E02 execution result
+
+**E02 status:** COMPLETED — PASS  
+**Exact source candidate:** `953cdca42978916754f6ae6cc68d86352aad35ac`  
+**Kernel-focused:** #1285 — PASS  
+**Windows FULL:** #1286 — PASS  
+**False-Resolved:** 0  
+**Evidence report:** `work/PM-00A_E02_MULTISTAGE_LINEAGE_EVIDENCE.md`
+
+All E02-01…E02-06 expectations are satisfied.
+
+Key findings:
+
+- an unaffected semantic face remains Resolved through Cut at the intended consumed stage;
+- independent upstream-height rebuilds preserve accepted stage outcomes without provider-handle continuity;
+- complete source-face removal is Missing and never retargets to a new Cut face;
+- Fillet input resolution must be bounded by the already-resolved Cut-face semantic context rather than by a global Body geometry search;
+- downstream geometric failure remains separate from reference resolution;
+- omitting producer stage while the same meaning is live at multiple stages is Ambiguous, never Resolved;
+- cold replay reproduces the complete neutral multi-stage evidence after provider objects are destroyed.
+
+The E02 fixture uses a deterministic box prism as its representative initial producer stage. E01 remains the exact Profile-to-Extrude provenance evidence. Provider history and fixture geometry lookup are transient evidence only.
+
 ## 7. E03 — referenced edge splits
 
 Goal: prove singular semantic references fail closed when one prior target becomes multiple plausible descendants.
