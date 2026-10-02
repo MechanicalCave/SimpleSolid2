@@ -117,6 +117,9 @@ public:
     }
     void refreshCadDynamicInputOverlay();
 
+    void requestUndo() { undo(); }
+    void requestRedo() { redo(); }
+
     [[nodiscard]] std::string cadInputPrompt() const override;
     [[nodiscard]] application::CadInputContextGeneration
     cadInputContextGeneration() const noexcept override;
@@ -352,12 +355,11 @@ private:
     QWidget* profile_operations_widget_{};
     QPushButton* profile_add_area_button_{};
     QPushButton* profile_subtract_area_button_{};
-    QPushButton* profile_detect_islands_button_{};
+    QPushButton* profile_show_islands_button_{};
     QPushButton* profile_highlight_hover_button_{};
     QPushButton* profile_show_boundaries_button_{};
     QPushButton* profile_show_problems_button_{};
     QLabel* profile_result_label_{};
-    QPushButton* profile_find_regions_button_{};
     QPushButton* profile_finish_button_{};
     QPushButton* profile_cancel_button_{};
 

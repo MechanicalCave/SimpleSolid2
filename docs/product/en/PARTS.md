@@ -65,7 +65,7 @@ Changing the Part unit changes how unitless Length input is interpreted and how 
 
 `Apply Properties` changes the other Document fields in the open session. Those changes are not durable on disk until you use `Save`.
 
-`Undo` and `Redo` operate on authored changes in the current open session.
+`Undo` and `Redo` operate on authored changes in the current open session. On Windows, `Ctrl+Z` invokes the same active-Document Undo path and `Ctrl+Y` invokes Redo. A focused text editor keeps its own local Undo/Redo.
 
 <!-- section-id: product.parts.origin -->
 ## Origin, selection and visibility
@@ -128,7 +128,7 @@ Real text-entry fields — for example property editors — keep keyboard owners
 
 A partially typed CAD token belongs to the semantic request in which typing started. Changing to another request/tool/Sketch/Document clears that partial token before it can execute in the new context. Moving the pointer to adjust direction inside the same PointRequest does not clear it. Switching Documents or navigating to Workspace likewise clears partial input so it can never leak into a hidden Document.
 
-With viewport CAD focus and a non-empty Command Line buffer, Delete is reserved by live input and does not delete selected geometry. Use Backspace to remove the last character. When the buffer is empty, normal Delete Selection behavior remains unchanged. If the Command Line or another real text field itself has focus, Delete behaves as normal text editing.
+With viewport CAD focus and a non-empty Command Line buffer, Delete is reserved by live input and does not delete selected geometry. Use Backspace to remove the last character. With an empty buffer during active Sketch Edit, Delete belongs to the Sketch semantic context: selected Sketch geometry is deleted, while a stale Profile/Tree selection cannot take over the command. If no Sketch geometry is selected, Delete does nothing rather than deleting a stale Profile. Outside Sketch Edit, normal Part/Profile Delete behavior remains available. Clicking blank space in Document Tree clears the Tree/Part selection only. If the Command Line or another real text field itself has focus, Delete behaves as normal text editing.
 
 The bottom Command Line stays one row high. Its right-side diagnostic area is permanently reserved, so showing an error does not resize the input field or make the Viewer jump. Long diagnostics are shortened visually in that row; the complete text is available as a tooltip.
 
@@ -412,7 +412,7 @@ Every Sketch Line, Circle and Arc can be **Regular** or **Construction**. Select
 
 The **Profile** tool works inside the active Sketch. Moving the pointer over closed geometry shows a translucent region result; clicking accepts that candidate into the current draft and Status reminds you that **Finish Profile** performs the durable commit. Region truth comes from exact Line/Circle/Arc semantics, not from Viewer tessellation.
 
-Operations provides **Add Area**, **Subtract Area**, **Detect Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Find All Regions**, **Finish Profile** and **Cancel**. Find All Regions is diagnostic only and creates no Profile automatically. During Subtract the resulting draft remains cyan/blue, while the currently hovered region to remove receives a separate red-orange emphasis fill.
+Operations provides **Add Area**, **Subtract Area**, **Show Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Finish Profile** and **Cancel**. Island detection itself is always active because it is part of the region analysis. **Show Islands** only shows or hides the island diagnostic/presentation; turning it off does not change Profile geometry, validity or picking. The former **Find All Regions** button is no longer part of the normal Profile workflow. During Subtract the resulting draft remains cyan/blue, while the currently hovered region to remove receives a separate red-orange emphasis fill.
 
 An open chain remains open: SimpleSolid does not close a small gap with a hidden tolerance or auto-repair it. Clicking where no bounded region exists reports an open-boundary diagnostic when the analysis detects one. Without snapping/OSNAP, two points that only look coincident on screen are not silently made equal. A disconnected Add result, subtraction that splits material, or ambiguous topology is rejected without changing the Document.
 
@@ -424,7 +424,7 @@ After **Finish Sketch**, a visible Valid Profile remains a flat selectable Part 
 
 To change an existing Profile region, select exactly one Profile and use **Edit Profile** or enter `EDITPROFILE`. Editing preserves ProfileId. Use `PROFILE` to start a new Profile draft.
 
-Command Line and Operations drive the same Profile state. Context commands are `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL`, plus `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF` and `PROBLEMS ON|OFF`.
+Command Line and Operations drive the same Profile state. Context commands are `ADD`, `SUBTRACT`, `FINISH`, `CANCEL`, plus `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF` and `PROBLEMS ON|OFF`. `ISLANDS ON|OFF` controls only Show Islands presentation; it never disables island analysis.
 
 Profile is 2D/Part semantics. **It does not perform Extrude or create a solid.** Modeled solid operations require separate Part functionality.
 

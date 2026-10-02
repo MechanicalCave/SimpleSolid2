@@ -666,7 +666,7 @@ int main(int argc, char* argv[]) {
     CHECK(profile_command.accepted);
     CHECK(
         !interaction.profileToolOptions()
-             .detect_islands);
+             .show_islands);
 
     profile_command =
         profile_command_endpoint.submit(
@@ -679,7 +679,7 @@ int main(int argc, char* argv[]) {
     profile_command =
         profile_command_endpoint.submit(
             "FIND");
-    CHECK(profile_command.accepted);
+    CHECK(!profile_command.accepted);
 
     profile_command =
         profile_command_endpoint.submit(
@@ -894,6 +894,46 @@ int main(int argc, char* argv[]) {
         session.document()
             .evaluateProfile(profile_id)
             ->region->holes.size() == 1U);
+
+    // SR-01: island truth stays active even when its presentation option is
+    // hidden. Add one bounded material island inside the authored hole and
+    // verify the same non-zero semantic count with Show Islands ON and OFF.
+    const auto nested_island_circle =
+        session.execute(
+            application::AddSketchCircleCommand{
+                sketch_id,
+                {102.0, 102.0},
+                0.5});
+    CHECK(nested_island_circle.ok());
+    CHECK(
+        interaction.activateProfileEdit(
+            profile_id));
+    CHECK(
+        interaction.profileIslandCount() ==
+        1U);
+    const auto island_analysis_builds =
+        interaction.profileAnalysisBuildCount();
+    profile_options =
+        interaction.profileToolOptions();
+    CHECK(profile_options.show_islands);
+    profile_options.show_islands = false;
+    CHECK(
+        interaction.setProfileToolOptions(
+            profile_options));
+    CHECK(
+        interaction.profileIslandCount() ==
+        1U);
+    CHECK(
+        interaction.profileAnalysisBuildCount() ==
+        island_analysis_builds);
+    profile_options.show_islands = true;
+    CHECK(
+        interaction.setProfileToolOptions(
+            profile_options));
+    CHECK(
+        interaction.profileIslandCount() ==
+        1U);
+    interaction.cancelProfile();
 
     // Cancel discards a fresh draft without allocating identity/history.
     const auto before_cancel =

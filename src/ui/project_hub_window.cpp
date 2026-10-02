@@ -455,6 +455,14 @@ void ProjectHubWindow::buildWorkspacePage() {
     workspace_shell_->setDocumentWorkbench(
         cad_workbench_);
 
+    workspace_shell_->setDocumentHistoryHandlers(
+        [this] {
+            cad_workbench_->requestUndo();
+        },
+        [this] {
+            cad_workbench_->requestRedo();
+        });
+
     cad_workbench_->setCadInteractionSettingsProvider(
         [this] {
             return workspace_shell_->

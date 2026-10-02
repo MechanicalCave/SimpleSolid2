@@ -98,11 +98,13 @@ When a resolved Part is already open, a second Open request returns the existing
 
 Profile creation/editing is a Part operation over derived Shared-2D regions. The Profile tool caches region analysis for the current Sketch model state, performs hover/pick against that cache and keeps Add/Subtract composition runtime-only. Repeated pointer motion on unchanged geometry does not rebuild the full arrangement.
 
+Nested/disconnected island analysis is part of that complete derived region truth and remains active for every Profile session. The runtime **Show Islands** option controls presentation/diagnostic visibility only; it cannot change RegionCandidate truth, Profile validity, point picking, RegionIntent or authored state. The former public Find All Regions action is no longer part of the normal Profile workflow; internal region enumeration remains derived analysis.
+
 Finish executes one semantic Profile command. Create allocates one fresh ProfileId. Edit preserves the existing ProfileId and atomically replaces RegionIntent. Cancel, hover, diagnostic lookup and rejected drafts do not mutate authored state or consume identity.
 
 Profiles are live references rather than geometry snapshots. `evaluateProfile` resolves durable RegionIntent against current source Sketch geometry. Missing source entities/intersections or ambiguous/unresolved topology make the Profile Invalid without rewriting intent; later source repair can return the same ProfileId to Valid.
 
-Delete Profile removes only the Profile. Source Sketch geometry remains authored. Source Sketch removal cannot silently strand dependent Profiles.
+Delete Profile removes only the Profile. Source Sketch geometry remains authored. Source Sketch removal cannot silently strand dependent Profiles. UI command targeting is runtime-only: while a Sketch is actively edited, its semantic selection owns Sketch Delete and stale Tree/Profile presentation cannot become mutation authority.
 
 <!-- section-id: internal.part-documents.sketch-presentation -->
 ## Active Sketch presentation and spatial input

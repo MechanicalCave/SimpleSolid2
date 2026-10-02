@@ -590,7 +590,7 @@ The top Create strip contains creation tools only. The right **Operations** pane
 
 Rectangle is activated by the toolbar or the top-level `RECTANGLE` token and uses the same controller/interaction state. First Corner captures the current DocumentRevision; Opposite Corner commits four ordinary perimeter Lines, plus two ordinary Construction diagonals when enabled, through one atomic application command. Stale revision fails closed instead of silently rebasing the second click. No Rectangle/group/center identity enters the Viewer or authored model.
 
-The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit `SELECT`, `LINE`, `CIRCLE`, `ARC`, `RECTANGLE`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE`, `MIRROR`, `PROFILE` and `EDITPROFILE`. An active Profile session additionally accepts `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` and the documented option toggles. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar; during active direct grip manipulation it may also consume the tool-local token `C` to enable Grip Copy. `C` is not a top-level command alias. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
+The workspace-global Command Line is context-sensitive. In an active Sketch with no semantic input request it can submit `SELECT`, `LINE`, `CIRCLE`, `ARC`, `RECTANGLE`, `MEASURE`, `MOVE`, `COPY`, `ROTATE`, `SCALE`, `MIRROR`, `PROFILE` and `EDITPROFILE`. An active Profile session additionally accepts `ADD`, `SUBTRACT`, `FINISH`, `CANCEL` and the documented option toggles. `ISLANDS ON|OFF` controls only the runtime **Show Islands** presentation; island analysis itself remains active. The former public `FIND`/Find All Regions workflow is no longer exposed. While a semantic PointRequest is active, that request receives the submitted text before top-level command activation. It may resolve the existing bare Direct Distance scalar; during active direct grip manipulation it may also consume the tool-local token `C` to enable Grip Copy. `C` is not a top-level command alias. Enter consumes one submitted token whether accepted or rejected; an invalid token creates no authored mutation, the active point/tool stage remains authoritative, the editable buffer becomes empty and a runtime diagnostic reports the rejection.
 
 R10 keeps that ownership explicit in code. `application::CadInputSession` owns the single live CAD text buffer, endpoint attachment/lifetime, context-generation binding, diagnostics, application-session Polar/DYN settings and Dynamic Input field focus. It does not know Sketch tool semantics or parse tool-specific numbers.
 
@@ -604,11 +604,15 @@ For accepted top-level Sketch commands, the Qt adapter preserves the pre-D prese
 
 The Command Line is keyboard-first. With a normal CAD surface such as the viewport focused, printable unmodified text is appended to the same runtime buffer and mirrored immediately in Command Line without transferring Qt focus. Clicking Command Line remains an equivalent adapter to the same buffer. Real text editors, editable properties, modal dialogs and application shortcuts keep their own keyboard ownership.
 
+Standard Windows document-history shortcuts are routed at the Workspace level only for the active CAD surface: `Ctrl+Z` invokes the existing active-Document Undo path and `Ctrl+Y` invokes the existing Redo path. They do not create a second Sketch history. The existing history boundary remains authoritative, so active transient Sketch manipulation is cancelled first where the normal Undo/Redo action already requires that. A focused real text editor keeps its own local Undo/Redo and inactive/hidden Documents cannot receive the shortcut.
+
 Each live token is bound to an opaque `CadInputContextGeneration` supplied by the active semantic endpoint. The Sketch adapter advances that generation when the owning semantic context/request is replaced — for example tool/stage/base-request replacement, active-grip edit-mode replacement, authored revision change, entering/leaving a Sketch or switching the active endpoint. The live buffer and diagnostic are cleared when the observed generation changes. Pointer-direction movement inside the same PointRequest does not advance the semantic context and therefore does not clear a partially entered value. On submit, the generation that owned the token is passed back to the endpoint and is validated before token interpretation or any domain effect.
 
 The QApplication-level event filter is global only as a transport hook; capture authority is Workspace-local. Printable CAD input is accepted only when the active top-level window is the owning Workspace, the focus and key target belong to its active Document Workbench, no popup/menu or modal surface owns the keyboard, the focus is not a real text editor, and an active CAD endpoint exists. A foreign non-modal window or another visible Workspace therefore cannot feed the background buffer.
 
-Delete follows the same precedence rule as the rest of live CAD input. With normal CAD focus and a non-empty viewport-entered buffer, Delete is consumed by the input layer and does not reach semantic Delete Selection; the append-only viewport buffer is left unchanged and Backspace remains the character-removal key. With an empty buffer, existing Delete Selection behavior is unchanged. With direct QLineEdit/text-editor focus, Delete remains ordinary local text editing.
+Delete follows the same precedence rule as the rest of live CAD input. With normal CAD focus and a non-empty viewport-entered buffer, Delete is consumed by the input layer and does not reach semantic Delete Selection; the append-only viewport buffer is left unchanged and Backspace remains the character-removal key. With an empty buffer, the active semantic interaction context owns the destructive action. During active Sketch edit, selected Sketch entities are the only eligible Delete target; stale Tree/Profile selection or the currently displayed Profile Properties page cannot steal the command. If no qualifying Sketch selection exists, Delete fails closed instead of falling through to a stale Part/Profile target. Outside Sketch edit, valid Part/Profile selection keeps its existing delete behavior. With direct QLineEdit/text-editor focus, Delete remains ordinary local text editing.
+
+A left click on blank Document Tree space clears only Tree/Part selection. It does not mutate authored state and does not globally clear independent active Sketch viewport selection.
 
 The Command Line presentation is a geometry-stable single row. Its diagnostic region is permanently reserved and single-line; a long message is elided in place (with the full message available as tooltip) instead of wrapping, changing the input width or shrinking/moving the Viewer above it.
 
@@ -1092,11 +1096,13 @@ When a resolved Part is already open, a second Open request returns the existing
 
 Profile creation/editing is a Part operation over derived Shared-2D regions. The Profile tool caches region analysis for the current Sketch model state, performs hover/pick against that cache and keeps Add/Subtract composition runtime-only. Repeated pointer motion on unchanged geometry does not rebuild the full arrangement.
 
+Nested/disconnected island analysis is part of that complete derived region truth and remains active for every Profile session. The runtime **Show Islands** option controls presentation/diagnostic visibility only; it cannot change RegionCandidate truth, Profile validity, point picking, RegionIntent or authored state. The former public Find All Regions action is no longer part of the normal Profile workflow; internal region enumeration remains derived analysis.
+
 Finish executes one semantic Profile command. Create allocates one fresh ProfileId. Edit preserves the existing ProfileId and atomically replaces RegionIntent. Cancel, hover, diagnostic lookup and rejected drafts do not mutate authored state or consume identity.
 
 Profiles are live references rather than geometry snapshots. `evaluateProfile` resolves durable RegionIntent against current source Sketch geometry. Missing source entities/intersections or ambiguous/unresolved topology make the Profile Invalid without rewriting intent; later source repair can return the same ProfileId to Valid.
 
-Delete Profile removes only the Profile. Source Sketch geometry remains authored. Source Sketch removal cannot silently strand dependent Profiles.
+Delete Profile removes only the Profile. Source Sketch geometry remains authored. Source Sketch removal cannot silently strand dependent Profiles. UI command targeting is runtime-only: while a Sketch is actively edited, its semantic selection owns Sketch Delete and stale Tree/Profile presentation cannot become mutation authority.
 
 <!-- section-id: internal.part-documents.sketch-presentation -->
 ## Active Sketch presentation and spatial input
@@ -1900,7 +1906,7 @@ Changing the Part unit changes how unitless Length input is interpreted and how 
 
 `Apply Properties` changes the other Document fields in the open session. Those changes are not durable on disk until you use `Save`.
 
-`Undo` and `Redo` operate on authored changes in the current open session.
+`Undo` and `Redo` operate on authored changes in the current open session. On Windows, `Ctrl+Z` invokes the same active-Document Undo path and `Ctrl+Y` invokes Redo. A focused text editor keeps its own local Undo/Redo.
 
 <!-- section-id: product.parts.origin -->
 ## Origin, selection and visibility
@@ -1963,7 +1969,7 @@ Real text-entry fields — for example property editors — keep keyboard owners
 
 A partially typed CAD token belongs to the semantic request in which typing started. Changing to another request/tool/Sketch/Document clears that partial token before it can execute in the new context. Moving the pointer to adjust direction inside the same PointRequest does not clear it. Switching Documents or navigating to Workspace likewise clears partial input so it can never leak into a hidden Document.
 
-With viewport CAD focus and a non-empty Command Line buffer, Delete is reserved by live input and does not delete selected geometry. Use Backspace to remove the last character. When the buffer is empty, normal Delete Selection behavior remains unchanged. If the Command Line or another real text field itself has focus, Delete behaves as normal text editing.
+With viewport CAD focus and a non-empty Command Line buffer, Delete is reserved by live input and does not delete selected geometry. Use Backspace to remove the last character. With an empty buffer during active Sketch Edit, Delete belongs to the Sketch semantic context: selected Sketch geometry is deleted, while a stale Profile/Tree selection cannot take over the command. If no Sketch geometry is selected, Delete does nothing rather than deleting a stale Profile. Outside Sketch Edit, normal Part/Profile Delete behavior remains available. Clicking blank space in Document Tree clears the Tree/Part selection only. If the Command Line or another real text field itself has focus, Delete behaves as normal text editing.
 
 The bottom Command Line stays one row high. Its right-side diagnostic area is permanently reserved, so showing an error does not resize the input field or make the Viewer jump. Long diagnostics are shortened visually in that row; the complete text is available as a tooltip.
 
@@ -2247,7 +2253,7 @@ Every Sketch Line, Circle and Arc can be **Regular** or **Construction**. Select
 
 The **Profile** tool works inside the active Sketch. Moving the pointer over closed geometry shows a translucent region result; clicking accepts that candidate into the current draft and Status reminds you that **Finish Profile** performs the durable commit. Region truth comes from exact Line/Circle/Arc semantics, not from Viewer tessellation.
 
-Operations provides **Add Area**, **Subtract Area**, **Detect Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Find All Regions**, **Finish Profile** and **Cancel**. Find All Regions is diagnostic only and creates no Profile automatically. During Subtract the resulting draft remains cyan/blue, while the currently hovered region to remove receives a separate red-orange emphasis fill.
+Operations provides **Add Area**, **Subtract Area**, **Show Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Finish Profile** and **Cancel**. Island detection itself is always active because it is part of the region analysis. **Show Islands** only shows or hides the island diagnostic/presentation; turning it off does not change Profile geometry, validity or picking. The former **Find All Regions** button is no longer part of the normal Profile workflow. During Subtract the resulting draft remains cyan/blue, while the currently hovered region to remove receives a separate red-orange emphasis fill.
 
 An open chain remains open: SimpleSolid does not close a small gap with a hidden tolerance or auto-repair it. Clicking where no bounded region exists reports an open-boundary diagnostic when the analysis detects one. Without snapping/OSNAP, two points that only look coincident on screen are not silently made equal. A disconnected Add result, subtraction that splits material, or ambiguous topology is rejected without changing the Document.
 
@@ -2259,7 +2265,7 @@ After **Finish Sketch**, a visible Valid Profile remains a flat selectable Part 
 
 To change an existing Profile region, select exactly one Profile and use **Edit Profile** or enter `EDITPROFILE`. Editing preserves ProfileId. Use `PROFILE` to start a new Profile draft.
 
-Command Line and Operations drive the same Profile state. Context commands are `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL`, plus `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF` and `PROBLEMS ON|OFF`.
+Command Line and Operations drive the same Profile state. Context commands are `ADD`, `SUBTRACT`, `FINISH`, `CANCEL`, plus `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF` and `PROBLEMS ON|OFF`. `ISLANDS ON|OFF` controls only Show Islands presentation; it never disables island analysis.
 
 Profile is 2D/Part semantics. **It does not perform Extrude or create a solid.** Modeled solid operations require separate Part functionality.
 
@@ -2569,7 +2575,7 @@ Zmiana jednostki Parta zmienia interpretację bezjednostkowych wartości Length 
 
 `Apply Properties` wprowadza pozostałe zmiany do otwartej sesji Dokumentu. Nie są trwałe na dysku, dopóki nie wykonasz `Save`.
 
-`Undo` i `Redo` działają dla authored changes bieżącej otwartej sesji.
+`Undo` i `Redo` działają dla authored changes bieżącej otwartej sesji. W Windows `Ctrl+Z` uruchamia tę samą ścieżkę Undo aktywnego Dokumentu, a `Ctrl+Y` uruchamia Redo. Pole tekstowe z focusem zachowuje własne lokalne Undo/Redo.
 
 <!-- section-id: product.parts.origin -->
 ## Origin, zaznaczenie i widoczność
@@ -2632,7 +2638,7 @@ Prawdziwe pola tekstowe — np. edycja właściwości — zachowują własny foc
 
 Częściowo wpisany token CAD należy do semantycznego requestu, w którym rozpoczęto wpisywanie. Zmiana requestu/narzędzia/Sketcha/Dokumentu czyści taki token, zanim mógłby wykonać się w nowym kontekście. Zwykły ruch kursora zmieniający kierunek w ramach tego samego PointRequest nie czyści wpisu. Zmiana Dokumentu lub przejście do Workspace również usuwa częściowy input, więc nie może on trafić do ukrytego Dokumentu.
 
-Przy focusie viewportu i niepustym buforze Command Line klawisz Delete należy do aktywnego inputu i nie usuwa zaznaczonej geometrii. Ostatni znak usuwa Backspace. Gdy bufor jest pusty, zwykłe Delete Selection działa jak wcześniej. Jeżeli focus ma sam Command Line albo inne prawdziwe pole tekstowe, Delete pozostaje normalną edycją tekstu.
+Przy focusie viewportu i niepustym buforze Command Line klawisz Delete należy do aktywnego inputu i nie usuwa zaznaczonej geometrii. Ostatni znak usuwa Backspace. Przy pustym buforze podczas aktywnego Sketch Edit Delete należy do semantycznego kontekstu Sketchu: usuwa zaznaczoną geometrię Sketchu, a stare zaznaczenie Profile/Tree nie może przejąć komendy. Jeżeli w Sketchu nic nie jest zaznaczone, Delete niczego nie usuwa zamiast przechodzić do starego Profile. Poza Sketch Edit pozostaje normalne usuwanie poprawnie zaznaczonego obiektu Part/Profile. Kliknięcie pustego miejsca w Document Tree czyści tylko zaznaczenie Tree/Part. Jeżeli focus ma sam Command Line albo inne prawdziwe pole tekstowe, Delete pozostaje normalną edycją tekstu.
 
 Dolny Command Line pozostaje zawsze jednym wierszem. Obszar diagnostyczny po prawej stronie ma stale zarezerwowane miejsce, więc pojawienie się błędu nie zmienia szerokości pola wejściowego i nie powoduje przeskoku Viewera. Długi komunikat jest wizualnie skracany w tym wierszu, a pełna treść jest dostępna jako tooltip.
 
@@ -2916,7 +2922,7 @@ Każda linia, okrąg i łuk w Sketchu może mieć rolę **Regular** albo **Const
 
 Narzędzie **Profile** działa w aktywnym Sketchu. Przesuwanie kursora nad zamkniętą geometrią pokazuje półprzezroczysty wynik regionu; kliknięcie przyjmuje kandydata do bieżącego draftu i Status przypomina, że dopiero **Finish Profile** wykonuje trwały commit. O tym, co jest regionem, decyduje dokładna semantyka Line/Circle/Arc, nie tessellation Viewera.
 
-Operations udostępnia **Add Area**, **Subtract Area**, **Detect Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Find All Regions**, **Finish Profile** i **Cancel**. Find All Regions jest tylko diagnostyczne i nie tworzy Profile automatycznie. Podczas Subtract wynikowy draft pozostaje błękitny, a aktualnie wskazany region do odjęcia dostaje osobne czerwono-pomarańczowe podświetlenie.
+Operations udostępnia **Add Area**, **Subtract Area**, **Show Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Finish Profile** i **Cancel**. Wykrywanie wysp jest zawsze aktywne, ponieważ należy do analizy regionu. **Show Islands** steruje wyłącznie pokazaniem lub ukryciem diagnostyki/prezentacji wysp; wyłączenie nie zmienia geometrii Profile, jego validity ani sposobu wskazywania regionu. Dawny przycisk **Find All Regions** nie należy już do normalnego workflow Profile. Podczas Subtract wynikowy draft pozostaje błękitny, a aktualnie wskazany region do odjęcia dostaje osobne czerwono-pomarańczowe podświetlenie.
 
 Otwarty łańcuch pozostaje otwarty: SimpleSolid nie domyka małej szczeliny ukrytą tolerancją ani nie naprawia jej automatycznie. Kliknięcie w miejscu, gdzie nie istnieje bounded region, zgłasza diagnostykę otwartej granicy, jeżeli analiza ją wykryła. Bez snapping/OSNAP dwa punkty, które tylko wyglądają na pokrywające się na ekranie, nie są automatycznie zrównywane. Rozłączony wynik Add, Subtract rozcinający materiał albo niejednoznaczna topologia są odrzucane bez zmiany Dokumentu.
 
@@ -2928,7 +2934,7 @@ Po **Finish Sketch** widoczny i Valid Profile pozostaje płaskim zaznaczalnym ob
 
 Aby zmienić region istniejącego Profile, zaznacz dokładnie jeden Profile i użyj **Edit Profile** albo wpisz `EDITPROFILE`. Edycja zachowuje ProfileId. `PROFILE` rozpoczyna nowy draft.
 
-Command Line i Operations sterują tym samym stanem Profile. Komendy kontekstowe to `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` oraz `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF`, `PROBLEMS ON|OFF`.
+Command Line i Operations sterują tym samym stanem Profile. Komendy kontekstowe to `ADD`, `SUBTRACT`, `FINISH`, `CANCEL` oraz `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF`, `PROBLEMS ON|OFF`. `ISLANDS ON|OFF` steruje tylko prezentacją Show Islands i nigdy nie wyłącza analizy wysp.
 
 Profile jest semantyką 2D/Part. **Nie wykonuje Extrude i nie tworzy bryły.** Modelowane operacje bryłowe wymagają osobnej funkcji Part.
 

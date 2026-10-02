@@ -65,7 +65,7 @@ Zmiana jednostki Parta zmienia interpretację bezjednostkowych wartości Length 
 
 `Apply Properties` wprowadza pozostałe zmiany do otwartej sesji Dokumentu. Nie są trwałe na dysku, dopóki nie wykonasz `Save`.
 
-`Undo` i `Redo` działają dla authored changes bieżącej otwartej sesji.
+`Undo` i `Redo` działają dla authored changes bieżącej otwartej sesji. W Windows `Ctrl+Z` uruchamia tę samą ścieżkę Undo aktywnego Dokumentu, a `Ctrl+Y` uruchamia Redo. Pole tekstowe z focusem zachowuje własne lokalne Undo/Redo.
 
 <!-- section-id: product.parts.origin -->
 ## Origin, zaznaczenie i widoczność
@@ -128,7 +128,7 @@ Prawdziwe pola tekstowe — np. edycja właściwości — zachowują własny foc
 
 Częściowo wpisany token CAD należy do semantycznego requestu, w którym rozpoczęto wpisywanie. Zmiana requestu/narzędzia/Sketcha/Dokumentu czyści taki token, zanim mógłby wykonać się w nowym kontekście. Zwykły ruch kursora zmieniający kierunek w ramach tego samego PointRequest nie czyści wpisu. Zmiana Dokumentu lub przejście do Workspace również usuwa częściowy input, więc nie może on trafić do ukrytego Dokumentu.
 
-Przy focusie viewportu i niepustym buforze Command Line klawisz Delete należy do aktywnego inputu i nie usuwa zaznaczonej geometrii. Ostatni znak usuwa Backspace. Gdy bufor jest pusty, zwykłe Delete Selection działa jak wcześniej. Jeżeli focus ma sam Command Line albo inne prawdziwe pole tekstowe, Delete pozostaje normalną edycją tekstu.
+Przy focusie viewportu i niepustym buforze Command Line klawisz Delete należy do aktywnego inputu i nie usuwa zaznaczonej geometrii. Ostatni znak usuwa Backspace. Przy pustym buforze podczas aktywnego Sketch Edit Delete należy do semantycznego kontekstu Sketchu: usuwa zaznaczoną geometrię Sketchu, a stare zaznaczenie Profile/Tree nie może przejąć komendy. Jeżeli w Sketchu nic nie jest zaznaczone, Delete niczego nie usuwa zamiast przechodzić do starego Profile. Poza Sketch Edit pozostaje normalne usuwanie poprawnie zaznaczonego obiektu Part/Profile. Kliknięcie pustego miejsca w Document Tree czyści tylko zaznaczenie Tree/Part. Jeżeli focus ma sam Command Line albo inne prawdziwe pole tekstowe, Delete pozostaje normalną edycją tekstu.
 
 Dolny Command Line pozostaje zawsze jednym wierszem. Obszar diagnostyczny po prawej stronie ma stale zarezerwowane miejsce, więc pojawienie się błędu nie zmienia szerokości pola wejściowego i nie powoduje przeskoku Viewera. Długi komunikat jest wizualnie skracany w tym wierszu, a pełna treść jest dostępna jako tooltip.
 
@@ -412,7 +412,7 @@ Każda linia, okrąg i łuk w Sketchu może mieć rolę **Regular** albo **Const
 
 Narzędzie **Profile** działa w aktywnym Sketchu. Przesuwanie kursora nad zamkniętą geometrią pokazuje półprzezroczysty wynik regionu; kliknięcie przyjmuje kandydata do bieżącego draftu i Status przypomina, że dopiero **Finish Profile** wykonuje trwały commit. O tym, co jest regionem, decyduje dokładna semantyka Line/Circle/Arc, nie tessellation Viewera.
 
-Operations udostępnia **Add Area**, **Subtract Area**, **Detect Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Find All Regions**, **Finish Profile** i **Cancel**. Find All Regions jest tylko diagnostyczne i nie tworzy Profile automatycznie. Podczas Subtract wynikowy draft pozostaje błękitny, a aktualnie wskazany region do odjęcia dostaje osobne czerwono-pomarańczowe podświetlenie.
+Operations udostępnia **Add Area**, **Subtract Area**, **Show Islands**, **Highlight on Hover**, **Show Region Boundaries**, **Show Problems**, **Finish Profile** i **Cancel**. Wykrywanie wysp jest zawsze aktywne, ponieważ należy do analizy regionu. **Show Islands** steruje wyłącznie pokazaniem lub ukryciem diagnostyki/prezentacji wysp; wyłączenie nie zmienia geometrii Profile, jego validity ani sposobu wskazywania regionu. Dawny przycisk **Find All Regions** nie należy już do normalnego workflow Profile. Podczas Subtract wynikowy draft pozostaje błękitny, a aktualnie wskazany region do odjęcia dostaje osobne czerwono-pomarańczowe podświetlenie.
 
 Otwarty łańcuch pozostaje otwarty: SimpleSolid nie domyka małej szczeliny ukrytą tolerancją ani nie naprawia jej automatycznie. Kliknięcie w miejscu, gdzie nie istnieje bounded region, zgłasza diagnostykę otwartej granicy, jeżeli analiza ją wykryła. Bez snapping/OSNAP dwa punkty, które tylko wyglądają na pokrywające się na ekranie, nie są automatycznie zrównywane. Rozłączony wynik Add, Subtract rozcinający materiał albo niejednoznaczna topologia są odrzucane bez zmiany Dokumentu.
 
@@ -424,7 +424,7 @@ Po **Finish Sketch** widoczny i Valid Profile pozostaje płaskim zaznaczalnym ob
 
 Aby zmienić region istniejącego Profile, zaznacz dokładnie jeden Profile i użyj **Edit Profile** albo wpisz `EDITPROFILE`. Edycja zachowuje ProfileId. `PROFILE` rozpoczyna nowy draft.
 
-Command Line i Operations sterują tym samym stanem Profile. Komendy kontekstowe to `ADD`, `SUBTRACT`, `FIND`, `FINISH`, `CANCEL` oraz `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF`, `PROBLEMS ON|OFF`.
+Command Line i Operations sterują tym samym stanem Profile. Komendy kontekstowe to `ADD`, `SUBTRACT`, `FINISH`, `CANCEL` oraz `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF`, `PROBLEMS ON|OFF`. `ISLANDS ON|OFF` steruje tylko prezentacją Show Islands i nigdy nie wyłącza analizy wysp.
 
 Profile jest semantyką 2D/Part. **Nie wykonuje Extrude i nie tworzy bryły.** Modelowane operacje bryłowe wymagają osobnej funkcji Part.
 

@@ -33,7 +33,12 @@ void check(bool value, const char* expression, int line) {
         std::cerr
             << "SK-01 Workbench Sketch CHECK failed at line "
             << line << ": " << expression << '\n';
-        std::abort();
+        // The self-hosted Windows runner is interactive. MSVC Debug
+        // abort() opens a modal CRT dialog and turns a normal assertion
+        // failure into a 30 s CTest timeout. Exit with failure instead so
+        // CI reports the actual CHECK immediately without blocking the
+        // runner desktop.
+        std::exit(EXIT_FAILURE);
     }
 }
 
@@ -438,6 +443,13 @@ int main(int argc, char* argv[]) {
         &workspace_shell};
     workspace_shell.setDocumentWorkbench(
         &workbench);
+    workspace_shell.setDocumentHistoryHandlers(
+        [&workbench] {
+            workbench.requestUndo();
+        },
+        [&workbench] {
+            workbench.requestRedo();
+        });
     workbench.setCadInputContextChangedHandler(
         [&workspace_shell] {
             workspace_shell.refreshCadInputPresentation();
@@ -570,6 +582,9 @@ int main(int argc, char* argv[]) {
     auto* profile_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("profileSketchToolButton"));
+    auto* select_sketch_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("selectSketchToolButton"));
     auto* regular_role_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("sketchRegularRoleButton"));
@@ -585,9 +600,9 @@ int main(int argc, char* argv[]) {
     auto* profile_subtract_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("profileSubtractAreaButton"));
-    auto* profile_detect_button =
+    auto* profile_show_islands_button =
         workbench.findChild<QPushButton*>(
-            QStringLiteral("profileDetectIslandsButton"));
+            QStringLiteral("profileShowIslandsButton"));
     auto* profile_highlight_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("profileHighlightHoverButton"));
@@ -597,9 +612,6 @@ int main(int argc, char* argv[]) {
     auto* profile_problems_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("profileShowProblemsButton"));
-    auto* profile_find_button =
-        workbench.findChild<QPushButton*>(
-            QStringLiteral("profileFindRegionsButton"));
     auto* profile_finish_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("profileFinishButton"));
@@ -757,16 +769,23 @@ int main(int argc, char* argv[]) {
     CHECK(creation_construction_button != nullptr);
     CHECK(rectangle_diagonals_button != nullptr);
     CHECK(profile_button != nullptr);
+    CHECK(select_sketch_button != nullptr);
     CHECK(regular_role_button != nullptr);
     CHECK(construction_role_button != nullptr);
     CHECK(profile_operations != nullptr);
     CHECK(profile_add_button != nullptr);
     CHECK(profile_subtract_button != nullptr);
-    CHECK(profile_detect_button != nullptr);
+    CHECK(profile_show_islands_button != nullptr);
+    CHECK(
+        profile_show_islands_button->text() ==
+        QStringLiteral("Show Islands"));
     CHECK(profile_highlight_button != nullptr);
     CHECK(profile_boundaries_button != nullptr);
     CHECK(profile_problems_button != nullptr);
-    CHECK(profile_find_button != nullptr);
+    CHECK(
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("profileFindRegionsButton")) ==
+        nullptr);
     CHECK(profile_finish_button != nullptr);
     CHECK(profile_cancel_button != nullptr);
     CHECK(trim_button != nullptr);
@@ -1329,7 +1348,7 @@ int main(int argc, char* argv[]) {
     CHECK(!profile_operations->isHidden());
     CHECK(profile_add_button->isChecked());
     CHECK(!profile_subtract_button->isChecked());
-    CHECK(profile_detect_button->isChecked());
+    CHECK(profile_show_islands_button->isChecked());
     CHECK(profile_highlight_button->isChecked());
     CHECK(!profile_boundaries_button->isChecked());
     CHECK(profile_problems_button->isChecked());
@@ -1372,19 +1391,16 @@ int main(int argc, char* argv[]) {
     QApplication::processEvents();
     CHECK(!profile_boundaries_button->isChecked());
 
-    profile_detect_button->click();
+    profile_show_islands_button->click();
     QApplication::processEvents();
-    CHECK(!profile_detect_button->isChecked());
+    CHECK(!profile_show_islands_button->isChecked());
     command_input->setText(
         QStringLiteral("ISLANDS ON"));
     QTest::keyClick(
         command_input,
         Qt::Key_Return);
     QApplication::processEvents();
-    CHECK(profile_detect_button->isChecked());
-
-    profile_find_button->click();
-    QApplication::processEvents();
+    CHECK(profile_show_islands_button->isChecked());
 
     profile_cancel_button->click();
     QApplication::processEvents();
@@ -1710,8 +1726,9 @@ int main(int argc, char* argv[]) {
                 0)
             .size() == 1);
 
-    // Profile deletion acts on Profile identity only. Source Sketch geometry
-    // remains authored, and Undo restores the same ProfileId.
+    // SR-01: Tree/Profile presentation must not steal Delete from the
+    // active Sketch semantic context. A blank Tree click clears only Tree
+    // selection and leaves authored Sketch geometry untouched.
     profile_items =
         tree->findItems(
             QStringLiteral("Main Profile"),
@@ -1729,9 +1746,17 @@ int main(int argc, char* argv[]) {
         session->document()
             .findSketch(sketch_id)
             ->model.entityCount();
+    CHECK(entities_before_profile_delete > 0U);
     CHECK(!profile_properties_page->isHidden());
-    viewport->setFocus(Qt::OtherFocusReason);
-    QTest::keyClick(viewport, Qt::Key_Delete);
+
+    // SR-01 Owner refinement: generic Delete remains Sketch-owned, but
+    // the explicitly named Delete Profile action is intentionally usable
+    // while the source Sketch remains in edit. It deletes only the Part
+    // Profile and one Undo restores the same Profile identity.
+    CHECK(delete_profile_button->isEnabled());
+    const auto explicit_delete_undo_before =
+        session->undoDepth();
+    delete_profile_button->click();
     QApplication::processEvents();
     CHECK(
         session->document()
@@ -1741,8 +1766,183 @@ int main(int argc, char* argv[]) {
             .findSketch(sketch_id)
             ->model.entityCount() ==
         entities_before_profile_delete);
+    CHECK(
+        session->undoDepth() ==
+        explicit_delete_undo_before + 1U);
 
-    undo_button->click();
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Z,
+        Qt::ControlModifier);
+    QApplication::processEvents();
+    const auto* explicitly_restored_profile =
+        session->document()
+            .findProfile(tree_profile_id);
+    CHECK(explicitly_restored_profile != nullptr);
+    CHECK(
+        explicitly_restored_profile->name ==
+        "Main Profile");
+    CHECK(
+        explicitly_restored_profile->
+            source_sketch_id == sketch_id);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() ==
+        entities_before_profile_delete);
+    CHECK(
+        session->undoDepth() ==
+        explicit_delete_undo_before);
+
+    // The same explicit action may delete the Profile currently open in
+    // Edit Profile. Only the transient Profile draft is cancelled first;
+    // source Sketch geometry and the single authored delete boundary stay
+    // unchanged.
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    tree->clearSelection();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+
+    // Enter Profile Edit through the explicit semantic Tree action.
+    // This test is about deleting the Profile that currently owns the
+    // transient Profile-edit session; Command Line routing is covered
+    // independently by the existing EDITPROFILE regression above.
+    CHECK(edit_profile_action->isEnabled());
+    edit_profile_action->trigger();
+    QApplication::processEvents();
+    CHECK(profile_button->isChecked());
+    CHECK(!profile_operations->isHidden());
+    CHECK(delete_profile_button->isEnabled());
+
+    const auto edit_profile_delete_undo_before =
+        session->undoDepth();
+    delete_profile_button->click();
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findProfile(tree_profile_id) == nullptr);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() ==
+        entities_before_profile_delete);
+    CHECK(
+        session->undoDepth() ==
+        edit_profile_delete_undo_before + 1U);
+    CHECK(!profile_button->isChecked());
+    CHECK(profile_operations->isHidden());
+
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Z,
+        Qt::ControlModifier);
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findProfile(tree_profile_id) != nullptr);
+    CHECK(
+        session->undoDepth() ==
+        edit_profile_delete_undo_before);
+
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    tree->clearSelection();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+
+    const QPoint blank_tree_point{
+        tree->viewport()->width() - 2,
+        tree->viewport()->height() - 2};
+    CHECK(tree->itemAt(blank_tree_point) == nullptr);
+    QTest::mouseClick(
+        tree->viewport(),
+        Qt::LeftButton,
+        Qt::NoModifier,
+        blank_tree_point);
+    QApplication::processEvents();
+    CHECK(tree->selectedItems().empty());
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() ==
+        entities_before_profile_delete);
+
+    // Edit Profile deliberately clears Sketch entity selection. Put the
+    // editor back into ordinary Select explicitly, then re-select one
+    // current authored curve. This freezes the intended precondition for
+    // the generic Delete ownership regression instead of relying on
+    // transient tool state left by Profile Edit + history restoration.
+    select_sketch_button->click();
+    QApplication::processEvents();
+    CHECK(select_sketch_button->isChecked());
+    CHECK(!viewport->sketchScene().curves.empty());
+    viewport->setSketchGripHit(std::nullopt);
+    viewport->setSketchPointHit(
+        viewport->sketchScene().curves.front().token);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_press,
+        120.0, 120.0,
+        50.0, 50.0);
+    viewport->emitSketchPointerXZ(
+        viewer::SpatialPointerPhase::primary_release,
+        120.0, 120.0,
+        50.0, 50.0);
+    QApplication::processEvents();
+    CHECK(
+        operations_label->text() ==
+        QStringLiteral("Select — 1 entity selected"));
+
+    // Re-establish stale Profile presentation while the Sketch selection
+    // remains authoritative. Delete must remove only the selected Sketch
+    // entity, never the Profile.
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+    CHECK(!profile_properties_page->isHidden());
+
+    viewport->setFocus(Qt::OtherFocusReason);
+    QTest::keyClick(viewport, Qt::Key_Delete);
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findProfile(tree_profile_id) != nullptr);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() + 1U ==
+        entities_before_profile_delete);
+
+    // Ctrl+Z / Ctrl+Y are workspace-global adapters to the same active
+    // DocumentSession history used by the toolbar buttons.
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Z,
+        Qt::ControlModifier);
     QApplication::processEvents();
     CHECK(
         session->document()
@@ -1752,6 +1952,64 @@ int main(int argc, char* argv[]) {
             .findSketch(sketch_id)
             ->model.entityCount() ==
         entities_before_profile_delete);
+
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Y,
+        Qt::ControlModifier);
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findProfile(tree_profile_id) != nullptr);
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() + 1U ==
+        entities_before_profile_delete);
+
+    QTest::keyClick(
+        viewport,
+        Qt::Key_Z,
+        Qt::ControlModifier);
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findSketch(sketch_id)
+            ->model.entityCount() ==
+        entities_before_profile_delete);
+
+    // With no qualifying Sketch selection, Delete fails closed instead of
+    // falling through to a stale Profile/Tree selection.
+    QTest::keyClick(viewport, Qt::Key_Escape);
+    QApplication::processEvents();
+    profile_items =
+        tree->findItems(
+            QStringLiteral("Main Profile"),
+            Qt::MatchExactly |
+                Qt::MatchRecursive,
+            0);
+    CHECK(profile_items.size() == 1);
+    profile_item = profile_items.front();
+    tree->clearSelection();
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    QApplication::processEvents();
+
+    const auto no_target_revision =
+        session->document().revision();
+    const auto no_target_undo =
+        session->undoDepth();
+    QTest::keyClick(viewport, Qt::Key_Delete);
+    QApplication::processEvents();
+    CHECK(
+        session->document()
+            .findProfile(tree_profile_id) != nullptr);
+    CHECK(
+        session->document().revision() ==
+        no_target_revision);
+    CHECK(
+        session->undoDepth() ==
+        no_target_undo);
 
     while (session->undoDepth() >
            profile_tree_undo_baseline) {

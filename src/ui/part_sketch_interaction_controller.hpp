@@ -28,7 +28,7 @@ enum class ProfileToolSessionKind : std::uint8_t {
 };
 
 struct ProfileToolOptions final {
-    bool detect_islands{true};
+    bool show_islands{true};
     bool highlight_on_hover{true};
     bool show_region_boundaries{false};
     bool show_problems{true};

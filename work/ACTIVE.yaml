@@ -1,9 +1,9 @@
 version: 1
 status: completed
-active_work: "work/R12_TRIM_EXTEND_MUTUAL_EXTEND.md"
+active_work: "work/SR-01_INTERACTION_CORRECTNESS_PROFILE_UX.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
-program_roadmap_version: "1.8"
+program_roadmap_version: "1.9"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -19,13 +19,21 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - keep production CAD mutation inactive after R12 completion
-  - perform only the explicit Sketcher profile-authoring readiness checkpoint defined by Roadmap v1.8; collect concrete acceptance evidence before proposing any Part Feature Tree work
-  - keep Split, Join and other deferred structural-edit operations inactive until a future explicit need and accepted contract
-  - keep authored constraints/solver/dimensions, projected/reference geometry, ordinary Select RMB context, Part Feature Tree and solid modeling inactive until separately accepted
-  - after the profile-authoring readiness checkpoint, require a separate Owner-accepted Part Feature Tree architecture gate before any first solid-operation contract
-
+  - SR-01 is complete; no production CAD Work Contract is active
+  - prepare the separate measurement-first SR-02 Sketch Interaction & Presentation Latency Work Contract for explicit Owner review and acceptance
+  - do not begin SR-02 production implementation until its synchronized activation candidate passes repository work/governance verification
+  - keep SR-03 responsive-shell work inactive until a separate Owner-accepted Work Contract
+  - keep Split, Join, authored constraints/solver/dimensions, projected/reference geometry, ordinary Select RMB context, Axis/Centerline semantics, Part Feature Tree and solid modeling inactive
+  - after SR-02 and SR-03 complete, perform the Sketcher profile-authoring readiness re-test before any Part Feature Tree architecture gate
 notes:
+  - SR-01 completed on 2026-10-02. Exact runtime/manual candidate 92d096c396ba0d3ba144d0626c8e96aa667b01af passed Windows FULL #1128 with core-only 16/16, desktop 83/83, warm FULL parity/comparative timing evidence and final windows-msvc PASS.
+  - Owner manual Windows verification passed on the same exact runtime candidate 92d096c396ba0d3ba144d0626c8e96aa667b01af and confirmed the accepted generic Delete / explicit Delete Profile behavior works as intended.
+  - This closeout candidate is work-only. SR-02 remains inactive and requires a separate measurement-first Owner-accepted Work Contract before production implementation.
+  - Owner accepted the bounded SR-01 Delete refinement on 2026-10-02: generic Delete remains Sketch-owned during active Sketch Edit, while an explicitly invoked Delete Profile command may delete the deliberately selected Profile; deleting the Profile currently under Edit Profile first cancels only that transient draft.
+  - Owner explicitly accepted SR-01 Interaction Correctness and Profile UX and Sketcher Roadmap v1.9 on 2026-10-02.
+  - SR-01 is the only active production scope. It freezes semantic action-target arbitration, standard Undo/Redo shortcut routing, always-on island analysis with presentation-only visibility control, and removal of Find All Regions from the normal Profile UI.
+  - Initial post-R12 readiness evidence found bounded interaction-correctness, performance/latency and shell-layout blockers; the accepted sequence is SR-01 -> SR-02 -> SR-03 -> readiness re-test. SR-02/SR-03 remain inactive.
+  - Package F durable Profile/RegionIntent semantics remain authoritative. SR-01 amends only the former Detect Islands runtime option so island truth is always analyzed and only its presentation may be toggled.
   - R12 completed on 2026-10-01 after exact-head Windows FULL #1104 PASS on 0f62c9f4411264a240a9774c18e11a6a70fdd1b0 with full desktop 83/83 PASS, current docs/Browser and all verification dispatchers/selectors green.
   - Owner manual Windows verification was accepted on runtime candidate 65d34048db60dae5b2fdec07ebc65e62967881c9 after the final tool-first Trim/Extend workflow correction was re-tested and no further observations remained; the final FULL head differs only by an additional R12 interaction-state regression test.
   - R12 acceptance conditions are satisfied by this work-only closeout candidate. No production CAD scope is active after completion; the next action is the non-production Sketcher profile-authoring readiness checkpoint.

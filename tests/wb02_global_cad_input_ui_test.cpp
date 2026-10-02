@@ -212,6 +212,16 @@ int main(int argc, char* argv[]) {
     workbench.setFocusProxy(cad_surface);
     shell.setDocumentWorkbench(&workbench);
 
+    std::size_t undo_shortcut_count{};
+    std::size_t redo_shortcut_count{};
+    shell.setDocumentHistoryHandlers(
+        [&undo_shortcut_count] {
+            ++undo_shortcut_count;
+        },
+        [&redo_shortcut_count] {
+            ++redo_shortcut_count;
+        });
+
     FakeEndpoint first;
     FakeEndpoint second;
     shell.setCadInputEndpoint(&first);
@@ -249,6 +259,19 @@ int main(int argc, char* argv[]) {
 
     cad_surface->setFocus(Qt::OtherFocusReason);
     CHECK(QApplication::focusWidget() == cad_surface);
+
+    QTest::keyClick(
+        cad_surface,
+        Qt::Key_Z,
+        Qt::ControlModifier);
+    QTest::keyClick(
+        cad_surface,
+        Qt::Key_Y,
+        Qt::ControlModifier);
+    QApplication::processEvents();
+    CHECK(undo_shortcut_count == 1U);
+    CHECK(redo_shortcut_count == 1U);
+    CHECK(input->text().isEmpty());
 
     CHECK(shell.cadInteractionSettings().polar.enabled);
     CHECK(
@@ -365,6 +388,29 @@ int main(int argc, char* argv[]) {
         ordinary_editor->text() ==
         QStringLiteral("PartName50"));
     CHECK(input->text().isEmpty());
+
+    const auto editor_text_before_undo =
+        ordinary_editor->text();
+    QTest::keyClick(
+        ordinary_editor,
+        Qt::Key_Z,
+        Qt::ControlModifier);
+    QApplication::processEvents();
+    CHECK(
+        ordinary_editor->text() !=
+        editor_text_before_undo);
+    CHECK(undo_shortcut_count == 1U);
+    CHECK(redo_shortcut_count == 1U);
+    QTest::keyClick(
+        ordinary_editor,
+        Qt::Key_Y,
+        Qt::ControlModifier);
+    QApplication::processEvents();
+    CHECK(
+        ordinary_editor->text() ==
+        editor_text_before_undo);
+    CHECK(undo_shortcut_count == 1U);
+    CHECK(redo_shortcut_count == 1U);
 
     cad_surface->setFocus(Qt::OtherFocusReason);
     QTest::keyClick(

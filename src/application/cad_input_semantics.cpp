@@ -132,11 +132,6 @@ profileCommand(std::string_view token) noexcept {
             ProfileCadInputCommandKind::subtract_area,
             std::nullopt};
     }
-    if (token == "FIND") {
-        return ProfileCadInputCommand{
-            ProfileCadInputCommandKind::find_all_regions,
-            std::nullopt};
-    }
     if (token == "FINISH") {
         return ProfileCadInputCommand{
             ProfileCadInputCommandKind::finish,
@@ -150,7 +145,7 @@ profileCommand(std::string_view token) noexcept {
     if (token == "ISLANDS ON" ||
         token == "ISLANDS OFF") {
         return ProfileCadInputCommand{
-            ProfileCadInputCommandKind::set_detect_islands,
+            ProfileCadInputCommandKind::set_show_islands,
             token == "ISLANDS ON"};
     }
     if (token == "BOUNDARIES ON" ||

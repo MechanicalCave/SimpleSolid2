@@ -1687,15 +1687,15 @@ void CadWorkbench::buildUi() {
     profile_operations_layout->addWidget(
         profile_subtract_area_button_);
 
-    profile_detect_islands_button_ =
+    profile_show_islands_button_ =
         new QPushButton(
-            QStringLiteral("Detect Islands"),
+            QStringLiteral("Show Islands"),
             profile_operations_widget_);
-    profile_detect_islands_button_->setObjectName(
-        QStringLiteral("profileDetectIslandsButton"));
-    profile_detect_islands_button_->setCheckable(true);
+    profile_show_islands_button_->setObjectName(
+        QStringLiteral("profileShowIslandsButton"));
+    profile_show_islands_button_->setCheckable(true);
     profile_operations_layout->addWidget(
-        profile_detect_islands_button_);
+        profile_show_islands_button_);
 
     profile_highlight_hover_button_ =
         new QPushButton(
@@ -1736,15 +1736,6 @@ void CadWorkbench::buildUi() {
     profile_result_label_->setWordWrap(true);
     profile_operations_layout->addWidget(
         profile_result_label_);
-
-    profile_find_regions_button_ =
-        new QPushButton(
-            QStringLiteral("Find All Regions"),
-            profile_operations_widget_);
-    profile_find_regions_button_->setObjectName(
-        QStringLiteral("profileFindRegionsButton"));
-    profile_operations_layout->addWidget(
-        profile_find_regions_button_);
 
     profile_finish_button_ =
         new QPushButton(
@@ -2411,8 +2402,8 @@ void CadWorkbench::buildUi() {
             auto options =
                 sketch_interaction_controller_->
                     profileToolOptions();
-            options.detect_islands =
-                profile_detect_islands_button_->
+            options.show_islands =
+                profile_show_islands_button_->
                     isChecked();
             options.highlight_on_hover =
                 profile_highlight_hover_button_->
@@ -2429,7 +2420,7 @@ void CadWorkbench::buildUi() {
         };
 
     for (auto* button : {
-             profile_detect_islands_button_,
+             profile_show_islands_button_,
              profile_highlight_hover_button_,
              profile_show_boundaries_button_,
              profile_show_problems_button_}) {
@@ -2440,29 +2431,6 @@ void CadWorkbench::buildUi() {
             update_profile_options);
     }
 
-    QObject::connect(
-        profile_find_regions_button_,
-        &QPushButton::clicked,
-        this,
-        [this] {
-            if (!sketch_interaction_controller_) {
-                return;
-            }
-            const auto result =
-                sketch_interaction_controller_->
-                    submitCadInputSemanticProfileCommand(
-                        application::
-                            ProfileCadInputCommand{
-                                application::
-                                    ProfileCadInputCommandKind::
-                                        find_all_regions,
-                                std::nullopt});
-            if (!result.accepted &&
-                !result.diagnostic.empty()) {
-                setStatusText(
-                    fromUtf8(result.diagnostic));
-            }
-        });
     QObject::connect(
         profile_finish_button_,
         &QPushButton::clicked,
@@ -2654,16 +2622,62 @@ void CadWorkbench::applyProfileProperties() {
 
 void CadWorkbench::deleteSelectedProfile() {
     auto* document_session = activeDocumentSession();
-    if (document_session == nullptr ||
-        !selected_profile_id_ ||
-        (sketch_interaction_controller_ &&
-         sketch_interaction_controller_->
-             profileToolActive())) {
+    if (document_session == nullptr) {
         return;
     }
 
-    const auto profile_id =
-        *selected_profile_id_;
+    std::optional<part::ProfileId> explicit_target =
+        selected_profile_id_;
+
+    // SR-01: generic Delete remains owned by the active Sketch context,
+    // but the explicitly named Delete Profile action remains a deliberate
+    // Part command even while the source Sketch is open for editing.
+    //
+    // During Edit Profile, the semantic edit target remains authoritative
+    // even if Viewer/Tree selection presentation is cleared while entering
+    // the Profile tool. This is not a generic Delete fallback.
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active() &&
+        sketch_interaction_controller_->profileToolActive()) {
+        const auto edited_profile_id =
+            sketch_interaction_controller_->
+                editedProfileId();
+        if (!edited_profile_id) {
+            setStatusText(
+                QStringLiteral(
+                    "Finish or cancel the active Profile creation before deleting a Profile."));
+            return;
+        }
+
+        if (explicit_target &&
+            *explicit_target != *edited_profile_id) {
+            setStatusText(
+                QStringLiteral(
+                    "Finish or cancel the active Profile operation before deleting another Profile."));
+            return;
+        }
+
+        explicit_target = edited_profile_id;
+
+        // Deleting the Profile currently being edited first discards only
+        // its transient draft. The authored deletion below is still one
+        // normal DeleteProfileCommand / history entry.
+        sketch_interaction_controller_->
+            cancelProfile();
+    }
+
+    if (!explicit_target) {
+        return;
+    }
+    const auto profile_id = *explicit_target;
+
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active()) {
+        sketch_interaction_controller_->
+            setSelectedProfileForCadInput(
+                std::nullopt);
+    }
+
     const auto result =
         document_session->execute(
             application::DeleteProfileCommand{
@@ -2828,6 +2842,13 @@ void CadWorkbench::requestEditProfile(
                 "Profile edit could not be activated."));
         return;
     }
+
+    // The Profile edit target is a semantic context of its own. Keep its
+    // Properties surface bound to that target even if entering the tool
+    // clears incidental Viewer/Tree presentation selection.
+    sketch_interaction_controller_->
+        setSelectedProfileForCadInput(profile_id);
+    refreshProfileProperties(profile_id);
 
     if (viewport_widget_ != nullptr) {
         viewport_widget_->setFocus(
@@ -4201,10 +4222,19 @@ void CadWorkbench::refreshProfileProperties(
             QStringLiteral("—"));
     }
 
+    bool explicit_profile_delete_enabled = true;
+    if (sketch_interaction_controller_ &&
+        sketch_interaction_controller_->active() &&
+        sketch_interaction_controller_->profileToolActive()) {
+        const auto edited_profile_id =
+            sketch_interaction_controller_->
+                editedProfileId();
+        explicit_profile_delete_enabled =
+            edited_profile_id &&
+            *edited_profile_id == profile_id;
+    }
     delete_profile_button_->setEnabled(
-        !sketch_interaction_controller_ ||
-        !sketch_interaction_controller_->
-             profileToolActive());
+        explicit_profile_delete_enabled);
 
     properties_stack_->setCurrentWidget(
         profile_properties_page_);
@@ -4259,7 +4289,7 @@ bool CadWorkbench::eventFilter(
                 profile_properties_page_ &&
             (!sketch_interaction_controller_ ||
              !sketch_interaction_controller_->
-                  profileToolActive());
+                  active());
         if (profile_delete_context &&
             key_event->key() == Qt::Key_Delete) {
             deleteSelectedProfile();
@@ -4806,14 +4836,24 @@ void CadWorkbench::syncSketchInteractionUi() {
         const auto options =
             sketch_interaction_controller_->
                 profileToolOptions();
-        profile_detect_islands_button_->setChecked(
-            options.detect_islands);
+        profile_show_islands_button_->setChecked(
+            options.show_islands);
         profile_highlight_hover_button_->setChecked(
             options.highlight_on_hover);
         profile_show_boundaries_button_->setChecked(
             options.show_region_boundaries);
         profile_show_problems_button_->setChecked(
             options.show_problems);
+
+        const auto island_count =
+            sketch_interaction_controller_->
+                profileIslandCount();
+        const auto island_text =
+            options.show_islands
+                ? QString::number(
+                      static_cast<qulonglong>(
+                          island_count))
+                : QStringLiteral("Hidden");
 
         const auto current =
             sketch_interaction_controller_->
@@ -4841,10 +4881,7 @@ void CadWorkbench::syncSketchInteractionUi() {
                     .arg(
                         static_cast<qulonglong>(
                             current->holes.size()))
-                    .arg(
-                        static_cast<qulonglong>(
-                            sketch_interaction_controller_->
-                                profileIslandCount()))
+                    .arg(island_text)
                     .arg(
                         static_cast<qulonglong>(
                             sketch_interaction_controller_->
@@ -4938,10 +4975,7 @@ void CadWorkbench::syncSketchInteractionUi() {
                     "Islands: %2\n"
                     "Problems: %3")
                     .arg(status)
-                    .arg(
-                        static_cast<qulonglong>(
-                            sketch_interaction_controller_->
-                                profileIslandCount()))
+                    .arg(island_text)
                     .arg(
                         static_cast<qulonglong>(
                             sketch_interaction_controller_->

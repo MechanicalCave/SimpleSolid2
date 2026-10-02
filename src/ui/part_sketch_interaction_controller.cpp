@@ -1662,7 +1662,7 @@ submitCadInputSemanticProfileCommand(
         cancelProfile();
         return {true, {}};
 
-    case Kind::set_detect_islands:
+    case Kind::set_show_islands:
     case Kind::set_show_boundaries:
     case Kind::set_show_problems:
         if (!profile_session_ ||
@@ -1676,8 +1676,8 @@ submitCadInputSemanticProfileCommand(
             auto options =
                 profileToolOptions();
             if (command.kind ==
-                Kind::set_detect_islands) {
-                options.detect_islands =
+                Kind::set_show_islands) {
+                options.show_islands =
                     *command.enabled;
             } else if (
                 command.kind ==
@@ -1828,7 +1828,6 @@ bool PartSketchInteractionController::setSelectedEntityRole(
 std::size_t
 PartSketchInteractionController::profileIslandCount() {
     if (!profile_session_ ||
-        !profile_session_->options.detect_islands ||
         !ensureProfileAnalysis() ||
         !profile_analysis_cache_) {
         return 0U;
