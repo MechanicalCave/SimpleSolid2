@@ -1,9 +1,9 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; IMPLEMENTATION NOT ACTIVATED  
-**Version:** 1.2  
+**Version:** 1.3  
 **Owner acceptance:** 2026-10-02  
-**Previous accepted version:** 1.1 — 2026-10-02  
+**Previous accepted version:** 1.2 — 2026-10-02  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Current baseline:** `main` after merged SR-03, `6bc83dc47dd4b101c881bd7df4455e6bcdba80f0`  
@@ -122,7 +122,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | Order | Gate / package | Required outcome | Activation |
 | --- | --- | --- | --- |
 | G0 | **Sketcher profile-authoring readiness re-test** | prove current Sketcher can deliberately author practical Profiles after SR-01/02/03 | **COMPLETED — PASS on `16df8d1940a1f438a66cbd6964a881ba24718c0d`** |
-| 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | **NEXT proposal; separate Owner acceptance required** |
+| 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | **ACTIVE — Owner accepted 2026-10-02; Phase A0 first** |
 | 2 | **PM-00B — Part Feature Architecture Freeze** | Owner-approved ADR/contract freeze for first solid workflow based on PM-00A evidence | future separate Work Contract / governance gate |
 | 3 | **PM-01 — First Solid Vertical Slice: Body / Feature / Extrude Add** | minimum durable Body/Feature architecture plus one complete Extrude Add lifecycle | future separate Work Contract |
 | 4 | **PM-02 — Datum Plane / Sketch Support / Extrude Cut** | offset datum from stable source, Sketch on datum, Cut, downstream recompute/failure behavior | future separate Work Contract |
@@ -577,13 +577,15 @@ Planned Part features must not be documented as already implemented.
 
 ## 23. Activation boundary
 
-Program v1.2 is accepted and frozen, but **no PM package is active by this acceptance**.
+Program v1.3 is accepted and frozen. **PM-00A is the only active PM package** after explicit Owner acceptance; all later PM packages remain inactive.
 
 Current legal next action:
 
-**Owner review/acceptance of the proposed PM-00A — Part Modeling Architecture Evidence Gate Work Contract.**
+**PM-00A Phase A0 — Verification Topology implementation.**
 
-G0 is complete. `work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md` is prepared as PROPOSED — INACTIVE. PM-00A still requires explicit Owner acceptance and repository activation before any Phase A0 implementation.
+G0 is complete. The Owner accepted `work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md` on 2026-10-02. After the synchronized activation candidate passes the repository governance gate, Phase A0 implementation may begin.
+
+E01–E10 may not be accepted before A0 PASS. PM-00B, PM-01 and all product solid-modeling packages remain inactive.
 
 After PM-00A evidence, PM-00B still requires explicit Owner architecture acceptance.
 
