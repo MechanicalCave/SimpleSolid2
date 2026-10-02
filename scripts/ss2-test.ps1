@@ -16,6 +16,7 @@ $knownSubsystems = @(
     "application",
     "persistence",
     "part",
+    "kernel",
     "sketch",
     "viewer",
     "ui",
@@ -103,6 +104,10 @@ if ($SelfTest) {
     if ((@(Get-SS2TierBuildTargets "full") -join ",") -ne "ss2_tests_full") {
         throw "FULL build-target self-test failed."
     }
+    if ((@(Get-SS2TierBuildTargets "subsystem" @("part,kernel", "persistence")) -join ",") -ne "ss2_tests_subsystem_part,ss2_tests_subsystem_kernel,ss2_tests_subsystem_persistence") {
+        throw "Kernel subsystem build-target self-test failed."
+    }
+
 
     $rejected = $false
     try {
