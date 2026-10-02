@@ -1,5 +1,7 @@
 # SR-02 Phase A baseline evidence
 
+**Final comparison:** see `work/SR-02_FINAL_RESULTS.md` for the matched SR-02 runtime candidate measured on the same Windows runner.
+
 **Status:** BASELINE CAPTURED  
 **Exact SHA measured:** `ed61c763215b4bbdb7199781af8dd01d71f5d22c`  
 **Windows FULL:** #1140 — PASS  
