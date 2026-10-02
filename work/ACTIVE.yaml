@@ -20,12 +20,15 @@ accepted_adrs:
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
   - Part Modeling v1 Program Roadmap v1.1 is accepted and frozen; no production CAD Work Contract is active
-  - execute G0: the explicit Sketcher profile-authoring readiness re-test using work/SKETCH_ROADMAP.md v1.9 as the readiness-criteria authority
+  - execute G0 using work/G0_SKETCHER_PROFILE_AUTHORING_READINESS_RETEST.md; work/SKETCH_ROADMAP.md v1.9 remains the readiness-criteria authority
   - if G0 fails, record bounded findings and close them through separately accepted stabilization work before repeating G0
   - G0 PASS does not activate solid modeling; PM-00A Part Modeling Architecture Evidence Gate still requires its own Owner-accepted Work Contract and repository activation gate
   - PM-00A must begin with Phase A0 Verification Topology before E01-E10 evidence; PM-00B Part Feature Architecture Freeze follows only after PM-00A completion, and PM-01 First Solid Vertical Slice may begin only after both gates pass
   - keep Body/Feature persistence, Kernel solid operations, Part Feature Tree product implementation, Assembly/Drawing, multi-body and solid modeling inactive until their owning package is explicitly activated
 notes:
+  - G0 readiness re-test procedure/evidence matrix prepared on 2026-10-02 in work/G0_SKETCHER_PROFILE_AUTHORING_READINESS_RETEST.md. Current result remains PENDING OWNER MANUAL RETEST; no PM package is activated.
+  - G0 preparation verified that 224/224 production/build/test/workflow blobs across src/**, tests/**, scripts/**, .github/**, benchmarks/** and root build dispatchers are identical between SR-03 manual/FULL candidate e96627ce1268e05f11a334d3d8f884dae854967e and main c49540c31346d7d7269fbfdd9b10d521d6a4ccc9.
+  - Historical R9-R12 and SR-01-SR-03 evidence is retained as component evidence only; one fresh integrated Owner manual G0 workflow on current main is still required for readiness PASS.
   - Owner accepted Part Modeling v1 Roadmap v1.1 on 2026-10-02. The amendment freezes PM-00A Phase A0 Verification Topology before E01-E10 architecture evidence.
   - Phase A0 preserves three distinct verification modes: semantic/core with Qt and OCCT forbidden; kernel-native Release with OCCT required and Qt forbidden; desktop with Qt and OCCT. Existing core-only authority must not regress.
   - Phase A0 also requires subsystem-kernel, fail-closed test-metadata completeness, a Release kernel evidence target and a cold-model-rebuild harness distinct from CMake clean/warm build-tree state.
