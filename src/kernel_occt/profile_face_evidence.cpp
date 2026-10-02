@@ -265,8 +265,12 @@ buildWire(
             use.provenance,
             1U,
         });
+        // MakeWire may replace a geometrically coincident vertex
+        // and therefore copy the supplied edge. Keep the exact edge that
+        // the builder reports as added to the transient wire; semantic
+        // identity remains use.provenance.
         result.source_edges.push_back({
-            *edge,
+            make_wire.Edge(),
             use.provenance,
         });
     }
