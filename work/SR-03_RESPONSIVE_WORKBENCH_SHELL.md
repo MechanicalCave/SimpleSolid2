@@ -1,6 +1,6 @@
 # SR-03 — Responsive Workbench Shell
 
-**Status:** ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-10-02  
 **Owner acceptance:** 2026-10-02  
 **Decision class:** bounded D1 Workbench/UI composition under ADR-0006; STOP for D2 if DocumentKind ownership, public Viewer contracts, CAD input ownership or subsystem dependency direction must change  
@@ -342,3 +342,24 @@ Completion requires:
 - work-only CLOSURE closeout.
 
 After SR-03 completion, production scope stops again. The next action is the explicit Sketcher profile-authoring readiness re-test. Part Feature Tree and solid modeling remain inactive behind their separate architecture gate.
+
+
+## 18. Completion evidence and closeout
+
+SR-03 completed on 2026-10-02 without crossing a D2/D3 or STOP boundary.
+
+Final evidence:
+
+- exact runtime/documentation candidate `e96627ce1268e05f11a334d3d8f884dae854967e`;
+- Windows FULL #1187 PASS on that exact candidate, including exact checkout verification, deterministic documentation regeneration/freshness, complete desktop build/test graph, core-only verification, FAST/SUBSYSTEM selector verification, full CTest execution and final `windows-msvc` aggregation;
+- earlier responsive implementation Windows FULL #1184 PASS on `eddd0ab2ba82c6355dd26f1ddc1e9b26f6b9ff61`;
+- documentation/Browser gate #1185 PASS on `3c962a42ce243016c80a39f5d04aae142bd4756b`;
+- Owner manual Windows verification PASS on 2026-10-02 on the exact final candidate `e96627ce1268e05f11a334d3d8f884dae854967e`.
+
+The delivered shell keeps Project identity/path in one compact row, aligns active-Document domain/context tools with Undo/Redo/Save/Close while preserving ownership, gives normal desktop space primarily to the center Editor/Viewport, and provides bounded normal/compact/narrow responsive behavior with deliberate Tree/Properties+Operations recovery in narrow mode.
+
+Responsive reflow remains presentation-only. No Document persistence/schema, CAD input ownership, semantic selection/history ownership, public Viewer contract, general docking framework, future DocumentKind implementation, Part Feature Tree or solid-modeling scope was introduced.
+
+All SR-03 acceptance conditions are satisfied. SR-03 is complete at this work-only closeout candidate. No production CAD Work Contract is active after SR-03 completion.
+
+The next program action is the explicit **Sketcher profile-authoring readiness re-test** required by Roadmap v1.9. That re-test is an evidence checkpoint, not authorization for Part Feature Tree or solid modeling. Any Part architecture work remains behind its separate Owner-accepted architecture gate.
