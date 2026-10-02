@@ -8,9 +8,10 @@
 
 The Qt application uses a `QStackedWidget` with Project Hub and Workspace pages.
 
-The Workspace page contains a persistent Project Workspace Shell. It shows Project name, ProjectId and Workspace path and owns the Project-level navigation surfaces:
+The Workspace page contains a persistent Project Workspace Shell. Project display name, ProjectId and Workspace path are presented in one compact non-wrapping information strip; complete values remain available through read-only tooltips when the visible text is constrained. The shell owns the Project-level navigation surfaces:
 
 ```text
+HEADER    compact Project / ProjectId / Workspace information strip
 TOP       Project toolbar
 CONTENT   Workspace Dashboard or active Document Workbench
 BELOW     Workspace-global Command Line
@@ -25,14 +26,17 @@ The Project Workspace Shell owns one visible Command Line surface and one runtim
 
 The Qt adapter captures printable unmodified keys from normal CAD surfaces without moving focus, mirrors them into Command Line and yields to real text editors, popup/menu ownership, modal dialogs, foreign windows and application shortcuts. Enter consumes a non-empty submitted token whether accepted or rejected; a rejected token creates no authored mutation, leaves the semantic context active, clears the editable buffer and publishes a bounded diagnostic. Buffer/prompt/diagnostic state is runtime-only and does not dirty a CAD Document or create Undo history.
 
-`CadWorkbenchShell` owns only fixed presentation regions for the active Part Document:
+`CadWorkbenchShell` owns only presentation regions for the active Part Document:
 
 ```text
+TOP       domain/context tools | Undo Redo Save Close
 LEFT      Document Tree
-CENTER    tool-launch strip + Editor Surface / 3D Viewport
+CENTER    Editor Surface / 3D Viewport
 RIGHT     Properties + contextual Operations
 BELOW     Status / Diagnostics
 ```
+
+Normal desktop layout starts near 150 px left / center stretch / 270 px right. Compact layout reduces the side targets while keeping all three columns. In narrow layout the center remains authoritative and the side surfaces collapse behind local `Tree` / `Panel` recovery controls. Responsive reflow is runtime presentation only and does not mutate authored state, selection, history or edit context.
 
 Document Tabs are deliberately outside `CadWorkbenchShell`. Future Assembly/Drawing editors can therefore use the same Project-level navigation without making Part Workbench their owner.
 
@@ -64,7 +68,7 @@ The persistent Project toolbar exposes `Workspace`, `New Part…`, neutral `Open
 
 `Workspace` switches only the runtime navigation context to Project Dashboard. It does not close, save or mutate open Documents.
 
-Once a Part is active, its Workbench exposes `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, the editor tool-launch strip and contextual Operations. Project-level Document Tabs remain owned by Project Workspace Shell.
+Once a Part is active, its Workbench exposes `Undo`, `Redo`, `Save`, `Close`, common Document Properties, Document Tree, the active-Document domain/context tool surface and contextual Operations. Domain/context tools occupy the expanding left side of one top row while the four Document actions remain a fixed right-side zone. Project-level Document Tabs remain owned by Project Workspace Shell.
 
 `New Part…` opens `WorkspaceLocationDialog`. It shows the current Workspace folder hierarchy, allows the user to choose a folder, enter the filename and explicitly `Create Folder`.
 
@@ -87,7 +91,7 @@ Tree and Viewport are adapters of one document-scoped selected set plus primary 
 
 Properties shows common Document fields when no semantic object is primary. When a built-in Origin reference is primary, Properties switches to a read-only reference context showing role/type/identity/visibility.
 
-The central Editor Surface hosts the provider-neutral Document Viewport. A tool-launch strip immediately above it contains the current Part `Sketch` launcher. Production composition injects the Windows Qt/OCCT provider.
+The central Editor Surface hosts the provider-neutral Document Viewport. The current Part `Sketch` launcher and, during Sketch Edit, the Sketch tool family live in the expanding domain/context zone of the active-Document top row. Production composition injects the Windows Qt/OCCT provider.
 
 Operations is contextual to the active tool/edit mode: it is idle when no tool is active, shows Sketch support-pick controls while creating a Sketch, and shows `Finish Sketch` while a Sketch is being edited.
 
