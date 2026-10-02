@@ -12,6 +12,7 @@
 #include <QPushButton>
 #include <QSplitter>
 #include <QStackedWidget>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QWidget>
 
@@ -339,6 +340,12 @@ int main(int argc, char* argv[]) {
     auto* splitter =
         workbench.findChild<QSplitter*>(
             QStringLiteral("workbenchSplitter"));
+    auto* tree_recovery =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchTreeRecoveryButton"));
+    auto* right_recovery =
+        workbench.findChild<QToolButton*>(
+            QStringLiteral("workbenchRightPanelRecoveryButton"));
     auto* sketch_tool =
         workbench.findChild<QPushButton*>(
             QStringLiteral("sketchToolButton"));
@@ -389,6 +396,8 @@ int main(int argc, char* argv[]) {
     CHECK(tree_panel != nullptr);
     CHECK(right_panel != nullptr);
     CHECK(splitter != nullptr);
+    CHECK(tree_recovery != nullptr);
+    CHECK(right_recovery != nullptr);
     CHECK(sketch_tool != nullptr);
     CHECK(operations != nullptr);
     CHECK(title != nullptr);
@@ -446,6 +455,56 @@ int main(int argc, char* argv[]) {
             wider_side_widths[2] -
             initial_side_widths[2]) <= 30);
 
+    // Compact keeps all three surfaces but deliberately gives the center
+    // Editor priority. Narrow collapses side surfaces and exposes bounded,
+    // local recovery controls rather than introducing a docking framework.
+    workbench.resize(980, 800);
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(tree_recovery->isHidden());
+    CHECK(right_recovery->isHidden());
+    const auto compact_widths = splitter->sizes();
+    CHECK(compact_widths.size() == 3);
+    CHECK(compact_widths[0] <= 170);
+    CHECK(compact_widths[2] <= 280);
+    CHECK(compact_widths[1] > compact_widths[0]);
+    CHECK(compact_widths[1] > compact_widths[2]);
+
+    workbench.resize(720, 800);
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(right_panel->isHidden());
+    CHECK(!tree_recovery->isHidden());
+    CHECK(!right_recovery->isHidden());
+    CHECK(!editor_host->isHidden());
+
+    tree_recovery->click();
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(right_panel->isHidden());
+    CHECK(tree_recovery->isChecked());
+    CHECK(!right_recovery->isChecked());
+
+    right_recovery->click();
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(!tree_recovery->isChecked());
+    CHECK(right_recovery->isChecked());
+
+    right_recovery->click();
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(right_panel->isHidden());
+
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(tree_recovery->isHidden());
+    CHECK(right_recovery->isHidden());
+
     CHECK(operations->text() ==
           QStringLiteral("Part modeling context."));
 
@@ -456,6 +515,46 @@ int main(int argc, char* argv[]) {
     CHECK(*workbench.activeDocumentId() == first_id);
     CHECK(title->text() == QStringLiteral("Drive Shaft"));
     CHECK(save->isEnabled());
+
+    auto* responsive_session =
+        opened.session->documentSession(first_id);
+    CHECK(responsive_session != nullptr);
+    const auto responsive_revision =
+        responsive_session->document().revision();
+    const auto responsive_undo =
+        responsive_session->undoDepth();
+    const bool responsive_dirty =
+        responsive_session->needsSave();
+
+    // A focused editor retains keyboard ownership when narrow reflow occurs;
+    // the owning right panel remains recovered instead of disappearing.
+    title->setFocus(Qt::OtherFocusReason);
+    QApplication::processEvents();
+    CHECK(title->hasFocus());
+    workbench.resize(720, 800);
+    QApplication::processEvents();
+    CHECK(tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(title->hasFocus());
+    CHECK(
+        responsive_session->document().revision() ==
+        responsive_revision);
+    CHECK(responsive_session->undoDepth() ==
+          responsive_undo);
+    CHECK(responsive_session->needsSave() ==
+          responsive_dirty);
+
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(!tree_panel->isHidden());
+    CHECK(!right_panel->isHidden());
+    CHECK(
+        responsive_session->document().revision() ==
+        responsive_revision);
+    CHECK(responsive_session->undoDepth() ==
+          responsive_undo);
+    CHECK(responsive_session->needsSave() ==
+          responsive_dirty);
 
     viewer::CameraState first_camera;
     first_camera.eye = {20.0, -10.0, 15.0};
