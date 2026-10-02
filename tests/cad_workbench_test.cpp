@@ -10,11 +10,13 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
+#include <QSplitter>
 #include <QStackedWidget>
 #include <QTreeWidget>
 #include <QWidget>
 
 #include <cstdlib>
+#include <cmath>
 #include <filesystem>
 #include <iostream>
 #include <string>
@@ -318,6 +320,24 @@ int main(int argc, char* argv[]) {
     auto* editor =
         workbench.findChild<QWidget*>(
             QStringLiteral("editorSurface"));
+    auto* editor_host =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("editorSurfaceHost"));
+    auto* document_top_row =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("documentTopRow"));
+    auto* tree_panel =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("documentTreePanel"));
+    auto* right_panel =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("workbenchRightPanel"));
+    auto* splitter =
+        workbench.findChild<QSplitter*>(
+            QStringLiteral("workbenchSplitter"));
+    auto* sketch_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("sketchToolButton"));
     auto* operations =
         workbench.findChild<QLabel*>(
             QStringLiteral("operationsPlaceholder"));
@@ -360,6 +380,12 @@ int main(int argc, char* argv[]) {
 
     CHECK(tree != nullptr);
     CHECK(editor != nullptr);
+    CHECK(editor_host != nullptr);
+    CHECK(document_top_row != nullptr);
+    CHECK(tree_panel != nullptr);
+    CHECK(right_panel != nullptr);
+    CHECK(splitter != nullptr);
+    CHECK(sketch_tool != nullptr);
     CHECK(operations != nullptr);
     CHECK(title != nullptr);
     CHECK(apply != nullptr);
@@ -373,6 +399,48 @@ int main(int argc, char* argv[]) {
     CHECK(reference_name != nullptr);
     CHECK(reference_visibility != nullptr);
     CHECK(status != nullptr);
+
+    workbench.resize(1400, 800);
+    workbench.show();
+    QApplication::processEvents();
+
+    CHECK(document_top_row->isAncestorOf(sketch_tool));
+    CHECK(document_top_row->isAncestorOf(undo));
+
+    const auto sketch_top =
+        sketch_tool->mapTo(
+            document_top_row,
+            QPoint{0, 0}).y();
+    const auto undo_top =
+        undo->mapTo(
+            document_top_row,
+            QPoint{0, 0}).y();
+    CHECK(std::abs(sketch_top - undo_top) <= 4);
+
+    CHECK(tree_panel->width() >= 110);
+    CHECK(tree_panel->width() <= 210);
+    CHECK(right_panel->width() >= 210);
+    CHECK(right_panel->width() <= 340);
+    CHECK(editor_host->width() > tree_panel->width());
+    CHECK(editor_host->width() > right_panel->width());
+
+    const auto initial_side_widths = splitter->sizes();
+    CHECK(initial_side_widths.size() == 3);
+    workbench.resize(1800, 800);
+    QApplication::processEvents();
+    const auto wider_side_widths = splitter->sizes();
+    CHECK(wider_side_widths.size() == 3);
+    CHECK(
+        wider_side_widths[1] >
+        initial_side_widths[1]);
+    CHECK(
+        std::abs(
+            wider_side_widths[0] -
+            initial_side_widths[0]) <= 30);
+    CHECK(
+        std::abs(
+            wider_side_widths[2] -
+            initial_side_widths[2]) <= 30);
 
     CHECK(operations->text() ==
           QStringLiteral("Part modeling context."));
