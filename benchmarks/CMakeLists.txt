@@ -36,3 +36,28 @@ if(SS2_ENABLE_E2_PRESENTATION_BENCHMARK)
 
     target_compile_features(e2_presentation_benchmark PRIVATE cxx_std_20)
 endif()
+
+
+if(SS2_ENABLE_SR02_LATENCY_BENCHMARK)
+    if(NOT SS2_BUILD_DESKTOP)
+        message(FATAL_ERROR
+            "SR-02 latency benchmark requires SS2_BUILD_DESKTOP=ON")
+    endif()
+
+    find_package(Qt6 6 REQUIRED COMPONENTS Widgets)
+
+    add_executable(sr02_interaction_latency_benchmark
+        sr02_interaction_latency_benchmark.cpp
+    )
+
+    target_link_libraries(sr02_interaction_latency_benchmark
+        PRIVATE
+            simplesolid2_ui
+            simplesolid2_viewer_qt_occt
+            Qt6::Widgets
+    )
+
+    target_compile_features(
+        sr02_interaction_latency_benchmark
+        PRIVATE cxx_std_20)
+endif()
