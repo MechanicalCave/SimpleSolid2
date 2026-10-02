@@ -23,6 +23,7 @@ struct QtOcctRuntimeDiagnostics final {
     std::size_t update_current_viewer_calls{};
     std::size_t redraw_calls{};
     std::size_t sketch_native_objects_current{};
+    std::size_t sketch_wire_style_applications{};
     std::size_t sketch_rectangle_queries{};
     std::size_t sketch_rectangle_segments{};
     std::uint64_t sketch_rectangle_token_lookups{};
