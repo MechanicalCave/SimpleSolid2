@@ -1216,6 +1216,15 @@ buildProfileFullRevolveEvidence(
                     seams.edge_count;
                 evidence.provider_seam_total_length +=
                     seams.total_length;
+            } else {
+                std::cerr
+                    << "E06_PROVIDER_DIAG source="
+                    << source.provenance.source_entity
+                    << " basis_matches="
+                    << basis_edges.size()
+                    << " generated_faces="
+                    << candidate_faces.size()
+                    << '\n';
             }
 
             evidence.boundary_faces.push_back(
