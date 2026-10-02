@@ -95,10 +95,12 @@ convertLoop(
             use.end_parameter;
         converted.follows_source_direction =
             use.follows_source_direction;
-        converted.crosses_closed_seam =
-            use.crosses_closed_seam;
         converted.whole_closed_curve =
             use.whole_closed_curve;
+        converted.crosses_closed_seam =
+            use.whole_closed_curve
+                ? false
+                : use.crosses_closed_seam;
         converted.provenance = {
             use.source_entity.serialized(),
             loop_index,
