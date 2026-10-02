@@ -1339,8 +1339,10 @@ public:
         if (!scene.region &&
             !scene.emphasis_region) {
             profile_preview_scene_ = scene;
+            // SR-02: UpdateCurrentViewer() is the synchronous provider
+            // update for this changed runtime preview; do not immediately
+            // redraw the same cleared scene a second time.
             updateCurrentViewer();
-            redraw();
             return true;
         }
 
@@ -1422,8 +1424,9 @@ public:
             }
 
             profile_preview_scene_ = scene;
+            // Same proven rule as Sketch preview: one synchronous
+            // UpdateCurrentViewer() per changed runtime Profile preview.
             updateCurrentViewer();
-            redraw();
             return true;
         } catch (...) {
             clearProfilePreviewScene();
