@@ -509,6 +509,12 @@ int main(int argc, char* argv[]) {
     CHECK(!tree_recovery->isHidden());
     CHECK(!right_recovery->isHidden());
     CHECK(!editor_host->isHidden());
+    CHECK(
+        tree_recovery->toolTip() ==
+        QStringLiteral("Show Document Tree"));
+    CHECK(
+        right_recovery->toolTip() ==
+        QStringLiteral("Show Properties and Operations"));
 
     tree_recovery->click();
     QApplication::processEvents();
@@ -516,6 +522,12 @@ int main(int argc, char* argv[]) {
     CHECK(right_panel->isHidden());
     CHECK(tree_recovery->isChecked());
     CHECK(!right_recovery->isChecked());
+    CHECK(
+        tree_recovery->toolTip() ==
+        QStringLiteral("Hide Document Tree"));
+    CHECK(
+        right_recovery->toolTip() ==
+        QStringLiteral("Show Properties and Operations"));
 
     right_recovery->click();
     QApplication::processEvents();
@@ -523,6 +535,12 @@ int main(int argc, char* argv[]) {
     CHECK(!right_panel->isHidden());
     CHECK(!tree_recovery->isChecked());
     CHECK(right_recovery->isChecked());
+    CHECK(
+        tree_recovery->toolTip() ==
+        QStringLiteral("Show Document Tree"));
+    CHECK(
+        right_recovery->toolTip() ==
+        QStringLiteral("Hide Properties and Operations"));
 
     right_recovery->click();
     QApplication::processEvents();
