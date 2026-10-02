@@ -4,16 +4,20 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepPrimAPI_MakePrism.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
+#include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
+#include <TopTools_ListIteratorOfListOfShape.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
+#include <gp_Vec.hxx>
 
 #include <cmath>
 #include <numbers>
@@ -208,10 +212,13 @@ buildEdge(
                     curve.start_angle +
                     curve.sweep_angle *
                         use.start_parameter;
-                const double delta =
+                double delta =
                     curve.sweep_angle *
                     (use.end_parameter -
                      use.start_parameter);
+                if (!use.follows_source_direction) {
+                    delta = -delta;
+                }
                 return circularEdge(
                     circle,
                     start_angle,
@@ -222,10 +229,16 @@ buildEdge(
         use.curve);
 }
 
+struct SourceEdgeEvidence final {
+    TopoDS_Edge edge;
+    kernel::BoundaryUseProvenance provenance;
+};
+
 struct WireEvidence final {
     TopoDS_Wire wire;
     std::vector<kernel::BoundaryLineageEvidence>
         lineage;
+    std::vector<SourceEdgeEvidence> source_edges;
 };
 
 [[nodiscard]] std::optional<WireEvidence>
@@ -235,6 +248,7 @@ buildWire(
     BRepBuilderAPI_MakeWire make_wire;
     WireEvidence result;
     result.lineage.reserve(loop.boundary.size());
+    result.source_edges.reserve(loop.boundary.size());
 
     for (const auto& use : loop.boundary) {
         const auto edge =
@@ -250,22 +264,148 @@ buildWire(
             use.provenance,
             1U,
         });
+        result.source_edges.push_back({
+            *edge,
+            use.provenance,
+        });
     }
 
     result.wire = make_wire.Wire();
     return result;
 }
 
+struct ProfileFaceBuild final {
+    TopoDS_Face face;
+    std::vector<kernel::BoundaryLineageEvidence>
+        lineage;
+    std::vector<SourceEdgeEvidence> source_edges;
+};
+
+[[nodiscard]] std::optional<ProfileFaceBuild>
+buildProfileFace(
+    const kernel::PlanarProfileInput& input) {
+    const auto outer =
+        buildWire(
+            input,
+            input.outer);
+    if (!outer) {
+        return std::nullopt;
+    }
+
+    BRepBuilderAPI_MakeFace make_face{
+        outer->wire,
+        true};
+    if (!make_face.IsDone()) {
+        return std::nullopt;
+    }
+
+    ProfileFaceBuild result;
+    result.lineage = outer->lineage;
+    result.source_edges = outer->source_edges;
+
+    for (const auto& hole :
+         input.holes) {
+        auto built =
+            buildWire(input, hole);
+        if (!built) {
+            return std::nullopt;
+        }
+
+        auto hole_wire =
+            built->wire;
+        hole_wire.Reverse();
+        make_face.Add(hole_wire);
+
+        result.lineage.insert(
+            result.lineage.end(),
+            built->lineage.begin(),
+            built->lineage.end());
+        result.source_edges.insert(
+            result.source_edges.end(),
+            built->source_edges.begin(),
+            built->source_edges.end());
+    }
+
+    if (!make_face.IsDone()) {
+        return std::nullopt;
+    }
+
+    result.face = make_face.Face();
+    return result;
+}
+
 [[nodiscard]] std::size_t countSubshapes(
     const TopoDS_Shape& shape,
     TopAbs_ShapeEnum kind) {
-    std::size_t count = 0U;
+    std::size_t count =
+        shape.ShapeType() == kind
+            ? 1U
+            : 0U;
     for (TopExp_Explorer explorer{shape, kind};
          explorer.More();
          explorer.Next()) {
         ++count;
     }
     return count;
+}
+
+[[nodiscard]] std::size_t countGeneratedFaces(
+    const TopTools_ListOfShape& generated) {
+    std::size_t count = 0U;
+    for (TopTools_ListIteratorOfListOfShape it{
+             generated};
+         it.More();
+         it.Next()) {
+        const auto& shape = it.Value();
+        if (shape.ShapeType() == TopAbs_FACE) {
+            ++count;
+        } else {
+            count += countSubshapes(
+                shape,
+                TopAbs_FACE);
+        }
+    }
+    return count;
+}
+
+[[nodiscard]] kernel::ReferenceStatus
+referenceStatus(
+    std::size_t candidate_count) noexcept {
+    if (candidate_count == 0U) {
+        return kernel::ReferenceStatus::missing;
+    }
+    if (candidate_count == 1U) {
+        return kernel::ReferenceStatus::resolved;
+    }
+    return kernel::ReferenceStatus::ambiguous;
+}
+
+void populateShapeEvidence(
+    kernel::ShapeEvidence& evidence,
+    const TopoDS_Shape& shape) {
+    const BRepCheck_Analyzer analyzer{shape};
+    evidence.brep_valid =
+        analyzer.IsValid();
+    evidence.solid_count =
+        countSubshapes(
+            shape,
+            TopAbs_SOLID);
+    evidence.face_count =
+        countSubshapes(
+            shape,
+            TopAbs_FACE);
+    evidence.wire_count =
+        countSubshapes(
+            shape,
+            TopAbs_WIRE);
+    evidence.edge_count =
+        countSubshapes(
+            shape,
+            TopAbs_EDGE);
+    evidence.status =
+        evidence.brep_valid
+            ? kernel::EvidenceStatus::ok
+            : kernel::EvidenceStatus::invalid_brep;
 }
 
 } // namespace
@@ -280,85 +420,19 @@ kernel::ShapeEvidence buildProfileFaceEvidence(
     }
 
     try {
-        const auto outer =
-            buildWire(
-                input,
-                input.outer);
-        if (!outer) {
-            evidence.status =
-                kernel::EvidenceStatus::provider_failure;
-            return evidence;
-        }
-
-        BRepBuilderAPI_MakeFace make_face{
-            outer->wire,
-            true};
-        if (!make_face.IsDone()) {
+        const auto built =
+            buildProfileFace(input);
+        if (!built) {
             evidence.status =
                 kernel::EvidenceStatus::provider_failure;
             return evidence;
         }
 
         evidence.boundary_lineage =
-            outer->lineage;
-
-        for (const auto& hole :
-             input.holes) {
-            auto built =
-                buildWire(input, hole);
-            if (!built) {
-                evidence.status =
-                    kernel::EvidenceStatus::provider_failure;
-                return evidence;
-            }
-
-            auto hole_wire =
-                built->wire;
-            hole_wire.Reverse();
-            make_face.Add(hole_wire);
-
-            evidence.boundary_lineage.insert(
-                evidence.boundary_lineage.end(),
-                built->lineage.begin(),
-                built->lineage.end());
-        }
-
-        if (!make_face.IsDone()) {
-            evidence.status =
-                kernel::EvidenceStatus::provider_failure;
-            return evidence;
-        }
-
-        const TopoDS_Face face =
-            make_face.Face();
-        const BRepCheck_Analyzer analyzer{face};
-        evidence.brep_valid =
-            analyzer.IsValid();
-        evidence.face_count =
-            countSubshapes(
-                face,
-                TopAbs_FACE);
-        evidence.wire_count =
-            countSubshapes(
-                face,
-                TopAbs_WIRE);
-        evidence.edge_count =
-            countSubshapes(
-                face,
-                TopAbs_EDGE);
-        evidence.solid_count =
-            countSubshapes(
-                face,
-                TopAbs_SOLID);
-
-        if (!evidence.brep_valid) {
-            evidence.status =
-                kernel::EvidenceStatus::invalid_brep;
-            return evidence;
-        }
-
-        evidence.status =
-            kernel::EvidenceStatus::ok;
+            built->lineage;
+        populateShapeEvidence(
+            evidence,
+            built->face);
         return evidence;
     } catch (const Standard_Failure&) {
         evidence.status =
@@ -366,6 +440,99 @@ kernel::ShapeEvidence buildProfileFaceEvidence(
         return evidence;
     } catch (...) {
         evidence.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
+    const kernel::PlanarProfileInput& input,
+    double distance) noexcept {
+    kernel::ExtrudeEvidence evidence;
+    if (!input.valid() ||
+        !std::isfinite(distance) ||
+        distance == 0.0) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::invalid_input;
+        return evidence;
+    }
+
+    try {
+        const auto built =
+            buildProfileFace(input);
+        if (!built) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const gp_Vec vector{
+            input.frame.normal.x * distance,
+            input.frame.normal.y * distance,
+            input.frame.normal.z * distance};
+
+        BRepPrimAPI_MakePrism make_prism{
+            built->face,
+            vector,
+            false,
+            true};
+        if (!make_prism.IsDone()) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const TopoDS_Shape shape =
+            make_prism.Shape();
+        populateShapeEvidence(
+            evidence.shape,
+            shape);
+        if (!evidence.shape.ok()) {
+            return evidence;
+        }
+
+        const auto start_count =
+            countSubshapes(
+                make_prism.FirstShape(),
+                TopAbs_FACE);
+        const auto end_count =
+            countSubshapes(
+                make_prism.LastShape(),
+                TopAbs_FACE);
+
+        evidence.start_cap = {
+            kernel::ExtrudeFaceRoleKind::start_cap,
+            referenceStatus(start_count),
+            start_count,
+            std::nullopt};
+        evidence.end_cap = {
+            kernel::ExtrudeFaceRoleKind::end_cap,
+            referenceStatus(end_count),
+            end_count,
+            std::nullopt};
+
+        evidence.sides.reserve(
+            built->source_edges.size());
+        for (const auto& source :
+             built->source_edges) {
+            const auto face_count =
+                countGeneratedFaces(
+                    make_prism.Generated(
+                        source.edge));
+            evidence.sides.push_back({
+                kernel::ExtrudeFaceRoleKind::side,
+                referenceStatus(face_count),
+                face_count,
+                source.provenance});
+        }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.shape.status =
             kernel::EvidenceStatus::provider_failure;
         return evidence;
     }
