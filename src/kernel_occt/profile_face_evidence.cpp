@@ -8,6 +8,7 @@
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
+#include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
@@ -346,6 +347,26 @@ buildProfileFace(
     return count;
 }
 
+[[nodiscard]] std::vector<TopoDS_Edge>
+matchingFaceEdges(
+    const TopoDS_Face& face,
+    const TopoDS_Edge& source) {
+    std::vector<TopoDS_Edge> matches;
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        const auto candidate =
+            TopoDS::Edge(
+                explorer.Current());
+        if (candidate.IsSame(source)) {
+            matches.push_back(candidate);
+        }
+    }
+    return matches;
+}
+
 [[nodiscard]] std::size_t countGeneratedFaces(
     const TopTools_ListOfShape& generated) {
     std::size_t count = 0U;
@@ -512,10 +533,19 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
             built->source_edges.size());
         for (const auto& source :
              built->source_edges) {
-            const auto face_count =
-                countGeneratedFaces(
-                    make_prism.Generated(
-                        source.edge));
+            std::size_t face_count = 0U;
+            const auto basis_edges =
+                matchingFaceEdges(
+                    built->face,
+                    source.edge);
+            for (const auto& basis_edge :
+                 basis_edges) {
+                face_count +=
+                    countGeneratedFaces(
+                        make_prism.Generated(
+                            basis_edge));
+            }
+
             evidence.sides.push_back({
                 kernel::ExtrudeFaceRoleKind::side,
                 referenceStatus(face_count),
