@@ -16,6 +16,12 @@ buildProfileExtrudeEvidence(
     const kernel::PlanarProfileInput& input,
     double distance) noexcept;
 
+[[nodiscard]] kernel::FullRevolveEvidence
+buildProfileFullRevolveEvidence(
+    const kernel::PlanarProfileInput& input,
+    kernel::Point2 axis_origin,
+    kernel::Point2 axis_direction) noexcept;
+
 [[nodiscard]] kernel::EdgeSplitHistoryEvidence
 buildEdgeSplitHistoryEvidence(
     kernel::EdgeSplitProbeScenario scenario) noexcept;
