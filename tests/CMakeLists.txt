@@ -1489,6 +1489,7 @@ set(_ss2_sketch_tests
     sk05a.part_sketch_direct_manipulation
     sk06a.circle_arc_model_persistence
     sk06a.circle_arc_interaction_state
+    e1.arc_numerical_stability
     sk07a.transform_core
     sk07a.move_controller
     sk07b.transform_core
