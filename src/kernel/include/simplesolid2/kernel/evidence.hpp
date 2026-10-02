@@ -130,6 +130,7 @@ enum class EdgeSplitProbeScenario {
 
 enum class FaceMergeProbeScenario {
     overlapping_coplanar,
+    asymmetric_history,
     absorbed_inner,
 };
 
