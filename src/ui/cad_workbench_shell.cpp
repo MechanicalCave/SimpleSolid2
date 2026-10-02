@@ -1,12 +1,15 @@
 #include "cad_workbench_shell.hpp"
 
 #include <QAbstractItemView>
+#include <QApplication>
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QResizeEvent>
 #include <QScrollArea>
 #include <QSizePolicy>
 #include <QSplitter>
+#include <QToolButton>
 #include <QTreeWidget>
 #include <QVBoxLayout>
 
@@ -60,6 +63,62 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     document_top_layout->addWidget(
         document_tools_scroll,
         1);
+
+    tree_recovery_button_ =
+        new QToolButton(document_top_row);
+    tree_recovery_button_->setObjectName(
+        QStringLiteral("workbenchTreeRecoveryButton"));
+    tree_recovery_button_->setText(
+        QStringLiteral("Tree"));
+    tree_recovery_button_->setToolTip(
+        QStringLiteral("Show Document Tree"));
+    tree_recovery_button_->setCheckable(true);
+    tree_recovery_button_->setAutoRaise(true);
+    tree_recovery_button_->hide();
+
+    right_recovery_button_ =
+        new QToolButton(document_top_row);
+    right_recovery_button_->setObjectName(
+        QStringLiteral("workbenchRightPanelRecoveryButton"));
+    right_recovery_button_->setText(
+        QStringLiteral("Panel"));
+    right_recovery_button_->setToolTip(
+        QStringLiteral("Show Properties and Operations"));
+    right_recovery_button_->setCheckable(true);
+    right_recovery_button_->setAutoRaise(true);
+    right_recovery_button_->hide();
+
+    connect(
+        tree_recovery_button_,
+        &QToolButton::clicked,
+        this,
+        [this](bool checked) {
+            if (responsive_regime_ !=
+                ResponsiveRegime::narrow) {
+                return;
+            }
+            setNarrowPanel(
+                checked ? tree_panel_ : nullptr);
+        });
+    connect(
+        right_recovery_button_,
+        &QToolButton::clicked,
+        this,
+        [this](bool checked) {
+            if (responsive_regime_ !=
+                ResponsiveRegime::narrow) {
+                return;
+            }
+            setNarrowPanel(
+                checked ? right_panel_ : nullptr);
+        });
+
+    document_top_layout->addWidget(
+        tree_recovery_button_,
+        0);
+    document_top_layout->addWidget(
+        right_recovery_button_,
+        0);
     document_top_layout->addLayout(
         document_actions_,
         0);
@@ -70,8 +129,9 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     splitter->setObjectName(QStringLiteral("workbenchSplitter"));
     splitter->setChildrenCollapsible(false);
 
-    auto* tree_group =
+    tree_panel_ =
         new QGroupBox(QStringLiteral("Document Tree"), splitter);
+    auto* tree_group = tree_panel_;
     tree_group->setObjectName(
         QStringLiteral("documentTreePanel"));
     tree_group->setMinimumWidth(0);
@@ -89,7 +149,8 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
 
     splitter->addWidget(tree_group);
 
-    auto* editor_host = new QWidget(splitter);
+    editor_host_ = new QWidget(splitter);
+    auto* editor_host = editor_host_;
     editor_host->setObjectName(QStringLiteral("editorSurfaceHost"));
     editor_host->setMinimumWidth(0);
     editor_host->setSizePolicy(
@@ -101,7 +162,8 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
 
     splitter->addWidget(editor_host);
 
-    auto* right_panel = new QWidget(splitter);
+    right_panel_ = new QWidget(splitter);
+    auto* right_panel = right_panel_;
     right_panel->setObjectName(
         QStringLiteral("workbenchRightPanel"));
     // The panel contains forms whose natural size hint is intentionally
@@ -139,6 +201,8 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     status_->setObjectName(QStringLiteral("workbenchStatus"));
     status_->setWordWrap(true);
     root->addWidget(status_);
+
+    updateResponsiveLayout(true);
 }
 
 QHBoxLayout& CadWorkbenchShell::documentActionsLayout() noexcept {
@@ -201,12 +265,163 @@ void CadWorkbenchShell::setOperationsContent(QWidget* widget) {
         operations_content_,
         widget);
 
-    // Apply the accepted normal-workbench geometry after the final
-    // right-panel content has been installed. Applying this only in the
-    // constructor lets later content size hints rebalance the splitter and
-    // defeats the intended narrow side-panel defaults.
-    if (splitter_ != nullptr) {
-        splitter_->setSizes({150, 900, 270});
+    // Re-apply the active regime after final right-panel content has been
+    // installed. Content size hints must not silently promote the side
+    // panels or undo a narrow/compact presentation.
+    updateResponsiveLayout(true);
+}
+
+void CadWorkbenchShell::resizeEvent(QResizeEvent* event) {
+    QWidget::resizeEvent(event);
+    updateResponsiveLayout();
+}
+
+bool CadWorkbenchShell::panelContainsFocus(
+    const QWidget* panel) const {
+    if (panel == nullptr) return false;
+    auto* focus = QApplication::focusWidget();
+    return focus != nullptr &&
+           (focus == panel || panel->isAncestorOf(focus));
+}
+
+void CadWorkbenchShell::setNarrowPanel(QWidget* panel) {
+    if (responsive_regime_ != ResponsiveRegime::narrow ||
+        tree_panel_ == nullptr ||
+        right_panel_ == nullptr) {
+        return;
+    }
+
+    const bool show_tree = panel == tree_panel_;
+    const bool show_right = panel == right_panel_;
+
+    tree_panel_->setVisible(show_tree);
+    right_panel_->setVisible(show_right);
+    tree_recovery_button_->setChecked(show_tree);
+    right_recovery_button_->setChecked(show_right);
+
+    if (show_tree) {
+        splitter_->setSizes({200, 1000, 0});
+    } else if (show_right) {
+        splitter_->setSizes({0, 1000, 270});
+    } else {
+        splitter_->setSizes({0, 1000, 0});
+    }
+}
+
+void CadWorkbenchShell::updateResponsiveLayout(bool force) {
+    if (splitter_ == nullptr ||
+        tree_panel_ == nullptr ||
+        editor_host_ == nullptr ||
+        right_panel_ == nullptr ||
+        tree_recovery_button_ == nullptr ||
+        right_recovery_button_ == nullptr) {
+        return;
+    }
+
+    // Deliberately separated enter/leave thresholds prevent visible
+    // oscillation when native resize metrics hover around a breakpoint.
+    constexpr int enter_normal_width = 1120;
+    constexpr int leave_normal_width = 1040;
+    constexpr int enter_narrow_width = 760;
+    constexpr int leave_narrow_width = 820;
+
+    auto next = responsive_regime_;
+    if (!responsive_initialized_) {
+        if (width() <= enter_narrow_width) {
+            next = ResponsiveRegime::narrow;
+        } else if (width() < enter_normal_width) {
+            next = ResponsiveRegime::compact;
+        } else {
+            next = ResponsiveRegime::normal;
+        }
+    } else {
+        switch (responsive_regime_) {
+        case ResponsiveRegime::normal:
+            if (width() < leave_normal_width) {
+                next =
+                    width() <= enter_narrow_width
+                        ? ResponsiveRegime::narrow
+                        : ResponsiveRegime::compact;
+            }
+            break;
+        case ResponsiveRegime::compact:
+            if (width() >= enter_normal_width) {
+                next = ResponsiveRegime::normal;
+            } else if (width() <= enter_narrow_width) {
+                next = ResponsiveRegime::narrow;
+            }
+            break;
+        case ResponsiveRegime::narrow:
+            if (width() >= leave_narrow_width) {
+                next =
+                    width() >= enter_normal_width
+                        ? ResponsiveRegime::normal
+                        : ResponsiveRegime::compact;
+            }
+            break;
+        }
+    }
+
+    if (!force &&
+        responsive_initialized_ &&
+        next == responsive_regime_) {
+        return;
+    }
+
+    const bool entering_narrow =
+        next == ResponsiveRegime::narrow &&
+        (!responsive_initialized_ ||
+         responsive_regime_ != ResponsiveRegime::narrow);
+
+    responsive_regime_ = next;
+    responsive_initialized_ = true;
+
+    if (responsive_regime_ == ResponsiveRegime::normal) {
+        tree_panel_->show();
+        right_panel_->show();
+        tree_recovery_button_->hide();
+        right_recovery_button_->hide();
+        tree_recovery_button_->setChecked(false);
+        right_recovery_button_->setChecked(false);
+        splitter_->setSizes({150, 1000, 270});
+        return;
+    }
+
+    if (responsive_regime_ == ResponsiveRegime::compact) {
+        tree_panel_->show();
+        right_panel_->show();
+        tree_recovery_button_->hide();
+        right_recovery_button_->hide();
+        tree_recovery_button_->setChecked(false);
+        right_recovery_button_->setChecked(false);
+        splitter_->setSizes({120, 1000, 230});
+        return;
+    }
+
+    tree_recovery_button_->show();
+    right_recovery_button_->show();
+
+    if (entering_narrow) {
+        // Do not make a focused text/property editor disappear during
+        // reflow. Otherwise narrow mode starts with the center surface only.
+        if (panelContainsFocus(right_panel_)) {
+            setNarrowPanel(right_panel_);
+        } else if (panelContainsFocus(tree_panel_)) {
+            setNarrowPanel(tree_panel_);
+        } else {
+            setNarrowPanel(nullptr);
+        }
+        return;
+    }
+
+    // Forced re-application (for example after installing Operations
+    // content) preserves the user's currently recovered narrow panel.
+    if (!right_panel_->isHidden()) {
+        setNarrowPanel(right_panel_);
+    } else if (!tree_panel_->isHidden()) {
+        setNarrowPanel(tree_panel_);
+    } else {
+        setNarrowPanel(nullptr);
     }
 }
 
