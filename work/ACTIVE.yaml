@@ -21,16 +21,18 @@ accepted_adrs:
 next:
   - PM-00A E01 Profile with hole -> Extrude evidence is COMPLETED — PASS on exact source candidate 476258b74751a251c1c4fdf7dabaa03b3da63976 with Windows FULL #1228 PASS and false-Resolved count 0
   - PM-00A E05 geometrically similar topology evidence is COMPLETED — PASS on exact source candidate 7e0d6109cf927a2e8d85d2794b5718dcc2feab22 with Windows FULL #1252 PASS and false-Resolved count 0
-  - implement E03 + E04 next as one bounded split/merge cardinality evidence package before multi-stage lineage
-  - E03 must prove that a singular referenced target that splits becomes Ambiguous unless independent semantic-role evidence excludes technical descendants; deletion becomes Missing; undeclared aggregate descendants are Unsupported
-  - E04 must prove that merge/lost distinction fails closed as Ambiguous or Missing unless independent semantic provenance preserves one unique meaning; provider bookkeeping alone must never choose a winner
-  - after E03 + E04, execute E02 multi-stage Extrude -> Cut -> Fillet-style lineage using the accepted split/merge semantics
+  - PM-00A E03 + E04 split/merge cardinality evidence is COMPLETED — PASS on exact source candidate 30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25 with Kernel-focused #1274 PASS, Windows FULL #1275 PASS and false-Resolved count 0
+  - implement E02 next: multi-stage Extrude -> Cut -> Fillet-style lineage using accepted E01/E03/E04/E05 semantics
+  - E02 must resolve against the intended producer/consumed stage rather than searching the final Body indiscriminately
+  - E02 must keep reference resolution distinct from downstream geometric failure and must preserve zero-false-Resolved
+  - after E02, execute E07 cold-rebuild parity across accumulated stable/failure cases
+  - preserve E03/E04 finding: provider Modified/Generated/Deleted/unchanged history is transient evidence only and can never choose a semantic winner by itself
   - preserve E05 finding: surface kind, area, centroid, axis, distance and other geometry-similarity signals are diagnostics only and can never create Resolved
   - preserve E01 provider finding: exact provider edges are transient lineage evidence only and never durable SS2 identity
-  - preserve zero-false-Resolved, cold-rebuild parity, and separation of authored validity / reference resolution / geometric validity
   - PM-00B Part Feature Architecture Freeze remains separate after PM-00A evidence
   - PM-01 First Solid Vertical Slice, Body/Feature persistence, Part Feature Tree product behavior, Assembly/Drawing and multi-body remain inactive
 notes:
+  - E03/E04 completed on exact source candidate 30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25 with Kernel-focused #1274 PASS and Windows FULL #1275 PASS. Split -> Ambiguous, deletion -> Missing, merge collapse -> Ambiguous without independent semantic winner, semantic winner -> Resolved/Missing, aggregate requests -> Unsupported. False-Resolved count 0.
   - E05 completed on exact source candidate 7e0d6109cf927a2e8d85d2794b5718dcc2feab22 with Windows FULL #1252 PASS. Equal/similar faces remain distinct by provenance; removed-source exact-geometry replacements remain Missing; closer decoys cannot steal identity; similarity-only evidence is Ambiguous/Unsupported and never Resolved. False-Resolved count 0.
   - Kernel-focused CI dispatcher defect found by #1248 was fixed independently in PR #120; main now forwards -NoConfigure through ss2.ps1 check while final E05 verification remained exact-head FULL.
   - E01 completed on exact source candidate 476258b74751a251c1c4fdf7dabaa03b3da63976 with Windows FULL #1228 PASS. Rectangle + Circle-hole Extrude roles, distance edit, dimension edit, cold replay and missing-source fail-closed behavior all passed with zero false Resolved.
