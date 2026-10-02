@@ -4,6 +4,8 @@
 #include <QGroupBox>
 #include <QHBoxLayout>
 #include <QLabel>
+#include <QScrollArea>
+#include <QSizePolicy>
 #include <QSplitter>
 #include <QTreeWidget>
 #include <QVBoxLayout>
@@ -24,23 +26,47 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     document_top_layout->setContentsMargins(0, 0, 0, 0);
     document_top_layout->setSpacing(6);
 
-    editor_tools_layout_ = new QHBoxLayout;
+    auto* document_tools_scroll =
+        new QScrollArea(document_top_row);
+    document_tools_scroll->setObjectName(
+        QStringLiteral("documentToolsScroll"));
+    document_tools_scroll->setFrameShape(
+        QFrame::NoFrame);
+    document_tools_scroll->setWidgetResizable(true);
+    document_tools_scroll->setVerticalScrollBarPolicy(
+        Qt::ScrollBarAlwaysOff);
+    document_tools_scroll->setHorizontalScrollBarPolicy(
+        Qt::ScrollBarAsNeeded);
+    document_tools_scroll->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Preferred);
+    document_tools_scroll->setMinimumWidth(0);
+
+    auto* document_tools_host =
+        new QWidget(document_tools_scroll);
+    document_tools_host->setObjectName(
+        QStringLiteral("documentToolsHost"));
+    editor_tools_layout_ =
+        new QHBoxLayout(document_tools_host);
     editor_tools_layout_->setContentsMargins(0, 0, 0, 0);
     editor_tools_layout_->addStretch(1);
+    document_tools_scroll->setWidget(
+        document_tools_host);
 
     document_actions_ = new QHBoxLayout;
     document_actions_->setContentsMargins(0, 0, 0, 0);
     document_actions_->setSpacing(4);
 
-    document_top_layout->addLayout(
-        editor_tools_layout_,
+    document_top_layout->addWidget(
+        document_tools_scroll,
         1);
     document_top_layout->addLayout(
         document_actions_,
         0);
     root->addWidget(document_top_row, 0);
 
-    auto* splitter = new QSplitter(Qt::Horizontal, this);
+    splitter_ = new QSplitter(Qt::Horizontal, this);
+    auto* splitter = splitter_;
     splitter->setObjectName(QStringLiteral("workbenchSplitter"));
     splitter->setChildrenCollapsible(false);
 
@@ -157,6 +183,14 @@ void CadWorkbenchShell::setOperationsContent(QWidget* widget) {
         *operations_host_layout_,
         operations_content_,
         widget);
+
+    // Apply the accepted normal-workbench geometry after the final
+    // right-panel content has been installed. Applying this only in the
+    // constructor lets later content size hints rebalance the splitter and
+    // defeats the intended narrow side-panel defaults.
+    if (splitter_ != nullptr) {
+        splitter_->setSizes({150, 900, 270});
+    }
 }
 
 } // namespace simplesolid2::ui
