@@ -1,6 +1,6 @@
 # SR-02 — Sketch Interaction & Presentation Latency Stabilization
 
-**Status:** ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-10-02  
 **Owner acceptance:** 2026-10-02  
 **Decision class:** bounded D1 measurement/runtime optimization under existing ownership; STOP for D2 if a public Viewer mutation protocol, differential authored-scene architecture, new subsystem ownership or CAD semantic change is required  
@@ -478,3 +478,21 @@ Completion requires:
 - work-only CLOSURE closeout.
 
 After SR-02 completion, production scope stops again. SR-03 does not activate automatically and still requires its own accepted Work Contract.
+
+## 22. Completion evidence
+
+SR-02 completion evidence on 2026-10-02:
+
+- the accepted current-stack baseline was captured on Windows FULL #1140 at exact baseline SHA `ed61c763215b4bbdb7199781af8dd01d71f5d22c`, with durable baseline evidence in `work/SR-02_BASELINE_RESULTS.md`;
+- bounded D1 optimizations removed measured duplicate work without changing public Viewer ownership, CAD semantics, persistence, history boundaries, RegionIntent meaning or snap/inference meaning;
+- final runtime/manual candidate `9b42fe2065e34801875b9fc45cd13820a784b55f` passed exact-head Windows FULL #1169, including deterministic documentation verification, complete desktop build graph, core-only **16/16 PASS**, desktop **83/83 PASS**, native curve-style regression PASS and `SR02_BENCHMARK_PASS`;
+- the final benchmark retains the measured improvements: ordinary 100–1,000-Line Sketch preview is about 16.7 ms p50, 5,000-Line Line/Arc/MOVE preview remains about 17–19 ms p50, warm Profile hover is about 16.7 ms p50 with zero repeated region analysis, and 1,000-Line Finish Sketch with active preview is about 66.8 ms p50;
+- native Circle/Arc aggregation keeps one semantic token and neutral point chain per curve while reducing provider-native object multiplication; after Owner manual detection of a red-wire presentation regression, the final candidate applies the same Regular/Construction/selection/hover style policy to AIS wire/boundary aspects and the native regression covers that path;
+- the Owner manually verified the final candidate on Windows and reported PASS after confirming the large responsiveness improvement, fast/unobtrusive Finish Sketch behavior and corrected Circle/Arc presentation;
+- durable before/after evidence and remaining scale risks are recorded in `work/SR-02_FINAL_RESULTS.md`; required internal as-built documentation is current;
+- remaining measured scale risks are intentionally bounded rather than hidden: full 5,000-Line crossing query remains about 59 ms p50 and full 5,000-Line authored presentation refresh remains about 144 ms p50 on the evidence runner;
+- no spatial index, public differential Viewer API, render-completion callback, provider identity persistence, async authored mutation, SR-03 shell-layout work, Part Feature Tree or solid-modeling scope was introduced.
+
+All SR-02 acceptance conditions are satisfied. SR-02 is complete at this work-only closeout candidate. No production CAD Work Contract is active after SR-02 completion.
+
+The next program action is preparation and explicit Owner review of the separate **SR-03 Responsive Workbench Shell** Work Contract. SR-03 remains inactive until that contract is accepted and activated.
