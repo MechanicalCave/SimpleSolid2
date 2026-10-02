@@ -349,6 +349,21 @@ Collect evidence for:
 - refine/unify/healing behavior;
 - deterministic result/version semantics.
 
+## 7A. Evidence execution progress
+
+### E01 — Profile with hole → Extrude
+
+**Status:** COMPLETED — PASS  
+**Exact source candidate:** `476258b74751a251c1c4fdf7dabaa03b3da63976`  
+**Windows FULL:** #1228 — PASS  
+**False-Resolved:** 0
+
+See `work/PM-00A_E01_PROFILE_EXTRUDE_EVIDENCE.md`.
+
+E01 supports semantic cap roles and side roles derived from exact Profile boundary-use provenance. OCCT topology remains transient provider evidence; no durable selector schema is frozen by this result.
+
+**Next:** E05 false-positive similarity guardrails, before expanding the resolver to split/merge or multi-stage lineage.
+
 ## 8. Acceptance asymmetry
 
 Completion requires **zero false Resolved** results in the accepted PM-00A matrix.
