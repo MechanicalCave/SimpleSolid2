@@ -178,4 +178,71 @@ struct FaceMergeHistoryEvidence final {
         const FaceMergeHistoryEvidence&) = default;
 };
 
+enum class MultiStageProbeScenario {
+    stable_fillet,
+    remove_selected_face,
+    upstream_thin_fillet_failure,
+};
+
+enum class EvidenceProducerStage {
+    extrude_output,
+    cut_output,
+    downstream_output,
+};
+
+enum class EvidenceOperationOutcome {
+    not_run,
+    valid,
+    geometric_failure,
+};
+
+struct StageReferenceEvidence final {
+    EvidenceProducerStage stage{
+        EvidenceProducerStage::extrude_output};
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_count{};
+
+    friend bool operator==(
+        const StageReferenceEvidence&,
+        const StageReferenceEvidence&) = default;
+};
+
+struct MultiStageLineageEvidence final {
+    ShapeEvidence extrude_shape;
+    ShapeEvidence cut_shape;
+    std::optional<ShapeEvidence> downstream_shape;
+
+    StageReferenceEvidence at_extrude{
+        EvidenceProducerStage::extrude_output,
+        ReferenceStatus::unsupported,
+        0U};
+    StageReferenceEvidence at_cut{
+        EvidenceProducerStage::cut_output,
+        ReferenceStatus::unsupported,
+        0U};
+    StageReferenceEvidence at_downstream{
+        EvidenceProducerStage::downstream_output,
+        ReferenceStatus::unsupported,
+        0U};
+
+    BooleanSubshapeHistoryEvidence extrude_to_cut;
+    BooleanSubshapeHistoryEvidence cut_to_downstream;
+
+    std::size_t downstream_input_edge_candidate_count{};
+    EvidenceOperationOutcome downstream_outcome{
+        EvidenceOperationOutcome::not_run};
+
+    [[nodiscard]] bool base_ok() const noexcept {
+        return extrude_shape.ok() &&
+               extrude_shape.solid_count == 1U &&
+               cut_shape.ok() &&
+               cut_shape.solid_count == 1U;
+    }
+
+    friend bool operator==(
+        const MultiStageLineageEvidence&,
+        const MultiStageLineageEvidence&) = default;
+};
+
 } // namespace simplesolid2::kernel
