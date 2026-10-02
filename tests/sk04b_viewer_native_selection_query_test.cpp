@@ -476,6 +476,64 @@ int main(int argc, char* argv[]) {
     CHECK(curve_hit.token.has_value());
     CHECK(*curve_hit.token == curve_token);
 
+    // SR-02 manual regression: aggregated AIS_Shape curves must receive the
+    // same semantic Regular/Construction styling as AIS_Line objects. The
+    // concrete-provider diagnostic proves the native wire aspect path is
+    // exercised on initial display and on later selection/hover restyles.
+    const viewer::PresentationToken
+        construction_curve_token{0x4202U};
+    viewer::SketchScene curve_style_scene;
+    curve_style_scene.curves.push_back(
+        viewer::SketchCurvePresentation{
+            curve_token,
+            {
+                {-20.0, -6.0, 0.0},
+                {-10.0, -6.0, 0.0},
+                {0.0, -6.0, 0.0},
+                {10.0, -6.0, 0.0},
+                {20.0, -6.0, 0.0},
+            },
+            false});
+    curve_style_scene.curves.push_back(
+        viewer::SketchCurvePresentation{
+            construction_curve_token,
+            {
+                {-20.0, 6.0, 0.0},
+                {-10.0, 6.0, 0.0},
+                {0.0, 6.0, 0.0},
+                {10.0, 6.0, 0.0},
+                {20.0, 6.0, 0.0},
+            },
+            true});
+    CHECK(curve_style_scene.valid());
+
+    widget.resetRuntimeDiagnostics();
+    CHECK(widget.setSketchScene(
+        curve_style_scene));
+    CHECK(
+        widget.runtimeDiagnostics().
+            sketch_wire_style_applications == 2U);
+
+    widget.resetRuntimeDiagnostics();
+    CHECK(widget.setPresentationSelection(
+        viewer::PresentationSelection{
+            {curve_token},
+            curve_token}));
+    CHECK(
+        widget.runtimeDiagnostics().
+            sketch_wire_style_applications == 2U);
+
+    viewer::SketchInteractionPresentation
+        curve_hover;
+    curve_hover.hovered_entity =
+        construction_curve_token;
+    widget.resetRuntimeDiagnostics();
+    CHECK(widget.setSketchInteractionPresentation(
+        curve_hover));
+    CHECK(
+        widget.runtimeDiagnostics().
+            sketch_wire_style_applications == 2U);
+
     // Package F: Construction is provider presentation only but must be
     // visibly distinct even when nothing is selected. Replacing the drawer
     // aspect after Display() requires Redisplay() for the Sketch object.
