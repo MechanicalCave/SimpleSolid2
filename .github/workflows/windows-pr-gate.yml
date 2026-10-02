@@ -387,7 +387,7 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug") -Tier subsystem -Subsystem "sketch,viewer,ui" -NoBuild -ListOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "kernel-release") -Tier subsystem -Subsystem "kernel" -NoBuild -ListOnly
+          .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "kernel-release") -Config Release -Tier subsystem -Subsystem "kernel" -NoBuild -ListOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test
