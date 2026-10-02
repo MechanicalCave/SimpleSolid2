@@ -3,7 +3,7 @@ status: completed
 active_work: "work/SR-03_RESPONSIVE_WORKBENCH_SHELL.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.1"
+program_roadmap_version: "1.2"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -19,13 +19,16 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - Part Modeling v1 Program Roadmap v1.1 is accepted and frozen; no production CAD Work Contract is active
-  - execute G0 using work/G0_SKETCHER_PROFILE_AUTHORING_READINESS_RETEST.md; work/SKETCH_ROADMAP.md v1.9 remains the readiness-criteria authority
-  - if G0 fails, record bounded findings and close them through separately accepted stabilization work before repeating G0
-  - G0 PASS does not activate solid modeling; PM-00A Part Modeling Architecture Evidence Gate still requires its own Owner-accepted Work Contract and repository activation gate
-  - PM-00A must begin with Phase A0 Verification Topology before E01-E10 evidence; PM-00B Part Feature Architecture Freeze follows only after PM-00A completion, and PM-01 First Solid Vertical Slice may begin only after both gates pass
-  - keep Body/Feature persistence, Kernel solid operations, Part Feature Tree product implementation, Assembly/Drawing, multi-body and solid modeling inactive until their owning package is explicitly activated
+  - G0 Sketcher profile-authoring readiness re-test is COMPLETED — PASS on exact candidate 16df8d1940a1f438a66cbd6964a881ba24718c0d
+  - review work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md; it is PROPOSED — INACTIVE and requires explicit Owner acceptance before activation
+  - if accepted, synchronize PM-00A to ACTIVE through work/ACTIVE.yaml and Roadmap v1.2, then pass the repository governance gate before implementation
+  - PM-00A must begin with Phase A0 Verification Topology before E01-E10 architecture evidence
+  - PM-00B Part Feature Architecture Freeze remains separate after PM-00A evidence
+  - PM-01 First Solid Vertical Slice, Body/Feature persistence, Part Feature Tree product behavior, Kernel solid tools, Assembly/Drawing and multi-body remain inactive
 notes:
+  - G0 completed on 2026-10-02. Owner reported PASS on exact candidate 16df8d1940a1f438a66cbd6964a881ba24718c0d against the integrated readiness workflow recorded in work/G0_SKETCHER_PROFILE_AUTHORING_READINESS_RETEST.md.
+  - Part Modeling v1 Roadmap v1.2 records G0 complete and PM-00A as the next proposed package.
+  - work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md is prepared as PROPOSED — INACTIVE. Merging the proposal does not authorize implementation.
   - G0 readiness re-test procedure/evidence matrix prepared on 2026-10-02 in work/G0_SKETCHER_PROFILE_AUTHORING_READINESS_RETEST.md. Current result remains PENDING OWNER MANUAL RETEST; no PM package is activated.
   - G0 preparation verified that 224/224 production/build/test/workflow blobs across src/**, tests/**, scripts/**, .github/**, benchmarks/** and root build dispatchers are identical between SR-03 manual/FULL candidate e96627ce1268e05f11a334d3d8f884dae854967e and main c49540c31346d7d7269fbfdd9b10d521d6a4ccc9.
   - Historical R9-R12 and SR-01-SR-03 evidence is retained as component evidence only; one fresh integrated Owner manual G0 workflow on current main is still required for readiness PASS.

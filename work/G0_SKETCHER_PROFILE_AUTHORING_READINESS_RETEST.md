@@ -1,6 +1,6 @@
 # G0 — Sketcher Profile-Authoring Readiness Re-test
 
-**Status:** READY FOR OWNER MANUAL RETEST  
+**Status:** COMPLETED — PASS  
 **Date prepared:** 2026-10-02  
 **Decision class:** evidence checkpoint; no production CAD scope activated  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.1  
@@ -211,12 +211,12 @@ On FAIL:
 
 ## 8. Result record
 
-**Current result:** PENDING OWNER MANUAL RETEST
+**Current result:** PASS
 
-Exact manual candidate: _pending_  
-Owner result: _pending_  
-Date: _pending_  
-Observations: _pending_
+Exact manual candidate: `16df8d1940a1f438a66cbd6964a881ba24718c0d`  
+Owner result: **PASS**  
+Date: 2026-10-02  
+Observations: Owner reported PASS against the documented integrated G0 readiness workflow. No additional blocking observation was reported.
 
 ## 9. Boundary after PASS
 
@@ -229,3 +229,16 @@ A G0 PASS changes only program scheduling/evidence:
 - PM-00B, PM-01 and solid modeling remain inactive.
 
 No code or persistence/schema change is authorized by recording G0 PASS.
+
+
+## 10. Closeout
+
+G0 is complete.
+
+The Owner reported PASS on 2026-10-02 for exact candidate `16df8d1940a1f438a66cbd6964a881ba24718c0d`.
+
+This satisfies the Sketcher profile-authoring readiness checkpoint defined by Sketch Roadmap v1.9 and Part Modeling v1 Roadmap.
+
+The result closes only the readiness gate. It does not activate PM-00A, Part Feature Tree, Body/Feature persistence, Kernel solid operations or any user-facing solid-modeling tool.
+
+The next legal program action is preparation and explicit Owner review/acceptance of the separate PM-00A Part Modeling Architecture Evidence Gate Work Contract.
