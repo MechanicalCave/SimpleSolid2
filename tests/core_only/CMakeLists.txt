@@ -64,6 +64,13 @@ add_test(
         -P ${_ss2_core_only_test_root}/verify_cad_input_semantic_boundaries.cmake
 )
 
+add_test(
+    NAME pm00a.kernel_boundaries
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
+        -P ${_ss2_core_only_test_root}/verify_kernel_boundaries.cmake
+)
+
 set_tests_properties(d.cad_input_semantics PROPERTIES LABELS "tier-fast;subsystem-application")
 set_tests_properties(r10.quantity_input PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-core")
 set_tests_properties(wb02.cad_input_session PROPERTIES LABELS "tier-fast;subsystem-application")
@@ -80,6 +87,7 @@ set_tests_properties(sk07f.precision_input_state PROPERTIES LABELS "tier-fast;su
 set_tests_properties(r11.snap_core PROPERTIES LABELS "tier-fast;subsystem-core;subsystem-sketch")
 set_tests_properties(wb02.cad_input_boundaries PROPERTIES LABELS "tier-fast;subsystem-core")
 set_tests_properties(d.cad_input_semantic_boundaries PROPERTIES LABELS "tier-fast;subsystem-core")
+set_tests_properties(pm00a.kernel_boundaries PROPERTIES LABELS "tier-fast;subsystem-core;subsystem-kernel;subsystem-part")
 
 get_property(_ss2_core_only_registered_tests DIRECTORY PROPERTY TESTS)
 foreach(_test IN LISTS _ss2_core_only_registered_tests)

@@ -171,6 +171,37 @@ No durable Body/Feature schema, persistent topology reference, Part Feature Tree
 
 **A0 remains INCOMPLETE.** The next required slice is A0.2 — Evidence Harness Foundation: the minimal provider-neutral Kernel boundary, bounded OCCT adapter/evidence surface, B-Rep validation/lineage harness foundation and cold-model-rebuild harness. E01–E10 remain blocked until the full A0 completion gate passes.
 
+### A0.2 — Evidence Harness Foundation
+
+**Status:** COMPLETED — PASS  
+**Exact candidate:** `8438cd739e55a390b1df8d4b7ddaa9e6c070e237`  
+**Windows FULL:** #1206 — PASS
+
+A0.2 established and proved on one exact revision:
+
+- provider-neutral `simplesolid2_kernel` input/evidence types compile in semantic/core mode with Qt and OCCT absent;
+- Part evaluates a durable Profile into exact neutral Line/Circle/Arc boundary uses with O/U/V/N frame and semantic provenance;
+- technical whole-curve provider seam state is stripped from neutral semantic input;
+- bounded `simplesolid2_kernel_occt` builds only in kernel-native mode and keeps TopoDS/Qt/provider handles out of public headers;
+- OCCT constructs and validates a real Profile face including an inner circular hole;
+- neutral evidence reports B-Rep validity/topology counts and provenance-to-generated-edge evidence without exporting provider topology identity;
+- dependency-boundary regression prevents neutral Kernel -> Part/Sketch/Application/Viewer/UI/provider leakage and Part -> kernel_occt leakage;
+- cold-model rebuild PASS: authored Rectangle + Circle-hole Profile is saved, runtime session/input/provider/B-Rep scope is destroyed, the file is reopened, Profile reevaluated, and neutral input/evidence reproduce deterministically;
+- desktop, core-only and kernel-native Release all PASS on the same exact candidate;
+- combined `part,kernel,persistence` subsystem selection and complete unfiltered desktop verification PASS.
+
+No Body/Feature persistence, Part Feature Tree, persistent topology naming or user-facing solid operation was introduced.
+
+### Phase A0 completion gate
+
+**Status:** COMPLETED — PASS  
+**A0 source candidate:** `8438cd739e55a390b1df8d4b7ddaa9e6c070e237`  
+**Windows FULL:** #1206 — PASS
+
+Phase A0 is complete. The Verification Topology and Evidence Harness Foundation required before E01–E10 are now present and exact-head verified.
+
+The next legal PM-00A work is the E01–E10 architecture-evidence matrix. E01–E10 may use the bounded neutral Kernel/OCCT evidence seams established by A0, but must not expand them into durable Body/Feature schema or product solid-modeling behavior.
+
 ## 6. Evidence model and invariants
 
 ### 6.1 Authored intent versus evaluated geometry

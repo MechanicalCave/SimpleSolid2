@@ -443,6 +443,13 @@ add_test(
         -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_project_workspace_boundaries.cmake
 )
 
+add_test(
+    NAME pm00a.kernel_boundaries
+    COMMAND ${CMAKE_COMMAND}
+        -DSOURCE_ROOT=${PROJECT_SOURCE_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/verify_kernel_boundaries.cmake
+)
+
 
 add_executable(wb01_viewer_selection_test
     viewer_selection_test.cpp
@@ -1423,6 +1430,7 @@ set(_ss2_fast_tests
     wb01.builtin_reference
     wb01.workbench_shell_boundaries
     ws01.project_workspace_boundaries
+    pm00a.kernel_boundaries
     wb01.viewer_selection
     wb01.viewer_native_smoke
     wb01a.workspace_directory
@@ -1530,6 +1538,7 @@ set(_ss2_project_tests
 set_property(TEST ${_ss2_project_tests} APPEND PROPERTY LABELS "subsystem-project")
 
 set(_ss2_part_tests
+    pm00a.kernel_boundaries
     b1.save_conflict
     part01.document_primitives
     part01.part_document_transaction
@@ -1668,6 +1677,7 @@ set(_ss2_persistence_tests
 set_property(TEST ${_ss2_persistence_tests} APPEND PROPERTY LABELS "subsystem-persistence")
 
 set(_ss2_core_tests
+    pm00a.kernel_boundaries
     r10.quantity_input
     d.cad_input_semantic_boundaries
     wb02.cad_input_boundaries
@@ -1681,6 +1691,11 @@ set(_ss2_core_tests
     r12.structural_edit_core
 )
 set_property(TEST ${_ss2_core_tests} APPEND PROPERTY LABELS "subsystem-core")
+
+set(_ss2_kernel_tests
+    pm00a.kernel_boundaries
+)
+set_property(TEST ${_ss2_kernel_tests} APPEND PROPERTY LABELS "subsystem-kernel")
 
 set(_ss2_viewer_tests
     wb01.viewer_camera_state
@@ -1881,6 +1896,7 @@ ss2_add_test_aggregate(ss2_tests_subsystem_core "subsystem-core" ${_ss2_core_tes
 ss2_add_test_aggregate(ss2_tests_subsystem_application "subsystem-application" ${_ss2_application_tests})
 ss2_add_test_aggregate(ss2_tests_subsystem_persistence "subsystem-persistence" ${_ss2_persistence_tests})
 ss2_add_test_aggregate(ss2_tests_subsystem_part "subsystem-part" ${_ss2_part_tests})
+ss2_add_test_aggregate(ss2_tests_subsystem_kernel "subsystem-kernel" ${_ss2_kernel_tests})
 ss2_add_test_aggregate(ss2_tests_subsystem_sketch "subsystem-sketch" ${_ss2_sketch_tests})
 ss2_add_test_aggregate(ss2_tests_subsystem_viewer "subsystem-viewer" ${_ss2_viewer_tests})
 ss2_add_test_aggregate(ss2_tests_subsystem_ui "subsystem-ui" ${_ss2_ui_tests})

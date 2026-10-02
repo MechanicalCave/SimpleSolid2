@@ -19,13 +19,15 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - PM-00A Part Modeling Architecture Evidence Gate is ACTIVE after explicit Owner acceptance on 2026-10-02
-  - begin Phase A0 Verification Topology; establish semantic/core, kernel-native Release, and desktop verification modes before E01-E10 evidence
-  - preserve existing core-only no-Qt/no-OCCT authority and add kernel-native OCCT-without-Qt verification
-  - add subsystem-kernel, fail-closed regression metadata completeness, Release kernel evidence targets, and cold-model-rebuild harness
-  - E01-E10 may not be accepted before exact-head Phase A0 PASS
-  - PM-00B Part Feature Architecture Freeze, PM-01 First Solid Vertical Slice, Body/Feature persistence, Part Feature Tree product behavior, Assembly/Drawing and multi-body remain inactive
+  - PM-00A Phase A0 Verification Topology is COMPLETED — PASS; A0.1 source FULL #1199 and A0.2/Phase A0 source FULL #1206 are recorded in the active contract
+  - begin PM-00A E01-E10 architecture evidence; first freeze the evidence matrix and expected Resolved/Missing/Ambiguous/Unsupported outcomes before implementing individual probes
+  - reuse the bounded neutral Kernel/OCCT evidence seams established by A0; do not expand them into durable Body/Feature schema or product solid-modeling behavior
+  - preserve zero-false-Resolved as the acceptance asymmetry and keep cold rebuild in the required stable-case matrix
+  - PM-00B Part Feature Architecture Freeze remains separate after PM-00A evidence
+  - PM-01 First Solid Vertical Slice, Body/Feature persistence, Part Feature Tree product behavior, Assembly/Drawing and multi-body remain inactive
 notes:
+  - Phase A0 completed on exact source candidate 8438cd739e55a390b1df8d4b7ddaa9e6c070e237 with Windows FULL #1206 PASS. Desktop, core-only no-Qt/no-OCCT and kernel-native Release OCCT-without-Qt all passed on that SHA.
+  - A0.2 cold-model rebuild proved durable Rectangle + Circle-hole Profile -> neutral Kernel input -> OCCT evidence -> Save/Close/Reopen -> deterministic neutral input/evidence without previous runtime/provider state.
   - Owner explicitly accepted PM-00A on 2026-10-02. The synchronized activation candidate is governance-only; implementation starts only after its repository gate passes.
   - PM-00A implementation begins with Phase A0. No durable Body/Feature schema or user-facing solid modeling is authorized.
   - G0 completed on 2026-10-02. Owner reported PASS on exact candidate 16df8d1940a1f438a66cbd6964a881ba24718c0d against the integrated readiness workflow recorded in work/G0_SKETCHER_PROFILE_AUTHORING_READINESS_RETEST.md.

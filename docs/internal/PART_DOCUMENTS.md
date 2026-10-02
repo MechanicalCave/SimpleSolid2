@@ -67,6 +67,42 @@ The native-file checkpoint represents the exact file version established by load
 
 Closing and reopening creates fresh runtime history.
 
+<!-- section-id: internal.part-documents.kernel-evidence -->
+## PM-00A transient Kernel evidence boundary
+
+PM-00A Phase A0 adds a provider-neutral evaluation seam for architecture evidence without changing the durable Part schema.
+
+A valid Part-owned Profile can be evaluated into transient `kernel::PlanarProfileInput` containing:
+
+- a complete right-handed support frame `O/U/V/N`;
+- exact Line/Circle/Arc source geometry;
+- evaluated boundary-use trimming/orientation;
+- outer/hole loop structure;
+- semantic provenance back to the source Sketch EntityId plus loop/use position.
+
+The neutral Kernel types contain no Qt, Viewer or OCCT/provider identity. The Part adapter depends only on the neutral Kernel surface. It does not depend on `kernel_occt`.
+
+The bounded kernel-native OCCT evidence provider consumes the neutral input and returns neutral evidence such as B-Rep validity, topology counts and provenance-associated generated-edge counts. `TopoDS_*` handles stay private to the provider implementation and are not returned to Part or persisted.
+
+A whole closed Circle is represented semantically as a whole closed curve; a technical provider/parameterization seam is not promoted to semantic authored meaning.
+
+This seam is currently architecture evidence only. It does not add BodyId, FeatureId, Part Feature history, persistent topology references or a user-facing solid operation.
+
+The PM-00A cold-model rebuild regression proves the intended lifecycle boundary:
+
+```text
+durable Part/Sketch/Profile state
+→ evaluate neutral Profile input
+→ build/validate OCCT evidence
+→ Save
+→ destroy DocumentSession + neutral input + provider/B-Rep runtime state
+→ reopen native .ss2part
+→ reevaluate neutral Profile input
+→ rebuild/validate OCCT evidence
+```
+
+The rebuilt neutral input fingerprint and neutral provider evidence must match the pre-close result without previous-process provider handles or caches.
+
 <!-- section-id: internal.part-documents.persistence -->
 ## Native Part persistence
 
