@@ -74,6 +74,10 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
         new QGroupBox(QStringLiteral("Document Tree"), splitter);
     tree_group->setObjectName(
         QStringLiteral("documentTreePanel"));
+    tree_group->setMinimumWidth(0);
+    tree_group->setSizePolicy(
+        QSizePolicy::Ignored,
+        QSizePolicy::Expanding);
     auto* tree_layout = new QVBoxLayout(tree_group);
 
     document_tree_ = new QTreeWidget(tree_group);
@@ -87,6 +91,10 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
 
     auto* editor_host = new QWidget(splitter);
     editor_host->setObjectName(QStringLiteral("editorSurfaceHost"));
+    editor_host->setMinimumWidth(0);
+    editor_host->setSizePolicy(
+        QSizePolicy::Expanding,
+        QSizePolicy::Expanding);
     editor_host_layout_ = new QVBoxLayout(editor_host);
     editor_host_layout_->setContentsMargins(0, 0, 0, 0);
     editor_host_layout_->setSpacing(4);
@@ -96,6 +104,15 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     auto* right_panel = new QWidget(splitter);
     right_panel->setObjectName(
         QStringLiteral("workbenchRightPanel"));
+    // The panel contains forms whose natural size hint is intentionally
+    // larger than the accepted normal CAD-shell width. Let the splitter
+    // honor the explicit ~270 px default instead of promoting that content
+    // hint to a shell-wide minimum; individual controls remain responsible
+    // for their own compact/narrow presentation.
+    right_panel->setMinimumWidth(0);
+    right_panel->setSizePolicy(
+        QSizePolicy::Ignored,
+        QSizePolicy::Expanding);
     auto* right_layout = new QVBoxLayout(right_panel);
     right_layout->setContentsMargins(0, 0, 0, 0);
 
