@@ -53,7 +53,11 @@ While a Sketch is actively being edited:
 
 Outside Sketch edit, existing Part/Profile Delete behavior may operate from the valid active Part semantic selection.
 
-The currently displayed Properties page is never command authority.
+The generic `Delete` key rule above does **not** disable explicitly named semantic Part commands. During active Sketch Edit, a deliberately invoked **Delete Profile** action from the selected Profile's Properties may delete that Profile without deleting its source Sketch geometry. This explicit action is not a fallback target for the generic `Delete` key.
+
+If **Delete Profile** targets the Profile currently open in an Edit Profile session, the transient Profile draft is cancelled first without authored mutation, then one normal `DeleteProfileCommand` performs the deletion. If another Profile Create/Edit session owns a different semantic target, deletion fails closed until that Profile operation is finished or cancelled.
+
+The currently displayed Properties page is never command authority; it may expose an explicitly named command only for the semantic Profile currently selected.
 
 ## 4. Tree blank-space selection behavior
 
@@ -125,6 +129,8 @@ A private/internal command kind may remain if it has legitimate test/internal us
 
 - deterministic Delete target arbitration in active Sketch edit;
 - protection against stale Tree/Profile selection stealing destructive commands;
+- explicit **Delete Profile** remains available during ordinary active Sketch Edit without becoming a generic Delete-key fallback;
+- deleting the Profile currently open in Edit Profile cancels only that transient draft before the single semantic Profile deletion;
 - Tree blank-space clearing of Tree/Part selection;
 - Windows `Ctrl+Z` / `Ctrl+Y` routing to existing active Document history;
 - preservation of text-editor focus ownership;
@@ -175,7 +181,10 @@ Tests must prove at minimum:
 
 - Profile selected in Tree → enter/edit Sketch → select Line → Delete removes only the Line and does not delete the Profile;
 - the same sequence remains correct even if Profile Properties is still the visible Properties page;
-- active Sketch edit + no Sketch entity selection + stale Profile/Tree selection → Delete does not delete the Profile;
+- active Sketch edit + no Sketch entity selection + stale Profile/Tree selection → generic Delete does not delete the Profile;
+- active Sketch edit + deliberately selected Profile + explicit **Delete Profile** → only the Profile is deleted, source Sketch geometry is unchanged, and Undo restores the same ProfileId/RegionIntent;
+- active Edit Profile session for that same Profile + explicit **Delete Profile** → transient Profile draft is cancelled without its own history entry and the Profile is deleted by one normal semantic command;
+- a conflicting active Profile Create/Edit session for another target fails closed rather than deleting through stale presentation;
 - outside Sketch edit, valid selected Profile → existing Profile Delete still works;
 - blank Tree click clears Tree/Part selection without authored mutation;
 - blank Tree click does not accidentally mutate or delete active Sketch geometry;
@@ -199,13 +208,15 @@ Owner manual verification must include at least:
 
 1. reproduce the originally reported stale-selection sequence: select a Profile/Tree item, enter Sketch edit, select Sketch geometry, press Delete, and confirm only intended Sketch geometry is removed;
 2. repeat with Profile Properties still visible;
-3. active Sketch edit with no Sketch selection and stale Profile/Tree selection: Delete must not remove the Profile;
-4. click blank Document Tree space and confirm Tree/Part selection clears predictably;
-5. execute several Sketch mutations and verify `Ctrl+Z` / `Ctrl+Y` step through the same history as the existing actions;
-6. verify a focused text editor keeps local Undo/Redo;
-7. verify a representative nested-island Profile case with island presentation ON and OFF: semantic Profile result remains identical while only presentation changes;
-8. verify `Find All Regions` is absent from the normal Profile workflow;
-9. representative Save → Close → Reopen regression.
+3. active Sketch edit with no Sketch selection and stale Profile/Tree selection: generic Delete must not remove the Profile;
+4. while Sketch Edit remains active, deliberately select a Profile and use **Delete Profile** in Properties: only the Profile is removed and Undo restores the same Profile identity/intent;
+5. open Edit Profile for that Profile and repeat explicit **Delete Profile**: the draft is cancelled and the Profile is deleted without touching source Sketch geometry;
+6. click blank Document Tree space and confirm Tree/Part selection clears predictably;
+7. execute several Sketch mutations and verify `Ctrl+Z` / `Ctrl+Y` step through the same history as the existing actions;
+8. verify a focused text editor keeps local Undo/Redo;
+9. verify a representative nested-island Profile case with island presentation ON and OFF: semantic Profile result remains identical while only presentation changes;
+10. verify `Find All Regions` is absent from the normal Profile workflow;
+11. representative Save → Close → Reopen regression.
 
 ## 13. Persistence, identity and lifecycle
 
@@ -281,7 +292,9 @@ Stop for Owner review if implementation requires or attempts:
 
 ## 17. Activation and completion boundary
 
-The Owner explicitly accepted this exact SR-01 contract and Sketcher Roadmap v1.9 on 2026-10-02.
+The Owner explicitly accepted this SR-01 contract and Sketcher Roadmap v1.9 on 2026-10-02.
+
+On 2026-10-02 the Owner additionally accepted the bounded SR-01 interaction refinement that distinguishes generic Sketch-owned `Delete` from the explicitly named **Delete Profile** command during active Sketch Edit. The refinement does not reopen selection architecture, persistence, Profile identity or history semantics.
 
 This acceptance authorizes only the bounded SR-01 scope recorded here.
 
