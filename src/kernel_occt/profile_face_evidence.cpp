@@ -30,6 +30,7 @@
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 
+#include <algorithm>
 #include <cmath>
 #include <iostream>
 #include <numbers>
@@ -1007,20 +1008,24 @@ buildEdgeSplitHistoryEvidence(
             return evidence;
         }
 
-        BRepPrimAPI_MakeBox tool =
+        const bool middle_notch =
             scenario ==
-                    kernel::EdgeSplitProbeScenario::
-                        middle_notch
-                ? BRepPrimAPI_MakeBox{
-                      gp_Pnt{15.0, -5.0, 5.0},
-                      10.0,
-                      10.0,
-                      10.0}
-                : BRepPrimAPI_MakeBox{
-                      gp_Pnt{-5.0, -5.0, 5.0},
-                      50.0,
-                      30.0,
-                      10.0};
+            kernel::EdgeSplitProbeScenario::
+                middle_notch;
+        const gp_Pnt tool_origin =
+            middle_notch
+                ? gp_Pnt{15.0, -5.0, 5.0}
+                : gp_Pnt{-5.0, -5.0, 5.0};
+        const double tool_dx =
+            middle_notch ? 10.0 : 50.0;
+        const double tool_dy =
+            middle_notch ? 10.0 : 30.0;
+
+        BRepPrimAPI_MakeBox tool{
+            tool_origin,
+            tool_dx,
+            tool_dy,
+            10.0};
 
         BRepAlgoAPI_Cut cut{
             base_shape,
@@ -1073,20 +1078,20 @@ buildFaceMergeHistoryEvidence(
             20.0,
             10.0};
 
-        BRepPrimAPI_MakeBox second_box =
+        const bool overlapping =
             scenario ==
-                    kernel::FaceMergeProbeScenario::
-                        overlapping_coplanar
-                ? BRepPrimAPI_MakeBox{
-                      gp_Pnt{20.0, 0.0, 0.0},
-                      20.0,
-                      20.0,
-                      10.0}
-                : BRepPrimAPI_MakeBox{
-                      gp_Pnt{10.0, 5.0, 0.0},
-                      10.0,
-                      10.0,
-                      5.0};
+            kernel::FaceMergeProbeScenario::
+                overlapping_coplanar;
+        const gp_Pnt second_origin =
+            overlapping
+                ? gp_Pnt{20.0, 0.0, 0.0}
+                : gp_Pnt{10.0, 5.0, 0.0};
+
+        BRepPrimAPI_MakeBox second_box{
+            second_origin,
+            overlapping ? 20.0 : 10.0,
+            overlapping ? 20.0 : 10.0,
+            overlapping ? 10.0 : 5.0};
 
         const TopoDS_Shape first_shape =
             first_box.Shape();
