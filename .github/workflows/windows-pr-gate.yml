@@ -375,6 +375,12 @@ jobs:
           .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug") -Tier full -NoBuild
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: SR-02 latency benchmark evidence
+        run: |
+          $ErrorActionPreference = "Stop"
+          .\scripts\ci\ss2-sr02-latency-benchmark.ps1
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: CI-04 warm FULL parity evidence
         run: |
           $ErrorActionPreference = "Stop"
