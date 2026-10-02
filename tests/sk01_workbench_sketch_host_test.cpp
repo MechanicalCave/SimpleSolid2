@@ -904,6 +904,41 @@ int main(int argc, char* argv[]) {
         viewer::StandardView::front);
     CHECK(viewport->fitAllCount() > 0);
 
+    // SR-03 reflow is presentation-only: active Sketch identity, history and
+    // dirty state survive narrow -> normal transitions unchanged.
+    const auto responsive_sketch_revision =
+        session->document().revision();
+    const auto responsive_sketch_undo =
+        session->undoDepth();
+    const bool responsive_sketch_dirty =
+        session->needsSave();
+    workbench.resize(720, 800);
+    QApplication::processEvents();
+    CHECK(
+        session->document().sketches().front().id ==
+        sketch_id);
+    CHECK(!finish_button->isHidden());
+    CHECK(
+        session->document().revision() ==
+        responsive_sketch_revision);
+    CHECK(session->undoDepth() ==
+          responsive_sketch_undo);
+    CHECK(session->needsSave() ==
+          responsive_sketch_dirty);
+    workbench.resize(1400, 800);
+    QApplication::processEvents();
+    CHECK(
+        session->document().sketches().front().id ==
+        sketch_id);
+    CHECK(!finish_button->isHidden());
+    CHECK(
+        session->document().revision() ==
+        responsive_sketch_revision);
+    CHECK(session->undoDepth() ==
+          responsive_sketch_undo);
+    CHECK(session->needsSave() ==
+          responsive_sketch_dirty);
+
     // R12 structural-edit controls support tool-first boundary acquisition.
     // Empty Enter/RMB cannot advance without a finite boundary.
     CHECK(!trim_button->isHidden());
