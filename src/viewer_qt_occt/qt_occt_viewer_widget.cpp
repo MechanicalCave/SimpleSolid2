@@ -1485,8 +1485,10 @@ public:
             }
 
             sketch_preview_scene_ = scene;
+            // SR-02: UpdateCurrentViewer() already performs the synchronous
+            // viewer update for this changed preview. Do not immediately
+            // force a second V3d_View::Redraw() for the same logical sample.
             updateCurrentViewer();
-            redraw();
             return true;
         } catch (...) {
             clearSketchPreviewScene();
