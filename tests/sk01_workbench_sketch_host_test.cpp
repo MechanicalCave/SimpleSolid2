@@ -827,7 +827,11 @@ int main(int argc, char* argv[]) {
     CHECK(polar_clear_button != nullptr);
     CHECK(polar_additional_label != nullptr);
     CHECK(circle_size_mode != nullptr);
-    CHECK(editor_host->isAncestorOf(sketch_button));
+    auto* document_top_row =
+        workbench.findChild<QWidget*>(
+            QStringLiteral("documentTopRow"));
+    CHECK(document_top_row != nullptr);
+    CHECK(document_top_row->isAncestorOf(sketch_button));
     CHECK(!operations_content->isAncestorOf(sketch_button));
     CHECK(sketch_button->isEnabled());
     CHECK(cancel_button->isHidden());
