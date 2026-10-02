@@ -298,6 +298,14 @@ void CadWorkbenchShell::setNarrowPanel(QWidget* panel) {
     right_panel_->setVisible(show_right);
     tree_recovery_button_->setChecked(show_tree);
     right_recovery_button_->setChecked(show_right);
+    tree_recovery_button_->setToolTip(
+        show_tree
+            ? QStringLiteral("Hide Document Tree")
+            : QStringLiteral("Show Document Tree"));
+    right_recovery_button_->setToolTip(
+        show_right
+            ? QStringLiteral("Hide Properties and Operations")
+            : QStringLiteral("Show Properties and Operations"));
 
     if (show_tree) {
         splitter_->setSizes({200, 1000, 0});
