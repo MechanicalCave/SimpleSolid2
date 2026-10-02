@@ -1,8 +1,9 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; IMPLEMENTATION NOT ACTIVATED  
-**Version:** 1.0  
+**Version:** 1.1  
 **Owner acceptance:** 2026-10-02  
+**Previous accepted version:** 1.0 — 2026-10-02  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Current baseline:** `main` after merged SR-03, `6bc83dc47dd4b101c881bd7df4455e6bcdba80f0`  
@@ -121,7 +122,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | Order | Gate / package | Required outcome | Activation |
 | --- | --- | --- | --- |
 | G0 | **Sketcher profile-authoring readiness re-test** | prove current Sketcher can deliberately author practical Profiles after SR-01/02/03 | **NEXT; evidence checkpoint only** |
-| 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | future separate Work Contract |
+| 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | future separate Work Contract |
 | 2 | **PM-00B — Part Feature Architecture Freeze** | Owner-approved ADR/contract freeze for first solid workflow based on PM-00A evidence | future separate Work Contract / governance gate |
 | 3 | **PM-01 — First Solid Vertical Slice: Body / Feature / Extrude Add** | minimum durable Body/Feature architecture plus one complete Extrude Add lifecycle | future separate Work Contract |
 | 4 | **PM-02 — Datum Plane / Sketch Support / Extrude Cut** | offset datum from stable source, Sketch on datum, Cut, downstream recompute/failure behavior | future separate Work Contract |
@@ -166,6 +167,81 @@ Use the accepted criteria in `work/SKETCH_ROADMAP.md` v1.9. At minimum the suppo
 
 Prove the minimum semantic contracts required to freeze single-Body / Feature evaluation architecture **before** persistent solid-modeling data or the first production Feature is introduced.
 
+### Phase A0 — Verification Topology
+
+PM-00A begins with an obligatory verification-topology slice before E01–E10 architecture evidence.
+
+This phase exists to keep Part modeling evidence aligned with SS2 ownership boundaries. It is **not** a separate speculative CI program and must not invent a broad Kernel framework before concrete PM-00A evidence requires it.
+
+The accepted verification topology has three distinct build/test modes:
+
+```text
+semantic/core
+    Qt forbidden
+    OCCT forbidden
+    -> provider-independent Core / Sketch / Part / Application semantics
+
+kernel-native
+    Qt forbidden
+    OCCT required
+    -> provider-neutral Kernel boundary + OCCT provider + Part/kernel evidence
+
+desktop
+    Qt required
+    OCCT required
+    -> full Workbench / Viewer / picking / presentation integration
+```
+
+The existing semantic/core boundary remains authoritative and must not regress when Kernel support is introduced. Part/domain semantics that do not intrinsically require a geometry provider remain testable without Qt and OCCT.
+
+Before E01–E10 may be accepted as PM-00A evidence, Phase A0 must establish:
+
+1. preservation of the current core-only no-Qt/no-OCCT build and its semantic test authority;
+2. the smallest provider-neutral Kernel boundary required by the active PM-00A evidence cases;
+3. an OCCT-backed **kernel-native Release** build/test lane with Qt discovery explicitly disabled;
+4. a stable `subsystem-kernel` test classification/aggregate in addition to the existing subsystem labels;
+5. repository verification that every registered regression has explicit, valid verification metadata and cannot silently fall outside the intended subsystem/tier graph;
+6. a Release kernel evidence target suitable for B-Rep validity, generated/modified/deleted lineage, split/merge/refine and tolerance cases;
+7. a **cold-model-rebuild harness** that destroys runtime DocumentSession/evaluated B-Rep/provider/cache state, reloads authored inputs and reevaluates from legal durable intent;
+8. exact-head proof that semantic/core, kernel-native and desktop modes all pass on the same candidate revision.
+
+Build-tree "clean/warm" state and model-evaluation "cold rebuild" are separate concepts. Deleting/reconfiguring a CMake build tree is not evidence that authored Part intent can reconstruct its geometry and references without previous-process runtime state.
+
+### Phase A0 pipeline rules
+
+The existing `FOCUSED / FAST / SUBSYSTEM / FULL / DOCS / CLOSURE` public verification model remains the default. PM-00A does not authorize a new developer-facing test tier merely because kernel-native tests are added.
+
+Expected use:
+
+- FOCUSED remains the cheapest exact target/test iteration mechanism;
+- FAST remains broad draft iteration evidence;
+- SUBSYSTEM gains `kernel` and may combine `part,kernel,persistence` for explicit checkpoints;
+- FULL remains mandatory merge evidence and must include the complete desktop regression plus semantic/core and kernel-native verification;
+- DOCS/CLOSURE trusted-FULL behavior remains unchanged.
+
+Do not add path-based pseudo-dependency analysis such as automatically assuming every `src/part/**` edit is fully covered by only Part tests. Selection remains explicit/fail-closed until measured repository growth proves a stronger mechanism necessary.
+
+### Phase A0 test-graph discipline
+
+Part Modeling will introduce many geometry/reference scenarios. The default design is to avoid one heavy executable per scenario when a shared harness can provide independent CTest cases.
+
+A bounded provider test executable may expose multiple exact scenario cases (for example lineage split/merge/refine variants) while each case remains separately reportable in CTest. This reduces repeated compile/link cost without reducing FULL coverage or merging distinct semantic assertions into one opaque pass/fail result.
+
+Test metadata must have one authoritative declaration path. The implementation may choose the CMake helper shape, but it must prevent drift between:
+
+- registered test;
+- FAST/FULL-only classification;
+- subsystem labels;
+- aggregate build target membership.
+
+A metadata self-test must fail closed when a registered regression is unclassified or carries contradictory verification metadata.
+
+### Phase A0 performance rule
+
+Do not pre-emptively introduce Ninja migration, compiler cache, PCH, Unity Build, distributed workers or test sharding.
+
+First measure the real PM-00A/PM-01 build and test graph on the supported Windows machine. Further CI/build optimization requires separate measured evidence if the new graph becomes a material development bottleneck.
+
 ### Evidence scope
 
 PM-00A may build bounded technical probes and test-only/minimal provider adapters required to answer architecture questions. It must not expose a production Body/Feature schema or user-facing solid-modeling feature.
@@ -182,6 +258,12 @@ Required evidence areas:
 8. numerical/tolerance/refine/healing policy evidence;
 9. generation/session isolation for stale preview/evaluation results;
 10. Part identity/snapshot assumptions required later by Assembly without implementing Assembly.
+
+### Phase A0 completion gate
+
+E01–E10 architecture evidence may begin only after the active PM-00A contract records Phase A0 PASS on an exact revision. A Phase A0 failure is a bounded verification/infrastructure finding inside PM-00A unless resolving it would cross a D2/D3 ownership, dependency or persistence boundary; such a boundary requires Owner review.
+
+Phase A0 PASS does **not** authorize persistent Body/Feature schema, Part Feature Tree product behavior or a user-facing solid operation.
 
 ### Mandatory PM-00A evidence cases
 
@@ -204,6 +286,7 @@ Completion requires **zero false Resolved** in the accepted matrix. However, a r
 
 ### PM-00A deliverables
 
+- Phase A0 verification-topology report with exact-head semantic/core, kernel-native and desktop evidence;
 - architecture evidence report;
 - reference survival/failure matrix;
 - support-frame evidence;
@@ -492,7 +575,7 @@ Planned Part features must not be documented as already implemented.
 
 ## 23. Activation boundary
 
-Program v1.0 is accepted and frozen, but **no PM package is active by this acceptance**.
+Program v1.1 is accepted and frozen, but **no PM package is active by this acceptance**.
 
 Current legal next action:
 
