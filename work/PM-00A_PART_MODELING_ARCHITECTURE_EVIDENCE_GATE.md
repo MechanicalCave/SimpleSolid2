@@ -380,7 +380,7 @@ Before PM-00A completion:
 
 Because PM-00A changes verification infrastructure and Kernel architecture seams, the final implementation candidate requires an exact-head Windows FULL. A later work-only completion suffix may use CLOSURE only under existing trusted-FULL rules.
 
-## 13. Documentation impact
+## Documentation impact
 
 Internal docs: required.
 
