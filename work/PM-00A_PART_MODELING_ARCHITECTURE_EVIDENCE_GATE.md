@@ -259,6 +259,14 @@ The Kernel boundary consumes exact semantic/evaluated boundary uses with:
 
 Tessellation or screen-space polylines are not valid modeling input.
 
+## 6A. Frozen E01–E10 execution matrix
+
+The expected outcomes for E01–E10 are frozen before individual probes in:
+
+`work/PM-00A_E01_E10_EVIDENCE_MATRIX.md`
+
+The matrix is an evidence oracle, not a durable Part-schema or PM-00B architecture decision. Probe implementation must not silently rewrite expected outcomes to match provider behavior. A contradiction is recorded as evidence and escalated under the active STOP rules.
+
 ## 7. Mandatory evidence cases
 
 ### E01 — Profile with hole → Extrude
