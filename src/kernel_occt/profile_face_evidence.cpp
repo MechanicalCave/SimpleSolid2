@@ -5,6 +5,7 @@
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <BRepPrimAPI_MakePrism.hxx>
+#include <BRepSweep_Prism.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
@@ -13,7 +14,6 @@
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Wire.hxx>
-#include <TopTools_ListOfShape.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
 #include <gp_Dir.hxx>
@@ -367,25 +367,6 @@ matchingFaceEdges(
     return matches;
 }
 
-[[nodiscard]] std::size_t countGeneratedFaces(
-    const TopTools_ListOfShape& generated) {
-    std::size_t count = 0U;
-    for (TopTools_ListOfShape::Iterator it{
-             generated};
-         it.More();
-         it.Next()) {
-        const auto& shape = it.Value();
-        if (shape.ShapeType() == TopAbs_FACE) {
-            ++count;
-        } else {
-            count += countSubshapes(
-                shape,
-                TopAbs_FACE);
-        }
-    }
-    return count;
-}
-
 [[nodiscard]] kernel::ReferenceStatus
 referenceStatus(
     std::size_t candidate_count) noexcept {
@@ -540,10 +521,20 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                     source.edge);
             for (const auto& basis_edge :
                  basis_edges) {
-                face_count +=
-                    countGeneratedFaces(
-                        make_prism.Generated(
-                            basis_edge));
+                // BRepPrimAPI_MakePrism::Generated(edge) can omit history
+                // even for an exact basis edge. Query the concrete sweep
+                // algorithm for the shape generated from that exact edge.
+                // The returned TopoDS shape remains transient provider
+                // evidence; semantic identity is source.provenance.
+                const TopoDS_Shape generated =
+                    make_prism.Prism().Shape(
+                        basis_edge);
+                if (!generated.IsNull()) {
+                    face_count +=
+                        countSubshapes(
+                            generated,
+                            TopAbs_FACE);
+                }
             }
 
             evidence.sides.push_back({
