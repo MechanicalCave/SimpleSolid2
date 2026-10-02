@@ -582,6 +582,9 @@ int main(int argc, char* argv[]) {
     auto* profile_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("profileSketchToolButton"));
+    auto* select_sketch_button =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("selectSketchToolButton"));
     auto* regular_role_button =
         workbench.findChild<QPushButton*>(
             QStringLiteral("sketchRegularRoleButton"));
@@ -766,6 +769,7 @@ int main(int argc, char* argv[]) {
     CHECK(creation_construction_button != nullptr);
     CHECK(rectangle_diagonals_button != nullptr);
     CHECK(profile_button != nullptr);
+    CHECK(select_sketch_button != nullptr);
     CHECK(regular_role_button != nullptr);
     CHECK(construction_role_button != nullptr);
     CHECK(profile_operations != nullptr);
@@ -1885,9 +1889,9 @@ int main(int argc, char* argv[]) {
     // current authored curve. This freezes the intended precondition for
     // the generic Delete ownership regression instead of relying on
     // transient tool state left by Profile Edit + history restoration.
-    select_sketch_button_->click();
+    select_sketch_button->click();
     QApplication::processEvents();
-    CHECK(select_sketch_button_->isChecked());
+    CHECK(select_sketch_button->isChecked());
     CHECK(!viewport->sketchScene().curves.empty());
     viewport->setSketchGripHit(std::nullopt);
     viewport->setSketchPointHit(
