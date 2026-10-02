@@ -381,11 +381,14 @@ int main(int argc, char* argv[]) {
 
     const auto state_before_rotate_preview =
         session.document().state();
+    interaction.resetLatencyDiagnostics();
     movePointer(
         interaction,
         sketch_id,
         40.0, 50.0,
         0.0, 1.0);
+    CHECK(
+        interaction.pointerResolutionCount() == 1U);
     CHECK(!viewport.preview_scene_.lines.empty());
     CHECK(
         session.document().state() ==

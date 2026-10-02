@@ -330,6 +330,8 @@ int main(int argc, char* argv[]) {
                 window);
     CHECK(window.valid());
     CHECK(window.completed);
+    CHECK(window.tokens.size() == 1U);
+    CHECK(window.tokens[0] == short_token);
     CHECK(contains(window.tokens, short_token));
     CHECK(!contains(window.tokens, long_token));
     CHECK(!contains(window.tokens, reference_token));
@@ -341,6 +343,9 @@ int main(int argc, char* argv[]) {
                 crossing);
     CHECK(crossing.valid());
     CHECK(crossing.completed);
+    CHECK(crossing.tokens.size() == 2U);
+    CHECK(crossing.tokens[0] == short_token);
+    CHECK(crossing.tokens[1] == long_token);
     CHECK(contains(crossing.tokens, short_token));
     CHECK(contains(crossing.tokens, long_token));
     CHECK(!contains(crossing.tokens, reference_token));
@@ -360,6 +365,9 @@ int main(int argc, char* argv[]) {
             viewer::SketchRectangleSelectionRule::
                 window);
     CHECK(all_window.completed);
+    CHECK(all_window.tokens.size() == 2U);
+    CHECK(all_window.tokens[0] == short_token);
+    CHECK(all_window.tokens[1] == long_token);
     CHECK(contains(all_window.tokens, short_token));
     CHECK(contains(all_window.tokens, long_token));
 
@@ -438,9 +446,103 @@ int main(int argc, char* argv[]) {
     CHECK(contains(after_orbit.tokens, long_token));
     CHECK(selection_intents == 0);
 
+    // SR-02: a semantic curve is presented as one OCCT wire object even
+    // though its neutral scene retains the exact derived segment chain.
+    // Native detection must still map the wire back to the one curve token.
+    CHECK(widget.setReferenceScene(
+        viewer::ReferenceScene{}));
+    const viewer::PresentationToken curve_token{
+        0x4201U};
+    viewer::SketchScene curve_scene;
+    curve_scene.curves.push_back(
+        viewer::SketchCurvePresentation{
+            curve_token,
+            {
+                {-20.0, 0.0, 0.0},
+                {-10.0, 0.0, 0.0},
+                {0.0, 0.0, 0.0},
+                {10.0, 0.0, 0.0},
+                {20.0, 0.0, 0.0},
+            },
+            false});
+    CHECK(curve_scene.valid());
+    CHECK(widget.setSketchScene(curve_scene));
+    CHECK(
+        widget.runtimeDiagnostics().
+            sketch_native_objects_current == 1U);
+    const auto curve_hit =
+        widget.querySketchPresentation(center);
+    CHECK(curve_hit.completed);
+    CHECK(curve_hit.token.has_value());
+    CHECK(*curve_hit.token == curve_token);
+
+    // SR-02 manual regression: aggregated AIS_Shape curves must receive the
+    // same semantic Regular/Construction styling as AIS_Line objects. The
+    // concrete-provider diagnostic proves the native wire aspect path is
+    // exercised on initial display and on later selection/hover restyles.
+    const viewer::PresentationToken
+        construction_curve_token{0x4202U};
+    viewer::SketchScene curve_style_scene;
+    curve_style_scene.curves.push_back(
+        viewer::SketchCurvePresentation{
+            curve_token,
+            {
+                {-20.0, -6.0, 0.0},
+                {-10.0, -6.0, 0.0},
+                {0.0, -6.0, 0.0},
+                {10.0, -6.0, 0.0},
+                {20.0, -6.0, 0.0},
+            },
+            false});
+    curve_style_scene.curves.push_back(
+        viewer::SketchCurvePresentation{
+            construction_curve_token,
+            {
+                {-20.0, 6.0, 0.0},
+                {-10.0, 6.0, 0.0},
+                {0.0, 6.0, 0.0},
+                {10.0, 6.0, 0.0},
+                {20.0, 6.0, 0.0},
+            },
+            true});
+    CHECK(curve_style_scene.valid());
+
+    // Isolate this diagnostic from the previous one-curve scene. The
+    // authored-scene setter first clears transient Measure cues, whose
+    // cleanup intentionally reapplies styles to the currently installed
+    // Sketch objects before replacing them.
+    CHECK(widget.setSketchScene(
+        viewer::SketchScene{}));
+    widget.resetRuntimeDiagnostics();
+    CHECK(widget.setSketchScene(
+        curve_style_scene));
+    CHECK(
+        widget.runtimeDiagnostics().
+            sketch_wire_style_applications == 2U);
+
+    widget.resetRuntimeDiagnostics();
+    CHECK(widget.setPresentationSelection(
+        viewer::PresentationSelection{
+            {curve_token},
+            curve_token}));
+    CHECK(
+        widget.runtimeDiagnostics().
+            sketch_wire_style_applications == 2U);
+
+    viewer::SketchInteractionPresentation
+        curve_hover;
+    curve_hover.hovered_entity =
+        construction_curve_token;
+    widget.resetRuntimeDiagnostics();
+    CHECK(widget.setSketchInteractionPresentation(
+        curve_hover));
+    CHECK(
+        widget.runtimeDiagnostics().
+            sketch_wire_style_applications == 2U);
+
     // Package F: Construction is provider presentation only but must be
     // visibly distinct even when nothing is selected. Replacing the drawer
-    // aspect after Display() requires Redisplay() for AIS_Line.
+    // aspect after Display() requires Redisplay() for the Sketch object.
     viewer::SketchScene role_scene;
     role_scene.lines.push_back(
         viewer::SketchLinePresentation{
@@ -507,10 +609,28 @@ int main(int argc, char* argv[]) {
     viewer::ProfilePreviewScene
         profile_preview;
     profile_preview.region = profile_region;
+
+    widget.resetRuntimeDiagnostics();
     CHECK(widget.setProfilePreviewScene(
         profile_preview));
+    const auto changed_profile_preview_metrics =
+        widget.runtimeDiagnostics();
+    CHECK(
+        changed_profile_preview_metrics.
+            update_current_viewer_calls == 1U);
+    CHECK(
+        changed_profile_preview_metrics.redraw_calls == 0U);
+
+    widget.resetRuntimeDiagnostics();
     CHECK(widget.setProfilePreviewScene(
         viewer::ProfilePreviewScene{}));
+    const auto cleared_profile_preview_metrics =
+        widget.runtimeDiagnostics();
+    CHECK(
+        cleared_profile_preview_metrics.
+            update_current_viewer_calls == 1U);
+    CHECK(
+        cleared_profile_preview_metrics.redraw_calls == 0U);
 
     const QPoint center_point{
         widget.width() / 2,

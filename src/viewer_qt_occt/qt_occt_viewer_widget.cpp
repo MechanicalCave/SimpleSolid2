@@ -61,6 +61,7 @@
 #include <cmath>
 #include <cstdint>
 #include <exception>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -75,6 +76,48 @@ void logProviderFailure(
         << operation
         << ":"
         << (message != nullptr ? message : "<no message>");
+}
+
+[[nodiscard]] bool sameReferenceScene(
+    const viewer::ReferenceScene& left,
+    const viewer::ReferenceScene& right) noexcept {
+    if (left.references.size() !=
+            right.references.size() ||
+        left.grid.has_value() !=
+            right.grid.has_value()) {
+        return false;
+    }
+
+    for (std::size_t index = 0U;
+         index < left.references.size();
+         ++index) {
+        const auto& a = left.references[index];
+        const auto& b = right.references[index];
+        if (a.token != b.token ||
+            a.kind != b.kind ||
+            a.origin != b.origin ||
+            a.u_axis != b.u_axis ||
+            a.v_axis != b.v_axis ||
+            a.extent != b.extent ||
+            a.role != b.role ||
+            a.visible != b.visible) {
+            return false;
+        }
+    }
+
+    if (!left.grid) {
+        return true;
+    }
+
+    const auto& a = *left.grid;
+    const auto& b = *right.grid;
+    return a.origin == b.origin &&
+           a.u_axis == b.u_axis &&
+           a.v_axis == b.v_axis &&
+           a.extent == b.extent &&
+           a.spacing == b.spacing &&
+           a.major_every == b.major_every &&
+           a.visible == b.visible;
 }
 
 [[nodiscard]] occ::handle<NCollection_HArray1<std::uint8_t>>
@@ -495,6 +538,24 @@ public:
             });
     }
 
+    void resetRuntimeDiagnostics() noexcept {
+        runtime_diagnostics_ = {};
+    }
+
+    [[nodiscard]] QtOcctRuntimeDiagnostics
+    runtimeDiagnostics() const noexcept {
+        auto result = runtime_diagnostics_;
+        result.sketch_native_objects_current =
+            sketch_objects_.size();
+        return result;
+    }
+
+    void updateCurrentViewer() {
+        if (context_.IsNull()) return;
+        ++runtime_diagnostics_.update_current_viewer_calls;
+        context_->UpdateCurrentViewer();
+    }
+
     void ensureInitialized() {
         if (!view_.IsNull()) return;
 
@@ -561,8 +622,8 @@ public:
         createNavigationControlLabels();
         syncNavigationControlVisibility();
 
-        context_->UpdateCurrentViewer();
-        view_->Redraw();
+        updateCurrentViewer();
+        redraw();
     }
 
     std::optional<viewer::CameraState> cameraState() const {
@@ -610,7 +671,7 @@ public:
         camera->SetUp(gp_Dir{state.up.x, state.up.y, state.up.z});
         camera->OrthogonalizeUp();
         camera->SetScale(state.scale);
-        view_->Redraw();
+        redraw();
         syncNavigationControlVisibility();
         return true;
     }
@@ -635,7 +696,7 @@ public:
         ensureInitialized();
         if (view_.IsNull()) return;
         view_->FitAll(0.05, false);
-        view_->Redraw();
+        redraw();
     }
 
     struct NavigationControl final {
@@ -971,7 +1032,7 @@ public:
 
         static_cast<void>(
             navigation_animation_->UpdateTimer());
-        view_->Redraw();
+        redraw();
 
         if (!navigation_animation_->IsStopped()) {
             return;
@@ -987,7 +1048,7 @@ public:
 
         if (navigation_animation_fit_all_) {
             view_->FitAll(0.05, false);
-            view_->Redraw();
+            redraw();
         }
 
         syncNavigationControlVisibility();
@@ -1003,6 +1064,15 @@ public:
 
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) return false;
+
+        // SR-02: ReferenceScene uses stable runtime tokens. Rebuilding an
+        // identical scene only removes/recreates the same objects and forces
+        // another synchronous provider flush.
+        if (sameReferenceScene(
+                scene,
+                reference_scene_)) {
+            return true;
+        }
 
         clearReferenceScene();
 
@@ -1032,8 +1102,8 @@ public:
             }
 
             applySelectionStyles();
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             reference_scene_ = scene;
             return true;
         } catch (...) {
@@ -1051,6 +1121,34 @@ public:
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) {
             return false;
+        }
+
+        // Empty -> empty is an exact no-op only when no Sketch transient
+        // state remains for this setter to clear as part of scene replace.
+        const bool requested_empty =
+            scene.lines.empty() &&
+            scene.curves.empty() &&
+            !scene.origin;
+        const bool installed_empty =
+            sketch_scene_.lines.empty() &&
+            sketch_scene_.curves.empty() &&
+            !sketch_scene_.origin;
+        const bool transients_empty =
+            sketch_grip_scene_.grips.empty() &&
+            sketch_measure_marker_scene_.empty() &&
+            sketch_measure_cue_scene_.empty() &&
+            sketch_snap_inference_scene_.empty() &&
+            !sketch_dynamic_input_overlay_ &&
+            !sketch_interaction_presentation_.
+                 hovered_entity &&
+            !sketch_interaction_presentation_.
+                 hovered_grip &&
+            !sketch_interaction_presentation_.
+                 active_grip;
+        if (requested_empty &&
+            installed_empty &&
+            transients_empty) {
+            return true;
         }
 
         clearSketchMeasureMarkerScene();
@@ -1094,15 +1192,48 @@ public:
             }
 
             for (const auto& curve : scene.curves) {
-                for (std::size_t index = 1U;
-                     index < curve.points.size();
+                // SR-02: one semantic Circle/Arc currently arrives as an
+                // already-derived polyline. Present the exact same segment
+                // chain as one OCCT wire/AIS_Shape instead of one AIS_Line
+                // per segment. Picking still maps the parent interactive
+                // object to the same semantic presentation token.
+                BRepBuilderAPI_MakePolygon polygon;
+                const bool closed =
+                    curve.points.size() > 2U &&
+                    curve.points.front() ==
+                        curve.points.back();
+                const std::size_t point_count =
+                    closed
+                        ? curve.points.size() - 1U
+                        : curve.points.size();
+
+                for (std::size_t index = 0U;
+                     index < point_count;
                      ++index) {
-                    display_segment(
-                        curve.token,
-                        curve.points[index - 1U],
-                        curve.points[index],
-                        curve.construction);
+                    polygon.Add(
+                        toPoint(curve.points[index]));
                 }
+                if (closed) {
+                    polygon.Close();
+                }
+                if (!polygon.IsDone()) {
+                    clearSketchScene();
+                    return false;
+                }
+
+                Handle(AIS_Shape) object =
+                    new AIS_Shape(polygon.Wire());
+                if (object.IsNull()) {
+                    clearSketchScene();
+                    return false;
+                }
+
+                sketch_objects_.push_back(
+                    SketchObject{
+                        curve.token,
+                        object,
+                        curve.construction});
+                context_->Display(object, false);
             }
 
             if (scene.origin) {
@@ -1127,8 +1258,11 @@ public:
 
             sketch_scene_ = scene;
             applySelectionStyles();
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            // SR-02: as proven on both Sketch and Profile transient
+            // presentation, UpdateCurrentViewer() is already the
+            // synchronous provider update. Avoid forcing the same authored
+            // Sketch scene through an immediate second V3d_View::Redraw().
+            updateCurrentViewer();
             return true;
         } catch (...) {
             clearSketchScene();
@@ -1143,6 +1277,11 @@ public:
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) {
             return false;
+        }
+
+        if (scene.profiles.empty() &&
+            profile_scene_.profiles.empty()) {
+            return true;
         }
 
         clearProfileScene();
@@ -1173,8 +1312,8 @@ public:
 
             profile_scene_ = scene;
             applySelectionStyles();
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearProfileScene();
@@ -1191,13 +1330,22 @@ public:
             return false;
         }
 
+        if (!scene.region &&
+            !scene.emphasis_region &&
+            !profile_preview_scene_.region &&
+            !profile_preview_scene_.emphasis_region) {
+            return true;
+        }
+
         clearProfilePreviewScene();
 
         if (!scene.region &&
             !scene.emphasis_region) {
             profile_preview_scene_ = scene;
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            // SR-02: UpdateCurrentViewer() is the synchronous provider
+            // update for this changed runtime preview; do not immediately
+            // redraw the same cleared scene a second time.
+            updateCurrentViewer();
             return true;
         }
 
@@ -1279,8 +1427,9 @@ public:
             }
 
             profile_preview_scene_ = scene;
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            // Same proven rule as Sketch preview: one synchronous
+            // UpdateCurrentViewer() per changed runtime Profile preview.
+            updateCurrentViewer();
             return true;
         } catch (...) {
             clearProfilePreviewScene();
@@ -1295,6 +1444,11 @@ public:
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) {
             return false;
+        }
+
+        if (scene.lines.empty() &&
+            sketch_preview_scene_.lines.empty()) {
+            return true;
         }
 
         clearSketchPreviewScene();
@@ -1337,8 +1491,10 @@ public:
             }
 
             sketch_preview_scene_ = scene;
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            // SR-02: UpdateCurrentViewer() already performs the synchronous
+            // viewer update for this changed preview. Do not immediately
+            // force a second V3d_View::Redraw() for the same logical sample.
+            updateCurrentViewer();
             return true;
         } catch (...) {
             clearSketchPreviewScene();
@@ -1353,6 +1509,11 @@ public:
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) {
             return false;
+        }
+
+        if (scene.grips.empty() &&
+            sketch_grip_scene_.grips.empty()) {
+            return true;
         }
 
         clearSketchGripScene();
@@ -1379,8 +1540,8 @@ public:
 
             sketch_grip_scene_ = scene;
             applySketchInteractionStyles();
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearSketchGripScene();
@@ -1392,15 +1553,24 @@ public:
         const viewer::SketchInteractionPresentation& presentation) {
         if (!presentation.valid()) return false;
 
+        if (!presentation.hovered_entity &&
+            !presentation.hovered_grip &&
+            !presentation.active_grip &&
+            !sketch_interaction_presentation_.hovered_entity &&
+            !sketch_interaction_presentation_.hovered_grip &&
+            !sketch_interaction_presentation_.active_grip) {
+            return true;
+        }
+
         sketch_interaction_presentation_ =
             presentation;
         if (!context_.IsNull()) {
             applySelectionStyles();
             applySketchInteractionStyles();
-            context_->UpdateCurrentViewer();
+            updateCurrentViewer();
         }
         if (!view_.IsNull()) {
-            view_->Redraw();
+            redraw();
         }
         return true;
     }
@@ -1491,6 +1661,11 @@ public:
             return false;
         }
 
+        if (scene.empty() &&
+            sketch_measure_marker_scene_.empty()) {
+            return true;
+        }
+
         clearSketchMeasureMarkerScene();
         ensureSketchMeasureMarkerAspects();
 
@@ -1530,8 +1705,8 @@ public:
             }
 
             sketch_measure_marker_scene_ = scene;
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearSketchMeasureMarkerScene();
@@ -1634,8 +1809,8 @@ public:
         }
 
         if (changed) {
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
         }
         return true;
     }
@@ -1704,6 +1879,11 @@ public:
             return false;
         }
 
+        if (scene.empty() &&
+            sketch_measure_cue_scene_.empty()) {
+            return true;
+        }
+
         clearSketchMeasureCueScene();
 
         try {
@@ -1758,8 +1938,8 @@ public:
             }
 
             applySelectionStyles();
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearSketchMeasureCueScene();
@@ -1771,12 +1951,19 @@ public:
         const viewer::PresentationSelection& selection) {
         if (!selection.valid()) return false;
 
+        if (selection.selected.empty() &&
+            !selection.primary &&
+            selection_.selected.empty() &&
+            !selection_.primary) {
+            return true;
+        }
+
         selection_ = selection;
         if (!context_.IsNull()) {
             applySelectionStyles();
-            context_->UpdateCurrentViewer();
+            updateCurrentViewer();
         }
-        if (!view_.IsNull()) view_->Redraw();
+        if (!view_.IsNull()) redraw();
         return true;
     }
 
@@ -1871,6 +2058,7 @@ public:
     querySketchPresentations(
         const viewer::ViewportRect2& rectangle,
         viewer::SketchRectangleSelectionRule rule) {
+        ++runtime_diagnostics_.sketch_rectangle_queries;
         if (!rectangle.valid()) {
             return {};
         }
@@ -1906,36 +2094,45 @@ public:
             sketch_scene_.lines.size() +
             sketch_scene_.curves.size());
 
+        // SR-02: keep semantic/result order in the vector, but use a
+        // runtime-only token -> vector-index lookup so repeated curve
+        // segments do not linearly rescan all prior semantic tokens.
+        std::unordered_map<std::uint64_t, std::size_t>
+            semantic_index;
+        semantic_index.reserve(
+            sketch_scene_.lines.size() +
+            sketch_scene_.curves.size());
+
         const auto accumulate_segment =
             [&](viewer::PresentationToken token,
                 const viewer::Point3& start_point,
                 const viewer::Point3& end_point) {
+                ++runtime_diagnostics_.sketch_rectangle_segments;
                 const auto start =
                     projectToScreen(start_point);
                 const auto end =
                     projectToScreen(end_point);
                 if (!start || !end) return false;
 
-                auto found = std::find_if(
-                    semantic.begin(),
-                    semantic.end(),
-                    [token](
-                        const SemanticHitState& state) {
-                        return state.token == token;
-                    });
-                if (found == semantic.end()) {
+                ++runtime_diagnostics_.
+                    sketch_rectangle_token_lookups;
+                const auto [index_it, inserted] =
+                    semantic_index.try_emplace(
+                        token.value,
+                        semantic.size());
+                if (inserted) {
                     semantic.push_back(
                         {token, true, false});
-                    found = std::prev(
-                        semantic.end());
                 }
 
-                found->all_inside =
-                    found->all_inside &&
+                auto& state =
+                    semantic[index_it->second];
+                state.all_inside =
+                    state.all_inside &&
                     screen_rect.contains(*start) &&
                     screen_rect.contains(*end);
-                found->any_intersection =
-                    found->any_intersection ||
+                state.any_intersection =
+                    state.any_intersection ||
                     segmentIntersectsRect(
                         *start,
                         *end,
@@ -2063,7 +2260,7 @@ public:
                 false);
         }
 
-        context_->UpdateCurrentViewer();
+        updateCurrentViewer();
         return true;
     }
 
@@ -2078,7 +2275,7 @@ public:
             selection_rubber_band_,
             false);
         selection_rubber_band_visible_ = false;
-        context_->UpdateCurrentViewer();
+        updateCurrentViewer();
     }
 
     bool setSketchSnapInferenceScene(
@@ -2090,6 +2287,14 @@ public:
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) {
             return false;
+        }
+
+        // SR-02: this setter is called after every logical Sketch pointer
+        // sample, including cases where no snap/inference overlay changed.
+        // Preserve synchronous validation/failure semantics but avoid
+        // rebuilding and flushing an identical runtime-only scene.
+        if (scene == sketch_snap_inference_scene_) {
+            return true;
         }
 
         clearSketchSnapInferenceScene();
@@ -2250,8 +2455,8 @@ public:
             }
 
             sketch_snap_inference_scene_ = scene;
-            context_->UpdateCurrentViewer();
-            view_->Redraw();
+            updateCurrentViewer();
+            redraw();
             return true;
         } catch (...) {
             clearSketchSnapInferenceScene();
@@ -2465,7 +2670,7 @@ public:
                 overlay;
             // One provider update per pointer sample. Reusing labels avoids
             // remove/create churn and the previous double redraw flicker.
-            context_->UpdateCurrentViewer();
+            updateCurrentViewer();
             return true;
         } catch (...) {
             clearSketchDynamicInputOverlay();
@@ -2498,7 +2703,7 @@ public:
         sketch_dynamic_input_overlay_.reset();
 
         if (!context_.IsNull()) {
-            context_->UpdateCurrentViewer();
+            updateCurrentViewer();
         }
     }
 
@@ -2528,7 +2733,7 @@ public:
             // Spatial tool callbacks may synchronously rebuild presentation.
             // Drop stale provider detection before entering that route.
             context_->ClearDetected(false);
-            context_->UpdateCurrentViewer();
+            updateCurrentViewer();
         }
     }
 
@@ -2680,7 +2885,7 @@ public:
         // highlight into Sketch hover presentation. Sketch hover is owned
         // by the semantic spatial-input path and is restyled explicitly.
         context_->ClearDetected(false);
-        context_->UpdateCurrentViewer();
+        updateCurrentViewer();
         return false;
     }
 
@@ -2839,7 +3044,7 @@ public:
         ensureInitialized();
         if (view_.IsNull() || !std::isfinite(factor) || factor <= 0.0) return;
         view_->SetZoom(factor, true);
-        view_->Redraw();
+        redraw();
     }
 
     void panByPixels(int delta_x, int delta_y) {
@@ -2852,7 +3057,7 @@ public:
         const auto dy = view_->Convert(
             static_cast<int>(std::lround(delta_y * dpr)));
         view_->Panning(-dx, dy, 1.0, true);
-        view_->Redraw();
+        redraw();
     }
 
     void orbitByScreenAngles(const detail::OrbitScreenAngles& angles) {
@@ -2865,7 +3070,7 @@ public:
         }
 
         view_->Rotate(angles.x, angles.y, angles.z, true);
-        view_->Redraw();
+        redraw();
         syncNavigationControlVisibility();
     }
 
@@ -3648,13 +3853,54 @@ public:
                                   ? 3.2
                                   : (hovered ? 3.0 : 2.0)));
 
-            entry.object->Attributes()->SetLineAspect(
-                new Prs3d_LineAspect(
+            const auto line_type =
+                entry.construction
+                    ? Aspect_TOL_DASH
+                    : Aspect_TOL_SOLID;
+
+            // AIS_Line consumes LineAspect, while the SR-02 aggregated
+            // Circle/Arc AIS_Shape wire consumes Wire/Boundary aspects.
+            // Without the shape-specific aspects OCCT falls back to its
+            // native wire color (red on the supported Windows stack).
+            // Keep one semantic style policy across both provider objects.
+            const Handle(AIS_Shape) shape =
+                Handle(AIS_Shape)::DownCast(
+                    entry.object);
+            if (!shape.IsNull()) {
+                context_->SetColor(
+                    entry.object,
                     color,
-                    entry.construction
-                        ? Aspect_TOL_DASH
-                        : Aspect_TOL_SOLID,
-                    width));
+                    false);
+                context_->SetWidth(
+                    entry.object,
+                    width,
+                    false);
+            }
+
+            const auto make_line_aspect =
+                [&]() {
+                    return occ::handle<Prs3d_LineAspect>{
+                        new Prs3d_LineAspect(
+                            color,
+                            line_type,
+                            width)};
+                };
+
+            entry.object->Attributes()->SetLineAspect(
+                make_line_aspect());
+
+            if (!shape.IsNull()) {
+                entry.object->Attributes()->SetWireAspect(
+                    make_line_aspect());
+                entry.object->Attributes()->
+                    SetFreeBoundaryAspect(
+                        make_line_aspect());
+                entry.object->Attributes()->
+                    SetUnFreeBoundaryAspect(
+                        make_line_aspect());
+                ++runtime_diagnostics_.
+                    sketch_wire_style_applications;
+            }
 
             // Construction cadence is a provider presentation style, not
             // authored/tessellated geometry. Preserve DASH through all
@@ -3896,11 +4142,13 @@ public:
         view_->MustBeResized();
         applySketchInteractionStyles();
         applySketchSnapInferenceStyles();
-        view_->Redraw();
+        redraw();
     }
 
     void redraw() {
-        if (!view_.IsNull()) view_->Redraw();
+        if (view_.IsNull()) return;
+        ++runtime_diagnostics_.redraw_calls;
+        view_->Redraw();
     }
 
     void beginMiddleDrag(int x, int y, bool orbit) noexcept {
@@ -3955,11 +4203,12 @@ public:
 
         view_->StartZoomAtPoint(x, y);
         view_->ZoomAtPoint(x, y, x + dx, y + dy);
-        view_->Redraw();
+        redraw();
     }
 
 private:
     QtOcctViewerWidget& owner_;
+    QtOcctRuntimeDiagnostics runtime_diagnostics_;
     bool middle_dragging_{};
     bool middle_orbit_{};
     int last_mouse_x_{};
@@ -4071,6 +4320,19 @@ QtOcctViewerWidget::QtOcctViewerWidget(QWidget* parent)
 }
 
 QtOcctViewerWidget::~QtOcctViewerWidget() = default;
+
+void QtOcctViewerWidget::resetRuntimeDiagnostics() noexcept {
+    if (impl_) {
+        impl_->resetRuntimeDiagnostics();
+    }
+}
+
+QtOcctRuntimeDiagnostics
+QtOcctViewerWidget::runtimeDiagnostics() const noexcept {
+    return impl_
+        ? impl_->runtimeDiagnostics()
+        : QtOcctRuntimeDiagnostics{};
+}
 
 std::optional<viewer::CameraState> QtOcctViewerWidget::cameraState() const {
     return guardedCameraState(

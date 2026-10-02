@@ -1,6 +1,6 @@
 version: 1
 status: completed
-active_work: "work/SR-01_INTERACTION_CORRECTNESS_PROFILE_UX.md"
+active_work: "work/SR-02_SKETCH_INTERACTION_PRESENTATION_LATENCY.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
 program_roadmap_version: "1.9"
@@ -19,13 +19,20 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - SR-01 is complete; no production CAD Work Contract is active
-  - prepare the separate measurement-first SR-02 Sketch Interaction & Presentation Latency Work Contract for explicit Owner review and acceptance
-  - do not begin SR-02 production implementation until its synchronized activation candidate passes repository work/governance verification
-  - keep SR-03 responsive-shell work inactive until a separate Owner-accepted Work Contract
+  - SR-02 is complete; no production CAD Work Contract is active
+  - prepare the separate SR-03 Responsive Workbench Shell Work Contract for explicit Owner review and acceptance
+  - do not begin SR-03 production implementation until its synchronized activation candidate passes repository work/governance verification
   - keep Split, Join, authored constraints/solver/dimensions, projected/reference geometry, ordinary Select RMB context, Axis/Centerline semantics, Part Feature Tree and solid modeling inactive
-  - after SR-02 and SR-03 complete, perform the Sketcher profile-authoring readiness re-test before any Part Feature Tree architecture gate
+  - after SR-03 completes, perform the Sketcher profile-authoring readiness re-test before any Part Feature Tree architecture gate
 notes:
+  - SR-02 completed on 2026-10-02. Exact final runtime/manual candidate 9b42fe2065e34801875b9fc45cd13820a784b55f passed Windows FULL #1169 with core-only 16/16, desktop 83/83, native curve-style regression PASS, SR02_BENCHMARK_PASS and final windows-msvc PASS.
+  - Owner manual Windows verification passed on the same exact candidate after confirming the large drawing/interaction responsiveness improvement, fast/unobtrusive Finish Sketch behavior and corrected Circle/Arc Regular/Construction presentation.
+  - Final durable before/after evidence is recorded in work/SR-02_FINAL_RESULTS.md; remaining scale risks are documented rather than hidden.
+  - This closeout candidate is work-only. SR-03 remains inactive and requires a separate Owner-accepted Responsive Workbench Shell Work Contract before production implementation.
+  - Owner explicitly accepted the audit-amended SR-02 Sketch Interaction & Presentation Latency Work Contract on 2026-10-02.
+  - The accepted amendment makes optimization order evidence-driven and adds complete event-to-visible measurement, total region-analysis accounting across Profile hover, one-resolver transform-preview evidence, deterministic fast token accumulation, complete cache-key invalidation and redraw-completion/failure-reporting requirements.
+  - Static pre-activation findings include 12,497,500 token comparisons for one 5,000-distinct-Line rectangle-query accumulation pass in the current vector/find_if implementation, repeated analyzeRegions work reachable through applyProfileAreaEdit despite the outer Profile cache, and duplicate pointer resolution in current common-transform preview. These are investigation baselines, not timing claims.
+  - Production performance changes remain forbidden until this synchronized activation candidate passes work/governance verification.
   - SR-01 completed on 2026-10-02. Exact runtime/manual candidate 92d096c396ba0d3ba144d0626c8e96aa667b01af passed Windows FULL #1128 with core-only 16/16, desktop 83/83, warm FULL parity/comparative timing evidence and final windows-msvc PASS.
   - Owner manual Windows verification passed on the same exact runtime candidate 92d096c396ba0d3ba144d0626c8e96aa667b01af and confirmed the accepted generic Delete / explicit Delete Profile behavior works as intended.
   - This closeout candidate is work-only. SR-02 remains inactive and requires a separate measurement-first Owner-accepted Work Contract before production implementation.

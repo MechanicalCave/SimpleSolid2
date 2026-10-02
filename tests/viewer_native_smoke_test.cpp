@@ -65,6 +65,16 @@ int main(int argc, char* argv[]) {
 
             bool ok = scene.valid();
             ok = ok && widget.setReferenceScene(scene);
+
+            widget.resetRuntimeDiagnostics();
+            ok = ok && widget.setReferenceScene(scene);
+            const auto same_reference_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 same_reference_metrics.
+                         update_current_viewer_calls == 0U &&
+                 same_reference_metrics.redraw_calls == 0U;
+
             ok = ok && widget.setStandardView(
                            viewer::StandardView::isometric);
             ok = ok && widget.setProjection(
@@ -94,10 +104,17 @@ int main(int argc, char* argv[]) {
                     {100.0, 5.0, 0.0},
                     true},
             };
+            widget.resetRuntimeDiagnostics();
             ok = ok &&
                  construction_scene.valid() &&
                  widget.setSketchScene(
                      construction_scene);
+            const auto changed_sketch_scene_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 changed_sketch_scene_metrics.
+                         update_current_viewer_calls == 1U &&
+                 changed_sketch_scene_metrics.redraw_calls == 0U;
 
             viewer::SketchPreviewScene
                 construction_preview;
@@ -107,13 +124,28 @@ int main(int argc, char* argv[]) {
                     {100.0, 10.0, 0.0},
                     true},
             };
+            widget.resetRuntimeDiagnostics();
             ok = ok &&
                  construction_preview.valid() &&
                  widget.setSketchPreviewScene(
                      construction_preview);
+            const auto changed_preview_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 changed_preview_metrics.
+                         update_current_viewer_calls == 1U &&
+                 changed_preview_metrics.redraw_calls == 0U;
+
+            widget.resetRuntimeDiagnostics();
             ok = ok &&
                  widget.setSketchPreviewScene(
                      viewer::SketchPreviewScene{});
+            const auto cleared_preview_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 cleared_preview_metrics.
+                         update_current_viewer_calls == 1U &&
+                 cleared_preview_metrics.redraw_calls == 0U;
 
             // R11 snap/OTRACK presentation is a real provider overlay:
             // one transient current marker/label plus up to two acquired
@@ -155,6 +187,20 @@ int main(int argc, char* argv[]) {
                  widget.setSketchSnapInferenceScene(
                      snap_scene);
 
+            // SR-02: an identical runtime-only snap/inference scene is an
+            // exact provider no-op. It must not create another OCCT viewer
+            // update/redraw pair.
+            widget.resetRuntimeDiagnostics();
+            ok = ok &&
+                 widget.setSketchSnapInferenceScene(
+                     snap_scene);
+            const auto same_snap_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 same_snap_metrics.
+                         update_current_viewer_calls == 0U &&
+                 same_snap_metrics.redraw_calls == 0U;
+
             snap_scene.current =
                 viewer::SketchSnapMarkerPresentation{
                     {28.0, 16.0, 0.0},
@@ -176,13 +222,60 @@ int main(int argc, char* argv[]) {
                     additional_direction;
             snap_scene.guides[0].direction =
                 {1.0, 1.0, 0.0};
+            widget.resetRuntimeDiagnostics();
             ok = ok &&
                  widget.setSketchSnapInferenceScene(
                      snap_scene);
+            const auto changed_snap_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 changed_snap_metrics.
+                         update_current_viewer_calls == 1U &&
+                 changed_snap_metrics.redraw_calls == 1U;
+
             ok = ok &&
                  widget.setSketchSnapInferenceScene(
                      viewer::
                          SketchSnapInferenceScene{});
+            widget.resetRuntimeDiagnostics();
+            ok = ok &&
+                 widget.setSketchSnapInferenceScene(
+                     viewer::
+                         SketchSnapInferenceScene{});
+            const auto empty_snap_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 empty_snap_metrics.
+                         update_current_viewer_calls == 0U &&
+                 empty_snap_metrics.redraw_calls == 0U;
+
+            // SR-02 Finish Sketch teardown repeatedly requests empty
+            // runtime-only scenes that may already be empty. These exact
+            // no-ops must not create provider flushes.
+            widget.resetRuntimeDiagnostics();
+            ok = ok &&
+                 widget.setSketchPreviewScene(
+                     viewer::SketchPreviewScene{}) &&
+                 widget.setSketchGripScene(
+                     viewer::SketchGripScene{}) &&
+                 widget.setSketchInteractionPresentation(
+                     viewer::SketchInteractionPresentation{}) &&
+                 widget.setSketchMeasureMarkerScene(
+                     viewer::SketchMeasureMarkerScene{}) &&
+                 widget.setSketchMeasureCueScene(
+                     viewer::SketchMeasureCueScene{}) &&
+                 widget.setProfilePreviewScene(
+                     viewer::ProfilePreviewScene{}) &&
+                 widget.setPresentationSelection(
+                     viewer::PresentationSelection{}) &&
+                 widget.setProfileScene(
+                     viewer::ProfileScene{});
+            const auto empty_runtime_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 empty_runtime_metrics.
+                         update_current_viewer_calls == 0U &&
+                 empty_runtime_metrics.redraw_calls == 0U;
 
             viewer::SketchDynamicInputOverlay dyn_overlay{
                 viewer::ViewportPoint2{
@@ -219,6 +312,22 @@ int main(int argc, char* argv[]) {
                  widget.setSketchDynamicInputOverlay(
                      dyn_overlay);
             widget.clearSketchDynamicInputOverlay();
+
+            // Empty authored Sketch replacement still clears a real scene
+            // once, then a repeated empty request is an exact no-op.
+            ok = ok &&
+                 widget.setSketchScene(
+                     viewer::SketchScene{});
+            widget.resetRuntimeDiagnostics();
+            ok = ok &&
+                 widget.setSketchScene(
+                     viewer::SketchScene{});
+            const auto empty_sketch_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 empty_sketch_metrics.
+                         update_current_viewer_calls == 0U &&
+                 empty_sketch_metrics.redraw_calls == 0U;
 
             result = ok ? EXIT_SUCCESS : EXIT_FAILURE;
             widget.close();

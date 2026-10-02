@@ -436,6 +436,7 @@ bool PartSketchInteractionController::setProfileAreaMode(
     profile_session_->area_mode = mode;
     profile_session_->hovered_region.reset();
     profile_session_->hover_result.reset();
+    profile_session_->hover_reuse_key.reset();
     notifyStateChanged();
     return true;
 }
@@ -3862,7 +3863,8 @@ resetProfileRuntime() noexcept {
 bool PartSketchInteractionController::
 ensureProfileAnalysis() {
     if (!profile_session_ ||
-        session_ == nullptr) {
+        session_ == nullptr ||
+        !sketch_id_) {
         return false;
     }
 
@@ -3871,27 +3873,56 @@ ensureProfileAnalysis() {
         return false;
     }
 
-    const auto current_state =
-        hosted->model.state();
+    const auto document_id =
+        session_->documentId();
+    const auto current_revision =
+        session_->document().revision();
+
     if (profile_analysis_cache_ &&
-        profile_analysis_cache_->model_state ==
+        profile_analysis_cache_->document_id ==
+            document_id &&
+        profile_analysis_cache_->sketch_id ==
+            *sketch_id_) {
+        if (profile_analysis_cache_->
+                observed_revision ==
+            current_revision) {
+            return true;
+        }
+
+        // SR-02: only pay for a full Sketch state copy after some authored
+        // Document revision actually changed. If the active Sketch itself
+        // is unchanged, keep the existing topology analysis and preserve
+        // the original Profile draft expected_revision so Finish remains
+        // fail-closed across unrelated authored edits.
+        const auto current_state =
+            hosted->model.state();
+        if (profile_analysis_cache_->model_state ==
             current_state) {
-        return true;
+            profile_analysis_cache_->
+                observed_revision =
+                current_revision;
+            return true;
+        }
     }
 
-    ProfileAnalysisCache rebuilt;
-    rebuilt.model_state = current_state;
-    rebuilt.analysis =
-        sketch::analyzeRegions(
-            hosted->model);
-    profile_analysis_cache_ =
-        std::move(rebuilt);
-    ++profile_analysis_build_count_;
+    const auto current_state =
+        hosted->model.state();
 
-    // The draft has now been evaluated against this exact authored
-    // document state; Finish must not silently commit over a later change.
+    profile_analysis_cache_ =
+        ProfileAnalysisCache{
+            document_id,
+            *sketch_id_,
+            current_revision,
+            current_state,
+            sketch::analyzeRegions(
+                hosted->model)};
+    ++profile_analysis_build_count_;
+    profile_session_->hover_reuse_key.reset();
+
+    // Preserve the established optimistic-concurrency rule: only a real
+    // active-Sketch state change rebases the draft's expected revision.
     profile_session_->expected_revision =
-        session_->document().revision();
+        current_revision;
     return true;
 }
 
@@ -3902,18 +3933,26 @@ updateProfileHover(
         return;
     }
 
-    profile_session_->hovered_region.reset();
-    profile_session_->hover_result.reset();
+    const auto clear_hover =
+        [this] {
+            profile_session_->hovered_region.reset();
+            profile_session_->hover_result.reset();
+            profile_session_->hover_reuse_key.reset();
+        };
 
     if (!point.finite() ||
         !ensureProfileAnalysis()) {
+        clear_hover();
         notifyStateChanged();
         return;
     }
 
     const auto* hosted = activeSketch();
     if (hosted == nullptr ||
-        !profile_analysis_cache_) {
+        !profile_analysis_cache_ ||
+        session_ == nullptr ||
+        !sketch_id_) {
+        clear_hover();
         notifyStateChanged();
         return;
     }
@@ -3926,6 +3965,7 @@ updateProfileHover(
     if (pick.location !=
             sketch::RegionPointLocation::inside ||
         !pick.region_index) {
+        clear_hover();
         notifyStateChanged();
         return;
     }
@@ -3945,12 +3985,37 @@ updateProfileHover(
     if (found ==
         profile_analysis_cache_
             ->analysis.regions.end()) {
+        clear_hover();
+        notifyStateChanged();
+        return;
+    }
+
+    const ProfileHoverReuseKey reuse_key{
+        session_->documentId(),
+        *sketch_id_,
+        session_->document().revision(),
+        profile_session_->draft_intent,
+        *pick.region_index,
+        profile_session_->area_mode};
+
+    if (profile_session_->hover_reuse_key &&
+        *profile_session_->hover_reuse_key ==
+            reuse_key &&
+        profile_session_->hovered_region ==
+            *pick.region_index &&
+        profile_session_->hover_result) {
+        // Same semantic hover request: reuse the already-computed Part
+        // composition result instead of re-entering applyProfileAreaEdit(),
+        // which would repeat analyzeRegions() for an unchanged draft.
         notifyStateChanged();
         return;
     }
 
     profile_session_->hovered_region =
         *pick.region_index;
+    profile_session_->hover_result.reset();
+    profile_session_->hover_reuse_key =
+        reuse_key;
 
     if (!profile_session_->draft_intent) {
         if (profile_session_->area_mode ==
@@ -4065,6 +4130,7 @@ handleProfilePointer(
             profile_session_->draft_intent =
                 profile_session_->hover_result
                     ->region_intent;
+            profile_session_->hover_reuse_key.reset();
             notifyStateChanged();
             reportStatus(
                 "Profile draft updated. Use Finish Profile to commit.");
@@ -5131,14 +5197,14 @@ handleCommonTransformPointer(
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
         updateCommonTransformPreview(
-            input);
+            resolved);
         return;
     }
 
     if (input.phase ==
         viewer::SpatialPointerPhase::primary_press) {
         updateCommonTransformPreview(
-            input);
+            resolved);
         static_cast<void>(commitTransform());
     }
 }
@@ -5574,6 +5640,7 @@ PartSketchInteractionController::resolveTrackingInference(
 std::optional<sketch::ResolvedSketchInput>
 PartSketchInteractionController::resolvePointerInput(
     const SketchPointerInput& input) {
+    ++pointer_resolution_count_;
     common_tangent_candidate_.reset();
     tracking_inference_presentation_.reset();
 
@@ -6362,9 +6429,12 @@ updateDirectManipulationPreview(
 
 void PartSketchInteractionController::
 updateCommonTransformPreview(
-    const SketchPointerInput& input) {
-    const auto resolved =
-        resolvePointerInput(input);
+    const std::optional<
+        sketch::ResolvedSketchInput>& resolved) {
+    // SR-02: handleCommonTransformPointer already resolved this exact
+    // logical pointer event before stage dispatch. Reuse that semantic
+    // result so one preview event cannot mutate OSNAP/OTRACK runtime state
+    // twice or repeat the same nearby-query work.
     if (!resolved ||
         !interaction_.updateTransformPreview(
             *resolved)) {

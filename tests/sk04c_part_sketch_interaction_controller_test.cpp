@@ -6,6 +6,7 @@
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/measurement.hpp>
+#include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <QApplication>
 #include <QTreeWidget>
@@ -863,6 +864,22 @@ int main(int argc, char* argv[]) {
     CHECK(
         viewport.profile_preview_scene_
             .emphasis_region.has_value());
+
+    sketch::resetRegionAnalysisInvocationCount();
+    interaction.onPointer(pointer(
+        sketch_id,
+        viewer::SpatialPointerPhase::move,
+        303.0, 303.0,
+        102.0, 102.0));
+    CHECK(
+        sketch::regionAnalysisInvocationCount() ==
+        0U);
+    CHECK(
+        interaction.profileHoverStatus() ==
+        part::ProfileAreaEditStatus::changed);
+    CHECK(
+        interaction.profileHoverPreview()
+            ->holes.size() == 1U);
 
     interaction.onPointer(pointer(
         sketch_id,

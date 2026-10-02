@@ -11,6 +11,9 @@
 namespace simplesolid2::sketch {
 namespace {
 
+thread_local std::uint64_t
+    region_analysis_invocation_count{};
+
 constexpr double full_turn =
     2.0 * std::numbers::pi_v<double>;
 
@@ -3908,6 +3911,7 @@ composeRegionCellsImpl(
 
 RegionAnalysis2D analyzeRegions(
     const SketchModel& model) {
+    ++region_analysis_invocation_count;
     RegionAnalysis2D result;
     const auto ids =
         regularEntities(model);
@@ -4303,6 +4307,14 @@ RegionComposition2D composeRegionCells(
     return composeRegionCellsImpl(
         model,
         cells);
+}
+
+void resetRegionAnalysisInvocationCount() noexcept {
+    region_analysis_invocation_count = 0U;
+}
+
+std::uint64_t regionAnalysisInvocationCount() noexcept {
+    return region_analysis_invocation_count;
 }
 
 std::vector<std::uint32_t>

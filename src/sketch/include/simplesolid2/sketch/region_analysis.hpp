@@ -159,6 +159,15 @@ struct RegionPick2D final {
 [[nodiscard]] RegionAnalysis2D analyzeRegions(
     const SketchModel& model);
 
+// SR-02 runtime measurement hook. This counter is diagnostic only: it is
+// process/thread runtime state, is never persisted and has no semantic
+// authority. It exists so the latency benchmark can observe all region
+// analysis calls, including calls reached indirectly through Part Profile
+// helpers.
+void resetRegionAnalysisInvocationCount() noexcept;
+[[nodiscard]] std::uint64_t
+regionAnalysisInvocationCount() noexcept;
+
 // Validates one explicit provider-neutral connected region boundary against
 // current evaluated Sketch geometry. Boundary parameters are runtime values;
 // durable identity remains the semantic anchors carried by each use.

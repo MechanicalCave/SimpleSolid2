@@ -308,6 +308,16 @@ public:
         return profile_analysis_build_count_;
     }
 
+    // SR-02 runtime-only measurement. Counts entry into the complete
+    // controller pointer resolver, not lower-level semantic helper calls.
+    void resetLatencyDiagnostics() noexcept {
+        pointer_resolution_count_ = 0U;
+    }
+    [[nodiscard]] std::size_t
+    pointerResolutionCount() const noexcept {
+        return pointer_resolution_count_;
+    }
+
     [[nodiscard]] bool activateProfileCreate();
     [[nodiscard]] bool activateProfileEdit(
         part::ProfileId profile_id);
@@ -439,7 +449,8 @@ private:
     void updateDirectManipulationPreview(
         const SketchPointerInput& input);
     void updateCommonTransformPreview(
-        const SketchPointerInput& input);
+        const std::optional<
+            sketch::ResolvedSketchInput>& resolved);
     [[nodiscard]] application::DocumentSessionResult
     executeGeometryUpdate(
         const sketch::SketchTransformGeometry& geometry,
@@ -543,6 +554,21 @@ private:
     application::PolarCaptureState
         polar_capture_;
 
+    struct ProfileHoverReuseKey final {
+        core::DocumentId document_id;
+        sketch::SketchId sketch_id;
+        core::DocumentRevision document_revision;
+        std::optional<part::ProfileRegionIntent>
+            draft_intent;
+        std::uint32_t region_index{};
+        part::ProfileAreaEditMode area_mode{
+            part::ProfileAreaEditMode::add_area};
+
+        friend bool operator==(
+            const ProfileHoverReuseKey&,
+            const ProfileHoverReuseKey&) = default;
+    };
+
     struct ProfileToolSession final {
         ProfileToolSessionKind kind{
             ProfileToolSessionKind::create};
@@ -557,9 +583,14 @@ private:
         std::optional<part::ProfileAreaEditResult>
             hover_result;
         core::DocumentRevision expected_revision;
+        std::optional<ProfileHoverReuseKey>
+            hover_reuse_key;
     };
 
     struct ProfileAnalysisCache final {
+        core::DocumentId document_id;
+        sketch::SketchId sketch_id;
+        core::DocumentRevision observed_revision;
         sketch::SketchModelState model_state;
         sketch::RegionAnalysis2D analysis;
     };
@@ -569,6 +600,7 @@ private:
     std::optional<ProfileAnalysisCache>
         profile_analysis_cache_;
     std::size_t profile_analysis_build_count_{};
+    std::size_t pointer_resolution_count_{};
     std::optional<part::ProfileId>
         selected_profile_id_;
 
