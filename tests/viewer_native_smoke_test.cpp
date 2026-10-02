@@ -104,10 +104,17 @@ int main(int argc, char* argv[]) {
                     {100.0, 5.0, 0.0},
                     true},
             };
+            widget.resetRuntimeDiagnostics();
             ok = ok &&
                  construction_scene.valid() &&
                  widget.setSketchScene(
                      construction_scene);
+            const auto changed_sketch_scene_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 changed_sketch_scene_metrics.
+                         update_current_viewer_calls == 1U &&
+                 changed_sketch_scene_metrics.redraw_calls == 0U;
 
             viewer::SketchPreviewScene
                 construction_preview;
