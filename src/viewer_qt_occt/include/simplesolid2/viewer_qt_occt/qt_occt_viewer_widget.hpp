@@ -22,6 +22,7 @@ namespace simplesolid2::viewer_qt_occt {
 struct QtOcctRuntimeDiagnostics final {
     std::size_t update_current_viewer_calls{};
     std::size_t redraw_calls{};
+    std::size_t sketch_native_objects_current{};
     std::size_t sketch_rectangle_queries{};
     std::size_t sketch_rectangle_segments{};
     std::uint64_t sketch_rectangle_token_lookups{};
