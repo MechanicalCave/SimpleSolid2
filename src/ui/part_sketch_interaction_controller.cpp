@@ -3908,16 +3908,14 @@ ensureProfileAnalysis() {
     const auto current_state =
         hosted->model.state();
 
-    ProfileAnalysisCache rebuilt;
-    rebuilt.document_id = document_id;
-    rebuilt.sketch_id = *sketch_id_;
-    rebuilt.observed_revision = current_revision;
-    rebuilt.model_state = current_state;
-    rebuilt.analysis =
-        sketch::analyzeRegions(
-            hosted->model);
     profile_analysis_cache_ =
-        std::move(rebuilt);
+        ProfileAnalysisCache{
+            document_id,
+            *sketch_id_,
+            current_revision,
+            current_state,
+            sketch::analyzeRegions(
+                hosted->model)};
     ++profile_analysis_build_count_;
     profile_session_->hover_reuse_key.reset();
 
