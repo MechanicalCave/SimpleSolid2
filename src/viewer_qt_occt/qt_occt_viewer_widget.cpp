@@ -1258,8 +1258,11 @@ public:
 
             sketch_scene_ = scene;
             applySelectionStyles();
+            // SR-02: as proven on both Sketch and Profile transient
+            // presentation, UpdateCurrentViewer() is already the
+            // synchronous provider update. Avoid forcing the same authored
+            // Sketch scene through an immediate second V3d_View::Redraw().
             updateCurrentViewer();
-            redraw();
             return true;
         } catch (...) {
             clearSketchScene();
