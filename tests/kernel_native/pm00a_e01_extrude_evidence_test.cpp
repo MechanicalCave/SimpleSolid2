@@ -63,6 +63,10 @@ struct SideKey final {
     std::string source_entity;
     bool hole{false};
 
+    friend bool operator==(
+        const SideKey&,
+        const SideKey&) = default;
+
     friend bool operator<(
         const SideKey& first,
         const SideKey& second) noexcept {
