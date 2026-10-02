@@ -2,8 +2,8 @@ version: 1
 status: completed
 active_work: "work/SR-03_RESPONSIVE_WORKBENCH_SHELL.md"
 foundation_version: "1.0"
-program_roadmap: "work/SKETCH_ROADMAP.md"
-program_roadmap_version: "1.9"
+program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
+program_roadmap_version: "1.0"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -19,12 +19,19 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - SR-03 is complete; no production CAD Work Contract is active
-  - perform the explicit Sketcher profile-authoring readiness re-test required by Roadmap v1.9
-  - treat the readiness re-test as an evidence checkpoint only; it does not activate Part Feature Tree or solid modeling
-  - keep Assembly/Drawing implementation, general docking framework, Split/Join, authored constraints/solver/dimensions, ordinary Select RMB context, Part Feature Tree and solid modeling inactive
-  - any Part Feature Tree architecture work still requires its own separate Owner-accepted architecture gate
+  - Part Modeling v1 Program Roadmap v1.0 is accepted and frozen; no production CAD Work Contract is active
+  - execute G0: the explicit Sketcher profile-authoring readiness re-test using work/SKETCH_ROADMAP.md v1.9 as the readiness-criteria authority
+  - if G0 fails, record bounded findings and close them through separately accepted stabilization work before repeating G0
+  - G0 PASS does not activate solid modeling; PM-00A Part Modeling Architecture Evidence Gate still requires its own Owner-accepted Work Contract and repository activation gate
+  - PM-00A must precede PM-00B Part Feature Architecture Freeze; PM-01 First Solid Vertical Slice may begin only after both gates pass
+  - keep Body/Feature persistence, Kernel solid operations, Part Feature Tree product implementation, Assembly/Drawing, multi-body and solid modeling inactive until their owning package is explicitly activated
 notes:
+  - Owner accepted and froze Part Modeling v1 Program Roadmap v1.0 on 2026-10-02, based on the Part Modeling v1 draft 0.1, architecture-audited draft 0.2 and the accepted evidence-first refinement.
+  - The program is durable sequencing/scope authority only, not blanket implementation authorization. Future PM packages require separate bounded Work Contracts.
+  - Program order is G0 readiness -> PM-00A architecture evidence -> PM-00B architecture freeze -> PM-01 first solid vertical slice -> PM-02 datum/Cut -> PM-03 face support/references/projection -> PM-04 Axis/datums/Revolve -> PM-05 Fillet/Chamfer -> PM-06 v1 completion.
+  - PM-00A must prove reference lineage, support frames, exact Profile-to-Kernel input, numerical/modeling semantics and cold rebuild before durable solid schema is frozen.
+  - The accepted program deliberately folds minimal Body/Feature infrastructure into PM-01's real Extrude Add vertical slice instead of authorizing a long speculative infrastructure-only phase.
+  - work/SKETCH_ROADMAP.md v1.9 remains authoritative for G0 readiness criteria and preserved Shared-2D/Sketch semantics.
   - SR-03 completed on 2026-10-02. Exact final runtime/manual candidate e96627ce1268e05f11a334d3d8f884dae854967e passed Windows FULL #1187 with exact checkout, docs freshness, complete desktop graph, core-only verification, selector checks and final windows-msvc PASS.
   - Owner manual Windows verification passed on 2026-10-02 on the same exact candidate e96627ce1268e05f11a334d3d8f884dae854967e.
   - Responsive shell delivery includes compact one-row Project information, unified ownership-preserving active-Document top row, approximately 150/270 px normal side-panel direction, center stretch priority, compact/narrow regimes, hysteresis and deliberate Tree/Panel recovery.
