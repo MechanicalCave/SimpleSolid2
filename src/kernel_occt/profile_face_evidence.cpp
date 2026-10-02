@@ -347,6 +347,18 @@ buildProfileFace(
     return count;
 }
 
+[[nodiscard]] std::size_t countShapeOrSubshapes(
+    const TopoDS_Shape& shape,
+    TopAbs_ShapeEnum kind) {
+    if (shape.IsNull()) {
+        return 0U;
+    }
+    if (shape.ShapeType() == kind) {
+        return 1U;
+    }
+    return countSubshapes(shape, kind);
+}
+
 [[nodiscard]] std::vector<TopoDS_Edge>
 matchingFaceEdges(
     const TopoDS_Face& face,
@@ -533,7 +545,7 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                 if (!generated.IsNull()) {
                     ++generated_shape_count;
                     face_count +=
-                        countSubshapes(
+                        countShapeOrSubshapes(
                             generated,
                             TopAbs_FACE);
                 }
@@ -578,7 +590,7 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                         << " generated_faces="
                         << (generated.IsNull()
                                 ? 0U
-                                : countSubshapes(
+                                : countShapeOrSubshapes(
                                       generated,
                                       TopAbs_FACE))
                         << " first_null="
@@ -639,7 +651,7 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
                         << " generated_faces="
                         << (generated.IsNull()
                                 ? 0U
-                                : countSubshapes(
+                                : countShapeOrSubshapes(
                                       generated,
                                       TopAbs_FACE))
                         << " first_null="
