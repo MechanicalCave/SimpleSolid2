@@ -382,18 +382,21 @@ Because PM-00A changes verification infrastructure and Kernel architecture seams
 
 ## Documentation impact
 
-Internal docs: required.
+Internal docs: required  
+User/Product docs: not required  
+Reason: PM-00A changes architecture evidence, Kernel/provider boundaries and repository verification topology without activating user-visible solid modeling.
 
-Expected topics:
+Internal documentation must cover, as delivered:
 
 - Kernel provider boundary;
-- build/test topology;
+- semantic/core versus kernel-native versus desktop build/test topology;
 - Part/reference architecture evidence;
+- cold-model-rebuild evidence;
 - numerical/modeling-semantics evidence.
 
-Product PL/EN docs: normally not required because PM-00A does not activate user-visible solid modeling. If an as-built user-visible behavior unexpectedly changes, STOP and reclassify scope before documenting it.
+If implementation would change user-visible product behavior, STOP and reclassify scope before proceeding.
 
-Generated Product Browser remains deterministic/current where canonical docs require regeneration.
+The deterministic Product Browser must remain current where canonical documentation changes require regeneration.
 
 ## 14. Deliverables
 
