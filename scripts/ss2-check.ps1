@@ -3,6 +3,7 @@ param(
     [string]$Config = "Debug",
     [string[]]$Target = @(),
     [string[]]$Test = @(),
+    [switch]$NoConfigure,
     [switch]$SelfTest
 )
 
@@ -77,14 +78,16 @@ $cmake = Get-SS2CMakeExe
 $root = Get-SS2Root
 
 $configure = Join-Path $PSScriptRoot "ss2-configure.ps1"
-& $configure -BuildDir $BuildDir
-if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+if (-not $NoConfigure) {
+    & $configure -BuildDir $BuildDir
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
 
 $build = Resolve-SS2BuildPath $BuildDir
 
 Write-Host "[check] targets=$($targets -join ',')"
 Write-Host "[check] tests=$($tests -join ',')"
-Write-Host "[check] build=$build config=$Config"
+Write-Host "[check] build=$build config=$Config noConfigure=$NoConfigure"
 
 $buildArgs = @("--build", $build, "--config", $Config, "--target") + $targets
 if ($env:SS2_BUILD_PARALLELISM) {

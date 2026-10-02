@@ -11,6 +11,8 @@ function Get-SS2FocusRequest {
 
     $targets = New-Object System.Collections.Generic.List[string]
     $tests = New-Object System.Collections.Generic.List[string]
+    $mode = "desktop"
+    $sawMode = $false
     $sawFocus = $false
     $invalid = $false
 
@@ -36,6 +38,18 @@ function Get-SS2FocusRequest {
             if (-not $tests.Contains($Matches[1])) {
                 $tests.Add($Matches[1])
             }
+            continue
+        }
+
+        if ($line -match '^SS2-Focus-Mode:') {
+            $sawFocus = $true
+            if ($sawMode -or
+                $line -notmatch '^SS2-Focus-Mode:\s*(desktop|kernel)\s*$') {
+                $invalid = $true
+                continue
+            }
+            $mode = $Matches[1]
+            $sawMode = $true
         }
     }
 
@@ -46,6 +60,7 @@ function Get-SS2FocusRequest {
 
     return [pscustomobject]@{
         State = $state
+        Mode = $mode
         Targets = @($targets)
         Tests = @($tests)
     }
@@ -62,16 +77,20 @@ function Assert-SS2FocusState {
 
 if ($SelfTest) {
     Assert-SS2FocusState "ordinary commit" "none"
+
     Assert-SS2FocusState @"
 change
 
 SS2-Focus-Target: e1_arc_numerical_stability_test
 SS2-Focus-Test: e1.arc_numerical_stability
+SS2-Focus-Mode: desktop
 "@ "valid"
+
     Assert-SS2FocusState @"
 SS2-Focus-Target:
 SS2-Focus-Test: e1.arc_numerical_stability
 "@ "invalid"
+
     Assert-SS2FocusState "SS2-Focus-Target: e1_arc_numerical_stability_test" "invalid"
 
     $dedupe = Get-SS2FocusRequest @"
@@ -84,17 +103,49 @@ SS2-Focus-Test: x.y
         throw "Focus parser self-test did not deduplicate values."
     }
 
+    $kernel = Get-SS2FocusRequest @"
+SS2-Focus-Target: pm00a_e01_extrude_evidence_test
+SS2-Focus-Test: pm00a.e01_extrude_evidence
+SS2-Focus-Mode: kernel
+"@
+    if ($kernel.State -ne "valid" -or $kernel.Mode -ne "kernel") {
+        throw "Kernel focus-mode parser self-test failed."
+    }
+
+    $defaultMode = Get-SS2FocusRequest @"
+SS2-Focus-Target: a
+SS2-Focus-Test: x.y
+"@
+    if ($defaultMode.Mode -ne "desktop") {
+        throw "Focused request default mode must remain desktop."
+    }
+
+    Assert-SS2FocusState @"
+SS2-Focus-Target: a
+SS2-Focus-Test: x.y
+SS2-Focus-Mode: invalid
+"@ "invalid"
+
+    Assert-SS2FocusState @"
+SS2-Focus-Target: a
+SS2-Focus-Test: x.y
+SS2-Focus-Mode: kernel
+SS2-Focus-Mode: desktop
+"@ "invalid"
+
     Write-Host "[focus] parser self-test passed"
     exit 0
 }
 
 $request = Get-SS2FocusRequest $CommitMessage
 Write-Host "[focus] state=$($request.State)"
+Write-Host "[focus] mode=$($request.Mode)"
 Write-Host "[focus] targets=$($request.Targets -join ',')"
 Write-Host "[focus] tests=$($request.Tests -join ',')"
 
 if (-not [string]::IsNullOrWhiteSpace($OutputPath)) {
     Add-Content -LiteralPath $OutputPath -Value "state=$($request.State)" -Encoding utf8
+    Add-Content -LiteralPath $OutputPath -Value "mode=$($request.Mode)" -Encoding utf8
     Add-Content -LiteralPath $OutputPath -Value "targets=$($request.Targets -join ',')" -Encoding utf8
     Add-Content -LiteralPath $OutputPath -Value "tests=$($request.Tests -join ',')" -Encoding utf8
 }

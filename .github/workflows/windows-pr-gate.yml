@@ -48,6 +48,7 @@ jobs:
       trusted_full_sha: ${{ steps.classify.outputs.trusted_full_sha }}
       diff_start_sha: ${{ steps.classify.outputs.diff_start_sha }}
       head_sha: ${{ steps.classify.outputs.head_sha }}
+      focus_mode: ${{ steps.focus.outputs.mode }}
       focus_targets: ${{ steps.focus.outputs.targets }}
       focus_tests: ${{ steps.focus.outputs.tests }}
       clean_full: ${{ steps.classify.outputs.clean_full }}
@@ -155,24 +156,46 @@ jobs:
           .\ss2.ps1 verify
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
-      - name: Prepare persistent desktop build tree
+      - name: Prepare persistent focused build tree
+        env:
+          FOCUS_MODE: ${{ needs.classify.outputs.focus_mode }}
         run: |
           $ErrorActionPreference = "Stop"
-          $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
-          .\scripts\ci\ss2-build-tree.ps1 -Action prepare -BuildDir $build -Mode desktop -Config Debug
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($env:FOCUS_MODE -eq "kernel") {
+              . .\scripts\ss2-common.ps1
+              Import-SS2LocalEnvironment
+              $cmake = Get-SS2CMakeExe
+              $build = Join-Path $env:SS2_CI_BUILD_ROOT "kernel-release"
+              .\scripts\ci\ss2-build-tree.ps1 -Action prepare -BuildDir $build -Mode kernel -Config Release
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              & $cmake -S . -B $build -DSS2_BUILD_DESKTOP=OFF -DSS2_BUILD_KERNEL_NATIVE=ON -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+              $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
+              .\scripts\ci\ss2-build-tree.ps1 -Action prepare -BuildDir $build -Mode desktop -Config Debug
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
       - name: Focused target build and exact tests
         env:
+          FOCUS_MODE: ${{ needs.classify.outputs.focus_mode }}
           FOCUS_TARGETS: ${{ needs.classify.outputs.focus_targets }}
           FOCUS_TESTS: ${{ needs.classify.outputs.focus_tests }}
         run: |
           $ErrorActionPreference = "Stop"
-          $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
-          .\ss2.ps1 check -BuildDir $build -Target $env:FOCUS_TARGETS -Test $env:FOCUS_TESTS
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          .\scripts\ci\ss2-build-tree.ps1 -Action record -BuildDir $build -Mode desktop -Config Debug
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ($env:FOCUS_MODE -eq "kernel") {
+              $build = Join-Path $env:SS2_CI_BUILD_ROOT "kernel-release"
+              .\ss2.ps1 check -BuildDir $build -Config Release -Target $env:FOCUS_TARGETS -Test $env:FOCUS_TESTS -NoConfigure
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              .\scripts\ci\ss2-build-tree.ps1 -Action record -BuildDir $build -Mode kernel -Config Release
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } else {
+              $build = Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug"
+              .\ss2.ps1 check -BuildDir $build -Target $env:FOCUS_TARGETS -Test $env:FOCUS_TESTS
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+              .\scripts\ci\ss2-build-tree.ps1 -Action record -BuildDir $build -Mode desktop -Config Debug
+              if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
 
   fast:
     name: windows-msvc-fast
