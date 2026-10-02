@@ -393,6 +393,22 @@ They also prove that provider history asymmetry is not identity authority: Modif
 
 **Next:** execute E02 multi-stage Extrude -> Cut -> Fillet-style lineage using the accepted E03/E04 split/merge semantics. E07 cold-rebuild matrix follows after E02.
 
+### E02 — multi-stage Extrude → Cut → Fillet-style lineage
+
+**Status:** COMPLETED — PASS  
+**Exact source candidate:** `953cdca42978916754f6ae6cc68d86352aad35ac`  
+**Kernel-focused:** #1285 — PASS  
+**Windows FULL:** #1286 — PASS  
+**False-Resolved:** 0
+
+See `work/PM-00A_E02_MULTISTAGE_LINEAGE_EVIDENCE.md`.
+
+E02 proves that producer/consumed stage participates in semantic reference meaning, that accepted lineage can remain Resolved across upstream rebuilds without provider-handle continuity, and that downstream geometric failure is separate from reference resolution.
+
+Provider Boolean/Fillet history remains transient evidence only. Geometry used to pick a concrete test edge inside an already Resolved semantic Cut-face context is probe plumbing, not persistent selector semantics.
+
+**Next:** execute E07 cold-rebuild parity across accumulated E01/E02/E03/E04/E05 stable and fail-closed cases.
+
 ## 8. Acceptance asymmetry
 
 Completion requires **zero false Resolved** results in the accepted PM-00A matrix.
