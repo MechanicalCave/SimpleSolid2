@@ -61,6 +61,11 @@ struct ExtrudeFaceEvidence final {
     std::size_t candidate_face_count{};
     std::optional<BoundaryUseProvenance> provenance;
 
+    // Evidence diagnostics only. These counts expose where provider lineage
+    // failed without becoming semantic identity or persistence.
+    std::size_t basis_edge_match_count{};
+    std::size_t generated_shape_count{};
+
     friend bool operator==(
         const ExtrudeFaceEvidence&,
         const ExtrudeFaceEvidence&) = default;
