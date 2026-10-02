@@ -188,7 +188,19 @@ The CI-03 focused command is:
 .\ss2.ps1 check -Target <cmake-target>[,<target>...] -Test <ctest-name>[,<test>...]
 ```
 
-It configures the normal development build, builds only the requested target set, verifies that every requested CTest name is registered, and executes an exact-name CTest selection. FOCUSED is intentionally independent of `tier-fast` labels so a direct regression can be exercised before a wider checkpoint.
+It configures the normal development build by default, builds only the requested target set, verifies that every requested CTest name is registered, and executes an exact-name CTest selection. `ss2-check.ps1 -NoConfigure` is reserved for a build tree that the caller already configured explicitly.
+
+PM-00A adds a kernel-native focused mode for draft iteration. A valid kernel request is expressed by HEAD commit trailers:
+
+```text
+SS2-Focus-Target: pm00a_e01_extrude_evidence_test
+SS2-Focus-Test: pm00a.e01_extrude_evidence
+SS2-Focus-Mode: kernel
+```
+
+`SS2-Focus-Mode` defaults to `desktop` when omitted. `kernel` selects the persistent `kernel-release` tree, configures `SS2_BUILD_KERNEL_NATIVE=ON`, keeps `SS2_BUILD_DESKTOP=OFF` and disables Qt package discovery. It then builds only the requested kernel target and executes only the exact requested CTest. This is iteration evidence only; the final runtime candidate still requires FULL.
+
+FOCUSED is intentionally independent of `tier-fast` labels so a direct regression can be exercised before a wider checkpoint.
 
 <!-- section-id: internal.build-test.ci -->
 ## Windows PR gate
@@ -201,8 +213,10 @@ For Package D and later verification-infrastructure changes, the FULL job config
 FOCUSED
   draft PR with ordinary runtime/test-content changes
   + valid HEAD commit trailers SS2-Focus-Target / SS2-Focus-Test
+  + optional SS2-Focus-Mode: desktop|kernel (default desktop)
   → exact checkout
   → machine-local setup + ss2 verify
+  → desktop-debug or kernel-release build tree according to focus mode
   → requested target build only
   → requested exact CTest names only
   → never trusted merge evidence
@@ -273,7 +287,7 @@ PM-00A A0 extends CI-04 build-tree compatibility fingerprints with a third `kern
 
 Regression verification metadata is fail-closed. Every desktop/core/kernel regression must have exactly one tier classification (`tier-fast` or `tier-full-only`) and at least one subsystem label. Tests outside the curated FAST list are classified `tier-full-only` automatically, so a newly registered test cannot silently fall outside tier metadata. The kernel-native registry additionally requires `subsystem-kernel`.
 
-CI-04 also corrected FOCUSED exact-test selection to use a CTest-compatible anchored regular expression. Focused requests still validate the registered CTest catalog before execution and remain iteration evidence only.
+CI-04 also corrected FOCUSED exact-test selection to use a CTest-compatible anchored regular expression. PM-00A extends FOCUSED with a `kernel` mode so OCCT-backed evidence probes can iterate against `kernel-release` instead of invoking the complete desktop/core/kernel FULL path for every diagnostic edit. Focused requests still validate the registered CTest catalog before execution and remain iteration evidence only.
 
 ### CI-04 timing evidence
 
