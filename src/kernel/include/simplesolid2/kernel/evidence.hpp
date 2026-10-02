@@ -123,6 +123,46 @@ struct ExtrudeEvidence final {
 };
 
 
+// PM-00A E06 full-Revolve evidence. Axis input remains evidence-only and
+// does not define durable Axis/Datum schema.
+struct RevolveBoundaryFaceEvidence final {
+    ReferenceStatus status{ReferenceStatus::unsupported};
+    std::size_t candidate_face_count{};
+    BoundaryUseProvenance provenance;
+    bool periodic_surface{false};
+    std::size_t seam_edge_count{};
+    double seam_total_length{};
+    std::optional<FaceGeometryDiagnostics>
+        geometry_diagnostics;
+
+    friend bool operator==(
+        const RevolveBoundaryFaceEvidence&,
+        const RevolveBoundaryFaceEvidence&) = default;
+};
+
+struct FullRevolveEvidence final {
+    ShapeEvidence shape;
+    std::vector<RevolveBoundaryFaceEvidence>
+        boundary_faces;
+
+    // A provider-created periodic seam has no semantic source/provenance
+    // under PM-00A and therefore cannot be promoted to Resolved.
+    ReferenceStatus periodic_seam_reference_status{
+        ReferenceStatus::unsupported};
+
+    std::size_t provider_seam_edge_count{};
+    double provider_seam_total_length{};
+
+    [[nodiscard]] bool ok() const noexcept {
+        return shape.ok() &&
+               shape.solid_count == 1U;
+    }
+
+    friend bool operator==(
+        const FullRevolveEvidence&,
+        const FullRevolveEvidence&) = default;
+};
+
 enum class EdgeSplitProbeScenario {
     middle_notch,
     remove_target,
