@@ -1207,6 +1207,13 @@ public:
             return false;
         }
 
+        if (!scene.region &&
+            !scene.emphasis_region &&
+            !profile_preview_scene_.region &&
+            !profile_preview_scene_.emphasis_region) {
+            return true;
+        }
+
         clearProfilePreviewScene();
 
         if (!scene.region &&
@@ -1313,6 +1320,11 @@ public:
             return false;
         }
 
+        if (scene.lines.empty() &&
+            sketch_preview_scene_.lines.empty()) {
+            return true;
+        }
+
         clearSketchPreviewScene();
 
         try {
@@ -1371,6 +1383,11 @@ public:
             return false;
         }
 
+        if (scene.grips.empty() &&
+            sketch_grip_scene_.grips.empty()) {
+            return true;
+        }
+
         clearSketchGripScene();
         ensureSketchGripAspects();
 
@@ -1407,6 +1424,15 @@ public:
     bool setSketchInteractionPresentation(
         const viewer::SketchInteractionPresentation& presentation) {
         if (!presentation.valid()) return false;
+
+        if (!presentation.hovered_entity &&
+            !presentation.hovered_grip &&
+            !presentation.active_grip &&
+            !sketch_interaction_presentation_.hovered_entity &&
+            !sketch_interaction_presentation_.hovered_grip &&
+            !sketch_interaction_presentation_.active_grip) {
+            return true;
+        }
 
         sketch_interaction_presentation_ =
             presentation;
@@ -1505,6 +1531,11 @@ public:
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) {
             return false;
+        }
+
+        if (scene.empty() &&
+            sketch_measure_marker_scene_.empty()) {
+            return true;
         }
 
         clearSketchMeasureMarkerScene();
@@ -1720,6 +1751,11 @@ public:
             return false;
         }
 
+        if (scene.empty() &&
+            sketch_measure_cue_scene_.empty()) {
+            return true;
+        }
+
         clearSketchMeasureCueScene();
 
         try {
@@ -1786,6 +1822,13 @@ public:
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) {
         if (!selection.valid()) return false;
+
+        if (selection.selected.empty() &&
+            !selection.primary &&
+            selection_.selected.empty() &&
+            !selection_.primary) {
+            return true;
+        }
 
         selection_ = selection;
         if (!context_.IsNull()) {
