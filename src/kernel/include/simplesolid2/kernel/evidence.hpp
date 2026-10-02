@@ -55,6 +55,27 @@ enum class ExtrudeFaceRoleKind {
     side,
 };
 
+enum class FaceSurfaceKind {
+    plane,
+    cylinder,
+    cone,
+    sphere,
+    torus,
+    other,
+};
+
+struct FaceGeometryDiagnostics final {
+    FaceSurfaceKind surface_kind{
+        FaceSurfaceKind::other};
+    double area{};
+    Point3 centroid;
+    Point3 surface_axis;
+
+    friend bool operator==(
+        const FaceGeometryDiagnostics&,
+        const FaceGeometryDiagnostics&) = default;
+};
+
 struct ExtrudeFaceEvidence final {
     ExtrudeFaceRoleKind role{ExtrudeFaceRoleKind::side};
     ReferenceStatus status{ReferenceStatus::unsupported};
@@ -65,6 +86,8 @@ struct ExtrudeFaceEvidence final {
     // failed without becoming semantic identity or persistence.
     std::size_t basis_edge_match_count{};
     std::size_t generated_shape_count{};
+    std::optional<FaceGeometryDiagnostics>
+        geometry_diagnostics;
 
     friend bool operator==(
         const ExtrudeFaceEvidence&,
