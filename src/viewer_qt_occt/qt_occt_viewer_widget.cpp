@@ -78,6 +78,48 @@ void logProviderFailure(
         << (message != nullptr ? message : "<no message>");
 }
 
+[[nodiscard]] bool sameReferenceScene(
+    const viewer::ReferenceScene& left,
+    const viewer::ReferenceScene& right) noexcept {
+    if (left.references.size() !=
+            right.references.size() ||
+        left.grid.has_value() !=
+            right.grid.has_value()) {
+        return false;
+    }
+
+    for (std::size_t index = 0U;
+         index < left.references.size();
+         ++index) {
+        const auto& a = left.references[index];
+        const auto& b = right.references[index];
+        if (a.token != b.token ||
+            a.kind != b.kind ||
+            a.origin != b.origin ||
+            a.u_axis != b.u_axis ||
+            a.v_axis != b.v_axis ||
+            a.extent != b.extent ||
+            a.role != b.role ||
+            a.visible != b.visible) {
+            return false;
+        }
+    }
+
+    if (!left.grid) {
+        return true;
+    }
+
+    const auto& a = *left.grid;
+    const auto& b = *right.grid;
+    return a.origin == b.origin &&
+           a.u_axis == b.u_axis &&
+           a.v_axis == b.v_axis &&
+           a.extent == b.extent &&
+           a.spacing == b.spacing &&
+           a.major_every == b.major_every &&
+           a.visible == b.visible;
+}
+
 [[nodiscard]] occ::handle<NCollection_HArray1<std::uint8_t>>
 squareMarkerBitmap(
     int size,
@@ -1020,6 +1062,15 @@ public:
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) return false;
 
+        // SR-02: ReferenceScene uses stable runtime tokens. Rebuilding an
+        // identical scene only removes/recreates the same objects and forces
+        // another synchronous provider flush.
+        if (sameReferenceScene(
+                scene,
+                reference_scene_)) {
+            return true;
+        }
+
         clearReferenceScene();
 
         try {
@@ -1067,6 +1118,34 @@ public:
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) {
             return false;
+        }
+
+        // Empty -> empty is an exact no-op only when no Sketch transient
+        // state remains for this setter to clear as part of scene replace.
+        const bool requested_empty =
+            scene.lines.empty() &&
+            scene.curves.empty() &&
+            !scene.origin;
+        const bool installed_empty =
+            sketch_scene_.lines.empty() &&
+            sketch_scene_.curves.empty() &&
+            !sketch_scene_.origin;
+        const bool transients_empty =
+            sketch_grip_scene_.grips.empty() &&
+            sketch_measure_marker_scene_.empty() &&
+            sketch_measure_cue_scene_.empty() &&
+            sketch_snap_inference_scene_.empty() &&
+            !sketch_dynamic_input_overlay_ &&
+            !sketch_interaction_presentation_.
+                 hovered_entity &&
+            !sketch_interaction_presentation_.
+                 hovered_grip &&
+            !sketch_interaction_presentation_.
+                 active_grip;
+        if (requested_empty &&
+            installed_empty &&
+            transients_empty) {
+            return true;
         }
 
         clearSketchMeasureMarkerScene();
@@ -1159,6 +1238,11 @@ public:
         ensureInitialized();
         if (context_.IsNull() || view_.IsNull()) {
             return false;
+        }
+
+        if (scene.profiles.empty() &&
+            profile_scene_.profiles.empty()) {
+            return true;
         }
 
         clearProfileScene();
