@@ -103,6 +103,23 @@ durable Part/Sketch/Profile state
 
 The rebuilt neutral input fingerprint and neutral provider evidence must match the pre-close result without previous-process provider handles or caches.
 
+<!-- section-id: internal.part-documents.pm00a-e01-extrude -->
+## PM-00A E01 transient Extrude-role evidence
+
+PM-00A E01 extends the transient Kernel evidence surface with provider-neutral Extrude face roles:
+
+- start cap;
+- end cap;
+- side generated from one exact Profile boundary-use provenance.
+
+These roles are architecture evidence only. They are not persisted Body/Feature topology references and do not activate a product Extrude command.
+
+For the OCCT evidence provider, side lineage is collected at the provider operation boundary. A `TopoDS_Edge` created before insertion into `BRepBuilderAPI_MakeWire` is not assumed to survive as the exact provider basis edge: `MakeWire` may copy/replace an edge while reconciling coincident vertices. The provider therefore retains the exact transient edge accepted by the completed wire builder and uses it when querying the local prism sweep.
+
+That provider edge is runtime evidence only. The semantic meaning remains the Part/Profile boundary-use provenance. No OCCT handle, topology ordinal, geometry similarity or Viewer token is promoted to durable identity.
+
+E01 exact source candidate `476258b74751a251c1c4fdf7dabaa03b3da63976` passed Windows FULL #1228, including cold replay after Save/Close/Reopen and zero false-Resolved outcomes for the accepted E01 matrix.
+
 <!-- section-id: internal.part-documents.persistence -->
 ## Native Part persistence
 
