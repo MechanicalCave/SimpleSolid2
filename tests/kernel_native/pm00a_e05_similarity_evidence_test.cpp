@@ -170,13 +170,11 @@ resolveSimilarityOnly(
         }
     }
 
-    if (matches == 0U) {
-        return kernel::ReferenceStatus::missing;
-    }
-    if (matches == 1U) {
-        return kernel::ReferenceStatus::resolved;
-    }
-    return kernel::ReferenceStatus::ambiguous;
+    // Geometry similarity is diagnostic evidence only. It may expose
+    // ambiguity, but it is never sufficient to produce Resolved.
+    return matches > 1U
+        ? kernel::ReferenceStatus::ambiguous
+        : kernel::ReferenceStatus::unsupported;
 }
 
 [[nodiscard]] part::ProfileRegionIntent
