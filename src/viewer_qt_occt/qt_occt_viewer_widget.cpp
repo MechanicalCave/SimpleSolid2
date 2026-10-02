@@ -544,7 +544,10 @@ public:
 
     [[nodiscard]] QtOcctRuntimeDiagnostics
     runtimeDiagnostics() const noexcept {
-        return runtime_diagnostics_;
+        auto result = runtime_diagnostics_;
+        result.sketch_native_objects_current =
+            sketch_objects_.size();
+        return result;
     }
 
     void updateCurrentViewer() {
@@ -1189,15 +1192,48 @@ public:
             }
 
             for (const auto& curve : scene.curves) {
-                for (std::size_t index = 1U;
-                     index < curve.points.size();
+                // SR-02: one semantic Circle/Arc currently arrives as an
+                // already-derived polyline. Present the exact same segment
+                // chain as one OCCT wire/AIS_Shape instead of one AIS_Line
+                // per segment. Picking still maps the parent interactive
+                // object to the same semantic presentation token.
+                BRepBuilderAPI_MakePolygon polygon;
+                const bool closed =
+                    curve.points.size() > 2U &&
+                    curve.points.front() ==
+                        curve.points.back();
+                const std::size_t point_count =
+                    closed
+                        ? curve.points.size() - 1U
+                        : curve.points.size();
+
+                for (std::size_t index = 0U;
+                     index < point_count;
                      ++index) {
-                    display_segment(
-                        curve.token,
-                        curve.points[index - 1U],
-                        curve.points[index],
-                        curve.construction);
+                    polygon.Add(
+                        toPoint(curve.points[index]));
                 }
+                if (closed) {
+                    polygon.Close();
+                }
+                if (!polygon.IsDone()) {
+                    clearSketchScene();
+                    return false;
+                }
+
+                Handle(AIS_Shape) object =
+                    new AIS_Shape(polygon.Wire());
+                if (object.IsNull()) {
+                    clearSketchScene();
+                    return false;
+                }
+
+                sketch_objects_.push_back(
+                    SketchObject{
+                        curve.token,
+                        object,
+                        curve.construction});
+                context_->Display(object, false);
             }
 
             if (scene.origin) {
