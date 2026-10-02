@@ -138,10 +138,6 @@ target_link_libraries(simplesolid2_application
 
 target_compile_features(simplesolid2_application PUBLIC cxx_std_20)
 
-if(SS2_BUILD_DESKTOP OR SS2_BUILD_KERNEL_NATIVE)
-find_package(OpenCASCADE CONFIG REQUIRED)
-endif()
-
 if(SS2_BUILD_KERNEL_NATIVE)
 foreach(_target IN ITEMS
         TKernel
