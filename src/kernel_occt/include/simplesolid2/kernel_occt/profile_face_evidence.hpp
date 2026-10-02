@@ -16,4 +16,12 @@ buildProfileExtrudeEvidence(
     const kernel::PlanarProfileInput& input,
     double distance) noexcept;
 
+[[nodiscard]] kernel::EdgeSplitHistoryEvidence
+buildEdgeSplitHistoryEvidence(
+    kernel::EdgeSplitProbeScenario scenario) noexcept;
+
+[[nodiscard]] kernel::FaceMergeHistoryEvidence
+buildFaceMergeHistoryEvidence(
+    kernel::FaceMergeProbeScenario scenario) noexcept;
+
 } // namespace simplesolid2::kernel_occt
