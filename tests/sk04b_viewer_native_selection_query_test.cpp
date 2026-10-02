@@ -330,6 +330,8 @@ int main(int argc, char* argv[]) {
                 window);
     CHECK(window.valid());
     CHECK(window.completed);
+    CHECK(window.tokens.size() == 1U);
+    CHECK(window.tokens[0] == short_token);
     CHECK(contains(window.tokens, short_token));
     CHECK(!contains(window.tokens, long_token));
     CHECK(!contains(window.tokens, reference_token));
@@ -341,6 +343,9 @@ int main(int argc, char* argv[]) {
                 crossing);
     CHECK(crossing.valid());
     CHECK(crossing.completed);
+    CHECK(crossing.tokens.size() == 2U);
+    CHECK(crossing.tokens[0] == short_token);
+    CHECK(crossing.tokens[1] == long_token);
     CHECK(contains(crossing.tokens, short_token));
     CHECK(contains(crossing.tokens, long_token));
     CHECK(!contains(crossing.tokens, reference_token));
@@ -360,6 +365,9 @@ int main(int argc, char* argv[]) {
             viewer::SketchRectangleSelectionRule::
                 window);
     CHECK(all_window.completed);
+    CHECK(all_window.tokens.size() == 2U);
+    CHECK(all_window.tokens[0] == short_token);
+    CHECK(all_window.tokens[1] == long_token);
     CHECK(contains(all_window.tokens, short_token));
     CHECK(contains(all_window.tokens, long_token));
 
