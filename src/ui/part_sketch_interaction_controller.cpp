@@ -6363,7 +6363,8 @@ updateDirectManipulationPreview(
 
 void PartSketchInteractionController::
 updateCommonTransformPreview(
-    const std::optional<sketch::Point2>& resolved) {
+    const std::optional<
+        sketch::ResolvedSketchInput>& resolved) {
     // SR-02: handleCommonTransformPointer already resolved this exact
     // logical pointer event before stage dispatch. Reuse that semantic
     // result so one preview event cannot mutate OSNAP/OTRACK runtime state
