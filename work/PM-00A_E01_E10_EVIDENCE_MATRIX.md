@@ -125,6 +125,29 @@ Goal: prove that merging topology cannot silently erase previously distinct sema
 | E04-03 | Merge occurs but producer-role/provenance still uniquely identifies one semantic meaning and the other meaning is genuinely removed | preserved meaning **Resolved**; removed meaning **Missing** | YES | both statuses collapse to the same answer |
 | E04-04 | Request asks for a merged aggregate semantic object not declared by the selector model | **Unsupported** | YES | new aggregate semantics invented during resolution |
 
+## 8A. E03/E04 execution result
+
+**E03/E04 status:** COMPLETED — PASS  
+**Exact source candidate:** `30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25`  
+**Kernel-focused:** #1274 — PASS  
+**Windows FULL:** #1275 — PASS  
+**False-Resolved:** 0  
+**Evidence report:** `work/PM-00A_E03_E04_SPLIT_MERGE_CARDINALITY_EVIDENCE.md`
+
+All E03-01…E03-04 and E04-01…E04-04 expectations are satisfied.
+
+Key provider observations:
+
+- middle-notch Cut: one source edge -> two Modified descendants -> singular reference Ambiguous;
+- complete-removal Cut: source edge Deleted with zero descendants -> Missing;
+- coplanar Fuse: two source faces each Modified to the same physical descendant -> prior semantic distinction is lost and both singular meanings remain Ambiguous without an independent semantic winner;
+- asymmetric Fuse: one source face is Modified while another source candidate is Deleted in the same Boolean result; provider history asymmetry alone does not choose identity;
+- absorption: independent semantic-role evidence can preserve one surviving meaning as Resolved while the genuinely removed meaning is Missing;
+- undeclared aggregate descendant/merge meanings remain Unsupported;
+- cold replay reproduces the same neutral provider-history/cardinality evidence after provider objects are destroyed.
+
+Provider Modified/Generated/Deleted/unchanged observations are evidence only. They are not the durable selector format and cannot independently produce semantic identity.
+
 ## 9. E05 — geometrically similar topology
 
 Goal: prove that similarity is diagnostic only.
