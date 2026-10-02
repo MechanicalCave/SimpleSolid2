@@ -21,18 +21,9 @@ function Normalize-RepoPath {
 
 function Test-SS2OrdinaryTestContentPath {
     param([Parameter(Mandatory=$true)][string]$Path)
-
-    if (-not $Path.EndsWith('_test.cpp')) {
-        return $false
-    }
-
-    $segments = @($Path -split '/')
     return (
-        ($segments.Count -eq 2 -and
-         $segments[0] -eq 'tests') -or
-        ($segments.Count -eq 3 -and
-         $segments[0] -eq 'tests' -and
-         $segments[1] -eq 'kernel_native')
+        $Path -match '^tests/[^/]+_test\.cpp$' -or
+        $Path -match '^tests/kernel_native/[^/]+_test\.cpp$'
     )
 }
 
@@ -209,6 +200,7 @@ function Invoke-ClassifierSelfTest {
     if (Test-SS2CleanFullForPaths @('src/sketch/sketch_model.cpp', 'tests/example_test.cpp')) {
         throw "Gate classifier self-test incorrectly required CLEAN FULL for ordinary source/test content."
     }
+
     if (Test-SS2CleanFullForPaths @('tests/kernel_native/pm00a_e05_similarity_evidence_test.cpp')) {
         throw "Gate classifier self-test incorrectly required CLEAN FULL for ordinary kernel-native test content."
     }
