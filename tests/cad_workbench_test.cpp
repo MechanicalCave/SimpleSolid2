@@ -30,7 +30,11 @@ void check(bool value, const char* expression, int line) {
     if (!value) {
         std::cerr << "WB-01 CAD Workbench CHECK failed at line "
                   << line << ": " << expression << '\n';
-        std::abort();
+        // The self-hosted Windows runner is interactive. MSVC Debug
+        // abort() opens a modal CRT dialog and turns a normal assertion
+        // failure into a blocking desktop prompt. Exit with failure instead
+        // so CTest reports the CHECK immediately without user intervention.
+        std::exit(EXIT_FAILURE);
     }
 }
 
