@@ -18,6 +18,17 @@ option(
 )
 
 option(
+    SS2_BUILD_KERNEL_NATIVE
+    "Build the OCCT-backed kernel-native evidence lane without Qt"
+    OFF
+)
+
+if(SS2_BUILD_DESKTOP AND SS2_BUILD_KERNEL_NATIVE)
+    message(FATAL_ERROR
+        "SS2_BUILD_DESKTOP and SS2_BUILD_KERNEL_NATIVE are mutually exclusive build modes")
+endif()
+
+option(
     SS2_ENABLE_C2_HISTORY_BENCHMARK
     "Build the C2 semantic history benchmark evidence target"
     OFF
@@ -43,6 +54,9 @@ if(SS2_ENABLE_C2_HISTORY_BENCHMARK OR
 endif()
 if(SS2_BUILD_DESKTOP)
     add_subdirectory(tests)
+elseif(SS2_BUILD_KERNEL_NATIVE)
+    add_subdirectory(tests/core_only)
+    add_subdirectory(tests/kernel_native)
 else()
     add_subdirectory(tests/core_only)
 endif()
