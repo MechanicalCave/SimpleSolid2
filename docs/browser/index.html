@@ -550,11 +550,31 @@ Pointer routing and cursor mode remain independent runtime axes. Ordinary Select
 
 `IDocumentViewport` remains provider-neutral. It exposes camera/navigation, reference scene, authored Sketch scene, Profile scene, transient Sketch/Profile preview scenes, presentation selection, neutral pointer transport, primary-pointer routing/cursor mode, Sketch point/rectangle queries, finite Sketch grip scene/query, runtime hover/active-grip presentation and the selection-box overlay channel.
 
-The authored Sketch scene carries one semantic presentation token per entity. Line uses one segment; Circle and Arc use one token plus an ordered finite point chain. It also carries the authored Regular/Construction role as presentation input. Qt/OCCT may display a curve as multiple derived native segments, but all of those segments map back to the single semantic token. Construction uses the provider's dashed native line aspect with screen-space cadence. Dash/gap size is independent of authored entity length, zoom does not mutate geometry, and committed/transient Construction derive the same presentation policy from the existing `construction` flag. No linetype scale, style entity or persistent presentation parameter is introduced.
+The authored Sketch scene carries one semantic presentation token per entity. Line uses one segment; Circle and Arc use one token plus an ordered finite point chain. It also carries the authored Regular/Construction role as presentation input. Qt/OCCT keeps that exact neutral point chain but presents each semantic Circle/Arc as one native wire/`AIS_Shape` instead of one native object per derived segment. Native detection still maps the whole provider object back to the single semantic token; the point chain remains the rectangle/query approximation and is not CAD identity. Construction uses the provider's dashed native line aspect with screen-space cadence. Dash/gap size is independent of authored entity length, zoom does not mutate geometry, and committed/transient Construction derive the same presentation policy from the existing `construction` flag. No linetype scale, style entity or persistent presentation parameter is introduced.
 
 Grip keys are `PresentationToken + SketchGripRole` only inside the Viewer boundary. PartViewportController immediately maps them back to `SketchId + EntityId + semantic role`. Profile presentation tokens are likewise runtime-only and are mapped immediately to Part-owned `ProfileId`. No Qt/OCCT handle becomes CAD identity.
 
 The production executable creates the concrete Qt/OCCT provider only in the composition root and injects it as a neutral `ViewportSurface`. Provider-native exceptions are contained at the Viewer boundary and fail closed.
+
+<!-- section-id: internal.cad-workbench-viewer.sr02-latency -->
+## SR-02 Sketch interaction and presentation latency
+
+SR-02 keeps the existing provider-neutral `IDocumentViewport` ownership and synchronous setter success/failure contract. No public differential-update protocol, render-completion callback or provider identity became CAD state.
+
+The measured runtime optimizations are private implementation details:
+
+- common-transform preview resolves one pointer event once and passes the complete `ResolvedSketchInput` through transform preview;
+- rectangle-query semantic accumulation keeps deterministic vector output order while a private token-to-index lookup removes repeated linear token scans;
+- Profile analysis and hover-result reuse are runtime-only and bind the owning Document/session, active Sketch, revision/state, draft RegionIntent, hovered region and Add/Subtract mode;
+- exact no-op runtime scene replacement is suppressed only when the requested and installed semantic/runtime state prove that no visible change is required;
+- Qt/OCCT aggregates one Circle/Arc point chain into one native wire object without changing the neutral point chain or semantic token;
+- on proven paths, `UpdateCurrentViewer()` is the synchronous provider update and an immediately following duplicate `V3d_View::Redraw()` is omitted.
+
+Finish Sketch still executes the established semantic teardown and final authoritative refresh. The optimization removes redundant already-empty scene submissions and duplicate flushes; it does not defer authored mutation, fuse history entries or create a second scene authority.
+
+All SR-02 caches, counters and provider grouping are runtime-only. They are invalidated by the owning context they depend on and are never serialized. Provider rejection continues to report presentation degradation without rolling back an already accepted authored transaction.
+
+Durable matched Windows evidence is in `work/SR-02_BASELINE_RESULTS.md` and `work/SR-02_FINAL_RESULTS.md`. On the measured runner, representative pointer preview moved from roughly 67–100 ms to roughly 16–19 ms, warm Profile hover from roughly 100 ms to roughly 17 ms, and 1,000-Line Finish Sketch with active preview from roughly 434 ms to roughly 67 ms. Large full-scene replacement and full 5,000-Line rectangle selection remain scale risks; SR-02 deliberately stops before a spatial index or public differential Viewer redesign because ordinary measured interaction no longer justifies that added architecture.
 
 <!-- section-id: internal.cad-workbench-viewer.sketch-edit -->
 ## Part Sketch host and 3D edit context
