@@ -545,10 +545,28 @@ int main(int argc, char* argv[]) {
     viewer::ProfilePreviewScene
         profile_preview;
     profile_preview.region = profile_region;
+
+    widget.resetRuntimeDiagnostics();
     CHECK(widget.setProfilePreviewScene(
         profile_preview));
+    const auto changed_profile_preview_metrics =
+        widget.runtimeDiagnostics();
+    CHECK(
+        changed_profile_preview_metrics.
+            update_current_viewer_calls == 1U);
+    CHECK(
+        changed_profile_preview_metrics.redraw_calls == 0U);
+
+    widget.resetRuntimeDiagnostics();
     CHECK(widget.setProfilePreviewScene(
         viewer::ProfilePreviewScene{}));
+    const auto cleared_profile_preview_metrics =
+        widget.runtimeDiagnostics();
+    CHECK(
+        cleared_profile_preview_metrics.
+            update_current_viewer_calls == 1U);
+    CHECK(
+        cleared_profile_preview_metrics.redraw_calls == 0U);
 
     const QPoint center_point{
         widget.width() / 2,
