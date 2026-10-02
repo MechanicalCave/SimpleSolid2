@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/SR-01_INTERACTION_CORRECTNESS_PROFILE_UX.md"
 foundation_version: "1.0"
 program_roadmap: "work/SKETCH_ROADMAP.md"
@@ -19,14 +19,16 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - implement only the accepted SR-01 Interaction Correctness and Profile UX scope after the synchronized governance activation candidate passes work/governance verification
-  - preserve the frozen SR-01 command-target rule: active Sketch semantic context cannot fall through to stale Tree/Profile presentation state for destructive Delete
-  - keep Profile island analysis always active; any user option controls presentation only; remove Find All Regions from the normal Profile workflow
-  - add standard Windows Ctrl+Z / Ctrl+Y routing to the existing active Document history while preserving ADR-0011 focus/input ownership
-  - keep SR-02 performance/latency work and SR-03 responsive-shell work inactive until separate Owner-accepted Work Contracts
+  - SR-01 is complete; no production CAD Work Contract is active
+  - prepare the separate measurement-first SR-02 Sketch Interaction & Presentation Latency Work Contract for explicit Owner review and acceptance
+  - do not begin SR-02 production implementation until its synchronized activation candidate passes repository work/governance verification
+  - keep SR-03 responsive-shell work inactive until a separate Owner-accepted Work Contract
   - keep Split, Join, authored constraints/solver/dimensions, projected/reference geometry, ordinary Select RMB context, Axis/Centerline semantics, Part Feature Tree and solid modeling inactive
-  - after SR-01, SR-02 and SR-03 complete, perform the Sketcher profile-authoring readiness re-test before any Part Feature Tree architecture gate
+  - after SR-02 and SR-03 complete, perform the Sketcher profile-authoring readiness re-test before any Part Feature Tree architecture gate
 notes:
+  - SR-01 completed on 2026-10-02. Exact runtime/manual candidate 92d096c396ba0d3ba144d0626c8e96aa667b01af passed Windows FULL #1128 with core-only 16/16, desktop 83/83, warm FULL parity/comparative timing evidence and final windows-msvc PASS.
+  - Owner manual Windows verification passed on the same exact runtime candidate 92d096c396ba0d3ba144d0626c8e96aa667b01af and confirmed the accepted generic Delete / explicit Delete Profile behavior works as intended.
+  - This closeout candidate is work-only. SR-02 remains inactive and requires a separate measurement-first Owner-accepted Work Contract before production implementation.
   - Owner accepted the bounded SR-01 Delete refinement on 2026-10-02: generic Delete remains Sketch-owned during active Sketch Edit, while an explicitly invoked Delete Profile command may delete the deliberately selected Profile; deleting the Profile currently under Edit Profile first cancels only that transient draft.
   - Owner explicitly accepted SR-01 Interaction Correctness and Profile UX and Sketcher Roadmap v1.9 on 2026-10-02.
   - SR-01 is the only active production scope. It freezes semantic action-target arbitration, standard Undo/Redo shortcut routing, always-on island analysis with presentation-only visibility control, and removal of Find All Regions from the normal Profile UI.

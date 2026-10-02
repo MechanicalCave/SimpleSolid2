@@ -1,6 +1,6 @@
 # SR-01 — Interaction Correctness and Profile UX Stabilization
 
-**Status:** ACTIVE  
+**Status:** COMPLETED  
 **Proposed:** 2026-10-02  
 **Owner acceptance:** 2026-10-02  
 **Decision class:** bounded D2 interaction/action-target semantics and Package-F runtime-option amendment + bounded D1 implementation  
@@ -316,3 +316,21 @@ Completion requires:
 - work-only CLOSURE closeout.
 
 After SR-01 completion, production scope stops again. SR-02 does not activate automatically; it requires its own accepted measurement-first Work Contract.
+
+
+## 18. Completion evidence
+
+SR-01 completion evidence on 2026-10-02:
+
+- exact runtime/manual candidate `92d096c396ba0d3ba144d0626c8e96aa667b01af` passed Windows FULL #1128, including exact checkout, deterministic documentation verification, bootstrap/dispatcher checks, complete desktop build graph, core-only **16/16 PASS**, full desktop **83/83 PASS**, warm FULL parity, comparative timing evidence and final `windows-msvc` aggregation PASS;
+- the Owner manually verified the same exact runtime candidate on Windows and confirmed that SR-01 behavior works as intended, including generic Sketch-owned Delete, explicit **Delete Profile** during Sketch Edit, and the accepted Edit Profile deletion refinement;
+- stale Tree/Profile presentation no longer steals generic Delete from active Sketch semantics; no-target Delete fails closed without authored revision/history mutation;
+- explicit **Delete Profile** remains a deliberate Part command during Sketch Edit, removes only the Profile, preserves source Sketch geometry, and supports Undo through the existing Document history;
+- standard Windows `Ctrl+Z` / `Ctrl+Y` route to the existing active DocumentSession history while real text editors retain local keyboard ownership;
+- Profile island analysis remains always active while **Show Islands** controls presentation only; the normal **Find All Regions** workflow is removed;
+- required internal documentation, PL/EN Product documentation and generated Product Browser are current on the runtime candidate;
+- no persistence/schema, durable identity, RegionIntent, Viewer/provider authority, SR-02 performance architecture, SR-03 shell-layout, Part Feature Tree or solid-modeling scope was introduced.
+
+All SR-01 acceptance conditions are satisfied. SR-01 is complete at this work-only closeout candidate. No production CAD Work Contract is active after SR-01 completion.
+
+The next program action is preparation and explicit Owner review of the separate measurement-first **SR-02 Sketch Interaction & Presentation Latency** Work Contract. SR-02 remains inactive until that contract is accepted and activated.
