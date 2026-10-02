@@ -155,6 +155,20 @@ int main(int argc, char* argv[]) {
                  widget.setSketchSnapInferenceScene(
                      snap_scene);
 
+            // SR-02: an identical runtime-only snap/inference scene is an
+            // exact provider no-op. It must not create another OCCT viewer
+            // update/redraw pair.
+            widget.resetRuntimeDiagnostics();
+            ok = ok &&
+                 widget.setSketchSnapInferenceScene(
+                     snap_scene);
+            const auto same_snap_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 same_snap_metrics.
+                         update_current_viewer_calls == 0U &&
+                 same_snap_metrics.redraw_calls == 0U;
+
             snap_scene.current =
                 viewer::SketchSnapMarkerPresentation{
                     {28.0, 16.0, 0.0},
@@ -176,13 +190,32 @@ int main(int argc, char* argv[]) {
                     additional_direction;
             snap_scene.guides[0].direction =
                 {1.0, 1.0, 0.0};
+            widget.resetRuntimeDiagnostics();
             ok = ok &&
                  widget.setSketchSnapInferenceScene(
                      snap_scene);
+            const auto changed_snap_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 changed_snap_metrics.
+                         update_current_viewer_calls == 1U &&
+                 changed_snap_metrics.redraw_calls == 1U;
+
             ok = ok &&
                  widget.setSketchSnapInferenceScene(
                      viewer::
                          SketchSnapInferenceScene{});
+            widget.resetRuntimeDiagnostics();
+            ok = ok &&
+                 widget.setSketchSnapInferenceScene(
+                     viewer::
+                         SketchSnapInferenceScene{});
+            const auto empty_snap_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 empty_snap_metrics.
+                         update_current_viewer_calls == 0U &&
+                 empty_snap_metrics.redraw_calls == 0U;
 
             viewer::SketchDynamicInputOverlay dyn_overlay{
                 viewer::ViewportPoint2{
