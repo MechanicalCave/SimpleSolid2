@@ -29,9 +29,16 @@ option(
     OFF
 )
 
+option(
+    SS2_ENABLE_SR02_LATENCY_BENCHMARK
+    "Build the SR-02 current-stack interaction latency evidence target"
+    OFF
+)
+
 add_subdirectory(src)
 if(SS2_ENABLE_C2_HISTORY_BENCHMARK OR
-   SS2_ENABLE_E2_PRESENTATION_BENCHMARK)
+   SS2_ENABLE_E2_PRESENTATION_BENCHMARK OR
+   SS2_ENABLE_SR02_LATENCY_BENCHMARK)
     add_subdirectory(benchmarks)
 endif()
 if(SS2_BUILD_DESKTOP)
