@@ -138,6 +138,8 @@ void printResult(
         << counters.provider.sketch_rectangle_queries
         << " rectangle_segments="
         << counters.provider.sketch_rectangle_segments
+        << " token_lookups="
+        << counters.provider.sketch_rectangle_token_lookups
         << " token_comparisons="
         << counters.provider.sketch_rectangle_token_comparisons
         << " update_current_viewer_calls="
@@ -884,6 +886,8 @@ void measureFinishSketch(
             sample_metrics.sketch_rectangle_queries;
         aggregate.sketch_rectangle_segments +=
             sample_metrics.sketch_rectangle_segments;
+        aggregate.sketch_rectangle_token_lookups +=
+            sample_metrics.sketch_rectangle_token_lookups;
         aggregate.sketch_rectangle_token_comparisons +=
             sample_metrics.sketch_rectangle_token_comparisons;
 
