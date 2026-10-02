@@ -212,9 +212,9 @@ void verifyMergeRows(
         no_winner.second ==
         kernel::ReferenceStatus::ambiguous);
 
-    // E04-02: provider bookkeeping may be asymmetric (one source receives
-    // surviving/modified history while the other is deleted). That asymmetry
-    // is evidence only and must not choose a semantic winner.
+    // E04-02: one Boolean result can report the surviving source as
+    // Modified while another source candidate is Deleted. Provider history
+    // asymmetry is evidence only and must not choose a semantic winner.
     CHECK(asymmetric.shape.face_count == 6U);
 
     const bool asymmetric_history =
