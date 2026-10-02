@@ -405,7 +405,22 @@ E02 proves stage-scoped resolution across bounded producer/Cut/Fillet evidence, 
 
 The representative initial prism in E02 is an evidence fixture, not the production Extrude implementation. E01 remains the exact Profile-to-Extrude provenance evidence.
 
-**Next:** execute accumulated E07 cold-rebuild parity for E07-01…E07-05 using the now-completed E01/E02/E03/E04/E05 evidence. E07-06 remains pending until E06 provides the full-Revolve periodic-seam case; this staging does not change the frozen E07 expectation.
+### E07 — accumulated cold-model rebuild parity
+
+**Status:** PARTIAL — E07-01…E07-05 COMPLETED — PASS; E07-06 PENDING E06  
+**Accumulated source candidate:** `953cdca42978916754f6ae6cc68d86352aad35ac`  
+**Windows FULL:** #1286 — PASS  
+**False-Resolved:** 0 in accepted rows
+
+See `work/PM-00A_E07_ACCUMULATED_COLD_REBUILD_EVIDENCE.md`.
+
+E07-01…E07-05 prove that the accepted E01/E02/E03/E04/E05 reference outcomes reproduce without previous runtime/provider identity. FULL #1286 executed all four owning kernel-native regressions together on the same exact source candidate.
+
+No separate meta-test was added because the owning regressions already perform the stronger scenario-specific teardown/rebuild assertions.
+
+E07 is not fully complete: E07-06 remains pending until E06 establishes the full-Revolve semantic-side and periodic-seam case.
+
+**Next:** E06 — full Revolve / periodic seam evidence. After E06 passes, execute E07-06 before calling the complete E07 package PASS.
 
 ## 8. Acceptance asymmetry
 
