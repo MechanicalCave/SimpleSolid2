@@ -4,6 +4,8 @@
 
 #include <QWidget>
 
+#include <cstddef>
+#include <cstdint>
 #include <memory>
 #include <optional>
 
@@ -16,6 +18,14 @@ class QShowEvent;
 class QWheelEvent;
 
 namespace simplesolid2::viewer_qt_occt {
+
+struct QtOcctRuntimeDiagnostics final {
+    std::size_t update_current_viewer_calls{};
+    std::size_t redraw_calls{};
+    std::size_t sketch_rectangle_queries{};
+    std::size_t sketch_rectangle_segments{};
+    std::uint64_t sketch_rectangle_token_comparisons{};
+};
 
 class QtOcctViewerWidget final
     : public QWidget,
@@ -130,6 +140,12 @@ public:
     void orbitByRadians(
         double horizontal_radians,
         double vertical_radians);
+
+    // SR-02 provider-private runtime diagnostics. These counters are not
+    // part of IDocumentViewport and never carry CAD identity or persistence.
+    void resetRuntimeDiagnostics() noexcept;
+    [[nodiscard]] QtOcctRuntimeDiagnostics
+    runtimeDiagnostics() const noexcept;
 
 protected:
     QPaintEngine* paintEngine() const override;
