@@ -117,6 +117,9 @@ target_include_directories(pm00a_e03_e04_cardinality_evidence_test
 
 target_link_libraries(pm00a_e03_e04_cardinality_evidence_test
     PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_part
         TKernel
         TKMath
         TKG3d
@@ -136,7 +139,7 @@ add_test(
 )
 
 set_tests_properties(pm00a.e03_e04_cardinality_evidence PROPERTIES
-    LABELS "tier-full-only;subsystem-kernel;native"
+    LABELS "tier-full-only;subsystem-kernel;subsystem-part;subsystem-persistence;native"
 )
 
 add_custom_target(ss2_tests_subsystem_kernel
