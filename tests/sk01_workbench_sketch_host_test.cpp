@@ -1803,11 +1803,12 @@ int main(int argc, char* argv[]) {
     tree->setCurrentItem(profile_item);
     QApplication::processEvents();
 
-    command_input->setText(
-        QStringLiteral("EDITPROFILE"));
-    QTest::keyClick(
-        command_input,
-        Qt::Key_Return);
+    // Enter Profile Edit through the explicit semantic Tree action.
+    // This test is about deleting the Profile that currently owns the
+    // transient Profile-edit session; Command Line routing is covered
+    // independently by the existing EDITPROFILE regression above.
+    CHECK(edit_profile_action->isEnabled());
+    edit_profile_action->trigger();
     QApplication::processEvents();
     CHECK(profile_button->isChecked());
     CHECK(!profile_operations->isHidden());
