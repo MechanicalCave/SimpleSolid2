@@ -1,9 +1,9 @@
 version: 1
-status: completed
-active_work: "work/SR-03_RESPONSIVE_WORKBENCH_SHELL.md"
+status: active
+active_work: "work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.2"
+program_roadmap_version: "1.3"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -19,13 +19,15 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - G0 Sketcher profile-authoring readiness re-test is COMPLETED — PASS on exact candidate 16df8d1940a1f438a66cbd6964a881ba24718c0d
-  - review work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md; it is PROPOSED — INACTIVE and requires explicit Owner acceptance before activation
-  - if accepted, synchronize PM-00A to ACTIVE through work/ACTIVE.yaml and Roadmap v1.2, then pass the repository governance gate before implementation
-  - PM-00A must begin with Phase A0 Verification Topology before E01-E10 architecture evidence
-  - PM-00B Part Feature Architecture Freeze remains separate after PM-00A evidence
-  - PM-01 First Solid Vertical Slice, Body/Feature persistence, Part Feature Tree product behavior, Kernel solid tools, Assembly/Drawing and multi-body remain inactive
+  - PM-00A Part Modeling Architecture Evidence Gate is ACTIVE after explicit Owner acceptance on 2026-10-02
+  - begin Phase A0 Verification Topology; establish semantic/core, kernel-native Release, and desktop verification modes before E01-E10 evidence
+  - preserve existing core-only no-Qt/no-OCCT authority and add kernel-native OCCT-without-Qt verification
+  - add subsystem-kernel, fail-closed regression metadata completeness, Release kernel evidence targets, and cold-model-rebuild harness
+  - E01-E10 may not be accepted before exact-head Phase A0 PASS
+  - PM-00B Part Feature Architecture Freeze, PM-01 First Solid Vertical Slice, Body/Feature persistence, Part Feature Tree product behavior, Assembly/Drawing and multi-body remain inactive
 notes:
+  - Owner explicitly accepted PM-00A on 2026-10-02. The synchronized activation candidate is governance-only; implementation starts only after its repository gate passes.
+  - PM-00A implementation begins with Phase A0. No durable Body/Feature schema or user-facing solid modeling is authorized.
   - G0 completed on 2026-10-02. Owner reported PASS on exact candidate 16df8d1940a1f438a66cbd6964a881ba24718c0d against the integrated readiness workflow recorded in work/G0_SKETCHER_PROFILE_AUTHORING_READINESS_RETEST.md.
   - Part Modeling v1 Roadmap v1.2 records G0 complete and PM-00A as the next proposed package.
   - work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md is prepared as PROPOSED — INACTIVE. Merging the proposal does not authorize implementation.
