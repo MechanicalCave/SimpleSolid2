@@ -449,7 +449,7 @@ private:
     void updateDirectManipulationPreview(
         const SketchPointerInput& input);
     void updateCommonTransformPreview(
-        const SketchPointerInput& input);
+        const std::optional<sketch::Point2>& resolved);
     [[nodiscard]] application::DocumentSessionResult
     executeGeometryUpdate(
         const sketch::SketchTransformGeometry& geometry,
