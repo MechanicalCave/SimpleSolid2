@@ -120,6 +120,27 @@ set_tests_properties(pm00a.e03_e04_cardinality PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;native"
 )
 
+add_executable(pm00a_e02_multistage_lineage_test
+    pm00a_e02_multistage_lineage_test.cpp
+)
+
+target_link_libraries(pm00a_e02_multistage_lineage_test
+    PRIVATE
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+)
+
+target_compile_features(pm00a_e02_multistage_lineage_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm00a.e02_multistage_lineage
+    COMMAND pm00a_e02_multistage_lineage_test
+)
+
+set_tests_properties(pm00a.e02_multistage_lineage PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
@@ -127,6 +148,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm00a_e01_extrude_evidence_test
         pm00a_e05_similarity_evidence_test
         pm00a_e03_e04_cardinality_evidence_test
+        pm00a_e02_multistage_lineage_test
 )
 
 foreach(_forbidden_target IN ITEMS
