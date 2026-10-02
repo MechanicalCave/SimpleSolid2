@@ -352,7 +352,7 @@ jobs:
           $forceClean = "${{ needs.classify.outputs.clean_full }}" -eq "true"
           .\scripts\ci\ss2-build-tree.ps1 -Action prepare -BuildDir $coreBuild -Mode core -Config Release -ForceClean:$forceClean
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          & $cmake -S . -B $coreBuild -DSS2_BUILD_DESKTOP=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_OpenCASCADE=TRUE
+          & $cmake -S . -B $coreBuild -DSS2_BUILD_DESKTOP=OFF -DSS2_BUILD_KERNEL_NATIVE=OFF -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE -DCMAKE_DISABLE_FIND_PACKAGE_OpenCASCADE=TRUE
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           & $cmake --build $coreBuild --config Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -361,12 +361,33 @@ jobs:
           .\scripts\ci\ss2-build-tree.ps1 -Action record -BuildDir $coreBuild -Mode core -Config Release
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
+      - name: Verify kernel-native Release build/test without Qt
+        run: |
+          $ErrorActionPreference = "Stop"
+          . .\scripts\ss2-common.ps1
+          Import-SS2LocalEnvironment
+          $cmake = Get-SS2CMakeExe
+          $kernelBuild = Join-Path $env:SS2_CI_BUILD_ROOT "kernel-release"
+          $forceClean = "${{ needs.classify.outputs.clean_full }}" -eq "true"
+          .\scripts\ci\ss2-build-tree.ps1 -Action prepare -BuildDir $kernelBuild -Mode kernel -Config Release -ForceClean:$forceClean
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $cmake -S . -B $kernelBuild -DSS2_BUILD_DESKTOP=OFF -DSS2_BUILD_KERNEL_NATIVE=ON -DCMAKE_DISABLE_FIND_PACKAGE_Qt6=TRUE
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $cmake --build $kernelBuild --config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & $cmake -E chdir $kernelBuild ctest -C Release --output-on-failure --parallel $env:SS2_TEST_PARALLELISM
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\scripts\ci\ss2-build-tree.ps1 -Action record -BuildDir $kernelBuild -Mode kernel -Config Release
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+
       - name: Verify FAST and SUBSYSTEM selectors
         run: |
           $ErrorActionPreference = "Stop"
           .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug") -Tier fast -NoBuild -ListOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "desktop-debug") -Tier subsystem -Subsystem "sketch,viewer,ui" -NoBuild -ListOnly
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          .\ss2.ps1 test -BuildDir (Join-Path $env:SS2_CI_BUILD_ROOT "kernel-release") -Tier subsystem -Subsystem "kernel" -NoBuild -ListOnly
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
       - name: Test
