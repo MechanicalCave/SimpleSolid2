@@ -8,6 +8,7 @@
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <BRepFilletAPI_MakeFillet.hxx>
 #include <BRepGProp.hxx>
 #include <BRepPrimAPI_MakeBox.hxx>
 #include <BRepSweep_Prism.hxx>
@@ -567,6 +568,46 @@ findEdgeByEndpoints(
         }
     }
     return std::nullopt;
+}
+
+[[nodiscard]] std::vector<TopoDS_Edge>
+findEdgesByEndpoints(
+    const TopoDS_Shape& shape,
+    const gp_Pnt& first,
+    const gp_Pnt& second) {
+    std::vector<TopoDS_Edge> matches;
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        const auto edge =
+            TopoDS::Edge(
+                explorer.Current());
+
+        TopoDS_Vertex v1;
+        TopoDS_Vertex v2;
+        TopExp::Vertices(
+            edge,
+            v1,
+            v2);
+        if (v1.IsNull() || v2.IsNull()) {
+            continue;
+        }
+
+        const auto p1 =
+            BRep_Tool::Pnt(v1);
+        const auto p2 =
+            BRep_Tool::Pnt(v2);
+
+        if ((nearPoint(p1, first) &&
+             nearPoint(p2, second)) ||
+            (nearPoint(p1, second) &&
+             nearPoint(p2, first))) {
+            matches.push_back(edge);
+        }
+    }
+    return matches;
 }
 
 [[nodiscard]] std::optional<TopoDS_Face>
@@ -1234,6 +1275,257 @@ buildFaceMergeHistoryEvidence(
         return evidence;
     } catch (...) {
         evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::MultiStageLineageEvidence
+buildMultiStageLineageEvidence(
+    kernel::MultiStageProbeScenario scenario,
+    double extrusion_height) noexcept {
+    kernel::MultiStageLineageEvidence evidence;
+
+    if (!std::isfinite(extrusion_height) ||
+        !(extrusion_height > 0.0)) {
+        evidence.extrude_shape.status =
+            kernel::EvidenceStatus::invalid_input;
+        return evidence;
+    }
+
+    try {
+        const double depth =
+            scenario ==
+                    kernel::MultiStageProbeScenario::
+                        upstream_thin_fillet_failure
+                ? 2.0
+                : 20.0;
+
+        // Evidence-only "Extrude" stage: a deterministic one-solid prism.
+        BRepPrimAPI_MakeBox base{
+            gp_Pnt{0.0, 0.0, 0.0},
+            40.0,
+            depth,
+            extrusion_height};
+
+        const TopoDS_Shape extrude_shape =
+            base.Shape();
+        if (extrude_shape.IsNull()) {
+            evidence.extrude_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.extrude_shape,
+            extrude_shape);
+
+        const auto selected_face =
+            findFaceByCentroid(
+                extrude_shape,
+                {
+                    0.0,
+                    depth * 0.5,
+                    extrusion_height * 0.5,
+                });
+        if (!selected_face) {
+            evidence.extrude_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        evidence.at_extrude = {
+            kernel::EvidenceProducerStage::
+                extrude_output,
+            kernel::ReferenceStatus::resolved,
+            1U};
+
+        // Cut either preserves the selected x=0 side or removes it entirely.
+        const bool remove_selected =
+            scenario ==
+            kernel::MultiStageProbeScenario::
+                remove_selected_face;
+
+        const gp_Pnt tool_origin =
+            remove_selected
+                ? gp_Pnt{-5.0, -5.0, -5.0}
+                : gp_Pnt{
+                      30.0,
+                      depth * 0.25,
+                      0.0};
+
+        const double tool_dx =
+            remove_selected ? 15.0 : 15.0;
+        const double tool_dy =
+            remove_selected
+                ? depth + 10.0
+                : depth * 0.5;
+        const double tool_dz =
+            remove_selected
+                ? extrusion_height + 10.0
+                : extrusion_height;
+
+        BRepPrimAPI_MakeBox tool{
+            tool_origin,
+            tool_dx,
+            tool_dy,
+            tool_dz};
+
+        BRepAlgoAPI_Cut cut{
+            extrude_shape,
+            tool.Shape()};
+        cut.Build();
+        if (!cut.IsDone()) {
+            evidence.cut_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const TopoDS_Shape cut_shape =
+            cut.Shape();
+        if (cut_shape.IsNull()) {
+            evidence.cut_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.cut_shape,
+            cut_shape);
+
+        evidence.extrude_to_cut =
+            historyEvidence(
+                cut,
+                *selected_face,
+                TopAbs_FACE,
+                cut_shape);
+
+        const auto cut_descendants =
+            historyDescendants(
+                cut,
+                *selected_face,
+                TopAbs_FACE,
+                cut_shape);
+
+        evidence.at_cut = {
+            kernel::EvidenceProducerStage::
+                cut_output,
+            referenceStatus(
+                cut_descendants.size()),
+            cut_descendants.size()};
+
+        if (remove_selected) {
+            evidence.downstream_outcome =
+                kernel::EvidenceOperationOutcome::
+                    not_run;
+            return evidence;
+        }
+
+        if (cut_descendants.size() != 1U) {
+            return evidence;
+        }
+
+        const TopoDS_Face cut_face =
+            TopoDS::Face(
+                cut_descendants.front());
+
+        // The Fillet input is addressed on the immediate Cut output
+        // inside the already-resolved semantic Cut-face context. Candidate
+        // cardinality is checked there before the operation is allowed; the
+        // whole Body is not searched for a geometry-similar edge.
+        const auto input_edges =
+            findEdgesByEndpoints(
+                cut_face,
+                gp_Pnt{0.0, 0.0, 0.0},
+                gp_Pnt{
+                    0.0,
+                    0.0,
+                    extrusion_height});
+
+        evidence.downstream_input_edge_candidate_count =
+            input_edges.size();
+
+        if (input_edges.size() != 1U) {
+            return evidence;
+        }
+
+        BRepFilletAPI_MakeFillet fillet{
+            cut_shape};
+
+        constexpr double fillet_radius = 3.0;
+        fillet.Add(
+            fillet_radius,
+            input_edges.front());
+
+        bool geometric_failure = false;
+        try {
+            fillet.Build();
+            geometric_failure =
+                !fillet.IsDone();
+        } catch (const Standard_Failure&) {
+            geometric_failure = true;
+        }
+
+        if (geometric_failure) {
+            evidence.downstream_outcome =
+                kernel::EvidenceOperationOutcome::
+                    geometric_failure;
+            return evidence;
+        }
+
+        const TopoDS_Shape downstream_shape =
+            fillet.Shape();
+        if (downstream_shape.IsNull()) {
+            evidence.downstream_outcome =
+                kernel::EvidenceOperationOutcome::
+                    geometric_failure;
+            return evidence;
+        }
+
+        kernel::ShapeEvidence downstream;
+        populateShapeEvidence(
+            downstream,
+            downstream_shape);
+        if (!downstream.ok()) {
+            evidence.downstream_outcome =
+                kernel::EvidenceOperationOutcome::
+                    geometric_failure;
+            return evidence;
+        }
+        evidence.downstream_shape =
+            downstream;
+
+        evidence.cut_to_downstream =
+            historyEvidence(
+                fillet,
+                cut_face,
+                TopAbs_FACE,
+                downstream_shape);
+
+        const auto downstream_descendants =
+            historyDescendants(
+                fillet,
+                cut_face,
+                TopAbs_FACE,
+                downstream_shape);
+
+        evidence.at_downstream = {
+            kernel::EvidenceProducerStage::
+                downstream_output,
+            referenceStatus(
+                downstream_descendants.size()),
+            downstream_descendants.size()};
+
+        evidence.downstream_outcome =
+            kernel::EvidenceOperationOutcome::
+                valid;
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.extrude_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.extrude_shape.status =
             kernel::EvidenceStatus::provider_failure;
         return evidence;
     }
