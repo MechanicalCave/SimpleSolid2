@@ -22,10 +22,7 @@ function Normalize-RepoPath {
 function Test-SS2OrdinaryTestContentPath {
     param([Parameter(Mandatory=$true)][string]$Path)
     return (
-        $Path -match '^tests/[^/]+_test\.cpp$' -or
-        $Path -match '^tests/kernel_native/[^/]+_test\.cpp$'
-    )
-}
+        $Path -match '^tests/[^/]+_test\.cpp
 
 function Test-SS2VerificationInfrastructurePath {
     param([Parameter(Mandatory=$true)][string]$Path)
