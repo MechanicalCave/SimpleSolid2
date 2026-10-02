@@ -3,7 +3,9 @@
 #include <simplesolid2/kernel/profile_input.hpp>
 
 #include <cstddef>
+#include <cstdint>
 #include <optional>
+#include <string>
 #include <vector>
 
 namespace simplesolid2::kernel {
@@ -48,6 +50,95 @@ enum class ReferenceStatus {
     ambiguous,
     unsupported,
 };
+
+using TransientLineageToken = std::uint32_t;
+
+struct SingularLineageSourceEvidence final {
+    std::string semantic_source;
+    bool aggregate_requested{false};
+    bool provider_reports_deleted{false};
+
+    // Provider candidates are diagnostics only. Tokens are request-local and
+    // have no durable meaning outside this evidence evaluation.
+    std::vector<TransientLineageToken>
+        provider_candidates;
+
+    // Candidates remaining after semantic producer/stage/role filtering.
+    // Geometry similarity is never allowed to populate this set.
+    std::vector<TransientLineageToken>
+        semantic_candidates;
+
+    friend bool operator==(
+        const SingularLineageSourceEvidence&,
+        const SingularLineageSourceEvidence&) = default;
+};
+
+[[nodiscard]] inline ReferenceStatus
+classifySingularLineage(
+    const std::vector<SingularLineageSourceEvidence>&
+        sources,
+    const std::string& semantic_source) noexcept {
+    const SingularLineageSourceEvidence* target =
+        nullptr;
+    for (const auto& source : sources) {
+        if (source.semantic_source ==
+            semantic_source) {
+            target = &source;
+            break;
+        }
+    }
+
+    if (!target) {
+        return ReferenceStatus::missing;
+    }
+    if (target->aggregate_requested) {
+        return ReferenceStatus::unsupported;
+    }
+
+    std::vector<TransientLineageToken> unique;
+    unique.reserve(
+        target->semantic_candidates.size());
+    for (const auto token :
+         target->semantic_candidates) {
+        bool seen = false;
+        for (const auto existing : unique) {
+            if (existing == token) {
+                seen = true;
+                break;
+            }
+        }
+        if (!seen) {
+            unique.push_back(token);
+        }
+    }
+
+    if (unique.empty()) {
+        return ReferenceStatus::missing;
+    }
+    if (unique.size() > 1U) {
+        return ReferenceStatus::ambiguous;
+    }
+
+    const auto candidate = unique.front();
+    std::size_t semantic_owner_count = 0U;
+    for (const auto& source : sources) {
+        bool owns = false;
+        for (const auto token :
+             source.semantic_candidates) {
+            if (token == candidate) {
+                owns = true;
+                break;
+            }
+        }
+        if (owns) {
+            ++semantic_owner_count;
+        }
+    }
+
+    return semantic_owner_count == 1U
+        ? ReferenceStatus::resolved
+        : ReferenceStatus::ambiguous;
+}
 
 enum class ExtrudeFaceRoleKind {
     start_cap,
