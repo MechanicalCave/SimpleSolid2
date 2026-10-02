@@ -5131,14 +5131,14 @@ handleCommonTransformPointer(
     if (input.phase ==
         viewer::SpatialPointerPhase::move) {
         updateCommonTransformPreview(
-            input);
+            resolved);
         return;
     }
 
     if (input.phase ==
         viewer::SpatialPointerPhase::primary_press) {
         updateCommonTransformPreview(
-            input);
+            resolved);
         static_cast<void>(commitTransform());
     }
 }
@@ -6363,9 +6363,11 @@ updateDirectManipulationPreview(
 
 void PartSketchInteractionController::
 updateCommonTransformPreview(
-    const SketchPointerInput& input) {
-    const auto resolved =
-        resolvePointerInput(input);
+    const std::optional<sketch::Point2>& resolved) {
+    // SR-02: handleCommonTransformPointer already resolved this exact
+    // logical pointer event before stage dispatch. Reuse that semantic
+    // result so one preview event cannot mutate OSNAP/OTRACK runtime state
+    // twice or repeat the same nearby-query work.
     if (!resolved ||
         !interaction_.updateTransformPreview(
             *resolved)) {
