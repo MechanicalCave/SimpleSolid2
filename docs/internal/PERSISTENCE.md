@@ -110,7 +110,8 @@ The following state is not serialized as Part authored state:
 - Qt objects;
 - Viewer provider objects and OCCT handles;
 - cached Shared 2D region analysis and transient Profile drafts;
-- evaluated B-Rep or tessellation.
+- evaluated B-Rep or tessellation;
+- PM-00A neutral Kernel inputs/evidence, OCCT provider objects, provider topology/lineage handles and cold-rebuild runtime fingerprints.
 
 Persistent user visibility of built-in Origin references is intentionally **not** in this runtime-only list; it is authored Part state.
 
