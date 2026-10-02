@@ -17,6 +17,7 @@ param(
     [string[]]$Target = @(),
     [string[]]$Test = @(),
     [switch]$NoBuild,
+    [switch]$NoConfigure,
     [switch]$ListOnly,
     [switch]$SelfTest
 )
@@ -54,7 +55,7 @@ switch ($Command) {
     "build"    { & $script -BuildDir $BuildDir -Config $Config -Target $Target -All:$All }
     "run"      { & $script -BuildDir $BuildDir -Config $Config }
     "test"     { & $script -BuildDir $BuildDir -Config $Config -Tier $Tier -Subsystem $Subsystem -NoBuild:$NoBuild -ListOnly:$ListOnly -SelfTest:$SelfTest }
-    "check"    { & $script -BuildDir $BuildDir -Config $Config -Target $Target -Test $Test -SelfTest:$SelfTest }
+    "check"    { & $script -BuildDir $BuildDir -Config $Config -Target $Target -Test $Test -NoConfigure:$NoConfigure -SelfTest:$SelfTest }
     default    { & $script }
 }
 exit $LASTEXITCODE
