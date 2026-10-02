@@ -337,10 +337,7 @@ buildProfileFace(
 [[nodiscard]] std::size_t countSubshapes(
     const TopoDS_Shape& shape,
     TopAbs_ShapeEnum kind) {
-    std::size_t count =
-        shape.ShapeType() == kind
-            ? 1U
-            : 0U;
+    std::size_t count = 0U;
     for (TopExp_Explorer explorer{shape, kind};
          explorer.More();
          explorer.Next()) {
