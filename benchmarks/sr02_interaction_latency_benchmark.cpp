@@ -20,6 +20,7 @@
 #include <cstddef>
 #include <cstdlib>
 #include <filesystem>
+#include <functional>
 #include <iomanip>
 #include <iostream>
 #include <numbers>
@@ -469,7 +470,7 @@ void measureInteractivePreviewPaths(
                     viewer::SpatialPointerPhase::primary_press,
                     {1.25, 1.25}));
             if (interaction.lineStage() !=
-                sketch::LineStage::await_end) {
+                sketch::LineStage::await_next_point) {
                 throw std::runtime_error(
                     "Line benchmark did not reach preview stage");
             }
