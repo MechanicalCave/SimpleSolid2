@@ -415,7 +415,7 @@ No performance structure is serialized into CAD documents.
 ## Documentation impact
 
 Internal docs: required  
-User/Product docs: not required unless implementation changes a documented user-visible behavior beyond reduced latency/smoother presentation  
+User/Product docs: not required  
 Reason: SR-02 is primarily an internal runtime/performance stabilization package with frozen user semantics.
 
 Internal documentation must describe:
