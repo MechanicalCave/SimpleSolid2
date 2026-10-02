@@ -217,6 +217,32 @@ int main(int argc, char* argv[]) {
                          update_current_viewer_calls == 0U &&
                  empty_snap_metrics.redraw_calls == 0U;
 
+            // SR-02 Finish Sketch teardown repeatedly requests empty
+            // runtime-only scenes that may already be empty. These exact
+            // no-ops must not create provider flushes.
+            widget.resetRuntimeDiagnostics();
+            ok = ok &&
+                 widget.setSketchPreviewScene(
+                     viewer::SketchPreviewScene{}) &&
+                 widget.setSketchGripScene(
+                     viewer::SketchGripScene{}) &&
+                 widget.setSketchInteractionPresentation(
+                     viewer::SketchInteractionPresentation{}) &&
+                 widget.setSketchMeasureMarkerScene(
+                     viewer::SketchMeasureMarkerScene{}) &&
+                 widget.setSketchMeasureCueScene(
+                     viewer::SketchMeasureCueScene{}) &&
+                 widget.setProfilePreviewScene(
+                     viewer::ProfilePreviewScene{}) &&
+                 widget.setPresentationSelection(
+                     viewer::PresentationSelection{});
+            const auto empty_runtime_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 empty_runtime_metrics.
+                         update_current_viewer_calls == 0U &&
+                 empty_runtime_metrics.redraw_calls == 0U;
+
             viewer::SketchDynamicInputOverlay dyn_overlay{
                 viewer::ViewportPoint2{
                     895.0,
