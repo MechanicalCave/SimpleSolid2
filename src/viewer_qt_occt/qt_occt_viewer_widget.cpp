@@ -61,6 +61,7 @@
 #include <cmath>
 #include <cstdint>
 #include <exception>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -1922,6 +1923,15 @@ public:
             sketch_scene_.lines.size() +
             sketch_scene_.curves.size());
 
+        // SR-02: keep semantic/result order in the vector, but use a
+        // runtime-only token -> vector-index lookup so repeated curve
+        // segments do not linearly rescan all prior semantic tokens.
+        std::unordered_map<std::uint64_t, std::size_t>
+            semantic_index;
+        semantic_index.reserve(
+            sketch_scene_.lines.size() +
+            sketch_scene_.curves.size());
+
         const auto accumulate_segment =
             [&](viewer::PresentationToken token,
                 const viewer::Point3& start_point,
@@ -1933,28 +1943,25 @@ public:
                     projectToScreen(end_point);
                 if (!start || !end) return false;
 
-                auto found = std::find_if(
-                    semantic.begin(),
-                    semantic.end(),
-                    [this, token](
-                        const SemanticHitState& state) {
-                        ++runtime_diagnostics_.
-                            sketch_rectangle_token_comparisons;
-                        return state.token == token;
-                    });
-                if (found == semantic.end()) {
+                ++runtime_diagnostics_.
+                    sketch_rectangle_token_lookups;
+                const auto [index_it, inserted] =
+                    semantic_index.try_emplace(
+                        token.value,
+                        semantic.size());
+                if (inserted) {
                     semantic.push_back(
                         {token, true, false});
-                    found = std::prev(
-                        semantic.end());
                 }
 
-                found->all_inside =
-                    found->all_inside &&
+                auto& state =
+                    semantic[index_it->second];
+                state.all_inside =
+                    state.all_inside &&
                     screen_rect.contains(*start) &&
                     screen_rect.contains(*end);
-                found->any_intersection =
-                    found->any_intersection ||
+                state.any_intersection =
+                    state.any_intersection ||
                     segmentIntersectsRect(
                         *start,
                         *end,
