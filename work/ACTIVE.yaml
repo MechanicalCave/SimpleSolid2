@@ -3,7 +3,7 @@ status: completed
 active_work: "work/SR-03_RESPONSIVE_WORKBENCH_SHELL.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.0"
+program_roadmap_version: "1.1"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -19,13 +19,18 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
 next:
-  - Part Modeling v1 Program Roadmap v1.0 is accepted and frozen; no production CAD Work Contract is active
+  - Part Modeling v1 Program Roadmap v1.1 is accepted and frozen; no production CAD Work Contract is active
   - execute G0: the explicit Sketcher profile-authoring readiness re-test using work/SKETCH_ROADMAP.md v1.9 as the readiness-criteria authority
   - if G0 fails, record bounded findings and close them through separately accepted stabilization work before repeating G0
   - G0 PASS does not activate solid modeling; PM-00A Part Modeling Architecture Evidence Gate still requires its own Owner-accepted Work Contract and repository activation gate
-  - PM-00A must precede PM-00B Part Feature Architecture Freeze; PM-01 First Solid Vertical Slice may begin only after both gates pass
+  - PM-00A must begin with Phase A0 Verification Topology before E01-E10 evidence; PM-00B Part Feature Architecture Freeze follows only after PM-00A completion, and PM-01 First Solid Vertical Slice may begin only after both gates pass
   - keep Body/Feature persistence, Kernel solid operations, Part Feature Tree product implementation, Assembly/Drawing, multi-body and solid modeling inactive until their owning package is explicitly activated
 notes:
+  - Owner accepted Part Modeling v1 Roadmap v1.1 on 2026-10-02. The amendment freezes PM-00A Phase A0 Verification Topology before E01-E10 architecture evidence.
+  - Phase A0 preserves three distinct verification modes: semantic/core with Qt and OCCT forbidden; kernel-native Release with OCCT required and Qt forbidden; desktop with Qt and OCCT. Existing core-only authority must not regress.
+  - Phase A0 also requires subsystem-kernel, fail-closed test-metadata completeness, a Release kernel evidence target and a cold-model-rebuild harness distinct from CMake clean/warm build-tree state.
+  - Existing FOCUSED/FAST/SUBSYSTEM/FULL/DOCS/CLOSURE semantics remain the public pipeline model; no new tier or path-based dependency analyzer is authorized without measured need.
+  - Further compiler/build optimizations such as Ninja migration, compiler cache, PCH, Unity Build, sharding or distributed workers remain deferred until PM-00A/PM-01 measurements show a material bottleneck.
   - Owner accepted and froze Part Modeling v1 Program Roadmap v1.0 on 2026-10-02, based on the Part Modeling v1 draft 0.1, architecture-audited draft 0.2 and the accepted evidence-first refinement.
   - The program is durable sequencing/scope authority only, not blanket implementation authorization. Future PM packages require separate bounded Work Contracts.
   - Program order is G0 readiness -> PM-00A architecture evidence -> PM-00B architecture freeze -> PM-01 first solid vertical slice -> PM-02 datum/Cut -> PM-03 face support/references/projection -> PM-04 Axis/datums/Revolve -> PM-05 Fillet/Chamfer -> PM-06 v1 completion.
