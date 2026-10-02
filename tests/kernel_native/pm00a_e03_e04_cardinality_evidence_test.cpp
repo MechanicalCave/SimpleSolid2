@@ -277,10 +277,11 @@ probeMergedEdges() {
             .Face();
 
     ShapeUpgrade_UnifySameDomain unify;
+    // Merge same-domain collinear edges only. Faces remain untouched.
     unify.Initialize(
         face,
-        false,
         true,
+        false,
         false);
     unify.Build();
 
