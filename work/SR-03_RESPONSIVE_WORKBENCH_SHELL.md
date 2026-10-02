@@ -276,7 +276,7 @@ SR-03 does not authorize:
 - redesign of Navigation Cube semantics;
 - broad visual theme/icon redesign.
 
-## 14. Documentation impact
+## Documentation impact
 
 Internal docs: required  
 User/Product docs: required  
