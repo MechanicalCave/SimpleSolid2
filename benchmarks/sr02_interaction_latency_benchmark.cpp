@@ -146,6 +146,8 @@ void printResult(
         << counters.provider.update_current_viewer_calls
         << " redraw_calls="
         << counters.provider.redraw_calls
+        << " native_objects_current="
+        << counters.provider.sketch_native_objects_current
         << '\n';
 }
 
@@ -882,6 +884,8 @@ void measureFinishSketch(
             sample_metrics.update_current_viewer_calls;
         aggregate.redraw_calls +=
             sample_metrics.redraw_calls;
+        aggregate.sketch_native_objects_current =
+            sample_metrics.sketch_native_objects_current;
         aggregate.sketch_rectangle_queries +=
             sample_metrics.sketch_rectangle_queries;
         aggregate.sketch_rectangle_segments +=
