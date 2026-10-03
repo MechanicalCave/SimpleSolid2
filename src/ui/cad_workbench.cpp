@@ -3888,7 +3888,8 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
     if (viewport_controller_) {
         viewport_controller_->clearSolidPreview();
         viewport_controller_->
-            setTransientProfileReveal(
+            setTransientProfilePresentationOverride(
+                std::nullopt,
                 std::nullopt);
     }
 
@@ -3967,8 +3968,9 @@ bool CadWorkbench::startExtrudeEdit(
 
     if (viewport_controller_) {
         viewport_controller_->
-            setTransientProfileReveal(
-                extrude_draft_->profileId());
+            setTransientProfilePresentationOverride(
+                extrude_draft_->profileId(),
+                std::nullopt);
     }
 
     refreshExtrudePreview();
@@ -3977,7 +3979,7 @@ bool CadWorkbench::startExtrudeEdit(
     notifyCadInputContextChanged();
     setStatusText(
         QStringLiteral(
-            "Edit Extrude active — source Profile is temporarily revealed."));
+            "Edit Extrude active — source Profile is hidden while valid preview is shown."));
     if (extrude_distance_edit_ != nullptr) {
         extrude_distance_edit_->setFocus(
             Qt::OtherFocusReason);
@@ -4160,10 +4162,46 @@ void CadWorkbench::refreshExtrudePreview() {
         viewport_controller_->clearSolidPreview();
     }
 
+    const auto sync_source_profile =
+        [this](bool preview_ready) {
+            if (viewport_controller_ == nullptr) {
+                return;
+            }
+            if (!extrude_draft_) {
+                viewport_controller_->
+                    setTransientProfilePresentationOverride(
+                        std::nullopt,
+                        std::nullopt);
+                return;
+            }
+
+            if (preview_ready) {
+                viewport_controller_->
+                    setTransientProfilePresentationOverride(
+                        std::nullopt,
+                        extrude_draft_->profileId());
+                return;
+            }
+
+            if (extrude_draft_->mode() ==
+                application::ExtrudeDraftMode::edit) {
+                viewport_controller_->
+                    setTransientProfilePresentationOverride(
+                        extrude_draft_->profileId(),
+                        std::nullopt);
+            } else {
+                viewport_controller_->
+                    setTransientProfilePresentationOverride(
+                        std::nullopt,
+                        std::nullopt);
+            }
+        };
+
     if (!extrude_draft_ ||
         !extrude_distance_input_valid_ ||
         document_session_ == nullptr ||
         solid_modeling_kernel_ == nullptr) {
+        sync_source_profile(false);
         syncExtrudeUi();
         return;
     }
@@ -4172,6 +4210,7 @@ void CadWorkbench::refreshExtrudePreview() {
         document_session_->evaluateExtrudeDraft(
             *extrude_draft_,
             *solid_modeling_kernel_);
+    bool preview_ready = false;
     if (evaluation.previewSolidAvailable() &&
         viewport_controller_ != nullptr) {
         const auto tone =
@@ -4181,14 +4220,17 @@ void CadWorkbench::refreshExtrudePreview() {
                       subtractive
                 : viewer::SolidPreviewTone::
                       additive;
-        if (!viewport_controller_->
+        if (viewport_controller_->
                 setSolidPreview(
-                    evaluation.preview_tool_solid,
+                    *evaluation.preview_delta_mesh,
                     tone)) {
-            evaluation.preview_tool_solid.reset();
+            preview_ready = true;
+        } else {
+            evaluation.preview_delta_mesh.reset();
         }
     }
 
+    sync_source_profile(preview_ready);
     extrude_evaluation_ =
         std::move(evaluation);
     syncExtrudeUi();
