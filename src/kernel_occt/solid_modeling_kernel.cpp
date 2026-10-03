@@ -6,6 +6,7 @@
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <Poly_Triangle.hxx>
@@ -1187,7 +1188,10 @@ OcctSolidModelingKernel::presentationMesh(
                 continue;
             }
             if (!triangulation->HasNormals()) {
-                triangulation->ComputeNormals();
+                BRepLib_ToolTriangulatedShape::
+                    ComputeNormals(
+                        face,
+                        triangulation);
             }
             if (!triangulation->HasNormals()) {
                 result.status =
