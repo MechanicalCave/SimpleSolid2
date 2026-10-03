@@ -94,6 +94,8 @@ int main(int argc, char* argv[]) {
                     {0.0, 0.0, 0.0},
                     {20.0, 0.0, 0.0},
                     {0.0, 20.0, 0.0},
+                    {0.0, 0.0, 1.0},
+                    {0.0, 0.0, 1.0},
                     {0.0, 0.0, 1.0}});
             ok = ok &&
                  solid_scene.valid() &&
@@ -125,8 +127,8 @@ int main(int argc, char* argv[]) {
             ok = ok &&
                  solid_preview_metrics.
                          update_current_viewer_calls == 1U &&
-                 !solid_preview_metrics.
-                          solid_committed_displayed &&
+                 solid_preview_metrics.
+                         solid_committed_displayed &&
                  solid_preview_metrics.
                          solid_preview_displayed;
 
