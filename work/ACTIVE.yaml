@@ -25,13 +25,15 @@ next:
   - PM-02P Body Semantic Topology Evidence is ACTIVE after explicit Owner acceptance on 2026-10-03
   - PM-02P.A complete topology inventory is COMPLETED — PASS on exact source 0c460b2d97551546b9a8e61b72efecd11933bf8e with Windows FULL #1376; merged main 9e43ac5cb5f4c941b435672c5bc77d98bb237d60
   - PM-02P.B1 pristine Surface carriers is COMPLETED — PASS on exact source dff5d6c3532358bbb4bfa11fb17d5bb1113ecb54 with Windows FULL #1378; merged main 6b7b967b5ee40ed87c48efba1607b0806b88524d
-  - PM-02P.B2 Boolean Surface lineage is the current evidence slice: trim/split/delete/alias plus Cut-exposed planar carrier frame
+  - PM-02P.B2 Boolean Surface lineage is COMPLETED — PASS on exact source 24a65c79c40061b7185f49463fe7a7838e1117f4 with Windows FULL #1379; merged main 5536e9be1c3da3b3e8f93c4dae229856e8221001
+  - PM-02P.B3 extent/cap frame closure is the current evidence slice: OneSide Forward/Reverse and Midplane exact semantic cap roles/frames
   - PM-02P remains evidence-only; no production CAD schema, topology picking, persistent face-supported Sketch or Datum mutation is authorized
   - continue frozen work/PM-02P_TOPOLOGY_EVIDENCE_MATRIX.md with zero false Resolved and zero unaccounted Face/Edge/Vertex
   - production PM-02 Body Semantic Topology / Face-Supported Sketch remains NOT ACTIVE until PM-02P PASS and a separately accepted production Work Contract
   - PM-03 Datum Reference Geometry and all later Part Modeling packages remain inactive
   - Projection remains outside the PM-02/PM-03 critical path and requires separate later activation
 notes:
+  - PM-02P.B2 Boolean Surface lineage is COMPLETED — PASS. Windows FULL #1379 passed on exact source 24a65c79c40061b7185f49463fe7a7838e1117f4; trim/split/delete/identical-recreate/alias/Cut-exposed Surface behavior passed with complete Boolean-result topology accounting and zero false Resolved. Squash merge main is 5536e9be1c3da3b3e8f93c4dae229856e8221001.
   - PM-02P.B1 pristine Surface carrier evidence is COMPLETED — PASS. Windows FULL #1378 passed on exact source dff5d6c3532358bbb4bfa11fb17d5bb1113ecb54; complete Face claims, Plane/Cylinder corroboration, XY/XZ/YZ and traversal-stable planar carrier frames passed. Squash merge main is 6b7b967b5ee40ed87c48efba1607b0806b88524d.
   - PM-02P.A complete topology inventory is COMPLETED — PASS. Windows FULL #1376 passed on exact source 0c460b2d97551546b9a8e61b72efecd11933bf8e; kernel-native included pm02p.a_topology_inventory and the canonical rectangular Extrude accounted 6 Faces / 12 Edges / 8 Vertices with no unaccounted topology. Squash merge main is 9e43ac5cb5f4c941b435672c5bc77d98bb237d60.
   - Owner accepted ADR-0016 and PM-02P on 2026-10-03. Program roadmap v1.6 deliberately replaces the previous Datum-first sequence with evidence-first Body Semantic Topology -> production Face-Supported Sketch -> Datum Reference Geometry. Projection is independent and excluded from PM-02P.
