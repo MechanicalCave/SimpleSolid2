@@ -457,6 +457,7 @@ int main() {
         part::BodyEvaluationStatus::
             unavailable);
     CHECK(blocked_eval.body_solid == nullptr);
+    CHECK(blocked_eval.resolved_prefix_solid == nullptr);
     CHECK(
         blocked_eval.features[0].status ==
         part::FeatureEvaluationStatus::
@@ -510,8 +511,10 @@ int main() {
         part::BodyEvaluationStatus::
             up_to_date);
 
-    // A geometric/kernel failure invalidates current Body truth and blocks
-    // all later active Features; no last-good solid survives.
+    // A geometric/kernel failure invalidates final Body truth and blocks all
+    // later active Features. H7 may retain only the same-revision upstream
+    // prefix for presentation; it is not final Body truth and is never
+    // consumed downstream.
     auto failed =
         withFeatures(
             fixture.document,
@@ -558,6 +561,7 @@ int main() {
         part::BodyEvaluationStatus::
             unavailable);
     CHECK(failed_eval.body_solid == nullptr);
+    CHECK(failed_eval.resolved_prefix_solid != nullptr);
     CHECK(
         failed_eval.current_face_references.empty());
 
@@ -588,10 +592,13 @@ int main() {
         missing_eval.features[1].status ==
         part::FeatureEvaluationStatus::
             blocked);
+    CHECK(missing_eval.body_solid == nullptr);
+    CHECK(missing_eval.resolved_prefix_solid == nullptr);
 
     std::cout
         << "PM01C_EVALUATOR_PASS"
         << " stale_last_good=0"
+        << " resolved_prefix_presentation=1"
         << " restart_after_failure=0\n";
     return EXIT_SUCCESS;
 }
