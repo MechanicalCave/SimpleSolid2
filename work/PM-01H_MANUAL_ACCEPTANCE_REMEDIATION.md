@@ -29,8 +29,8 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 - **H3 COMPLETED — PASS:** PR #157, exact-head Windows FULL #1343 PASS on `931fa47e93333832778b56349bd8b6ee6ddfd64c`; merged to main as `78558b825f1ec2b0ad622166774774ac26e5f417`.
 - **Owner re-test after H1/H2/H3:** PARTIAL PASS; remaining H4 findings are recorded below.
 - **H4a COMPLETED — PASS:** PR #160, exact-head Windows FULL #1346 PASS on `818ed69a37ddee3a54be7b65c819cd67ab67dcc1`; merged to main as `af1800cbcde8f7b45b5c3cb2e10795f0b76e2a66`.
-- **H4b ACTIVE:** operation-only Extrude preview plus smooth nodal-normal presentation at restored bounded tessellation density.
-- **Owner re-test:** PENDING on the consolidated H1-H4b candidate after H4b exact-head gate.
+- **H4b COMPLETED — PASS:** PR #161, exact-head Windows FULL #1348 PASS on `86b5a4238635953f013ea10be35c8d21bbb07b03`; merged to main as `53bde160abeabd854d99fb96535c528f8402858f`.
+- **Owner re-test:** PENDING on `53bde160abeabd854d99fb96535c528f8402858f`; PM-01 remains ACTIVE until the consolidated manual Windows acceptance passes.
 
 ## H1 — Profile → Kernel fidelity blocker
 

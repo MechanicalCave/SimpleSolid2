@@ -20,6 +20,11 @@
 | Body/Feature Tree and Properties; status/diagnostics; Profile↔Feature navigation; FeatureId-preserving Edit Extrude; temporary source-Profile reveal | PR #151, Windows FULL #1336 | PASS |
 | Suppress/Unsuppress/Delete from Properties/Tree; automatic Profile visibility; Undo/Redo; ordered Add/Cut persistence; Save → destroy runtime/session/provider state → Reopen → cold rebuild; persisted suppression/delete/source Profile | PR #153, Windows FULL #1339 | PASS |
 | Same runtime checkpoint passes semantic/core, kernel-native and desktop FULL topology | Windows FULL #1339 | PASS |
+| Manual-remediation H1: mixed Line+Arc Profile fidelity and reverse Arc traversal | PR #155, Windows FULL #1341 | PASS |
+| Manual-remediation H2: preview replacement and initial curved-presentation fix | PR #156, Windows FULL #1342 | PASS |
+| Manual-remediation H3: Tree/default-distance/command-first Extrude UX | PR #157, Windows FULL #1343 | PASS |
+| Manual-remediation H4a: debounced typing + live Tree diagnostics/warning icons | PR #160, Windows FULL #1346 | PASS |
+| Manual-remediation H4b: operation-only preview + nodal-normal smooth shading + restored mesh density | PR #161, Windows FULL #1348 | PASS |
 | As-built docs + PL/EN product docs + generated Product Browser | PM-01 closure branch | PENDING GATE |
 | Supported Windows integrated manual workflow | Section 3 below | PENDING OWNER |
 
@@ -106,7 +111,7 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 
 ## 4. Manual result
 
-**Owner Windows result:** FAIL — remediation required  
+**Owner Windows result:** PENDING RETEST — prior attempts found remediation issues  
 **Date:** 2026-10-03  
-**Final tested candidate:** `ede4e6050d09bb492101eb41cd35464565a2c841`  
-**Notes:** Manual acceptance found supported-profile and presentation defects before completion. Rectangle, whole Circle and Circle-with-hole first Add succeed; mixed Line+Arc Profiles can be rejected or misinterpreted by Extrude. Add/Cut preview and curved-surface presentation also require remediation. See `work/PM-01H_MANUAL_ACCEPTANCE_REMEDIATION.md`.
+**Final tested candidate:** PENDING — next candidate is `53bde160abeabd854d99fb96535c528f8402858f`  
+**Notes:** Initial manual acceptance failed on `ede4e605...`; the H1-H3 re-test was a partial pass and exposed H4 responsiveness/presentation/live-diagnostic issues. H1-H4b are now automated PASS through Windows FULL #1348. Owner must re-test merged candidate `53bde160...` before PM-01 completion. See `work/PM-01H_MANUAL_ACCEPTANCE_REMEDIATION.md`.
