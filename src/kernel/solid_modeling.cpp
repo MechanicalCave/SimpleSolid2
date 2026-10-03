@@ -20,12 +20,12 @@ namespace {
 } // namespace
 
 bool ExtrudeFaceRole::valid() const noexcept {
-    if (kind == ExtrudeFaceRoleKind::cap) {
+    if (kind == ExtrudeGeneratedFaceRoleKind::cap) {
         return cap_role.has_value() &&
                capRole(*cap_role) &&
                !side_provenance.has_value();
     }
-    if (kind == ExtrudeFaceRoleKind::side) {
+    if (kind == ExtrudeGeneratedFaceRoleKind::side) {
         return !cap_role.has_value() &&
                side_provenance.has_value() &&
                !side_provenance

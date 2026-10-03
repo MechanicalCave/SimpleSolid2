@@ -137,13 +137,13 @@ public:
 
         publish(
             {
-                kernel::ExtrudeFaceRoleKind::cap,
+                kernel::ExtrudeGeneratedFaceRoleKind::cap,
                 input.start_cap_role,
                 std::nullopt,
             });
         publish(
             {
-                kernel::ExtrudeFaceRoleKind::cap,
+                kernel::ExtrudeGeneratedFaceRoleKind::cap,
                 input.end_cap_role,
                 std::nullopt,
             });
@@ -151,7 +151,7 @@ public:
              input.profile.outer.boundary) {
             publish(
                 {
-                    kernel::ExtrudeFaceRoleKind::
+                    kernel::ExtrudeGeneratedFaceRoleKind::
                         side,
                     std::nullopt,
                     use.provenance,

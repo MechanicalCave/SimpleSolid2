@@ -168,7 +168,7 @@ convertNewFace(
         source.resolved_token;
 
     if (source.role.kind ==
-        kernel::ExtrudeFaceRoleKind::cap) {
+        kernel::ExtrudeGeneratedFaceRoleKind::cap) {
         if (!source.role.cap_role) {
             result.status =
                 kernel::ReferenceStatus::

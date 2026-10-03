@@ -47,14 +47,14 @@ enum class ExtrudeCapRole {
     positive_cap,
 };
 
-enum class ExtrudeFaceRoleKind {
+enum class ExtrudeGeneratedFaceRoleKind {
     cap,
     side,
 };
 
 struct ExtrudeFaceRole final {
-    ExtrudeFaceRoleKind kind{
-        ExtrudeFaceRoleKind::side};
+    ExtrudeGeneratedFaceRoleKind kind{
+        ExtrudeGeneratedFaceRoleKind::side};
     std::optional<ExtrudeCapRole> cap_role;
     std::optional<BoundaryUseProvenance>
         side_provenance;
