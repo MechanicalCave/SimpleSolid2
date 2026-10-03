@@ -11,6 +11,7 @@
 #include <AIS_RubberBand.hxx>
 #include <AIS_Shape.hxx>
 #include <AIS_TextLabel.hxx>
+#include <AIS_Triangulation.hxx>
 #include <AIS_ViewCube.hxx>
 #include <Aspect_DisplayConnection.hxx>
 #include <Aspect_PolygonOffsetMode.hxx>
@@ -31,6 +32,8 @@
 #include <NCollection_HArray1.hxx>
 #include <OpenGl_GraphicDriver.hxx>
 #include <Prs3d_LineAspect.hxx>
+#include <Poly_Triangle.hxx>
+#include <Poly_Triangulation.hxx>
 #include <Prs3d_PointAspect.hxx>
 #include <Quantity_Color.hxx>
 #include <Standard_Failure.hxx>
@@ -1287,17 +1290,14 @@ public:
             return;
         }
 
-        if (solid_preview_scene_.empty()) {
-            context_->Display(
-                solid_object_,
-                false);
-            context_->Deactivate(
-                solid_object_);
-        } else {
-            context_->Erase(
-                solid_object_,
-                false);
-        }
+        // H4b preview is the isolated Extrude tool volume. The committed Body
+        // therefore remains visible in its normal opaque presentation while
+        // the translucent Add/Cut tool is overlaid.
+        context_->Display(
+            solid_object_,
+            false);
+        context_->Deactivate(
+            solid_object_);
     }
 
     bool setSolidScene(
@@ -1332,10 +1332,6 @@ public:
             solid_object_ = object;
             context_->Display(
                 solid_object_,
-                false);
-            context_->SetDisplayMode(
-                solid_object_,
-                AIS_Shaded,
                 false);
             context_->SetColor(
                 solid_object_,
@@ -1393,10 +1389,6 @@ public:
             context_->Display(
                 solid_preview_object_,
                 false);
-            context_->SetDisplayMode(
-                solid_preview_object_,
-                AIS_Shaded,
-                false);
             context_->SetColor(
                 solid_preview_object_,
                 scene.tone ==
@@ -1416,12 +1408,9 @@ public:
             context_->Deactivate(
                 solid_preview_object_);
             solid_preview_scene_ = scene;
-            // The preview mesh is the complete evaluated candidate Body.
-            // Keeping the committed Body visible underneath would overlay
-            // identical unchanged faces (Add z-fighting) and would hide the
-            // removed region of a Cut. While a preview is active, present
-            // exactly one candidate Body and restore committed presentation
-            // when the preview clears.
+            // The preview mesh is only the transient Extrude tool volume.
+            // Keep the committed Body opaque/default and overlay this tool
+            // with Add/Cut tone, matching the semantic operation being edited.
             syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
@@ -3496,7 +3485,7 @@ public:
         return object;
     }
 
-    [[nodiscard]] Handle(AIS_Shape)
+    [[nodiscard]] Handle(AIS_InteractiveObject)
     makeSolidObject(
         const viewer::SolidScene& scene) {
         if (!scene.valid() ||
@@ -3504,38 +3493,66 @@ public:
             return {};
         }
 
-        BRep_Builder builder;
-        TopoDS_Compound compound;
-        builder.MakeCompound(compound);
+        const auto triangle_count =
+            static_cast<Standard_Integer>(
+                scene.triangles.size());
+        const auto node_count =
+            triangle_count * 3;
+        Handle(Poly_Triangulation) triangulation =
+            new Poly_Triangulation(
+                node_count,
+                triangle_count,
+                false,
+                true);
+
+        Standard_Integer node = 1;
+        Standard_Integer face = 1;
+        const auto set_vertex =
+            [&triangulation, &node](
+                const viewer::Point3& point,
+                const viewer::Vec3& normal) {
+                triangulation->SetNode(
+                    node,
+                    gp_Pnt{
+                        point.x,
+                        point.y,
+                        point.z});
+                triangulation->SetNormal(
+                    node,
+                    gp_Dir{
+                        normal.x,
+                        normal.y,
+                        normal.z});
+                return node++;
+            };
 
         for (const auto& triangle :
              scene.triangles) {
-            BRepBuilderAPI_MakePolygon polygon;
-            polygon.Add(
-                toPoint(triangle.first));
-            polygon.Add(
-                toPoint(triangle.second));
-            polygon.Add(
-                toPoint(triangle.third));
-            polygon.Close();
-            if (!polygon.IsDone()) {
-                return {};
-            }
-
-            BRepBuilderAPI_MakeFace face{
-                polygon.Wire()};
-            if (!face.IsDone()) {
-                return {};
-            }
-            builder.Add(
-                compound,
-                face.Face());
+            const auto first =
+                set_vertex(
+                    triangle.first,
+                    triangle.first_normal);
+            const auto second =
+                set_vertex(
+                    triangle.second,
+                    triangle.second_normal);
+            const auto third =
+                set_vertex(
+                    triangle.third,
+                    triangle.third_normal);
+            triangulation->SetTriangle(
+                face++,
+                Poly_Triangle{
+                    first,
+                    second,
+                    third});
         }
 
-        Handle(AIS_Shape) object =
-            new AIS_Shape(compound);
-        object->Attributes()->SetFaceBoundaryDraw(
-            Standard_False);
+        Handle(AIS_Triangulation) object =
+            new AIS_Triangulation(
+                triangulation);
+        object->Attributes()->SetShadingModel(
+            Graphic3d_TOSM_FRAGMENT);
         return object;
     }
 
@@ -4501,8 +4518,8 @@ private:
     std::vector<NavigationControl>
         navigation_controls_;
     std::vector<ReferenceObject> reference_objects_;
-    Handle(AIS_Shape) solid_object_;
-    Handle(AIS_Shape) solid_preview_object_;
+    Handle(AIS_InteractiveObject) solid_object_;
+    Handle(AIS_InteractiveObject) solid_preview_object_;
     viewer::SolidScene solid_scene_;
     viewer::SolidPreviewScene solid_preview_scene_;
     std::vector<ProfileObject> profile_objects_;
