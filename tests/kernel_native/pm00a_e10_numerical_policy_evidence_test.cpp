@@ -154,7 +154,7 @@ bool containsSameFace(
 }
 
 std::size_t uniqueModifiedFaceCount(
-    const BRepAlgoAPI_Fuse& fuse,
+    BRepAlgoAPI_Fuse& fuse,
     const TopoDS_Face& source,
     const TopoDS_Shape& result) {
     std::vector<TopoDS_Face> unique;
