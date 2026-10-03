@@ -3,6 +3,7 @@
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/core/document_reference.hpp>
 #include <simplesolid2/core/units.hpp>
+#include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/part/profile.hpp>
 
@@ -21,6 +22,14 @@ struct PartPresentationState final {
 };
 
 struct PartAuthoredState final {
+    PartAuthoredState() noexcept {
+        const auto initial_body_id =
+            next_body_id.allocate();
+        if (initial_body_id) {
+            body.id = *initial_body_id;
+        }
+    }
+
     core::DocumentProperties properties;
     PartPresentationState presentation;
     std::vector<PartSketch> sketches;
@@ -28,6 +37,10 @@ struct PartAuthoredState final {
     std::vector<PartProfile> profiles;
     core::LengthUnit length_unit{
         core::LengthUnit::millimetre};
+    ModelingSemanticsVersion modeling_semantics_version{
+        current_modeling_semantics_version};
+    BodyIdCursor next_body_id;
+    PartBody body;
 
     friend bool operator==(
         const PartAuthoredState&,
@@ -108,7 +121,26 @@ public:
         return state_.profiles;
     }
 
+    [[nodiscard]] ModelingSemanticsVersion
+    modelingSemanticsVersion() const noexcept {
+        return state_.modeling_semantics_version;
+    }
+
+    [[nodiscard]] BodyIdCursor bodyIdCursor() const noexcept {
+        return state_.next_body_id;
+    }
+
+    [[nodiscard]] const PartBody& body() const noexcept {
+        return state_.body;
+    }
+
     [[nodiscard]] const PartProfile* findProfile(
+        ProfileId id) const noexcept;
+
+    [[nodiscard]] const PartFeature* findFeature(
+        FeatureId id) const noexcept;
+
+    [[nodiscard]] bool profilePresentationVisible(
         ProfileId id) const noexcept;
 
     [[nodiscard]] std::optional<ResolvedProfileRegion>

@@ -1955,7 +1955,11 @@ PartViewportController::buildProfileScene() {
 
     for (const auto& profile :
          session_->document().profiles()) {
-        if (!profile.visible) continue;
+        if (!session_->document()
+                 .profilePresentationVisible(
+                     profile.id)) {
+            continue;
+        }
 
         const auto evaluation =
             session_->document()

@@ -166,7 +166,8 @@ struct SetProfilePropertiesCommand final {
     part::ProfileId profile_id;
     core::DocumentRevision expected_revision;
     std::string name;
-    bool visible{true};
+    part::ProfileVisibilityPolicy visibility{
+        part::ProfileVisibilityPolicy::automatic};
 };
 
 struct DeleteProfileCommand final {
@@ -426,6 +427,8 @@ private:
         part::PartAuthoredState& state) const;
     void applyProfileIdCursor(
         part::PartAuthoredState& state) const noexcept;
+    void applyBodyFeatureIdCursors(
+        part::PartAuthoredState& state) const noexcept;
 
     std::filesystem::path path_;
     part::PartDocument document_;
@@ -437,6 +440,8 @@ private:
     std::size_t cursor_{0};
     SketchEntityIdCursorMap sketch_entity_id_cursors_;
     part::ProfileIdCursor profile_id_cursor_;
+    part::BodyIdCursor body_id_cursor_;
+    part::FeatureIdCursor feature_id_cursor_;
     part::PartDocumentStore store_;
 };
 

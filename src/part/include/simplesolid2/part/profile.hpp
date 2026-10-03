@@ -13,6 +13,24 @@
 
 namespace simplesolid2::part {
 
+enum class ProfileVisibilityPolicy : std::uint8_t {
+    automatic,
+    force_shown,
+    force_hidden,
+};
+
+[[nodiscard]] constexpr bool
+isProfileVisibilityPolicy(
+    ProfileVisibilityPolicy policy) noexcept {
+    switch (policy) {
+    case ProfileVisibilityPolicy::automatic:
+    case ProfileVisibilityPolicy::force_shown:
+    case ProfileVisibilityPolicy::force_hidden:
+        return true;
+    }
+    return false;
+}
+
 enum class ProfileBoundaryAnchorKind {
     endpoint_start,
     endpoint_end,
@@ -63,7 +81,8 @@ struct PartProfile final {
     ProfileId id;
     sketch::SketchId source_sketch_id;
     std::string name;
-    bool visible{true};
+    ProfileVisibilityPolicy visibility{
+        ProfileVisibilityPolicy::automatic};
     ProfileRegionIntent region_intent;
 
     friend bool operator==(

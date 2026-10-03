@@ -1564,7 +1564,9 @@ int main(int argc, char* argv[]) {
     CHECK(
         profile_name_edit->text() ==
         QStringLiteral("Profile001"));
-    CHECK(profile_visible_check->isChecked());
+    CHECK(
+        profile_visible_check->checkState() ==
+        Qt::PartiallyChecked);
     CHECK(
         profile_source_label->text() ==
         QString::fromUtf8(
@@ -1619,7 +1621,9 @@ int main(int argc, char* argv[]) {
     CHECK(
         renamed_profile->name ==
         "Main Profile");
-    CHECK(!renamed_profile->visible);
+    CHECK(
+        renamed_profile->visibility ==
+        part::ProfileVisibilityPolicy::force_hidden);
 
     profile_items =
         tree->findItems(

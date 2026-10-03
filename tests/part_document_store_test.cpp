@@ -157,6 +157,18 @@ int main() {
         std::string::npos);
     CHECK(
         package.package->authored_json.find(
+            "\"modeling_semantics_version\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
+            "\"body\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
+            "\"features\"") !=
+        std::string::npos);
+    CHECK(
+        package.package->authored_json.find(
             "ProjectId") ==
         std::string::npos);
     CHECK(
@@ -181,6 +193,11 @@ int main() {
     CHECK(
         loaded.document->revision().value() ==
         0U);
+    CHECK(loaded.document->body().id.valid());
+    CHECK(loaded.document->body().features.empty());
+    CHECK(
+        loaded.document->modelingSemanticsVersion() ==
+        part::current_modeling_semantics_version);
     CHECK(
         loaded.document->builtinReferenceVisible(
             core::BuiltinReferenceRole::

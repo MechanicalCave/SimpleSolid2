@@ -1,146 +1,272 @@
-# PM-01 — First Solid Vertical Slice: Body / Feature / Extrude Add
+# PM-01 — Extrude Feature Vertical Slice: Body / Feature / Add / Cut
 
-**Status:** PROPOSED — NOT ACTIVE; EXPLICIT OWNER ACCEPTANCE REQUIRED  
-**Decision class:** D2 production Work Contract with bounded D0/D1 implementation inside ADR-0014  
+**Status:** ACTIVE — OWNER ACCEPTED 2026-10-03  
+**Decision class:** D2 production Work Contract with bounded D0/D1 implementation inside ADR-0014 and ADR-0015  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.4  
-**Architecture authority:** `adr/ADR-0014-part-feature-architecture-references-and-modeling-semantics.md`  
-**Entry gate:** PM-00B COMPLETED — PASS is required before activation
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.5  
+**Architecture authority:** `adr/ADR-0014-part-feature-architecture-references-and-modeling-semantics.md`, `adr/ADR-0015-extrude-feature-scope-preview-and-presentation.md`  
+**Entry gate:** PM-00B COMPLETED — PASS  
+**Owner acceptance:** 2026-10-03 — expanded PM-01 plan accepted before production mutation
 
 ## 1. Goal
 
-Deliver the first production solid-modeling vertical slice:
+Deliver the first production solid-modeling vertical slice as a development-ready Extrude Feature family:
 
-`existing valid Profile -> Extrude Add -> single Body -> edit/recompute -> Undo/Redo -> Save -> Close -> Reopen -> cold rebuild`.
+`existing valid Profile -> Extrude Add -> single Body -> additional Extrude Add/Cut -> edit/recompute -> Undo/Redo -> Save -> Close -> Reopen -> cold rebuild`.
 
-PM-01 proves the smallest durable Body/Feature implementation that satisfies ADR-0014 with one real user-facing solid operation. It is not a general feature-framework package.
+PM-01 proves durable Body/Feature identity, ordered evaluation, real Boolean composition, dynamic preview, GUI/Command Line parity and lifecycle completeness without introducing multi-body or topology-dependent face picking.
 
 ## 2. Activation rule
 
-This Work Contract is a proposal only.
+This Work Contract is ACTIVE by explicit Owner acceptance on 2026-10-03.
 
-It becomes active only after PM-00B is completed and the Owner explicitly accepts PM-01 scope. PM-00B completion, ADR-0014 acceptance or Part Modeling v1 roadmap acceptance does not activate production mutation.
+Production mutation is authorized only inside this contract and ADR-0014/ADR-0015. Any STOP condition still returns to the Owner.
 
-Before activation, no durable Body/Feature schema, migration or user-facing Extrude Add implementation is authorized.
+## 3. Scope IN
 
-## 3. Scope IN after Owner acceptance
-
-PM-01 may implement only what is required for the first solid vertical slice:
+PM-01 may implement only what is required for this Extrude vertical slice:
 
 - exactly one durable Part-v1 Body with typed Part-local BodyId distinct from DocumentId;
 - ordered typed Feature records with typed Part-local FeatureId and non-aliasing/high-water identity allocation;
-- the minimum persistent schema migration from the current Part schema while preserving existing SketchId/ProfileId/EntityId meaning;
-- a durable modeling-semantics version distinct from container/schema/EngineeringRevision/DocumentRevision;
-- Extrude Add from one existing valid Part Profile;
-- one-sided linear distance normal to the accepted Sketch support frame, with explicit direction/reverse semantics;
-- first Add creating the Body solid and later Add features succeeding only when the accepted result is exactly one attached valid solid;
-- explicit non-success for no-effect, detached/multi-solid or geometrically invalid results;
-- exact Profile boundary/provenance transfer to the provider-neutral Kernel boundary, including holes;
-- minimal OCCT-backed evaluation required for Extrude Add, without provider identity becoming authored state;
-- semantic cap/side lineage sufficient to preserve ADR-0014 reference meaning for future consumers;
-- deterministic feature evaluation/status using UpToDate / Failed / Blocked / Suppressed where applicable;
-- edit, retry/reevaluate, Delete and Suppress semantics required by ADR-0014;
-- transient preview with Finish/Cancel and revision/context revalidation before authored commit;
-- Part Feature Tree / Properties / visibility surfaces only to the extent required to operate and inspect this slice;
-- one semantic command/transaction meaning shared by GUI and non-GUI callers;
+- one durable Extrude Feature family with Add/Cut operation and OneSide/Midplane extent;
+- first successful solid-producing Feature must be Add; later Features may be Add or Cut;
+- finite positive unit-aware Length;
+- Forward/Reverse only for OneSide; Midplane uses total distance split equally about the support plane;
+- minimum persistent schema migration preserving existing SketchId/ProfileId/EntityId meaning;
+- durable modeling-semantics version distinct from container/schema/EngineeringRevision/DocumentRevision;
+- Profile visibility policy `automatic / force_shown / force_hidden` with migration of current boolean visibility;
+- exact Profile boundary/provenance transfer to provider-neutral Kernel input, including holes;
+- production provider-neutral Kernel Extrude/Boolean boundary plus OCCT implementation;
+- every successful stage yields exactly one valid solid;
+- explicit non-success for no-effect, detached Add, empty Cut, multi-solid or invalid geometry;
+- semantic cap/side lineage using ADR-0015 roles and exact boundary provenance;
+- deterministic feature evaluation/status using UpToDate / Failed / Blocked / Suppressed;
+- edit, reevaluate, Delete and Suppress semantics required by ADR-0014;
+- dynamic transient preview driven by a single shared Extrude draft;
+- live preview refresh from GUI and Command Line when the current input is valid;
+- one Finish/Enter user action with execution-time revision/profile/draft/result revalidation;
+- bounded provider-neutral Viewer solid scene and solid preview scene support, presentation-only and without topology picking;
+- Part Feature Tree / Properties sufficient to inspect Body, ordered Features, statuses and Profile/Feature relationships;
+- bidirectional Profile <-> Feature navigation/inspection without changing semantic ownership;
+- automatic hiding of consumed Profiles under automatic visibility policy and temporary source-Profile reveal during Feature edit;
+- semantic Command Line support for EXTRUDE / ADD / CUT / REVERSE / MIDPLANE / ONESIDE / FINISH / CANCEL and unit-aware distance input;
+- one semantic command/transaction meaning shared by GUI, Command Line and non-GUI callers;
 - Undo/Redo, Save/Close/Reopen and true cold rebuild from authored state;
-- structured diagnostics for invalid Profile, failed geometry, Blocked downstream state and stale context;
+- structured diagnostics for invalid/missing Profile, missing upstream Body, failed Boolean/geometry, Blocked downstream state and stale context;
 - tests and Windows manual acceptance for the delivered workflow;
 - required as-built and PL/EN product documentation plus regenerated Product Browser.
 
-## 4. Frozen Extrude Add variant
+## 4. Frozen Extrude variants
 
-The PM-01 product variant is deliberately narrow:
+### 4.1 Input
 
-- input: exactly one existing valid Profile;
-- support: the Profile's currently accepted deterministic Sketch support frame;
-- extent: one finite positive Length;
-- direction: support normal with explicit reverse/direction choice;
-- result: exactly one valid solid in the single Body;
-- holes in the Profile remain holes in the produced solid.
+Exactly one existing valid Part Profile.
 
-Excluded variants include symmetric/two-sided extent, draft, thin-wall, up-to-face/up-to-next/through-all, multiple Profiles in one Feature and multi-body output.
+The Feature references ProfileId only. It does not duplicate SketchId, support plane, frame or boundary geometry as authored truth.
 
-PM-01 may support multiple ordered Extrude Add Feature instances only under the same single-Body rule; it must not introduce a second Body.
+### 4.2 Operation
 
-## 5. Required semantic behavior
+- Add;
+- Cut.
 
-Finish commits only a currently valid accepted preview/result. Rejected Finish, Cancel and no-op do not mutate authored state or consume durable identity beyond already-accepted high-water rules.
+An Empty Body accepts only Add as a newly finished Feature. Cut requires a valid upstream Body.
 
-Editing an existing Feature preserves FeatureId. If an upstream edit makes an authored Feature invalid, the Feature remains authored and repairable; downstream features cannot consume stale last-good geometry as current truth.
+### 4.3 Extent
 
-Reference resolution and geometric feasibility remain separate. Missing/Ambiguous/Unsupported reference states fail closed. Provider generated/modified/deleted history and geometry similarity remain evidence/diagnostics only.
+OneSide:
 
-Display, camera, tessellation, pick aperture, OSNAP and Viewer state are never modeling inputs. Fuzzy/healing escalation is forbidden. Any refine/unify choice used by Extrude Add must be explicit and regression-covered under the accepted modeling-semantics policy.
+- total distance from the Profile support plane;
+- Forward or Reverse.
 
-If evaluation is synchronous, PM-01 need not invent an async publication manager. If asynchronous publication is introduced, ADR-0014 freshness authority is mandatory.
+Midplane:
 
-## 6. Persistence and migration
+- total distance centered on the Profile support plane;
+- half-distance in each support-normal direction;
+- Reverse is disabled/not authored because it would not change geometry.
 
-The first Body/Feature schema change must be explicit and versioned.
+Excluded extents: symmetric-with-independent-sides, two independent distances, Through All, Up To Face, Up To Next, draft/taper and thin-wall.
 
-Migration must preserve current durable document properties, Origin visibility, Sketch identity/content, Profile identity/intent, current high-water ID rules and user-selected length unit. Older valid Parts without Body/Feature state migrate to a valid Empty Body state without inventing a solid Feature.
+### 4.4 Result invariant
 
-No B-Rep, TopoDS/OCAF handle, topology ordinal, Viewer token, tree row or runtime session/request generation is serialized as authored CAD identity.
+After every successful Feature stage the Body result is exactly one valid solid.
 
-Save/Close/Reopen must reconstruct accepted Body/Feature intent and reevaluate from legal durable inputs without previous-process provider/cache state.
+Detached Add, no-effect Add/Cut, zero-solid Cut and multi-solid output are explicit Failed outcomes. They never silently create another Body or silently pass through the previous shape.
 
-## 7. Scope OUT
+## 5. Authored state versus evaluation
+
+The durable model stores Body/Feature identity and Extrude intent. UpToDate/Failed/Blocked are derived evaluation states; Suppressed is authored intent.
+
+Structural document validity does not require every Feature dependency to resolve at load time. An authored Feature may remain valid persistent intent while evaluation is Blocked because its Profile or upstream Body is unavailable.
+
+No stale last-good geometry is current truth or a valid downstream modeling input.
+
+## 6. Preview and Finish
+
+One runtime Extrude draft is shared by Operations UI and Command Line.
+
+Draft changes are non-authoring. A valid distance/operation/extent/direction change may trigger immediate synchronous preview evaluation. Invalid/incomplete text keeps the prior valid preview or clears it according to the UI state but never mutates authored state.
+
+Finish/Enter is exactly one user confirmation. Execution must revalidate:
+
+- current DocumentId and DocumentRevision;
+- source Profile identity/resolution;
+- legal operation against the current upstream Body;
+- active draft generation;
+- current successful evaluation corresponding to that draft.
+
+If any condition is stale/invalid, Finish fails closed with no partial mutation and no Undo entry.
+
+Cancel/Escape is non-authoring.
+
+## 7. Profile visibility and relationship UX
+
+PM-01 does not introduce Body/Feature Show/Hide.
+
+Profile visibility becomes:
+
+- automatic;
+- force_shown;
+- force_hidden.
+
+Under automatic policy, Profiles consumed by active/non-suppressed Features are hidden from normal presentation. When no active Feature consumes a Profile, it is visible.
+
+Existing persisted `visible=false` migrates to `force_hidden`; `visible=true` migrates to `automatic`.
+
+Feature Properties/Tree presentation identifies Source Profile and Source Sketch. Profile Properties identify consuming Features. Navigation between related objects is supported. Editing a Feature temporarily reveals/highlights the source Profile without changing its authored visibility policy.
+
+Suppress remains distinct from presentation visibility.
+
+## 8. Kernel and numerical boundary
+
+Kernel API remains provider-neutral and production code outside the OCCT provider cannot depend on TopoDS/OCAF handles, topology ordinals or provider identity.
+
+PM-01 may add the minimum runtime evaluated-solid and neutral presentation-mesh contracts required by Extrude Add/Cut and Viewer presentation.
+
+Modeling policy:
+
+- fuzzy = 0;
+- no fuzzy escalation;
+- no silent healing;
+- exact semantic Profile geometry enters Kernel;
+- refine/unify must be explicit and reference-regression-covered before enabled;
+- display tessellation is derived and never an operation input.
+
+## 9. Viewer boundary
+
+PM-01 may add only the public Viewer API necessary for:
+
+- final evaluated solid presentation;
+- transient Extrude preview presentation.
+
+The API is provider-neutral and consumes derived presentation data, not durable topology identity.
+
+Face/edge topology picking, semantic face/edge selection and public provider topology access remain outside PM-01.
+
+## 10. Command Line behavior
+
+Command Line and GUI manipulate the same Extrude draft.
+
+Required command semantics include:
+
+- EXTRUDE activates creation from an admissible selected Profile or enters Profile selection;
+- ADD/CUT switch legal operation and refresh preview;
+- REVERSE flips OneSide direction;
+- MIDPLANE/ONESIDE switch extent mode;
+- a legal Length expression updates distance and preview;
+- FINISH/Enter commits when the current draft is valid;
+- CANCEL/Escape exits without authored mutation.
+
+Existing unit grammar remains authoritative.
+
+## 11. Persistence and migration
+
+The first Body/Feature schema change is explicit and versioned.
+
+Migration preserves:
+
+- Document properties and DocumentId;
+- Origin presentation state;
+- SketchId/EntityId and Sketch geometry;
+- ProfileId/RegionIntent;
+- existing ID high-water semantics;
+- user-selected Length unit;
+- existing explicit Profile hidden state.
+
+Older valid Parts migrate to one valid Empty Body without inventing a Feature.
+
+No B-Rep, TopoDS/OCAF handle, topology ordinal, Viewer token, tree row, tessellation or runtime session/request generation is serialized as authored CAD identity.
+
+Save/Close/Reopen reconstructs authored Body/Feature intent and reevaluates from durable inputs without previous-process provider/cache state.
+
+## 12. Scope OUT
 
 PM-01 does not authorize:
 
-- Extrude Cut;
+- multi-body;
 - Revolve;
 - Fillet or Chamfer;
 - Datum/Construction Plane implementation;
 - Sketch support on model faces;
 - projection/reprojection;
 - deterministic planar-face frame derivation;
-- edge/face repair UI beyond the references actually required by PM-01;
+- Through All / Up To Face / Up To Next Extrude;
+- draft/taper or thin Extrude;
+- multiple Profiles in one Feature;
+- edge/face repair UI beyond diagnostics/navigation required by PM-01;
+- face/edge topology picking;
 - Assembly, Drawing or occurrence infrastructure;
 - Published References UI or final Assembly read interface;
-- multi-body;
-- arbitrary feature reorder/insertion;
+- arbitrary Feature reorder/insertion;
 - Loft, Sweep, Shell, Draft, Pattern or solid Mirror;
 - general surface/direct-face editing;
 - a global dependency framework;
 - a mandatory Sketch constraint solver;
 - generalized numerical healing or adaptive fuzzy retries;
-- public Viewer API changes unless separately Owner-approved.
+- Viewer API beyond the bounded solid/preview presentation contract accepted by ADR-0015.
 
-## 8. Acceptance evidence
+## 13. Acceptance evidence
 
 Completion requires exact-head automated and manual evidence covering at least:
 
-- migrate/open an existing pre-PM-01 Part with Sketch/Profile identity preserved and an Empty Body;
-- valid Profile -> first Extrude Add -> exactly one valid solid;
-- Profile with a hole -> correct solid with hole;
-- reverse/direction and unit-aware distance edit;
-- attached subsequent Add coverage if multiple Add instances are delivered;
-- detached/multi-solid/no-effect/invalid Profile outcomes fail explicitly according to ADR-0014;
-- edit upstream Profile -> deterministic recompute or explicit Failed/Blocked state without stale last-good truth;
-- Feature edit preserves FeatureId;
+- migrate/open pre-PM-01 Parts with Sketch/Profile identities preserved, boolean Profile visibility migrated correctly and Empty Body created;
+- valid Profile -> first Add -> exactly one valid solid;
+- Profile with hole -> correct solid with hole;
+- OneSide Forward/Reverse with unit-aware live distance preview;
+- Midplane total-distance semantics with symmetric result and no authored Reverse;
+- second attached Add -> one Body;
+- valid Cut -> one Body;
+- Cut cannot be newly authored without upstream Body;
+- detached Add, no-effect Add, no-effect Cut, zero-solid Cut and multi-solid results fail explicitly;
+- edit upstream Profile/Feature -> deterministic recompute or explicit Failed/Blocked without stale last-good truth;
+- Feature edit preserves FeatureId and one Finish creates one Undo entry;
 - Delete and Suppress are distinct, Undoable and reconstruct correctly;
-- Cancel/rejected Finish/stale context causes no partial authored mutation;
+- consumed Profile automatic hiding, explicit Show/Hide override and reappearance when no longer consumed;
+- Feature -> Profile and Profile -> consuming Features navigation/inspection;
+- Command Line and GUI manipulate the same draft/meaning;
+- dynamic preview updates for legal parameter changes and stale draft/revision cannot commit;
+- Cancel/rejected Finish causes no partial authored mutation;
 - Undo/Redo restores authored Feature identity and accepted state;
-- Save -> Close -> Reopen and cold rebuild reproduce authored intent and semantic cap/side outcomes;
+- Save -> Close -> Reopen and true cold rebuild reproduce authored intent and semantic cap/side outcomes;
+- OneSide profile_cap/extent_cap and Midplane negative_cap/positive_cap lineage plus side provenance;
 - zero false Resolved topology-reference outcomes in the PM-01 matrix;
-- camera/display/pick state cannot alter modeling result;
+- camera/display/pick/tessellation state cannot alter modeling result;
 - no fuzzy escalation or silent gap healing;
+- Viewer solid/preview contract carries no provider/durable topology identity;
 - semantic/core, kernel-native and desktop verification remain green on the same final source candidate;
 - supported Windows manual workflow passes.
 
-## 9. STOP conditions
+## 14. STOP conditions
 
 STOP and return to the Owner if implementation would require:
 
-- changing ADR-0014 semantics;
+- changing ADR-0014 or ADR-0015 semantics;
 - persisting provider topology identity or geometry similarity as authored identity;
 - adding multi-body;
+- adding Extrude variants outside Section 4;
 - introducing planar-face support/frame semantics;
-- adding a public Viewer API;
+- adding topology face/edge picking;
+- Viewer public API beyond bounded solid/preview presentation;
 - introducing Assembly/global dependency infrastructure;
-- broadening Extrude variants beyond Section 4;
 - changing Foundation ownership;
 - an unplanned schema meaning that cannot be expressed within this contract.
 
@@ -148,8 +274,8 @@ STOP and return to the Owner if implementation would require:
 
 Internal docs: required
 User/Product docs: required
-Reason: PM-01 introduces the first durable Body/Feature schema and user-visible Extrude Add workflow, including persistence, failure and lifecycle behavior.
+Reason: PM-01 introduces the first durable Body/Feature schema and user-visible Extrude Add/Cut workflow, dynamic preview, Command Line semantics, Profile consumption visibility and solid presentation.
 
-## 10. Completion boundary
+## 15. Completion boundary
 
-PM-01 completion authorizes only the delivered Extrude Add vertical slice. PM-02 and later Part-v1 packages remain separately gated by their own Work Contracts and any still-open roadmap decisions.
+PM-01 completion authorizes only the delivered Extrude Feature vertical slice. PM-02 and later Part-v1 packages remain separately gated by their own Work Contracts and any still-open roadmap decisions.

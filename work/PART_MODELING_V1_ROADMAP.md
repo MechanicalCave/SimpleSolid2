@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
-**Status:** ACCEPTED — PROGRAM FROZEN; IMPLEMENTATION NOT ACTIVATED  
-**Version:** 1.4  
+**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 ACTIVE  
+**Version:** 1.5  
 **Owner acceptance:** 2026-10-03  
-**Previous accepted version:** 1.3 — 2026-10-02  
+**Previous accepted version:** 1.4 — 2026-10-03  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current baseline:** `main` after PM-00A completion, `19b4dba090ea99d0e2bad56d46ab8753f1097e85`  
+**Current baseline:** `main` after PM-00B completion, `ee1e67d7fa68167ce85414d90c1f8cdd20ac4697`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -124,8 +124,8 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | G0 | **Sketcher profile-authoring readiness re-test** | prove current Sketcher can deliberately author practical Profiles after SR-01/02/03 | **COMPLETED — PASS on `16df8d1940a1f438a66cbd6964a881ba24718c0d`** |
 | 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | **COMPLETED — PASS; final source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb`, Windows FULL #1320; Owner-review synthesis prepared** |
 | 2 | **PM-00B — Part Feature Architecture Freeze** | Owner-approved ADR/contract freeze for first solid workflow based on PM-00A evidence | **COMPLETED — PASS; source candidate `4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9`, Windows FULL #1323** |
-| 3 | **PM-01 — First Solid Vertical Slice: Body / Feature / Extrude Add** | minimum durable Body/Feature architecture plus one complete Extrude Add lifecycle | future separate Work Contract |
-| 4 | **PM-02 — Datum Plane / Sketch Support / Extrude Cut** | offset datum from stable source, Sketch on datum, Cut, downstream recompute/failure behavior | future separate Work Contract |
+| 3 | **PM-01 — Extrude Feature Vertical Slice: Body / Feature / Add / Cut** | durable Body/Feature architecture plus complete Extrude Add/Cut OneSide/Midplane lifecycle | **ACTIVE — Owner accepted 2026-10-03; ADR-0015** |
+| 4 | **PM-02 — Datum Plane / Sketch Support** | offset datum from stable source, Sketch/Profile on datum and reuse of the PM-01 Extrude Feature from datum-backed Profiles | future separate Work Contract |
 | 5 | **PM-03 — Face Support / Semantic Topology References / Projection** | planar-face support, repair, exact bounded projection and resolver expansion without silent rebinding | future separate Work Contract |
 | 6 | **PM-04 — Axis / Datums / Revolve** | Axis semantics, remaining required datums and complete Revolve Add/Cut lifecycle | future separate Work Contract |
 | 7 | **PM-05 — Edge Features: Fillet / Chamfer** | complete edge-feature lifecycle with lineage/refine handling and repair | future separate Work Contract |
@@ -137,7 +137,7 @@ No package number authorizes mutation by itself.
 
 The audited v0.2 draft correctly requires minimal Body/Feature schema work before Extrude, but the accepted program deliberately forbids a long standalone "infrastructure first" implementation phase.
 
-PM-01 therefore combines only the **minimum** Body/Feature identity, persistence, evaluation, tree projection and Kernel API required to prove one real Extrude Add vertical workflow.
+PM-01 therefore combines only the Body/Feature identity, persistence, evaluation, tree projection, bounded Viewer presentation and Kernel API required to prove the accepted Extrude Feature family: multiple ordered Add/Cut Features with OneSide/Midplane. ADR-0015 explicitly supersedes the earlier single-Add product-scope slice before production mutation began.
 
 Architecture that cannot be justified by PM-01's concrete workflow remains out of scope.
 
@@ -323,11 +323,11 @@ The audited design uses O-01...O-12 as a durable decision ledger. Decisions rema
 | O-03 | projection curves, snapshot/refresh, atomic face-boundary capture | snapshot intent; exact supported curves or explicit UnsupportedCurve; no silent approximation | **INITIAL MATRIX ACCEPTED by PM-00B; final before PM-03** |
 | O-04 | support-frame construction, re-support and orientation | full stable O/U/V/N rule; preserve local 2D by default; no silent fallback | **CLOSED by ADR-0014 / PM-00B** |
 | O-05 | topology-reference selector, lineage and split/merge guarantees | semantic producer/stage/role lineage, fail closed, user repair; no Face[n]/Edge[n] | **CLOSED by ADR-0014 / PM-00B** |
-| O-06 | exact variants/inputs per modeling operation | freeze a bounded v1 matrix; lifecycle completeness over variant breadth | **INITIAL MATRIX ACCEPTED by PM-00B; each owning operation contract remains authoritative** |
+| O-06 | exact variants/inputs per modeling operation | freeze a bounded v1 matrix; lifecycle completeness over variant breadth | **EXTRUDE MATRIX AMENDED/CLOSED for PM-01 by ADR-0015; later operations remain owned by their packages** |
 | O-07 | Sketch Axis representation/editing/direction/visibility | Axis excluded from Profiles; any valid straight Sketch line may still be an axis source without role conversion | PM-04 before Shared-2D mutation |
 | O-08 | Published References/local frames and v1 UI scope | stable typed interface identity; no Assembly implementation | semantics by PM-00B; UI/final scope PM-06 |
 | O-09 | downstream failure commit, Delete, Suppress, retry/history semantics | preserve repairable downstream intent; separate Delete from Suppress; no hidden history entries | **CLOSED by ADR-0014 / PM-00B** |
-| O-10 | visibility, auto-hide, history inspection and performance budgets | visibility never changes evaluation; measure before optimize | each owning UI package; final budget by PM-06 |
+| O-10 | visibility, auto-hide, history inspection and performance budgets | visibility never changes evaluation; measure before optimize | **Profile-consumption visibility closed for PM-01 by ADR-0015; later tools/final budget remain owning-package/PM-06 work** |
 | O-11 | numerical tolerances, refine/healing, exact Profile->Kernel input, modeling semantics version | explicit versioned policy; no display tolerance leakage or escalating fuzzy success | **CLOSED by ADR-0014 / PM-00B** |
 | O-12 | ID scopes, Part snapshot/read contract, transform direction, durable version vs DocumentRevision | distinguish Document/Body/local IDs and runtime revision; no Assembly solver | **FOUNDATIONS CLOSED by ADR-0014 / PM-00B; minimal interface PM-06** |
 
@@ -349,40 +349,44 @@ It converts accepted PM-00A evidence into:
 
 PM-00B must not become a second research phase or a general modeling-framework implementation.
 
-## 11. PM-01 — First Solid Vertical Slice: Body / Feature / Extrude Add
+## 11. PM-01 — Extrude Feature Vertical Slice: Body / Feature / Add / Cut
 
-PM-01 is the first authorized production-solid package only after G0, PM-00A and PM-00B pass.
+**Status:** ACTIVE — Owner accepted 2026-10-03 under ADR-0015.
+
+PM-01 is the first authorized production-solid package.
 
 Minimum complete workflow:
 
-`existing valid Profile -> Extrude Add -> Body -> edit -> recompute -> Undo/Redo -> Save -> Close -> Reopen -> cold rebuild`.
+`existing valid Profile -> Extrude Add -> Body -> additional Extrude Add/Cut -> edit/recompute -> Undo/Redo -> Save/Close/Reopen -> cold rebuild`.
 
-PM-01 owns only the minimal implementation required for that workflow:
+PM-01 owns the bounded implementation required for that workflow:
 
 - BodyId / FeatureId and one-Body validation;
-- minimal ordered Feature state and dependency edges;
-- schema migration preserving existing SketchId/ProfileId/EntityId;
-- exact Profile->Kernel boundary required by Extrude;
-- minimal provider-neutral Kernel API + OCCT adapter;
-- Extrude Add variants explicitly frozen by PM-01;
-- cap/side reference lineage required by later consumers;
-- deterministic recompute/status;
-- Tree/Properties/visibility needed to operate the feature;
-- semantic edit/delete behavior in the accepted subset;
-- complete GUI/semantic API parity;
+- ordered Feature state and evaluation;
+- schema migration preserving current Sketch/Profile/Entity identity;
+- Profile visibility policy with automatic hiding when consumed;
+- exact Profile -> Kernel boundary;
+- provider-neutral production Kernel API + OCCT Extrude/Fuse/Cut;
+- Add/Cut with OneSide/Midplane and OneSide Reverse;
+- dynamic single-draft preview with one Finish;
+- bounded provider-neutral solid/preview Viewer presentation, without topology picking;
+- cap/side semantic lineage required by later consumers;
+- deterministic recompute/status and Delete/Suppress;
+- Tree/Properties bidirectional Profile <-> Feature identification;
+- complete GUI/Command Line/semantic API parity;
 - documentation and Windows manual acceptance.
 
-No speculative framework beyond the first real Feature.
+ADR-0015 supersedes the earlier one-sided Add-only O-06 slice before PM-01 production mutation began. No speculative framework beyond the accepted Extrude Feature family is authorized.
 
-## 12. PM-02 — Datum Plane / Sketch Support / Extrude Cut
+## 12. PM-02 — Datum Plane / Sketch Support
 
 Primary vertical scenario:
 
-`Extrude Add -> accepted datum plane -> Sketch -> Profile -> Extrude Cut -> edit upstream -> recompute or structured downstream failure`.
+`existing Body -> accepted Origin-based offset datum plane -> Sketch -> Profile -> PM-01 Extrude Add/Cut -> edit datum/upstream -> recompute or structured downstream failure`.
 
-Start with datum definitions that do not require unresolved face topology (for example accepted Origin-based offset). Face-derived support belongs to PM-03 unless PM-00B explicitly proves and freezes the required reference path.
+PM-02 owns the exact bounded datum constructors/support semantics it activates. It reuses the production Extrude Feature delivered by PM-01 rather than introducing a second Cut implementation.
 
-The package owns full lifecycle for the exact datum/Cut variants it activates.
+Face-derived support belongs to PM-03 because it requires semantic model-face reference plus deterministic face-frame behavior.
 
 ## 13. PM-03 — Face Support / Semantic Topology References / Projection
 
@@ -579,14 +583,12 @@ Planned Part features must not be documented as already implemented.
 
 ## 23. Activation boundary
 
-Program v1.4 is accepted and frozen. **G0, PM-00A and PM-00B are COMPLETED — PASS.**
+Program v1.5 is accepted and frozen. **G0, PM-00A and PM-00B are COMPLETED — PASS. PM-01 is ACTIVE.**
 
-PM-00B's final source candidate `4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9` passed Windows FULL #1323 with core-only 19/19, kernel-native 27/27 and desktop FULL 84/84. ADR-0014 is now the accepted Part Feature architecture authority.
+The Owner accepted the expanded PM-01 plan on 2026-10-03 before production mutation. ADR-0015 records the deliberate O-06 amendment from the earlier one-sided Add-only slice to the complete bounded Extrude Feature family: multiple ordered Add/Cut Features, OneSide/Midplane, dynamic single-Finish preview, Profile-consumption visibility/discoverability, Command Line parity and bounded solid Viewer presentation.
 
-Current legal next action:
+Current legal implementation authority is:
 
-**Owner review and explicit acceptance or amendment of `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`.**
+**`work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md` under ADR-0014 + ADR-0015.**
 
-PM-01 remains **NOT ACTIVE**. No durable Body/Feature schema, migration, Part Feature Tree product behavior or user-facing Extrude Add implementation is authorized until that separate acceptance.
-
-Part Modeling v1 program acceptance and PM-00B completion must never be interpreted as permission to skip the PM-01 boundary.
+PM-02 and later packages remain NOT ACTIVE. PM-01 must not expand into datum planes, planar-face support, topology picking, Revolve, edge features, multi-body or general dependency infrastructure.

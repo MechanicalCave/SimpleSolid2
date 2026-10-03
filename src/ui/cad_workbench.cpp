@@ -65,6 +65,34 @@ QString fromUtf8(std::string_view value) {
     return 0;
 }
 
+[[nodiscard]] part::ProfileVisibilityPolicy
+profileVisibilityForCheckState(
+    Qt::CheckState state) noexcept {
+    switch (state) {
+    case Qt::Checked:
+        return part::ProfileVisibilityPolicy::force_shown;
+    case Qt::Unchecked:
+        return part::ProfileVisibilityPolicy::force_hidden;
+    case Qt::PartiallyChecked:
+        return part::ProfileVisibilityPolicy::automatic;
+    }
+    return part::ProfileVisibilityPolicy::automatic;
+}
+
+[[nodiscard]] Qt::CheckState
+checkStateForProfileVisibility(
+    part::ProfileVisibilityPolicy policy) noexcept {
+    switch (policy) {
+    case part::ProfileVisibilityPolicy::automatic:
+        return Qt::PartiallyChecked;
+    case part::ProfileVisibilityPolicy::force_shown:
+        return Qt::Checked;
+    case part::ProfileVisibilityPolicy::force_hidden:
+        return Qt::Unchecked;
+    }
+    return Qt::PartiallyChecked;
+}
+
 [[nodiscard]] std::optional<core::LengthUnit>
 lengthUnitForIndex(int index) noexcept {
     switch (index) {
@@ -1190,6 +1218,12 @@ void CadWorkbench::buildUi() {
             profile_properties_page_);
     profile_visible_->setObjectName(
         QStringLiteral("profilePropertyVisible"));
+    profile_visible_->setTristate(true);
+    profile_visible_->setCheckState(
+        Qt::PartiallyChecked);
+    profile_visible_->setToolTip(
+        QStringLiteral(
+            "Partially checked = Automatic; checked = Force Shown; unchecked = Force Hidden"));
 
     apply_profile_button_ =
         new QPushButton(
@@ -2602,7 +2636,8 @@ void CadWorkbench::applyProfileProperties() {
                 profile_id,
                 document_session->document().revision(),
                 toUtf8(profile_name_->text()),
-                profile_visible_->isChecked()});
+                profileVisibilityForCheckState(
+                    profile_visible_->checkState())});
     if (!result.ok()) {
         showFailure(result.diagnostic);
         refreshProfileProperties(profile_id);
@@ -4003,7 +4038,8 @@ void CadWorkbench::clearActiveContext() {
     profile_area_->clear();
     profile_perimeter_->clear();
     profile_holes_->clear();
-    profile_visible_->setChecked(false);
+    profile_visible_->setCheckState(
+        Qt::PartiallyChecked);
 
     number_->setEnabled(false);
     title_->setEnabled(false);
@@ -4158,8 +4194,9 @@ void CadWorkbench::refreshProfileProperties(
     profile_source_->setText(
         fromUtf8(
             profile->source_sketch_id.value()));
-    profile_visible_->setChecked(
-        profile->visible);
+    profile_visible_->setCheckState(
+        checkStateForProfileVisibility(
+            profile->visibility));
 
     const auto evaluation =
         document_session->document()

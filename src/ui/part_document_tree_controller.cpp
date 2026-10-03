@@ -564,7 +564,10 @@ void PartDocumentTreeController::rebuild(
 
                 auto profile_font =
                     profile_item->font(0);
-                profile_font.setItalic(!profile.visible);
+                profile_font.setItalic(
+                    !session_->document()
+                         .profilePresentationVisible(
+                             profile.id));
                 profile_item->setFont(
                     0,
                     profile_font);

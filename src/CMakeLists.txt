@@ -84,6 +84,9 @@ target_include_directories(simplesolid2_kernel
 target_compile_features(simplesolid2_kernel PUBLIC cxx_std_20)
 
 add_library(simplesolid2_part STATIC
+    part/body_id.cpp
+    part/feature.cpp
+    part/feature_id.cpp
     part/part_document.cpp
     part/part_document_store.cpp
     part/part_sketch.cpp

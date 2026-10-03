@@ -419,16 +419,19 @@ int main() {
                 second_profile_id,
                 session.document().revision(),
                 "Main plate",
-                false})
+                part::ProfileVisibilityPolicy::
+                    force_hidden})
             .ok());
     CHECK(
         session.document()
             .findProfile(second_profile_id)
             ->name == "Main plate");
     CHECK(
-        !session.document()
-             .findProfile(second_profile_id)
-             ->visible);
+        session.document()
+            .findProfile(second_profile_id)
+            ->visibility ==
+        part::ProfileVisibilityPolicy::
+            force_hidden);
 
     // Source-geometry changes may invalidate evaluation without mutating
     // Profile identity or RegionIntent.
