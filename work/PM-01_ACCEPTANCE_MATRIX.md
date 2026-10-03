@@ -3,8 +3,8 @@
 **Status:** PENDING FINAL DOCS/CLOSURE GATE + OWNER MANUAL WINDOWS ACCEPTANCE  
 **Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
 **Architecture:** ADR-0014 + ADR-0015  
-**Runtime baseline merged to main:** `84a5be5a229f881120d838609ddfdc80c2431557`  
-**Latest runtime exact-head gate:** Windows FULL #1339 — PASS on `7c4783525c589c9e626ba260680e3e3026827a44`
+**Runtime baseline merged to main:** `53bde160abeabd854d99fb96535c528f8402858f`  
+**Latest runtime exact-head gate:** Windows FULL #1348 — PASS on `86b5a4238635953f013ea10be35c8d21bbb07b03`
 
 ## 1. Automated acceptance coverage
 
