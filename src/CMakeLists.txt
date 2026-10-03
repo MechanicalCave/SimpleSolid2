@@ -74,6 +74,7 @@ target_compile_features(simplesolid2_persistence PUBLIC cxx_std_20)
 
 add_library(simplesolid2_kernel STATIC
     kernel/profile_input.cpp
+    kernel/solid_modeling.cpp
 )
 
 target_include_directories(simplesolid2_kernel
@@ -154,7 +155,7 @@ target_link_libraries(simplesolid2_application
 
 target_compile_features(simplesolid2_application PUBLIC cxx_std_20)
 
-if(SS2_BUILD_KERNEL_NATIVE)
+if(SS2_BUILD_DESKTOP OR SS2_BUILD_KERNEL_NATIVE)
 foreach(_target IN ITEMS
         TKernel
         TKMath
@@ -173,6 +174,7 @@ endforeach()
 
 add_library(simplesolid2_kernel_occt STATIC
     kernel_occt/profile_face_evidence.cpp
+    kernel_occt/solid_modeling_kernel.cpp
 )
 
 target_include_directories(simplesolid2_kernel_occt

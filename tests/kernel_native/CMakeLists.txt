@@ -197,6 +197,27 @@ set_tests_properties(pm00a.e10_numerical_policy PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;native"
 )
 
+add_executable(pm01b_production_kernel_test
+    pm01b_production_kernel_test.cpp
+)
+
+target_link_libraries(pm01b_production_kernel_test
+    PRIVATE
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+)
+
+target_compile_features(pm01b_production_kernel_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm01b.production_kernel
+    COMMAND pm01b_production_kernel_test
+)
+
+set_tests_properties(pm01b.production_kernel PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;subsystem-part;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
@@ -207,6 +228,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm00a_e02_multistage_lineage_test
         pm00a_e06_revolve_evidence_test
         pm00a_e10_numerical_policy_evidence_test
+        pm01b_production_kernel_test
 )
 
 foreach(_forbidden_target IN ITEMS

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/kernel/profile_input.hpp>
+#include <simplesolid2/kernel/reference_status.hpp>
 
 #include <cstddef>
 #include <optional>
@@ -40,13 +41,6 @@ struct ShapeEvidence final {
     friend bool operator==(
         const ShapeEvidence&,
         const ShapeEvidence&) = default;
-};
-
-enum class ReferenceStatus {
-    resolved,
-    missing,
-    ambiguous,
-    unsupported,
 };
 
 enum class ExtrudeFaceRoleKind {
