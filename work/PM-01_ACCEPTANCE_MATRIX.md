@@ -1,10 +1,10 @@
 # PM-01 — Final Acceptance Matrix
 
-**Status:** PENDING H7 REMEDIATION + OWNER MANUAL WINDOWS ACCEPTANCE  
+**Status:** PENDING H7 DOCS GATE + OWNER MANUAL WINDOWS ACCEPTANCE  
 **Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
 **Architecture:** ADR-0014 + ADR-0015  
-**Runtime baseline merged to main:** `ca5592d07a271c83c9752fb654cded2c7b3d83c6`  
-**Latest runtime exact-head gate:** Windows FULL #1364 — PASS on `60f2a7ac6ed894e77c751449b370ee4322c870ae`
+**Runtime baseline merged to main:** `48377c5a5a81673e901e22d3534d3f049912d2a6`  
+**Latest runtime exact-head gate:** Windows FULL #1369 — PASS on `aaab5610f8f7c6fa3036d8123849523d06dd66e1`
 
 ## 1. Automated acceptance coverage
 
@@ -27,6 +27,7 @@
 | Manual-remediation H4b: operation-only preview + nodal-normal smooth shading + restored mesh density | PR #161, Windows FULL #1348 | PASS |
 | Manual-remediation H5: exact Add/Cut delta preview, transient source-Profile hide, volumetric Cut no-effect including face/edge/point contact | PR #165, Windows FULL #1359 | PASS |
 | Manual-remediation H6: independent committed-Body / Add / Cut OCCT shading aspects; preview replacement/clear cannot recolor Body | PR #169, Windows FULL #1364 | PASS |
+| Manual-remediation H7: current-revision resolved lower-history prefix remains visible when a higher active Feature fails/blocks; final Body remains Unavailable | PR #173, Windows FULL #1369 | PASS |
 | As-built docs + PL/EN product docs + generated Product Browser | PR #163/#166/#171, Windows DOCS #1350/#1360/#1367 | PASS |
 | Supported Windows integrated manual workflow | Section 3 below | PENDING OWNER |
 
@@ -113,8 +114,8 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 
 ## 4. Manual result
 
-**Owner Windows result:** PARTIAL PASS — H6 PASS; H7 history-prefix presentation required  
+**Owner Windows result:** PENDING RETEST — H7 automated PASS  
 **Date:** 2026-10-03  
 **Last Owner-tested candidate:** `540f24a8f89fcb30ba1de6d8273e50f27db93f20`  
-**Next Owner-test candidate:** PENDING H7 runtime gate  
+**Next Owner-test candidate:** latest main after H7 docs/Product Browser sync (runtime baseline `48377c5a5a81673e901e22d3534d3f049912d2a6`)  
 **Notes:** H6 Add/Cut preview color isolation is manually confirmed PASS on `540f24a...`. Broader manual use exposed H7: when a higher Sketch/Profile invalidates a later Feature, Viewer clears the entire Body. H7 retains only a current-revision resolved lower-history prefix for presentation; final Body remains Unavailable, final semantic face references remain empty and downstream active Features remain Blocked.
