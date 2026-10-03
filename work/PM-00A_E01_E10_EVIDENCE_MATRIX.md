@@ -214,6 +214,27 @@ Goal: expose provider periodic/seam behavior without making the seam semantic id
 | E06-03 | Attempt to reference the provider-created periodic seam itself as a durable semantic target | **Unsupported** | YES | technical seam is promoted to semantic identity |
 | E06-04 | Upstream dimension change moves/changes provider seam representation but preserves revolved semantic side | semantic side remains **Resolved** | YES | seam placement causes semantic identity flip |
 
+## 10A. E06 execution result
+
+**E06 status:** COMPLETED — PASS  
+**Exact source candidate:** `44eda36ba6bdc19d8c252831937fb86f8afabde7`  
+**Kernel-focused:** #1305 — PASS  
+**Windows FULL:** #1306 — PASS  
+**False-Resolved:** 0  
+**Evidence report:** `work/PM-00A_E06_REVOLVE_PERIODIC_SEAM_EVIDENCE.md`
+
+All E06-01…E06-04 expectations are satisfied.
+
+Key findings:
+
+- a full 360° Revolve produces one valid solid;
+- semantic revolved faces are reconstructed from exact Profile boundary-use provenance;
+- real provider periodic seam topology is observed but remains `Unsupported` as semantic identity;
+- an upstream dimension edit changes seam geometry while the same semantic side remains uniquely `Resolved`;
+- cold replay reproduces the same semantic side and non-semantic seam outcome without previous provider state.
+
+E06 also supplies E07-06.
+
 ## 11. E07 — cold model rebuild matrix
 
 A0 already proved cold reconstruction for Profile face evidence. E07 extends the requirement to topology-reference outcomes.
@@ -231,24 +252,25 @@ Every row below destroys DocumentSession/evidence inputs/B-Rep/provider objects/
 
 Any status change caused solely by loss of previous-process provider history is an E07 failure.
 
-## 11A. E07 accumulated execution result — Phase 1
+## 11A. E07 accumulated execution result
 
-**E07 status:** PARTIAL — E07-01…E07-05 COMPLETED — PASS; E07-06 PENDING E06  
-**Accumulated source candidate:** `953cdca42978916754f6ae6cc68d86352aad35ac`  
-**Windows FULL:** #1286 — PASS  
-**Kernel-native:** 23/23 PASS  
-**False-Resolved across completed rows:** 0  
+**E07 status:** COMPLETED — PASS  
+**Accumulated source candidate:** `44eda36ba6bdc19d8c252831937fb86f8afabde7`  
+**Windows FULL:** #1306 — PASS  
+**Kernel-native:** 24/24 PASS  
+**False-Resolved:** 0  
 **Evidence report:** `work/PM-00A_E07_ACCUMULATED_COLD_REBUILD_EVIDENCE.md`
 
-E07-01…E07-05 are satisfied by the owning cold-replay regressions executed together on the accumulated #1286 candidate:
+E07-01…E07-06 are satisfied by their owning cold-replay regressions on the accumulated #1306 candidate:
 
 - E01 stable cap/side meanings remain Resolved after authored Save/Close/Reopen;
 - E02 stable downstream meaning remains Resolved at the same producer/consumed stage after provider teardown/rebuild;
 - E03 split remains Ambiguous after provider-history teardown;
 - E04 lost distinction remains Ambiguous/Missing according to the source-row semantic meaning;
-- E05 removed target remains Missing after reopen even with a geometry-similar/identical decoy.
+- E05 removed target remains Missing after reopen even with a geometry-similar/identical decoy;
+- E06 semantic revolved side remains Resolved after provider teardown/rebuild while the periodic seam remains Unsupported.
 
-E07-06 is not executed yet because E06 periodic/full-Revolve evidence does not yet exist. The frozen E07 expectation is unchanged and E07 is not marked complete until E07-06 PASS.
+The frozen E07 matrix is therefore fully COMPLETED — PASS.
 
 ## 12. E08 — support-frame stability
 
