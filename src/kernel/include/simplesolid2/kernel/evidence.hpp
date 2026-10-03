@@ -151,6 +151,7 @@ struct ExtrudeSurfaceCarrierEvidence final {
     std::size_t unique_claimed_face_count{};
     std::size_t unclaimed_face_count{};
     std::size_t multiply_claimed_face_count{};
+    std::size_t claim_outside_body_count{};
 
     [[nodiscard]] bool completeFaceClaims() const noexcept {
         return shape.ok() &&
@@ -160,6 +161,7 @@ struct ExtrudeSurfaceCarrierEvidence final {
                    unique_claimed_face_count &&
                unclaimed_face_count == 0U &&
                multiply_claimed_face_count == 0U &&
+               claim_outside_body_count == 0U &&
                start_cap.status == ReferenceStatus::resolved &&
                end_cap.status == ReferenceStatus::resolved;
     }
