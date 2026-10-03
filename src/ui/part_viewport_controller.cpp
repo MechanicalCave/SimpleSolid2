@@ -527,9 +527,6 @@ void PartViewportController::clear() {
             viewport_->setSolidScene(
                 viewer::SolidScene{}));
         static_cast<void>(
-            viewport_->setSolidScene(
-                viewer::SolidScene{}));
-        static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));
         static_cast<void>(
@@ -578,6 +575,9 @@ void PartViewportController::refreshPresentation() {
         clearProfileDraftPreview();
         clearSketchSelectionBoxOverlay();
         applySketchViewportMode();
+        static_cast<void>(
+            viewport_->setSolidScene(
+                viewer::SolidScene{}));
         static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));

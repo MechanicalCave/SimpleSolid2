@@ -2,6 +2,8 @@
 #include "part_viewport_controller.hpp"
 
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/kernel/solid_modeling.hpp>
+#include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <QApplication>
 #include <QTreeWidget>
@@ -11,6 +13,7 @@
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <utility>
 
@@ -85,6 +88,14 @@ public:
         const viewer::ReferenceScene& scene) override {
         if (!scene.valid()) return false;
         reference_scene_ = scene;
+        return true;
+    }
+
+    bool setSolidScene(
+        const viewer::SolidScene& scene) override {
+        ++solid_scene_calls_;
+        if (!scene.valid()) return false;
+        solid_scene_ = scene;
         return true;
     }
 
@@ -165,8 +176,10 @@ public:
 
     viewer::CameraState camera_;
     viewer::ReferenceScene reference_scene_;
+    viewer::SolidScene solid_scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene preview_scene_;
+    std::size_t solid_scene_calls_{};
     std::size_t sketch_scene_calls_{};
     std::size_t preview_scene_calls_{};
     bool fail_preview_{};
@@ -179,6 +192,70 @@ public:
     viewer::ViewportCursorMode cursor_mode_{
         viewer::ViewportCursorMode::
             system_default};
+};
+
+class FakeSolid final
+    : public kernel::RuntimeSolid {};
+
+class FakeSolidKernel final
+    : public kernel::ISolidModelingKernel {
+public:
+    kernel::SolidModelingResult extrude(
+        const kernel::LinearExtrudeInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        kernel::SolidModelingResult result;
+        if (!input.valid()) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    invalid_input;
+            return result;
+        }
+        if (input.operation ==
+                kernel::SolidBooleanOperation::cut &&
+            upstream == nullptr) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    missing_upstream;
+            return result;
+        }
+
+        result.status =
+            kernel::SolidModelingStatus::ok;
+        result.solid =
+            std::make_shared<FakeSolid>();
+        result.brep_valid = true;
+        result.solid_count = 1U;
+        return result;
+    }
+
+    kernel::SolidPresentationResult
+    presentationMesh(
+        kernel::RuntimeSolidHandle solid) noexcept override {
+        if (!solid) {
+            return {
+                kernel::SolidPresentationStatus::
+                    invalid_input,
+                {}};
+        }
+        if (dynamic_cast<const FakeSolid*>(
+                solid.get()) == nullptr) {
+            return {
+                kernel::SolidPresentationStatus::
+                    provider_mismatch,
+                {}};
+        }
+
+        kernel::SolidPresentationMesh mesh;
+        mesh.triangles.push_back(
+            {
+                {0.0, 0.0, 0.0},
+                {10.0, 0.0, 0.0},
+                {0.0, 10.0, 0.0},
+                {0.0, 0.0, 1.0}});
+        return {
+            kernel::SolidPresentationStatus::ok,
+            std::move(mesh)};
+    }
 };
 
 } // namespace
@@ -605,6 +682,118 @@ int main(int argc, char* argv[]) {
         !controller.setSketchCursorMode(
             viewer::ViewportCursorMode::
                 create_edit_crosshair));
+
+
+    // PM-01D: final Body presentation is rebuilt from current authored state
+    // through a provider-neutral mesh. Failed/Blocked current truth clears
+    // the solid scene instead of retaining stale last-good geometry.
+    {
+        auto solid_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession
+            solid_session{
+                std::filesystem::path{
+                    "pm01d-solid.ss2part"},
+                std::move(solid_document)};
+        FakeSolidKernel solid_kernel;
+
+        const auto profile_sketch =
+            solid_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            profile_sketch.ok() &&
+            profile_sketch.sketch_id);
+
+        const auto rectangle =
+            solid_session.execute(
+                application::AddSketchRectangleCommand{
+                    *profile_sketch.sketch_id,
+                    solid_session.document()
+                        .revision(),
+                    {0.0, 0.0},
+                    {20.0, 10.0},
+                    sketch::EntityRole::regular,
+                    false});
+        CHECK(rectangle.ok());
+
+        const auto* source =
+            solid_session.document()
+                .findSketch(
+                    *profile_sketch.sketch_id);
+        CHECK(source != nullptr);
+        const auto analysis =
+            sketch::analyzeRegions(
+                source->model);
+        CHECK(analysis.complete());
+        CHECK(analysis.regions.size() == 1U);
+        const auto intent =
+            part::makeProfileRegionIntent(
+                analysis.regions.front());
+        CHECK(intent);
+
+        const auto profile =
+            solid_session.execute(
+                application::CreateProfileCommand{
+                    *profile_sketch.sketch_id,
+                    solid_session.document()
+                        .revision(),
+                    *intent});
+        CHECK(
+            profile.ok() &&
+            profile.profile_id);
+
+        const auto feature =
+            solid_session.execute(
+                application::
+                    CreateExtrudeFeatureCommand{
+                    *profile.profile_id,
+                    solid_session.document()
+                        .revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{5.0},
+                        false},
+                    {}},
+                solid_kernel);
+        CHECK(
+            feature.ok() &&
+            feature.feature_id);
+
+        controller.setSolidModelingKernel(
+            &solid_kernel);
+        controller.setDocumentSession(
+            &solid_session);
+        CHECK(
+            viewport.solid_scene_
+                .triangles.size() == 1U);
+
+        const auto delete_profile =
+            solid_session.execute(
+                application::DeleteProfileCommand{
+                    *profile.profile_id,
+                    solid_session.document()
+                        .revision()});
+        CHECK(delete_profile.ok());
+        controller.refreshPresentation();
+        CHECK(
+            viewport.solid_scene_
+                .triangles.empty());
+
+        CHECK(solid_session.undo().changed);
+        controller.refreshPresentation();
+        CHECK(
+            viewport.solid_scene_
+                .triangles.size() == 1U);
+
+        controller.setSolidModelingKernel(
+            nullptr);
+        CHECK(
+            viewport.solid_scene_
+                .triangles.empty());
+    }
 
     return EXIT_SUCCESS;
 }
