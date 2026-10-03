@@ -175,6 +175,11 @@ int main() {
             kernel);
     CHECK(preview.committable());
     CHECK(preview.previewSolidAvailable());
+    CHECK(preview.body_solid != nullptr);
+    CHECK(preview.preview_tool_solid != nullptr);
+    CHECK(
+        preview.body_solid !=
+        preview.preview_tool_solid);
     CHECK(
         fixture.session.document().revision() ==
         base_revision);
