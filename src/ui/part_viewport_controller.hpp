@@ -2,6 +2,7 @@
 
 #include "part_document_tree_controller.hpp"
 
+#include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 #include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
@@ -111,6 +112,9 @@ public:
 
     void setDocumentSession(
         application::DocumentSession* session);
+
+    void setSolidModelingKernel(
+        kernel::ISolidModelingKernel* modeling_kernel);
 
     void clear();
     void resetRuntimeState();
@@ -281,6 +285,9 @@ private:
     [[nodiscard]] viewer::ReferenceScene
     buildReferenceScene() const;
 
+    [[nodiscard]] std::optional<viewer::SolidScene>
+    buildSolidScene();
+
     [[nodiscard]] std::optional<viewer::SketchScene>
     buildSketchScene();
 
@@ -316,6 +323,8 @@ private:
     PartDocumentTreeController* tree_{};
     viewer::IDocumentViewport* viewport_{};
     application::DocumentSession* session_{};
+    kernel::ISolidModelingKernel*
+        solid_modeling_kernel_{};
     std::optional<sketch::SketchId>
         sketch_edit_id_;
     viewer::PrimaryPointerRouting

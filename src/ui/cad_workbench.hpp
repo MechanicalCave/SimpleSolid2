@@ -28,6 +28,10 @@ class QString;
 class QTreeWidget;
 class QWidget;
 
+namespace simplesolid2::kernel {
+class ISolidModelingKernel;
+}
+
 namespace simplesolid2::ui {
 
 class CadWorkbenchShell;
@@ -48,6 +52,11 @@ public:
     ~CadWorkbench() override;
     CadWorkbench(
         ViewportFactory viewport_factory,
+        QWidget* parent = nullptr);
+    CadWorkbench(
+        ViewportFactory viewport_factory,
+        kernel::ISolidModelingKernel*
+            solid_modeling_kernel,
         QWidget* parent = nullptr);
 
     [[nodiscard]] bool activateDocument(
@@ -221,6 +230,8 @@ private:
     application::DocumentSession* document_session_{};
     std::filesystem::path workspace_root_;
     ViewportFactory viewport_factory_;
+    kernel::ISolidModelingKernel*
+        solid_modeling_kernel_{};
     viewer::IDocumentViewport* viewport_{};
     std::unordered_map<
         std::string,

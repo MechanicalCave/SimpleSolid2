@@ -5,8 +5,13 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
+#include <BRepMesh_IncrementalMesh.hxx>
+#include <BRep_Tool.hxx>
 #include <BRepCheck_Analyzer.hxx>
+#include <Poly_Triangle.hxx>
+#include <Poly_Triangulation.hxx>
 #include <Standard_Failure.hxx>
+#include <TopAbs_Orientation.hxx>
 #include <TopAbs_ShapeEnum.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
@@ -15,6 +20,7 @@
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Solid.hxx>
 #include <TopoDS_Wire.hxx>
+#include <TopLoc_Location.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
@@ -1103,6 +1109,162 @@ OcctSolidModelingKernel::extrude(
         result.status =
             kernel::SolidModelingStatus::
                 provider_failure;
+        return result;
+    }
+}
+
+
+kernel::SolidPresentationResult
+OcctSolidModelingKernel::presentationMesh(
+    kernel::RuntimeSolidHandle solid) noexcept {
+    kernel::SolidPresentationResult result;
+    if (solid == nullptr) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+
+    const auto* runtime =
+        dynamic_cast<
+            const OcctRuntimeSolid*>(
+                solid.get());
+    if (runtime == nullptr) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_mismatch;
+        return result;
+    }
+
+    try {
+        // Presentation-only policy. These values are intentionally private to
+        // the provider and never participate in modeling semantics.
+        constexpr double linear_deflection_mm = 0.25;
+        constexpr double angular_deflection_rad = 0.35;
+
+        BRepMesh_IncrementalMesh mesher{
+            runtime->solid,
+            linear_deflection_mm,
+            false,
+            angular_deflection_rad,
+            true};
+        mesher.Perform();
+        if (!mesher.IsDone()) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+
+        for (TopExp_Explorer explorer{
+                 runtime->solid,
+                 TopAbs_FACE};
+             explorer.More();
+             explorer.Next()) {
+            const auto face =
+                TopoDS::Face(
+                    explorer.Current());
+            TopLoc_Location location;
+            const Handle(Poly_Triangulation)
+                triangulation =
+                    BRep_Tool::Triangulation(
+                        face,
+                        location);
+            if (triangulation.IsNull()) {
+                continue;
+            }
+
+            const auto transform =
+                location.Transformation();
+            for (Standard_Integer index = 1;
+                 index <=
+                     triangulation->NbTriangles();
+                 ++index) {
+                Standard_Integer first_index{};
+                Standard_Integer second_index{};
+                Standard_Integer third_index{};
+                triangulation->Triangle(index).Get(
+                    first_index,
+                    second_index,
+                    third_index);
+
+                gp_Pnt first =
+                    triangulation
+                        ->Node(first_index)
+                        .Transformed(transform);
+                gp_Pnt second =
+                    triangulation
+                        ->Node(second_index)
+                        .Transformed(transform);
+                gp_Pnt third =
+                    triangulation
+                        ->Node(third_index)
+                        .Transformed(transform);
+
+                if (face.Orientation() ==
+                    TopAbs_REVERSED) {
+                    std::swap(
+                        second,
+                        third);
+                }
+
+                const gp_Vec first_edge{
+                    first,
+                    second};
+                const gp_Vec second_edge{
+                    first,
+                    third};
+                const gp_Vec cross =
+                    first_edge.Crossed(
+                        second_edge);
+                const double magnitude =
+                    cross.Magnitude();
+                if (!std::isfinite(magnitude) ||
+                    !(magnitude > 0.0)) {
+                    continue;
+                }
+
+                const gp_Vec normal =
+                    cross / magnitude;
+                result.mesh.triangles.push_back(
+                    kernel::SolidMeshTriangle{
+                        {first.X(),
+                         first.Y(),
+                         first.Z()},
+                        {second.X(),
+                         second.Y(),
+                         second.Z()},
+                        {third.X(),
+                         third.Y(),
+                         third.Z()},
+                        {normal.X(),
+                         normal.Y(),
+                         normal.Z()}});
+            }
+        }
+
+        if (!result.mesh.valid()) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            result.mesh.triangles.clear();
+            return result;
+        }
+
+        result.status =
+            kernel::SolidPresentationStatus::ok;
+        return result;
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        result.mesh.triangles.clear();
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        result.mesh.triangles.clear();
         return result;
     }
 }

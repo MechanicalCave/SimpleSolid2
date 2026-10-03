@@ -243,11 +243,25 @@ ProjectHubWindow::ProjectHubWindow(
     std::filesystem::path recent_catalog_path,
     ViewportFactory viewport_factory,
     QWidget* parent)
+    : ProjectHubWindow{
+          std::move(recent_catalog_path),
+          std::move(viewport_factory),
+          nullptr,
+          parent} {}
+
+ProjectHubWindow::ProjectHubWindow(
+    std::filesystem::path recent_catalog_path,
+    ViewportFactory viewport_factory,
+    kernel::ISolidModelingKernel*
+        solid_modeling_kernel,
+    QWidget* parent)
     : QMainWindow{parent},
       controller_{
           std::move(recent_catalog_path)},
       viewport_factory_{
-          std::move(viewport_factory)} {
+          std::move(viewport_factory)},
+      solid_modeling_kernel_{
+          solid_modeling_kernel} {
     setWindowTitle(
         QStringLiteral("SimpleSolid 2.0"));
     resize(1280, 800);
@@ -448,6 +462,7 @@ void ProjectHubWindow::buildWorkspacePage() {
     cad_workbench_ =
         new CadWorkbench(
             viewport_factory_,
+            solid_modeling_kernel_,
             workspace_shell_);
     cad_workbench_->setObjectName(
         QStringLiteral("cadWorkbench"));

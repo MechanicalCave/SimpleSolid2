@@ -16,6 +16,7 @@
 #include <Aspect_PolygonOffsetMode.hxx>
 #include <Aspect_TypeOfLine.hxx>
 #include <Aspect_TypeOfTriedronPosition.hxx>
+#include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakePolygon.hxx>
 #include <Geom_CartesianPoint.hxx>
@@ -34,6 +35,7 @@
 #include <Quantity_Color.hxx>
 #include <Standard_Failure.hxx>
 #include <TCollection_ExtendedString.hxx>
+#include <TopoDS_Compound.hxx>
 #include <TopoDS_Wire.hxx>
 #include <V3d_TypeOfOrientation.hxx>
 #include <V3d_View.hxx>
@@ -1266,6 +1268,61 @@ public:
             return true;
         } catch (...) {
             clearSketchScene();
+            throw;
+        }
+    }
+
+    bool setSolidScene(
+        const viewer::SolidScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        if (scene.empty() &&
+            solid_scene_.empty()) {
+            return true;
+        }
+
+        clearSolidScene();
+
+        if (scene.empty()) {
+            solid_scene_ = scene;
+            updateCurrentViewer();
+            return true;
+        }
+
+        try {
+            const auto object =
+                makeSolidObject(scene);
+            if (object.IsNull()) {
+                clearSolidScene();
+                return false;
+            }
+
+            solid_object_ = object;
+            context_->Display(
+                solid_object_,
+                false);
+            context_->SetDisplayMode(
+                solid_object_,
+                AIS_Shaded,
+                false);
+            context_->SetColor(
+                solid_object_,
+                Quantity_Color{
+                    0.72, 0.74, 0.78,
+                    Quantity_TOC_RGB},
+                false);
+            context_->Deactivate(
+                solid_object_);
+            solid_scene_ = scene;
+            updateCurrentViewer();
+            return true;
+        } catch (...) {
+            clearSolidScene();
             throw;
         }
     }
@@ -3335,6 +3392,67 @@ public:
         return object;
     }
 
+    [[nodiscard]] Handle(AIS_Shape)
+    makeSolidObject(
+        const viewer::SolidScene& scene) {
+        if (!scene.valid() ||
+            scene.empty()) {
+            return {};
+        }
+
+        BRep_Builder builder;
+        TopoDS_Compound compound;
+        builder.MakeCompound(compound);
+
+        for (const auto& triangle :
+             scene.triangles) {
+            BRepBuilderAPI_MakePolygon polygon;
+            polygon.Add(
+                toPoint(triangle.first));
+            polygon.Add(
+                toPoint(triangle.second));
+            polygon.Add(
+                toPoint(triangle.third));
+            polygon.Close();
+            if (!polygon.IsDone()) {
+                return {};
+            }
+
+            BRepBuilderAPI_MakeFace face{
+                polygon.Wire()};
+            if (!face.IsDone()) {
+                return {};
+            }
+            builder.Add(
+                compound,
+                face.Face());
+        }
+
+        Handle(AIS_Shape) object =
+            new AIS_Shape(compound);
+        object->Attributes()->SetFaceBoundaryDraw(
+            Standard_False);
+        return object;
+    }
+
+    void clearSolidScene() noexcept {
+        if (!context_.IsNull() &&
+            !solid_object_.IsNull()) {
+            const auto retained =
+                solid_object_;
+            guardedVoid(
+                "removeSolidObject",
+                [this, retained] {
+                    context_->Remove(
+                        retained,
+                        false);
+                });
+        }
+
+        solid_object_.Nullify();
+        solid_scene_.triangles.clear();
+    }
+
     void clearProfileScene() noexcept {
         if (!context_.IsNull()) {
             guardedVoid(
@@ -4258,6 +4376,8 @@ private:
     std::vector<NavigationControl>
         navigation_controls_;
     std::vector<ReferenceObject> reference_objects_;
+    Handle(AIS_Shape) solid_object_;
+    viewer::SolidScene solid_scene_;
     std::vector<ProfileObject> profile_objects_;
     Handle(AIS_Shape) profile_preview_object_;
     Handle(AIS_Shape) profile_preview_emphasis_object_;
@@ -4424,6 +4544,15 @@ bool QtOcctViewerWidget::setSketchScene(
         "setSketchScene",
         [this, &scene] {
             return impl_->setSketchScene(scene);
+        });
+}
+
+bool QtOcctViewerWidget::setSolidScene(
+    const viewer::SolidScene& scene) {
+    return guardedBool(
+        "setSolidScene",
+        [this, &scene] {
+            return impl_->setSolidScene(scene);
         });
 }
 

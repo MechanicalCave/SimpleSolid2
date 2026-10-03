@@ -16,6 +16,10 @@ public:
     extrude(
         const kernel::LinearExtrudeInput& input,
         kernel::RuntimeSolidHandle upstream = {}) noexcept override;
+
+    [[nodiscard]] kernel::SolidPresentationResult
+    presentationMesh(
+        kernel::RuntimeSolidHandle solid) noexcept override;
 };
 
 } // namespace simplesolid2::kernel_occt

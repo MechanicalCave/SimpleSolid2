@@ -23,6 +23,49 @@ public:
 
 using RuntimeSolidHandle = std::shared_ptr<const RuntimeSolid>;
 
+struct SolidMeshTriangle final {
+    Point3 first;
+    Point3 second;
+    Point3 third;
+    Point3 normal;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const SolidMeshTriangle&,
+        const SolidMeshTriangle&) = default;
+};
+
+struct SolidPresentationMesh final {
+    std::vector<SolidMeshTriangle> triangles;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const SolidPresentationMesh&,
+        const SolidPresentationMesh&) = default;
+};
+
+enum class SolidPresentationStatus {
+    ok,
+    invalid_input,
+    provider_mismatch,
+    provider_failure,
+    unsupported,
+};
+
+struct SolidPresentationResult final {
+    SolidPresentationStatus status{
+        SolidPresentationStatus::unsupported};
+    SolidPresentationMesh mesh;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status ==
+                   SolidPresentationStatus::ok &&
+               mesh.valid();
+    }
+};
+
 struct RuntimeFaceToken final {
     std::uint64_t value{};
 
@@ -151,6 +194,12 @@ public:
     extrude(
         const LinearExtrudeInput& input,
         RuntimeSolidHandle upstream = {}) noexcept = 0;
+
+    // Display-only tessellation. This must never influence authored CAD
+    // state, modeling semantics or reference resolution.
+    [[nodiscard]] virtual SolidPresentationResult
+    presentationMesh(
+        RuntimeSolidHandle solid) noexcept;
 };
 
 } // namespace simplesolid2::kernel
