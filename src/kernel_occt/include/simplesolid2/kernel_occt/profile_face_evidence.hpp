@@ -21,6 +21,11 @@ buildExtrudeTopologyInventoryEvidence(
     const kernel::PlanarProfileInput& input,
     double distance) noexcept;
 
+[[nodiscard]] kernel::ExtrudeSurfaceCarrierEvidence
+buildExtrudeSurfaceCarrierEvidence(
+    const kernel::PlanarProfileInput& input,
+    double distance) noexcept;
+
 [[nodiscard]] kernel::FullRevolveEvidence
 buildProfileFullRevolveEvidence(
     const kernel::PlanarProfileInput& input,
