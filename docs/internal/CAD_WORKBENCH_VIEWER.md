@@ -17,15 +17,13 @@ Responsive transitions are presentation-only: they do not mutate the Document, r
 <!-- section-id: internal.cad-workbench-viewer.active-document -->
 ## Active document context
 
-ProjectSession may keep several canonical DocumentSessions open, while Project Workspace Shell owns `Workspace | Document(DocumentId)` navigation and Project-level Document Tabs.
+The Workbench binds exactly one active `DocumentSession` at a time. Switching Document Tabs replaces the active Part/Tree/Properties/Viewer projection and invalidates stale CAD-input/edit context.
 
-`CadWorkbench` receives only the currently active Part `DocumentSession` plus Workspace path context needed for presentation. It does not own ProjectSession, discovery or tabs.
+For Part, Document Tree now projects the built-in Origin, source-Sketch/Profile hierarchy and one Body with ordered Feature rows. Body/Feature rows carry semantic IDs and current derived evaluation status, but Tree item addresses are never CAD identity.
 
-Project-level tab changes ask the host to bind a different open DocumentSession. Navigating to Workspace detaches the Workbench without closing the DocumentSession. Returning to that Document rebinds it.
+Properties can inspect Body status/Feature count and Feature name, FeatureId, evaluation status/diagnostic, operation, extent, distance/direction and source Profile/Sketch. Profile Properties expose consuming Features. Navigation between Feature and Profile changes runtime selection only.
 
-Camera state is stored in Workbench runtime state keyed by DocumentId so Document → Workspace → Document and inter-Document switching can restore the view while the Project remains open. Project close resets that runtime state.
-
-Detach-before-destroy ordering is mandatory: Tree/Viewport controllers are disconnected from the active DocumentSession before ProjectSession erases it. This prevents runtime cleanup from dereferencing a destroyed session during Document or Project close.
+Feature lifecycle actions from Properties and Tree share the same semantic handlers: Edit Extrude, Suppress/Unsuppress and Delete. They are disabled while an incompatible active Sketch/Extrude modeling context owns input.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
 ## Origin and reference scene
@@ -73,13 +71,13 @@ Pointer routing and cursor mode remain independent runtime axes. Ordinary Select
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-`IDocumentViewport` remains provider-neutral. It exposes camera/navigation, reference scene, authored Sketch scene, Profile scene, transient Sketch/Profile preview scenes, presentation selection, neutral pointer transport, primary-pointer routing/cursor mode, Sketch point/rectangle queries, finite Sketch grip scene/query, runtime hover/active-grip presentation and the selection-box overlay channel.
+The public Viewer boundary remains provider-neutral. It accepts derived scenes for authored references/Sketch/Profile presentation plus bounded solid and transient solid-preview presentation required by PM-01.
 
-The authored Sketch scene carries one semantic presentation token per entity. Line uses one segment; Circle and Arc use one token plus an ordered finite point chain. It also carries the authored Regular/Construction role as presentation input. Qt/OCCT keeps that exact neutral point chain but presents each semantic Circle/Arc as one native wire/`AIS_Shape` instead of one native object per derived segment. Native detection still maps the whole provider object back to the single semantic token; the point chain remains the rectangle/query approximation and is not CAD identity. Construction uses the provider's dashed native line aspect with screen-space cadence. Dash/gap size is independent of authored entity length, zoom does not mutate geometry, and committed/transient Construction derive the same presentation policy from the existing `construction` flag. No linetype scale, style entity or persistent presentation parameter is introduced.
+Part evaluation may hold provider-neutral runtime solid/face tokens while the current runtime exists, but no TopoDS/OCAF handle, provider topology ordinal or Viewer presentation token crosses into durable Part identity.
 
-Grip keys are `PresentationToken + SketchGripRole` only inside the Viewer boundary. PartViewportController immediately maps them back to `SketchId + EntityId + semantic role`. Profile presentation tokens are likewise runtime-only and are mapped immediately to Part-owned `ProfileId`. No Qt/OCCT handle becomes CAD identity.
+PM-01 does not expose face/edge topology picking. Solid presentation is display-only; tessellation quality, camera, pick aperture and Viewer state cannot alter Add/Cut result, semantic face roles or commit authority.
 
-The production executable creates the concrete Qt/OCCT provider only in the composition root and injects it as a neutral `ViewportSurface`. Provider-native exceptions are contained at the Viewer boundary and fail closed.
+Presentation setters report failure to the Workbench. A successful authored CAD command is not rolled back because a later Viewer refresh fails; recovery retries presentation from current authored state.
 
 <!-- section-id: internal.cad-workbench-viewer.sr02-latency -->
 ## SR-02 Sketch interaction and presentation latency
@@ -279,15 +277,11 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
-The provider presents visible Origin references, a non-selectable reference grid, active-Sketch authored Line/Circle/Arc geometry, intrinsic Sketch Origin, valid visible Part Profiles, transient Sketch/Profile preview, runtime selection box, selected/primary/hover emphasis and finite semantic grips.
+The concrete Qt/OCCT provider presents the current derived Body solid and a separately replaceable transient Extrude preview alongside Origin, Sketch and Profile scenes.
 
-Circle/Arc authored geometry is carried as one semantic curve presentation token with an ordered point chain; Qt/OCCT derives line-segment presentation objects without promoting those provider segments to semantic identity. Point/rectangle query likewise evaluates those derived projected segments but returns only the semantic token.
+The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude preview is runtime-only and is cleared on Finish, Cancel, context replacement or stale/failed draft. Feature edit may request a transient source-Profile reveal without changing the Profile visibility policy.
 
-Sketch grips are provider-only `AIS_Point` presentations deactivated from native OCCT selection and hit-tested separately in logical screen space. Their point aspects use custom square bitmaps: hollow for idle, cyan-emphasized hollow for hover and slightly larger filled yellow for active/captured. Marker dimensions are rebuilt for device-pixel ratio changes. Grip query runs before authored geometry query so an overlapping visible grip wins.
-
-The Sketch selection box remains OCCT `AIS_RubberBand` in the same native graphics surface. Profile regions are derived planar OCCT faces with preserved holes, boundary display and transparency/selection styling. Profile fill uses an unlit shading model so its semantic presentation color does not depend on camera/light angle, plus provider-only polygon depth bias to avoid coplanar z-fighting; neither setting changes authored geometry. Native detection maps the picked Profile object to its neutral runtime token and then immediately to ProfileId. The separate Profile preview scene can present both the resulting draft and an optional hovered-candidate emphasis region; Subtract keeps the result cyan and overlays the candidate in red-orange. Principal reference planes remain finite provider presentation geometry. No native provider object is durable CAD identity.
-
-There is still no modeled Part B-Rep at this milestone; the OCCT provider remains presentation/navigation infrastructure.
+PM-01 solid/preview presentation carries no durable semantic topology identity. Face/edge subshape picking is deliberately absent. Existing provider selection/detection cleanup rules still apply before presentation replacement/removal.
 
 <!-- section-id: internal.cad-workbench-viewer.presentation-recovery -->
 ## Presentation failure and recovery
