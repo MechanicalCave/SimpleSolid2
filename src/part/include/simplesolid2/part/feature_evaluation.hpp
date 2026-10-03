@@ -100,7 +100,13 @@ struct PartEvaluation final {
     core::DocumentRevision source_revision;
     BodyEvaluationStatus body_status{
         BodyEvaluationStatus::empty};
+    // Final current Body truth. Null whenever body_status is unavailable.
     kernel::RuntimeSolidHandle body_solid;
+    // Runtime-only current-revision result immediately before the first
+    // Failed/Blocked active Feature. Presentation may use this prefix while
+    // final Body truth remains unavailable. Never persisted, published as
+    // semantic identity, or consumed by downstream evaluation.
+    kernel::RuntimeSolidHandle resolved_prefix_solid;
     std::vector<FeatureEvaluation> features;
     // Semantic references resolved at the current final Body stage only.
     // Empty when Body is unavailable.

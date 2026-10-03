@@ -1,6 +1,6 @@
 # PM-01 — Final Acceptance Matrix
 
-**Status:** PENDING OWNER MANUAL WINDOWS ACCEPTANCE  
+**Status:** PENDING H7 REMEDIATION + OWNER MANUAL WINDOWS ACCEPTANCE  
 **Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
 **Architecture:** ADR-0014 + ADR-0015  
 **Runtime baseline merged to main:** `ca5592d07a271c83c9752fb654cded2c7b3d83c6`  
@@ -113,8 +113,8 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 
 ## 4. Manual result
 
-**Owner Windows result:** PENDING RETEST — H6 automated PASS  
+**Owner Windows result:** PARTIAL PASS — H6 PASS; H7 history-prefix presentation required  
 **Date:** 2026-10-03  
-**Last Owner-tested candidate:** `26dd32f65d2d1497d3d3ee55ca52ab69182f93fb`  
-**Next Owner-test candidate:** `d2655331c6713d87fc61564e75300b61312dfb37` (runtime baseline `ca5592d07a271c83c9752fb654cded2c7b3d83c6`)  
-**Notes:** H5 exact-delta/no-effect behavior is automated PASS. H6 isolates committed Body and transient preview shading state in Qt/OCCT and passed exact-head Windows FULL #1364; H6 internal docs/Product Browser passed Windows DOCS #1367. Only the focused Owner Add/Cut preview color-isolation retest remains before PM-01 governance completion.
+**Last Owner-tested candidate:** `540f24a8f89fcb30ba1de6d8273e50f27db93f20`  
+**Next Owner-test candidate:** PENDING H7 runtime gate  
+**Notes:** H6 Add/Cut preview color isolation is manually confirmed PASS on `540f24a...`. Broader manual use exposed H7: when a higher Sketch/Profile invalidates a later Feature, Viewer clears the entire Body. H7 retains only a current-revision resolved lower-history prefix for presentation; final Body remains Unavailable, final semantic face references remain empty and downstream active Features remain Blocked.

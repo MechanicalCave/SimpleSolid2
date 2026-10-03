@@ -360,7 +360,9 @@ PartEvaluation evaluatePart(
                 FeatureEvaluationDiagnosticCode::
                     kernel_invalid_input;
             chain_broken = true;
-            current_solid.reset();
+            // Keep the current-revision upstream result available only as a
+            // presentation prefix. chain_broken prevents all later active
+            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
@@ -378,7 +380,9 @@ PartEvaluation evaluatePart(
                 FeatureEvaluationDiagnosticCode::
                     missing_profile;
             chain_broken = true;
-            current_solid.reset();
+            // Keep the current-revision upstream result available only as a
+            // presentation prefix. chain_broken prevents all later active
+            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
@@ -397,7 +401,9 @@ PartEvaluation evaluatePart(
                 FeatureEvaluationDiagnosticCode::
                     unresolved_profile;
             chain_broken = true;
-            current_solid.reset();
+            // Keep the current-revision upstream result available only as a
+            // presentation prefix. chain_broken prevents all later active
+            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
@@ -432,7 +438,9 @@ PartEvaluation evaluatePart(
                 FeatureEvaluationDiagnosticCode::
                     kernel_invalid_input;
             chain_broken = true;
-            current_solid.reset();
+            // Keep the current-revision upstream result available only as a
+            // presentation prefix. chain_broken prevents all later active
+            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
@@ -453,7 +461,9 @@ PartEvaluation evaluatePart(
                 diagnosticForKernel(
                     kernel_result.status);
             chain_broken = true;
-            current_solid.reset();
+            // Keep the current-revision upstream result available only as a
+            // presentation prefix. chain_broken prevents all later active
+            // Features from consuming it as Body truth.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
@@ -495,6 +505,8 @@ PartEvaluation evaluatePart(
             BodyEvaluationStatus::
                 unavailable;
         result.body_solid.reset();
+        result.resolved_prefix_solid =
+            std::move(current_solid);
         result.current_face_references.clear();
         return result;
     }

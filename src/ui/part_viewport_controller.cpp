@@ -2109,12 +2109,28 @@ PartViewportController::buildSolidScene() {
         part::evaluatePart(
             session_->document(),
             *solid_modeling_kernel_);
-    if (evaluation.body_status !=
+    kernel::RuntimeSolidHandle presentation_solid;
+    if (evaluation.body_status ==
             part::BodyEvaluationStatus::
-                up_to_date ||
-        evaluation.body_solid == nullptr) {
-        // Empty/Failed/Blocked/Suppressed-only histories publish no Body.
-        // Cache only the derived empty presentation for this exact revision.
+                up_to_date &&
+        evaluation.body_solid != nullptr) {
+        presentation_solid =
+            evaluation.body_solid;
+    } else if (
+        evaluation.body_status ==
+            part::BodyEvaluationStatus::
+                unavailable &&
+        evaluation.resolved_prefix_solid != nullptr) {
+        // H7: present only the current-revision prefix immediately before the
+        // first failing active Feature. Final Body truth remains unavailable;
+        // no downstream evaluation or semantic reference consumes this solid.
+        presentation_solid =
+            evaluation.resolved_prefix_solid;
+    }
+
+    if (presentation_solid == nullptr) {
+        // Empty history or failure at the first active Feature has no valid
+        // current-revision prefix to present.
         solid_scene_revision_ = revision;
         solid_scene_cache_ = empty_scene;
         return *solid_scene_cache_;
@@ -2123,7 +2139,7 @@ PartViewportController::buildSolidScene() {
     const auto mesh =
         solid_modeling_kernel_->
             presentationMesh(
-                evaluation.body_solid);
+                presentation_solid);
     if (!mesh.ok()) {
         // Provider/presentation failure remains retryable at the same
         // authored revision; never cache it as valid current truth.
