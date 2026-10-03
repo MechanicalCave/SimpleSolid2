@@ -117,4 +117,4 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 **Date:** 2026-10-03  
 **Last Owner-tested candidate:** `540f24a8f89fcb30ba1de6d8273e50f27db93f20`  
 **Next Owner-test candidate:** PENDING H7 runtime gate  
-**Notes:** H5 exact-delta/no-effect behavior is automated PASS. H6 isolates committed Body and transient preview shading state in Qt/OCCT and passed exact-head Windows FULL #1364; H6 internal docs/Product Browser passed Windows DOCS #1367. Only the focused Owner Add/Cut preview color-isolation retest remains before PM-01 governance completion.
+**Notes:** H6 Add/Cut preview color isolation is manually confirmed PASS on `540f24a...`. Broader manual use exposed H7: when a higher Sketch/Profile invalidates a later Feature, Viewer clears the entire Body. H7 retains only a current-revision resolved lower-history prefix for presentation; final Body remains Unavailable, final semantic face references remain empty and downstream active Features remain Blocked.
