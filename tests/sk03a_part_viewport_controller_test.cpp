@@ -880,5 +880,180 @@ int main(int argc, char* argv[]) {
         controller.clear();
     }
 
+    // H7: if a higher Feature loses its source Profile, the final Body is
+    // unavailable but the current-revision lower Feature prefix remains
+    // visible. If the first Feature loses its Profile, no prefix exists.
+    {
+        auto solid_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession
+            solid_session{
+                std::filesystem::path{
+                    "pm01h7-prefix.ss2part"},
+                std::move(solid_document)};
+        FakeSolidKernel solid_kernel;
+
+        const auto make_profile =
+            [&solid_session](double x0)
+                -> part::ProfileId {
+            const auto created_sketch =
+                solid_session.execute(
+                    application::CreatePartSketchCommand{
+                        core::BuiltinReferenceRole::
+                            xy_plane});
+            CHECK(
+                created_sketch.ok() &&
+                created_sketch.sketch_id);
+
+            const auto rectangle =
+                solid_session.execute(
+                    application::AddSketchRectangleCommand{
+                        *created_sketch.sketch_id,
+                        solid_session.document()
+                            .revision(),
+                        {x0, 0.0},
+                        {x0 + 10.0, 10.0},
+                        sketch::EntityRole::regular,
+                        false});
+            CHECK(rectangle.ok());
+
+            const auto* source =
+                solid_session.document()
+                    .findSketch(
+                        *created_sketch.sketch_id);
+            CHECK(source != nullptr);
+            const auto analysis =
+                sketch::analyzeRegions(
+                    source->model);
+            CHECK(analysis.complete());
+            CHECK(analysis.regions.size() == 1U);
+            const auto intent =
+                part::makeProfileRegionIntent(
+                    analysis.regions.front());
+            CHECK(intent);
+
+            const auto profile =
+                solid_session.execute(
+                    application::CreateProfileCommand{
+                        *created_sketch.sketch_id,
+                        solid_session.document()
+                            .revision(),
+                        *intent});
+            CHECK(
+                profile.ok() &&
+                profile.profile_id);
+            return *profile.profile_id;
+        };
+
+        const auto lower_profile =
+            make_profile(0.0);
+        const auto lower_feature =
+            solid_session.execute(
+                application::
+                    CreateExtrudeFeatureCommand{
+                    lower_profile,
+                    solid_session.document()
+                        .revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{5.0},
+                        false},
+                    {}},
+                solid_kernel);
+        CHECK(
+            lower_feature.ok() &&
+            lower_feature.feature_id);
+
+        const auto higher_profile =
+            make_profile(20.0);
+        const auto higher_feature =
+            solid_session.execute(
+                application::
+                    CreateExtrudeFeatureCommand{
+                    higher_profile,
+                    solid_session.document()
+                        .revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{5.0},
+                        false},
+                    {}},
+                solid_kernel);
+        CHECK(
+            higher_feature.ok() &&
+            higher_feature.feature_id);
+
+        controller.setSolidModelingKernel(
+            &solid_kernel);
+        controller.setDocumentSession(
+            &solid_session);
+        CHECK(
+            viewport.solid_scene_
+                .triangles.size() == 1U);
+
+        const auto delete_higher =
+            solid_session.execute(
+                application::DeleteProfileCommand{
+                    higher_profile,
+                    solid_session.document()
+                        .revision()});
+        CHECK(delete_higher.ok());
+        controller.refreshPresentation();
+
+        const auto higher_failed =
+            part::evaluatePart(
+                solid_session.document(),
+                solid_kernel);
+        CHECK(
+            higher_failed.body_status ==
+            part::BodyEvaluationStatus::
+                unavailable);
+        CHECK(higher_failed.body_solid == nullptr);
+        CHECK(
+            higher_failed.resolved_prefix_solid !=
+            nullptr);
+        CHECK(
+            higher_failed.features[0].status ==
+            part::FeatureEvaluationStatus::
+                up_to_date);
+        CHECK(
+            higher_failed.features[1].status ==
+            part::FeatureEvaluationStatus::
+                blocked);
+        CHECK(
+            viewport.solid_scene_
+                .triangles.size() == 1U);
+
+        const auto delete_lower =
+            solid_session.execute(
+                application::DeleteProfileCommand{
+                    lower_profile,
+                    solid_session.document()
+                        .revision()});
+        CHECK(delete_lower.ok());
+        controller.refreshPresentation();
+
+        const auto first_failed =
+            part::evaluatePart(
+                solid_session.document(),
+                solid_kernel);
+        CHECK(
+            first_failed.body_status ==
+            part::BodyEvaluationStatus::
+                unavailable);
+        CHECK(first_failed.body_solid == nullptr);
+        CHECK(
+            first_failed.resolved_prefix_solid ==
+            nullptr);
+        CHECK(
+            viewport.solid_scene_
+                .triangles.empty());
+
+        controller.setSolidModelingKernel(
+            nullptr);
+        controller.clear();
+    }
+
     return EXIT_SUCCESS;
 }
