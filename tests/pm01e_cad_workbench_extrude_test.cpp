@@ -507,9 +507,17 @@ int main(int argc, char* argv[]) {
     const auto undo_before_edit =
         session.undoDepth();
     edit_feature->click();
-    CHECK(!viewport->profile_scene.profiles.empty());
+    CHECK(viewport->profile_scene.profiles.empty());
     CHECK(distance->text().contains(
         QStringLiteral("10")));
+
+    // Invalid text clears the preview and reveals the source Profile only as
+    // transient diagnostic presentation.
+    distance->clear();
+    CHECK(!finish->isEnabled());
+    CHECK(viewport->solid_preview.empty());
+    CHECK(!viewport->profile_scene.profiles.empty());
+
     distance->setText(
         QStringLiteral("12 mm"));
     // Typing updates the draft immediately but expensive Body evaluation /
@@ -517,6 +525,7 @@ int main(int argc, char* argv[]) {
     CHECK(!finish->isEnabled());
     waitForPreviewDebounce();
     CHECK(finish->isEnabled());
+    CHECK(viewport->profile_scene.profiles.empty());
     finish->click();
 
     CHECK(
