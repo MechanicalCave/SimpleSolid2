@@ -67,6 +67,34 @@ public:
         result.solid_count = 1U;
         return result;
     }
+
+    kernel::SolidPresentationResult
+    extrudePreviewMesh(
+        const kernel::LinearExtrudeInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        if (!input.valid() ||
+            (input.operation ==
+                 kernel::SolidBooleanOperation::cut &&
+             upstream == nullptr)) {
+            return {
+                kernel::SolidPresentationStatus::
+                    invalid_input,
+                {}};
+        }
+        kernel::SolidPresentationMesh mesh;
+        mesh.triangles.push_back(
+            {
+                {0.0, 0.0, 0.0},
+                {10.0, 0.0, 0.0},
+                {0.0, 10.0, 0.0},
+                {0.0, 0.0, 1.0},
+                {0.0, 0.0, 1.0},
+                {0.0, 0.0, 1.0}});
+        return {
+            kernel::SolidPresentationStatus::ok,
+            std::move(mesh)};
+    }
+
 };
 
 struct Fixture final {
@@ -176,10 +204,8 @@ int main() {
     CHECK(preview.committable());
     CHECK(preview.previewSolidAvailable());
     CHECK(preview.body_solid != nullptr);
-    CHECK(preview.preview_tool_solid != nullptr);
-    CHECK(
-        preview.body_solid !=
-        preview.preview_tool_solid);
+    CHECK(preview.preview_delta_mesh.has_value());
+    CHECK(preview.preview_delta_mesh->valid());
     CHECK(
         fixture.session.document().revision() ==
         base_revision);
@@ -286,6 +312,8 @@ int main() {
             kernel);
     CHECK(edit_preview.committable());
     CHECK(edit_preview.previewSolidAvailable());
+    CHECK(edit_preview.preview_delta_mesh.has_value());
+    CHECK(edit_preview.preview_delta_mesh->valid());
 
     const auto undo_before_edit =
         fixture.session.undoDepth();
