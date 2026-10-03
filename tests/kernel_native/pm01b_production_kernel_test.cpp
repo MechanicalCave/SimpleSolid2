@@ -1,6 +1,7 @@
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <limits>
