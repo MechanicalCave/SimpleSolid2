@@ -3,6 +3,7 @@
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRep_Builder.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
@@ -16,6 +17,7 @@
 #include <BRepTools.hxx>
 #include <BRep_Tool.hxx>
 #include <GProp_GProps.hxx>
+#include <GeomAbs_CurveType.hxx>
 #include <GeomAbs_SurfaceType.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_ShapeEnum.hxx>
@@ -901,6 +903,227 @@ void populateBodyTopologyEvidence(
         topology.vertices,
         shape,
         TopAbs_VERTEX);
+}
+
+struct EvidencePrismSurfaceClaim final {
+    kernel::EvidenceSurfaceCarrierKey key;
+    TopoDS_Face face;
+};
+
+[[nodiscard]] std::vector<EvidencePrismSurfaceClaim>
+prismSurfaceClaims(
+    const EvidencePrismBuild& prism) {
+    std::vector<EvidencePrismSurfaceClaim> result;
+    result.reserve(
+        prism.sides.size() + 2U);
+    result.push_back({
+        {kernel::EvidenceSurfaceCarrierRoleKind::start_cap,
+         std::nullopt},
+        prism.start_cap});
+    result.push_back({
+        {kernel::EvidenceSurfaceCarrierRoleKind::end_cap,
+         std::nullopt},
+        prism.end_cap});
+    for (const auto& side : prism.sides) {
+        result.push_back({
+            {kernel::EvidenceSurfaceCarrierRoleKind::side,
+             side.provenance},
+            side.face});
+    }
+    return result;
+}
+
+void appendUniqueEdge(
+    std::vector<TopoDS_Edge>& edges,
+    const TopoDS_Edge& candidate) {
+    const bool duplicate =
+        std::any_of(
+            edges.begin(),
+            edges.end(),
+            [&candidate](const TopoDS_Edge& existing) {
+                return existing.IsSame(candidate);
+            });
+    if (!duplicate) {
+        edges.push_back(candidate);
+    }
+}
+
+[[nodiscard]] std::vector<TopoDS_Edge>
+uniqueEdgesFromShape(
+    const TopoDS_Shape& shape) {
+    std::vector<TopoDS_Edge> result;
+    if (shape.IsNull()) {
+        return result;
+    }
+
+    TopTools_IndexedMapOfShape unique;
+    TopExp::MapShapes(
+        shape,
+        TopAbs_EDGE,
+        unique);
+    result.reserve(
+        static_cast<std::size_t>(
+            unique.Extent()));
+    for (Standard_Integer index = 1;
+         index <= unique.Extent();
+         ++index) {
+        result.push_back(
+            TopoDS::Edge(
+                unique.FindKey(index)));
+    }
+    return result;
+}
+
+[[nodiscard]] std::vector<TopoDS_Edge>
+uniqueEdgesFromFace(
+    const TopoDS_Face& face) {
+    std::vector<TopoDS_Edge> result;
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        appendUniqueEdge(
+            result,
+            TopoDS::Edge(
+                explorer.Current()));
+    }
+    return result;
+}
+
+[[nodiscard]] bool faceContainsEdge(
+    const TopoDS_Face& face,
+    const TopoDS_Edge& edge) {
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(edge)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void appendUniqueSurfaceKey(
+    std::vector<kernel::EvidenceSurfaceCarrierKey>& keys,
+    const kernel::EvidenceSurfaceCarrierKey& candidate) {
+    if (std::find(
+            keys.begin(),
+            keys.end(),
+            candidate) == keys.end()) {
+        keys.push_back(candidate);
+    }
+}
+
+[[nodiscard]] kernel::EvidenceCurveKind
+providerCurveKind(
+    const TopoDS_Edge& edge) {
+    BRepAdaptor_Curve curve{
+        edge};
+    switch (curve.GetType()) {
+    case GeomAbs_Line:
+        return kernel::EvidenceCurveKind::line;
+    case GeomAbs_Circle:
+        return kernel::EvidenceCurveKind::circle;
+    default:
+        return kernel::EvidenceCurveKind::other;
+    }
+}
+
+[[nodiscard]] kernel::EvidenceCurveKind
+semanticCurveKind(
+    const kernel::BoundaryUse2D& use) noexcept {
+    return std::holds_alternative<kernel::Line2>(
+               use.curve)
+        ? kernel::EvidenceCurveKind::line
+        : kernel::EvidenceCurveKind::circle;
+}
+
+[[nodiscard]] std::vector<TopoDS_Edge>
+sharedEdges(
+    const std::vector<TopoDS_Shape>& first_faces,
+    const std::vector<TopoDS_Shape>& second_faces) {
+    std::vector<TopoDS_Edge> first_edges;
+    std::vector<TopoDS_Edge> second_edges;
+
+    for (const auto& shape : first_faces) {
+        if (shape.IsNull() ||
+            shape.ShapeType() != TopAbs_FACE) {
+            continue;
+        }
+        for (const auto& edge :
+             uniqueEdgesFromFace(
+                 TopoDS::Face(shape))) {
+            appendUniqueEdge(
+                first_edges,
+                edge);
+        }
+    }
+    for (const auto& shape : second_faces) {
+        if (shape.IsNull() ||
+            shape.ShapeType() != TopAbs_FACE) {
+            continue;
+        }
+        for (const auto& edge :
+             uniqueEdgesFromFace(
+                 TopoDS::Face(shape))) {
+            appendUniqueEdge(
+                second_edges,
+                edge);
+        }
+    }
+
+    std::vector<TopoDS_Edge> result;
+    for (const auto& first : first_edges) {
+        const bool present =
+            std::any_of(
+                second_edges.begin(),
+                second_edges.end(),
+                [&first](const TopoDS_Edge& second) {
+                    return first.IsSame(second);
+                });
+        if (present) {
+            appendUniqueEdge(
+                result,
+                first);
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] bool allEdgesMatchCurveKind(
+    const std::vector<TopoDS_Shape>& edges,
+    kernel::EvidenceCurveKind expected) {
+    if (edges.empty()) {
+        return false;
+    }
+    return std::all_of(
+        edges.begin(),
+        edges.end(),
+        [expected](const TopoDS_Shape& shape) {
+            return !shape.IsNull() &&
+                   shape.ShapeType() == TopAbs_EDGE &&
+                   providerCurveKind(
+                       TopoDS::Edge(shape)) ==
+                       expected;
+        });
+}
+
+[[nodiscard]] bool allEdgesMatchCurveKind(
+    const std::vector<TopoDS_Edge>& edges,
+    kernel::EvidenceCurveKind expected) {
+    if (edges.empty()) {
+        return false;
+    }
+    return std::all_of(
+        edges.begin(),
+        edges.end(),
+        [expected](const TopoDS_Edge& edge) {
+            return providerCurveKind(edge) ==
+                   expected;
+        });
 }
 
 [[nodiscard]] kernel::ReferenceStatus
@@ -2462,6 +2685,677 @@ buildCutExposedSurfaceEvidence() noexcept {
         return evidence;
     } catch (...) {
         evidence.result_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::ExtrudeEdgeOntologyEvidence
+buildExtrudeEdgeOntologyEvidence(
+    const kernel::PlanarProfileInput& input,
+    double distance) noexcept {
+    kernel::ExtrudeEdgeOntologyEvidence evidence;
+
+    if (!input.valid() ||
+        !std::isfinite(distance) ||
+        distance == 0.0) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::invalid_input;
+        evidence.topology.status =
+            kernel::EvidenceStatus::invalid_input;
+        return evidence;
+    }
+
+    try {
+        const auto prism =
+            buildEvidencePrism(
+                input,
+                distance);
+        if (!prism) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            evidence.topology.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.shape,
+            prism->shape);
+        if (!evidence.shape.ok()) {
+            return evidence;
+        }
+        populateBodyTopologyEvidence(
+            evidence.topology,
+            evidence.shape,
+            prism->shape);
+
+        const auto provider_edges =
+            uniqueEdgesFromShape(
+                prism->shape);
+        const auto surfaces =
+            prismSurfaceClaims(
+                *prism);
+
+        evidence.edges.reserve(
+            provider_edges.size());
+
+        for (std::size_t index = 0U;
+             index < provider_edges.size();
+             ++index) {
+            const auto& edge =
+                provider_edges[index];
+
+            kernel::EvidenceEdgeOntologyRecord record;
+            record.provider_curve_kind =
+                providerCurveKind(edge);
+
+            for (const auto& surface : surfaces) {
+                if (!faceContainsEdge(
+                        surface.face,
+                        edge)) {
+                    continue;
+                }
+
+                appendUniqueSurfaceKey(
+                    record.adjacent_surfaces,
+                    surface.key);
+
+                if (surface.key.role ==
+                        kernel::
+                            EvidenceSurfaceCarrierRoleKind::
+                                side &&
+                    BRepTools::IsReallyClosed(
+                        edge,
+                        surface.face)) {
+                    record.periodic_seam = true;
+                }
+            }
+
+            if (record.periodic_seam) {
+                record.accounting_class =
+                    kernel::
+                        EvidenceTopologyAccountingClass::
+                            known_representation_artifact;
+                record.status =
+                    kernel::ReferenceStatus::unsupported;
+                record.role =
+                    kernel::
+                        EvidenceEdgeSemanticRoleKind::
+                            periodic_seam;
+                record.semantic_curve_kind =
+                    kernel::EvidenceCurveKind::other;
+                ++evidence.representation_artifact_count;
+                evidence.topology.edges.catalog[index]
+                    .accounting_class =
+                    record.accounting_class;
+                evidence.edges.push_back(
+                    std::move(record));
+                continue;
+            }
+
+            if (record.adjacent_surfaces.size() != 2U) {
+                record.accounting_class =
+                    kernel::
+                        EvidenceTopologyAccountingClass::
+                            integrity_failure;
+                record.status =
+                    kernel::ReferenceStatus::unsupported;
+                record.role =
+                    kernel::
+                        EvidenceEdgeSemanticRoleKind::
+                            unsupported;
+                ++evidence.integrity_failure_count;
+                evidence.topology.edges.catalog[index]
+                    .accounting_class =
+                    record.accounting_class;
+                evidence.edges.push_back(
+                    std::move(record));
+                continue;
+            }
+
+            const auto is_cap =
+                [](const kernel::EvidenceSurfaceCarrierKey& key) {
+                    return key.role ==
+                               kernel::
+                                   EvidenceSurfaceCarrierRoleKind::
+                                       start_cap ||
+                           key.role ==
+                               kernel::
+                                   EvidenceSurfaceCarrierRoleKind::
+                                       end_cap;
+                };
+            const auto is_side =
+                [](const kernel::EvidenceSurfaceCarrierKey& key) {
+                    return key.role ==
+                           kernel::
+                               EvidenceSurfaceCarrierRoleKind::
+                                   side;
+                };
+
+            const bool cap_side =
+                (is_cap(record.adjacent_surfaces[0]) &&
+                 is_side(record.adjacent_surfaces[1])) ||
+                (is_side(record.adjacent_surfaces[0]) &&
+                 is_cap(record.adjacent_surfaces[1]));
+            const bool side_side =
+                is_side(record.adjacent_surfaces[0]) &&
+                is_side(record.adjacent_surfaces[1]);
+
+            if (cap_side) {
+                record.role =
+                    kernel::
+                        EvidenceEdgeSemanticRoleKind::
+                            cap_side;
+
+                const auto& side_key =
+                    is_side(record.adjacent_surfaces[0])
+                        ? record.adjacent_surfaces[0]
+                        : record.adjacent_surfaces[1];
+
+                const auto* use =
+                    side_key.provenance
+                        ? findBoundaryUse(
+                              input,
+                              *side_key.provenance)
+                        : nullptr;
+                if (use != nullptr) {
+                    record.semantic_curve_kind =
+                        semanticCurveKind(
+                            *use);
+                } else {
+                    record.semantic_curve_kind =
+                        kernel::EvidenceCurveKind::other;
+                }
+            } else if (side_side) {
+                record.role =
+                    kernel::
+                        EvidenceEdgeSemanticRoleKind::
+                            side_side;
+                // For a linear Extrude, adjacent side carriers meet along
+                // the semantic sweep direction. This is a straight Curve
+                // regardless of the individual side Surface classes.
+                record.semantic_curve_kind =
+                    kernel::EvidenceCurveKind::line;
+            } else {
+                record.role =
+                    kernel::
+                        EvidenceEdgeSemanticRoleKind::
+                            unsupported;
+            }
+
+            const bool semantic_supported =
+                record.role !=
+                    kernel::
+                        EvidenceEdgeSemanticRoleKind::
+                            unsupported &&
+                record.semantic_curve_kind !=
+                    kernel::EvidenceCurveKind::other;
+
+            const bool provider_matches =
+                semantic_supported &&
+                record.provider_curve_kind.has_value() &&
+                *record.provider_curve_kind ==
+                    record.semantic_curve_kind;
+
+            if (semantic_supported &&
+                provider_matches) {
+                record.accounting_class =
+                    kernel::
+                        EvidenceTopologyAccountingClass::
+                            referenceable;
+                record.status =
+                    kernel::ReferenceStatus::resolved;
+                ++evidence.referenceable_edge_count;
+            } else if (semantic_supported) {
+                // A semantic claim that contradicts provider geometry is not
+                // downgraded to a guessable Unsupported result.
+                record.accounting_class =
+                    kernel::
+                        EvidenceTopologyAccountingClass::
+                            integrity_failure;
+                record.status =
+                    kernel::ReferenceStatus::unsupported;
+                ++evidence.integrity_failure_count;
+            } else {
+                record.accounting_class =
+                    kernel::
+                        EvidenceTopologyAccountingClass::
+                            semantically_unsupported;
+                record.status =
+                    kernel::ReferenceStatus::unsupported;
+                ++evidence.unsupported_edge_count;
+            }
+
+            evidence.topology.edges.catalog[index]
+                .accounting_class =
+                record.accounting_class;
+            evidence.edges.push_back(
+                std::move(record));
+        }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        evidence.topology.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        evidence.topology.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::EdgeBooleanLineageEvidence
+buildEdgeBooleanLineageEvidence(
+    kernel::EdgeBooleanProbeScenario scenario) noexcept {
+    kernel::EdgeBooleanLineageEvidence evidence;
+
+    try {
+        const auto base =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    40.0,
+                    20.0,
+                    0.0,
+                    "base"),
+                10.0);
+        if (!base) {
+            evidence.before_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const auto* bottom =
+            findPrismSide(
+                *base,
+                "base-bottom");
+        if (bottom == nullptr) {
+            evidence.before_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const auto source_edges =
+            sharedEdges(
+                {TopoDS_Shape{base->end_cap}},
+                {TopoDS_Shape{bottom->face}});
+        if (source_edges.size() != 1U) {
+            evidence.before_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.before_shape,
+            base->shape);
+        if (!evidence.before_shape.ok()) {
+            return evidence;
+        }
+
+        double x0{};
+        double y0{};
+        double x1{};
+        double y1{};
+        double z{5.0};
+
+        switch (scenario) {
+        case kernel::EdgeBooleanProbeScenario::unchanged:
+            x0 = 30.0;
+            y0 = 10.0;
+            x1 = 35.0;
+            y1 = 15.0;
+            break;
+        case kernel::EdgeBooleanProbeScenario::trim:
+            x0 = 30.0;
+            y0 = -5.0;
+            x1 = 45.0;
+            y1 = 5.0;
+            break;
+        case kernel::EdgeBooleanProbeScenario::split:
+            x0 = 15.0;
+            y0 = -5.0;
+            x1 = 25.0;
+            y1 = 5.0;
+            break;
+        case kernel::EdgeBooleanProbeScenario::remove:
+            x0 = -5.0;
+            y0 = -5.0;
+            x1 = 45.0;
+            y1 = 5.0;
+            break;
+        }
+
+        const auto tool =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    x0,
+                    y0,
+                    x1,
+                    y1,
+                    z,
+                    "edge-cut"),
+                10.0);
+        if (!tool) {
+            evidence.after_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        BRepAlgoAPI_Cut cut{
+            base->shape,
+            tool->shape};
+        cut.SetFuzzyValue(0.0);
+        cut.Build();
+        if (!cut.IsDone() ||
+            cut.Shape().IsNull()) {
+            evidence.after_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const auto result =
+            cut.Shape();
+        populateShapeEvidence(
+            evidence.after_shape,
+            result);
+        if (!evidence.after_shape.ok()) {
+            return evidence;
+        }
+        populateBodyTopologyEvidence(
+            evidence.after_topology,
+            evidence.after_shape,
+            result);
+
+        evidence.source_history =
+            historyEvidence(
+                cut,
+                source_edges.front(),
+                TopAbs_EDGE,
+                result);
+        const auto descendants =
+            historyDescendants(
+                cut,
+                source_edges.front(),
+                TopAbs_EDGE,
+                result);
+
+        evidence.edge_status =
+            referenceStatus(
+                descendants.size());
+        evidence.current_edge_realization_count =
+            descendants.size();
+        evidence.semantic_curve_kind =
+            kernel::EvidenceCurveKind::line;
+        evidence.all_provider_curves_match_kind =
+            descendants.empty()
+                ? scenario ==
+                      kernel::EdgeBooleanProbeScenario::remove
+                : allEdgesMatchCurveKind(
+                      descendants,
+                      kernel::EvidenceCurveKind::line);
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.after_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.after_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::BooleanIntersectionEdgeEvidence
+buildBooleanIntersectionEdgeEvidence() noexcept {
+    kernel::BooleanIntersectionEdgeEvidence evidence;
+
+    try {
+        const auto base =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    40.0,
+                    20.0,
+                    0.0,
+                    "base"),
+                10.0);
+        const auto tool =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    10.0,
+                    5.0,
+                    30.0,
+                    15.0,
+                    5.0,
+                    "tool"),
+                10.0);
+        if (!base || !tool) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const auto* tool_bottom =
+            findPrismSide(
+                *tool,
+                "tool-bottom");
+        if (tool_bottom == nullptr) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        BRepAlgoAPI_Cut cut{
+            base->shape,
+            tool->shape};
+        cut.SetFuzzyValue(0.0);
+        cut.Build();
+        if (!cut.IsDone() ||
+            cut.Shape().IsNull()) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const auto result =
+            cut.Shape();
+        populateShapeEvidence(
+            evidence.shape,
+            result);
+        if (!evidence.shape.ok()) {
+            return evidence;
+        }
+        populateBodyTopologyEvidence(
+            evidence.topology,
+            evidence.shape,
+            result);
+
+        const auto first_faces =
+            historyDescendants(
+                cut,
+                base->end_cap,
+                TopAbs_FACE,
+                result);
+        const auto second_faces =
+            historyDescendants(
+                cut,
+                tool_bottom->face,
+                TopAbs_FACE,
+                result);
+        const auto intersections =
+            sharedEdges(
+                first_faces,
+                second_faces);
+
+        evidence.status =
+            referenceStatus(
+                intersections.size());
+        evidence.current_edge_realization_count =
+            intersections.size();
+        evidence.semantic_curve_kind =
+            kernel::EvidenceCurveKind::line;
+        evidence.all_provider_curves_match_kind =
+            allEdgesMatchCurveKind(
+                intersections,
+                kernel::EvidenceCurveKind::line);
+        evidence.first_surface = {
+            kernel::EvidenceSurfaceCarrierRoleKind::end_cap,
+            std::nullopt};
+        evidence.second_surface = {
+            kernel::EvidenceSurfaceCarrierRoleKind::side,
+            tool_bottom->provenance};
+
+        evidence.absent_from_both_source_shapes =
+            !intersections.empty() &&
+            std::all_of(
+                intersections.begin(),
+                intersections.end(),
+                [&base, &tool](const TopoDS_Edge& edge) {
+                    return !containsSameSubshape(
+                               base->shape,
+                               edge,
+                               TopAbs_EDGE) &&
+                           !containsSameSubshape(
+                               tool->shape,
+                               edge,
+                               TopAbs_EDGE);
+                });
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::SurfacePairBranchEvidence
+buildSurfacePairBranchEvidence() noexcept {
+    kernel::SurfacePairBranchEvidence evidence;
+
+    try {
+        const auto base =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    40.0,
+                    20.0,
+                    0.0,
+                    "base"),
+                10.0);
+        if (!base) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const auto* bottom =
+            findPrismSide(
+                *base,
+                "base-bottom");
+        if (bottom == nullptr) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const auto tool =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    15.0,
+                    -5.0,
+                    25.0,
+                    25.0,
+                    5.0,
+                    "branch-cut"),
+                10.0);
+        if (!tool) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        BRepAlgoAPI_Cut cut{
+            base->shape,
+            tool->shape};
+        cut.SetFuzzyValue(0.0);
+        cut.Build();
+        if (!cut.IsDone() ||
+            cut.Shape().IsNull()) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const auto result =
+            cut.Shape();
+        populateShapeEvidence(
+            evidence.shape,
+            result);
+        if (!evidence.shape.ok()) {
+            return evidence;
+        }
+        populateBodyTopologyEvidence(
+            evidence.topology,
+            evidence.shape,
+            result);
+
+        const auto top_faces =
+            historyDescendants(
+                cut,
+                base->end_cap,
+                TopAbs_FACE,
+                result);
+        const auto front_faces =
+            historyDescendants(
+                cut,
+                bottom->face,
+                TopAbs_FACE,
+                result);
+        const auto branches =
+            sharedEdges(
+                top_faces,
+                front_faces);
+
+        evidence.branch_count =
+            branches.size();
+        evidence.pair_only_status =
+            referenceStatus(
+                branches.size());
+        evidence.semantic_curve_kind =
+            kernel::EvidenceCurveKind::line;
+        evidence.all_provider_curves_match_kind =
+            allEdgesMatchCurveKind(
+                branches,
+                kernel::EvidenceCurveKind::line);
+        evidence.first_surface = {
+            kernel::EvidenceSurfaceCarrierRoleKind::end_cap,
+            std::nullopt};
+        evidence.second_surface = {
+            kernel::EvidenceSurfaceCarrierRoleKind::side,
+            bottom->provenance};
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.shape.status =
             kernel::EvidenceStatus::provider_failure;
         return evidence;
     }
