@@ -154,16 +154,25 @@ struct ExtrudeSurfaceCarrierEvidence final {
     std::size_t claim_outside_body_count{};
 
     [[nodiscard]] bool completeFaceClaims() const noexcept {
-        return shape.ok() &&
-               shape.solid_count == 1U &&
-               topology.complete() &&
-               topology.faces.provider_unique_count ==
-                   unique_claimed_face_count &&
-               unclaimed_face_count == 0U &&
-               multiply_claimed_face_count == 0U &&
-               claim_outside_body_count == 0U &&
-               start_cap.status == ReferenceStatus::resolved &&
-               end_cap.status == ReferenceStatus::resolved;
+        if (!(shape.ok() &&
+              shape.solid_count == 1U &&
+              topology.complete() &&
+              topology.faces.provider_unique_count ==
+                  unique_claimed_face_count &&
+              unclaimed_face_count == 0U &&
+              multiply_claimed_face_count == 0U &&
+              claim_outside_body_count == 0U &&
+              start_cap.status == ReferenceStatus::resolved &&
+              end_cap.status == ReferenceStatus::resolved)) {
+            return false;
+        }
+
+        for (const auto& side : sides) {
+            if (side.status != ReferenceStatus::resolved) {
+                return false;
+            }
+        }
+        return true;
     }
 
     friend bool operator==(
