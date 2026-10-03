@@ -1218,7 +1218,9 @@ void CadWorkbench::buildUi() {
                 }
             }
             syncSketchInteractionUi();
-            tryCompleteExtrudeProfilePick();
+            if (semantic) {
+                tryCompleteExtrudeProfilePick();
+            }
             syncActionState();
         });
     viewport_controller_->setProfileSelectionChangedHandler(
@@ -1246,7 +1248,9 @@ void CadWorkbench::buildUi() {
                 }
             }
             syncSketchInteractionUi();
-            tryCompleteExtrudeProfilePick();
+            if (semantic) {
+                tryCompleteExtrudeProfilePick();
+            }
             syncActionState();
         });
     tree_controller_->setProfileEditHandler(
@@ -6340,6 +6344,7 @@ void CadWorkbench::refreshFeatureProperties(
     feature_go_to_profile_button_->setEnabled(
         profile != nullptr);
     const bool lifecycle_available =
+        !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
