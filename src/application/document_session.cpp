@@ -1745,23 +1745,79 @@ DocumentSession::evaluateExtrudeDraft(
         return result;
     }
 
-    // Presentation uses the raw Extrude tool, not the complete candidate
-    // Body. Full candidate evaluation above remains the sole authority for
-    // whether Finish is legal. Force Add only for isolated tool generation:
-    // Cut semantics are still validated against the upstream Body above.
+    // Full candidate evaluation above remains the sole authority for
+    // whether Finish is legal. Preview is a separate exact operation delta:
+    // Add = tool - upstream Body, Cut = tool ∩ upstream Body.
+    kernel::RuntimeSolidHandle preview_upstream;
+    bool preview_upstream_ready = false;
+    const auto& candidate_features =
+        candidate.document->body().features;
+    const auto target_authored =
+        std::find_if(
+            candidate_features.begin(),
+            candidate_features.end(),
+            [target_id](
+                const part::PartFeature& feature) {
+                return feature.id == target_id;
+            });
+
+    if (target_authored !=
+        candidate_features.end()) {
+        const auto target_index =
+            static_cast<std::size_t>(
+                std::distance(
+                    candidate_features.begin(),
+                    target_authored));
+        if (target_index == 0U) {
+            preview_upstream_ready = true;
+        } else {
+            auto upstream_state =
+                candidate.document->state();
+            upstream_state.body.features.erase(
+                upstream_state.body.features.begin() +
+                    static_cast<std::ptrdiff_t>(
+                        target_index),
+                upstream_state.body.features.end());
+
+            auto upstream_document =
+                part::PartDocument::restore(
+                    documentId(),
+                    std::move(upstream_state),
+                    document_.revision());
+            if (upstream_document.ok()) {
+                const auto upstream_evaluation =
+                    part::evaluatePart(
+                        *upstream_document.document,
+                        modeling_kernel);
+                if (upstream_evaluation.body_status ==
+                    part::BodyEvaluationStatus::
+                        up_to_date) {
+                    preview_upstream =
+                        upstream_evaluation.body_solid;
+                    preview_upstream_ready =
+                        preview_upstream != nullptr;
+                } else if (
+                    upstream_evaluation.body_status ==
+                    part::BodyEvaluationStatus::empty) {
+                    preview_upstream_ready = true;
+                }
+            }
+        }
+    }
+
     auto preview_input =
         part::makeKernelExtrudeInput(
             *candidate.document,
             definition);
-    if (preview_input) {
-        preview_input->operation =
-            kernel::SolidBooleanOperation::add;
-        const auto preview_tool =
-            modeling_kernel.extrude(
-                *preview_input);
-        if (preview_tool.ok()) {
-            result.preview_tool_solid =
-                preview_tool.solid;
+    if (preview_input &&
+        preview_upstream_ready) {
+        auto preview =
+            modeling_kernel.extrudePreviewMesh(
+                *preview_input,
+                preview_upstream);
+        if (preview.ok()) {
+            result.preview_delta_mesh =
+                std::move(preview.mesh);
         }
     }
 
