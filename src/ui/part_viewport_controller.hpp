@@ -245,6 +245,9 @@ public:
         const std::vector<part::ProfileId>& selected,
         std::optional<part::ProfileId> primary);
 
+    void setTransientProfileReveal(
+        std::optional<part::ProfileId> profile_id);
+
     [[nodiscard]] bool projectSketchEntitySelection(
         const std::vector<sketch::EntityId>& selected,
         std::optional<sketch::EntityId> primary);
@@ -355,6 +358,8 @@ private:
         std::uint64_t,
         part::ProfileId>
         profile_bindings_;
+    std::optional<part::ProfileId>
+        transient_profile_reveal_;
     std::uint64_t next_presentation_token_{
         0x10000U};
     bool sketch_grip_projection_valid_{};

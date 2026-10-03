@@ -531,6 +531,7 @@ void PartViewportController::setDocumentSession(
                 select_pick_box;
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
+        transient_profile_reveal_.reset();
         solid_scene_revision_.reset();
         solid_scene_cache_.reset();
         clearSolidPreview();
@@ -559,6 +560,7 @@ void PartViewportController::clear() {
             select_pick_box;
     sketch_entity_bindings_.clear();
     profile_bindings_.clear();
+    transient_profile_reveal_.reset();
     solid_scene_revision_.reset();
     solid_scene_cache_.reset();
     clearSketchSelectionBoxOverlay();
@@ -1683,6 +1685,26 @@ void PartViewportController::setProfileSelectionFromTree(
     notifySelectionChanged();
 }
 
+
+void PartViewportController::setTransientProfileReveal(
+    std::optional<part::ProfileId> profile_id) {
+    if (profile_id &&
+        (session_ == nullptr ||
+         session_->document().findProfile(
+             *profile_id) == nullptr)) {
+        profile_id.reset();
+    }
+
+    if (transient_profile_reveal_ ==
+        profile_id) {
+        return;
+    }
+
+    transient_profile_reveal_ =
+        profile_id;
+    refreshPresentation();
+}
+
 bool PartViewportController::projectSketchEntitySelection(
     const std::vector<sketch::EntityId>& selected,
     std::optional<sketch::EntityId> primary) {
@@ -2145,7 +2167,12 @@ PartViewportController::buildProfileScene() {
 
     for (const auto& profile :
          session_->document().profiles()) {
-        if (!session_->document()
+        const bool transient_reveal =
+            transient_profile_reveal_ &&
+            *transient_profile_reveal_ ==
+                profile.id;
+        if (!transient_reveal &&
+            !session_->document()
                  .profilePresentationVisible(
                      profile.id)) {
             continue;
