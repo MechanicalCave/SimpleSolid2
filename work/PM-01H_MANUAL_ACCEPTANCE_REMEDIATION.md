@@ -36,6 +36,7 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 - **H5 documentation sync COMPLETED — PASS:** PR #166, Windows DOCS #1360 PASS; latest main `2e98164a91e93717e4cfbcf886ce467bc503d31e`.
 - **Owner re-test after H5:** PARTIAL PASS; exact delta/no-effect behavior is improved, but committed Body and preview still share the subtractive orange appearance during preview.
 - **H6 COMPLETED — PASS:** PR #169, exact-head Windows FULL #1364 PASS on `60f2a7ac6ed894e77c751449b370ee4322c870ae`; merged to main as `ca5592d07a271c83c9752fb654cded2c7b3d83c6`.
+- **H6 documentation sync COMPLETED — PASS:** PR #171, Windows DOCS #1367 PASS; latest main `d2655331c6713d87fc61564e75300b61312dfb37`.
 - **Owner H6 re-test:** PENDING on latest main; only Add/Cut preview color isolation needs manual confirmation before PM-01 governance completion.
 
 ## H1 — Profile → Kernel fidelity blocker
