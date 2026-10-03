@@ -281,6 +281,27 @@ set_tests_properties(pm02p.b2_boolean_surface_lineage PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;native"
 )
 
+add_executable(pm02p_b3_cap_frame_matrix_test
+    pm02p_b3_cap_frame_matrix_test.cpp
+)
+
+target_link_libraries(pm02p_b3_cap_frame_matrix_test
+    PRIVATE
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+)
+
+target_compile_features(pm02p_b3_cap_frame_matrix_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm02p.b3_cap_frame_matrix
+    COMMAND pm02p_b3_cap_frame_matrix_test
+)
+
+set_tests_properties(pm02p.b3_cap_frame_matrix PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
@@ -295,6 +316,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm02p_a_topology_inventory_test
         pm02p_b1_surface_carriers_test
         pm02p_b2_boolean_surface_lineage_test
+        pm02p_b3_cap_frame_matrix_test
 )
 
 foreach(_forbidden_target IN ITEMS
