@@ -9,6 +9,7 @@
 #include <QMouseEvent>
 #include <QPoint>
 #include <QSignalBlocker>
+#include <QStyle>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 
@@ -734,10 +735,17 @@ void PartDocumentTreeController::rebuild(
 
     {
         auto body_font = body->font(0);
-        body_font.setBold(
+        const bool unavailable =
             body_status_ ==
-            part::BodyEvaluationStatus::unavailable);
+            part::BodyEvaluationStatus::unavailable;
+        body_font.setBold(unavailable);
         body->setFont(0, body_font);
+        if (unavailable) {
+            body->setIcon(
+                0,
+                tree_->style()->standardIcon(
+                    QStyle::SP_MessageBoxWarning));
+        }
     }
 
     if (preserve_reference_selection &&
@@ -835,12 +843,19 @@ void PartDocumentTreeController::rebuild(
 
         auto font = item->font(0);
         font.setItalic(feature.suppressed);
-        font.setBold(
+        const bool warning =
             status ==
                 part::FeatureEvaluationStatus::failed ||
             status ==
-                part::FeatureEvaluationStatus::blocked);
+                part::FeatureEvaluationStatus::blocked;
+        font.setBold(warning);
         item->setFont(0, font);
+        if (warning) {
+            item->setIcon(
+                0,
+                tree_->style()->standardIcon(
+                    QStyle::SP_MessageBoxWarning));
+        }
 
         if (preserve_reference_selection) {
             const bool was_selected =
@@ -994,6 +1009,12 @@ void PartDocumentTreeController::rebuild(
                 profile_item->setFont(
                     0,
                     profile_font);
+                if (!valid) {
+                    profile_item->setIcon(
+                        0,
+                        tree_->style()->standardIcon(
+                            QStyle::SP_MessageBoxWarning));
+                }
 
                 profile_item->setToolTip(
                     0,
