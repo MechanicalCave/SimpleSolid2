@@ -905,6 +905,227 @@ void populateBodyTopologyEvidence(
         TopAbs_VERTEX);
 }
 
+struct EvidencePrismSurfaceClaim final {
+    kernel::EvidenceSurfaceCarrierKey key;
+    TopoDS_Face face;
+};
+
+[[nodiscard]] std::vector<EvidencePrismSurfaceClaim>
+prismSurfaceClaims(
+    const EvidencePrismBuild& prism) {
+    std::vector<EvidencePrismSurfaceClaim> result;
+    result.reserve(
+        prism.sides.size() + 2U);
+    result.push_back({
+        {kernel::EvidenceSurfaceCarrierRoleKind::start_cap,
+         std::nullopt},
+        prism.start_cap});
+    result.push_back({
+        {kernel::EvidenceSurfaceCarrierRoleKind::end_cap,
+         std::nullopt},
+        prism.end_cap});
+    for (const auto& side : prism.sides) {
+        result.push_back({
+            {kernel::EvidenceSurfaceCarrierRoleKind::side,
+             side.provenance},
+            side.face});
+    }
+    return result;
+}
+
+void appendUniqueEdge(
+    std::vector<TopoDS_Edge>& edges,
+    const TopoDS_Edge& candidate) {
+    const bool duplicate =
+        std::any_of(
+            edges.begin(),
+            edges.end(),
+            [&candidate](const TopoDS_Edge& existing) {
+                return existing.IsSame(candidate);
+            });
+    if (!duplicate) {
+        edges.push_back(candidate);
+    }
+}
+
+[[nodiscard]] std::vector<TopoDS_Edge>
+uniqueEdgesFromShape(
+    const TopoDS_Shape& shape) {
+    std::vector<TopoDS_Edge> result;
+    if (shape.IsNull()) {
+        return result;
+    }
+
+    TopTools_IndexedMapOfShape unique;
+    TopExp::MapShapes(
+        shape,
+        TopAbs_EDGE,
+        unique);
+    result.reserve(
+        static_cast<std::size_t>(
+            unique.Extent()));
+    for (Standard_Integer index = 1;
+         index <= unique.Extent();
+         ++index) {
+        result.push_back(
+            TopoDS::Edge(
+                unique.FindKey(index)));
+    }
+    return result;
+}
+
+[[nodiscard]] std::vector<TopoDS_Edge>
+uniqueEdgesFromFace(
+    const TopoDS_Face& face) {
+    std::vector<TopoDS_Edge> result;
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        appendUniqueEdge(
+            result,
+            TopoDS::Edge(
+                explorer.Current()));
+    }
+    return result;
+}
+
+[[nodiscard]] bool faceContainsEdge(
+    const TopoDS_Face& face,
+    const TopoDS_Edge& edge) {
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(edge)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void appendUniqueSurfaceKey(
+    std::vector<kernel::EvidenceSurfaceCarrierKey>& keys,
+    const kernel::EvidenceSurfaceCarrierKey& candidate) {
+    if (std::find(
+            keys.begin(),
+            keys.end(),
+            candidate) == keys.end()) {
+        keys.push_back(candidate);
+    }
+}
+
+[[nodiscard]] kernel::EvidenceCurveKind
+providerCurveKind(
+    const TopoDS_Edge& edge) {
+    BRepAdaptor_Curve curve{
+        edge};
+    switch (curve.GetType()) {
+    case GeomAbs_Line:
+        return kernel::EvidenceCurveKind::line;
+    case GeomAbs_Circle:
+        return kernel::EvidenceCurveKind::circle;
+    default:
+        return kernel::EvidenceCurveKind::other;
+    }
+}
+
+[[nodiscard]] kernel::EvidenceCurveKind
+semanticCurveKind(
+    const kernel::BoundaryUse2D& use) noexcept {
+    return std::holds_alternative<kernel::Line2>(
+               use.curve)
+        ? kernel::EvidenceCurveKind::line
+        : kernel::EvidenceCurveKind::circle;
+}
+
+[[nodiscard]] std::vector<TopoDS_Edge>
+sharedEdges(
+    const std::vector<TopoDS_Shape>& first_faces,
+    const std::vector<TopoDS_Shape>& second_faces) {
+    std::vector<TopoDS_Edge> first_edges;
+    std::vector<TopoDS_Edge> second_edges;
+
+    for (const auto& shape : first_faces) {
+        if (shape.IsNull() ||
+            shape.ShapeType() != TopAbs_FACE) {
+            continue;
+        }
+        for (const auto& edge :
+             uniqueEdgesFromFace(
+                 TopoDS::Face(shape))) {
+            appendUniqueEdge(
+                first_edges,
+                edge);
+        }
+    }
+    for (const auto& shape : second_faces) {
+        if (shape.IsNull() ||
+            shape.ShapeType() != TopAbs_FACE) {
+            continue;
+        }
+        for (const auto& edge :
+             uniqueEdgesFromFace(
+                 TopoDS::Face(shape))) {
+            appendUniqueEdge(
+                second_edges,
+                edge);
+        }
+    }
+
+    std::vector<TopoDS_Edge> result;
+    for (const auto& first : first_edges) {
+        const bool present =
+            std::any_of(
+                second_edges.begin(),
+                second_edges.end(),
+                [&first](const TopoDS_Edge& second) {
+                    return first.IsSame(second);
+                });
+        if (present) {
+            appendUniqueEdge(
+                result,
+                first);
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] bool allEdgesMatchCurveKind(
+    const std::vector<TopoDS_Shape>& edges,
+    kernel::EvidenceCurveKind expected) {
+    if (edges.empty()) {
+        return false;
+    }
+    return std::all_of(
+        edges.begin(),
+        edges.end(),
+        [expected](const TopoDS_Shape& shape) {
+            return !shape.IsNull() &&
+                   shape.ShapeType() == TopAbs_EDGE &&
+                   providerCurveKind(
+                       TopoDS::Edge(shape)) ==
+                       expected;
+        });
+}
+
+[[nodiscard]] bool allEdgesMatchCurveKind(
+    const std::vector<TopoDS_Edge>& edges,
+    kernel::EvidenceCurveKind expected) {
+    if (edges.empty()) {
+        return false;
+    }
+    return std::all_of(
+        edges.begin(),
+        edges.end(),
+        [expected](const TopoDS_Edge& edge) {
+            return providerCurveKind(edge) ==
+                   expected;
+        });
+}
+
 [[nodiscard]] kernel::ReferenceStatus
 surfaceStatusFromSingleCarrierLineage(
     std::size_t descendant_face_count) noexcept {
