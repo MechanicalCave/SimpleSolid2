@@ -3213,6 +3213,18 @@ void CadWorkbench::buildUi() {
                 if (viewport_controller_) {
                     viewport_controller_->
                         clearSolidPreview();
+                    if (extrude_draft_->mode() ==
+                        application::ExtrudeDraftMode::edit) {
+                        viewport_controller_->
+                            setTransientProfilePresentationOverride(
+                                extrude_draft_->profileId(),
+                                std::nullopt);
+                    } else {
+                        viewport_controller_->
+                            setTransientProfilePresentationOverride(
+                                std::nullopt,
+                                std::nullopt);
+                    }
                 }
                 syncExtrudeUi();
                 return;
