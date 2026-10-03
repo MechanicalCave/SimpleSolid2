@@ -304,6 +304,96 @@ struct BooleanSubshapeHistoryEvidence final {
         const BooleanSubshapeHistoryEvidence&) = default;
 };
 
+enum class SurfaceBooleanProbeScenario {
+    attached_add_trim,
+    cut_trim,
+    cut_split,
+};
+
+struct SurfaceBooleanLineageEvidence final {
+    ShapeEvidence before_shape;
+    ShapeEvidence after_shape;
+    BodyTopologyInventoryEvidence after_topology;
+    BooleanSubshapeHistoryEvidence source_history;
+    ReferenceStatus strict_face_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus surface_status{
+        ReferenceStatus::unsupported};
+    std::size_t current_face_realization_count{};
+    std::size_t planar_realization_count{};
+    std::optional<Frame3> canonical_frame;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return before_shape.ok() &&
+               before_shape.solid_count == 1U &&
+               after_shape.ok() &&
+               after_shape.solid_count == 1U &&
+               after_topology.complete();
+    }
+
+    friend bool operator==(
+        const SurfaceBooleanLineageEvidence&,
+        const SurfaceBooleanLineageEvidence&) = default;
+};
+
+struct SurfaceDeleteRecreateEvidence final {
+    ShapeEvidence before_shape;
+    ShapeEvidence after_delete_shape;
+    ShapeEvidence after_recreate_shape;
+    BooleanSubshapeHistoryEvidence delete_history;
+    ReferenceStatus old_surface_after_delete{
+        ReferenceStatus::unsupported};
+    ReferenceStatus old_surface_after_recreate{
+        ReferenceStatus::unsupported};
+    ReferenceStatus replacement_surface_status{
+        ReferenceStatus::unsupported};
+    std::size_t replacement_face_count{};
+    bool replacement_geometry_matches_old{false};
+    std::optional<Frame3> old_canonical_frame;
+    std::optional<Frame3> replacement_canonical_frame;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return before_shape.ok() &&
+               before_shape.solid_count == 1U &&
+               after_delete_shape.ok() &&
+               after_delete_shape.solid_count == 1U &&
+               after_recreate_shape.ok() &&
+               after_recreate_shape.solid_count == 1U;
+    }
+
+    friend bool operator==(
+        const SurfaceDeleteRecreateEvidence&,
+        const SurfaceDeleteRecreateEvidence&) = default;
+};
+
+struct CutExposedSurfaceEvidence final {
+    ShapeEvidence result_shape;
+    BodyTopologyInventoryEvidence result_topology;
+    BooleanSubshapeHistoryEvidence tool_surface_history;
+    ReferenceStatus strict_face_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus surface_status{
+        ReferenceStatus::unsupported};
+    std::size_t current_face_realization_count{};
+    FaceSurfaceKind semantic_surface_kind{
+        FaceSurfaceKind::other};
+    std::optional<FaceSurfaceKind>
+        provider_surface_kind;
+    std::optional<BoundaryUseProvenance>
+        provenance;
+    std::optional<Frame3> canonical_frame;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return result_shape.ok() &&
+               result_shape.solid_count == 1U &&
+               result_topology.complete();
+    }
+
+    friend bool operator==(
+        const CutExposedSurfaceEvidence&,
+        const CutExposedSurfaceEvidence&) = default;
+};
+
 struct EdgeSplitHistoryEvidence final {
     ShapeEvidence shape;
     BooleanSubshapeHistoryEvidence target;
