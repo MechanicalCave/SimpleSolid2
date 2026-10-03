@@ -108,6 +108,45 @@ parseSupportRole(std::string_view value) noexcept {
     return std::nullopt;
 }
 
+const char* profileVisibilityPolicyName(
+    ProfileVisibilityPolicy policy) noexcept {
+    switch (policy) {
+    case ProfileVisibilityPolicy::automatic:
+        return "automatic";
+    case ProfileVisibilityPolicy::force_shown:
+        return "force_shown";
+    case ProfileVisibilityPolicy::force_hidden:
+        return "force_hidden";
+    }
+    return "";
+}
+
+std::optional<ProfileVisibilityPolicy>
+parseProfileVisibilityPolicy(
+    std::string_view value) noexcept {
+    if (value == "automatic") return ProfileVisibilityPolicy::automatic;
+    if (value == "force_shown") return ProfileVisibilityPolicy::force_shown;
+    if (value == "force_hidden") return ProfileVisibilityPolicy::force_hidden;
+    return std::nullopt;
+}
+
+const char* extrudeOperationName(
+    ExtrudeOperation operation) noexcept {
+    switch (operation) {
+    case ExtrudeOperation::add: return "add";
+    case ExtrudeOperation::cut: return "cut";
+    }
+    return "";
+}
+
+std::optional<ExtrudeOperation>
+parseExtrudeOperation(
+    std::string_view value) noexcept {
+    if (value == "add") return ExtrudeOperation::add;
+    if (value == "cut") return ExtrudeOperation::cut;
+    return std::nullopt;
+}
+
 std::optional<core::LengthUnit>
 parseLengthUnitName(std::string_view value) noexcept {
     if (value == "mm") {
@@ -298,12 +337,67 @@ std::string serializeAuthored(
                  std::string{
                      profile.source_sketch_id.value()}},
                 {"name", profile.name},
-                {"visible", profile.visible},
+                {"visibility",
+                 profileVisibilityPolicyName(
+                     profile.visibility)},
                 {"region_intent",
                  profileIntentJson(
                      profile.region_intent)},
             });
     }
+
+    nlohmann::json features =
+        nlohmann::json::array();
+    for (const auto& feature :
+         document.body().features) {
+        const auto& extrude =
+            std::get<ExtrudeFeature>(
+                feature.definition);
+        nlohmann::json extent;
+        if (const auto* one_sided =
+                std::get_if<OneSidedExtrudeExtent>(
+                    &extrude.extent)) {
+            extent = {
+                {"mode", "one_side"},
+                {"distance_mm",
+                 one_sided->distance.millimetres},
+                {"direction",
+                 one_sided->reversed
+                     ? "reverse"
+                     : "forward"},
+            };
+        } else {
+            const auto& midplane =
+                std::get<MidplaneExtrudeExtent>(
+                    extrude.extent);
+            extent = {
+                {"mode", "midplane"},
+                {"distance_mm",
+                 midplane.total_distance.millimetres},
+            };
+        }
+        features.push_back(
+            {
+                {"id", feature.id.serialized()},
+                {"kind", "extrude"},
+                {"name", feature.name},
+                {"suppressed", feature.suppressed},
+                {"profile_id",
+                 extrude.profile_id.serialized()},
+                {"operation",
+                 extrudeOperationName(
+                     extrude.operation)},
+                {"extent", std::move(extent)},
+            });
+    }
+
+    nlohmann::json body{
+        {"id", document.body().id.serialized()},
+        {"next_feature_id",
+         document.body()
+             .next_feature_id.serialized()},
+        {"features", std::move(features)},
+    };
 
     nlohmann::json authored{
         {"properties",
@@ -329,6 +423,11 @@ std::string serializeAuthored(
         {"next_profile_id",
          document.profileIdCursor().serialized()},
         {"profiles", std::move(profiles)},
+        {"modeling_semantics_version",
+         document.modelingSemanticsVersion().value},
+        {"next_body_id",
+         document.bodyIdCursor().serialized()},
+        {"body", std::move(body)},
     };
 
     std::string text = authored.dump(2);
@@ -1044,6 +1143,7 @@ parseProfileIntent(
 
 bool parseProfiles(
     const nlohmann::json& value,
+    int schema_version,
     ProfileIdCursor cursor,
     std::vector<PartProfile>& profiles,
     std::string& error) {
@@ -1056,17 +1156,23 @@ bool parseProfiles(
     profiles.clear();
     profiles.reserve(value.size());
     for (const auto& item : value) {
+        const bool has_visibility_policy =
+            schema_version >= 8;
         if (!item.is_object() ||
             item.size() != 5U ||
             !item.contains("id") ||
             !item.contains("source_sketch_id") ||
             !item.contains("name") ||
-            !item.contains("visible") ||
+            !(has_visibility_policy
+                  ? item.contains("visibility")
+                  : item.contains("visible")) ||
             !item.contains("region_intent") ||
             !item["id"].is_string() ||
             !item["source_sketch_id"].is_string() ||
             !item["name"].is_string() ||
-            !item["visible"].is_boolean()) {
+            (has_visibility_policy
+                 ? !item["visibility"].is_string()
+                 : !item["visible"].is_boolean())) {
             error =
                 "Native Part contains malformed Profile record";
             return false;
@@ -1092,14 +1198,173 @@ bool parseProfiles(
             return false;
         }
 
+        ProfileVisibilityPolicy visibility =
+            ProfileVisibilityPolicy::automatic;
+        if (has_visibility_policy) {
+            const auto parsed_visibility =
+                parseProfileVisibilityPolicy(
+                    item["visibility"]
+                        .get<std::string>());
+            if (!parsed_visibility) {
+                error =
+                    "Native Part contains invalid Profile visibility policy";
+                return false;
+            }
+            visibility = *parsed_visibility;
+        } else if (!item["visible"].get<bool>()) {
+            visibility =
+                ProfileVisibilityPolicy::force_hidden;
+        }
+
         profiles.push_back(
             PartProfile{
                 *id,
                 std::move(*sketch_id),
                 item["name"].get<std::string>(),
-                item["visible"].get<bool>(),
+                visibility,
                 std::move(*intent)});
     }
+    return true;
+}
+
+bool parseBodyV8(
+    const nlohmann::json& value,
+    BodyIdCursor body_cursor,
+    ProfileIdCursor profile_cursor,
+    PartBody& body,
+    std::string& error) {
+    if (!value.is_object() ||
+        value.size() != 3U ||
+        !value.contains("id") ||
+        !value.contains("next_feature_id") ||
+        !value.contains("features") ||
+        !value["id"].is_string() ||
+        !value["next_feature_id"].is_string() ||
+        !value["features"].is_array()) {
+        error = "Native Part contains malformed Body record";
+        return false;
+    }
+
+    const auto body_id =
+        BodyId::parse(value["id"].get<std::string>());
+    const auto feature_cursor =
+        FeatureIdCursor::parse(
+            value["next_feature_id"].get<std::string>());
+    if (!body_id || !feature_cursor ||
+        !body_cursor.containsAllocated(*body_id)) {
+        error = "Native Part contains invalid Body identity";
+        return false;
+    }
+
+    PartBody parsed;
+    parsed.id = *body_id;
+    parsed.next_feature_id = *feature_cursor;
+    parsed.features.reserve(value["features"].size());
+
+    for (const auto& item : value["features"]) {
+        if (!item.is_object() ||
+            item.size() != 7U ||
+            !item.contains("id") ||
+            !item.contains("kind") ||
+            !item.contains("name") ||
+            !item.contains("suppressed") ||
+            !item.contains("profile_id") ||
+            !item.contains("operation") ||
+            !item.contains("extent") ||
+            !item["id"].is_string() ||
+            !item["kind"].is_string() ||
+            !item["name"].is_string() ||
+            !item["suppressed"].is_boolean() ||
+            !item["profile_id"].is_string() ||
+            !item["operation"].is_string()) {
+            error = "Native Part contains malformed Feature record";
+            return false;
+        }
+        if (item["kind"].get<std::string>() != "extrude") {
+            error = "Native Part contains unsupported Feature kind";
+            return false;
+        }
+
+        const auto feature_id =
+            FeatureId::parse(item["id"].get<std::string>());
+        const auto profile_id =
+            ProfileId::parse(
+                item["profile_id"].get<std::string>());
+        const auto operation =
+            parseExtrudeOperation(
+                item["operation"].get<std::string>());
+        if (!feature_id || !profile_id || !operation ||
+            !feature_cursor->containsAllocated(*feature_id) ||
+            !profile_cursor.containsAllocated(*profile_id)) {
+            error = "Native Part contains invalid Feature identity/reference";
+            return false;
+        }
+
+        const auto& extent_json = item["extent"];
+        if (!extent_json.is_object() ||
+            !extent_json.contains("mode") ||
+            !extent_json.contains("distance_mm") ||
+            !extent_json["mode"].is_string() ||
+            !extent_json["distance_mm"].is_number()) {
+            error = "Native Part contains malformed Extrude extent";
+            return false;
+        }
+        const double distance =
+            extent_json["distance_mm"].get<double>();
+        if (!std::isfinite(distance) || distance <= 0.0) {
+            error = "Native Part contains invalid Extrude distance";
+            return false;
+        }
+
+        ExtrudeExtent extent;
+        const auto mode =
+            extent_json["mode"].get<std::string>();
+        if (mode == "one_side") {
+            if (extent_json.size() != 3U ||
+                !extent_json.contains("direction") ||
+                !extent_json["direction"].is_string()) {
+                error = "Native Part contains malformed OneSide Extrude extent";
+                return false;
+            }
+            const auto direction =
+                extent_json["direction"].get<std::string>();
+            if (direction != "forward" &&
+                direction != "reverse") {
+                error = "Native Part contains invalid OneSide Extrude direction";
+                return false;
+            }
+            extent = OneSidedExtrudeExtent{
+                core::LengthValue{distance},
+                direction == "reverse"};
+        } else if (mode == "midplane") {
+            if (extent_json.size() != 2U) {
+                error = "Native Part Midplane extent contains unexpected fields";
+                return false;
+            }
+            extent = MidplaneExtrudeExtent{
+                core::LengthValue{distance}};
+        } else {
+            error = "Native Part contains unsupported Extrude extent mode";
+            return false;
+        }
+
+        PartFeature feature{
+            *feature_id,
+            item["name"].get<std::string>(),
+            item["suppressed"].get<bool>(),
+            ExtrudeFeature{
+                *profile_id,
+                *operation,
+                std::move(extent)}};
+        if (!partFeatureDefinitionStructurallyValid(
+                feature.definition)) {
+            error = "Native Part contains structurally invalid Feature";
+            return false;
+        }
+        parsed.features.push_back(std::move(feature));
+    }
+
+    body = std::move(parsed);
     return true;
 }
 
@@ -1119,12 +1384,16 @@ std::optional<PartAuthoredState> parseAuthored(
         schema_version >= 6;
     const bool has_length_unit =
         schema_version >= 7;
+    const bool has_body_features =
+        schema_version >= 8;
     const std::size_t expected_fields =
         legacy_v1
             ? 2U
-            : (has_profiles
-                   ? (has_length_unit ? 6U : 5U)
-                   : 3U);
+            : (has_body_features
+                   ? 9U
+                   : (has_profiles
+                          ? (has_length_unit ? 6U : 5U)
+                          : 3U));
 
     if (authored.is_discarded() ||
         !authored.is_object() ||
@@ -1138,7 +1407,12 @@ std::optional<PartAuthoredState> parseAuthored(
           !authored["length_unit"].is_string())) ||
         (has_profiles &&
          (!authored.contains("next_profile_id") ||
-          !authored.contains("profiles")))) {
+          !authored.contains("profiles"))) ||
+        (has_body_features &&
+         (!authored.contains("modeling_semantics_version") ||
+          !authored.contains("next_body_id") ||
+          !authored.contains("body") ||
+          !authored["next_body_id"].is_string()))) {
         error =
             "Native Part authored payload has an invalid top-level schema";
         return std::nullopt;
@@ -1244,8 +1518,41 @@ std::optional<PartAuthoredState> parseAuthored(
         state.next_profile_id = *cursor;
         if (!parseProfiles(
                 authored["profiles"],
+                schema_version,
                 *cursor,
                 state.profiles,
+                error)) {
+            return std::nullopt;
+        }
+    }
+
+    if (has_body_features) {
+        const auto semantics =
+            parseUint32(
+                authored["modeling_semantics_version"]);
+        if (!semantics ||
+            *semantics !=
+                current_modeling_semantics_version.value) {
+            error =
+                "Native Part contains unsupported modeling semantics version";
+            return std::nullopt;
+        }
+        state.modeling_semantics_version =
+            ModelingSemanticsVersion{*semantics};
+
+        const auto body_cursor =
+            BodyIdCursor::parse(
+                authored["next_body_id"].get<std::string>());
+        if (!body_cursor) {
+            error = "Native Part next_body_id is invalid";
+            return std::nullopt;
+        }
+        state.next_body_id = *body_cursor;
+        if (!parseBodyV8(
+                authored["body"],
+                *body_cursor,
+                state.next_profile_id,
+                state.body,
                 error)) {
             return std::nullopt;
         }

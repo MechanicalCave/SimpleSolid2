@@ -58,6 +58,11 @@ int main() {
         core::BuiltinReferenceRole::x_axis));
     CHECK(!document.builtinReferenceVisible(
         core::BuiltinReferenceRole::xy_plane));
+    CHECK(document.body().id.valid());
+    CHECK(document.body().features.empty());
+    CHECK(
+        document.modelingSemanticsVersion() ==
+        part::current_modeling_semantics_version);
 
     // Fresh changed commit increments exactly once and is terminal.
     {
@@ -347,7 +352,7 @@ int main() {
                 *profile_id,
                 sketch::SketchId::generate(),
                 "Orphaned",
-                true,
+                part::ProfileVisibilityPolicy::automatic,
                 intent});
 
         auto rejected =
@@ -360,6 +365,51 @@ int main() {
             rejected.code ==
             part::PartReconstructErrorCode::
                 invalid_state);
+    }
+
+    // Missing previously allocated Profile identity is repairable Feature
+    // dependency state, not malformed persistence.
+    {
+        part::PartAuthoredState repairable;
+        repairable.next_profile_id =
+            *part::ProfileIdCursor::parse("2");
+        const auto missing_profile =
+            part::ProfileId::parse("1");
+        CHECK(missing_profile.has_value());
+        const auto feature_id =
+            repairable.body.next_feature_id.allocate();
+        CHECK(feature_id.has_value());
+        repairable.body.features.push_back(
+            part::PartFeature{
+                *feature_id,
+                "Extrude001",
+                false,
+                part::ExtrudeFeature{
+                    *missing_profile,
+                    part::ExtrudeOperation::cut,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{10.0},
+                        false}}});
+
+        auto restored =
+            part::PartDocument::restore(
+                core::DocumentId::generate(),
+                repairable);
+        CHECK(restored.ok());
+
+        auto invalid = repairable;
+        auto& extrude =
+            std::get<part::ExtrudeFeature>(
+                invalid.body.features.front()
+                    .definition);
+        extrude.extent =
+            part::MidplaneExtrudeExtent{
+                core::LengthValue{0.0}};
+        auto rejected =
+            part::PartDocument::restore(
+                core::DocumentId::generate(),
+                std::move(invalid));
+        CHECK(!rejected.ok());
     }
 
     // Reconstruction itself uses the same Part authored-state validator.

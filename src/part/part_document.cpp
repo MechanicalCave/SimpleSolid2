@@ -41,6 +41,48 @@ const PartSketch* PartDocument::findSketch(
         : &*found;
 }
 
+const PartFeature* PartDocument::findFeature(
+    FeatureId id) const noexcept {
+    if (!id.valid()) {
+        return nullptr;
+    }
+    const auto found = std::find_if(
+        state_.body.features.begin(),
+        state_.body.features.end(),
+        [id](const PartFeature& item) {
+            return item.id == id;
+        });
+    return found == state_.body.features.end()
+        ? nullptr
+        : &*found;
+}
+
+bool PartDocument::profilePresentationVisible(
+    ProfileId id) const noexcept {
+    const auto* profile = findProfile(id);
+    if (profile == nullptr) {
+        return false;
+    }
+
+    switch (profile->visibility) {
+    case ProfileVisibilityPolicy::force_shown:
+        return true;
+    case ProfileVisibilityPolicy::force_hidden:
+        return false;
+    case ProfileVisibilityPolicy::automatic:
+        break;
+    }
+
+    for (const auto& feature : state_.body.features) {
+        if (feature.suppressed) continue;
+        const auto source = sourceProfileId(feature);
+        if (source && *source == id) {
+            return false;
+        }
+    }
+    return true;
+}
+
 const PartProfile* PartDocument::findProfile(
     ProfileId id) const noexcept {
     if (!id.valid()) {
@@ -77,7 +119,13 @@ PartDocument::evaluateProfile(
 bool PartDocument::validAuthoredState(
     const PartAuthoredState& state) noexcept {
     if (!core::isLengthUnit(
-            state.length_unit)) {
+            state.length_unit) ||
+        !state.modeling_semantics_version.valid() ||
+        state.modeling_semantics_version !=
+            current_modeling_semantics_version ||
+        !state.body.id.valid() ||
+        !state.next_body_id.containsAllocated(
+            state.body.id)) {
         return false;
     }
 
@@ -112,6 +160,8 @@ bool PartDocument::validAuthoredState(
         if (!profile.id.valid() ||
             !state.next_profile_id
                  .containsAllocated(profile.id) ||
+            !isProfileVisibilityPolicy(
+                profile.visibility) ||
             !profileRegionIntentStructurallyValid(
                 profile.region_intent)) {
             return false;
@@ -134,6 +184,36 @@ bool PartDocument::validAuthoredState(
              ++previous) {
             if (state.profiles[previous].id ==
                 profile.id) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < state.body.features.size();
+         ++index) {
+        const auto& feature =
+            state.body.features[index];
+        if (!feature.id.valid() ||
+            !state.body.next_feature_id
+                 .containsAllocated(feature.id) ||
+            !partFeatureDefinitionStructurallyValid(
+                feature.definition)) {
+            return false;
+        }
+
+        const auto source = sourceProfileId(feature);
+        if (!source ||
+            !state.next_profile_id
+                 .containsAllocated(*source)) {
+            return false;
+        }
+
+        for (std::size_t previous = 0U;
+             previous < index;
+             ++previous) {
+            if (state.body.features[previous].id ==
+                feature.id) {
                 return false;
             }
         }
