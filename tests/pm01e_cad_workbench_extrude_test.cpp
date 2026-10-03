@@ -79,6 +79,33 @@ public:
     }
 
     kernel::SolidPresentationResult
+    extrudePreviewMesh(
+        const kernel::LinearExtrudeInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        if (!input.valid() ||
+            (input.operation ==
+                 kernel::SolidBooleanOperation::cut &&
+             upstream == nullptr)) {
+            return {
+                kernel::SolidPresentationStatus::
+                    invalid_input,
+                {}};
+        }
+        kernel::SolidPresentationMesh mesh;
+        mesh.triangles.push_back(
+            {
+                {0.0, 0.0, 0.0},
+                {10.0, 0.0, 0.0},
+                {0.0, 10.0, 0.0},
+                {0.0, 0.0, 1.0},
+                {0.0, 0.0, 1.0},
+                {0.0, 0.0, 1.0}});
+        return {
+            kernel::SolidPresentationStatus::ok,
+            std::move(mesh)};
+    }
+
+    kernel::SolidPresentationResult
     presentationMesh(
         kernel::RuntimeSolidHandle solid) noexcept override {
         if (dynamic_cast<const FakeSolid*>(
