@@ -26,6 +26,7 @@
 | Manual-remediation H4a: debounced typing + live Tree diagnostics/warning icons | PR #160, Windows FULL #1346 | PASS |
 | Manual-remediation H4b: operation-only preview + nodal-normal smooth shading + restored mesh density | PR #161, Windows FULL #1348 | PASS |
 | Manual-remediation H5: exact Add/Cut delta preview, transient source-Profile hide, volumetric Cut no-effect including face/edge/point contact | PR #165, Windows FULL #1359 | PASS |
+| Manual-remediation H6: independent committed-Body / Add / Cut OCCT shading aspects; preview replacement/clear cannot recolor Body | PR #169, Windows FULL #1364 | PASS |
 | As-built docs + PL/EN product docs + generated Product Browser | PR #163/#166, Windows DOCS #1350/#1360 | PASS |
 | Supported Windows integrated manual workflow | Section 3 below | PENDING OWNER |
 
