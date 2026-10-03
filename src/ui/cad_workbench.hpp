@@ -167,11 +167,14 @@ private:
         core::LengthUnit unit);
     void applyProfileProperties();
     void deleteSelectedProfile();
-    void toggleSelectedFeatureSuppressed();
-    void deleteSelectedFeature();
 
     [[nodiscard]] bool startExtrudeFromSelectedProfile();
     [[nodiscard]] bool startExtrudeEdit(
+        part::FeatureId feature_id);
+    void setFeatureSuppressed(
+        part::FeatureId feature_id,
+        bool suppressed);
+    void deleteFeature(
         part::FeatureId feature_id);
     void cancelExtrude();
     [[nodiscard]] bool finishExtrude();
