@@ -10,64 +10,59 @@ It is explanatory, not normative. If an as-built document conflicts with the Eng
 <!-- section-id: internal.overview.current-scope -->
 ## Current implemented scope
 
-The current executable implements the Project platform, persistent empty Part Documents and the stabilized shared CAD Workbench / Viewer foundation:
+The current executable implements the Project platform, durable Part/Sketch/Profile authoring and the first single-Body solid-modeling vertical slice:
 
 ```text
 App start
-→ Project Hub
-→ Create / Open Project
-→ ProjectSession
+→ Project Hub / ProjectSession
 → discover native .ss2part Documents
-→ New Part… through Workspace Location Picker
-→ optional Create Folder inside Workspace
-→ Open… through document-oriented dialog
-→ canonical DocumentSessions
+→ canonical DocumentSessions + Document Tabs
 → shared CAD Workbench
-→ bottom Document Tabs + one ActiveDocumentSession
-→ Document Tree + built-in Origin
-→ shared Properties / Operations surfaces
-→ OCCT-backed 3D Viewport + reference grid + provider-surface Navigation Cube + ORTHO/PERSP
-→ Tree / Viewport selection synchronization
-→ persistent Show / Hide of Origin references
-→ Undo / Redo
-→ Save / Close
-→ restart
-→ rediscover the same DocumentId and saved Origin visibility
+→ Part Origin + persistent Origin-plane Sketches
+→ Shared 2D Line / Circle / Arc / Rectangle authoring
+→ precision input + Polar + Dynamic Input + OSNAP/Tracking/Inference
+→ Trim / Extend / Measure
+→ Part-owned live-reference Profiles
+→ one durable Body with ordered Extrude Features
+→ Extrude Add / Cut, OneSide / Midplane
+→ derived Kernel evaluation + solid presentation
+→ Feature edit / Suppress / Delete + Undo / Redo
+→ Save / Close / Reopen
+→ cold rebuild from authored Part state
 ```
 
-The product still does **not** implement Sketch, Body/Feature modeling, solid geometry evaluation, Assembly, Drawing, BOM, modeled-topology selection or persistent topology naming.
+The Part Feature model currently supports one Body and one Feature family: Extrude. The first successful solid-producing Feature is Add; later ordered Features may be Add or Cut. OneSide supports Forward/Reverse and Midplane uses total-distance symmetric semantics. Failed, Blocked and Suppressed Feature states remain explicit; derived B-Rep is never persisted as authored truth.
+
+Assembly and Drawing remain unimplemented. Part also does not yet provide datum-plane or planar-face Sketch support, topology face/edge picking, Revolve, Fillet/Chamfer, multi-body modeling or general persistent topology-repair UI.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
 
-The implemented dependency direction has two coordinated branches:
+The implemented dependency direction keeps authored meaning separate from evaluation and presentation:
 
 ```text
-Qt ProjectHubWindow
+Qt ProjectHubWindow / CadWorkbench
         ↓
-CadWorkbenchShell + CadWorkbench
-        ├── ProjectSession / DocumentSession
-        │       ↓
-        │   PartDocument + PartDocumentTransaction
-        │       ↓
-        │   PartDocumentStore / atomic persistence
-        │
-        ├── WorkspaceLocationDialog / OpenDocumentDialog
-        │       ↓
-        │   Workspace-safe application services
-        │
-        └── PartViewportController / Tree adapter
-                ↓
-            provider-neutral Viewer API
-                ↓
-            Qt/OCCT Viewer provider
-                ↓
-                OCCT
+ProjectSession / DocumentSession
+        ↓
+semantic Commands + PartDocumentTransaction
+        ↓
+PartDocument authored state
+  ├── Sketch / Profile semantics
+  └── Body / ordered Feature semantics
+        ↓
+provider-neutral Part evaluation / Kernel API
+        ↓
+OCCT solid-modeling provider
+        ↓
+provider-neutral Viewer scene contracts
+        ↓
+Qt/OCCT Viewer provider
 ```
 
-`CadWorkbenchShell` owns only the fixed UI regions. Part-specific lifecycle, Tree and Viewer adapters sit outside that neutral shell.
+`CadWorkbenchShell` owns only fixed application UI regions. Tree, Properties, Operations, Command Line and Viewer adapters project or invoke semantic state; they are not additional CAD models.
 
-OCCT types stay inside the concrete Viewer provider. They do not participate in Part authored semantics, persistence, Document identity or command/transaction ownership.
+OCCT handles, topology ordinals and Viewer presentation tokens stay runtime/provider-local. They do not participate in Part authored identity, persistence, Body/Feature identity or semantic reference meaning.
 
 <!-- section-id: internal.overview.identity -->
 ## Identity and location
@@ -85,11 +80,13 @@ A copied `.ss2part` file preserves its embedded DocumentId. If more than one fil
 <!-- section-id: internal.overview.runtime-presentation -->
 ## Runtime and persistent presentation state
 
-Camera, projection, pan/orbit/zoom, active selection and primary selection are runtime-only. They do not increment DocumentRevision, dirty the Part or create CAD Undo entries.
+Camera, projection, pan/orbit/zoom, active selection, preview geometry, evaluated B-Rep handles and presentation tokens are runtime-only. They do not become authored Part identity.
 
-User-authored visibility of built-in Origin references is different: it is persistent presentation semantics stored by PartDocument, changed through DocumentSession commands, Undo/Redo-able and saved in the native Part file.
+User-authored visibility of built-in Origin references and Profile visibility policy are persistent presentation semantics changed through semantic commands and covered by Undo/Redo. Profile policy is `automatic`, `force_shown` or `force_hidden`; automatic presentation reacts to active Feature consumption without changing evaluation.
 
-The native Viewer clears provider-native detection/selection state before presentation objects are removed, and recoverable provider exceptions are contained at the concrete Viewer boundary.
+Feature Suppress is not visibility. Suppress is authored modeling state that preserves FeatureId and parameters while removing the Feature contribution from evaluation.
+
+The native Viewer clears provider-native detection/selection state before presentation objects are removed, and recoverable provider exceptions are contained at the concrete Viewer boundary. A valid authored commit is not rolled back merely because presentation refresh fails.
 
 <!-- section-id: internal.overview.documentation -->
 ## Documentation system

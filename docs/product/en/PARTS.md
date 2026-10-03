@@ -428,7 +428,29 @@ To change an existing Profile region, select exactly one Profile and use **Edit 
 
 Command Line and Operations drive the same Profile state. Context commands are `ADD`, `SUBTRACT`, `FINISH`, `CANCEL`, plus `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF` and `PROBLEMS ON|OFF`. `ISLANDS ON|OFF` controls only Show Islands presentation; it never disables island analysis.
 
-Profile is 2D/Part semantics. **It does not perform Extrude or create a solid.** Modeled solid operations require separate Part functionality.
+Profile remains Part semantics based on authored 2D geometry and is now a durable source for solid Features. With **Automatic** visibility, an active Feature consuming the Profile hides its normal presentation; after the last active consumer is Suppressed or Deleted, the Profile becomes visible again. Explicit Show/Hide forces shown/hidden presentation without changing modeling evaluation. Edit Extrude temporarily reveals its source Profile.
+
+<!-- section-id: product.parts.extrude -->
+## Body, Feature and Extrude
+
+Every current Part has exactly one durable **Body**. The Body may be empty or contain an ordered Feature history. The only production Feature family currently available is **Extrude**.
+
+To create an Extrude, select one valid Profile and use **Extrude** or enter `EXTRUDE`. The first Feature that creates a solid in an Empty Body must be **Add**. Later Extrudes may be **Add** or **Cut**. Every successful stage must still produce exactly one solid; detached Add, no-effect Add/Cut, a Cut that removes the whole solid, or a multi-solid result is rejected explicitly and is not committed.
+
+Available extent semantics:
+
+- **OneSide** — Length is the full distance from the Profile plane; **Reverse** switches direction relative to the support normal;
+- **Midplane** — Length is the total symmetric distance across both sides of the Profile plane; Reverse is not meaningful and is not authored.
+
+Changing a valid parameter updates the dynamic preview. **Finish** performs exactly one durable commit and creates one Undo step. **Cancel**, invalid input or stale preview/context creates no partial authored change. Editing an existing Extrude from Properties or Tree uses the same draft, preserves `FeatureId` and again requires one Finish.
+
+Document Tree shows the Body and ordered Features with their current status. Feature Properties shows `FeatureId`, status/diagnostic, Add/Cut, extent, Length, direction and the source Profile/Sketch. Navigation works Feature → Profile and Profile → consuming Feature without changing ownership: the Profile remains owned by its Sketch.
+
+**Suppress Feature** preserves FeatureId and parameters while removing the Feature contribution from current evaluation. **Unsuppress** reevaluates from current authored state. **Delete Feature** removes that Feature, preserves its source Profile and does not rewrite remaining dependencies; downstream Features may become Failed/Blocked. Suppress, Unsuppress and Delete participate in Undo/Redo.
+
+Command Line and GUI control the same Extrude draft. Supported contextual words include `ADD`, `CUT`, `REVERSE`, `MIDPLANE`, `ONESIDE`, `FINISH` and `CANCEL`; Length uses the shared unit-aware quantity input.
+
+Body/Feature do not have a separate Show/Hide state. Suppress is modeling semantics, not visibility. Current Extrude also does not expose solid face/edge picking as durable references.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -455,26 +477,22 @@ The next normal full Viewer refresh automatically retries presentation from the 
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state, including Origin visibility, Sketches with durable identity/support/placement, Line/Circle/Arc geometry with Regular/Construction roles and stable EntityIds, and Profiles with ProfileId/RegionIntent/name/visibility, to its `.ss2part` file.
+`Save` writes the current authored Part state: Document properties, Origin visibility, Sketches and geometry, Profiles with RegionIntent/visibility policy, and the Body with ordered Extrude Features, stable identities, parameters and Suppressed state.
 
-Ordinary Save is conditional on the exact native file version that this session loaded or last saved. If that target was removed, replaced, changed on disk, changed to another DocumentId or is currently guarded by another cooperating SS2 Save, SimpleSolid reports a Save conflict instead of silently overwriting the target. The in-memory Part remains open and keeps its local changes/Undo history.
+The current B-Rep solid, preview, evaluation status, provider face tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
 
-After a successful Save the session adopts the newly published file version, so a later unchanged Save works normally. The strict no-lost-update guarantee is for cooperating SS2 instances; SimpleSolid does not claim a general atomic compare-and-swap against every unrelated external writer.
+Ordinary Save remains conditional on the exact native file version loaded or last saved by the session. A removed, replaced or externally changed target reports a Save conflict rather than being silently overwritten. The in-memory Part, Undo/Redo and local changes stay open.
 
-When closing a Part with unsaved changes, the application requires `Save`, `Discard` or `Cancel`.
-
-When closing the complete Project or application while any Part is dirty, the choices are `Save All`, `Discard` and `Cancel`.
-
-If saving fails or reports a conflict, the Document/Project remains open. Closing the last open Part keeps the Project open and returns to the Project Workspace Dashboard. Using `Workspace` by itself never closes the Part.
+Closing a dirty Part requires `Save`, `Discard` or `Cancel`. Closing the complete Project/application offers `Save All`, `Discard` and `Cancel`. A failed Save does not close the Document.
 
 <!-- section-id: product.parts.restart -->
 ## Restart and reopen
 
-After restarting the application, open the same Project.
+After restarting, open the same Project. SimpleSolid scans the Workspace again and opens the saved Part with the same DocumentId, SketchId/ProfileId, BodyId and FeatureId values.
 
-SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties, saved Origin visibility, saved Sketch records including geometry roles, and saved Profiles with the same ProfileIds.
+The Body and its ordered Extrude Add/Cut Features are evaluated from scratch from authored state. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers. A deleted Feature stays deleted while its source Profile remains available unless the Profile itself was removed.
 
-Undo/Redo history, active selection, active Sketch edit context and camera state are not stored in the file and start fresh after reopening.
+Undo/Redo history, active selection, active Sketch/Extrude draft, preview, camera and provider/B-Rep runtime state are not stored and start fresh after reopen.
 
 <!-- section-id: product.parts.conflicts -->
 ## Document and Save conflicts
@@ -488,10 +506,13 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, a durable display/input length unit, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, Rectangle authoring that resolves to ordinary Lines, and Part-owned Profiles with live RegionIntent semantics.
+The current Part provides persistent Origin-plane Sketches, Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles, and one durable Body with ordered Extrude Features.
 
-The current Sketch UI includes keyboard-first precision input, mm/cm/m/in/ft quantities and bounded expressions, absolute/relative Cartesian and polar point entry, exact Circle/Arc/Rectangle size input, numeric Rotate/Scale and grip transform values, Polar attraction, Dynamic Input with request-local locks, Measure in current physical units, the supported Grip edit cycle, Grip Copy in Reshape/Move, repeated COPY, Repeat Last Command, Undo/Redo and Save/Reopen.
+Solid modeling is currently limited to **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**. Edit Extrude, Feature status, Suppress/Unsuppress, Delete, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
 
-Profile is not a solid operation. The product still lacks Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, OSNAP/tracking/inference, Grid Snap, authored constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
+Not yet implemented are Sketch support on Datums or planar model faces, face/edge topology picking and repair, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body, Material, Assembly or Drawing tools.
 
-Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
+On the Sketch side, authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy and final ordinary-Select RMB convergence remain outside the current surface.
+
+Very early test `.ss2part` files from before the current native format are not supported production data.
+

@@ -1,0 +1,112 @@
+# PM-01 — Final Acceptance Matrix
+
+**Status:** PENDING FINAL DOCS/CLOSURE GATE + OWNER MANUAL WINDOWS ACCEPTANCE  
+**Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
+**Architecture:** ADR-0014 + ADR-0015  
+**Runtime baseline merged to main:** `84a5be5a229f881120d838609ddfdc80c2431557`  
+**Latest runtime exact-head gate:** Windows FULL #1339 — PASS on `7c4783525c589c9e626ba260680e3e3026827a44`
+
+## 1. Automated acceptance coverage
+
+| Contract requirement | Durable implementation/evidence | Status |
+| --- | --- | --- |
+| Pre-PM-01 Part migration, Empty Body, schema v8, BodyId/FeatureId high-water, Profile visibility migration | PR #144, Windows FULL #1326 | PASS |
+| First Add, Profile with hole, OneSide Forward/Reverse, Midplane, chained Add/Cut, explicit detached/no-effect/empty/multi-solid failures, fuzzy=0/refine OFF, semantic cap/side lineage | PR #145, Windows FULL #1327 | PASS |
+| Ordered evaluator; UpToDate/Failed/Blocked/Suppressed; no stale last-good truth; semantic Feature commands; Create/Edit/Suppress/Delete; rejected command does not consume identity/history | PR #146, Windows FULL #1330 | PASS |
+| Provider-neutral final Body presentation, no topology picking/provider identity leakage, stale/unavailable Body clears presentation | PR #147, Windows FULL #1331 | PASS |
+| Transient Add/Cut preview, revision-keyed presentation cache, preview replacement/clear and provider-failure recovery | PR #148, Windows FULL #1332 | PASS |
+| Revision-bound Extrude draft, execution-time revalidation, stale draft/evaluation rejection, one Finish commit | PR #149, Windows FULL #1333 | PASS |
+| Operations UI + shared Command Line draft; EXTRUDE/ADD/CUT/REVERSE/MIDPLANE/ONESIDE/FINISH/CANCEL; unit-aware Length; Dynamic Input; Cancel non-authoring | PR #150, Windows FULL #1334 | PASS |
+| Body/Feature Tree and Properties; status/diagnostics; Profile↔Feature navigation; FeatureId-preserving Edit Extrude; temporary source-Profile reveal | PR #151, Windows FULL #1336 | PASS |
+| Suppress/Unsuppress/Delete from Properties/Tree; automatic Profile visibility; Undo/Redo; ordered Add/Cut persistence; Save → destroy runtime/session/provider state → Reopen → cold rebuild; persisted suppression/delete/source Profile | PR #153, Windows FULL #1339 | PASS |
+| Same runtime checkpoint passes semantic/core, kernel-native and desktop FULL topology | Windows FULL #1339 | PASS |
+| As-built docs + PL/EN product docs + generated Product Browser | PM-01 closure branch | PENDING GATE |
+| Supported Windows integrated manual workflow | Section 3 below | PENDING OWNER |
+
+The runtime acceptance matrix has zero known false-Resolved semantic topology outcomes. PM-01 does not authorize face/edge topology picking, provider-native durable identity, adaptive fuzzy healing, multi-body or later Part-v1 operations.
+
+## 2. Final closeout gate
+
+Before PM-01 may be marked COMPLETED:
+
+1. canonical internal and PL/EN product documentation must describe the as-built PM-01 surface;
+2. `docs/browser/index.html` must be regenerated from canonical Markdown and documentation validation must pass;
+3. an exact-head repository gate must pass on the final documentation/evidence candidate;
+4. Owner must complete the Windows workflow below and report PASS;
+5. only then may ACTIVE/Part Modeling roadmap/PM-01 contract be moved to completed state.
+
+Any code change after the final runtime baseline requires a new exact-head runtime-appropriate gate. Documentation/evidence-only closure must not silently alter production behavior.
+
+## 3. Owner manual Windows acceptance
+
+Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL for each workflow.
+
+### M1 — first Body + Add + Properties
+
+1. Create/open a Part.
+2. Create an Origin-plane Sketch with a closed rectangle and Finish Sketch.
+3. Create and Finish a Profile.
+4. Start Extrude from that Profile.
+5. Confirm first Feature is Add-only.
+6. Set OneSide Length with an explicit unit and Finish once.
+7. Confirm one Body, one UpToDate Extrude Feature and visible solid.
+8. Inspect Body/Feature Properties and verify source Profile/Sketch navigation.
+9. Confirm the consumed Profile is hidden under Automatic policy.
+
+**PASS:** one durable Feature is authored, one Undo step represents Finish, Tree/Properties are coherent, and no second confirmation is required.
+
+### M2 — Edit Extrude / identity / preview
+
+1. Open Edit Extrude for the Feature.
+2. Confirm the source Profile is temporarily revealed.
+3. Change Length and verify live preview.
+4. Switch OneSide direction with Reverse; then switch to Midplane and verify Reverse is no longer semantic.
+5. Finish once.
+6. Re-open Properties.
+
+**PASS:** the same FeatureId remains, parameters update, source Profile returns to normal Automatic presentation and the Body remains UpToDate.
+
+### M3 — ordered Cut + lifecycle
+
+1. Create a second valid Profile suitable for removing material from the existing Body.
+2. Create an Extrude Cut; use Midplane if needed to span the Body.
+3. Confirm Body contains ordered Add then Cut and the final solid reflects the Cut.
+4. Suppress the Cut from Properties or Tree.
+5. Confirm its FeatureId/parameters remain, Body reevaluates without the Cut and the Cut source Profile becomes visible under Automatic policy.
+6. Undo, Redo, then Unsuppress.
+7. Delete the Cut.
+8. Confirm the source Profile remains and the Feature is removed.
+9. Undo Delete and confirm the same FeatureId returns.
+
+**PASS:** Suppress and Delete are distinct, Undoable authored operations and automatic Profile visibility follows active consumption.
+
+### M4 — Command Line parity
+
+1. Select an admissible Profile.
+2. Start `EXTRUDE` from Command Line.
+3. Change at least one accepted option using Command Line (`ADD`/`CUT`, `MIDPLANE`/`ONESIDE`, `REVERSE` where legal).
+4. Enter a unit-aware Length expression.
+5. Confirm Operations panel and preview reflect the same draft.
+6. Finish with `FINISH` or the accepted Enter path.
+7. Start another draft and `CANCEL`.
+
+**PASS:** GUI and Command Line remain one semantic draft; Finish authors once and Cancel authors nothing.
+
+### M5 — Save / Close / Reopen cold lifecycle
+
+1. Leave a representative ordered Add/Cut model saved, including at least one lifecycle state exercised above.
+2. Save.
+3. Close the Part/application so the previous runtime session/provider state is destroyed.
+4. Reopen the Project and Part.
+5. Inspect Body/Feature order, IDs, parameters, statuses and source Profile relationships.
+6. Confirm the solid rebuilds from authored state.
+7. Exercise Undo/Redo on a new post-reopen Feature lifecycle change.
+
+**PASS:** authored Body/Feature intent survives; runtime B-Rep/preview/history from the old process is not required.
+
+## 4. Manual result
+
+**Owner Windows result:** PENDING  
+**Date:** PENDING  
+**Final tested candidate:** PENDING  
+**Notes:** PENDING

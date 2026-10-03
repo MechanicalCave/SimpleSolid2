@@ -15,32 +15,24 @@ Jest przeznaczona do zrozumienia i używania programu. Nie opisuje historii impl
 
 Obecny produkt udostępnia:
 
-- tworzenie i otwieranie Projektów;
-- stabilną tożsamość Projektu oraz Recent Projects;
-- przenoszenie Projektu i odzyskiwanie lokalizacji przez `Locate…`;
-- tworzenie natywnych Partów `.ss2part` przez wybór folderu wewnątrz Workspace;
-- tworzenie nowego folderu bezpośrednio z dialogu New Part;
-- otwieranie wykrytych Dokumentów przez neutralny dialog `Open…`;
-- stabilny `DocumentId` niezależny od nazwy i ścieżki pliku;
-- otwieranie kilku Partów i przełączanie ich dolnymi Document Tabs;
-- wspólny CAD Workbench z Document Tree, Properties, Operations i Status;
-- viewport 3D oparty o OCCT z siatką odniesienia i responsywnym ViewCube;
-- Pan, Orbit, Zoom, Fit, widoki standardowe/narożne oraz Orthographic/Perspective;
-- wbudowany Origin Parta: punkt, osie i płaszczyzny;
-- zsynchronizowane zaznaczenie Tree/Viewport z czyszczeniem zaznaczenia na pustym tle i primary selection;
-- trwałe Show/Hide referencji Origin z Undo/Redo;
-- edycję Number, Title, Description i Engineering Revision;
-- tworzenie i edycję Sketchy na płaszczyznach Origin z geometrią Line/Circle/Arc, zaznaczeniem, gripami oraz Move/Copy/Rotate/Scale/Mirror;
-- keyboard-first Command Line z Direct Distance w obsługiwanych wejściach punktowych;
-- Save z ochroną przed konfliktem zmienionego pliku oraz bezpieczne zamykanie z ochroną niezapisanych zmian;
-- ponowne odnajdywanie Partów po restarcie;
-- wykrywanie konfliktu, gdy dwa pliki w jednym Workspace mają ten sam DocumentId.
+- tworzenie/otwieranie Projektów, Recent Projects i recovery lokalizacji;
+- natywne Dokumenty Part `.ss2part` ze stabilnym `DocumentId`;
+- wiele otwartych Partów z Document Tabs;
+- wspólny CAD Workbench z Tree, Properties, Operations, Status i keyboard-first Command Line;
+- OCCT-backed Viewport 3D, ViewCube, Pan/Orbit/Zoom/Fit i Ortho/Perspective;
+- trwały Origin oraz Sketche na płaszczyznach XY/XZ/YZ;
+- Shared-2D Line/Circle/Arc/Rectangle, Regular/Construction, grip editing i Move/Copy/Rotate/Scale/Mirror;
+- precision input z jednostkami, Polar, Dynamic Input, OSNAP/Tracking/Inference;
+- Trim/Extend oraz read-only Measure;
+- Part-owned live-reference Profiles z Add/Subtract;
+- dokładnie jeden trwały Body i uporządkowane Extrude Features;
+- Extrude Add/Cut z OneSide Forward/Reverse i Midplane;
+- dynamiczny preview, Edit Extrude, Feature status, Suppress/Unsuppress/Delete oraz Undo/Redo;
+- Save z ochroną konfliktu oraz Save/Close/Reopen z cold rebuildem modelu bryłowego.
 
-Dialog `Open…` jest już dokumentowo-neutralny, ale jedynym zaimplementowanym typem głównego Dokumentu CAD pozostaje obecnie Part.
+Part jest obecnie jedynym zaimplementowanym typem głównego Dokumentu CAD. Assembly i Drawing nie są jeszcze dostępne.
 
-Obecny Part jest trwałym dokumentem CAD ze wspólnym środowiskiem pracy 3D oraz trwałymi Sketchami na płaszczyznach Origin. Nie zawiera jeszcze modelowanej geometrii bryłowej Body/Feature.
-
-Powierzchnie dokumentów/narzędzi Assembly i Drawing nie są jeszcze dostępne.
+Bieżący solid modeling jest celowo ograniczony do PM-01 Extrude; Datum/planar-face support, topology picking, Revolve, Fillet/Chamfer i multi-body pozostają późniejszym zakresem.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser

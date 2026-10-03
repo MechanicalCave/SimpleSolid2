@@ -15,32 +15,24 @@ It is written for understanding and using the application. It does not describe 
 
 The current product provides:
 
-- creating and opening Projects;
-- stable Project identity and Recent Projects;
-- moving a Project and recovering its location with `Locate…`;
-- creating native `.ss2part` Parts through a Workspace folder picker;
-- creating a new folder inside the Workspace directly from the New Part dialog;
-- opening discovered Documents through the neutral `Open…` dialog;
-- stable `DocumentId` independent of filename and path;
-- opening several Parts and switching them with bottom Document Tabs;
-- a shared CAD Workbench with Document Tree, Properties, Operations and Status areas;
-- an OCCT-backed 3D Viewport with reference grid and responsive ViewCube;
-- Pan, Orbit, Zoom, Fit, standard/corner views and Orthographic/Perspective;
-- built-in Part Origin point, axes and planes;
-- synchronized Tree/Viewport selection with empty-space clear and primary selection;
-- persistent Show/Hide for Origin references with Undo/Redo;
-- editing Number, Title, Description and Engineering Revision;
-- creating/editing Origin-plane Sketches with Line/Circle/Arc geometry, selection, grips and Move/Copy/Rotate/Scale/Mirror;
-- keyboard-first Command Line with Direct Distance at supported point inputs;
-- Save with stale-file conflict protection plus safe closing with unsaved-change protection;
-- rediscovering Parts after restart;
-- identity-conflict detection when two files in one Workspace carry the same DocumentId.
+- Project create/open, Recent Projects and location recovery;
+- native `.ss2part` Part Documents with stable `DocumentId`;
+- multiple open Parts with Document Tabs;
+- a shared CAD Workbench with Tree, Properties, Operations, Status and keyboard-first Command Line;
+- an OCCT-backed 3D Viewport, ViewCube, Pan/Orbit/Zoom/Fit and Ortho/Perspective;
+- persistent Origin references and Sketches on XY/XZ/YZ planes;
+- Shared-2D Line/Circle/Arc/Rectangle, Regular/Construction, grip editing and Move/Copy/Rotate/Scale/Mirror;
+- unit-aware precision input, Polar, Dynamic Input and OSNAP/Tracking/Inference;
+- Trim/Extend and read-only Measure;
+- Part-owned live-reference Profiles with Add/Subtract composition;
+- exactly one durable Body with ordered Extrude Features;
+- Extrude Add/Cut with OneSide Forward/Reverse and Midplane;
+- dynamic preview, Edit Extrude, Feature status, Suppress/Unsuppress/Delete and Undo/Redo;
+- conflict-protected Save plus Save/Close/Reopen cold rebuild of solid evaluation.
 
-The current `Open…` dialog is document-oriented, but the only implemented top-level CAD Document kind is still Part.
+Part is currently the only implemented top-level CAD Document kind. Assembly and Drawing are not yet available.
 
-The current Part is a durable CAD Document with a shared 3D working environment and durable Origin-plane Sketches. It does not yet contain Body/Feature modeled solid geometry.
-
-Assembly and Drawing document/tool surfaces are not yet available.
+Current solid modeling is intentionally limited to the PM-01 Extrude slice; Datum/planar-face support, topology picking, Revolve, Fillet/Chamfer and multi-body remain later scope.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
