@@ -37,7 +37,8 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 - **Owner re-test after H5:** PARTIAL PASS; exact delta/no-effect behavior is improved, but committed Body and preview still share the subtractive orange appearance during preview.
 - **H6 COMPLETED — PASS:** PR #169, exact-head Windows FULL #1364 PASS on `60f2a7ac6ed894e77c751449b370ee4322c870ae`; merged to main as `ca5592d07a271c83c9752fb654cded2c7b3d83c6`.
 - **H6 documentation sync COMPLETED — PASS:** PR #171, Windows DOCS #1367 PASS; latest main `d2655331c6713d87fc61564e75300b61312dfb37`.
-- **Owner H6 re-test:** PENDING on latest main; only Add/Cut preview color isolation needs manual confirmation before PM-01 governance completion.
+- **Owner H6 re-test:** PASS for Add/Cut preview color isolation on latest main; a separate H7 history-prefix presentation defect was discovered during broader manual use.
+- **H7 ACTIVE:** when a higher Feature becomes Failed/Blocked, preserve only the current-revision resolved lower-history prefix for Viewer presentation while final Body remains Unavailable and downstream Features remain Blocked.
 
 ## H1 — Profile → Kernel fidelity blocker
 
@@ -193,6 +194,34 @@ Acceptance regression:
 - additive preview remains blue/translucent;
 - replacing subtractive with additive preview does not change committed Body style;
 - clearing preview leaves committed Body visible with its original style.
+
+## H7 — current-revision resolved history-prefix presentation
+
+Owner manual use after H6 found a separate ordered-history presentation defect: invalidating a Sketch/Profile consumed by a higher Feature marks that Feature/Body unavailable and clears the entire solid from the Viewer, including lower Features that still evaluate UpToDate.
+
+This is not permission for stale last-good geometry. ADR-0014 remains unchanged:
+
+- final Body truth is Unavailable after the first active Feature failure;
+- downstream active Features remain Blocked and may not consume a prior B-Rep as current truth;
+- current final semantic face references remain empty while Body is unavailable.
+
+Accepted H7 presentation rule:
+
+- evaluation may retain a runtime-only `resolved_prefix_solid` representing the current-revision result immediately before the first Failed/Blocked active Feature;
+- the prefix is recomputed from current authored state in the same evaluation and is therefore not stale last-good state;
+- `body_solid` remains null whenever final Body status is Unavailable;
+- Viewer may present `resolved_prefix_solid` when final Body is Unavailable;
+- if the first active Feature fails/blocks, no prefix exists and Viewer remains empty;
+- Tree/Properties continue to show Body Unavailable, the failing Feature Failed/Blocked, and later active Features Blocked;
+- the prefix is presentation-only: commands, persistence, semantic reference resolution, Finish authority and downstream evaluation must never consume it.
+
+Acceptance regressions:
+
+- first active Feature failure => final Body Unavailable, no body_solid, no resolved prefix, empty Viewer solid scene;
+- second/later Feature failure => lower Feature remains UpToDate, failing Feature Failed/Blocked, later Features Blocked, final Body Unavailable, body_solid null, current face references empty, resolved prefix non-null;
+- Viewer publishes the prefix mesh for the same current DocumentRevision;
+- repairing the higher Sketch/Profile recomputes the complete Body and replaces prefix presentation with the full current result;
+- Undo/Redo follows authored revision and cannot reuse a prefix from an older revision.
 
 ## Verification sequence
 
