@@ -162,6 +162,20 @@ private:
         core::LengthUnit unit);
     void applyProfileProperties();
     void deleteSelectedProfile();
+
+    [[nodiscard]] bool startExtrudeFromSelectedProfile();
+    void cancelExtrude();
+    [[nodiscard]] bool finishExtrude();
+    void clearExtrudeRuntimeContext();
+    void refreshExtrudePreview();
+    void syncExtrudeUi();
+    [[nodiscard]] bool setExtrudeDistance(
+        core::LengthValue distance,
+        std::optional<std::string_view> display_text =
+            std::nullopt);
+    [[nodiscard]] application::CadInputSubmitResult
+    submitExtrudeCadInput(std::string_view text);
+
     void setSketchSelectionRole(
         sketch::EntityRole role);
     void startSketchTool();
@@ -332,6 +346,7 @@ private:
     QComboBox* circle_size_mode_combo_{};
     bool syncing_precision_ui_{};
     QPushButton* sketch_button_{};
+    QPushButton* extrude_button_{};
     QPushButton* select_sketch_button_{};
     QLabel* create_tools_label_{};
     QPushButton* line_sketch_button_{};
@@ -362,6 +377,24 @@ private:
     QLabel* entity_role_label_{};
     QPushButton* regular_role_button_{};
     QPushButton* construction_role_button_{};
+
+    QWidget* extrude_operations_widget_{};
+    QPushButton* extrude_add_button_{};
+    QPushButton* extrude_cut_button_{};
+    QPushButton* extrude_one_side_button_{};
+    QPushButton* extrude_midplane_button_{};
+    QPushButton* extrude_reverse_button_{};
+    QLineEdit* extrude_distance_edit_{};
+    QLabel* extrude_result_label_{};
+    QPushButton* extrude_finish_button_{};
+    QPushButton* extrude_cancel_button_{};
+    std::optional<application::ExtrudeDraft>
+        extrude_draft_;
+    std::optional<
+        application::ExtrudeDraftEvaluationResult>
+        extrude_evaluation_;
+    bool extrude_distance_input_valid_{};
+    bool syncing_extrude_ui_{};
 
     QWidget* profile_operations_widget_{};
     QPushButton* profile_add_area_button_{};
