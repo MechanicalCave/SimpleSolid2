@@ -39,10 +39,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <numbers>
 #include <optional>
-#include <string>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -659,6 +659,11 @@ surfaceCarrierRecord(
     return false;
 }
 
+
+[[nodiscard]] std::vector<TopoDS_Edge>
+matchingFaceEdges(
+    const TopoDS_Face& face,
+    const TopoDS_Edge& source);
 
 [[nodiscard]] const kernel::BoundaryUse2D*
 findBoundaryUse(
