@@ -452,7 +452,23 @@ E08 proves the currently accepted Origin-plane Sketch support frame is semantic 
 
 Origin point and axes remain Unsupported as Sketch supports. PM-00A does not invent planar-face support or face-derived frame semantics; those remain future bounded architecture work.
 
-**Next:** execute E09 stale generation/session publication evidence.
+### E09 — stale generation/session publication
+
+**Status:** COMPLETED — PASS  
+**Exact source candidate:** `018966aa143a006cdd39429a201755c54c3e7948`  
+**Windows FULL:** #1313 — PASS  
+**Core-only:** 19/19 PASS  
+**Kernel-native aggregate:** 26/26 PASS  
+**Desktop FULL:** 84/84 PASS  
+**Stale publications:** 0
+
+See `work/PM-00A_E09_STALE_PUBLICATION_EVIDENCE.md`.
+
+E09 proves the candidate runtime publication rule must bind evidence to the owning durable Document, exact DocumentRevision, canonical DocumentSession generation and request generation. A revision advance rejects the old result; closing/reopening the same durable Document replaces Session A with canonical Session B and rejects A-owned completion; geometrically identical neutral evidence does not restore authority to an older request generation; cancelled/failed requests remain terminal and cannot replace newer published evidence.
+
+The publication gate used for this proof is deliberately test-local. PM-00A does not introduce a production async-evaluation manager, durable session identity or persistent generation schema. PM-00B owns the architecture freeze for the eventual production publication contract.
+
+**Next:** execute E10 tolerance/refine/healing matrix and O-11 evidence.
 
 ## 8. Acceptance asymmetry
 

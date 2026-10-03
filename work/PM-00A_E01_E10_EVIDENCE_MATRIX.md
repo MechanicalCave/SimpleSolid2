@@ -326,6 +326,29 @@ Goal: prove runtime evaluation publication cannot cross revision/session ownersh
 
 Geometric equality never grants publication authority.
 
+## 13A. E09 execution result
+
+**E09 status:** COMPLETED — PASS  
+**Exact source candidate:** `018966aa143a006cdd39429a201755c54c3e7948`  
+**Windows FULL:** #1313 — PASS  
+**Core-only:** 19/19 PASS  
+**Kernel-native aggregate:** 26/26 PASS  
+**Desktop FULL:** 84/84 PASS  
+**Stale publications:** 0  
+**Evidence report:** `work/PM-00A_E09_STALE_PUBLICATION_EVIDENCE.md`
+
+All E09-01…E09-04 expectations are satisfied by an evidence-only publication-authority prototype over real `ProjectSession` / `DocumentSession` lifecycle.
+
+Key findings:
+
+- a result ticket captured at revision R is rejected after an authored command advances the canonical document to R+1;
+- closing the clean canonical Session A and reopening the same durable DocumentId as Session B invalidates A-owned result publication even though durable document identity is unchanged;
+- two requests at the same revision may produce byte-for-byte equal neutral `ShapeEvidence`, but only the current request generation may publish;
+- cancelled and failed requests are terminal and cannot replace evidence published by a newer request;
+- payload geometry, provider handles, topology ordinals and similarity are not consulted when deciding publication authority.
+
+The prototype binds authority to DocumentId + DocumentRevision + session generation + request generation. It is test-local evidence and does not freeze the production API or make session/request generation durable state.
+
 ## 14. E10 — tolerance / refine / healing matrix
 
 Goal: separate modeling semantics from display/picking tolerances and collect evidence for O-11.
