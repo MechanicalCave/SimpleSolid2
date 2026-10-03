@@ -200,6 +200,16 @@ public:
         const LinearExtrudeInput& input,
         RuntimeSolidHandle upstream = {}) noexcept = 0;
 
+    // Presentation-only exact operation delta for Extrude preview:
+    // Add => tool - upstream Body, Cut => tool ∩ upstream Body.
+    // The returned mesh is derived runtime data only and carries no CAD
+    // identity. Providers that cannot supply exact delta preview must return
+    // unsupported rather than substitute the raw tool.
+    [[nodiscard]] virtual SolidPresentationResult
+    extrudePreviewMesh(
+        const LinearExtrudeInput& input,
+        RuntimeSolidHandle upstream = {}) noexcept;
+
     // Display-only tessellation. This must never influence authored CAD
     // state, modeling semantics or reference resolution.
     [[nodiscard]] virtual SolidPresentationResult
