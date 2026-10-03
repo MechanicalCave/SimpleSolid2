@@ -1587,6 +1587,165 @@ DocumentSessionResult DocumentSession::execute(
         "Part transaction failed while deleting Profile");
 }
 
+
+ExtrudeDraftEvaluationResult
+DocumentSession::evaluateExtrudeDraft(
+    const ExtrudeDraft& draft,
+    kernel::ISolidModelingKernel&
+        modeling_kernel) const {
+    ExtrudeDraftEvaluationResult result;
+    result.document_id = draft.documentId();
+    result.source_revision =
+        draft.sourceRevision();
+    result.draft_generation =
+        draft.generation();
+    result.profile_id =
+        draft.profileId();
+    result.feature_id =
+        draft.featureId();
+    result.operation =
+        draft.operation();
+    result.extent =
+        draft.extent();
+
+    if (documentId() !=
+        draft.documentId()) {
+        result.status =
+            ExtrudeDraftEvaluationStatus::
+                stale_document;
+        return result;
+    }
+    if (document_.revision() !=
+        draft.sourceRevision()) {
+        result.status =
+            ExtrudeDraftEvaluationStatus::
+                stale_revision;
+        return result;
+    }
+    if (!draft.valid()) {
+        result.status =
+            ExtrudeDraftEvaluationStatus::
+                invalid_draft;
+        return result;
+    }
+    if (document_.findProfile(
+            draft.profileId()) == nullptr) {
+        result.status =
+            ExtrudeDraftEvaluationStatus::
+                missing_profile;
+        return result;
+    }
+
+    auto after =
+        document_.state();
+    applyBodyFeatureIdCursors(after);
+
+    part::FeatureId target_id;
+    const part::ExtrudeFeature definition{
+        draft.profileId(),
+        draft.operation(),
+        draft.extent()};
+
+    if (draft.mode() ==
+        ExtrudeDraftMode::create) {
+        const auto id =
+            after.body.next_feature_id
+                .allocate();
+        if (!id) {
+            result.status =
+                ExtrudeDraftEvaluationStatus::
+                    feature_id_exhausted;
+            return result;
+        }
+        target_id = *id;
+        after.body.features.push_back(
+            part::PartFeature{
+                target_id,
+                draft.name().empty()
+                    ? defaultFeatureName(
+                          target_id)
+                    : draft.name(),
+                false,
+                definition});
+    } else {
+        if (!draft.featureId()) {
+            result.status =
+                ExtrudeDraftEvaluationStatus::
+                    invalid_draft;
+            return result;
+        }
+        auto* feature =
+            findFeature(
+                after,
+                *draft.featureId());
+        if (feature == nullptr) {
+            result.status =
+                ExtrudeDraftEvaluationStatus::
+                    missing_feature;
+            return result;
+        }
+        if (feature->suppressed) {
+            result.status =
+                ExtrudeDraftEvaluationStatus::
+                    suppressed_feature;
+            return result;
+        }
+        target_id = feature->id;
+        feature->name =
+            draft.name();
+        feature->definition =
+            definition;
+    }
+
+    auto candidate =
+        part::PartDocument::restore(
+            documentId(),
+            std::move(after),
+            document_.revision());
+    if (!candidate.ok()) {
+        result.status =
+            ExtrudeDraftEvaluationStatus::
+                invalid_candidate;
+        return result;
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    result.body_status =
+        evaluation.body_status;
+    result.body_solid =
+        evaluation.body_solid;
+
+    const auto* target =
+        evaluation.findFeature(
+            target_id);
+    if (target == nullptr) {
+        result.status =
+            ExtrudeDraftEvaluationStatus::
+                invalid_candidate;
+        result.body_solid.reset();
+        return result;
+    }
+
+    result.evaluation_diagnostic =
+        target->diagnostic;
+    if (target->status !=
+        part::FeatureEvaluationStatus::
+            up_to_date) {
+        result.status =
+            ExtrudeDraftEvaluationStatus::
+                target_failed;
+        result.body_solid.reset();
+        return result;
+    }
+
+    result.status =
+        ExtrudeDraftEvaluationStatus::ok;
+    return result;
+}
+
 CreateExtrudeFeatureResult DocumentSession::execute(
     const CreateExtrudeFeatureCommand& command,
     kernel::ISolidModelingKernel& modeling_kernel) {

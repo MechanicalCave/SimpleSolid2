@@ -1,5 +1,6 @@
 #pragma once
 
+#include <simplesolid2/application/extrude_draft.hpp>
 #include <simplesolid2/core/units.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_document.hpp>
@@ -410,6 +411,11 @@ public:
         const SetProfilePropertiesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const DeleteProfileCommand& command);
+    [[nodiscard]] ExtrudeDraftEvaluationResult
+    evaluateExtrudeDraft(
+        const ExtrudeDraft& draft,
+        kernel::ISolidModelingKernel& modeling_kernel) const;
+
     [[nodiscard]] CreateExtrudeFeatureResult execute(
         const CreateExtrudeFeatureCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
