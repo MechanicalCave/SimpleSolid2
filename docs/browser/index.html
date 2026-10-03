@@ -563,15 +563,13 @@ Responsive transitions are presentation-only: they do not mutate the Document, r
 <!-- section-id: internal.cad-workbench-viewer.active-document -->
 ## Active document context
 
-ProjectSession may keep several canonical DocumentSessions open, while Project Workspace Shell owns `Workspace | Document(DocumentId)` navigation and Project-level Document Tabs.
+The Workbench binds exactly one active `DocumentSession` at a time. Switching Document Tabs replaces the active Part/Tree/Properties/Viewer projection and invalidates stale CAD-input/edit context.
 
-`CadWorkbench` receives only the currently active Part `DocumentSession` plus Workspace path context needed for presentation. It does not own ProjectSession, discovery or tabs.
+For Part, Document Tree now projects the built-in Origin, source-Sketch/Profile hierarchy and one Body with ordered Feature rows. Body/Feature rows carry semantic IDs and current derived evaluation status, but Tree item addresses are never CAD identity.
 
-Project-level tab changes ask the host to bind a different open DocumentSession. Navigating to Workspace detaches the Workbench without closing the DocumentSession. Returning to that Document rebinds it.
+Properties can inspect Body status/Feature count and Feature name, FeatureId, evaluation status/diagnostic, operation, extent, distance/direction and source Profile/Sketch. Profile Properties expose consuming Features. Navigation between Feature and Profile changes runtime selection only.
 
-Camera state is stored in Workbench runtime state keyed by DocumentId so Document → Workspace → Document and inter-Document switching can restore the view while the Project remains open. Project close resets that runtime state.
-
-Detach-before-destroy ordering is mandatory: Tree/Viewport controllers are disconnected from the active DocumentSession before ProjectSession erases it. This prevents runtime cleanup from dereferencing a destroyed session during Document or Project close.
+Feature lifecycle actions from Properties and Tree share the same semantic handlers: Edit Extrude, Suppress/Unsuppress and Delete. They are disabled while an incompatible active Sketch/Extrude modeling context owns input.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
 ## Origin and reference scene
@@ -619,13 +617,13 @@ Pointer routing and cursor mode remain independent runtime axes. Ordinary Select
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-`IDocumentViewport` remains provider-neutral. It exposes camera/navigation, reference scene, authored Sketch scene, Profile scene, transient Sketch/Profile preview scenes, presentation selection, neutral pointer transport, primary-pointer routing/cursor mode, Sketch point/rectangle queries, finite Sketch grip scene/query, runtime hover/active-grip presentation and the selection-box overlay channel.
+The public Viewer boundary remains provider-neutral. It accepts derived scenes for authored references/Sketch/Profile presentation plus bounded solid and transient solid-preview presentation required by PM-01.
 
-The authored Sketch scene carries one semantic presentation token per entity. Line uses one segment; Circle and Arc use one token plus an ordered finite point chain. It also carries the authored Regular/Construction role as presentation input. Qt/OCCT keeps that exact neutral point chain but presents each semantic Circle/Arc as one native wire/`AIS_Shape` instead of one native object per derived segment. Native detection still maps the whole provider object back to the single semantic token; the point chain remains the rectangle/query approximation and is not CAD identity. Construction uses the provider's dashed native line aspect with screen-space cadence. Dash/gap size is independent of authored entity length, zoom does not mutate geometry, and committed/transient Construction derive the same presentation policy from the existing `construction` flag. No linetype scale, style entity or persistent presentation parameter is introduced.
+Part evaluation may hold provider-neutral runtime solid/face tokens while the current runtime exists, but no TopoDS/OCAF handle, provider topology ordinal or Viewer presentation token crosses into durable Part identity.
 
-Grip keys are `PresentationToken + SketchGripRole` only inside the Viewer boundary. PartViewportController immediately maps them back to `SketchId + EntityId + semantic role`. Profile presentation tokens are likewise runtime-only and are mapped immediately to Part-owned `ProfileId`. No Qt/OCCT handle becomes CAD identity.
+PM-01 does not expose face/edge topology picking. Solid presentation is display-only; tessellation quality, camera, pick aperture and Viewer state cannot alter Add/Cut result, semantic face roles or commit authority.
 
-The production executable creates the concrete Qt/OCCT provider only in the composition root and injects it as a neutral `ViewportSurface`. Provider-native exceptions are contained at the Viewer boundary and fail closed.
+Presentation setters report failure to the Workbench. A successful authored CAD command is not rolled back because a later Viewer refresh fails; recovery retries presentation from current authored state.
 
 <!-- section-id: internal.cad-workbench-viewer.sr02-latency -->
 ## SR-02 Sketch interaction and presentation latency
@@ -825,15 +823,11 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
-The provider presents visible Origin references, a non-selectable reference grid, active-Sketch authored Line/Circle/Arc geometry, intrinsic Sketch Origin, valid visible Part Profiles, transient Sketch/Profile preview, runtime selection box, selected/primary/hover emphasis and finite semantic grips.
+The concrete Qt/OCCT provider presents the current derived Body solid and a separately replaceable transient Extrude preview alongside Origin, Sketch and Profile scenes.
 
-Circle/Arc authored geometry is carried as one semantic curve presentation token with an ordered point chain; Qt/OCCT derives line-segment presentation objects without promoting those provider segments to semantic identity. Point/rectangle query likewise evaluates those derived projected segments but returns only the semantic token.
+The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude preview is runtime-only and is cleared on Finish, Cancel, context replacement or stale/failed draft. Feature edit may request a transient source-Profile reveal without changing the Profile visibility policy.
 
-Sketch grips are provider-only `AIS_Point` presentations deactivated from native OCCT selection and hit-tested separately in logical screen space. Their point aspects use custom square bitmaps: hollow for idle, cyan-emphasized hollow for hover and slightly larger filled yellow for active/captured. Marker dimensions are rebuilt for device-pixel ratio changes. Grip query runs before authored geometry query so an overlapping visible grip wins.
-
-The Sketch selection box remains OCCT `AIS_RubberBand` in the same native graphics surface. Profile regions are derived planar OCCT faces with preserved holes, boundary display and transparency/selection styling. Profile fill uses an unlit shading model so its semantic presentation color does not depend on camera/light angle, plus provider-only polygon depth bias to avoid coplanar z-fighting; neither setting changes authored geometry. Native detection maps the picked Profile object to its neutral runtime token and then immediately to ProfileId. The separate Profile preview scene can present both the resulting draft and an optional hovered-candidate emphasis region; Subtract keeps the result cyan and overlays the candidate in red-orange. Principal reference planes remain finite provider presentation geometry. No native provider object is durable CAD identity.
-
-There is still no modeled Part B-Rep at this milestone; the OCCT provider remains presentation/navigation infrastructure.
+PM-01 solid/preview presentation carries no durable semantic topology identity. Face/edge subshape picking is deliberately absent. Existing provider selection/detection cleanup rules still apply before presentation replacement/removal.
 
 <!-- section-id: internal.cad-workbench-viewer.presentation-recovery -->
 ## Presentation failure and recovery
@@ -992,64 +986,59 @@ It is explanatory, not normative. If an as-built document conflicts with the Eng
 <!-- section-id: internal.overview.current-scope -->
 ## Current implemented scope
 
-The current executable implements the Project platform, persistent empty Part Documents and the stabilized shared CAD Workbench / Viewer foundation:
+The current executable implements the Project platform, durable Part/Sketch/Profile authoring and the first single-Body solid-modeling vertical slice:
 
 ```text
 App start
-→ Project Hub
-→ Create / Open Project
-→ ProjectSession
+→ Project Hub / ProjectSession
 → discover native .ss2part Documents
-→ New Part… through Workspace Location Picker
-→ optional Create Folder inside Workspace
-→ Open… through document-oriented dialog
-→ canonical DocumentSessions
+→ canonical DocumentSessions + Document Tabs
 → shared CAD Workbench
-→ bottom Document Tabs + one ActiveDocumentSession
-→ Document Tree + built-in Origin
-→ shared Properties / Operations surfaces
-→ OCCT-backed 3D Viewport + reference grid + provider-surface Navigation Cube + ORTHO/PERSP
-→ Tree / Viewport selection synchronization
-→ persistent Show / Hide of Origin references
-→ Undo / Redo
-→ Save / Close
-→ restart
-→ rediscover the same DocumentId and saved Origin visibility
+→ Part Origin + persistent Origin-plane Sketches
+→ Shared 2D Line / Circle / Arc / Rectangle authoring
+→ precision input + Polar + Dynamic Input + OSNAP/Tracking/Inference
+→ Trim / Extend / Measure
+→ Part-owned live-reference Profiles
+→ one durable Body with ordered Extrude Features
+→ Extrude Add / Cut, OneSide / Midplane
+→ derived Kernel evaluation + solid presentation
+→ Feature edit / Suppress / Delete + Undo / Redo
+→ Save / Close / Reopen
+→ cold rebuild from authored Part state
 ```
 
-The product still does **not** implement Sketch, Body/Feature modeling, solid geometry evaluation, Assembly, Drawing, BOM, modeled-topology selection or persistent topology naming.
+The Part Feature model currently supports one Body and one Feature family: Extrude. The first successful solid-producing Feature is Add; later ordered Features may be Add or Cut. OneSide supports Forward/Reverse and Midplane uses total-distance symmetric semantics. Failed, Blocked and Suppressed Feature states remain explicit; derived B-Rep is never persisted as authored truth.
+
+Assembly and Drawing remain unimplemented. Part also does not yet provide datum-plane or planar-face Sketch support, topology face/edge picking, Revolve, Fillet/Chamfer, multi-body modeling or general persistent topology-repair UI.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
 
-The implemented dependency direction has two coordinated branches:
+The implemented dependency direction keeps authored meaning separate from evaluation and presentation:
 
 ```text
-Qt ProjectHubWindow
+Qt ProjectHubWindow / CadWorkbench
         ↓
-CadWorkbenchShell + CadWorkbench
-        ├── ProjectSession / DocumentSession
-        │       ↓
-        │   PartDocument + PartDocumentTransaction
-        │       ↓
-        │   PartDocumentStore / atomic persistence
-        │
-        ├── WorkspaceLocationDialog / OpenDocumentDialog
-        │       ↓
-        │   Workspace-safe application services
-        │
-        └── PartViewportController / Tree adapter
-                ↓
-            provider-neutral Viewer API
-                ↓
-            Qt/OCCT Viewer provider
-                ↓
-                OCCT
+ProjectSession / DocumentSession
+        ↓
+semantic Commands + PartDocumentTransaction
+        ↓
+PartDocument authored state
+  ├── Sketch / Profile semantics
+  └── Body / ordered Feature semantics
+        ↓
+provider-neutral Part evaluation / Kernel API
+        ↓
+OCCT solid-modeling provider
+        ↓
+provider-neutral Viewer scene contracts
+        ↓
+Qt/OCCT Viewer provider
 ```
 
-`CadWorkbenchShell` owns only the fixed UI regions. Part-specific lifecycle, Tree and Viewer adapters sit outside that neutral shell.
+`CadWorkbenchShell` owns only fixed application UI regions. Tree, Properties, Operations, Command Line and Viewer adapters project or invoke semantic state; they are not additional CAD models.
 
-OCCT types stay inside the concrete Viewer provider. They do not participate in Part authored semantics, persistence, Document identity or command/transaction ownership.
+OCCT handles, topology ordinals and Viewer presentation tokens stay runtime/provider-local. They do not participate in Part authored identity, persistence, Body/Feature identity or semantic reference meaning.
 
 <!-- section-id: internal.overview.identity -->
 ## Identity and location
@@ -1067,11 +1056,13 @@ A copied `.ss2part` file preserves its embedded DocumentId. If more than one fil
 <!-- section-id: internal.overview.runtime-presentation -->
 ## Runtime and persistent presentation state
 
-Camera, projection, pan/orbit/zoom, active selection and primary selection are runtime-only. They do not increment DocumentRevision, dirty the Part or create CAD Undo entries.
+Camera, projection, pan/orbit/zoom, active selection, preview geometry, evaluated B-Rep handles and presentation tokens are runtime-only. They do not become authored Part identity.
 
-User-authored visibility of built-in Origin references is different: it is persistent presentation semantics stored by PartDocument, changed through DocumentSession commands, Undo/Redo-able and saved in the native Part file.
+User-authored visibility of built-in Origin references and Profile visibility policy are persistent presentation semantics changed through semantic commands and covered by Undo/Redo. Profile policy is `automatic`, `force_shown` or `force_hidden`; automatic presentation reacts to active Feature consumption without changing evaluation.
 
-The native Viewer clears provider-native detection/selection state before presentation objects are removed, and recoverable provider exceptions are contained at the concrete Viewer boundary.
+Feature Suppress is not visibility. Suppress is authored modeling state that preserves FeatureId and parameters while removing the Feature contribution from evaluation.
+
+The native Viewer clears provider-native detection/selection state before presentation objects are removed, and recoverable provider exceptions are contained at the concrete Viewer boundary. A valid authored commit is not rolled back merely because presentation refresh fails.
 
 <!-- section-id: internal.overview.documentation -->
 ## Documentation system
@@ -1095,15 +1086,19 @@ Operational documentation rules are defined in `governance/DOCUMENTATION.md`.
 <!-- section-id: internal.part-documents.model -->
 ## Current model
 
-The current `PartDocument` is persistent and hosts durable Part Sketch objects with embedded Shared 2D Line/Circle/Arc geometry plus Part-owned Profile objects. It still contains no Body, Feature or modeled solid B-Rep.
+The current `PartDocument` is persistent and owns Part-hosted Sketches, Part-owned Profiles and exactly one durable Part Body. The Body has stable `BodyId`, a monotonic `FeatureId` cursor and an ordered collection of authored Features.
 
-Its authored state consists of stable `DocumentId`, common Document Properties, the durable Part display/input `LengthUnit`, persistent presentation state for the seven built-in Origin references, an ordered collection of Part-hosted Sketch records, a monotonic `ProfileId` cursor and an ordered collection of Profiles. Length geometry remains canonical in millimetres; changing the display/input unit changes interpretation and presentation only and never rescales existing geometry.
+The authored state contains stable `DocumentId`, common Document Properties, the display/input `LengthUnit`, persistent built-in Origin visibility, Sketches, Profiles, `ModelingSemanticsVersion`, the Body identity/cursor and ordered Features. Canonical geometric length remains millimetres; display/input unit changes do not rescale authored geometry.
 
-Each Part Sketch has stable `SketchId`, semantic support restricted to XY/XZ/YZ built-in Origin planes, explicit `SketchPlacement`, persistent visibility and one value-owned `sketch::SketchModel`. Shared 2D owns entity identity, Line/Circle/Arc geometry and Regular/Construction role; Part owns host support/placement/visibility/persistence.
+Each Part Sketch has stable `SketchId`, support restricted in PM-01 to XY/XZ/YZ built-in Origin planes, explicit `SketchPlacement`, persistent visibility and one value-owned Shared-2D `SketchModel`.
 
-Each Profile has stable `ProfileId`, source `SketchId`, authored name/visibility and durable `ProfileRegionIntent`. RegionIntent references source EntityIds and semantic endpoint/intersection anchors. It does not store Viewer tokens, OCCT topology, sampled fill geometry or derived runtime region indices.
+Each Profile has stable `ProfileId`, source `SketchId`, authored name, durable `ProfileRegionIntent` and authored visibility policy: `automatic`, `force_shown` or `force_hidden`. RegionIntent references source EntityIds and semantic anchors; it does not store Viewer tokens, OCCT topology or sampled fill geometry.
 
-`DocumentRevision` is a technical monotonic counter for successful semantic mutations within the loaded lifecycle.
+The only current durable Feature definition is Extrude. An Extrude references exactly one existing ProfileId and authors Add/Cut plus either OneSide distance with Forward/Reverse meaning or Midplane total distance. A `PartFeature` also owns stable `FeatureId`, name and authored Suppressed state.
+
+Evaluated solid geometry is derived. Ordered evaluation produces Body status `Empty`, `UpToDate` or `Unavailable` and Feature status `UpToDate`, `Failed`, `Blocked` or `Suppressed`. Runtime B-Rep/provider handles are disposable and are rebuilt from authored state.
+
+`DocumentRevision` remains a technical monotonic freshness counter for successful semantic mutations within the loaded lifecycle.
 
 <!-- section-id: internal.part-documents.origin -->
 ## Built-in Document Origin
@@ -1122,24 +1117,21 @@ The current default is Origin Point plus X/Y/Z axes visible and the three princi
 Persistent authored changes follow:
 
 ```text
-Qt / caller
+Qt / Command Line / caller
 → semantic DocumentSession command
-→ history / revision validation
+→ current-context + revision validation
 → PartDocumentTransaction staged state
-→ atomic domain commit
+→ atomic Part-domain commit
+→ derived evaluation / presentation refresh
 ```
 
-Current commands cover common Document Properties, built-in reference visibility, Sketch creation, mixed Line/Circle/Arc creation/update/deletion, Regular/Construction role changes, common transforms/duplication and Profile create/edit/properties/delete. Durable mutation remains semantic-command driven; UI/Viewer presentation identity is never mutation authority.
+Current commands cover Document Properties, Origin visibility, Sketch/Shared-2D mutations, Profile lifecycle and PM-01 Feature lifecycle. Extrude Create/Edit commits through the revision-bound Extrude draft/evaluation path; Feature Suppress/Unsuppress and Delete use semantic commands. UI rows, Viewer objects and preview handles are never mutation authority.
 
-Each `PartDocumentTransaction` captures the technical `DocumentRevision` from which its staged full-state snapshot was created. Commit is authorized only when that base revision still equals the owning `PartDocument` revision. A mismatch returns typed `stale_transaction` before validation, no-op comparison or authored mutation, so an older full-state transaction cannot overwrite a newer accepted mutation.
+Each `PartDocumentTransaction` captures the `DocumentRevision` from which its staged full-state snapshot was created. Commit is authorized only when that base revision still equals the owning document revision. Stale state fails before authored mutation.
 
-Part transactions are one-shot. The first commit attempt is terminal whether it succeeds, is a no-op, or fails as stale, invalid-state or revision-exhausted; a later commit returns `inactive_transaction`. Rollback is terminal and idempotent. A fresh no-op creates neither a revision increment nor a history entry.
+The Part domain validates the complete staged `PartAuthoredState`: Sketch/Profile identity and references, modeling-semantics version, Body/Feature identity cursors, Feature structural validity and legal Profile references must remain coherent. Invalid reconstruction fails closed.
 
-The Part domain validates the complete staged `PartAuthoredState` at commit: hosted Sketch support/placement must be valid and match, SketchId/ProfileId values must be unique and below their cursors, every Profile must reference an existing source Sketch, and RegionIntent structure must be valid. Invalid full-state replacement returns typed `invalid_state` without changing authored state or revision. The same validator protects `PartDocument::restore`, which returns a structured validated reconstruction result rather than constructing an invalid live document.
-
-`DocumentSession::verifyRevision()` remains a second command/history consistency guard; the owning Part transaction is the domain authority for stale-state rejection.
-
-Undo and Redo reapply authored states through `PartDocumentTransaction` and therefore count as new semantic mutations with increasing technical `DocumentRevision`. Undo/Redo preserve accepted EntityId lineage/high-water rules and restore authored identity rather than Viewer/presentation identity.
+Undo and Redo reapply authored snapshots through the same transaction boundary and therefore create new technical revisions while restoring durable IDs and authored Feature definitions. Preview, hover, rejected Finish and Cancel create no authored mutation or Undo entry.
 
 <!-- section-id: internal.part-documents.session -->
 ## DocumentSession
@@ -1352,15 +1344,17 @@ This is evidence synthesis only. It does not introduce a persistent topology-ref
 
 The native extension is `.ss2part`.
 
-The current Part domain writer uses schema **v7**. It stores document properties, the durable display/input length unit, built-in Origin visibility, hosted Sketch records, canonical `next_profile_id` and authored Profiles.
+The current Part domain writer uses schema **v8**. In addition to document properties, length unit, built-in Origin visibility, Sketches and Profiles, v8 persists modeling-semantics version 1, Body identity/cursor and the ordered Feature records required to reconstruct the PM-01 Body.
 
-Each Sketch stores stable SketchId, Origin-plane support, explicit placement, visibility and one embedded Shared 2D model. The model stores canonical `next_entity_id` plus mixed Line/Circle/Arc `entities[]`. Every entity stores its authored `regular` or `construction` role.
+Each Sketch stores stable SketchId, Origin-plane support, placement, visibility and one embedded Shared-2D model with canonical entity IDs and authored Regular/Construction role.
 
-Each Profile stores canonical ProfileId, source SketchId, authored name/visibility and the semantic RegionIntent loop/anchor structure. Derived region indices, sampled presentation geometry, Viewer tokens and OCCT handles are not serialized.
+Each Profile stores canonical ProfileId, source SketchId, name, visibility policy and semantic RegionIntent. Automatic/forced Profile presentation is authored policy; evaluated region geometry remains derived.
 
-Schemas v1–v6 remain readable. Older schemas have no length-unit field and therefore migrate in memory to **mm** without rescaling any geometry. Opening an older schema does not rewrite the file; a later successful ordinary Save publishes current schema v7 with the selected length unit.
+The Body stores stable BodyId, `next_feature_id` and ordered Features. Current Extrude records preserve FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane extent parameters. B-Rep, provider handles, runtime face tokens, cached Feature evaluations and tessellation are not serialized.
 
-ProjectId, DocumentSession, Undo/Redo, active Sketch/Profile tool context, Polar/Dynamic Input runtime configuration, request-local numeric locks, region-analysis cache, camera, active selection, Qt objects, Viewer objects and OCCT handles are not serialized as authored Part state.
+Schemas v1–v7 remain readable. Older data is restored into current in-memory defaults and a later successful Save publishes schema v8. The PM-01 visibility migration preserves an older hidden Profile as forced hidden while an older visible Profile becomes automatic. Pre-PM-01 Parts receive an Empty Body rather than synthesized solid history.
+
+ProjectId, DocumentSession, Undo/Redo, active tools, preview, selection, camera, evaluated solid handles and provider state remain runtime-only.
 
 Ordinary Save remains conditional on the session's native-file checkpoint. Save-conflict rules and whole-file atomic publication are unchanged.
 
@@ -1376,15 +1370,15 @@ When a resolved Part is already open, a second Open request returns the existing
 <!-- section-id: internal.part-documents.profiles -->
 ## Profile semantics and lifecycle
 
-Profile creation/editing is a Part operation over derived Shared-2D regions. The Profile tool caches region analysis for the current Sketch model state, performs hover/pick against that cache and keeps Add/Subtract composition runtime-only. Repeated pointer motion on unchanged geometry does not rebuild the full arrangement.
+Profile creation/editing remains a Part operation over exact derived Shared-2D regions. Finish executes one semantic Profile command: Create allocates a fresh ProfileId; Edit preserves ProfileId and atomically replaces RegionIntent. Cancel, hover and rejected drafts do not mutate authored state.
 
-Nested/disconnected island analysis is part of that complete derived region truth and remains active for every Profile session. The runtime **Show Islands** option controls presentation/diagnostic visibility only; it cannot change RegionCandidate truth, Profile validity, point picking, RegionIntent or authored state. The former public Find All Regions action is no longer part of the normal Profile workflow; internal region enumeration remains derived analysis.
+Profiles are live references rather than geometry snapshots. `evaluateProfile` resolves durable RegionIntent against current source Sketch geometry. Missing or ambiguous source meaning makes the Profile Invalid without rewriting intent; later source repair can return the same ProfileId to Valid.
 
-Finish executes one semantic Profile command. Create allocates one fresh ProfileId. Edit preserves the existing ProfileId and atomically replaces RegionIntent. Cancel, hover, diagnostic lookup and rejected drafts do not mutate authored state or consume identity.
+Profile visibility is now an authored policy. `automatic` shows an otherwise valid Profile when it is not consumed by an active/non-suppressed Feature and hides it when it is consumed. `force_shown` and `force_hidden` override that presentation policy without changing modeling evaluation. Feature edit may transiently reveal its source Profile; that reveal is runtime-only.
 
-Profiles are live references rather than geometry snapshots. `evaluateProfile` resolves durable RegionIntent against current source Sketch geometry. Missing source entities/intersections or ambiguous/unresolved topology make the Profile Invalid without rewriting intent; later source repair can return the same ProfileId to Valid.
+Feature/Profile relationships do not change ownership. A Profile remains under its source Sketch. Feature Properties identify source Profile/Sketch, Profile Properties enumerate consuming Features, and navigation moves selection between related semantic objects.
 
-Delete Profile removes only the Profile. Source Sketch geometry remains authored. Source Sketch removal cannot silently strand dependent Profiles. UI command targeting is runtime-only: while a Sketch is actively edited, its semantic selection owns Sketch Delete and stale Tree/Profile presentation cannot become mutation authority.
+Delete Profile removes only the Profile and leaves source Sketch geometry authored. A Feature that references a missing/unresolved Profile remains authored and evaluates Failed/Blocked according to its stage; the system does not silently rebind it to similar geometry.
 
 <!-- section-id: internal.part-documents.sketch-presentation -->
 ## Active Sketch presentation and spatial input
@@ -1398,26 +1392,32 @@ Presentation tokens are ephemeral. Scene rebuild/history may allocate different 
 If the active Sketch disappears through Undo/history or the editing context is replaced, presentation/input state fails closed and is cleared.
 
 <!-- section-id: internal.part-documents.accepted-part-feature-boundary -->
-## Accepted Part Feature architecture boundary
+## As-built Part Feature and Extrude boundary
 
-Production Body/Feature modeling is still absent in the current executable. The accepted normative boundary for the next production slice is now ADR-0014.
+ADR-0014 and ADR-0015 are now implemented for the PM-01 vertical slice.
 
-ADR-0014 fixes the semantics that future implementation must preserve: one durable Body in Part v1; typed BodyId/FeatureId distinct from DocumentId; ordered typed Features; provider-neutral stage/role/provenance topology references with Missing/Resolved/Ambiguous/Unsupported cardinality; deterministic support frames; explicit Failed/Blocked/Suppressed lifecycle; no stale last-good geometry as current truth; revision/session/request freshness for result publication; explicit versioned modeling semantics with no display/pick tolerance leakage, fuzzy escalation or silent gap healing; and provider-neutral read/identity boundaries.
+Part v1 currently owns one durable Body with ordered Features. The only production Feature family is Extrude: Add/Cut and OneSide/Midplane. The first successful solid-producing Feature in an Empty Body must be Add; later Features may be Add or Cut. Every successful evaluated stage remains exactly one valid solid.
 
-This section records an accepted architecture boundary, not an as-built solid feature. Until a separately Owner-accepted PM-01 Work Contract is active and implemented, the native Part schema continues to contain no durable Body/Feature records and the product exposes no Extrude Add command.
+OneSide distance runs from the Profile support plane and may be Forward or Reverse. Midplane distance is the total symmetric length and does not author Reverse. Semantic cap/side meaning is stage/role/provenance based; provider topology order is not identity.
+
+Already-authored Features retain identity and inputs when Failed, Blocked or Suppressed. Downstream evaluation never consumes stale last-good B-Rep as current truth. Suppress preserves the Feature and removes its contribution; Delete removes that authored Feature while leaving source Profile and remaining Features authored. Both are Undoable.
+
+Extrude Create/Edit uses one runtime draft shared by GUI and Command Line. Valid parameter changes update derived preview; Finish revalidates document revision, draft generation, source Profile and successful evaluation before one authored transaction. Edit preserves FeatureId. Cancel or stale/rejected Finish commits nothing.
+
+The Viewer receives provider-neutral derived solid/preview presentation only. PM-01 does not add face/edge topology picking or durable provider identity.
 
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The Part model durably owns hosted Shared 2D Line/Circle/Arc entities, a display/input length unit and Part-owned Profiles. The active Sketch editor supports semantic point/Window/Crossing selection, mixed Delete, Line/Circle/Arc/Rectangle creation, Regular/Construction role changes, Profile Create/Edit with Add/Subtract, Move/Copy/Rotate/Scale/Mirror, the full supported grip edit cycle, Grip Copy in Reshape/Move, Repeat Last Command and the R10 shared precision-input path.
+The current Part model supports persistent Origin-plane Sketches, Shared-2D authoring/precision/OSNAP/structural-edit workflows, live-reference Profiles and one durable Body with ordered Extrude Features.
 
-Length input accepts mm/cm/m/in/ft with canonical millimetres, dimensional arithmetic and absolute/relative Cartesian or polar point syntax. Polar and Dynamic Input are application-session runtime aids; request-local numeric locks remain transient. Exact Rotate/Scale and supported grip Rotate/Scale/Mirror numeric input reuse the same semantic request pipeline.
+Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane. Feature Tree/Properties expose ordered Feature identity, status/diagnostics, Profile relationships and Edit Extrude. Suppress/Unsuppress and Delete are semantic, Undoable lifecycle operations. Save/Close/Reopen reconstructs the ordered Body from authored v8 state without persisted B-Rep.
 
-Presentation tokens, preview, pointer input, Command Line/Dynamic Input live token, Polar capture, numeric locks, hover/grip state and camera remain runtime-only and are not Part/Sketch identity.
+Not yet implemented are datum/construction-plane Sketch support, planar-face Sketch support, topology face/edge picking and repair UX, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body modeling, Material, Assembly and Drawing.
 
-The product still does not implement authored constraints/dimensions/solver, OSNAP/tracking/inference, Grid Snap, Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Datum/Construction Plane support, planar model-face Sketch support, Body/Feature modeled solid geometry, persistent topology naming or Material.
+Authored constraints/dimensions/solver, Grid Snap, Rotate/Scale/Mirror+Copy, ordinary-Select RMB convergence and clipboard/cross-Sketch Copy also remain outside the current surface.
 
-The Viewer is not a second model: no OCCT object or Viewer token is durable Part/Sketch identity, support or authored state.
+The Viewer is not a second model: OCCT objects, runtime solid/face tokens, tessellation and Viewer presentation tokens are never durable Part identity or authored state.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.persistence" data-kind="internal" data-lang="en" data-path="docs/internal/PERSISTENCE.md">
 # Persistence — As-built
@@ -1450,9 +1450,7 @@ Metadata initialization is fail-closed and uses staged publication. Metadata loa
 <!-- section-id: internal.persistence.part-document -->
 ## Native Document container and Part payload
 
-A native top-level Part is stored as `*.ss2part`.
-
-The physical representation remains native Document container v1: one ZIP-compatible package with exactly two mandatory files and an optional derived namespace:
+A native top-level Part is stored as `*.ss2part` in native Document container v1:
 
 ```text
 Part001.ss2part
@@ -1463,19 +1461,17 @@ Part001.ss2part
     └── ... optional disposable assets
 ```
 
-Container v1 uses UTF-8 JSON. The common manifest contains `format`, `container_version`, `document_kind`, `document_id` and `domain_schema_version`. Shared persistence owns package/container safety; Part owns engineering meaning in `authored/document.json`.
+The common manifest contains format/container metadata, Document kind/identity and Part domain schema version. Shared persistence owns package safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part domain writer is schema **v7**. It persists document properties, the durable display/input length unit, built-in Origin visibility, hosted Sketch records, `next_profile_id` and authored Profiles. Canonical geometric length values remain millimetres regardless of the selected display/input unit.
+The current Part writer is schema **v8**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1 and one Body with ordered Features.
 
-Sketch models store canonical `next_entity_id` plus mixed `entities[]`. Each Line/Circle/Arc record stores its semantic kind, canonical EntityId, canonical geometry and authored `regular`/`construction` role.
+Sketch models persist canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
 
-Each Profile record stores canonical ProfileId, source SketchId, authored name/visibility and semantic RegionIntent. RegionIntent persists source EntityIds and endpoint/intersection anchors; runtime region indices, evaluated parameters, cached arrangements, sampled fills and provider topology are not persisted.
+The Body persists BodyId, the FeatureId cursor and ordered Feature records. The current Extrude Feature record preserves stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane parameters. Evaluated B-Rep, OCCT handles, runtime topology tokens, evaluation statuses, previews and tessellation are not authored payload.
 
-Schemas v1–v6 remain readable. Files without the v7 length-unit field restore **mm** in memory and keep all existing geometry numerically unchanged. A later successful Save of an older loaded file publishes schema v7.
+Schemas v1–v7 remain readable. Older schemas reconstruct the current defaults in memory; pre-PM-01 data receives an Empty Body. The visibility migration maps legacy hidden Profiles to forced hidden and legacy visible Profiles to automatic. A later successful Save publishes schema v8.
 
-DocumentId remains only in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tool state, Polar/Dynamic Input application-session configuration, Dynamic Input field focus/locks, region-analysis cache and Viewer state are runtime-only.
-
-The former line-based `SS2PART` bootstrap format remains unsupported legacy test data and fails closed rather than being migrated.
+DocumentId remains in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tools, CAD input buffer, selection, camera and all provider/runtime geometry remain non-persistent.
 
 <!-- section-id: internal.persistence.atomic-save -->
 ## Atomic Document publication and Save
@@ -1516,30 +1512,18 @@ Each entry stores ProjectId, DisplayName and the remembered absolute Workspace p
 <!-- section-id: internal.persistence.derived-state -->
 ## Runtime-only and derived state
 
-The following state is not serialized as Part authored state:
+The following are derived/runtime and intentionally disposable:
 
-- ProjectSession and DocumentSession;
-- Undo/Redo history and save-history cursor;
-- Workspace discovery/conflict state;
-- active Document tab;
-- camera / projection / pan / orbit / zoom;
-- selected set and primary selection;
-- reference grid runtime presentation;
-- active Sketch edit context;
-- Sketch support-pick tool state;
-- Polar/Dynamic Input application-session settings;
-- Polar capture, Dynamic Input field focus and request-local numeric locks;
-- Qt objects;
-- Viewer provider objects and OCCT handles;
-- cached Shared 2D region analysis and transient Profile drafts;
-- evaluated B-Rep or tessellation;
-- PM-00A neutral Kernel inputs/evidence, OCCT provider objects, provider topology/lineage handles and cold-rebuild runtime fingerprints.
+- `ProjectSession`, `DocumentSession` and Undo/Redo history;
+- `DocumentRevision`, runtime session/request/draft generations and file checkpoints;
+- evaluated Shared-2D arrangements and Profile regions;
+- Part Feature evaluation snapshots and UpToDate/Failed/Blocked/Suppressed diagnostics;
+- runtime solid/B-Rep handles, face tokens and provider history;
+- Extrude preview geometry and temporary source-Profile reveal;
+- Viewer presentation objects, tessellation, detection/picking tokens and camera state;
+- active selection, hover, grips, Dynamic Input/Polar/OSNAP tracking state and CAD input buffer.
 
-Persistent user visibility of built-in Origin references is intentionally **not** in this runtime-only list; it is authored Part state.
-
-The native package reserves `derived/*` for optional disposable assets. Unknown safe derived entries may be ignored. Deleting derived content must not destroy authored design intent. The current implementation does not generate thumbnails or another derived asset.
-
-Recent availability is also derived at runtime.
+A clean reopen must recover authored semantic state without any of these objects. PM-01 cold-persistence coverage destroys the session/runtime/provider evaluation state after Save, reloads schema-v8 authored data and rebuilds ordered Add/Cut evaluation from a fresh provider/evaluator.
 
 <!-- section-id: internal.persistence.identity-safety -->
 ## Identity and container safety
@@ -1561,11 +1545,11 @@ A `.ss2part` whose manifest declares another Document kind fails closed. `docume
 <!-- section-id: internal.persistence.non-goals -->
 ## Current non-goals
 
-The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch constraints/dimensions/solver state, modeled solid geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
+Current persistence does not store Undo/Redo history, evaluated B-Rep, Viewer state, runtime topology/provider identity, caches or active edit context.
 
-The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented.
+The native format also does not yet encode datum-plane or planar-face support semantics, topology-reference repair state for later face/edge-driven Features, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics.
 
-Implementation dependencies are vendored and pinned: miniz 3.1.2 for ZIP mechanics and nlohmann/json 3.12.0 for JSON. Normal builds do not download them, and their types do not cross CAD-domain public semantic APIs.
+Save remains whole-file conditional replacement rather than an in-place feature database or event log.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="internal.project-platform" data-kind="internal" data-lang="en" data-path="docs/internal/PROJECT_PLATFORM.md">
 # Project Platform — As-built
@@ -2100,32 +2084,24 @@ It is written for understanding and using the application. It does not describe 
 
 The current product provides:
 
-- creating and opening Projects;
-- stable Project identity and Recent Projects;
-- moving a Project and recovering its location with `Locate…`;
-- creating native `.ss2part` Parts through a Workspace folder picker;
-- creating a new folder inside the Workspace directly from the New Part dialog;
-- opening discovered Documents through the neutral `Open…` dialog;
-- stable `DocumentId` independent of filename and path;
-- opening several Parts and switching them with bottom Document Tabs;
-- a shared CAD Workbench with Document Tree, Properties, Operations and Status areas;
-- an OCCT-backed 3D Viewport with reference grid and responsive ViewCube;
-- Pan, Orbit, Zoom, Fit, standard/corner views and Orthographic/Perspective;
-- built-in Part Origin point, axes and planes;
-- synchronized Tree/Viewport selection with empty-space clear and primary selection;
-- persistent Show/Hide for Origin references with Undo/Redo;
-- editing Number, Title, Description and Engineering Revision;
-- creating/editing Origin-plane Sketches with Line/Circle/Arc geometry, selection, grips and Move/Copy/Rotate/Scale/Mirror;
-- keyboard-first Command Line with Direct Distance at supported point inputs;
-- Save with stale-file conflict protection plus safe closing with unsaved-change protection;
-- rediscovering Parts after restart;
-- identity-conflict detection when two files in one Workspace carry the same DocumentId.
+- Project create/open, Recent Projects and location recovery;
+- native `.ss2part` Part Documents with stable `DocumentId`;
+- multiple open Parts with Document Tabs;
+- a shared CAD Workbench with Tree, Properties, Operations, Status and keyboard-first Command Line;
+- an OCCT-backed 3D Viewport, ViewCube, Pan/Orbit/Zoom/Fit and Ortho/Perspective;
+- persistent Origin references and Sketches on XY/XZ/YZ planes;
+- Shared-2D Line/Circle/Arc/Rectangle, Regular/Construction, grip editing and Move/Copy/Rotate/Scale/Mirror;
+- unit-aware precision input, Polar, Dynamic Input and OSNAP/Tracking/Inference;
+- Trim/Extend and read-only Measure;
+- Part-owned live-reference Profiles with Add/Subtract composition;
+- exactly one durable Body with ordered Extrude Features;
+- Extrude Add/Cut with OneSide Forward/Reverse and Midplane;
+- dynamic preview, Edit Extrude, Feature status, Suppress/Unsuppress/Delete and Undo/Redo;
+- conflict-protected Save plus Save/Close/Reopen cold rebuild of solid evaluation.
 
-The current `Open…` dialog is document-oriented, but the only implemented top-level CAD Document kind is still Part.
+Part is currently the only implemented top-level CAD Document kind. Assembly and Drawing are not yet available.
 
-The current Part is a durable CAD Document with a shared 3D working environment and durable Origin-plane Sketches. It does not yet contain Body/Feature modeled solid geometry.
-
-Assembly and Drawing document/tool surfaces are not yet available.
+Current solid modeling is intentionally limited to the PM-01 Extrude slice; Datum/planar-face support, topology picking, Revolve, Fillet/Chamfer and multi-body remain later scope.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
@@ -2565,7 +2541,29 @@ To change an existing Profile region, select exactly one Profile and use **Edit 
 
 Command Line and Operations drive the same Profile state. Context commands are `ADD`, `SUBTRACT`, `FINISH`, `CANCEL`, plus `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF` and `PROBLEMS ON|OFF`. `ISLANDS ON|OFF` controls only Show Islands presentation; it never disables island analysis.
 
-Profile is 2D/Part semantics. **It does not perform Extrude or create a solid.** Modeled solid operations require separate Part functionality.
+Profile remains Part semantics based on authored 2D geometry and is now a durable source for solid Features. With **Automatic** visibility, an active Feature consuming the Profile hides its normal presentation; after the last active consumer is Suppressed or Deleted, the Profile becomes visible again. Explicit Show/Hide forces shown/hidden presentation without changing modeling evaluation. Edit Extrude temporarily reveals its source Profile.
+
+<!-- section-id: product.parts.extrude -->
+## Body, Feature and Extrude
+
+Every current Part has exactly one durable **Body**. The Body may be empty or contain an ordered Feature history. The only production Feature family currently available is **Extrude**.
+
+To create an Extrude, select one valid Profile and use **Extrude** or enter `EXTRUDE`. The first Feature that creates a solid in an Empty Body must be **Add**. Later Extrudes may be **Add** or **Cut**. Every successful stage must still produce exactly one solid; detached Add, no-effect Add/Cut, a Cut that removes the whole solid, or a multi-solid result is rejected explicitly and is not committed.
+
+Available extent semantics:
+
+- **OneSide** — Length is the full distance from the Profile plane; **Reverse** switches direction relative to the support normal;
+- **Midplane** — Length is the total symmetric distance across both sides of the Profile plane; Reverse is not meaningful and is not authored.
+
+Changing a valid parameter updates the dynamic preview. **Finish** performs exactly one durable commit and creates one Undo step. **Cancel**, invalid input or stale preview/context creates no partial authored change. Editing an existing Extrude from Properties or Tree uses the same draft, preserves `FeatureId` and again requires one Finish.
+
+Document Tree shows the Body and ordered Features with their current status. Feature Properties shows `FeatureId`, status/diagnostic, Add/Cut, extent, Length, direction and the source Profile/Sketch. Navigation works Feature → Profile and Profile → consuming Feature without changing ownership: the Profile remains owned by its Sketch.
+
+**Suppress Feature** preserves FeatureId and parameters while removing the Feature contribution from current evaluation. **Unsuppress** reevaluates from current authored state. **Delete Feature** removes that Feature, preserves its source Profile and does not rewrite remaining dependencies; downstream Features may become Failed/Blocked. Suppress, Unsuppress and Delete participate in Undo/Redo.
+
+Command Line and GUI control the same Extrude draft. Supported contextual words include `ADD`, `CUT`, `REVERSE`, `MIDPLANE`, `ONESIDE`, `FINISH` and `CANCEL`; Length uses the shared unit-aware quantity input.
+
+Body/Feature do not have a separate Show/Hide state. Suppress is modeling semantics, not visibility. Current Extrude also does not expose solid face/edge picking as durable references.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -2592,26 +2590,22 @@ The next normal full Viewer refresh automatically retries presentation from the 
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state, including Origin visibility, Sketches with durable identity/support/placement, Line/Circle/Arc geometry with Regular/Construction roles and stable EntityIds, and Profiles with ProfileId/RegionIntent/name/visibility, to its `.ss2part` file.
+`Save` writes the current authored Part state: Document properties, Origin visibility, Sketches and geometry, Profiles with RegionIntent/visibility policy, and the Body with ordered Extrude Features, stable identities, parameters and Suppressed state.
 
-Ordinary Save is conditional on the exact native file version that this session loaded or last saved. If that target was removed, replaced, changed on disk, changed to another DocumentId or is currently guarded by another cooperating SS2 Save, SimpleSolid reports a Save conflict instead of silently overwriting the target. The in-memory Part remains open and keeps its local changes/Undo history.
+The current B-Rep solid, preview, evaluation status, provider face tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
 
-After a successful Save the session adopts the newly published file version, so a later unchanged Save works normally. The strict no-lost-update guarantee is for cooperating SS2 instances; SimpleSolid does not claim a general atomic compare-and-swap against every unrelated external writer.
+Ordinary Save remains conditional on the exact native file version loaded or last saved by the session. A removed, replaced or externally changed target reports a Save conflict rather than being silently overwritten. The in-memory Part, Undo/Redo and local changes stay open.
 
-When closing a Part with unsaved changes, the application requires `Save`, `Discard` or `Cancel`.
-
-When closing the complete Project or application while any Part is dirty, the choices are `Save All`, `Discard` and `Cancel`.
-
-If saving fails or reports a conflict, the Document/Project remains open. Closing the last open Part keeps the Project open and returns to the Project Workspace Dashboard. Using `Workspace` by itself never closes the Part.
+Closing a dirty Part requires `Save`, `Discard` or `Cancel`. Closing the complete Project/application offers `Save All`, `Discard` and `Cancel`. A failed Save does not close the Document.
 
 <!-- section-id: product.parts.restart -->
 ## Restart and reopen
 
-After restarting the application, open the same Project.
+After restarting, open the same Project. SimpleSolid scans the Workspace again and opens the saved Part with the same DocumentId, SketchId/ProfileId, BodyId and FeatureId values.
 
-SimpleSolid scans the Workspace again. The saved Part is rediscovered with the same DocumentId, saved properties, saved Origin visibility, saved Sketch records including geometry roles, and saved Profiles with the same ProfileIds.
+The Body and its ordered Extrude Add/Cut Features are evaluated from scratch from authored state. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers. A deleted Feature stays deleted while its source Profile remains available unless the Profile itself was removed.
 
-Undo/Redo history, active selection, active Sketch edit context and camera state are not stored in the file and start fresh after reopening.
+Undo/Redo history, active selection, active Sketch/Extrude draft, preview, camera and provider/B-Rep runtime state are not stored and start fresh after reopen.
 
 <!-- section-id: product.parts.conflicts -->
 ## Document and Save conflicts
@@ -2625,13 +2619,15 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides Document identity/properties, a durable display/input length unit, built-in Origin, persistent reference visibility, the 3D Workbench/Viewer foundation, durable Origin-plane Sketches with Line/Circle/Arc authored geometry and Regular/Construction roles, Rectangle authoring that resolves to ordinary Lines, and Part-owned Profiles with live RegionIntent semantics.
+The current Part provides persistent Origin-plane Sketches, Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles, and one durable Body with ordered Extrude Features.
 
-The current Sketch UI includes keyboard-first precision input, mm/cm/m/in/ft quantities and bounded expressions, absolute/relative Cartesian and polar point entry, exact Circle/Arc/Rectangle size input, numeric Rotate/Scale and grip transform values, Polar attraction, Dynamic Input with request-local locks, Measure in current physical units, the supported Grip edit cycle, Grip Copy in Reshape/Move, repeated COPY, Repeat Last Command, Undo/Redo and Save/Reopen.
+Solid modeling is currently limited to **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**. Edit Extrude, Feature status, Suppress/Unsuppress, Delete, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
 
-Profile is not a solid operation. The product still lacks Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, OSNAP/tracking/inference, Grid Snap, authored constraints/solver, authored dimensions, Sketch support on Datum/planar model faces, Bodies, Features/Extrude, modeled solid geometry, Material, Assembly and Drawing tools.
+Not yet implemented are Sketch support on Datums or planar model faces, face/edge topology picking and repair, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body, Material, Assembly or Drawing tools.
 
-Very early test `.ss2part` files from before the current native format are not supported product data and are not migrated automatically.
+On the Sketch side, authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy and final ordinary-Select RMB convergence remain outside the current surface.
+
+Very early test `.ss2part` files from before the current native format are not supported production data.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="en" data-path="docs/product/en/PROJECTS.md">
 # Projects
@@ -2773,32 +2769,24 @@ Jest przeznaczona do zrozumienia i używania programu. Nie opisuje historii impl
 
 Obecny produkt udostępnia:
 
-- tworzenie i otwieranie Projektów;
-- stabilną tożsamość Projektu oraz Recent Projects;
-- przenoszenie Projektu i odzyskiwanie lokalizacji przez `Locate…`;
-- tworzenie natywnych Partów `.ss2part` przez wybór folderu wewnątrz Workspace;
-- tworzenie nowego folderu bezpośrednio z dialogu New Part;
-- otwieranie wykrytych Dokumentów przez neutralny dialog `Open…`;
-- stabilny `DocumentId` niezależny od nazwy i ścieżki pliku;
-- otwieranie kilku Partów i przełączanie ich dolnymi Document Tabs;
-- wspólny CAD Workbench z Document Tree, Properties, Operations i Status;
-- viewport 3D oparty o OCCT z siatką odniesienia i responsywnym ViewCube;
-- Pan, Orbit, Zoom, Fit, widoki standardowe/narożne oraz Orthographic/Perspective;
-- wbudowany Origin Parta: punkt, osie i płaszczyzny;
-- zsynchronizowane zaznaczenie Tree/Viewport z czyszczeniem zaznaczenia na pustym tle i primary selection;
-- trwałe Show/Hide referencji Origin z Undo/Redo;
-- edycję Number, Title, Description i Engineering Revision;
-- tworzenie i edycję Sketchy na płaszczyznach Origin z geometrią Line/Circle/Arc, zaznaczeniem, gripami oraz Move/Copy/Rotate/Scale/Mirror;
-- keyboard-first Command Line z Direct Distance w obsługiwanych wejściach punktowych;
-- Save z ochroną przed konfliktem zmienionego pliku oraz bezpieczne zamykanie z ochroną niezapisanych zmian;
-- ponowne odnajdywanie Partów po restarcie;
-- wykrywanie konfliktu, gdy dwa pliki w jednym Workspace mają ten sam DocumentId.
+- tworzenie/otwieranie Projektów, Recent Projects i recovery lokalizacji;
+- natywne Dokumenty Part `.ss2part` ze stabilnym `DocumentId`;
+- wiele otwartych Partów z Document Tabs;
+- wspólny CAD Workbench z Tree, Properties, Operations, Status i keyboard-first Command Line;
+- OCCT-backed Viewport 3D, ViewCube, Pan/Orbit/Zoom/Fit i Ortho/Perspective;
+- trwały Origin oraz Sketche na płaszczyznach XY/XZ/YZ;
+- Shared-2D Line/Circle/Arc/Rectangle, Regular/Construction, grip editing i Move/Copy/Rotate/Scale/Mirror;
+- precision input z jednostkami, Polar, Dynamic Input, OSNAP/Tracking/Inference;
+- Trim/Extend oraz read-only Measure;
+- Part-owned live-reference Profiles z Add/Subtract;
+- dokładnie jeden trwały Body i uporządkowane Extrude Features;
+- Extrude Add/Cut z OneSide Forward/Reverse i Midplane;
+- dynamiczny preview, Edit Extrude, Feature status, Suppress/Unsuppress/Delete oraz Undo/Redo;
+- Save z ochroną konfliktu oraz Save/Close/Reopen z cold rebuildem modelu bryłowego.
 
-Dialog `Open…` jest już dokumentowo-neutralny, ale jedynym zaimplementowanym typem głównego Dokumentu CAD pozostaje obecnie Part.
+Part jest obecnie jedynym zaimplementowanym typem głównego Dokumentu CAD. Assembly i Drawing nie są jeszcze dostępne.
 
-Obecny Part jest trwałym dokumentem CAD ze wspólnym środowiskiem pracy 3D oraz trwałymi Sketchami na płaszczyznach Origin. Nie zawiera jeszcze modelowanej geometrii bryłowej Body/Feature.
-
-Powierzchnie dokumentów/narzędzi Assembly i Drawing nie są jeszcze dostępne.
+Bieżący solid modeling jest celowo ograniczony do PM-01 Extrude; Datum/planar-face support, topology picking, Revolve, Fillet/Chamfer i multi-body pozostają późniejszym zakresem.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
@@ -3238,7 +3226,29 @@ Aby zmienić region istniejącego Profile, zaznacz dokładnie jeden Profile i u�
 
 Command Line i Operations sterują tym samym stanem Profile. Komendy kontekstowe to `ADD`, `SUBTRACT`, `FINISH`, `CANCEL` oraz `ISLANDS ON|OFF`, `BOUNDARIES ON|OFF`, `PROBLEMS ON|OFF`. `ISLANDS ON|OFF` steruje tylko prezentacją Show Islands i nigdy nie wyłącza analizy wysp.
 
-Profile jest semantyką 2D/Part. **Nie wykonuje Extrude i nie tworzy bryły.** Modelowane operacje bryłowe wymagają osobnej funkcji Part.
+Profile pozostaje semantyką Part opartą na geometrii 2D i jest trwałym źródłem dla operacji bryłowych. Gdy Profile ma politykę widoczności **Automatic**, aktywny Feature zużywający ten Profile ukrywa jego normalną prezentację; po Suppress/Delete ostatniego aktywnego konsumenta Profile pojawia się ponownie. Jawne Show/Hide wymusza odpowiednio stan pokazany/ukryty bez zmiany wyniku modelowania. Podczas Edit Extrude źródłowy Profile jest tymczasowo ujawniany.
+
+<!-- section-id: product.parts.extrude -->
+## Body, Feature i Extrude
+
+Każdy obecny Part ma dokładnie jeden trwały **Body**. Body może być pusty albo zawierać uporządkowaną historię Feature. Obecnie jedyną dostępną rodziną Feature jest **Extrude**.
+
+Aby utworzyć Extrude, wybierz jeden poprawny Profile i użyj **Extrude** albo wpisz `EXTRUDE`. Pierwszy Feature tworzący bryłę w pustym Body musi być **Add**. Kolejne Extrude mogą być **Add** albo **Cut**. Każdy poprawny etap musi nadal dawać dokładnie jedną bryłę; detached Add, no-effect Add/Cut, wycięcie do zera albo wynik wielobryłowy są odrzucane jawnie i nie są zatwierdzane.
+
+Dostępne extent semantics:
+
+- **OneSide** — Length jest pełną długością od płaszczyzny Profile; **Reverse** zmienia kierunek względem normalnej supportu;
+- **Midplane** — Length jest całkowitą długością symetryczną po obu stronach płaszczyzny; Reverse nie ma tutaj znaczenia i nie jest zapisywany.
+
+Zmiana poprawnego parametru aktualizuje dynamiczny preview. **Finish** wykonuje dokładnie jedno trwałe zatwierdzenie i tworzy jeden krok Undo. **Cancel**, niepoprawne dane albo stale preview/context nie zapisują częściowej zmiany. Edycja istniejącego Extrude przez Properties lub Tree używa tego samego draftu, zachowuje `FeatureId` i ponownie wymaga jednego Finish.
+
+Document Tree pokazuje Body oraz uporządkowane Feature z bieżącym statusem. Properties Feature pokazuje m.in. `FeatureId`, status/diagnostic, Add/Cut, extent, Length, kierunek oraz źródłowy Profile i Sketch. Można przejść Feature → Profile oraz Profile → consuming Feature bez zmiany własności: Profile nadal należy do swojego Sketchu.
+
+**Suppress Feature** zachowuje FeatureId i parametry, ale usuwa wkład Feature z bieżącej ewaluacji. **Unsuppress** ponownie przelicza model z aktualnego authored state. **Delete Feature** usuwa sam Feature, pozostawia źródłowy Profile i nie przepisuje automatycznie pozostałych zależności; dalsze Feature mogą stać się Failed/Blocked. Suppress, Unsuppress i Delete są obsługiwane przez Undo/Redo.
+
+Command Line i GUI sterują tym samym Extrude draftem. Obsługiwane słowa kontekstowe obejmują `ADD`, `CUT`, `REVERSE`, `MIDPLANE`, `ONESIDE`, `FINISH` i `CANCEL`; Length korzysta ze wspólnego unit-aware quantity input.
+
+Body/Feature nie mają osobnego Show/Hide. Suppress jest semantyką modelowania, a nie widocznością. Obecny Extrude nie udostępnia także wybierania ścian/krawędzi bryły jako trwałych referencji.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
@@ -3265,26 +3275,22 @@ Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę pr
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta, w tym widoczność Origin oraz utworzone Sketche z trwałą tożsamością/supportem/placementem, geometrią Line/Circle/Arc i stabilnymi EntityId, do pliku `.ss2part`.
+`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, Sketche i ich geometrię, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed.
 
-Zwykły Save jest warunkowy względem dokładnej wersji pliku natywnego, którą ta sesja otworzyła albo ostatnio poprawnie zapisała. Jeżeli target został usunięty, podmieniony, zmieniony na dysku, zawiera już inny DocumentId albo jest aktualnie chroniony przez inny współpracujący Save SS2, SimpleSolid zgłasza konflikt Save zamiast po cichu nadpisać plik. Part w pamięci pozostaje otwarty i zachowuje lokalne zmiany/historię Undo.
+Bieżąca bryła B-Rep, preview, status ewaluacji, tokeny ścian/providera i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
 
-Po poprawnym Save sesja przyjmuje nową opublikowaną wersję pliku, więc kolejny niezmieniony Save działa normalnie. Ścisła gwarancja braku lost-update dotyczy współpracujących instancji SS2; SimpleSolid nie deklaruje ogólnego atomowego compare-and-swap wobec każdego obcego programu zapisującego plik.
+Ordinary Save pozostaje warunkowy względem dokładnej wersji natywnego pliku wczytanej lub ostatnio zapisanej przez sesję. Usunięty, podmieniony albo zewnętrznie zmieniony target powoduje konflikt Save zamiast cichego nadpisania. In-memory Part, Undo/Redo i lokalne zmiany pozostają wtedy otwarte.
 
-Przy zamykaniu Parta z niezapisanymi zmianami program wymaga decyzji `Save`, `Discard` albo `Cancel`.
-
-Przy zamykaniu całego Projektu lub aplikacji, gdy jakikolwiek Part jest dirty, dostępne są `Save All`, `Discard` i `Cancel`.
-
-Jeżeli zapis się nie powiedzie albo zgłosi konflikt, Dokument/Projekt pozostaje otwarty. Zamknięcie ostatniego otwartego Parta pozostawia Projekt otwarty i pokazuje Project Workspace Dashboard. Samo użycie `Workspace` nigdy nie zamyka Parta.
+Przy zamykaniu Parta z niezapisanymi zmianami aplikacja wymaga `Save`, `Discard` albo `Cancel`. Przy zamykaniu całego Projektu/aplikacji dostępne są `Save All`, `Discard` i `Cancel`. Nieudany Save nie zamyka Dokumentu.
 
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
 
-Po restarcie aplikacji otwórz ten sam Projekt.
+Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, SketchId/ProfileId, BodyId oraz FeatureId.
 
-SimpleSolid ponownie skanuje Workspace. Zapisany Part zostaje odnaleziony z tym samym DocumentId, zapisanymi właściwościami, zapisaną widocznością Origin oraz zapisanymi Sketches.
+Body i jego ordered Extrude Add/Cut są przeliczane od zera z authored state. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów. Usunięty Feature pozostaje usunięty, natomiast jego źródłowy Profile pozostaje dostępny, jeżeli sam nie został usunięty.
 
-Historia Undo/Redo, aktywne zaznaczenie, aktywny tryb edycji Sketchu i stan kamery nie są zapisywane do pliku i po ponownym otwarciu zaczynają się od nowa.
+Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Extrude draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
 
 <!-- section-id: product.parts.conflicts -->
 ## Konflikty Dokumentu i Save
@@ -3298,13 +3304,15 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia tożsamość/właściwości Dokumentu, trwałą jednostkę długości wejścia/wyświetlania, wbudowany Origin, trwałą widoczność referencji, fundament Workbench/Viewer 3D, trwałe Sketche na płaszczyznach Origin z authored geometrią Line/Circle/Arc i rolami Regular/Construction, authoring Rectangle rozkładany na zwykłe Lines oraz Part-owned Profiles z live RegionIntent.
+Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles oraz jeden trwały Body z ordered Extrude Features.
 
-Bieżący Sketch UI obejmuje keyboard-first precision input, wartości mm/cm/m/in/ft i ograniczone expressions, absolutne/względne współrzędne kartezjańskie i polarne, exact Circle/Arc/Rectangle input, numeryczny Rotate/Scale i grip transforms, Polar attraction, Dynamic Input z request-local locks, Measure w bieżących jednostkach fizycznych, obsługiwany Grip edit cycle, Grip Copy w Reshape/Move, repeated COPY, Repeat Last Command, Undo/Redo oraz Save/Reopen.
+Solid modeling jest obecnie ograniczony do **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**. Dostępne są Edit Extrude, statusy Feature, Suppress/Unsuppress, Delete, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
 
-Profile nie jest operacją bryłową. Nadal brakuje Rotate/Scale/Mirror+Copy, ordinary-Select RMB context, clipboard/cross-Sketch Copy, OSNAP/tracking/inference, Grid Snap, authored constraints/solver, authored dimensions, supportu Sketchu na Datum/płaskiej ścianie modelu, Bodies, Features/Extrude, modelowanej geometrii bryłowej, Material oraz narzędzi Assembly/Drawing.
+Nie ma jeszcze Sketch support na Datum ani planar model face, face/edge topology picking i repair, Revolve, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, multi-body, Material ani narzędzi Assembly/Drawing.
 
-Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym formatem danych i nie są automatycznie migrowane.
+Po stronie Sketch nadal poza zakresem pozostają authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy i docelowe ordinary-Select RMB convergence.
+
+Bardzo wczesne testowe pliki `.ss2part` sprzed obecnego natywnego formatu nie są obsługiwanym produkcyjnym formatem danych.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.projects" data-kind="product" data-lang="pl" data-path="docs/product/pl/PROJECTS.md">
 # Projekty
