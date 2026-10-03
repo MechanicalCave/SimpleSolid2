@@ -232,6 +232,30 @@ int main() {
             .body().features.front().id ==
         *finish.feature_id);
 
+    // A metadata-only draft change also invalidates the older evaluation.
+    auto renamed =
+        application::ExtrudeDraft::beginEdit(
+            fixture.session,
+            *finish.feature_id);
+    CHECK(renamed);
+    const auto rename_preview =
+        fixture.session.evaluateExtrudeDraft(
+            *renamed,
+            kernel);
+    CHECK(rename_preview.committable());
+    CHECK(renamed->setName("Renamed Extrude"));
+    const auto stale_name_finish =
+        application::finishExtrudeDraft(
+            fixture.session,
+            *renamed,
+            rename_preview,
+            kernel);
+    CHECK(!stale_name_finish.ok());
+    CHECK(
+        stale_name_finish.status ==
+        application::ExtrudeDraftFinishStatus::
+            stale_evaluation);
+
     // Edit keeps FeatureId; Midplane has no authored Reverse.
     auto edit =
         application::ExtrudeDraft::beginEdit(

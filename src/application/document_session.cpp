@@ -1599,6 +1599,8 @@ DocumentSession::evaluateExtrudeDraft(
         draft.sourceRevision();
     result.draft_generation =
         draft.generation();
+    result.mode =
+        draft.mode();
     result.profile_id =
         draft.profileId();
     result.feature_id =
@@ -1607,6 +1609,8 @@ DocumentSession::evaluateExtrudeDraft(
         draft.operation();
     result.extent =
         draft.extent();
+    result.name =
+        draft.name();
 
     if (documentId() !=
         draft.documentId()) {

@@ -262,7 +262,7 @@ bool ExtrudeDraft::setReversed(
 }
 
 bool ExtrudeDraft::setName(
-    std::string name) noexcept {
+    std::string name) {
     if (name_ == name) {
         return true;
     }
@@ -310,6 +310,8 @@ finishExtrudeDraft(
             draft.sourceRevision() &&
         evaluation.draft_generation ==
             draft.generation() &&
+        evaluation.mode ==
+            draft.mode() &&
         evaluation.profile_id ==
             draft.profileId() &&
         evaluation.feature_id ==
@@ -317,7 +319,9 @@ finishExtrudeDraft(
         evaluation.operation ==
             draft.operation() &&
         evaluation.extent ==
-            draft.extent();
+            draft.extent() &&
+        evaluation.name ==
+            draft.name();
 
     if (!exact_evaluation) {
         return {

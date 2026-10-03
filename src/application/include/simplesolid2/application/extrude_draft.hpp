@@ -106,7 +106,7 @@ public:
         bool reversed) noexcept;
 
     [[nodiscard]] bool setName(
-        std::string name) noexcept;
+        std::string name);
 
 private:
     ExtrudeDraft(
@@ -154,12 +154,15 @@ struct ExtrudeDraftEvaluationResult final {
     std::optional<core::DocumentId> document_id;
     core::DocumentRevision source_revision;
     ExtrudeDraftGeneration draft_generation{};
+    ExtrudeDraftMode mode{
+        ExtrudeDraftMode::create};
     part::ProfileId profile_id;
     std::optional<part::FeatureId> feature_id;
     part::ExtrudeOperation operation{
         part::ExtrudeOperation::add};
     part::ExtrudeExtent extent{
         part::OneSidedExtrudeExtent{}};
+    std::string name;
     part::BodyEvaluationStatus body_status{
         part::BodyEvaluationStatus::unavailable};
     kernel::RuntimeSolidHandle body_solid;
