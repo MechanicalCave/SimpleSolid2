@@ -56,6 +56,7 @@ void verifyAttachedAddTrim() {
                 attached_add_trim);
 
     CHECK(evidence.ok());
+    CHECK(evidence.after_topology.complete());
     CHECK(evidence.source_history.modified_count > 0U);
     CHECK(!evidence.source_history.deleted);
     CHECK(
@@ -126,6 +127,8 @@ void verifyDeleteAndIdenticalRecreate() {
         kernel_occt::buildSurfaceDeleteRecreateEvidence();
 
     CHECK(evidence.ok());
+    CHECK(evidence.after_delete_topology.complete());
+    CHECK(evidence.after_recreate_topology.complete());
     CHECK(evidence.delete_history.deleted);
     CHECK(
         evidence.delete_history.unique_descendant_count ==
@@ -193,6 +196,7 @@ void verifyAliasMerge() {
             kernel::FaceMergeProbeScenario::
                 overlapping_coplanar);
     CHECK(merged.ok());
+    CHECK(merged.topology.complete());
     CHECK(merged.shared_descendant_count > 0U);
 
     const auto no_winner =
@@ -211,6 +215,7 @@ void verifyAliasMerge() {
             kernel::FaceMergeProbeScenario::
                 asymmetric_history);
     CHECK(asymmetric.ok());
+    CHECK(asymmetric.topology.complete());
     CHECK(asymmetric.first.modified_count > 0U);
     CHECK(asymmetric.second.deleted);
 
@@ -230,6 +235,7 @@ void verifyAliasMerge() {
             kernel::FaceMergeProbeScenario::
                 absorbed_inner);
     CHECK(absorbed.ok());
+    CHECK(absorbed.topology.complete());
     CHECK(absorbed.second.deleted);
 
     const auto independent_winner =
