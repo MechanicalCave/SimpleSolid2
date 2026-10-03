@@ -1,6 +1,6 @@
 # PM-01 — Final Acceptance Matrix
 
-**Status:** PENDING H5 DOCS GATE + OWNER MANUAL WINDOWS ACCEPTANCE  
+**Status:** PENDING OWNER MANUAL WINDOWS ACCEPTANCE  
 **Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
 **Architecture:** ADR-0014 + ADR-0015  
 **Runtime baseline merged to main:** `eac7d26973949bc3275fe6b4bd4d68c1c54cdc6c`  
@@ -26,7 +26,7 @@
 | Manual-remediation H4a: debounced typing + live Tree diagnostics/warning icons | PR #160, Windows FULL #1346 | PASS |
 | Manual-remediation H4b: operation-only preview + nodal-normal smooth shading + restored mesh density | PR #161, Windows FULL #1348 | PASS |
 | Manual-remediation H5: exact Add/Cut delta preview, transient source-Profile hide, volumetric Cut no-effect including face/edge/point contact | PR #165, Windows FULL #1359 | PASS |
-| As-built docs + PL/EN product docs + generated Product Browser | PR #163, Windows DOCS #1350 | PASS |
+| As-built docs + PL/EN product docs + generated Product Browser | PR #163/#166, Windows DOCS #1350/#1360 | PASS |
 | Supported Windows integrated manual workflow | Section 3 below | PENDING OWNER |
 
 The runtime acceptance matrix has zero known false-Resolved semantic topology outcomes. PM-01 does not authorize face/edge topology picking, provider-native durable identity, adaptive fuzzy healing, multi-body or later Part-v1 operations.
@@ -115,5 +115,5 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 **Owner Windows result:** PENDING RETEST — H5 automated PASS  
 **Date:** 2026-10-03  
 **Last Owner-tested candidate:** `ef2877fb75cb3745119fc44dbcd018734bf2e044`  
-**Next Owner-test candidate:** latest main after H5 documentation sync (runtime baseline `eac7d26973949bc3275fe6b4bd4d68c1c54cdc6c`)  
-**Notes:** Owner H4 retest exposed H5 exact-delta preview/Profile z-fighting and zero-volume Cut issues. H5 is now exact-head automated PASS in Windows FULL #1359 and merged. Documentation/Product Browser synchronization and a new Owner Windows retest remain required before PM-01 completion.
+**Next Owner-test candidate:** `2e98164a91e93717e4cfbcf886ce467bc503d31e` (runtime baseline `eac7d26973949bc3275fe6b4bd4d68c1c54cdc6c`)  
+**Notes:** Owner H4 retest exposed H5 exact-delta preview/Profile z-fighting and zero-volume Cut issues. H5 is exact-head automated PASS in Windows FULL #1359 and its as-built documentation/Product Browser passed Windows DOCS #1360. Only a new Owner Windows retest remains before PM-01 governance completion.
