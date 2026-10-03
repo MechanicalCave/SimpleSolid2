@@ -122,7 +122,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | Order | Gate / package | Required outcome | Activation |
 | --- | --- | --- | --- |
 | G0 | **Sketcher profile-authoring readiness re-test** | prove current Sketcher can deliberately author practical Profiles after SR-01/02/03 | **COMPLETED — PASS on `16df8d1940a1f438a66cbd6964a881ba24718c0d`** |
-| 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | **ACTIVE — Owner accepted 2026-10-02; Phase A0 first** |
+| 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | **COMPLETED — PASS; final source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb`, Windows FULL #1320; Owner-review synthesis prepared** |
 | 2 | **PM-00B — Part Feature Architecture Freeze** | Owner-approved ADR/contract freeze for first solid workflow based on PM-00A evidence | future separate Work Contract / governance gate |
 | 3 | **PM-01 — First Solid Vertical Slice: Body / Feature / Extrude Add** | minimum durable Body/Feature architecture plus one complete Extrude Add lifecycle | future separate Work Contract |
 | 4 | **PM-02 — Datum Plane / Sketch Support / Extrude Cut** | offset datum from stable source, Sketch on datum, Cut, downstream recompute/failure behavior | future separate Work Contract |
@@ -577,18 +577,16 @@ Planned Part features must not be documented as already implemented.
 
 ## 23. Activation boundary
 
-Program v1.3 is accepted and frozen. **PM-00A is the only active PM package** after explicit Owner acceptance; all later PM packages remain inactive.
+Program v1.3 is accepted and frozen. **PM-00A is completed** after A0 plus E01-E10 evidence and the Owner-review synthesis. No later PM package is active.
 
 Current legal next action:
 
-**PM-00A Phase A0 — Verification Topology implementation.**
+**Owner review of the proposed PM-00A Part Feature Architecture ADR candidate and the proposed PM-00B Part Feature Architecture Freeze Work Contract.**
 
-G0 is complete. The Owner accepted `work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md` on 2026-10-02. After the synchronized activation candidate passes the repository governance gate, Phase A0 implementation may begin.
+G0 and PM-00A are complete. PM-00A's final source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb` passed Windows FULL #1320. The evidence and recommendations do not themselves freeze D2 architecture.
 
-E01–E10 may not be accepted before A0 PASS. PM-00B, PM-01 and all product solid-modeling packages remain inactive.
+PM-00B remains inactive until explicit Owner acceptance of `work/PM-00B_PART_FEATURE_ARCHITECTURE_FREEZE.md`. PM-01 and all product solid-modeling packages remain inactive.
 
-After PM-00A evidence, PM-00B still requires explicit Owner architecture acceptance.
-
-After PM-00B, PM-01 still requires a separate production Work Contract.
+After PM-00B, PM-01 still requires a separate production Work Contract and explicit Owner acceptance.
 
 Part Modeling v1 program acceptance must never be interpreted as permission to skip those boundaries.

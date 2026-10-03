@@ -1,6 +1,6 @@
 # PM-00A — Part Modeling Architecture Evidence Gate
 
-**Status:** ACTIVE  
+**Status:** COMPLETED — PASS  
 **Owner acceptance:** 2026-10-02  
 **Decision class:** D2 architecture-evidence contract; no durable Part Feature schema or user-facing solid-modeling activation  
 **Foundation:** 1.0 (`foundation-v1.0`)  
@@ -468,7 +468,33 @@ E09 proves the candidate runtime publication rule must bind evidence to the owni
 
 The publication gate used for this proof is deliberately test-local. PM-00A does not introduce a production async-evaluation manager, durable session identity or persistent generation schema. PM-00B owns the architecture freeze for the eventual production publication contract.
 
-**Next:** execute E10 tolerance/refine/healing matrix and O-11 evidence.
+### E10 — tolerance / refine / healing matrix
+
+**Status:** COMPLETED — PASS  
+**Exact source candidate:** `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb`  
+**Windows FULL:** #1320 — PASS  
+**Core-only:** 19/19 PASS  
+**Kernel-native aggregate:** 27/27 PASS  
+**Desktop FULL:** 84/84 PASS  
+**False-Resolved:** 0
+
+See `work/PM-00A_E10_NUMERICAL_POLICY_EVIDENCE.md`.
+
+E10 proves that the accepted neutral/kernel-native modeling evidence path has no camera, projection, pick-aperture or OSNAP input; repeated clean Profile → Extrude evidence is identical. An explicit test-local refine/unify policy changes real OCCT topology while a separately source-defined exterior-face meaning remains singular. A clearly open 1 mm Profile loop fails geometrically without iterative fuzzy escalation or silent healing. A deterministic gap family scaled around provider precision contains both accepted and rejected cases with at least one transition, but provider precision is not promoted to an SS2 modeling tolerance.
+
+The evidence supports an O-11 recommendation: modeling semantics must use an explicit versioned policy, display/pick tolerances must never enter modeling, fuzzy/healing escalation is forbidden unless a later explicitly versioned contract adds it, and refine/unify policy must be explicit rather than inherited from hidden provider defaults.
+
+### PM-00A completion synthesis
+
+All frozen E01-E10 rows are complete with zero false-Resolved outcomes. The final exact-head source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb` passed Windows FULL #1320 across semantic/core, kernel-native Release and complete desktop verification.
+
+Owner-reviewable recommendations and candidates are recorded in:
+
+- `work/PM-00A_ARCHITECTURE_RECOMMENDATIONS.md`;
+- `work/PM-00A_PART_FEATURE_ARCHITECTURE_ADR_CANDIDATE.md`;
+- `work/PM-00B_PART_FEATURE_ARCHITECTURE_FREEZE.md`.
+
+These files are proposals only. They do not add an accepted ADR, do not activate PM-00B and do not authorize PM-01 or durable Body/Feature production mutation.
 
 ## 8. Acceptance asymmetry
 

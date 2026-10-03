@@ -1,6 +1,6 @@
 # PM-00A — E01–E10 Architecture Evidence Matrix
 
-**Status:** FROZEN FOR PM-00A EVIDENCE EXECUTION  
+**Status:** FROZEN EVIDENCE ORACLE — EXECUTION COMPLETED PASS  
 **Version:** 1.0  
 **Date:** 2026-10-02  
 **Active contract:** `work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md`  
@@ -366,6 +366,31 @@ Exact numerical thresholds are not frozen before measurement.
 | E10-07 | Same authored input under a changed refine/healing/modeling-semantics policy candidate | evidence must identify the policy/version change explicitly | silent result change under same claimed semantics version |
 
 E10 produces an O-11 recommendation; it does not authorize user-configurable modeling tolerance.
+
+## 14A. E10 execution result
+
+**E10 status:** COMPLETED — PASS  
+**Exact source candidate:** `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb`  
+**Windows FULL:** #1320 — PASS  
+**Core-only:** 19/19 PASS  
+**Kernel-native aggregate:** 27/27 PASS  
+**Desktop FULL:** 84/84 PASS  
+**False-Resolved:** 0  
+**Evidence report:** `work/PM-00A_E10_NUMERICAL_POLICY_EVIDENCE.md`
+
+All E10-01…E10-07 expectations are satisfied.
+
+Key findings:
+
+- camera/projection and pick/OSNAP display state have no input path into the neutral/kernel-native modeling evidence boundary;
+- the clean rectangle-with-hole Profile → Extrude result and semantic cap/side reference outcomes are deterministic;
+- explicit refine/unify OFF versus ON produces a real provider-topology difference in the bounded Boolean fixture while the independently source-defined exterior face remains a unique semantic candidate;
+- clean millimetre-scale geometry succeeds with explicit fuzzy value 0;
+- a 1 mm open Profile loop fails deterministically with no tolerance escalation or silent healing;
+- the gap sweep uses `Precision::Confusion()` only as a provider-relative measurement scale and proves deterministic accepted/rejected cases plus at least one transition;
+- test-local policy tags differ whenever refine/healing policy differs, demonstrating that such a policy change cannot be silent under one claimed modeling-semantics version.
+
+The provider precision value and measured transition are evidence, not a durable SS2 tolerance. PM-00B owns the final O-11 architecture freeze.
 
 ## 15. Execution order
 
