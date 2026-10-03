@@ -603,6 +603,14 @@ lineSideCarrierFrame(
         : std::nullopt;
 }
 
+[[nodiscard]] kernel::ReferenceStatus
+referenceStatus(
+    std::size_t count) noexcept;
+
+[[nodiscard]] kernel::FaceGeometryDiagnostics
+faceGeometryDiagnostics(
+    const TopoDS_Face& face);
+
 [[nodiscard]] kernel::EvidenceSurfaceCarrierRecord
 surfaceCarrierRecord(
     kernel::EvidenceSurfaceCarrierRoleKind role,
