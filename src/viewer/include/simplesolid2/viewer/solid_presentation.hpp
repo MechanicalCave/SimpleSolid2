@@ -55,4 +55,34 @@ struct SolidScene final {
         const SolidScene&) = default;
 };
 
+enum class SolidPreviewTone {
+    additive,
+    subtractive,
+};
+
+struct SolidPreviewScene final {
+    std::vector<SolidTrianglePresentation>
+        triangles;
+    SolidPreviewTone tone{
+        SolidPreviewTone::additive};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return std::all_of(
+            triangles.begin(),
+            triangles.end(),
+            [](const SolidTrianglePresentation&
+                   triangle) {
+                return triangle.valid();
+            });
+    }
+
+    [[nodiscard]] bool empty() const noexcept {
+        return triangles.empty();
+    }
+
+    friend bool operator==(
+        const SolidPreviewScene&,
+        const SolidPreviewScene&) = default;
+};
+
 } // namespace simplesolid2::viewer

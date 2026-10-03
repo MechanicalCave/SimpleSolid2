@@ -67,6 +67,12 @@ public:
                scene.empty();
     }
 
+    virtual bool setSolidPreviewScene(
+        const SolidPreviewScene& scene) {
+        return scene.valid() &&
+               scene.empty();
+    }
+
     virtual bool setSketchScene(
         const SketchScene& scene) = 0;
 

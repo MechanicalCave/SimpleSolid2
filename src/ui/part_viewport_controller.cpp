@@ -24,6 +24,40 @@ constexpr double axisExtent = 45.0;
 constexpr double planeExtent = 35.0;
 constexpr double pointExtent = 3.0;
 
+
+[[nodiscard]] std::optional<viewer::SolidScene>
+viewerSolidScene(
+    const kernel::SolidPresentationMesh& mesh) {
+    if (!mesh.valid()) {
+        return std::nullopt;
+    }
+
+    viewer::SolidScene scene;
+    scene.triangles.reserve(
+        mesh.triangles.size());
+    for (const auto& triangle :
+         mesh.triangles) {
+        scene.triangles.push_back(
+            viewer::SolidTrianglePresentation{
+                {triangle.first.x,
+                 triangle.first.y,
+                 triangle.first.z},
+                {triangle.second.x,
+                 triangle.second.y,
+                 triangle.second.z},
+                {triangle.third.x,
+                 triangle.third.y,
+                 triangle.third.z},
+                {triangle.normal.x,
+                 triangle.normal.y,
+                 triangle.normal.z}});
+    }
+    return scene.valid()
+        ? std::optional<viewer::SolidScene>{
+              std::move(scene)}
+        : std::nullopt;
+}
+
 viewer::PresentationToken presentationTokenFor(
     core::BuiltinReferenceRole role) noexcept {
     return viewer::PresentationToken{
@@ -479,6 +513,9 @@ void PartViewportController::setSolidModelingKernel(
     }
     solid_modeling_kernel_ =
         modeling_kernel;
+    solid_scene_revision_.reset();
+    solid_scene_cache_.reset();
+    clearSolidPreview();
     refreshPresentation();
 }
 
@@ -494,6 +531,9 @@ void PartViewportController::setDocumentSession(
                 select_pick_box;
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
+        solid_scene_revision_.reset();
+        solid_scene_cache_.reset();
+        clearSolidPreview();
         clearSketchPreview();
         clearProfileDraftPreview();
         clearSketchSelectionBoxOverlay();
@@ -519,10 +559,15 @@ void PartViewportController::clear() {
             select_pick_box;
     sketch_entity_bindings_.clear();
     profile_bindings_.clear();
+    solid_scene_revision_.reset();
+    solid_scene_cache_.reset();
     clearSketchSelectionBoxOverlay();
     tree_->clear();
 
     if (viewport_ != nullptr) {
+        static_cast<void>(
+            viewport_->setSolidPreviewScene(
+                viewer::SolidPreviewScene{}));
         static_cast<void>(
             viewport_->setSolidScene(
                 viewer::SolidScene{}));
@@ -571,6 +616,9 @@ void PartViewportController::refreshPresentation() {
     if (session_ == nullptr) {
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
+        solid_scene_revision_.reset();
+        solid_scene_cache_.reset();
+        clearSolidPreview();
         clearSketchPreview();
         clearProfileDraftPreview();
         clearSketchSelectionBoxOverlay();
@@ -833,6 +881,52 @@ bool PartViewportController::setSketchGeometryPreview(
     }
 
     return setSketchPreview(lines);
+}
+
+
+bool PartViewportController::setSolidPreview(
+    kernel::RuntimeSolidHandle solid,
+    viewer::SolidPreviewTone tone) {
+    if (viewport_ == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        solid == nullptr) {
+        return false;
+    }
+
+    const auto mesh =
+        solid_modeling_kernel_->
+            presentationMesh(
+                std::move(solid));
+    if (!mesh.ok()) {
+        static_cast<void>(
+            viewport_->setSolidPreviewScene(
+                viewer::SolidPreviewScene{}));
+        return false;
+    }
+
+    const auto scene =
+        viewerSolidScene(mesh.mesh);
+    if (!scene) {
+        static_cast<void>(
+            viewport_->setSolidPreviewScene(
+                viewer::SolidPreviewScene{}));
+        return false;
+    }
+
+    viewer::SolidPreviewScene preview;
+    preview.triangles =
+        scene->triangles;
+    preview.tone = tone;
+    return viewport_->setSolidPreviewScene(
+        preview);
+}
+
+void PartViewportController::clearSolidPreview() {
+    if (viewport_ != nullptr) {
+        static_cast<void>(
+            viewport_->setSolidPreviewScene(
+                viewer::SolidPreviewScene{}));
+    }
 }
 
 void PartViewportController::clearSketchPreview() {
@@ -1929,10 +2023,20 @@ PartViewportController::buildReferenceScene() const {
 
 std::optional<viewer::SolidScene>
 PartViewportController::buildSolidScene() {
-    viewer::SolidScene scene;
+    viewer::SolidScene empty_scene;
     if (session_ == nullptr ||
         solid_modeling_kernel_ == nullptr) {
-        return scene;
+        solid_scene_revision_.reset();
+        solid_scene_cache_.reset();
+        return empty_scene;
+    }
+
+    const auto revision =
+        session_->document().revision();
+    if (solid_scene_revision_ &&
+        *solid_scene_revision_ == revision &&
+        solid_scene_cache_) {
+        return *solid_scene_cache_;
     }
 
     const auto evaluation =
@@ -1943,47 +2047,36 @@ PartViewportController::buildSolidScene() {
             part::BodyEvaluationStatus::
                 up_to_date ||
         evaluation.body_solid == nullptr) {
-        // Empty/Failed/Blocked/Suppressed-only histories publish no Body
-        // presentation. Never retain last-good geometry.
-        return scene;
+        // Empty/Failed/Blocked/Suppressed-only histories publish no Body.
+        // Cache only the derived empty presentation for this exact revision.
+        solid_scene_revision_ = revision;
+        solid_scene_cache_ = empty_scene;
+        return *solid_scene_cache_;
     }
 
     const auto mesh =
-        solid_modeling_kernel_
-            ->presentationMesh(
+        solid_modeling_kernel_->
+            presentationMesh(
                 evaluation.body_solid);
     if (!mesh.ok()) {
+        // Provider/presentation failure remains retryable at the same
+        // authored revision; never cache it as valid current truth.
+        solid_scene_revision_.reset();
+        solid_scene_cache_.reset();
         return std::nullopt;
     }
 
-    scene.triangles.reserve(
-        mesh.mesh.triangles.size());
-    for (const auto& triangle :
-         mesh.mesh.triangles) {
-        scene.triangles.push_back(
-            viewer::SolidTrianglePresentation{
-                {
-                    triangle.first.x,
-                    triangle.first.y,
-                    triangle.first.z},
-                {
-                    triangle.second.x,
-                    triangle.second.y,
-                    triangle.second.z},
-                {
-                    triangle.third.x,
-                    triangle.third.y,
-                    triangle.third.z},
-                {
-                    triangle.normal.x,
-                    triangle.normal.y,
-                    triangle.normal.z}});
+    const auto scene =
+        viewerSolidScene(mesh.mesh);
+    if (!scene) {
+        solid_scene_revision_.reset();
+        solid_scene_cache_.reset();
+        return std::nullopt;
     }
 
-    return scene.valid()
-        ? std::optional<viewer::SolidScene>{
-              std::move(scene)}
-        : std::nullopt;
+    solid_scene_revision_ = revision;
+    solid_scene_cache_ = *scene;
+    return *solid_scene_cache_;
 }
 
 std::optional<viewer::ProfileRegionPresentation>

@@ -72,6 +72,9 @@ public:
     [[nodiscard]] bool setSolidScene(
         const viewer::SolidScene& scene) override;
 
+    [[nodiscard]] bool setSolidPreviewScene(
+        const viewer::SolidPreviewScene& scene) override;
+
     [[nodiscard]] bool setSketchScene(
         const viewer::SketchScene& scene) override;
 

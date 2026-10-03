@@ -1281,8 +1281,7 @@ public:
             return false;
         }
 
-        if (scene.empty() &&
-            solid_scene_.empty()) {
+        if (scene == solid_scene_) {
             return true;
         }
 
@@ -1323,6 +1322,74 @@ public:
             return true;
         } catch (...) {
             clearSolidScene();
+            throw;
+        }
+    }
+
+
+    bool setSolidPreviewScene(
+        const viewer::SolidPreviewScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        if (scene == solid_preview_scene_) {
+            return true;
+        }
+
+        clearSolidPreviewScene();
+
+        if (scene.empty()) {
+            solid_preview_scene_ = scene;
+            updateCurrentViewer();
+            return true;
+        }
+
+        try {
+            viewer::SolidScene mesh_scene;
+            mesh_scene.triangles =
+                scene.triangles;
+            const auto object =
+                makeSolidObject(mesh_scene);
+            if (object.IsNull()) {
+                clearSolidPreviewScene();
+                return false;
+            }
+
+            solid_preview_object_ = object;
+            context_->Display(
+                solid_preview_object_,
+                false);
+            context_->SetDisplayMode(
+                solid_preview_object_,
+                AIS_Shaded,
+                false);
+            context_->SetColor(
+                solid_preview_object_,
+                scene.tone ==
+                        viewer::SolidPreviewTone::
+                            subtractive
+                    ? Quantity_Color{
+                          0.94, 0.30, 0.18,
+                          Quantity_TOC_RGB}
+                    : Quantity_Color{
+                          0.20, 0.78, 0.92,
+                          Quantity_TOC_RGB},
+                false);
+            context_->SetTransparency(
+                solid_preview_object_,
+                0.45,
+                false);
+            context_->Deactivate(
+                solid_preview_object_);
+            solid_preview_scene_ = scene;
+            updateCurrentViewer();
+            return true;
+        } catch (...) {
+            clearSolidPreviewScene();
             throw;
         }
     }
@@ -3453,6 +3520,25 @@ public:
         solid_scene_.triangles.clear();
     }
 
+
+    void clearSolidPreviewScene() noexcept {
+        if (!context_.IsNull() &&
+            !solid_preview_object_.IsNull()) {
+            const auto retained =
+                solid_preview_object_;
+            guardedVoid(
+                "removeSolidPreviewObject",
+                [this, retained] {
+                    context_->Remove(
+                        retained,
+                        false);
+                });
+        }
+
+        solid_preview_object_.Nullify();
+        solid_preview_scene_.triangles.clear();
+    }
+
     void clearProfileScene() noexcept {
         if (!context_.IsNull()) {
             guardedVoid(
@@ -4377,7 +4463,9 @@ private:
         navigation_controls_;
     std::vector<ReferenceObject> reference_objects_;
     Handle(AIS_Shape) solid_object_;
+    Handle(AIS_Shape) solid_preview_object_;
     viewer::SolidScene solid_scene_;
+    viewer::SolidPreviewScene solid_preview_scene_;
     std::vector<ProfileObject> profile_objects_;
     Handle(AIS_Shape) profile_preview_object_;
     Handle(AIS_Shape) profile_preview_emphasis_object_;
@@ -4553,6 +4641,17 @@ bool QtOcctViewerWidget::setSolidScene(
         "setSolidScene",
         [this, &scene] {
             return impl_->setSolidScene(scene);
+        });
+}
+
+
+bool QtOcctViewerWidget::setSolidPreviewScene(
+    const viewer::SolidPreviewScene& scene) {
+    return guardedBool(
+        "setSolidPreviewScene",
+        [this, &scene] {
+            return impl_->setSolidPreviewScene(
+                scene);
         });
 }
 
