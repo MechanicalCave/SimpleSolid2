@@ -50,9 +50,6 @@ buildEdgeSplitHistoryEvidence(
 buildFaceMergeHistoryEvidence(
     kernel::FaceMergeProbeScenario scenario) noexcept;
 
-[[nodiscard]] kernel::SurfaceBooleanLineageEvidence
-buildSurfaceBooleanLineageEvidence(
-    kernel::SurfaceBooleanProbeScenario scenario) noexcept;
 
 [[nodiscard]] kernel::MultiStageLineageEvidence
 buildMultiStageLineageEvidence(
