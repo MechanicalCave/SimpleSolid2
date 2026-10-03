@@ -26,6 +26,7 @@
 #include <QStackedWidget>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QTimer>
 #include <QVBoxLayout>
 
 #include <cctype>
@@ -1185,6 +1186,16 @@ void CadWorkbench::buildUi() {
     sketch_interaction_controller_->setStateChangedHandler(
         [this] {
             syncSketchInteractionUi();
+            if (document_session_ != nullptr) {
+                const auto revision =
+                    document_session_->document()
+                        .revision();
+                if (!part_evaluation_revision_ ||
+                    *part_evaluation_revision_ !=
+                        revision) {
+                    refreshPartFeatureEvaluationSnapshot();
+                }
+            }
             syncActionState();
             notifyDocumentStateChanged();
         });
@@ -2239,6 +2250,17 @@ void CadWorkbench::buildUi() {
         QStringLiteral("extrudeDistanceEdit"));
     extrude_distance_edit_->setPlaceholderText(
         QStringLiteral("e.g. 10 mm"));
+    extrude_preview_timer_ =
+        new QTimer(this);
+    extrude_preview_timer_->setSingleShot(true);
+    extrude_preview_timer_->setInterval(90);
+    QObject::connect(
+        extrude_preview_timer_,
+        &QTimer::timeout,
+        this,
+        [this] {
+            refreshExtrudePreview();
+        });
     extrude_distance_form->addRow(
         QStringLiteral("Distance"),
         extrude_distance_edit_);
@@ -3185,6 +3207,9 @@ void CadWorkbench::buildUi() {
                 extrude_distance_input_valid_ =
                     false;
                 extrude_evaluation_.reset();
+                if (extrude_preview_timer_ != nullptr) {
+                    extrude_preview_timer_->stop();
+                }
                 if (viewport_controller_) {
                     viewport_controller_->
                         clearSolidPreview();
@@ -3196,13 +3221,15 @@ void CadWorkbench::buildUi() {
             static_cast<void>(
                 setExtrudeDistance(
                     core::LengthValue{*parsed},
-                    toUtf8(text_value)));
+                    toUtf8(text_value),
+                    false));
         });
     QObject::connect(
         extrude_distance_edit_,
         &QLineEdit::returnPressed,
         this,
         [this] {
+            flushExtrudePreview();
             static_cast<void>(
                 finishExtrude());
         });
@@ -3963,6 +3990,9 @@ void CadWorkbench::cancelExtrude() {
         return;
     }
 
+    if (extrude_preview_timer_ != nullptr) {
+        extrude_preview_timer_->stop();
+    }
     extrude_draft_.reset();
     extrude_evaluation_.reset();
     extrude_distance_input_valid_ = false;
@@ -3986,6 +4016,7 @@ void CadWorkbench::cancelExtrude() {
 }
 
 bool CadWorkbench::finishExtrude() {
+    flushExtrudePreview();
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr ||
@@ -4046,6 +4077,9 @@ bool CadWorkbench::finishExtrude() {
 }
 
 void CadWorkbench::clearExtrudeRuntimeContext() {
+    if (extrude_preview_timer_ != nullptr) {
+        extrude_preview_timer_->stop();
+    }
     extrude_profile_pick_active_ = false;
     extrude_draft_.reset();
     extrude_evaluation_.reset();
@@ -4067,7 +4101,8 @@ void CadWorkbench::clearExtrudeRuntimeContext() {
 bool CadWorkbench::setExtrudeDistance(
     core::LengthValue distance,
     std::optional<std::string_view>
-        display_text) {
+        display_text,
+    bool refresh_now) {
     if (!extrude_draft_ ||
         !distance.finite() ||
         !(distance.millimetres > 0.0)) {
@@ -4087,12 +4122,38 @@ bool CadWorkbench::setExtrudeDistance(
             fromUtf8(*display_text));
     }
 
-    refreshExtrudePreview();
+    extrude_evaluation_.reset();
+    if (refresh_now) {
+        refreshExtrudePreview();
+    } else {
+        scheduleExtrudePreview();
+        syncExtrudeUi();
+    }
     notifyCadInputContextChanged();
     return true;
 }
 
+void CadWorkbench::scheduleExtrudePreview() {
+    if (extrude_preview_timer_ == nullptr) {
+        refreshExtrudePreview();
+        return;
+    }
+    extrude_preview_timer_->start();
+}
+
+void CadWorkbench::flushExtrudePreview() {
+    if (extrude_preview_timer_ == nullptr ||
+        !extrude_preview_timer_->isActive()) {
+        return;
+    }
+    extrude_preview_timer_->stop();
+    refreshExtrudePreview();
+}
+
 void CadWorkbench::refreshExtrudePreview() {
+    if (extrude_preview_timer_ != nullptr) {
+        extrude_preview_timer_->stop();
+    }
     extrude_evaluation_.reset();
 
     if (viewport_controller_) {
