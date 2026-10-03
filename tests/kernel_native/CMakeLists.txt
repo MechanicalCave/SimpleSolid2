@@ -260,6 +260,27 @@ set_tests_properties(pm02p.b1_surface_carriers PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;native"
 )
 
+add_executable(pm02p_b2_boolean_surface_lineage_test
+    pm02p_b2_boolean_surface_lineage_test.cpp
+)
+
+target_link_libraries(pm02p_b2_boolean_surface_lineage_test
+    PRIVATE
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+)
+
+target_compile_features(pm02p_b2_boolean_surface_lineage_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm02p.b2_boolean_surface_lineage
+    COMMAND pm02p_b2_boolean_surface_lineage_test
+)
+
+set_tests_properties(pm02p.b2_boolean_surface_lineage PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
@@ -273,6 +294,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm01b_production_kernel_test
         pm02p_a_topology_inventory_test
         pm02p_b1_surface_carriers_test
+        pm02p_b2_boolean_surface_lineage_test
 )
 
 foreach(_forbidden_target IN ITEMS

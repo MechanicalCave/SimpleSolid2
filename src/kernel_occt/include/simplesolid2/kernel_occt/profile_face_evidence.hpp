@@ -26,6 +26,16 @@ buildExtrudeSurfaceCarrierEvidence(
     const kernel::PlanarProfileInput& input,
     double distance) noexcept;
 
+[[nodiscard]] kernel::SurfaceBooleanLineageEvidence
+buildSurfaceBooleanLineageEvidence(
+    kernel::SurfaceBooleanProbeScenario scenario) noexcept;
+
+[[nodiscard]] kernel::SurfaceDeleteRecreateEvidence
+buildSurfaceDeleteRecreateEvidence() noexcept;
+
+[[nodiscard]] kernel::CutExposedSurfaceEvidence
+buildCutExposedSurfaceEvidence() noexcept;
+
 [[nodiscard]] kernel::FullRevolveEvidence
 buildProfileFullRevolveEvidence(
     const kernel::PlanarProfileInput& input,
@@ -39,6 +49,7 @@ buildEdgeSplitHistoryEvidence(
 [[nodiscard]] kernel::FaceMergeHistoryEvidence
 buildFaceMergeHistoryEvidence(
     kernel::FaceMergeProbeScenario scenario) noexcept;
+
 
 [[nodiscard]] kernel::MultiStageLineageEvidence
 buildMultiStageLineageEvidence(

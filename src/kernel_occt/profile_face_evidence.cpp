@@ -39,9 +39,11 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <iostream>
 #include <numbers>
 #include <optional>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -611,10 +613,6 @@ referenceStatus(
 faceGeometryDiagnostics(
     const TopoDS_Face& face);
 
-[[nodiscard]] kernel::FaceGeometryDiagnostics
-faceGeometryDiagnostics(
-    const TopoDS_Face& face);
-
 [[nodiscard]] kernel::EvidenceSurfaceCarrierRecord
 surfaceCarrierRecord(
     kernel::EvidenceSurfaceCarrierRoleKind role,
@@ -659,6 +657,309 @@ surfaceCarrierRecord(
         }
     }
     return false;
+}
+
+
+[[nodiscard]] std::vector<TopoDS_Edge>
+matchingFaceEdges(
+    const TopoDS_Face& face,
+    const TopoDS_Edge& source);
+
+[[nodiscard]] const kernel::BoundaryUse2D*
+findBoundaryUse(
+    const kernel::PlanarProfileInput& input,
+    const kernel::BoundaryUseProvenance& provenance) {
+    for (const auto& use : input.outer.boundary) {
+        if (use.provenance == provenance) {
+            return &use;
+        }
+    }
+    for (const auto& loop : input.holes) {
+        for (const auto& use : loop.boundary) {
+            if (use.provenance == provenance) {
+                return &use;
+            }
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] kernel::BoundaryUse2D
+evidenceLineUse(
+    kernel::Point2 start,
+    kernel::Point2 end,
+    std::string source,
+    std::uint32_t use_index) {
+    return {
+        kernel::Line2{start, end},
+        0.0,
+        1.0,
+        true,
+        false,
+        false,
+        kernel::BoundaryUseProvenance{
+            std::move(source),
+            0U,
+            use_index,
+            false},
+    };
+}
+
+[[nodiscard]] kernel::PlanarProfileInput
+evidenceRectangleProfile(
+    double x0,
+    double y0,
+    double x1,
+    double y1,
+    double z,
+    const std::string& prefix) {
+    kernel::PlanarProfileInput input;
+    input.frame.origin = {0.0, 0.0, z};
+    input.outer.boundary = {
+        evidenceLineUse(
+            {x0, y0},
+            {x1, y0},
+            prefix + "-bottom",
+            0U),
+        evidenceLineUse(
+            {x1, y0},
+            {x1, y1},
+            prefix + "-right",
+            1U),
+        evidenceLineUse(
+            {x1, y1},
+            {x0, y1},
+            prefix + "-top",
+            2U),
+        evidenceLineUse(
+            {x0, y1},
+            {x0, y0},
+            prefix + "-left",
+            3U),
+    };
+    return input;
+}
+
+struct EvidencePrismSide final {
+    kernel::BoundaryUseProvenance provenance;
+    kernel::FaceSurfaceKind semantic_kind{
+        kernel::FaceSurfaceKind::other};
+    std::optional<kernel::Frame3> canonical_frame;
+    TopoDS_Face face;
+};
+
+struct EvidencePrismBuild final {
+    TopoDS_Shape shape;
+    TopoDS_Face start_cap;
+    TopoDS_Face end_cap;
+    std::optional<kernel::Frame3> start_frame;
+    std::optional<kernel::Frame3> end_frame;
+    std::vector<EvidencePrismSide> sides;
+};
+
+[[nodiscard]] std::optional<EvidencePrismBuild>
+buildEvidencePrism(
+    const kernel::PlanarProfileInput& input,
+    double distance) {
+    if (!input.valid() ||
+        !std::isfinite(distance) ||
+        distance == 0.0) {
+        return std::nullopt;
+    }
+
+    const auto built =
+        buildProfileFace(input);
+    if (!built) {
+        return std::nullopt;
+    }
+
+    BRepSweep_Prism sweep{
+        built->face,
+        gp_Vec{
+            input.frame.normal.x * distance,
+            input.frame.normal.y * distance,
+            input.frame.normal.z * distance},
+        false,
+        true};
+
+    const TopoDS_Shape shape =
+        sweep.Shape();
+    if (shape.IsNull()) {
+        return std::nullopt;
+    }
+
+    const auto start_faces =
+        uniqueFacesFromGeneratedShape(
+            sweep.FirstShape());
+    const auto end_faces =
+        uniqueFacesFromGeneratedShape(
+            sweep.LastShape());
+    if (start_faces.size() != 1U ||
+        end_faces.size() != 1U) {
+        return std::nullopt;
+    }
+
+    EvidencePrismBuild result;
+    result.shape = shape;
+    result.start_cap = start_faces.front();
+    result.end_cap = end_faces.front();
+    result.start_frame =
+        shiftedCarrierFrame(
+            input.frame,
+            0.0);
+    result.end_frame =
+        shiftedCarrierFrame(
+            input.frame,
+            distance);
+
+    result.sides.reserve(
+        built->source_edges.size());
+    for (const auto& source :
+         built->source_edges) {
+        std::vector<TopoDS_Face> candidates;
+        const auto basis_edges =
+            matchingFaceEdges(
+                built->face,
+                source.edge);
+        for (const auto& basis_edge :
+             basis_edges) {
+            const auto generated =
+                sweep.Shape(
+                    basis_edge);
+            for (const auto& face :
+                 uniqueFacesFromGeneratedShape(
+                     generated)) {
+                appendUniqueFace(
+                    candidates,
+                    face);
+            }
+        }
+        if (candidates.size() != 1U) {
+            return std::nullopt;
+        }
+
+        const auto* use =
+            findBoundaryUse(
+                input,
+                source.provenance);
+        if (use == nullptr) {
+            return std::nullopt;
+        }
+
+        const auto kind =
+            semanticSurfaceKind(*use);
+        result.sides.push_back({
+            source.provenance,
+            kind,
+            kind == kernel::FaceSurfaceKind::plane
+                ? lineSideCarrierFrame(input, *use)
+                : std::nullopt,
+            candidates.front(),
+        });
+    }
+
+    return result;
+}
+
+[[nodiscard]] const EvidencePrismSide*
+findPrismSide(
+    const EvidencePrismBuild& prism,
+    const std::string& source_entity) {
+    const auto found =
+        std::find_if(
+            prism.sides.begin(),
+            prism.sides.end(),
+            [&source_entity](
+                const EvidencePrismSide& side) {
+                return side.provenance.source_entity ==
+                       source_entity;
+            });
+    return found == prism.sides.end()
+        ? nullptr
+        : &*found;
+}
+
+void populateBodyTopologyEvidence(
+    kernel::BodyTopologyInventoryEvidence& topology,
+    const kernel::ShapeEvidence& shape_evidence,
+    const TopoDS_Shape& shape) {
+    topology.status =
+        shape_evidence.status;
+    topology.brep_valid =
+        shape_evidence.brep_valid;
+    topology.solid_count =
+        shape_evidence.solid_count;
+    populateTopologyInventory(
+        topology.faces,
+        shape,
+        TopAbs_FACE);
+    populateTopologyInventory(
+        topology.edges,
+        shape,
+        TopAbs_EDGE);
+    populateTopologyInventory(
+        topology.vertices,
+        shape,
+        TopAbs_VERTEX);
+}
+
+[[nodiscard]] kernel::ReferenceStatus
+surfaceStatusFromSingleCarrierLineage(
+    std::size_t descendant_face_count) noexcept {
+    return descendant_face_count == 0U
+        ? kernel::ReferenceStatus::missing
+        : kernel::ReferenceStatus::resolved;
+}
+
+[[nodiscard]] std::size_t
+countSurfaceKind(
+    const std::vector<TopoDS_Shape>& faces,
+    kernel::FaceSurfaceKind expected) {
+    std::size_t count = 0U;
+    for (const auto& shape : faces) {
+        if (shape.ShapeType() != TopAbs_FACE) {
+            continue;
+        }
+        if (faceGeometryDiagnostics(
+                TopoDS::Face(shape))
+                .surface_kind == expected) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+[[nodiscard]] bool nearEvidenceValue(
+    double first,
+    double second) noexcept {
+    const double scale =
+        std::max({
+            1.0,
+            std::abs(first),
+            std::abs(second)});
+    return std::abs(first - second) <=
+           1.0e-9 * scale;
+}
+
+[[nodiscard]] bool nearEvidencePoint(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return nearEvidenceValue(first.x, second.x) &&
+           nearEvidenceValue(first.y, second.y) &&
+           nearEvidenceValue(first.z, second.z);
+}
+
+[[nodiscard]] bool sameGeometryDiagnostics(
+    const kernel::FaceGeometryDiagnostics& first,
+    const kernel::FaceGeometryDiagnostics& second) noexcept {
+    return first.surface_kind == second.surface_kind &&
+           nearEvidenceValue(first.area, second.area) &&
+           nearEvidencePoint(
+               first.centroid,
+               second.centroid) &&
+           nearEvidencePoint(
+               first.surface_axis,
+               second.surface_axis);
 }
 
 [[nodiscard]] kernel::FaceSurfaceKind
@@ -1680,6 +1981,492 @@ buildExtrudeSurfaceCarrierEvidence(
     }
 }
 
+kernel::SurfaceBooleanLineageEvidence
+buildSurfaceBooleanLineageEvidence(
+    kernel::SurfaceBooleanProbeScenario scenario) noexcept {
+    kernel::SurfaceBooleanLineageEvidence evidence;
+
+    try {
+        const auto base_input =
+            evidenceRectangleProfile(
+                0.0,
+                0.0,
+                40.0,
+                20.0,
+                0.0,
+                "base");
+        const auto base =
+            buildEvidencePrism(
+                base_input,
+                10.0);
+        if (!base ||
+            !base->end_frame.has_value()) {
+            evidence.before_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.before_shape,
+            base->shape);
+        if (!evidence.before_shape.ok()) {
+            return evidence;
+        }
+
+        auto publish =
+            [&evidence, &base](
+                auto& operation) {
+                operation.Build();
+                if (!operation.IsDone()) {
+                    evidence.after_shape.status =
+                        kernel::EvidenceStatus::provider_failure;
+                    return;
+                }
+
+                const TopoDS_Shape result =
+                    operation.Shape();
+                if (result.IsNull()) {
+                    evidence.after_shape.status =
+                        kernel::EvidenceStatus::provider_failure;
+                    return;
+                }
+
+                populateShapeEvidence(
+                    evidence.after_shape,
+                    result);
+                if (!evidence.after_shape.ok()) {
+                    return;
+                }
+
+                populateBodyTopologyEvidence(
+                    evidence.after_topology,
+                    evidence.after_shape,
+                    result);
+
+                evidence.source_history =
+                    historyEvidence(
+                        operation,
+                        base->end_cap,
+                        TopAbs_FACE,
+                        result);
+                const auto descendants =
+                    historyDescendants(
+                        operation,
+                        base->end_cap,
+                        TopAbs_FACE,
+                        result);
+
+                evidence.strict_face_status =
+                    referenceStatus(
+                        descendants.size());
+                evidence.surface_status =
+                    surfaceStatusFromSingleCarrierLineage(
+                        descendants.size());
+                evidence.current_face_realization_count =
+                    descendants.size();
+                evidence.planar_realization_count =
+                    countSurfaceKind(
+                        descendants,
+                        kernel::FaceSurfaceKind::plane);
+                if (!descendants.empty()) {
+                    evidence.canonical_frame =
+                        base->end_frame;
+                }
+            };
+
+        if (scenario ==
+            kernel::SurfaceBooleanProbeScenario::
+                attached_add_trim) {
+            const auto tool =
+                buildEvidencePrism(
+                    evidenceRectangleProfile(
+                        10.0,
+                        5.0,
+                        30.0,
+                        15.0,
+                        10.0,
+                        "add"),
+                    10.0);
+            if (!tool) {
+                evidence.after_shape.status =
+                    kernel::EvidenceStatus::provider_failure;
+                return evidence;
+            }
+
+            BRepAlgoAPI_Fuse operation{
+                base->shape,
+                tool->shape};
+            operation.SetFuzzyValue(0.0);
+            publish(operation);
+            return evidence;
+        }
+
+        if (scenario ==
+            kernel::SurfaceBooleanProbeScenario::
+                cut_trim) {
+            const auto tool =
+                buildEvidencePrism(
+                    evidenceRectangleProfile(
+                        30.0,
+                        5.0,
+                        45.0,
+                        15.0,
+                        5.0,
+                        "cut-trim"),
+                    10.0);
+            if (!tool) {
+                evidence.after_shape.status =
+                    kernel::EvidenceStatus::provider_failure;
+                return evidence;
+            }
+
+            BRepAlgoAPI_Cut operation{
+                base->shape,
+                tool->shape};
+            operation.SetFuzzyValue(0.0);
+            publish(operation);
+            return evidence;
+        }
+
+        const auto tool =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    15.0,
+                    -5.0,
+                    25.0,
+                    25.0,
+                    8.0,
+                    "cut-split"),
+                7.0);
+        if (!tool) {
+            evidence.after_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        BRepAlgoAPI_Cut operation{
+            base->shape,
+            tool->shape};
+        publish(operation);
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.after_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.after_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::SurfaceDeleteRecreateEvidence
+buildSurfaceDeleteRecreateEvidence() noexcept {
+    kernel::SurfaceDeleteRecreateEvidence evidence;
+
+    try {
+        const auto base =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    40.0,
+                    20.0,
+                    0.0,
+                    "base"),
+                10.0);
+        if (!base ||
+            !base->end_frame.has_value()) {
+            evidence.before_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.before_shape,
+            base->shape);
+        if (!evidence.before_shape.ok()) {
+            return evidence;
+        }
+        evidence.old_canonical_frame =
+            base->end_frame;
+
+        const auto delete_tool =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    -5.0,
+                    -5.0,
+                    45.0,
+                    25.0,
+                    8.0,
+                    "delete"),
+                7.0);
+        if (!delete_tool) {
+            evidence.after_delete_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        BRepAlgoAPI_Cut cut{
+            base->shape,
+            delete_tool->shape};
+        cut.SetFuzzyValue(0.0);
+        cut.Build();
+        if (!cut.IsDone()) {
+            evidence.after_delete_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const TopoDS_Shape after_delete =
+            cut.Shape();
+        if (after_delete.IsNull()) {
+            evidence.after_delete_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.after_delete_shape,
+            after_delete);
+        if (!evidence.after_delete_shape.ok()) {
+            return evidence;
+        }
+
+        populateBodyTopologyEvidence(
+            evidence.after_delete_topology,
+            evidence.after_delete_shape,
+            after_delete);
+
+        evidence.delete_history =
+            historyEvidence(
+                cut,
+                base->end_cap,
+                TopAbs_FACE,
+                after_delete);
+        const auto old_descendants =
+            historyDescendants(
+                cut,
+                base->end_cap,
+                TopAbs_FACE,
+                after_delete);
+        evidence.old_surface_after_delete =
+            surfaceStatusFromSingleCarrierLineage(
+                old_descendants.size());
+
+        const auto replacement =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    40.0,
+                    20.0,
+                    8.0,
+                    "replacement"),
+                2.0);
+        if (!replacement ||
+            !replacement->end_frame.has_value()) {
+            evidence.after_recreate_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        BRepAlgoAPI_Fuse fuse{
+            after_delete,
+            replacement->shape};
+        fuse.SetFuzzyValue(0.0);
+        fuse.Build();
+        if (!fuse.IsDone()) {
+            evidence.after_recreate_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const TopoDS_Shape after_recreate =
+            fuse.Shape();
+        if (after_recreate.IsNull()) {
+            evidence.after_recreate_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.after_recreate_shape,
+            after_recreate);
+        if (!evidence.after_recreate_shape.ok()) {
+            return evidence;
+        }
+
+        populateBodyTopologyEvidence(
+            evidence.after_recreate_topology,
+            evidence.after_recreate_shape,
+            after_recreate);
+
+        // The old carrier was semantically deleted in the previous stage and
+        // is not an input to this Fuse. Geometry equality cannot recreate a
+        // lineage path for the old meaning.
+        evidence.old_surface_after_recreate =
+            evidence.old_surface_after_delete;
+
+        const auto replacement_faces =
+            historyDescendants(
+                fuse,
+                replacement->end_cap,
+                TopAbs_FACE,
+                after_recreate);
+        evidence.replacement_face_count =
+            replacement_faces.size();
+        evidence.replacement_surface_status =
+            surfaceStatusFromSingleCarrierLineage(
+                replacement_faces.size());
+        evidence.replacement_canonical_frame =
+            replacement->end_frame;
+
+        if (replacement_faces.size() == 1U) {
+            evidence.replacement_geometry_matches_old =
+                sameGeometryDiagnostics(
+                    faceGeometryDiagnostics(
+                        base->end_cap),
+                    faceGeometryDiagnostics(
+                        TopoDS::Face(
+                            replacement_faces.front())));
+        }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.after_recreate_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.after_recreate_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::CutExposedSurfaceEvidence
+buildCutExposedSurfaceEvidence() noexcept {
+    kernel::CutExposedSurfaceEvidence evidence;
+
+    try {
+        const auto base =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    40.0,
+                    30.0,
+                    0.0,
+                    "base"),
+                10.0);
+        const auto tool =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    10.0,
+                    10.0,
+                    30.0,
+                    20.0,
+                    5.0,
+                    "cut-tool"),
+                10.0);
+        if (!base || !tool) {
+            evidence.result_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const auto* source_side =
+            findPrismSide(
+                *tool,
+                "cut-tool-bottom");
+        if (source_side == nullptr ||
+            source_side->semantic_kind !=
+                kernel::FaceSurfaceKind::plane ||
+            !source_side->canonical_frame.has_value()) {
+            evidence.result_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        BRepAlgoAPI_Cut cut{
+            base->shape,
+            tool->shape};
+        cut.SetFuzzyValue(0.0);
+        cut.Build();
+        if (!cut.IsDone()) {
+            evidence.result_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const TopoDS_Shape result =
+            cut.Shape();
+        if (result.IsNull()) {
+            evidence.result_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.result_shape,
+            result);
+        if (!evidence.result_shape.ok()) {
+            return evidence;
+        }
+
+        populateBodyTopologyEvidence(
+            evidence.result_topology,
+            evidence.result_shape,
+            result);
+
+        evidence.tool_surface_history =
+            historyEvidence(
+                cut,
+                source_side->face,
+                TopAbs_FACE,
+                result);
+        const auto descendants =
+            historyDescendants(
+                cut,
+                source_side->face,
+                TopAbs_FACE,
+                result);
+
+        evidence.strict_face_status =
+            referenceStatus(
+                descendants.size());
+        evidence.surface_status =
+            surfaceStatusFromSingleCarrierLineage(
+                descendants.size());
+        evidence.current_face_realization_count =
+            descendants.size();
+        evidence.semantic_surface_kind =
+            source_side->semantic_kind;
+        evidence.provenance =
+            source_side->provenance;
+        evidence.canonical_frame =
+            source_side->canonical_frame;
+
+        if (descendants.size() == 1U) {
+            evidence.provider_surface_kind =
+                faceGeometryDiagnostics(
+                    TopoDS::Face(
+                        descendants.front()))
+                    .surface_kind;
+        }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.result_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.result_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
 kernel::FullRevolveEvidence
 buildProfileFullRevolveEvidence(
     const kernel::PlanarProfileInput& input,
@@ -2042,6 +2829,10 @@ buildFaceMergeHistoryEvidence(
         }
 
         populateShapeEvidence(
+            evidence.shape,
+            result);
+        populateBodyTopologyEvidence(
+            evidence.topology,
             evidence.shape,
             result);
 
