@@ -27,6 +27,7 @@ class QPushButton;
 class QStackedWidget;
 class QString;
 class QTreeWidget;
+class QTimer;
 class QWidget;
 
 namespace simplesolid2::kernel {
@@ -183,11 +184,14 @@ private:
     [[nodiscard]] bool finishExtrude();
     void clearExtrudeRuntimeContext();
     void refreshExtrudePreview();
+    void scheduleExtrudePreview();
+    void flushExtrudePreview();
     void syncExtrudeUi();
     [[nodiscard]] bool setExtrudeDistance(
         core::LengthValue distance,
         std::optional<std::string_view> display_text =
-            std::nullopt);
+            std::nullopt,
+        bool refresh_now = true);
     [[nodiscard]] application::CadInputSubmitResult
     submitExtrudeCadInput(std::string_view text);
 
@@ -450,6 +454,7 @@ private:
     QPushButton* extrude_midplane_button_{};
     QPushButton* extrude_reverse_button_{};
     QLineEdit* extrude_distance_edit_{};
+    QTimer* extrude_preview_timer_{};
     QLabel* extrude_result_label_{};
     QPushButton* extrude_finish_button_{};
     QPushButton* extrude_cancel_button_{};

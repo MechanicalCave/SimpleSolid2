@@ -89,6 +89,33 @@ Selecting a Feature in Tree should improve identification in the viewport, but i
 
 Do not add provider topology picking or a speculative per-feature persistent geometry model merely to implement highlight.
 
+## H4 — post-H1/H2/H3 refinement from Owner re-test
+
+Owner re-test on the merged H1/H2/H3 candidate found four remaining presentation/interaction defects:
+
+- typed Extrude Distance blocks on synchronous full candidate evaluation plus tessellation;
+- full-body translucent preview is semantically too broad: committed Body should stay in its normal opaque presentation while only the current Extrude tool volume is preview-colored/translucent;
+- denser tessellation does not solve curved shading because the current Viewer reconstructs every neutral triangle as an independent planar BRep face; cylindrical continuity therefore remains flat-shaded and the denser mesh only adds cost;
+- Tree warning state is derived correctly but its evaluation snapshot is stale until a later full refresh such as Save.
+
+### H4a — responsiveness + live diagnostics
+
+- debounce only the expensive preview evaluation/tessellation triggered by QLineEdit typing;
+- mutate the runtime Extrude draft immediately and invalidate stale Finish evidence immediately;
+- Enter/Finish must flush the current debounced preview before commit;
+- recompute Tree evaluation when authored DocumentRevision changes through Sketch interaction, not on selection-only runtime changes;
+- add native warning icons for Invalid Profile, Failed/Blocked Feature and unavailable Body;
+- no authored semantics or persistence changes.
+
+### H4b — operation preview + smooth shading
+
+- keep committed Body visible with normal opaque/default presentation during preview;
+- preview only the current Extrude tool volume, colored by Add/Cut;
+- final candidate Body evaluation still remains authoritative for Finish validity;
+- restore the pre-H2 display tessellation density after smooth shading is implemented;
+- render neutral solid triangles with smoothing continuity rather than rebuilding every triangle as an independent planar BRep face;
+- preserve sharp edges by smoothing only within compatible local normal groups; do not alter modeled geometry, tolerances or topology identity.
+
 ## Verification sequence
 
 1. H1 focused kernel/core regressions.

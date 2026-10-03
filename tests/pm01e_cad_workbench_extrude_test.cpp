@@ -7,11 +7,13 @@
 
 #include <QApplication>
 #include <QComboBox>
+#include <QEventLoop>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
+#include <QTimer>
 #include <QWidget>
 
 #include <cstdlib>
@@ -23,6 +25,15 @@
 using namespace simplesolid2;
 
 namespace {
+
+void waitForPreviewDebounce() {
+    QEventLoop loop;
+    QTimer::singleShot(
+        130,
+        &loop,
+        &QEventLoop::quit);
+    loop.exec();
+}
 
 void check(bool value, const char* expression, int line) {
     if (!value) {
@@ -466,6 +477,10 @@ int main(int argc, char* argv[]) {
         QStringLiteral("10")));
     distance->setText(
         QStringLiteral("12 mm"));
+    // Typing updates the draft immediately but expensive Body evaluation /
+    // tessellation is debounced so the edit control remains responsive.
+    CHECK(!finish->isEnabled());
+    waitForPreviewDebounce();
     CHECK(finish->isEnabled());
     finish->click();
 
