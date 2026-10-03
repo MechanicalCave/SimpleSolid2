@@ -117,17 +117,19 @@ Fixture makeFixture() {
         {},
         std::move(document)};
 
-    const auto sketch =
+    const auto sketch_created =
         session.execute(
             application::CreatePartSketchCommand{
                 core::BuiltinReferenceRole::
                     xy_plane});
-    CHECK(sketch.ok() && sketch.sketch_id);
+    CHECK(
+        sketch_created.ok() &&
+        sketch_created.sketch_id);
 
     const auto rectangle =
         session.execute(
             application::AddSketchRectangleCommand{
-                *sketch.sketch_id,
+                *sketch_created.sketch_id,
                 session.document().revision(),
                 {0.0, 0.0},
                 {40.0, 30.0},
@@ -137,7 +139,7 @@ Fixture makeFixture() {
 
     const auto* source =
         session.document().findSketch(
-            *sketch.sketch_id);
+            *sketch_created.sketch_id);
     CHECK(source != nullptr);
     const auto analysis =
         sketch::analyzeRegions(
@@ -152,7 +154,7 @@ Fixture makeFixture() {
     const auto profile =
         session.execute(
             application::CreateProfileCommand{
-                *sketch.sketch_id,
+                *sketch_created.sketch_id,
                 session.document().revision(),
                 *intent});
     CHECK(profile.ok() && profile.profile_id);

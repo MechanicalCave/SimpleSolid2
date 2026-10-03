@@ -37,6 +37,9 @@ public:
 class FakeKernel final
     : public kernel::ISolidModelingKernel {
 public:
+    bool saw_reverse{false};
+    bool saw_midplane{false};
+
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
         kernel::RuntimeSolidHandle upstream) noexcept override {
@@ -54,6 +57,27 @@ public:
                 kernel::SolidModelingStatus::
                     missing_upstream;
             return result;
+        }
+
+        if (input.start_offset_mm < 0.0 &&
+            input.end_offset_mm == 0.0 &&
+            input.start_cap_role ==
+                kernel::ExtrudeCapRole::
+                    extent_cap &&
+            input.end_cap_role ==
+                kernel::ExtrudeCapRole::
+                    profile_cap) {
+            saw_reverse = true;
+        }
+        if (input.start_offset_mm < 0.0 &&
+            input.end_offset_mm > 0.0 &&
+            input.start_cap_role ==
+                kernel::ExtrudeCapRole::
+                    negative_cap &&
+            input.end_cap_role ==
+                kernel::ExtrudeCapRole::
+                    positive_cap) {
+            saw_midplane = true;
         }
 
         const double span =
@@ -244,11 +268,11 @@ part::PartDocument withFeatures(
     return std::move(*restored.document);
 }
 
-part::PartFeature feature(
+part::PartFeature featureWithExtent(
     part::FeatureId id,
     part::ProfileId profile,
     part::ExtrudeOperation operation,
-    double distance,
+    part::ExtrudeExtent extent,
     bool suppressed = false) {
     return {
         id,
@@ -257,10 +281,24 @@ part::PartFeature feature(
         part::ExtrudeFeature{
             profile,
             operation,
-            part::OneSidedExtrudeExtent{
-                core::LengthValue{distance},
-                false}},
+            std::move(extent)},
     };
+}
+
+part::PartFeature feature(
+    part::FeatureId id,
+    part::ProfileId profile,
+    part::ExtrudeOperation operation,
+    double distance,
+    bool suppressed = false) {
+    return featureWithExtent(
+        id,
+        profile,
+        operation,
+        part::OneSidedExtrudeExtent{
+            core::LengthValue{distance},
+            false},
+        suppressed);
 }
 
 } // namespace
@@ -324,6 +362,74 @@ int main() {
             kernel::ReferenceStatus::resolved);
         CHECK(reference.runtime_token);
     }
+
+    // Part -> Kernel translation preserves Reverse OneSide semantics.
+    kernel.saw_reverse = false;
+    auto reversed =
+        withFeatures(
+            fixture.document,
+            {
+                featureWithExtent(
+                    id1,
+                    fixture.profile_id,
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{8.0},
+                        true}),
+            },
+            cursor);
+    const auto reversed_evaluation =
+        part::evaluatePart(
+            reversed,
+            kernel);
+    CHECK(
+        reversed_evaluation.body_status ==
+        part::BodyEvaluationStatus::
+            up_to_date);
+    CHECK(kernel.saw_reverse);
+
+    // Midplane uses total distance split equally and negative/positive caps.
+    kernel.saw_midplane = false;
+    auto centered =
+        withFeatures(
+            fixture.document,
+            {
+                featureWithExtent(
+                    id1,
+                    fixture.profile_id,
+                    part::ExtrudeOperation::add,
+                    part::MidplaneExtrudeExtent{
+                        core::LengthValue{10.0}}),
+            },
+            cursor);
+    const auto centered_evaluation =
+        part::evaluatePart(
+            centered,
+            kernel);
+    CHECK(
+        centered_evaluation.body_status ==
+        part::BodyEvaluationStatus::
+            up_to_date);
+    CHECK(kernel.saw_midplane);
+
+    bool negative_cap = false;
+    bool positive_cap = false;
+    for (const auto& face :
+         centered_evaluation.features[0]
+             .produced_faces) {
+        negative_cap =
+            negative_cap ||
+            face.address.role ==
+                part::FeatureFaceRoleKind::
+                    negative_cap;
+        positive_cap =
+            positive_cap ||
+            face.address.role ==
+                part::FeatureFaceRoleKind::
+                    positive_cap;
+    }
+    CHECK(negative_cap);
+    CHECK(positive_cap);
 
     // A first Cut is Blocked, and a later Add cannot silently restart history.
     auto blocked =
