@@ -1,6 +1,6 @@
 # PM-01 — Extrude Feature Vertical Slice: Body / Feature / Add / Cut
 
-**Status:** ACTIVE — OWNER ACCEPTED 2026-10-03  
+**Status:** COMPLETED — PASS; OWNER ACCEPTED 2026-10-03, FINAL MANUAL PASS 2026-10-03  
 **Decision class:** D2 production Work Contract with bounded D0/D1 implementation inside ADR-0014 and ADR-0015  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.5  
@@ -18,9 +18,9 @@ PM-01 proves durable Body/Feature identity, ordered evaluation, real Boolean com
 
 ## 2. Activation rule
 
-This Work Contract is ACTIVE by explicit Owner acceptance on 2026-10-03.
+This Work Contract was activated by explicit Owner acceptance on 2026-10-03 and is now COMPLETED — PASS.
 
-Production mutation is authorized only inside this contract and ADR-0014/ADR-0015. Any STOP condition still returns to the Owner.
+PM-01 production mutation is closed. Any future change to delivered PM-01 semantics requires a separately authorized Work Contract or an explicitly accepted amendment under the normal governance rules.
 
 ## 3. Scope IN
 
@@ -286,7 +286,9 @@ Bounded checkpoint evidence:
 
 PR #152 was superseded by #153 and closed without merge after its runner-side LNK1103 failure; #153 contains the lifecycle functionality and supplies the accepted green evidence.
 
-Runtime implementation is frozen for closeout. Remaining PM-01 completion obligations are documentation/Product Browser validation, a final exact-head closure gate and Owner manual Windows acceptance recorded in `work/PM-01_ACCEPTANCE_MATRIX.md`.
+Runtime implementation completed through PM-01G and manual-remediation checkpoints H1-H7. Final runtime evidence includes Windows FULL #1369 PASS on `aaab5610f8f7c6fa3036d8123849523d06dd66e1`; H7 docs/Product Browser passed Windows DOCS #1370. Owner manual Windows acceptance PASS was reported on `afecfa9884bfeb53d5d0bb84ff110b3b280cf8d2`.
+
+PM-01 completion obligations are satisfied subject only to the exact-head work/governance closure gate for this final status synchronization.
 
 PM-02 and later packages remain inactive.
 
