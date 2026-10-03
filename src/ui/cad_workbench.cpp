@@ -3887,6 +3887,12 @@ bool CadWorkbench::startExtrudeEdit(
                 "Edit Extrude requires an active Part and modeling Kernel."));
         return false;
     }
+    if (extrude_profile_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Cancel the active Extrude Profile selection before editing a Feature."));
+        return false;
+    }
     if (extrude_draft_) {
         setStatusText(
             QStringLiteral(
@@ -4036,6 +4042,7 @@ bool CadWorkbench::finishExtrude() {
 }
 
 void CadWorkbench::clearExtrudeRuntimeContext() {
+    extrude_profile_pick_active_ = false;
     extrude_draft_.reset();
     extrude_evaluation_.reset();
     extrude_distance_input_valid_ = false;
@@ -5076,6 +5083,15 @@ std::string CadWorkbench::cadInputPrompt() const {
 
 application::CadInputContextGeneration
 CadWorkbench::cadInputContextGeneration() const noexcept {
+    if (extrude_profile_pick_active_) {
+        constexpr application::CadInputContextGeneration
+            extrude_pick_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 62U};
+        return extrude_pick_namespace |
+               (extrude_profile_pick_generation_ &
+                (extrude_pick_namespace - 1U));
+    }
     if (extrude_draft_) {
         constexpr application::CadInputContextGeneration
             extrude_namespace =
@@ -5093,6 +5109,9 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
 
 std::vector<application::CadDynamicInputField>
 CadWorkbench::cadDynamicInputFields() const {
+    if (extrude_profile_pick_active_) {
+        return {};
+    }
     if (extrude_draft_) {
         return {
             application::CadDynamicInputField{
@@ -5231,6 +5250,22 @@ CadWorkbench::submitCadInput(
         return {false, "CAD input semantic context is stale."};
     }
 
+    if (extrude_profile_pick_active_) {
+        const auto keyword =
+            upperAsciiTrimmed(text);
+        if (keyword == "CANCEL" ||
+            keyword == "ESC") {
+            cancelExtrudeProfilePick();
+            return {true, {}};
+        }
+        if (keyword == "EXTRUDE") {
+            return {true, {}};
+        }
+        return {
+            false,
+            "EXTRUDE is waiting for one valid Profile selection; use Tree/viewport or CANCEL."};
+    }
+
     if (extrude_draft_) {
         auto result =
             submitExtrudeCadInput(text);
@@ -5244,12 +5279,12 @@ CadWorkbench::submitCadInput(
     }
 
     if (upperAsciiTrimmed(text) == "EXTRUDE") {
-        return startExtrudeFromSelectedProfile()
+        return startExtrudeTool()
             ? application::CadInputSubmitResult{
                   true, {}}
             : application::CadInputSubmitResult{
                   false,
-                  "EXTRUDE requires one selected valid Profile."};
+                  "EXTRUDE could not be activated."};
     }
 
     if (!sketch_interaction_controller_) {
@@ -5286,6 +5321,10 @@ CadWorkbench::submitCadInput(
     return result;
 }
 QString CadWorkbench::cadInputPromptText() const {
+    if (extrude_profile_pick_active_) {
+        return QStringLiteral(
+            "Command: EXTRUDE — Select one valid Profile · CANCEL/Esc");
+    }
     if (extrude_draft_) {
         return QStringLiteral(
             "Command: EXTRUDE — ADD/CUT · ONESIDE/MIDPLANE · REVERSE · Distance · FINISH/CANCEL");
@@ -6425,6 +6464,13 @@ bool CadWorkbench::eventFilter(
         event->type() == QEvent::KeyPress) {
         auto* key_event =
             static_cast<QKeyEvent*>(event);
+
+        if (watched == viewport_widget_ &&
+            extrude_profile_pick_active_ &&
+            key_event->key() == Qt::Key_Escape) {
+            cancelExtrudeProfilePick();
+            return true;
+        }
 
         if (watched == viewport_widget_ &&
             extrude_draft_) {
