@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/core/units.hpp>
+#include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/part_document_store.hpp>
 #include <simplesolid2/sketch/structural_edit.hpp>
@@ -175,6 +176,36 @@ struct DeleteProfileCommand final {
     core::DocumentRevision expected_revision;
 };
 
+struct CreateExtrudeFeatureCommand final {
+    part::ProfileId profile_id;
+    core::DocumentRevision expected_revision;
+    part::ExtrudeOperation operation{
+        part::ExtrudeOperation::add};
+    part::ExtrudeExtent extent;
+    std::string name;
+};
+
+struct EditExtrudeFeatureCommand final {
+    part::FeatureId feature_id;
+    core::DocumentRevision expected_revision;
+    part::ProfileId profile_id;
+    part::ExtrudeOperation operation{
+        part::ExtrudeOperation::add};
+    part::ExtrudeExtent extent;
+    std::string name;
+};
+
+struct SetFeatureSuppressedCommand final {
+    part::FeatureId feature_id;
+    core::DocumentRevision expected_revision;
+    bool suppressed{false};
+};
+
+struct DeleteFeatureCommand final {
+    part::FeatureId feature_id;
+    core::DocumentRevision expected_revision;
+};
+
 enum class DocumentSessionErrorCode {
     none,
     invalid_command,
@@ -286,6 +317,20 @@ struct CreateProfileResult final {
     }
 };
 
+struct CreateExtrudeFeatureResult final {
+    bool changed{false};
+    std::optional<part::FeatureId> feature_id;
+    std::optional<
+        part::FeatureEvaluationDiagnosticCode>
+        evaluation_diagnostic;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code ==
+               DocumentSessionErrorCode::none;
+    }
+};
+
 class DocumentSession final {
 public:
     DocumentSession(
@@ -365,6 +410,16 @@ public:
         const SetProfilePropertiesCommand& command);
     [[nodiscard]] DocumentSessionResult execute(
         const DeleteProfileCommand& command);
+    [[nodiscard]] CreateExtrudeFeatureResult execute(
+        const CreateExtrudeFeatureCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EditExtrudeFeatureCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const SetFeatureSuppressedCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const DeleteFeatureCommand& command);
     [[nodiscard]] DocumentSessionResult undo();
     [[nodiscard]] DocumentSessionResult redo();
     [[nodiscard]] DocumentSessionResult save();

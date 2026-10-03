@@ -738,7 +738,7 @@ buildExtrudeTool(
     sources.push_back(
         {
             kernel::ExtrudeFaceRole{
-                kernel::ExtrudeFaceRoleKind::cap,
+                kernel::ExtrudeGeneratedFaceRoleKind::cap,
                 input.start_cap_role,
                 std::nullopt},
             facesFromShape(
@@ -747,7 +747,7 @@ buildExtrudeTool(
     sources.push_back(
         {
             kernel::ExtrudeFaceRole{
-                kernel::ExtrudeFaceRoleKind::cap,
+                kernel::ExtrudeGeneratedFaceRoleKind::cap,
                 input.end_cap_role,
                 std::nullopt},
             facesFromShape(
@@ -787,7 +787,7 @@ buildExtrudeTool(
         sources.push_back(
             {
                 kernel::ExtrudeFaceRole{
-                    kernel::ExtrudeFaceRoleKind::side,
+                    kernel::ExtrudeGeneratedFaceRoleKind::side,
                     std::nullopt,
                     source.provenance},
                 std::move(faces),

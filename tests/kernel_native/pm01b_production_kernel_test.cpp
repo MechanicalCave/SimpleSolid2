@@ -135,7 +135,7 @@ const kernel::NewFaceLineage* cap(
     kernel::ExtrudeCapRole role) {
     for (const auto& face : result.new_faces) {
         if (face.role.kind ==
-                kernel::ExtrudeFaceRoleKind::cap &&
+                kernel::ExtrudeGeneratedFaceRoleKind::cap &&
             face.role.cap_role == role) {
             return &face;
         }
@@ -148,7 +148,7 @@ std::size_t resolvedSides(
     std::size_t count = 0U;
     for (const auto& face : result.new_faces) {
         if (face.role.kind ==
-                kernel::ExtrudeFaceRoleKind::side &&
+                kernel::ExtrudeGeneratedFaceRoleKind::side &&
             face.status ==
                 kernel::ReferenceStatus::resolved &&
             face.resolved_token.has_value()) {
