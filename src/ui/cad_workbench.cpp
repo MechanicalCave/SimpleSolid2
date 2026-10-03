@@ -7625,10 +7625,12 @@ void CadWorkbench::syncActionState() {
     apply_button_->setEnabled(active);
     undo_button_->setEnabled(
         active &&
+        !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         document_session->canUndo());
     redo_button_->setEnabled(
         active &&
+        !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         document_session->canRedo());
     // Save remains available for a clean active Document so an explicit
@@ -7652,6 +7654,7 @@ void CadWorkbench::syncActionState() {
         active &&
         !editing_sketch &&
         !sketch_support_pick_active_ &&
+        !extrude_profile_pick_active_ &&
         !extrude_draft_);
 
     if (extrude_button_ != nullptr) {
@@ -7662,8 +7665,10 @@ void CadWorkbench::syncActionState() {
             !editing_sketch &&
             !sketch_support_pick_active_ &&
             !extrude_draft_ &&
-            selected_profile_id_.has_value() &&
             solid_modeling_kernel_ != nullptr);
+        extrude_button_->setChecked(
+            extrude_profile_pick_active_ ||
+            extrude_draft_.has_value());
     }
 
     select_sketch_button_->setVisible(
