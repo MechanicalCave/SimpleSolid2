@@ -731,11 +731,28 @@ int main(int argc, char* argv[]) {
     auto* root = tree->topLevelItem(0);
     CHECK(root != nullptr);
     CHECK(root->text(0) == QStringLiteral("Drive Shaft"));
-    CHECK(root->childCount() == 1);
+    CHECK(root->childCount() == 2);
 
-    auto* origin = root->child(0);
+    QTreeWidgetItem* origin = nullptr;
+    QTreeWidgetItem* body = nullptr;
+    for (int index = 0;
+         index < root->childCount();
+         ++index) {
+        auto* item = root->child(index);
+        if (item == nullptr) continue;
+        if (item->text(0).startsWith(
+                QStringLiteral("Body ["))) {
+            body = item;
+        } else if (
+            item->text(0) ==
+            QStringLiteral("Origin")) {
+            origin = item;
+        }
+    }
+    CHECK(body != nullptr);
+    CHECK(body->text(0) ==
+          QStringLiteral("Body [Empty]"));
     CHECK(origin != nullptr);
-    CHECK(origin->text(0) == QStringLiteral("Origin"));
     CHECK(origin->childCount() == 7);
     CHECK(tree->selectionMode() ==
           QAbstractItemView::ExtendedSelection);

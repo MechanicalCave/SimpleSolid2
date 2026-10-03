@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 class QCheckBox;
 class QComboBox;
@@ -168,6 +169,8 @@ private:
     void deleteSelectedProfile();
 
     [[nodiscard]] bool startExtrudeFromSelectedProfile();
+    [[nodiscard]] bool startExtrudeEdit(
+        part::FeatureId feature_id);
     void cancelExtrude();
     [[nodiscard]] bool finishExtrude();
     void clearExtrudeRuntimeContext();
@@ -227,6 +230,15 @@ private:
         std::optional<core::BuiltinReferenceRole> primary);
     void refreshProfileProperties(
         part::ProfileId profile_id);
+    void refreshBodyProperties(
+        part::BodyId body_id);
+    void refreshFeatureProperties(
+        part::FeatureId feature_id);
+    void refreshPartFeatureEvaluationSnapshot();
+    void navigateToProfile(
+        part::ProfileId profile_id);
+    void navigateToFeature(
+        part::FeatureId feature_id);
     void syncActionState();
     void notifyDocumentStateChanged();
     void notifyCadInputContextChanged();
@@ -244,6 +256,14 @@ private:
     void showFailure(
         const application::DocumentSessionDiagnostic& diagnostic);
     void setStatusText(const QString& message);
+
+    struct FeatureEvaluationUiState final {
+        part::FeatureId feature_id;
+        part::FeatureEvaluationStatus status{
+            part::FeatureEvaluationStatus::blocked};
+        part::FeatureEvaluationDiagnosticCode diagnostic{
+            part::FeatureEvaluationDiagnosticCode::none};
+    };
 
     application::DocumentSession* document_session_{};
     std::filesystem::path workspace_root_;
@@ -296,6 +316,8 @@ private:
     QWidget* document_properties_page_{};
     QWidget* reference_properties_page_{};
     QWidget* profile_properties_page_{};
+    QWidget* body_properties_page_{};
+    QWidget* feature_properties_page_{};
     QLabel* active_path_{};
     QLabel* active_id_{};
     QLabel* reference_name_{};
@@ -310,17 +332,46 @@ private:
     QLabel* profile_area_{};
     QLabel* profile_perimeter_{};
     QLabel* profile_holes_{};
+    QComboBox* profile_consuming_features_{};
+    QPushButton* profile_go_to_feature_button_{};
     QCheckBox* profile_visible_{};
     QPushButton* apply_profile_button_{};
     QPushButton* delete_profile_button_{};
     std::optional<part::ProfileId>
         selected_profile_id_;
+    std::optional<part::FeatureId>
+        selected_feature_id_;
+    std::optional<part::BodyId>
+        selected_body_id_;
+    std::optional<core::DocumentRevision>
+        part_evaluation_revision_;
+    std::optional<part::BodyEvaluationStatus>
+        body_evaluation_status_;
+    std::vector<FeatureEvaluationUiState>
+        feature_evaluation_statuses_;
     QLineEdit* number_{};
     QLineEdit* title_{};
     QPlainTextEdit* description_{};
     QLineEdit* engineering_revision_{};
     QComboBox* length_unit_combo_{};
     QPushButton* apply_button_{};
+
+    QLabel* body_identity_{};
+    QLabel* body_status_{};
+    QLabel* body_feature_count_{};
+
+    QLabel* feature_name_{};
+    QLabel* feature_identity_{};
+    QLabel* feature_status_{};
+    QLabel* feature_diagnostic_{};
+    QLabel* feature_operation_{};
+    QLabel* feature_extent_{};
+    QLabel* feature_distance_{};
+    QLabel* feature_direction_{};
+    QLabel* feature_source_profile_{};
+    QLabel* feature_source_sketch_{};
+    QPushButton* feature_go_to_profile_button_{};
+    QPushButton* feature_edit_button_{};
 
     QLabel* operations_placeholder_{};
     QWidget* precision_operations_widget_{};

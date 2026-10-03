@@ -6,6 +6,8 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <QApplication>
+#include <QComboBox>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTreeWidget>
@@ -16,6 +18,7 @@
 #include <iostream>
 #include <memory>
 #include <utility>
+#include <variant>
 
 using namespace simplesolid2;
 
@@ -140,7 +143,9 @@ public:
     }
     bool setProfileScene(
         const viewer::ProfileScene& scene) override {
-        return scene.valid();
+        if (!scene.valid()) return false;
+        profile_scene = scene;
+        return true;
     }
     bool setProfilePreviewScene(
         const viewer::ProfilePreviewScene& scene) override {
@@ -192,6 +197,7 @@ public:
     viewer::CameraState camera_;
     viewer::SolidScene solid_scene;
     viewer::SolidPreviewScene solid_preview;
+    viewer::ProfileScene profile_scene;
     viewer::SelectionIntentHandler selection_handler;
     viewer::SpatialPointerHandler spatial_handler;
 };
@@ -251,6 +257,25 @@ QTreeWidgetItem* findProfileItem(
     return matches.empty()
         ? nullptr
         : matches.front();
+}
+
+
+QTreeWidgetItem* findFeatureItem(
+    QTreeWidget& tree) {
+    const auto matches =
+        tree.findItems(
+            QStringLiteral("Extrude"),
+            Qt::MatchContains |
+                Qt::MatchRecursive,
+            0);
+    for (auto* item : matches) {
+        if (item != nullptr &&
+            item->text(0).contains(
+                QStringLiteral("[UpToDate]"))) {
+            return item;
+        }
+    }
+    return nullptr;
 }
 
 } // namespace
@@ -365,6 +390,110 @@ int main(int argc, char* argv[]) {
         undo_before + 1U);
     CHECK(viewport->solid_preview.empty());
     CHECK(!viewport->solid_scene.empty());
+    CHECK(viewport->profile_scene.profiles.empty());
+
+    // Feature Tree + Properties expose the durable relationship without
+    // nesting the source Profile under the Feature.
+    auto* feature_item =
+        findFeatureItem(*tree);
+    CHECK(feature_item != nullptr);
+    feature_item->setSelected(true);
+    tree->setCurrentItem(feature_item);
+
+    auto* feature_page =
+        workbench.findChild<QWidget*>(
+            QStringLiteral(
+                "featurePropertiesPage"));
+    auto* feature_id_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral(
+                "featurePropertyIdentity"));
+    auto* source_profile_label =
+        workbench.findChild<QLabel*>(
+            QStringLiteral(
+                "featurePropertySourceProfile"));
+    auto* edit_feature =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "featureEditExtrudeButton"));
+    auto* go_profile =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "featureGoToProfileButton"));
+    CHECK(
+        feature_page &&
+        feature_id_label &&
+        source_profile_label &&
+        edit_feature &&
+        go_profile);
+    CHECK(
+        feature_id_label->text() ==
+        QStringLiteral("1"));
+    CHECK(
+        source_profile_label->text() ==
+        QString::fromStdString(
+            profile_id.serialized()));
+
+    const auto feature_id_before_edit =
+        session.document().body()
+            .features.front().id;
+    const auto undo_before_edit =
+        session.undoDepth();
+    edit_feature->click();
+    CHECK(!viewport->profile_scene.profiles.empty());
+    CHECK(distance->text().contains(
+        QStringLiteral("10")));
+    distance->setText(
+        QStringLiteral("12 mm"));
+    CHECK(finish->isEnabled());
+    finish->click();
+
+    CHECK(
+        session.document().body()
+            .features.front().id ==
+        feature_id_before_edit);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_edit + 1U);
+    const auto* edited_extrude =
+        std::get_if<part::ExtrudeFeature>(
+            &session.document().body()
+                 .features.front()
+                 .definition);
+    CHECK(edited_extrude != nullptr);
+    const auto* edited_extent =
+        std::get_if<
+            part::OneSidedExtrudeExtent>(
+            &edited_extrude->extent);
+    CHECK(edited_extent != nullptr);
+    CHECK(
+        edited_extent->distance.millimetres ==
+        12.0);
+    CHECK(viewport->profile_scene.profiles.empty());
+
+    // Bidirectional relationship navigation: Feature -> Profile -> Feature.
+    feature_item =
+        findFeatureItem(*tree);
+    CHECK(feature_item != nullptr);
+    feature_item->setSelected(true);
+    tree->setCurrentItem(feature_item);
+    go_profile->click();
+
+    auto* consuming =
+        workbench.findChild<QComboBox*>(
+            QStringLiteral(
+                "profileConsumingFeaturesCombo"));
+    auto* go_feature =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "profileGoToFeatureButton"));
+    CHECK(consuming && go_feature);
+    CHECK(consuming->count() == 1);
+    CHECK(go_feature->isEnabled());
+    go_feature->click();
+    CHECK(
+        feature_id_label->text() ==
+        QStringLiteral("1"));
 
     // Command Line enters the same draft API and CANCEL remains non-authoring.
     profile_item =

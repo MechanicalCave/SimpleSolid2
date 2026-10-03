@@ -74,11 +74,23 @@ QTreeWidgetItem* findOriginReference(
     }
 
     auto* root = tree.topLevelItem(0);
-    if (root == nullptr || root->childCount() != 1) {
+    if (root == nullptr) {
         return nullptr;
     }
 
-    auto* origin = root->child(0);
+    QTreeWidgetItem* origin = nullptr;
+    for (int index = 0;
+         index < root->childCount();
+         ++index) {
+        auto* candidate =
+            root->child(index);
+        if (candidate != nullptr &&
+            candidate->text(0) ==
+                QStringLiteral("Origin")) {
+            origin = candidate;
+            break;
+        }
+    }
     if (origin == nullptr) return nullptr;
 
     for (int index = 0;
