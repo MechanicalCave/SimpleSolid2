@@ -732,6 +732,14 @@ void PartDocumentTreeController::rebuild(
                     session_->document()
                         .body().features.size())));
 
+    {
+        auto body_font = body->font(0);
+        body_font.setBold(
+            body_status_ ==
+            part::BodyEvaluationStatus::unavailable);
+        body->setFont(0, body_font);
+    }
+
     if (preserve_reference_selection &&
         previously_selected_body &&
         *previously_selected_body ==
@@ -827,6 +835,11 @@ void PartDocumentTreeController::rebuild(
 
         auto font = item->font(0);
         font.setItalic(feature.suppressed);
+        font.setBold(
+            status ==
+                part::FeatureEvaluationStatus::failed ||
+            status ==
+                part::FeatureEvaluationStatus::blocked);
         item->setFont(0, font);
 
         if (preserve_reference_selection) {
@@ -977,6 +990,7 @@ void PartDocumentTreeController::rebuild(
                     !session_->document()
                          .profilePresentationVisible(
                              profile.id));
+                profile_font.setBold(!valid);
                 profile_item->setFont(
                     0,
                     profile_font);
@@ -1015,6 +1029,12 @@ void PartDocumentTreeController::rebuild(
 
         sketches->setExpanded(true);
     }
+
+    // Source authoring appears before derived modeling history.
+    // Body remains a direct child of Part, but is positioned after Origin
+    // and Sketches so the Tree reads from inputs to modeled result.
+    root->removeChild(body);
+    root->addChild(body);
 
     root->setExpanded(true);
     origin->setExpanded(true);
