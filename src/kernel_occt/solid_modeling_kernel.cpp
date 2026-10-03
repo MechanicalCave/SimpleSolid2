@@ -118,6 +118,25 @@ constexpr double full_turn =
     return delta;
 }
 
+[[nodiscard]] double arcDelta(
+    const kernel::Arc2& curve,
+    const kernel::BoundaryUse2D& use) noexcept {
+    const double from =
+        use.follows_source_direction
+            ? use.start_parameter
+            : use.end_parameter;
+    const double to =
+        use.follows_source_direction
+            ? use.end_parameter
+            : use.start_parameter;
+    double delta =
+        curve.sweep_angle * (to - from);
+    if (!use.follows_source_direction) {
+        delta = -delta;
+    }
+    return delta;
+}
+
 [[nodiscard]] std::optional<TopoDS_Edge>
 circularEdge(
     const gp_Circ& circle,
@@ -220,17 +239,10 @@ buildEdge(
                     curve.start_angle +
                     curve.sweep_angle *
                         use.start_parameter;
-                double delta =
-                    curve.sweep_angle *
-                    (use.end_parameter -
-                     use.start_parameter);
-                if (!use.follows_source_direction) {
-                    delta = -delta;
-                }
                 return circularEdge(
                     circle,
                     start_angle,
-                    delta,
+                    arcDelta(curve, use),
                     false);
             }
         },
