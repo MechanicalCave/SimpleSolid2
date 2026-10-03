@@ -339,7 +339,9 @@ struct SurfaceBooleanLineageEvidence final {
 struct SurfaceDeleteRecreateEvidence final {
     ShapeEvidence before_shape;
     ShapeEvidence after_delete_shape;
+    BodyTopologyInventoryEvidence after_delete_topology;
     ShapeEvidence after_recreate_shape;
+    BodyTopologyInventoryEvidence after_recreate_topology;
     BooleanSubshapeHistoryEvidence delete_history;
     ReferenceStatus old_surface_after_delete{
         ReferenceStatus::unsupported};
@@ -357,8 +359,10 @@ struct SurfaceDeleteRecreateEvidence final {
                before_shape.solid_count == 1U &&
                after_delete_shape.ok() &&
                after_delete_shape.solid_count == 1U &&
+               after_delete_topology.complete() &&
                after_recreate_shape.ok() &&
-               after_recreate_shape.solid_count == 1U;
+               after_recreate_shape.solid_count == 1U &&
+               after_recreate_topology.complete();
     }
 
     friend bool operator==(
@@ -410,13 +414,15 @@ struct EdgeSplitHistoryEvidence final {
 
 struct FaceMergeHistoryEvidence final {
     ShapeEvidence shape;
+    BodyTopologyInventoryEvidence topology;
     BooleanSubshapeHistoryEvidence first;
     BooleanSubshapeHistoryEvidence second;
     std::size_t shared_descendant_count{};
 
     [[nodiscard]] bool ok() const noexcept {
         return shape.ok() &&
-               shape.solid_count == 1U;
+               shape.solid_count == 1U &&
+               topology.complete();
     }
 
     friend bool operator==(
