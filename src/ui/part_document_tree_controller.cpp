@@ -25,6 +25,8 @@ constexpr int builtinReferenceRoleData = Qt::UserRole + 40;
 constexpr int builtinReferenceVisibleData = Qt::UserRole + 41;
 constexpr int sketchIdData = Qt::UserRole + 42;
 constexpr int profileIdData = Qt::UserRole + 43;
+constexpr int bodyIdData = Qt::UserRole + 44;
+constexpr int featureIdData = Qt::UserRole + 45;
 
 constexpr std::array<core::BuiltinReferenceRole, 7> tree_reference_order{
     core::BuiltinReferenceRole::xy_plane,
@@ -40,6 +42,68 @@ QString fromUtf8(std::string_view value) {
     return QString::fromUtf8(
         value.data(),
         static_cast<qsizetype>(value.size()));
+}
+
+
+QString featureStatusText(
+    part::FeatureEvaluationStatus status) {
+    switch (status) {
+    case part::FeatureEvaluationStatus::up_to_date:
+        return QStringLiteral("UpToDate");
+    case part::FeatureEvaluationStatus::failed:
+        return QStringLiteral("Failed");
+    case part::FeatureEvaluationStatus::blocked:
+        return QStringLiteral("Blocked");
+    case part::FeatureEvaluationStatus::suppressed:
+        return QStringLiteral("Suppressed");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString bodyStatusText(
+    part::BodyEvaluationStatus status) {
+    switch (status) {
+    case part::BodyEvaluationStatus::empty:
+        return QStringLiteral("Empty");
+    case part::BodyEvaluationStatus::up_to_date:
+        return QStringLiteral("UpToDate");
+    case part::BodyEvaluationStatus::unavailable:
+        return QStringLiteral("Unavailable");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString featureDiagnosticText(
+    part::FeatureEvaluationDiagnosticCode diagnostic) {
+    switch (diagnostic) {
+    case part::FeatureEvaluationDiagnosticCode::none:
+        return QStringLiteral("None");
+    case part::FeatureEvaluationDiagnosticCode::missing_profile:
+        return QStringLiteral("Missing Profile");
+    case part::FeatureEvaluationDiagnosticCode::unresolved_profile:
+        return QStringLiteral("Unresolved Profile");
+    case part::FeatureEvaluationDiagnosticCode::missing_upstream_body:
+        return QStringLiteral("Missing upstream Body");
+    case part::FeatureEvaluationDiagnosticCode::upstream_unavailable:
+        return QStringLiteral("Upstream unavailable");
+    case part::FeatureEvaluationDiagnosticCode::kernel_invalid_input:
+        return QStringLiteral("Kernel invalid input");
+    case part::FeatureEvaluationDiagnosticCode::kernel_provider_mismatch:
+        return QStringLiteral("Kernel provider mismatch");
+    case part::FeatureEvaluationDiagnosticCode::kernel_provider_failure:
+        return QStringLiteral("Kernel provider failure");
+    case part::FeatureEvaluationDiagnosticCode::invalid_brep:
+        return QStringLiteral("Invalid B-Rep");
+    case part::FeatureEvaluationDiagnosticCode::detached_add:
+        return QStringLiteral("Detached Add");
+    case part::FeatureEvaluationDiagnosticCode::no_effect:
+        return QStringLiteral("No effect");
+    case part::FeatureEvaluationDiagnosticCode::empty_result:
+        return QStringLiteral("Empty result");
+    case part::FeatureEvaluationDiagnosticCode::multi_solid:
+        return QStringLiteral("Multi-solid result");
+    }
+    return QStringLiteral("Unknown");
 }
 
 QString displayName(
@@ -98,6 +162,24 @@ PartDocumentTreeController::PartDocumentTreeController(
         new QAction(QStringLiteral("Edit Profile"), tree_);
     edit_profile_action_->setObjectName(
         QStringLiteral("editProfileAction"));
+
+    edit_feature_action_ =
+        new QAction(
+            QStringLiteral("Edit Extrude"),
+            tree_);
+    edit_feature_action_->setObjectName(
+        QStringLiteral("editExtrudeFeatureAction"));
+
+    QObject::connect(
+        edit_feature_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (auto* item = tree_->currentItem();
+                item != nullptr) {
+                requestFeatureEdit(*item);
+            }
+        });
 
     QObject::connect(
         edit_profile_action_,
@@ -196,6 +278,11 @@ bool PartDocumentTreeController::eventFilter(
                         mouse_event->position()
                             .toPoint());
                 item != nullptr) {
+                if (featureIdForItem(*item)) {
+                    tree_->setCurrentItem(item);
+                    requestFeatureEdit(*item);
+                    return true;
+                }
                 if (profileIdForItem(*item)) {
                     tree_->setCurrentItem(item);
                     requestProfileEdit(*item);
@@ -224,6 +311,9 @@ void PartDocumentTreeController::setDocumentSession(
 
 void PartDocumentTreeController::clear() {
     session_ = nullptr;
+    feature_evaluations_.clear();
+    body_status_ =
+        part::BodyEvaluationStatus::empty;
     tree_->clear();
     updateVisibilityActions();
 }
@@ -288,6 +378,51 @@ PartDocumentTreeController::primaryProfileId() const {
     return selected.empty()
         ? std::nullopt
         : std::optional<part::ProfileId>{selected.front()};
+}
+
+
+std::vector<part::FeatureId>
+PartDocumentTreeController::selectedFeatureIds() const {
+    std::vector<part::FeatureId> ids;
+    for (const auto* item : tree_->selectedItems()) {
+        if (item == nullptr) continue;
+        if (const auto id = featureIdForItem(*item)) {
+            ids.push_back(*id);
+        }
+    }
+    return ids;
+}
+
+std::optional<part::FeatureId>
+PartDocumentTreeController::primaryFeatureId() const {
+    const auto* current = tree_->currentItem();
+    if (current != nullptr && current->isSelected()) {
+        if (const auto id = featureIdForItem(*current)) {
+            return id;
+        }
+    }
+    const auto selected = selectedFeatureIds();
+    return selected.empty()
+        ? std::nullopt
+        : std::optional<part::FeatureId>{
+              selected.front()};
+}
+
+std::optional<part::BodyId>
+PartDocumentTreeController::selectedBodyId() const {
+    const auto* current = tree_->currentItem();
+    if (current != nullptr && current->isSelected()) {
+        if (const auto id = bodyIdForItem(*current)) {
+            return id;
+        }
+    }
+    for (const auto* item : tree_->selectedItems()) {
+        if (item == nullptr) continue;
+        if (const auto id = bodyIdForItem(*item)) {
+            return id;
+        }
+    }
+    return std::nullopt;
 }
 
 void PartDocumentTreeController::setBuiltinReferenceSelection(
@@ -395,6 +530,72 @@ void PartDocumentTreeController::setProfileSelection(
     updateVisibilityActions();
 }
 
+
+void PartDocumentTreeController::setFeatureSelection(
+    const std::vector<part::FeatureId>& selected,
+    std::optional<part::FeatureId> primary) {
+    const QSignalBlocker blocked{tree_};
+
+    QTreeWidgetItem* first_selected = nullptr;
+    QTreeWidgetItem* primary_item = nullptr;
+
+    const auto visit =
+        [&](auto&& self, QTreeWidgetItem* item) -> void {
+            if (item == nullptr) return;
+            if (const auto id = featureIdForItem(*item)) {
+                const bool should_select =
+                    std::find(
+                        selected.begin(),
+                        selected.end(),
+                        *id) != selected.end();
+                item->setSelected(should_select);
+                if (should_select &&
+                    first_selected == nullptr) {
+                    first_selected = item;
+                }
+                if (should_select &&
+                    primary &&
+                    *primary == *id) {
+                    primary_item = item;
+                }
+            }
+            for (int index = 0;
+                 index < item->childCount();
+                 ++index) {
+                self(self, item->child(index));
+            }
+        };
+
+    for (int index = 0;
+         index < tree_->topLevelItemCount();
+         ++index) {
+        visit(visit, tree_->topLevelItem(index));
+    }
+
+    if (primary_item != nullptr) {
+        tree_->setCurrentItem(
+            primary_item,
+            0,
+            QItemSelectionModel::NoUpdate);
+    } else if (first_selected != nullptr) {
+        tree_->setCurrentItem(
+            first_selected,
+            0,
+            QItemSelectionModel::NoUpdate);
+    }
+    updateVisibilityActions();
+}
+
+void PartDocumentTreeController::setEvaluationSnapshot(
+    part::BodyEvaluationStatus body_status,
+    std::vector<FeatureTreeEvaluationEntry>
+        feature_evaluations) {
+    body_status_ = body_status;
+    feature_evaluations_ =
+        std::move(feature_evaluations);
+    rebuild(true);
+}
+
 bool PartDocumentTreeController::
 selectionContainsOnlyBuiltinReferences() const {
     const auto selected = tree_->selectedItems();
@@ -416,12 +617,20 @@ void PartDocumentTreeController::rebuild(
         previously_selected;
     std::vector<part::ProfileId>
         previously_selected_profiles;
+    std::vector<part::FeatureId>
+        previously_selected_features;
+    std::optional<part::BodyId>
+        previously_selected_body;
 
     if (preserve_reference_selection) {
         previously_selected =
             selectedBuiltinReferences();
         previously_selected_profiles =
             selectedProfileIds();
+        previously_selected_features =
+            selectedFeatureIds();
+        previously_selected_body =
+            selectedBodyId();
     }
 
     tree_->clear();
@@ -434,6 +643,145 @@ void PartDocumentTreeController::rebuild(
     auto* root = new QTreeWidgetItem(
         tree_,
         QStringList{displayName(*session_)});
+
+
+    auto* body = new QTreeWidgetItem(
+        root,
+        QStringList{
+            QStringLiteral("Body [%1]")
+                .arg(bodyStatusText(
+                    body_status_))});
+    body->setData(
+        0,
+        bodyIdData,
+        fromUtf8(
+            session_->document()
+                .body().id.serialized()));
+    body->setToolTip(
+        0,
+        QStringLiteral("BodyId: ") +
+            fromUtf8(
+                session_->document()
+                    .body().id.serialized()) +
+            QStringLiteral("\nStatus: ") +
+            bodyStatusText(body_status_) +
+            QStringLiteral("\nOrdered Features: ") +
+            QString::number(
+                static_cast<qulonglong>(
+                    session_->document()
+                        .body().features.size())));
+
+    if (preserve_reference_selection &&
+        previously_selected_body &&
+        *previously_selected_body ==
+            session_->document().body().id) {
+        body->setSelected(true);
+    }
+
+    std::size_t feature_index = 0U;
+    for (const auto& feature :
+         session_->document().body().features) {
+        ++feature_index;
+        const auto* extrude =
+            std::get_if<part::ExtrudeFeature>(
+                &feature.definition);
+        if (extrude == nullptr) {
+            continue;
+        }
+
+        const auto evaluation =
+            std::find_if(
+                feature_evaluations_.begin(),
+                feature_evaluations_.end(),
+                [&feature](
+                    const FeatureTreeEvaluationEntry&
+                        entry) {
+                    return entry.feature_id ==
+                           feature.id;
+                });
+
+        const auto status =
+            evaluation !=
+                    feature_evaluations_.end()
+                ? evaluation->status
+                : (feature.suppressed
+                       ? part::FeatureEvaluationStatus::
+                             suppressed
+                       : part::FeatureEvaluationStatus::
+                             blocked);
+        const auto diagnostic =
+            evaluation !=
+                    feature_evaluations_.end()
+                ? evaluation->diagnostic
+                : part::FeatureEvaluationDiagnosticCode::
+                      none;
+
+        QString label =
+            feature.name.empty()
+                ? QStringLiteral("Extrude %1")
+                      .arg(
+                          static_cast<qulonglong>(
+                              feature_index))
+                : fromUtf8(feature.name);
+        label += extrude->operation ==
+                         part::ExtrudeOperation::cut
+                     ? QStringLiteral(" — Cut")
+                     : QStringLiteral(" — Add");
+        label += QStringLiteral(" [%1]")
+                     .arg(
+                         featureStatusText(status));
+
+        auto* item = new QTreeWidgetItem(
+            body,
+            QStringList{label});
+        item->setData(
+            0,
+            featureIdData,
+            fromUtf8(
+                feature.id.serialized()));
+
+        const auto* profile =
+            session_->document().findProfile(
+                extrude->profile_id);
+        item->setToolTip(
+            0,
+            QStringLiteral("FeatureId: ") +
+                fromUtf8(
+                    feature.id.serialized()) +
+                QStringLiteral("\nSource ProfileId: ") +
+                fromUtf8(
+                    extrude->profile_id
+                        .serialized()) +
+                QStringLiteral("\nSource SketchId: ") +
+                (profile != nullptr
+                     ? fromUtf8(
+                           profile->source_sketch_id
+                               .value())
+                     : QStringLiteral("<missing>")) +
+                QStringLiteral("\nStatus: ") +
+                featureStatusText(status) +
+                QStringLiteral("\nDiagnostic: ") +
+                featureDiagnosticText(
+                    diagnostic));
+
+        auto font = item->font(0);
+        font.setItalic(feature.suppressed);
+        item->setFont(0, font);
+
+        if (preserve_reference_selection) {
+            const bool was_selected =
+                std::find(
+                    previously_selected_features
+                        .begin(),
+                    previously_selected_features
+                        .end(),
+                    feature.id) !=
+                previously_selected_features
+                    .end();
+            item->setSelected(was_selected);
+        }
+    }
+    body->setExpanded(true);
 
     auto* origin = new QTreeWidgetItem(
         root,
@@ -647,6 +995,15 @@ void PartDocumentTreeController::showContextMenu(
 
     if (auto* item = tree_->itemAt(position);
         item != nullptr) {
+        if (featureIdForItem(*item)) {
+            tree_->setCurrentItem(item);
+            QMenu menu{tree_};
+            menu.addAction(edit_feature_action_);
+            menu.exec(
+                tree_->viewport()->mapToGlobal(
+                    position));
+            return;
+        }
         if (profileIdForItem(*item)) {
             tree_->setCurrentItem(item);
             QMenu menu{tree_};
@@ -727,6 +1084,18 @@ void PartDocumentTreeController::requestProfileEdit(
     profile_edit_handler_(*profile_id);
 }
 
+
+void PartDocumentTreeController::requestFeatureEdit(
+    const QTreeWidgetItem& item) {
+    const auto feature_id =
+        featureIdForItem(item);
+    if (!feature_id ||
+        !feature_edit_handler_) {
+        return;
+    }
+    feature_edit_handler_(*feature_id);
+}
+
 void PartDocumentTreeController::notifySelectionChanged() {
     if (selection_handler_) {
         selection_handler_(
@@ -737,6 +1106,15 @@ void PartDocumentTreeController::notifySelectionChanged() {
         profile_selection_handler_(
             selectedProfileIds(),
             primaryProfileId());
+    }
+    if (feature_selection_handler_) {
+        feature_selection_handler_(
+            selectedFeatureIds(),
+            primaryFeatureId());
+    }
+    if (body_selection_handler_) {
+        body_selection_handler_(
+            selectedBodyId());
     }
 }
 
@@ -814,6 +1192,41 @@ PartDocumentTreeController::profileIdForItem(
     const auto bytes =
         value.toString().toUtf8();
     return part::ProfileId::parse(
+        std::string_view{
+            bytes.constData(),
+            static_cast<std::size_t>(
+                bytes.size())});
+}
+
+
+std::optional<part::FeatureId>
+PartDocumentTreeController::featureIdForItem(
+    const QTreeWidgetItem& item) {
+    const auto value =
+        item.data(0, featureIdData);
+    if (!value.isValid()) {
+        return std::nullopt;
+    }
+    const auto bytes =
+        value.toString().toUtf8();
+    return part::FeatureId::parse(
+        std::string_view{
+            bytes.constData(),
+            static_cast<std::size_t>(
+                bytes.size())});
+}
+
+std::optional<part::BodyId>
+PartDocumentTreeController::bodyIdForItem(
+    const QTreeWidgetItem& item) {
+    const auto value =
+        item.data(0, bodyIdData);
+    if (!value.isValid()) {
+        return std::nullopt;
+    }
+    const auto bytes =
+        value.toString().toUtf8();
+    return part::BodyId::parse(
         std::string_view{
             bytes.constData(),
             static_cast<std::size_t>(

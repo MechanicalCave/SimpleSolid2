@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/part/feature_evaluation.hpp>
 
 #include <QObject>
 
@@ -16,6 +17,14 @@ class QTreeWidget;
 class QTreeWidgetItem;
 
 namespace simplesolid2::ui {
+
+struct FeatureTreeEvaluationEntry final {
+    part::FeatureId feature_id;
+    part::FeatureEvaluationStatus status{
+        part::FeatureEvaluationStatus::blocked};
+    part::FeatureEvaluationDiagnosticCode diagnostic{
+        part::FeatureEvaluationDiagnosticCode::none};
+};
 
 class PartDocumentTreeController final : public QObject {
 public:
@@ -35,6 +44,15 @@ public:
             std::optional<part::ProfileId>)>;
     using ProfileEditHandler =
         std::function<void(part::ProfileId)>;
+    using FeatureSelectionHandler =
+        std::function<void(
+            const std::vector<part::FeatureId>&,
+            std::optional<part::FeatureId>)>;
+    using FeatureEditHandler =
+        std::function<void(part::FeatureId)>;
+    using BodySelectionHandler =
+        std::function<void(
+            std::optional<part::BodyId>)>;
 
     PartDocumentTreeController(
         QTreeWidget& tree,
@@ -60,6 +78,15 @@ public:
         const std::vector<part::ProfileId>& selected,
         std::optional<part::ProfileId> primary);
 
+    void setFeatureSelection(
+        const std::vector<part::FeatureId>& selected,
+        std::optional<part::FeatureId> primary);
+
+    void setEvaluationSnapshot(
+        part::BodyEvaluationStatus body_status,
+        std::vector<FeatureTreeEvaluationEntry>
+            feature_evaluations);
+
     void setSketchEditHandler(SketchEditHandler handler) {
         sketch_edit_handler_ = std::move(handler);
     }
@@ -73,6 +100,21 @@ public:
         profile_edit_handler_ =
             std::move(handler);
     }
+    void setFeatureSelectionHandler(
+        FeatureSelectionHandler handler) {
+        feature_selection_handler_ =
+            std::move(handler);
+    }
+    void setFeatureEditHandler(
+        FeatureEditHandler handler) {
+        feature_edit_handler_ =
+            std::move(handler);
+    }
+    void setBodySelectionHandler(
+        BodySelectionHandler handler) {
+        body_selection_handler_ =
+            std::move(handler);
+    }
 
     [[nodiscard]] std::vector<core::BuiltinReferenceRole>
     selectedBuiltinReferences() const;
@@ -83,6 +125,12 @@ public:
     selectedProfileIds() const;
     [[nodiscard]] std::optional<part::ProfileId>
     primaryProfileId() const;
+    [[nodiscard]] std::vector<part::FeatureId>
+    selectedFeatureIds() const;
+    [[nodiscard]] std::optional<part::FeatureId>
+    primaryFeatureId() const;
+    [[nodiscard]] std::optional<part::BodyId>
+    selectedBodyId() const;
 
 protected:
     bool eventFilter(
@@ -96,6 +144,7 @@ private:
     void applySelectedVisibility(bool visible);
     void requestSketchEdit(const QTreeWidgetItem& item);
     void requestProfileEdit(const QTreeWidgetItem& item);
+    void requestFeatureEdit(const QTreeWidgetItem& item);
     void notifySelectionChanged();
 
     [[nodiscard]] bool selectionContainsOnlyBuiltinReferences() const;
@@ -107,6 +156,10 @@ private:
     sketchIdForItem(const QTreeWidgetItem& item);
     [[nodiscard]] static std::optional<part::ProfileId>
     profileIdForItem(const QTreeWidgetItem& item);
+    [[nodiscard]] static std::optional<part::FeatureId>
+    featureIdForItem(const QTreeWidgetItem& item);
+    [[nodiscard]] static std::optional<part::BodyId>
+    bodyIdForItem(const QTreeWidgetItem& item);
 
     QTreeWidget* tree_{};
     application::DocumentSession* session_{};
@@ -114,11 +167,19 @@ private:
     QAction* hide_action_{};
     QAction* edit_sketch_action_{};
     QAction* edit_profile_action_{};
+    QAction* edit_feature_action_{};
     ResultHandler result_handler_;
     SelectionHandler selection_handler_;
     SketchEditHandler sketch_edit_handler_;
     ProfileSelectionHandler profile_selection_handler_;
     ProfileEditHandler profile_edit_handler_;
+    FeatureSelectionHandler feature_selection_handler_;
+    FeatureEditHandler feature_edit_handler_;
+    BodySelectionHandler body_selection_handler_;
+    part::BodyEvaluationStatus body_status_{
+        part::BodyEvaluationStatus::empty};
+    std::vector<FeatureTreeEvaluationEntry>
+        feature_evaluations_;
 };
 
 } // namespace simplesolid2::ui
