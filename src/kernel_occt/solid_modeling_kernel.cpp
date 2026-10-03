@@ -1058,15 +1058,23 @@ presentationMeshForShape(
             return result;
         }
 
-        for (TopExp_Explorer explorer{
+        for (TopExp_Explorer solid_explorer{
                  shape,
-                 TopAbs_FACE};
-             explorer.More();
-             explorer.Next()) {
-            const auto face =
-                TopoDS::Face(
-                    explorer.Current());
-            TopLoc_Location location;
+                 TopAbs_SOLID};
+             solid_explorer.More();
+             solid_explorer.Next()) {
+            const auto presentation_solid =
+                TopoDS::Solid(
+                    solid_explorer.Current());
+            for (TopExp_Explorer explorer{
+                     presentation_solid,
+                     TopAbs_FACE};
+                 explorer.More();
+                 explorer.Next()) {
+                const auto face =
+                    TopoDS::Face(
+                        explorer.Current());
+                TopLoc_Location location;
             const Handle(Poly_Triangulation)
                 triangulation =
                     BRep_Tool::Triangulation(
@@ -1178,6 +1186,7 @@ presentationMeshForShape(
                         {third_normal.X(),
                          third_normal.Y(),
                          third_normal.Z()}});
+            }
             }
         }
 
