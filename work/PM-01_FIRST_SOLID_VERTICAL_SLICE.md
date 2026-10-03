@@ -270,6 +270,26 @@ STOP and return to the Owner if implementation would require:
 - changing Foundation ownership;
 - an unplanned schema meaning that cannot be expressed within this contract.
 
+## Implementation closeout checkpoint — 2026-10-03
+
+PM-01 runtime implementation is complete through checkpoint PM-01G and merged to `main` as `84a5be5a229f881120d838609ddfdc80c2431557`.
+
+Bounded checkpoint evidence:
+
+- PM-01A / PR #144 — schema/semantic foundation — Windows FULL #1326 PASS;
+- PM-01B / PR #145 — production Extrude Boolean Kernel — Windows FULL #1327 PASS;
+- PM-01C / PR #146 — evaluator + semantic commands — Windows FULL #1330 PASS;
+- PM-01D / PR #147/#148 — final solid presentation + transient preview — Windows FULL #1331/#1332 PASS;
+- PM-01E / PR #149/#150 — revision-bound draft/Finish + Operations/Command Line — Windows FULL #1333/#1334 PASS;
+- PM-01F / PR #151 — Body/Feature Tree, Properties, relationships and Edit Extrude — Windows FULL #1336 PASS;
+- PM-01G / PR #153 — Suppress/Delete lifecycle and cold persistence — exact-head Windows FULL #1339 PASS on `7c4783525c589c9e626ba260680e3e3026827a44`.
+
+PR #152 was superseded by #153 and closed without merge after its runner-side LNK1103 failure; #153 contains the lifecycle functionality and supplies the accepted green evidence.
+
+Runtime implementation is frozen for closeout. Remaining PM-01 completion obligations are documentation/Product Browser validation, a final exact-head closure gate and Owner manual Windows acceptance recorded in `work/PM-01_ACCEPTANCE_MATRIX.md`.
+
+PM-02 and later packages remain inactive.
+
 ## Documentation impact
 
 Internal docs: required
