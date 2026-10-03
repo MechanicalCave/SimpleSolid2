@@ -1,7 +1,9 @@
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 
+#include <cmath>
 #include <cstdlib>
+#include <limits>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -40,6 +42,106 @@ kernel::BoundaryUse2D lineUse(
             0U,
             false},
     };
+}
+
+kernel::BoundaryUse2D arcUse(
+    kernel::Point2 center,
+    double radius,
+    double start_angle,
+    double sweep_angle,
+    double start_parameter,
+    double end_parameter,
+    bool follows_source_direction,
+    std::string_view source) {
+    return {
+        kernel::Arc2{
+            center,
+            radius,
+            start_angle,
+            sweep_angle},
+        start_parameter,
+        end_parameter,
+        follows_source_direction,
+        false,
+        false,
+        kernel::BoundaryUseProvenance{
+            std::string{source},
+            0U,
+            0U,
+            false},
+    };
+}
+
+kernel::PlanarProfileInput upperHalfDisk(
+    bool reverse_traversal,
+    kernel::Point3 origin = {}) {
+    constexpr double pi =
+        3.141592653589793238462643383279502884;
+    kernel::PlanarProfileInput profile;
+    profile.frame.origin = origin;
+
+    if (!reverse_traversal) {
+        profile.outer.boundary = {
+            arcUse(
+                {0.0, 0.0},
+                10.0,
+                0.0,
+                pi,
+                0.0,
+                1.0,
+                true,
+                "upper-arc"),
+            lineUse(
+                {-10.0, 0.0},
+                {10.0, 0.0},
+                "diameter"),
+        };
+    } else {
+        // The resolved Profile already carries traversal start/end in loop
+        // order. follows_source_direction only records provenance relative to
+        // the authored Arc; it must not cause a second parameter reversal.
+        profile.outer.boundary = {
+            lineUse(
+                {10.0, 0.0},
+                {-10.0, 0.0},
+                "diameter"),
+            arcUse(
+                {0.0, 0.0},
+                10.0,
+                0.0,
+                pi,
+                1.0,
+                0.0,
+                false,
+                "upper-arc"),
+        };
+    }
+
+    CHECK(profile.valid());
+    return profile;
+}
+
+struct MeshBounds final {
+    double min_y{std::numeric_limits<double>::infinity()};
+    double max_y{-std::numeric_limits<double>::infinity()};
+};
+
+MeshBounds meshBoundsY(
+    const kernel::SolidPresentationMesh& mesh) {
+    MeshBounds bounds;
+    const auto include =
+        [&bounds](const kernel::Point3& point) {
+            bounds.min_y =
+                std::min(bounds.min_y, point.y);
+            bounds.max_y =
+                std::max(bounds.max_y, point.y);
+        };
+    for (const auto& triangle : mesh.triangles) {
+        include(triangle.first);
+        include(triangle.second);
+        include(triangle.third);
+    }
+    return bounds;
 }
 
 kernel::PlanarProfileInput rectangle(
@@ -231,6 +333,45 @@ int main() {
     CHECK(holed.ok());
     CHECK(holed.solid_count == 1U);
     CHECK(resolvedSides(holed) == 5U);
+
+    // Mixed Line+Arc Profile: reversing traversal must preserve the same
+    // geometric upper semicircle instead of reflecting it to the lower side.
+    const auto arc_forward =
+        provider.extrude(
+            forward(
+                upperHalfDisk(false),
+                10.0));
+    CHECK(arc_forward.ok());
+    CHECK(arc_forward.solid_count == 1U);
+    CHECK(resolvedSides(arc_forward) == 2U);
+
+    const auto arc_reverse =
+        provider.extrude(
+            forward(
+                upperHalfDisk(true),
+                10.0));
+    CHECK(arc_reverse.ok());
+    CHECK(arc_reverse.solid_count == 1U);
+    CHECK(resolvedSides(arc_reverse) == 2U);
+
+    const auto arc_forward_mesh =
+        provider.presentationMesh(
+            arc_forward.solid);
+    const auto arc_reverse_mesh =
+        provider.presentationMesh(
+            arc_reverse.solid);
+    CHECK(arc_forward_mesh.ok());
+    CHECK(arc_reverse_mesh.ok());
+
+    const auto forward_bounds =
+        meshBoundsY(arc_forward_mesh.mesh);
+    const auto reverse_bounds =
+        meshBoundsY(arc_reverse_mesh.mesh);
+    constexpr double geometry_epsilon = 1.0e-7;
+    CHECK(forward_bounds.min_y >= -geometry_epsilon);
+    CHECK(reverse_bounds.min_y >= -geometry_epsilon);
+    CHECK(forward_bounds.max_y > 9.0);
+    CHECK(reverse_bounds.max_y > 9.0);
 
     // Attached chained Add: remains one Body; the coincident profile cap may
     // disappear into the Boolean, but no missing/merged role is promoted to
