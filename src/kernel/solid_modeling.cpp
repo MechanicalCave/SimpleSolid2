@@ -30,7 +30,9 @@ bool SolidMeshTriangle::valid() const noexcept {
     if (!finite_point(first) ||
         !finite_point(second) ||
         !finite_point(third) ||
-        !finite_point(normal)) {
+        !finite_point(first_normal) ||
+        !finite_point(second_normal) ||
+        !finite_point(third_normal)) {
         return false;
     }
 
@@ -45,14 +47,26 @@ bool SolidMeshTriangle::valid() const noexcept {
     const double cz = abx * acy - aby * acx;
     const double area2 =
         cx * cx + cy * cy + cz * cz;
-    const double normal2 =
-        normal.x * normal.x +
-        normal.y * normal.y +
-        normal.z * normal.z;
+    const auto normal2 =
+        [](const Point3& value) noexcept {
+            return value.x * value.x +
+                   value.y * value.y +
+                   value.z * value.z;
+        };
+    const double first_normal2 =
+        normal2(first_normal);
+    const double second_normal2 =
+        normal2(second_normal);
+    const double third_normal2 =
+        normal2(third_normal);
     return std::isfinite(area2) &&
-           std::isfinite(normal2) &&
+           std::isfinite(first_normal2) &&
+           std::isfinite(second_normal2) &&
+           std::isfinite(third_normal2) &&
            area2 > 0.0 &&
-           normal2 > 0.0;
+           first_normal2 > 0.0 &&
+           second_normal2 > 0.0 &&
+           third_normal2 > 0.0;
 }
 
 bool SolidPresentationMesh::valid() const noexcept {
