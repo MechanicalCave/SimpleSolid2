@@ -47,6 +47,24 @@ part::PartSketch* findSketch(
         : &*found;
 }
 
+part::PartFeature* findFeature(
+    part::PartAuthoredState& state,
+    part::FeatureId id) noexcept {
+    if (!id.valid()) {
+        return nullptr;
+    }
+    const auto found =
+        std::find_if(
+            state.body.features.begin(),
+            state.body.features.end(),
+            [id](const part::PartFeature& item) {
+                return item.id == id;
+            });
+    return found == state.body.features.end()
+        ? nullptr
+        : &*found;
+}
+
 part::PartProfile* findProfile(
     part::PartAuthoredState& state,
     part::ProfileId id) noexcept {
@@ -62,6 +80,19 @@ part::PartProfile* findProfile(
     return found == state.profiles.end()
         ? nullptr
         : &*found;
+}
+
+std::string defaultFeatureName(
+    part::FeatureId id) {
+    const auto serialized = id.serialized();
+    std::string result{"Extrude"};
+    if (serialized.size() < 3U) {
+        result.append(
+            3U - serialized.size(),
+            '0');
+    }
+    result += serialized;
+    return result;
 }
 
 std::string defaultProfileName(
@@ -1554,6 +1585,292 @@ DocumentSessionResult DocumentSession::execute(
     return commitCommandState(
         std::move(after),
         "Part transaction failed while deleting Profile");
+}
+
+CreateExtrudeFeatureResult DocumentSession::execute(
+    const CreateExtrudeFeatureCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    revision_diverged,
+                "Create Extrude was started from a stale DocumentRevision",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const part::ExtrudeFeature definition{
+        command.profile_id,
+        command.operation,
+        command.extent};
+    if (!part::extrudeFeatureStructurallyValid(
+            definition) ||
+        document_.findProfile(
+            command.profile_id) == nullptr) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Extrude contains invalid inputs or missing ProfileId",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applyBodyFeatureIdCursors(after);
+    const auto id =
+        after.body.next_feature_id.allocate();
+    if (!id) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "FeatureId allocation space is exhausted",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    after.body.features.push_back(
+        part::PartFeature{
+            *id,
+            command.name.empty()
+                ? defaultFeatureName(*id)
+                : command.name,
+            false,
+            definition});
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "Create Extrude candidate violates Part authored-state invariants",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    const auto* target =
+        evaluation.findFeature(*id);
+    if (target == nullptr ||
+        target->status !=
+            part::FeatureEvaluationStatus::
+                up_to_date) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Extrude did not evaluate UpToDate; no authored mutation committed",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            target != nullptr
+                ? std::optional<
+                      part::FeatureEvaluationDiagnosticCode>{
+                      target->diagnostic}
+                : std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while creating Extrude Feature");
+    if (!committed.ok() ||
+        !committed.changed) {
+        return {
+            committed.changed,
+            std::nullopt,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return {
+        true,
+        *id,
+        part::FeatureEvaluationDiagnosticCode::
+            none,
+        DocumentSessionDiagnostic{}};
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EditExtrudeFeatureCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Edit Extrude was started from a stale DocumentRevision",
+            path_);
+    }
+
+    const part::ExtrudeFeature definition{
+        command.profile_id,
+        command.operation,
+        command.extent};
+    if (!part::extrudeFeatureStructurallyValid(
+            definition) ||
+        document_.findProfile(
+            command.profile_id) == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Extrude contains invalid inputs or missing ProfileId",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* feature =
+        findFeature(
+            after,
+            command.feature_id);
+    if (feature == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Extrude target FeatureId does not exist",
+            path_);
+    }
+    if (feature->suppressed) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Extrude target is Suppressed; unsuppress before editing",
+            path_);
+    }
+
+    feature->name = command.name;
+    feature->definition = definition;
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        return failure(
+            DocumentSessionErrorCode::
+                transaction_failure,
+            "Edit Extrude candidate violates Part authored-state invariants",
+            path_);
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    const auto* target =
+        evaluation.findFeature(
+            command.feature_id);
+    if (target == nullptr ||
+        target->status !=
+            part::FeatureEvaluationStatus::
+                up_to_date) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Extrude target did not evaluate UpToDate; no authored mutation committed",
+            path_);
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while editing Extrude Feature");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const SetFeatureSuppressedCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Suppress Feature was started from a stale DocumentRevision",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* feature =
+        findFeature(
+            after,
+            command.feature_id);
+    if (feature == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Suppress Feature target FeatureId does not exist",
+            path_);
+    }
+
+    feature->suppressed =
+        command.suppressed;
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while changing Feature suppression");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const DeleteFeatureCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Delete Feature was started from a stale DocumentRevision",
+            path_);
+    }
+
+    auto after = document_.state();
+    const auto found =
+        std::find_if(
+            after.body.features.begin(),
+            after.body.features.end(),
+            [&command](
+                const part::PartFeature& feature) {
+                return feature.id ==
+                       command.feature_id;
+            });
+    if (found ==
+        after.body.features.end()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Delete Feature target FeatureId does not exist",
+            path_);
+    }
+
+    after.body.features.erase(found);
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while deleting Feature");
 }
 
 DocumentSessionResult DocumentSession::applyHistoricalState(

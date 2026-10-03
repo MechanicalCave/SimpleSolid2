@@ -269,15 +269,7 @@ int main() {
     FakeKernel kernel;
     auto fixture = makeFixture();
 
-    const auto f1 =
-        fixture.document.body()
-            .next_feature_id.allocate();
-    CHECK(f1.has_value());
-    auto cursor =
-        fixture.document.body()
-            .next_feature_id;
-    // PartBody accessor is const; create a deterministic cursor explicitly.
-    cursor =
+    const auto cursor =
         *part::FeatureIdCursor::parse("4");
     const auto id1 =
         *part::FeatureId::parse("1");
