@@ -406,21 +406,37 @@ E02 proves stage-scoped resolution across bounded producer/Cut/Fillet evidence, 
 The representative initial prism in E02 is an evidence fixture, not the production Extrude implementation. E01 remains the exact Profile-to-Extrude provenance evidence.
 
 
-### E07 — accumulated cold-rebuild parity, Phase 1
+### E06 — full-Revolve / periodic seam
 
-**Status:** PARTIAL — E07-01…E07-05 COMPLETED — PASS; E07-06 PENDING E06  
-**Accumulated source candidate:** `953cdca42978916754f6ae6cc68d86352aad35ac`  
-**Windows FULL:** #1286 — PASS  
-**Kernel-native:** 23/23 PASS  
-**False-Resolved across completed rows:** 0
+**Status:** COMPLETED — PASS  
+**Exact source candidate:** `44eda36ba6bdc19d8c252831937fb86f8afabde7`  
+**Kernel-focused:** #1305 — PASS  
+**Windows FULL:** #1306 — PASS  
+**False-Resolved:** 0
+
+See `work/PM-00A_E06_REVOLVE_PERIODIC_SEAM_EVIDENCE.md`.
+
+E06 proves that a full 360° Revolve can preserve semantic side meaning through exact Profile boundary-use provenance while provider-created periodic seam topology remains non-semantic and `Unsupported` as an addressable reference.
+
+The upstream dimension edit changes provider seam geometry without changing the supported semantic side identity.
+
+E06 cold replay also supplies E07-06.
+
+### E07 — accumulated cold-rebuild parity
+
+**Status:** COMPLETED — PASS  
+**Accumulated source candidate:** `44eda36ba6bdc19d8c252831937fb86f8afabde7`  
+**Windows FULL:** #1306 — PASS  
+**Kernel-native:** 24/24 PASS  
+**False-Resolved:** 0
 
 See `work/PM-00A_E07_ACCUMULATED_COLD_REBUILD_EVIDENCE.md`.
 
-The existing E01/E02/E03/E04/E05 regressions already contain the required teardown/cold-replay assertions. #1286 executes them together on one exact candidate, so no duplicate E07 harness is introduced.
+The owning E01/E02/E03/E04/E05/E06 regressions contain the required teardown/cold-replay assertions. #1306 executes the accumulated kernel-native set together on one exact candidate, so no duplicate E07 harness is introduced.
 
-E07-06 remains pending until E06 supplies the full-Revolve / periodic-seam source case. E07 is therefore not yet complete.
+E07-06 is supplied by E06: the semantic revolved side remains Resolved after provider teardown/rebuild while the periodic seam remains Unsupported.
 
-**Next:** execute E06 full-Revolve / periodic-seam evidence; its cold replay must also satisfy E07-06.
+**Next:** execute E08 support-frame stability evidence.
 
 ## 8. Acceptance asymmetry
 

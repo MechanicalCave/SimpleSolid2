@@ -1,17 +1,17 @@
 # PM-00A — E07 Accumulated Cold-Rebuild Parity Evidence
 
-**Status:** PARTIAL — E07-01…E07-05 COMPLETED — PASS; E07-06 PENDING E06  
+**Status:** COMPLETED — PASS  
 **Date:** 2026-10-02  
-**Accumulated source candidate:** `953cdca42978916754f6ae6cc68d86352aad35ac`  
-**Windows FULL:** #1286 — PASS  
-**Kernel-native suite:** 23/23 PASS  
+**Accumulated source candidate:** `44eda36ba6bdc19d8c252831937fb86f8afabde7`  
+**Windows FULL:** #1306 — PASS  
+**Kernel-native suite:** 24/24 PASS  
 **Matrix:** `work/PM-00A_E01_E10_EVIDENCE_MATRIX.md` v1.0
 
 ## Result
 
-E07-01 through E07-05 PASS on one accumulated source candidate.
+E07-01 through E07-06 PASS across the accumulated accepted evidence set.
 
-E07-06 is intentionally **not executed and not marked PASS** because its source evidence is E06 full-Revolve / periodic-seam behavior, which has not yet been implemented.
+E07-06 is supplied by the E06 full-Revolve / periodic-seam regression on exact source candidate `44eda36ba6bdc19d8c252831937fb86f8afabde7`.
 
 False-Resolved count across the completed E07 rows: **0**.
 
@@ -30,15 +30,16 @@ E07 Phase 1 therefore treats the existing cold assertions as the executable sour
 
 ## Accumulated exact-head evidence
 
-Windows FULL #1286 on `953cdca42978916754f6ae6cc68d86352aad35ac` ran the kernel-native suite with:
+Windows FULL #1306 on `44eda36ba6bdc19d8c252831937fb86f8afabde7` ran the accumulated kernel-native suite with:
 
 ```text
 pm00a.e01_extrude_evidence          PASS
 pm00a.e05_similarity_guardrails    PASS
 pm00a.e03_e04_cardinality          PASS
 pm00a.e02_multistage_lineage       PASS
+pm00a.e06_revolve_periodic         PASS
 pm00a.profile_cold_rebuild         PASS
-kernel-native total                23/23 PASS
+kernel-native total                24/24 PASS
 ```
 
 The same FULL also passed desktop, core-only, selector validation and the complete unfiltered desktop suite.
@@ -52,7 +53,7 @@ The same FULL also passed desktop, core-only, selector validation and the comple
 | E07-03 | `pm00a.e03_e04_cardinality` | first-pass Boolean/history/provider objects destroyed; split scenario reconstructed | same Ambiguous singular split result | split remains two semantic descendants / Ambiguous | PASS |
 | E07-04 | `pm00a.e03_e04_cardinality` | first-pass Boolean/history/provider objects destroyed; merge scenarios reconstructed | same Ambiguous/Missing outcomes defined by E04 | collapsed meanings remain Ambiguous; genuinely removed meaning remains Missing under the source-row semantic winner | PASS |
 | E07-05 | `pm00a.e05_similarity_guardrails` | authored scenario Save/Close/Reopen; provider evidence rebuilt | removed target remains Missing despite similar/identical decoy | old semantic target remains Missing; no similarity fallback | PASS |
-| E07-06 | E06 Revolve / periodic seam | depends on E06 | same Resolved semantic revolved side while seam remains non-semantic | not yet available | PENDING |
+| E07-06 | `pm00a.e06_revolve_periodic` | first-pass full-Revolve sweep/B-Rep/provider state destroyed; Profile + evidence-axis reconstructed | same Resolved semantic revolved side while seam remains non-semantic | same outer provenance/status/cardinality after cold replay; provider seam remains Unsupported | PASS |
 
 ## E07-01 — E01 stable Profile/Extrude roles
 
@@ -100,25 +101,25 @@ A replacement entity can reproduce the removed target's geometry while carrying 
 
 Result: the original target remains **Missing** after reopen. Geometry similarity does not recover identity.
 
-## E07-06 dependency
+## E07-06 — full-Revolve periodic seam
 
-E07-06 requires the E06 full-Revolve / periodic-seam source row:
+E06 evaluates the full-Revolve scenario, destroys the first provider sweep/B-Rep/TopoDS state and reconstructs the same legal Profile + evidence-only axis input.
 
-```text
-E06 semantic revolved side
-→ destroy provider/runtime evidence
-→ reconstruct
-→ same Resolved semantic side
-→ provider periodic seam remains non-semantic
-```
+The cold replay reproduces:
 
-Because E06 is not yet executed, E07-06 remains PENDING.
+- the same semantic outer boundary-use provenance;
+- `Resolved` status;
+- candidate cardinality = 1;
+- periodic-surface evidence;
+- a provider-created seam that remains `Unsupported` as semantic identity.
 
-This does not change or weaken the frozen E07 matrix. E07 becomes fully completed only after E06 and E07-06 both PASS.
+The edited-dimension Revolve case is also replayed cold. The provider seam geometry changes with the edited model, but semantic side identity remains stable.
+
+Result: **E07-06 PASS**. The complete E07 matrix is now COMPLETED — PASS.
 
 ## Architecture implication
 
-E07 Phase 1 strengthens O-05:
+Completed E07 strengthens O-05:
 
 1. accepted semantic status survives provider/runtime teardown;
 2. previous-process topology handles/history are not required for accepted reconstruction;
@@ -130,4 +131,4 @@ E07 Phase 1 strengthens O-05:
 
 This package is evidence synthesis only. It introduces no source-code behavior, no new test fixture, no persistent selector schema, no Body/Feature state and no product modeling command.
 
-**Next:** execute E06 full-Revolve / periodic-seam evidence. E06 cold replay then supplies E07-06 and allows E07 to be marked fully completed.
+**Next:** E08 support-frame stability evidence.
