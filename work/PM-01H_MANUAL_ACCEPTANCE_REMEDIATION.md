@@ -26,8 +26,8 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 
 - **H1 COMPLETED — PASS:** PR #155, exact-head Windows FULL #1341 PASS on `b74dae97e3740c1a583ef2a56c1505ef271003e4`; merged to main as `b8b89c204afeadf42ff25bd99cf4a9279c242f64`.
 - **H2 COMPLETED — PASS:** PR #156, exact-head Windows FULL #1342 PASS on `3dbe6b0de2ae7dd7805f132eea71fe51d184b0d0`; merged to main as `f80f5426dfb7c896f52a580505f328eea927da38`.
-- **H3 ACTIVE:** bounded Tree/default-distance/command-first UX remediation.
-- **Owner re-test:** consolidated after H3 exact-head PASS so one newest executable covers H1/H2/H3; H1 and H2 retain separate exact-head automated evidence for diagnosis.
+- **H3 COMPLETED — PASS:** PR #157, exact-head Windows FULL #1343 PASS on `931fa47e93333832778b56349bd8b6ee6ddfd64c`; merged to main as `78558b825f1ec2b0ad622166774774ac26e5f417`.
+- **Owner re-test:** PENDING on the consolidated H1/H2/H3 candidate; H1, H2 and H3 retain separate exact-head FULL evidence for diagnosis.
 
 ## H1 — Profile → Kernel fidelity blocker
 
