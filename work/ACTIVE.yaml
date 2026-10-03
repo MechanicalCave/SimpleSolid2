@@ -1,9 +1,9 @@
 version: 1
 status: completed
-active_work: "work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md"
+active_work: "work/PM-00B_PART_FEATURE_ARCHITECTURE_FREEZE.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.3"
+program_roadmap_version: "1.4"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -18,28 +18,18 @@ accepted_adrs:
   - "adr/ADR-0011-workspace-global-cad-input-routing-and-semantic-requests.md"
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
+  - "adr/ADR-0014-part-feature-architecture-references-and-modeling-semantics.md"
 next:
-  - PM-00A E01 is COMPLETED — PASS; source candidate 476258b74751a251c1c4fdf7dabaa03b3da63976, Windows FULL #1228, false-Resolved 0
-  - PM-00A E05 is COMPLETED — PASS; source candidate 7e0d6109cf927a2e8d85d2794b5718dcc2feab22, Windows FULL #1252, false-Resolved 0
-  - PM-00A E03 + E04 are COMPLETED — PASS; source candidate 30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25, Kernel-focused #1274, Windows FULL #1275, false-Resolved 0
-  - PM-00A E02 is COMPLETED — PASS; source candidate 953cdca42978916754f6ae6cc68d86352aad35ac, Kernel-focused #1285, Windows FULL #1286, false-Resolved 0
-  - PM-00A E06 is COMPLETED — PASS; source candidate 44eda36ba6bdc19d8c252831937fb86f8afabde7, Kernel-focused #1305, Windows FULL #1306, false-Resolved 0
-  - PM-00A E07 is COMPLETED — PASS for E07-01 through E07-06; accumulated source candidate 44eda36ba6bdc19d8c252831937fb86f8afabde7, Windows FULL #1306, kernel-native 24/24 PASS
-  - PM-00A E08 is COMPLETED — PASS; source candidate 51a223dc7f380c8545de2238ef5d3a6ca9e7345d, Windows FULL #1311, core-only 18/18 PASS, kernel-native 25/25 PASS, desktop 84/84 PASS, false-Resolved 0
-  - PM-00A E09 is COMPLETED — PASS; source candidate 018966aa143a006cdd39429a201755c54c3e7948, Windows FULL #1313, core-only 19/19 PASS, kernel-native 26/26 PASS, desktop 84/84 PASS, stale publications 0
-  - PM-00A is COMPLETED — PASS; final source candidate ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb, Windows FULL #1320, core-only 19/19 PASS, kernel-native 27/27 PASS, desktop 84/84 PASS, false-Resolved 0
-  - Owner review is the next legal action: work/PM-00A_PART_FEATURE_ARCHITECTURE_ADR_CANDIDATE.md plus work/PM-00B_PART_FEATURE_ARCHITECTURE_FREEZE.md
-  - keep production solid-modeling mutation inactive; PM-00B and PM-01 remain inactive until their separate explicit Owner acceptance
-  - preserve E06 rule that provider periodic seam is diagnostic only and never semantic identity
-  - preserve E02 stage-scoped resolution and separation of reference status from geometric failure
-  - preserve E03/E04 fail-closed cardinality and provider-history-as-evidence-only rule
-  - preserve E05 similarity-as-diagnostics-only rule
-  - preserve E01 provider-edge-as-transient-evidence-only rule
-  - PM-00B Part Feature Architecture Freeze remains separate after PM-00A evidence
-  - PM-01 First Solid Vertical Slice, Body/Feature persistence, Part Feature Tree product behavior, Assembly/Drawing and multi-body remain inactive
+  - PM-00B is COMPLETED — PASS; source candidate 4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9, Windows FULL #1323, core-only 19/19 PASS, kernel-native 27/27 PASS, desktop FULL 84/84 PASS
+  - ADR-0014 is accepted and listed in accepted_adrs
+  - Owner review and separate explicit acceptance/amendment of work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md is the next legal action
+  - PM-01 remains NOT ACTIVE
+  - keep production Body/Feature schema, migration, Part Feature Tree behavior and user-facing Extrude Add inactive
 notes:
+  - PM-00B completed its governance/architecture freeze deliverables on exact source candidate 4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9. Windows FULL #1323 passed core-only 19/19, kernel-native 27/27 and desktop FULL 84/84. Closure changes after that candidate are restricted to work/** status/evidence synchronization.
+  - Owner explicitly accepted PM-00B Part Feature Architecture Freeze and proposed ADR-0014 on 2026-10-03, including O-01, O-04, O-05, O-09, O-11, O-12 and the O-03/O-06 matrix. This authorizes governance/architecture freeze only; PM-01 production mutation remains separately gated.
   - E10 completed on exact source candidate ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb with Windows FULL #1320 PASS. Core-only 19/19, kernel-native 27/27 including pm00a.e10_numerical_policy, and desktop FULL 84/84 all passed. E10 proved display/pick state cannot enter the neutral/kernel-native modeling path, explicit refine policy changes provider topology without changing the bounded semantic source-face outcome, invalid gaps fail without fuzzy escalation, and the near-threshold family is deterministic with at least one measured acceptance transition. False-Resolved count remains 0.
-  - PM-00A E01-E10 and required synthesis deliverables are complete. The proposed Part Feature Architecture ADR and PM-00B Work Contract are Owner-review artifacts only; accepted_adrs is unchanged and no durable Body/Feature schema is authorized.
+  - PM-00A E01-E10 and required synthesis deliverables are complete. Their Owner-review architecture was accepted without amendment on 2026-10-03 and is now normative as ADR-0014; no durable Body/Feature production schema is authorized until separately accepted PM-01.
   - E09 completed on exact source candidate 018966aa143a006cdd39429a201755c54c3e7948 with Windows FULL #1313 PASS. The core-only stale-publication regression passed in core-only 19/19 and kernel-native aggregate 26/26 while complete desktop remained 84/84 PASS. Revision advance, canonical DocumentSession replacement, geometrically identical stale request completion, and cancelled/failed older requests all rejected publication; stale publications 0. The publication gate remains test-local evidence only and freezes no production API or persistent session identity.
   - E08 completed on exact source candidate 51a223dc7f380c8545de2238ef5d3a6ca9e7345d with Windows FULL #1311 PASS. The core-only support-frame regression passed in core-only (18/18), kernel-native aggregate (25/25) and the complete desktop FULL remained 84/84 PASS. XY/XZ/YZ frames stayed deterministic across geometry edits, reordered evidence traversal and cold Save/Close/Reopen; unsupported Origin point/axes remained Unsupported; future planar-face support semantics were not invented. False-Resolved count 0.
   - E06 completed on exact source candidate 44eda36ba6bdc19d8c252831937fb86f8afabde7 with Kernel-focused #1305 PASS and Windows FULL #1306 PASS. Full 360-degree Revolve, provenance-bound semantic side resolution, non-semantic provider seam, dimension-edit stability and cold replay all passed with false-Resolved count 0.

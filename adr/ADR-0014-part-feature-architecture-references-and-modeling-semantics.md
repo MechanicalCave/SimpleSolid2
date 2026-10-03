@@ -1,14 +1,14 @@
-# ADR Candidate — Part Feature Architecture, References and Modeling Semantics
+# ADR-0014 — Part Feature Architecture, References and Modeling Semantics
 
-**Proposed ADR number:** ADR-0014  
-**Status:** REVIEWED — ACCEPTED AS ADR-0014 ON 2026-10-03  
+**Status:** ACCEPTED  
+**Proposed:** 2026-10-03  
+**Owner acceptance:** 2026-10-03  
 **Decision class:** D2 Part architecture  
-**Foundation:** 1.0 (`foundation-v1.0`)  
+**Foundation:** 1.0 (foundation-v1.0)  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.4 — PM-00B  
 **Evidence authority:** PM-00A final source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb`, Windows FULL #1320  
 **Related:** ADR-0004, ADR-0005, ADR-0008, ADR-0009, ADR-0012, ADR-0013  
-**Candidate source:** `work/PM-00A_ARCHITECTURE_RECOMMENDATIONS.md`
-
-> Historical Owner-review artifact. The accepted normative authority is `adr/ADR-0014-part-feature-architecture-references-and-modeling-semantics.md`; this candidate remains as provenance and must not be used as a second architecture authority.
+**Source review artifact:** `work/PM-00A_PART_FEATURE_ARCHITECTURE_ADR_CANDIDATE.md`
 
 ## Context
 
@@ -16,7 +16,7 @@ Part Modeling v1 needs durable Body/Feature semantics before the first solid fea
 
 The evidence rules out provider topology identity, geometry-similarity identity, Viewer identity and runtime-session continuity as durable foundations.
 
-## Proposed decision
+## Decision
 
 ### 1. Single Body and ordered Features
 
@@ -102,7 +102,7 @@ Transform direction is explicit at domain boundaries using the convention `paren
 
 `P_parent = T_parent_from_local(P_local)`.
 
-## Proposed product-scope consequence
+## Product-scope consequence
 
 The initial production slice is deliberately narrow: one existing valid Profile -> one-sided Extrude Add -> one Body, with complete edit/history/persistence lifecycle. Later Part-v1 packages add Cut, planar-face support/projection, Revolve and constant Fillet/Chamfer under the same reference/failure/numerical rules.
 
@@ -136,9 +136,3 @@ Costs:
 - durable reference selectors need semantic provenance/stage information;
 - modeling-semantics versioning adds compatibility obligations;
 - face-supported Sketch work requires an additional deterministic-frame decision before activation.
-
-## Acceptance result
-
-The Owner accepted PM-00B and this ADR candidate without amendment on 2026-10-03, including O-01, O-04, O-05, O-09, O-11, O-12 and the O-03/O-06 scope matrix.
-
-The accepted normative wording is materialized as `adr/ADR-0014-part-feature-architecture-references-and-modeling-semantics.md`. PM-01 remains separately gated.
