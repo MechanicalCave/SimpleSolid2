@@ -28,9 +28,7 @@ Metadata initialization is fail-closed and uses staged publication. Metadata loa
 <!-- section-id: internal.persistence.part-document -->
 ## Native Document container and Part payload
 
-A native top-level Part is stored as `*.ss2part`.
-
-The physical representation remains native Document container v1: one ZIP-compatible package with exactly two mandatory files and an optional derived namespace:
+A native top-level Part is stored as `*.ss2part` in native Document container v1:
 
 ```text
 Part001.ss2part
@@ -41,19 +39,17 @@ Part001.ss2part
     └── ... optional disposable assets
 ```
 
-Container v1 uses UTF-8 JSON. The common manifest contains `format`, `container_version`, `document_kind`, `document_id` and `domain_schema_version`. Shared persistence owns package/container safety; Part owns engineering meaning in `authored/document.json`.
+The common manifest contains format/container metadata, Document kind/identity and Part domain schema version. Shared persistence owns package safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part domain writer is schema **v7**. It persists document properties, the durable display/input length unit, built-in Origin visibility, hosted Sketch records, `next_profile_id` and authored Profiles. Canonical geometric length values remain millimetres regardless of the selected display/input unit.
+The current Part writer is schema **v8**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1 and one Body with ordered Features.
 
-Sketch models store canonical `next_entity_id` plus mixed `entities[]`. Each Line/Circle/Arc record stores its semantic kind, canonical EntityId, canonical geometry and authored `regular`/`construction` role.
+Sketch models persist canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
 
-Each Profile record stores canonical ProfileId, source SketchId, authored name/visibility and semantic RegionIntent. RegionIntent persists source EntityIds and endpoint/intersection anchors; runtime region indices, evaluated parameters, cached arrangements, sampled fills and provider topology are not persisted.
+The Body persists BodyId, the FeatureId cursor and ordered Feature records. The current Extrude Feature record preserves stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane parameters. Evaluated B-Rep, OCCT handles, runtime topology tokens, evaluation statuses, previews and tessellation are not authored payload.
 
-Schemas v1–v6 remain readable. Files without the v7 length-unit field restore **mm** in memory and keep all existing geometry numerically unchanged. A later successful Save of an older loaded file publishes schema v7.
+Schemas v1–v7 remain readable. Older schemas reconstruct the current defaults in memory; pre-PM-01 data receives an Empty Body. The visibility migration maps legacy hidden Profiles to forced hidden and legacy visible Profiles to automatic. A later successful Save publishes schema v8.
 
-DocumentId remains only in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tool state, Polar/Dynamic Input application-session configuration, Dynamic Input field focus/locks, region-analysis cache and Viewer state are runtime-only.
-
-The former line-based `SS2PART` bootstrap format remains unsupported legacy test data and fails closed rather than being migrated.
+DocumentId remains in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tools, CAD input buffer, selection, camera and all provider/runtime geometry remain non-persistent.
 
 <!-- section-id: internal.persistence.atomic-save -->
 ## Atomic Document publication and Save
@@ -94,30 +90,18 @@ Each entry stores ProjectId, DisplayName and the remembered absolute Workspace p
 <!-- section-id: internal.persistence.derived-state -->
 ## Runtime-only and derived state
 
-The following state is not serialized as Part authored state:
+The following are derived/runtime and intentionally disposable:
 
-- ProjectSession and DocumentSession;
-- Undo/Redo history and save-history cursor;
-- Workspace discovery/conflict state;
-- active Document tab;
-- camera / projection / pan / orbit / zoom;
-- selected set and primary selection;
-- reference grid runtime presentation;
-- active Sketch edit context;
-- Sketch support-pick tool state;
-- Polar/Dynamic Input application-session settings;
-- Polar capture, Dynamic Input field focus and request-local numeric locks;
-- Qt objects;
-- Viewer provider objects and OCCT handles;
-- cached Shared 2D region analysis and transient Profile drafts;
-- evaluated B-Rep or tessellation;
-- PM-00A neutral Kernel inputs/evidence, OCCT provider objects, provider topology/lineage handles and cold-rebuild runtime fingerprints.
+- `ProjectSession`, `DocumentSession` and Undo/Redo history;
+- `DocumentRevision`, runtime session/request/draft generations and file checkpoints;
+- evaluated Shared-2D arrangements and Profile regions;
+- Part Feature evaluation snapshots and UpToDate/Failed/Blocked/Suppressed diagnostics;
+- runtime solid/B-Rep handles, face tokens and provider history;
+- Extrude preview geometry and temporary source-Profile reveal;
+- Viewer presentation objects, tessellation, detection/picking tokens and camera state;
+- active selection, hover, grips, Dynamic Input/Polar/OSNAP tracking state and CAD input buffer.
 
-Persistent user visibility of built-in Origin references is intentionally **not** in this runtime-only list; it is authored Part state.
-
-The native package reserves `derived/*` for optional disposable assets. Unknown safe derived entries may be ignored. Deleting derived content must not destroy authored design intent. The current implementation does not generate thumbnails or another derived asset.
-
-Recent availability is also derived at runtime.
+A clean reopen must recover authored semantic state without any of these objects. PM-01 cold-persistence coverage destroys the session/runtime/provider evaluation state after Save, reloads schema-v8 authored data and rebuilds ordered Add/Cut evaluation from a fresh provider/evaluator.
 
 <!-- section-id: internal.persistence.identity-safety -->
 ## Identity and container safety
@@ -139,8 +123,9 @@ A `.ss2part` whose manifest declares another Document kind fails closed. `docume
 <!-- section-id: internal.persistence.non-goals -->
 ## Current non-goals
 
-The current persistence layer does not provide Project synchronization/semantic merge, cloud locking, Part Save As / Save Copy As UI, identity-conflict repair, Assembly/Drawing semantic persistence, Sketch constraints/dimensions/solver state, modeled solid geometry persistence, thumbnail generation, tile/icon browsing, or camera/selection persistence between application runs.
+Current persistence does not store Undo/Redo history, evaluated B-Rep, Viewer state, runtime topology/provider identity, caches or active edit context.
 
-The architecture reserves the same native package mechanism for future Assembly and Drawing, but their semantic schemas are not implemented.
+The native format also does not yet encode datum-plane or planar-face support semantics, topology-reference repair state for later face/edge-driven Features, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics.
 
-Implementation dependencies are vendored and pinned: miniz 3.1.2 for ZIP mechanics and nlohmann/json 3.12.0 for JSON. Normal builds do not download them, and their types do not cross CAD-domain public semantic APIs.
+Save remains whole-file conditional replacement rather than an in-place feature database or event log.
+
