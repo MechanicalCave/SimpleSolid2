@@ -43,6 +43,7 @@
 #include <numbers>
 #include <optional>
 #include <string>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -1445,6 +1446,166 @@ void populateShapeEvidence(
         evidence.brep_valid
             ? kernel::EvidenceStatus::ok
             : kernel::EvidenceStatus::invalid_brep;
+}
+
+struct EvidencePrismBuild final {
+    TopoDS_Shape shape;
+    TopoDS_Face start_cap;
+    TopoDS_Face end_cap;
+    kernel::Frame3 start_frame;
+    kernel::Frame3 end_frame;
+};
+
+[[nodiscard]] kernel::BoundaryUse2D
+evidenceLineUse(
+    kernel::Point2 start,
+    kernel::Point2 end,
+    const char* source,
+    std::uint32_t use_index) {
+    return {
+        kernel::Line2{start, end},
+        0.0,
+        1.0,
+        true,
+        false,
+        false,
+        kernel::BoundaryUseProvenance{
+            std::string{source},
+            0U,
+            use_index,
+            false},
+    };
+}
+
+[[nodiscard]] std::optional<EvidencePrismBuild>
+buildEvidenceRectangularPrism(
+    kernel::Point3 origin,
+    double width,
+    double height,
+    double distance) {
+    kernel::PlanarProfileInput profile;
+    profile.frame.origin = origin;
+    profile.outer.boundary = {
+        evidenceLineUse(
+            {0.0, 0.0},
+            {width, 0.0},
+            "bottom",
+            0U),
+        evidenceLineUse(
+            {width, 0.0},
+            {width, height},
+            "right",
+            1U),
+        evidenceLineUse(
+            {width, height},
+            {0.0, height},
+            "top",
+            2U),
+        evidenceLineUse(
+            {0.0, height},
+            {0.0, 0.0},
+            "left",
+            3U),
+    };
+    if (!profile.valid() ||
+        !std::isfinite(distance) ||
+        distance == 0.0) {
+        return std::nullopt;
+    }
+
+    const auto built =
+        buildProfileFace(profile);
+    if (!built) {
+        return std::nullopt;
+    }
+
+    BRepSweep_Prism sweep{
+        built->face,
+        gp_Vec{
+            profile.frame.normal.x * distance,
+            profile.frame.normal.y * distance,
+            profile.frame.normal.z * distance},
+        false,
+        true};
+
+    const auto shape = sweep.Shape();
+    if (shape.IsNull()) {
+        return std::nullopt;
+    }
+
+    const auto start_faces =
+        uniqueFacesFromGeneratedShape(
+            sweep.FirstShape());
+    const auto end_faces =
+        uniqueFacesFromGeneratedShape(
+            sweep.LastShape());
+    const auto end_frame =
+        shiftedCarrierFrame(
+            profile.frame,
+            distance);
+
+    if (start_faces.size() != 1U ||
+        end_faces.size() != 1U ||
+        !end_frame) {
+        return std::nullopt;
+    }
+
+    return EvidencePrismBuild{
+        shape,
+        start_faces.front(),
+        end_faces.front(),
+        profile.frame,
+        *end_frame,
+    };
+}
+
+void populateBodyTopologyEvidence(
+    kernel::BodyTopologyInventoryEvidence& evidence,
+    const TopoDS_Shape& shape) {
+    const BRepCheck_Analyzer analyzer{shape};
+    evidence.brep_valid =
+        analyzer.IsValid();
+    evidence.solid_count =
+        countSubshapes(
+            shape,
+            TopAbs_SOLID);
+    populateTopologyInventory(
+        evidence.faces,
+        shape,
+        TopAbs_FACE);
+    populateTopologyInventory(
+        evidence.edges,
+        shape,
+        TopAbs_EDGE);
+    populateTopologyInventory(
+        evidence.vertices,
+        shape,
+        TopAbs_VERTEX);
+    evidence.status =
+        evidence.brep_valid
+            ? kernel::EvidenceStatus::ok
+            : kernel::EvidenceStatus::invalid_brep;
+}
+
+[[nodiscard]] bool allFacesMatchSurfaceKind(
+    const std::vector<TopoDS_Shape>& faces,
+    kernel::FaceSurfaceKind expected) {
+    if (faces.empty()) {
+        return false;
+    }
+    return std::all_of(
+        faces.begin(),
+        faces.end(),
+        [expected](const TopoDS_Shape& shape) {
+            if (shape.IsNull() ||
+                shape.ShapeType() != TopAbs_FACE) {
+                return false;
+            }
+            return faceGeometryDiagnostics(
+                       TopoDS::Face(shape))
+                       .surface_kind ==
+                   expected;
+        });
 }
 
 } // namespace
