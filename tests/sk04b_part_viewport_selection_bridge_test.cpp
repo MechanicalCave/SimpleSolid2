@@ -323,7 +323,8 @@ int main(int argc, char* argv[]) {
                 profile_id,
                 session.document().revision(),
                 "Profile001",
-                false})
+                part::ProfileVisibilityPolicy::
+                    force_hidden})
             .ok());
     controller.refreshPresentation();
     CHECK(viewport.profile_scene_.profiles.empty());
@@ -335,7 +336,8 @@ int main(int argc, char* argv[]) {
                 profile_id,
                 session.document().revision(),
                 "Profile001",
-                true})
+                part::ProfileVisibilityPolicy::
+                    force_shown})
             .ok());
     controller.refreshPresentation();
     CHECK(viewport.profile_scene_.profiles.size() == 1U);
