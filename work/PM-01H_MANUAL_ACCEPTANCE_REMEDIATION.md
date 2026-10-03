@@ -34,7 +34,8 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 - **Owner re-test after H4:** PARTIAL PASS; remaining H5 findings are exact operation-delta preview/Profile z-fighting and a Cut face-contact case incorrectly accepted as effect.
 - **H5 COMPLETED — PASS:** PR #165, exact-head Windows FULL #1359 PASS on `0fd15f815b1913e144070e508e7a565dca33fae5`; merged to main as `eac7d26973949bc3275fe6b4bd4d68c1c54cdc6c`.
 - **H5 documentation sync COMPLETED — PASS:** PR #166, Windows DOCS #1360 PASS; latest main `2e98164a91e93717e4cfbcf886ce467bc503d31e`.
-- **Owner re-test:** PENDING on latest main; PM-01 remains ACTIVE until manual Windows acceptance passes.
+- **Owner re-test after H5:** PARTIAL PASS; exact delta/no-effect behavior is improved, but committed Body and preview still share the subtractive orange appearance during preview.
+- **H6 ACTIVE:** isolate committed Body and preview shading state in the Qt/OCCT Viewer; no modeling or authored semantics change.
 
 ## H1 — Profile → Kernel fidelity blocker
 
@@ -160,6 +161,36 @@ Acceptance regressions:
 - Cut tool touching only an edge/point is `no_effect`;
 - ordinary volumetric Cut remains accepted;
 - source Profile does not z-fight while a valid preview is active and its authored visibility state is not mutated.
+
+## H6 — Viewer shading-style isolation
+
+Owner H5 manual re-test on `26dd32f65d2d1497d3d3ee55ca52ab69182f93fb` found one remaining presentation blocker: while a valid Extrude preview is active, the committed Body is visually recolored with the preview tone. The geometry/delta scope is not the defect; the preview Profile is small while remote Body regions receive the same orange appearance.
+
+Root boundary:
+
+- committed Body and transient preview are separate `AIS_Triangulation` objects;
+- both currently receive color/transparency through `AIS_InteractiveContext` after Display;
+- the Viewer must not rely on linked/default shading attributes for these two independent presentations.
+
+Accepted H6 fix:
+
+- give every committed solid and preview triangulation its own `Prs3d_ShadingAspect` before Display;
+- committed Body owns the normal opaque Body color;
+- additive preview owns additive blue plus preview transparency;
+- subtractive preview owns subtractive orange plus preview transparency;
+- preview style mutation must never alter the committed Body style;
+- clearing/replacing preview must leave committed Body style unchanged;
+- polygon offset remains display-only and scoped to preview;
+- no change to exact delta geometry, Boolean/modeling semantics, persistence, semantic identity or topology picking.
+
+Acceptance regression:
+
+- with committed Body + subtractive preview displayed simultaneously, their shading-aspect handles are distinct;
+- committed Body remains opaque and at its normal Body color;
+- subtractive preview remains orange/translucent;
+- additive preview remains blue/translucent;
+- replacing subtractive with additive preview does not change committed Body style;
+- clearing preview leaves committed Body visible with its original style.
 
 ## Verification sequence
 
