@@ -3014,6 +3014,260 @@ buildFaceMergeHistoryEvidence(
     }
 }
 
+kernel::SurfaceBooleanLineageEvidence
+buildSurfaceBooleanLineageEvidence(
+    kernel::SurfaceBooleanProbeScenario scenario) noexcept {
+    kernel::SurfaceBooleanLineageEvidence evidence;
+
+    try {
+        const auto base =
+            buildEvidenceRectangularPrism(
+                {0.0, 0.0, 0.0},
+                40.0,
+                30.0,
+                10.0);
+        if (!base) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            evidence.topology.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        evidence.surface_kind =
+            kernel::FaceSurfaceKind::plane;
+        evidence.source_frame =
+            base->end_frame;
+
+        const auto fill_source =
+            [&evidence, &base](
+                auto& operation,
+                const TopoDS_Shape& result) {
+                populateShapeEvidence(
+                    evidence.shape,
+                    result);
+                populateBodyTopologyEvidence(
+                    evidence.topology,
+                    result);
+
+                evidence.source_face_history =
+                    historyEvidence(
+                        operation,
+                        base->end_cap,
+                        TopAbs_FACE,
+                        result);
+
+                const auto descendants =
+                    historyDescendants(
+                        operation,
+                        base->end_cap,
+                        TopAbs_FACE,
+                        result);
+
+                evidence.surface_realization_count =
+                    descendants.size();
+                evidence.strict_face_status =
+                    referenceStatus(
+                        descendants.size());
+
+                // The carrier is semantic source intent. A split creates
+                // several bounded Face realizations but does not create
+                // several semantic planes. Zero descendants means the source
+                // Surface is gone.
+                evidence.surface_status =
+                    descendants.empty()
+                        ? kernel::ReferenceStatus::missing
+                        : kernel::ReferenceStatus::resolved;
+
+                evidence.all_surface_realizations_match_kind =
+                    descendants.empty()
+                        ? true
+                        : allFacesMatchSurfaceKind(
+                              descendants,
+                              kernel::FaceSurfaceKind::plane);
+
+                if (evidence.surface_status ==
+                    kernel::ReferenceStatus::resolved) {
+                    evidence.resolved_surface_frame =
+                        base->end_frame;
+                }
+            };
+
+        if (scenario ==
+            kernel::SurfaceBooleanProbeScenario::
+                add_trim) {
+            // A partially overlapping boss removes an interior patch from the
+            // existing top cap while preserving one connected realization of
+            // the same semantic plane.
+            const auto tool =
+                buildEvidenceRectangularPrism(
+                    {10.0, 10.0, 9.0},
+                    10.0,
+                    10.0,
+                    6.0);
+            if (!tool) {
+                evidence.shape.status =
+                    kernel::EvidenceStatus::provider_failure;
+                evidence.topology.status =
+                    kernel::EvidenceStatus::provider_failure;
+                return evidence;
+            }
+
+            BRepAlgoAPI_Fuse fuse{
+                base->shape,
+                tool->shape};
+            fuse.SetFuzzyValue(0.0);
+            fuse.Build();
+            if (!fuse.IsDone() ||
+                fuse.Shape().IsNull()) {
+                evidence.shape.status =
+                    kernel::EvidenceStatus::provider_failure;
+                evidence.topology.status =
+                    kernel::EvidenceStatus::provider_failure;
+                return evidence;
+            }
+
+            fill_source(
+                fuse,
+                fuse.Shape());
+            return evidence;
+        }
+
+        kernel::Point3 tool_origin;
+        double tool_width{};
+        double tool_height{};
+        double tool_distance{10.0};
+
+        switch (scenario) {
+        case kernel::SurfaceBooleanProbeScenario::
+                 cut_trim_and_expose:
+            // Interior pocket. The old top plane remains one bounded Face
+            // with an inner boundary; the tool start cap at z=5 becomes the
+            // current pocket floor.
+            tool_origin =
+                {10.0, 10.0, 5.0};
+            tool_width = 10.0;
+            tool_height = 10.0;
+            break;
+
+        case kernel::SurfaceBooleanProbeScenario::
+                 cut_split:
+            // A channel spanning the complete Y extent only through the
+            // upper half leaves one connected solid below z=5 while splitting
+            // the old top plane into two disconnected Face realizations.
+            tool_origin =
+                {15.0, -5.0, 5.0};
+            tool_width = 10.0;
+            tool_height = 40.0;
+            break;
+
+        case kernel::SurfaceBooleanProbeScenario::
+                 cut_delete:
+            // Remove the entire upper half. The former z=10 source Surface
+            // disappears; coincident/similar replacement rules are not used.
+            tool_origin =
+                {-5.0, -5.0, 5.0};
+            tool_width = 50.0;
+            tool_height = 40.0;
+            break;
+
+        case kernel::SurfaceBooleanProbeScenario::
+                 add_trim:
+            // handled above
+            break;
+        }
+
+        const auto tool =
+            buildEvidenceRectangularPrism(
+                tool_origin,
+                tool_width,
+                tool_height,
+                tool_distance);
+        if (!tool) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            evidence.topology.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        BRepAlgoAPI_Cut cut{
+            base->shape,
+            tool->shape};
+        cut.SetFuzzyValue(0.0);
+        cut.Build();
+        if (!cut.IsDone() ||
+            cut.Shape().IsNull()) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            evidence.topology.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const auto result =
+            cut.Shape();
+        fill_source(
+            cut,
+            result);
+
+        if (scenario ==
+            kernel::SurfaceBooleanProbeScenario::
+                cut_trim_and_expose) {
+            evidence.tool_surface_kind =
+                kernel::FaceSurfaceKind::plane;
+            evidence.tool_source_frame =
+                tool->start_frame;
+            evidence.tool_surface_history =
+                historyEvidence(
+                    cut,
+                    tool->start_cap,
+                    TopAbs_FACE,
+                    result);
+
+            const auto tool_descendants =
+                historyDescendants(
+                    cut,
+                    tool->start_cap,
+                    TopAbs_FACE,
+                    result);
+
+            evidence.tool_surface_realization_count =
+                tool_descendants.size();
+            evidence.tool_surface_status =
+                tool_descendants.empty()
+                    ? kernel::ReferenceStatus::missing
+                    : kernel::ReferenceStatus::resolved;
+            evidence.all_tool_realizations_match_kind =
+                tool_descendants.empty()
+                    ? false
+                    : allFacesMatchSurfaceKind(
+                          tool_descendants,
+                          kernel::FaceSurfaceKind::plane);
+
+            if (evidence.tool_surface_status ==
+                kernel::ReferenceStatus::resolved) {
+                evidence.resolved_tool_surface_frame =
+                    tool->start_frame;
+            }
+        }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        evidence.topology.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        evidence.topology.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
 kernel::MultiStageLineageEvidence
 buildMultiStageLineageEvidence(
     kernel::MultiStageProbeScenario scenario,
