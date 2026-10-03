@@ -3674,6 +3674,108 @@ void CadWorkbench::deleteFeature(
             "Feature deleted — dependents remain authored and are reevaluated from current history."));
 }
 
+bool CadWorkbench::startExtrudeTool() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Extrude requires an active Part and modeling Kernel."));
+        return false;
+    }
+    if (extrude_draft_) {
+        setStatusText(
+            QStringLiteral(
+                "An Extrude operation is already active."));
+        return false;
+    }
+    if (active_sketch_id_ ||
+        sketch_support_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active Sketch context before Extrude."));
+        return false;
+    }
+
+    if (selected_profile_id_) {
+        const auto evaluation =
+            document_session->document()
+                .evaluateProfile(
+                    *selected_profile_id_);
+        if (evaluation &&
+            evaluation->valid()) {
+            return startExtrudeFromSelectedProfile();
+        }
+    }
+
+    extrude_profile_pick_active_ = true;
+    ++extrude_profile_pick_generation_;
+    if (extrude_profile_pick_generation_ == 0U) {
+        ++extrude_profile_pick_generation_;
+    }
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Extrude active — select one valid Profile in the Tree or viewport; Esc/CANCEL exits."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::cancelExtrudeProfilePick() {
+    if (!extrude_profile_pick_active_) {
+        return;
+    }
+
+    extrude_profile_pick_active_ = false;
+    ++extrude_profile_pick_generation_;
+    if (extrude_profile_pick_generation_ == 0U) {
+        ++extrude_profile_pick_generation_;
+    }
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Extrude profile selection cancelled — no authored change."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::tryCompleteExtrudeProfilePick() {
+    if (!extrude_profile_pick_active_ ||
+        !selected_profile_id_) {
+        return;
+    }
+
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        cancelExtrudeProfilePick();
+        return;
+    }
+
+    const auto evaluation =
+        document_session->document()
+            .evaluateProfile(
+                *selected_profile_id_);
+    if (!evaluation ||
+        !evaluation->valid()) {
+        setStatusText(
+            QStringLiteral(
+                "Selected Profile is Invalid — select one valid Profile for Extrude or cancel."));
+        return;
+    }
+
+    static_cast<void>(
+        startExtrudeFromSelectedProfile());
+}
+
 bool CadWorkbench::startExtrudeFromSelectedProfile() {
     auto* document_session =
         activeDocumentSession();
@@ -3727,15 +3829,30 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
         return false;
     }
 
+    constexpr core::LengthValue
+        default_extrude_distance{10.0};
+    if (!draft->setDistance(
+            default_extrude_distance)) {
+        setStatusText(
+            QStringLiteral(
+                "Extrude default distance could not be initialized."));
+        return false;
+    }
+
+    extrude_profile_pick_active_ = false;
     extrude_draft_ =
         std::move(*draft);
     extrude_evaluation_.reset();
-    extrude_distance_input_valid_ = false;
+    extrude_distance_input_valid_ = true;
 
     if (extrude_distance_edit_ != nullptr) {
         const QSignalBlocker blocked{
             extrude_distance_edit_};
-        extrude_distance_edit_->clear();
+        extrude_distance_edit_->setText(
+            formatLengthForPart(
+                extrude_draft_->distance(),
+                document_session->document()
+                    .lengthUnit()));
     }
     if (viewport_controller_) {
         viewport_controller_->clearSolidPreview();
@@ -3744,12 +3861,13 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
                 std::nullopt);
     }
 
+    refreshExtrudePreview();
     syncActionState();
     syncExtrudeUi();
     notifyCadInputContextChanged();
     setStatusText(
         QStringLiteral(
-            "Extrude active — enter a positive distance."));
+            "Extrude active — default distance applied; adjust parameters or Finish."));
     if (extrude_distance_edit_ != nullptr) {
         extrude_distance_edit_->setFocus(
             Qt::OtherFocusReason);
