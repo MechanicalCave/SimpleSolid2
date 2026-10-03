@@ -1,6 +1,6 @@
 # PM-01 — Final Acceptance Matrix
 
-**Status:** PENDING FINAL DOCS/CLOSURE GATE + OWNER MANUAL WINDOWS ACCEPTANCE  
+**Status:** PENDING OWNER MANUAL WINDOWS ACCEPTANCE  
 **Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
 **Architecture:** ADR-0014 + ADR-0015  
 **Runtime baseline merged to main:** `53bde160abeabd854d99fb96535c528f8402858f`  
@@ -25,7 +25,7 @@
 | Manual-remediation H3: Tree/default-distance/command-first Extrude UX | PR #157, Windows FULL #1343 | PASS |
 | Manual-remediation H4a: debounced typing + live Tree diagnostics/warning icons | PR #160, Windows FULL #1346 | PASS |
 | Manual-remediation H4b: operation-only preview + nodal-normal smooth shading + restored mesh density | PR #161, Windows FULL #1348 | PASS |
-| As-built docs + PL/EN product docs + generated Product Browser | PM-01 closure branch | PENDING GATE |
+| As-built docs + PL/EN product docs + generated Product Browser | PR #163, Windows DOCS #1350 | PASS |
 | Supported Windows integrated manual workflow | Section 3 below | PENDING OWNER |
 
 The runtime acceptance matrix has zero known false-Resolved semantic topology outcomes. PM-01 does not authorize face/edge topology picking, provider-native durable identity, adaptive fuzzy healing, multi-body or later Part-v1 operations.
@@ -113,5 +113,5 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 
 **Owner Windows result:** PENDING RETEST — prior attempts found remediation issues  
 **Date:** 2026-10-03  
-**Final tested candidate:** PENDING — next candidate is `53bde160abeabd854d99fb96535c528f8402858f`  
-**Notes:** Initial manual acceptance failed on `ede4e605...`; the H1-H3 re-test was a partial pass and exposed H4 responsiveness/presentation/live-diagnostic issues. H1-H4b are now automated PASS through Windows FULL #1348. Owner must re-test merged candidate `53bde160...` before PM-01 completion. See `work/PM-01H_MANUAL_ACCEPTANCE_REMEDIATION.md`.
+**Final tested candidate:** PENDING — next launch candidate is `f19b52f1cdc77ef1405aeb95a1a2ed042d9c8b02` (runtime baseline `53bde160abeabd854d99fb96535c528f8402858f`)  
+**Notes:** Initial manual acceptance failed on `ede4e605...`; the H1-H3 re-test was a partial pass and exposed H4 responsiveness/presentation/live-diagnostic issues. H1-H4b are now automated PASS through Windows FULL #1348. Owner must re-test the latest main `f19b52f...`; its runtime is the already-gated `53bde160...` baseline because later merges are work/docs-only. See `work/PM-01H_MANUAL_ACCEPTANCE_REMEDIATION.md`.
