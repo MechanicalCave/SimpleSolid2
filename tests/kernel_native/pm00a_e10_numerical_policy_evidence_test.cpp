@@ -100,10 +100,11 @@ std::size_t countSubshapes(
         return 0U;
     }
 
-    std::size_t count = 0U;
     if (shape.ShapeType() == kind) {
-        ++count;
+        return 1U;
     }
+
+    std::size_t count = 0U;
     for (TopExp_Explorer explorer{shape, kind};
          explorer.More();
          explorer.Next()) {
