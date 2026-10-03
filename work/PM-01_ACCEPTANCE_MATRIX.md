@@ -27,7 +27,7 @@
 | Manual-remediation H4b: operation-only preview + nodal-normal smooth shading + restored mesh density | PR #161, Windows FULL #1348 | PASS |
 | Manual-remediation H5: exact Add/Cut delta preview, transient source-Profile hide, volumetric Cut no-effect including face/edge/point contact | PR #165, Windows FULL #1359 | PASS |
 | Manual-remediation H6: independent committed-Body / Add / Cut OCCT shading aspects; preview replacement/clear cannot recolor Body | PR #169, Windows FULL #1364 | PASS |
-| As-built docs + PL/EN product docs + generated Product Browser | PR #163/#166, Windows DOCS #1350/#1360 | PASS |
+| As-built docs + PL/EN product docs + generated Product Browser | PR #163/#166/#171, Windows DOCS #1350/#1360/#1367 | PASS |
 | Supported Windows integrated manual workflow | Section 3 below | PENDING OWNER |
 
 The runtime acceptance matrix has zero known false-Resolved semantic topology outcomes. PM-01 does not authorize face/edge topology picking, provider-native durable identity, adaptive fuzzy healing, multi-body or later Part-v1 operations.
@@ -116,5 +116,5 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 **Owner Windows result:** PENDING RETEST — H6 automated PASS  
 **Date:** 2026-10-03  
 **Last Owner-tested candidate:** `26dd32f65d2d1497d3d3ee55ca52ab69182f93fb`  
-**Next Owner-test candidate:** `ca5592d07a271c83c9752fb654cded2c7b3d83c6`  
-**Notes:** H5 exact-delta/no-effect behavior is automated PASS. H6 isolates committed Body and transient preview shading state in Qt/OCCT and passed exact-head Windows FULL #1364. One Owner Windows retest of Add/Cut preview color isolation remains before PM-01 governance completion.
+**Next Owner-test candidate:** `d2655331c6713d87fc61564e75300b61312dfb37` (runtime baseline `ca5592d07a271c83c9752fb654cded2c7b3d83c6`)  
+**Notes:** H5 exact-delta/no-effect behavior is automated PASS. H6 isolates committed Body and transient preview shading state in Qt/OCCT and passed exact-head Windows FULL #1364; H6 internal docs/Product Browser passed Windows DOCS #1367. Only the focused Owner Add/Cut preview color-isolation retest remains before PM-01 governance completion.
