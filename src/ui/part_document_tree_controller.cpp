@@ -170,6 +170,67 @@ PartDocumentTreeController::PartDocumentTreeController(
     edit_feature_action_->setObjectName(
         QStringLiteral("editExtrudeFeatureAction"));
 
+    suppress_feature_action_ =
+        new QAction(
+            QStringLiteral("Suppress Feature"),
+            tree_);
+    suppress_feature_action_->setObjectName(
+        QStringLiteral("suppressFeatureAction"));
+    unsuppress_feature_action_ =
+        new QAction(
+            QStringLiteral("Unsuppress Feature"),
+            tree_);
+    unsuppress_feature_action_->setObjectName(
+        QStringLiteral("unsuppressFeatureAction"));
+    delete_feature_action_ =
+        new QAction(
+            QStringLiteral("Delete Feature"),
+            tree_);
+    delete_feature_action_->setObjectName(
+        QStringLiteral("deleteFeatureAction"));
+
+    QObject::connect(
+        suppress_feature_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            const auto id =
+                primaryFeatureId();
+            if (id &&
+                feature_suppression_handler_) {
+                feature_suppression_handler_(
+                    *id,
+                    true);
+            }
+        });
+    QObject::connect(
+        unsuppress_feature_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            const auto id =
+                primaryFeatureId();
+            if (id &&
+                feature_suppression_handler_) {
+                feature_suppression_handler_(
+                    *id,
+                    false);
+            }
+        });
+    QObject::connect(
+        delete_feature_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            const auto id =
+                primaryFeatureId();
+            if (id &&
+                feature_delete_handler_) {
+                feature_delete_handler_(
+                    *id);
+            }
+        });
+
     QObject::connect(
         edit_feature_action_,
         &QAction::triggered,
@@ -995,10 +1056,36 @@ void PartDocumentTreeController::showContextMenu(
 
     if (auto* item = tree_->itemAt(position);
         item != nullptr) {
-        if (featureIdForItem(*item)) {
+        if (const auto feature_id =
+                featureIdForItem(*item)) {
             tree_->setCurrentItem(item);
+            const auto* feature =
+                session_ != nullptr
+                    ? session_->document()
+                          .findFeature(
+                              *feature_id)
+                    : nullptr;
+            if (feature == nullptr) {
+                return;
+            }
+
+            edit_feature_action_->setEnabled(
+                !feature->suppressed);
+            suppress_feature_action_->setEnabled(
+                !feature->suppressed);
+            unsuppress_feature_action_->setEnabled(
+                feature->suppressed);
+            delete_feature_action_->setEnabled(
+                true);
+
             QMenu menu{tree_};
             menu.addAction(edit_feature_action_);
+            menu.addSeparator();
+            menu.addAction(
+                feature->suppressed
+                    ? unsuppress_feature_action_
+                    : suppress_feature_action_);
+            menu.addAction(delete_feature_action_);
             menu.exec(
                 tree_->viewport()->mapToGlobal(
                     position));
