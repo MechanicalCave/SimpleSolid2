@@ -120,6 +120,44 @@ Owner re-test on the merged H1/H2/H3 candidate found four remaining presentation
 - render neutral solid triangles with smoothing continuity rather than rebuilding every triangle as an independent planar BRep face;
 - preserve sharp edges by smoothing only within compatible local normal groups; do not alter modeled geometry, tolerances or topology identity.
 
+## H5 — exact operation delta preview + volumetric no-effect
+
+Owner re-test on latest main after H4 found two remaining PM-01 acceptance defects.
+
+### H5a — exact operation delta preview
+
+Accepted presentation semantics:
+
+- committed Body remains in its normal opaque/default presentation;
+- Add preview shows only material that would actually be added: `tool - upstream Body`;
+- Cut preview shows only material that would actually be removed: `tool ∩ upstream Body`;
+- preview tone is additive blue for Add and subtractive orange for Cut;
+- when a valid solid preview is ready, the source Profile is hidden transiently to avoid coplanar z-fighting against a Body face; authored Profile visibility policy is unchanged and normal visibility returns on invalid preview, Cancel, Finish or context exit;
+- full candidate Body evaluation remains authoritative for whether Finish is legal;
+- delta preview is runtime-only derived geometry and must not enter persistence, semantic identity or topology picking.
+
+### H5b — volumetric no-effect
+
+PM-01 already requires explicit Failed for no-effect Add/Cut. H5b strengthens provider evaluation so geometric contact without removed/added volume cannot pass as a modeling effect.
+
+For Cut:
+
+- compute/check the volumetric common between upstream Body and Extrude tool;
+- face/edge/point-only contact counts as zero volumetric effect and returns `no_effect`;
+- only positive-volume intersection may continue to the Boolean Cut;
+- Finish is disabled for `no_effect` and no Feature/Undo entry may be authored.
+
+Existing post-Boolean unchanged-result checks remain a secondary invariant, not the sole no-effect detector.
+
+Acceptance regressions:
+
+- Add delta excludes the portion of tool already inside upstream Body;
+- Cut delta equals only the upstream/tool volumetric overlap;
+- Cut tool touching only a Body face is `no_effect`;
+- Cut tool touching only an edge/point is `no_effect`;
+- ordinary volumetric Cut remains accepted;
+- source Profile does not z-fight while a valid preview is active and its authored visibility state is not mutated.
+
 ## Verification sequence
 
 1. H1 focused kernel/core regressions.
