@@ -1397,6 +1397,15 @@ Presentation tokens are ephemeral. Scene rebuild/history may allocate different 
 
 If the active Sketch disappears through Undo/history or the editing context is replaced, presentation/input state fails closed and is cleared.
 
+<!-- section-id: internal.part-documents.accepted-part-feature-boundary -->
+## Accepted Part Feature architecture boundary
+
+Production Body/Feature modeling is still absent in the current executable. The accepted normative boundary for the next production slice is now ADR-0014.
+
+ADR-0014 fixes the semantics that future implementation must preserve: one durable Body in Part v1; typed BodyId/FeatureId distinct from DocumentId; ordered typed Features; provider-neutral stage/role/provenance topology references with Missing/Resolved/Ambiguous/Unsupported cardinality; deterministic support frames; explicit Failed/Blocked/Suppressed lifecycle; no stale last-good geometry as current truth; revision/session/request freshness for result publication; explicit versioned modeling semantics with no display/pick tolerance leakage, fuzzy escalation or silent gap healing; and provider-neutral read/identity boundaries.
+
+This section records an accepted architecture boundary, not an as-built solid feature. Until a separately Owner-accepted PM-01 Work Contract is active and implemented, the native Part schema continues to contain no durable Body/Feature records and the product exposes no Extrude Add command.
+
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 

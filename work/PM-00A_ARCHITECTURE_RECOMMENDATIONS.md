@@ -1,6 +1,6 @@
 # PM-00A — Part Modeling Architecture Recommendations
 
-**Status:** COMPLETED EVIDENCE SYNTHESIS — OWNER REVIEW REQUIRED  
+**Status:** OWNER REVIEW COMPLETED — ACCEPTED VIA ADR-0014 ON 2026-10-03  
 **Decision class:** D2 proposals only; not accepted architecture  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.3  

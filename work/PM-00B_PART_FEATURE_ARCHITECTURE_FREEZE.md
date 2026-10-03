@@ -1,9 +1,10 @@
 # PM-00B — Part Feature Architecture Freeze
 
-**Status:** PROPOSED — NOT ACTIVE; EXPLICIT OWNER ACCEPTANCE REQUIRED  
+**Status:** ACTIVE  
+**Owner acceptance:** 2026-10-03  
 **Decision class:** D2 architecture-freeze Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.3  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.4  
 **Entry gate:** PM-00A COMPLETED — PASS, final source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb`, Windows FULL #1320  
 **Primary review input:** `work/PM-00A_PART_FEATURE_ARCHITECTURE_ADR_CANDIDATE.md`
 
@@ -15,11 +16,9 @@ PM-00B is governance/architecture freeze, not a second research phase and not PM
 
 ## 2. Activation rule
 
-This Work Contract is only a proposal.
+The Owner explicitly accepted PM-00B and ADR-0014 without amendment on 2026-10-03. The activation condition is satisfied.
 
-It becomes active only after the Owner explicitly accepts PM-00B scope. Merely merging the PM-00A completion artifacts does not activate it.
-
-Before activation, production mutation remains inactive.
+PM-00B authorizes only the governance/architecture work in Section 3. Production Body/Feature schema, migration and user-facing solid-modeling mutation remain inactive until a separately accepted PM-01 contract.
 
 ## 3. Scope IN after Owner acceptance
 
@@ -55,7 +54,7 @@ Those remain PM-01+ work under separately accepted contracts.
 
 ## 5. Required Owner decisions
 
-Owner review must explicitly resolve or amend:
+The Owner resolved all required PM-00B decisions without amendment on 2026-10-03:
 
 1. O-01 single-Body/Empty/no-effect/multi-solid semantics;
 2. O-04 frame/re-support rules and the explicit deferral boundary for planar-face frame derivation;
@@ -65,7 +64,7 @@ Owner review must explicitly resolve or amend:
 6. O-12 typed IDs/runtime freshness/read-snapshot/transform-direction foundations;
 7. O-03/O-06 bounded first operation/projection scope.
 
-Silence is not acceptance.
+The accepted decisions are materialized in ADR-0014. This PM-00B acceptance is not acceptance of PM-01.
 
 ## 6. Deliverables
 
@@ -104,10 +103,11 @@ STOP and return to Owner if the proposed freeze would require:
 - a hidden persistence migration;
 - a user-facing solid tool.
 
-## 9. Documentation impact
+## Documentation impact
 
-Internal docs: required when PM-00B accepts architecture that maintainers must understand.  
-User/Product docs: not required unless Owner review changes user-visible product direction.
+Internal docs: required
+User/Product docs: not required
+Reason: PM-00B accepts durable Part Feature architecture that maintainers must understand, while it introduces no user-visible product behavior.
 
 ## 10. Completion boundary
 

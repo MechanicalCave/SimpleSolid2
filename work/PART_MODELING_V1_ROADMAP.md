@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; IMPLEMENTATION NOT ACTIVATED  
-**Version:** 1.3  
-**Owner acceptance:** 2026-10-02  
-**Previous accepted version:** 1.2 — 2026-10-02  
+**Version:** 1.4  
+**Owner acceptance:** 2026-10-03  
+**Previous accepted version:** 1.3 — 2026-10-02  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current baseline:** `main` after merged SR-03, `6bc83dc47dd4b101c881bd7df4455e6bcdba80f0`  
+**Current baseline:** `main` after PM-00A completion, `19b4dba090ea99d0e2bad56d46ab8753f1097e85`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -123,7 +123,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | --- | --- | --- | --- |
 | G0 | **Sketcher profile-authoring readiness re-test** | prove current Sketcher can deliberately author practical Profiles after SR-01/02/03 | **COMPLETED — PASS on `16df8d1940a1f438a66cbd6964a881ba24718c0d`** |
 | 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | **COMPLETED — PASS; final source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb`, Windows FULL #1320; Owner-review synthesis prepared** |
-| 2 | **PM-00B — Part Feature Architecture Freeze** | Owner-approved ADR/contract freeze for first solid workflow based on PM-00A evidence | future separate Work Contract / governance gate |
+| 2 | **PM-00B — Part Feature Architecture Freeze** | Owner-approved ADR/contract freeze for first solid workflow based on PM-00A evidence | **ACTIVE — Owner accepted 2026-10-03; governance-only freeze in progress** |
 | 3 | **PM-01 — First Solid Vertical Slice: Body / Feature / Extrude Add** | minimum durable Body/Feature architecture plus one complete Extrude Add lifecycle | future separate Work Contract |
 | 4 | **PM-02 — Datum Plane / Sketch Support / Extrude Cut** | offset datum from stable source, Sketch on datum, Cut, downstream recompute/failure behavior | future separate Work Contract |
 | 5 | **PM-03 — Face Support / Semantic Topology References / Projection** | planar-face support, repair, exact bounded projection and resolver expansion without silent rebinding | future separate Work Contract |
@@ -314,26 +314,28 @@ STOP for Owner review if evidence suggests:
 
 ## 9. Decision ledger and owning package
 
-The audited design uses O-01...O-12 as a durable decision ledger. They remain open until explicitly closed by the package below.
+The audited design uses O-01...O-12 as a durable decision ledger. Decisions remain open until explicitly closed by their owning package; PM-00B now closes the ADR-0014 foundations and records the accepted initial O-03/O-06 matrix.
 
 | ID | Decision | Program direction | Must be closed by |
 | --- | --- | --- | --- |
-| O-01 | exact single-Body semantics: creation, Empty, valid one-solid result, no-effect/multi-solid outcomes | one Body in v1; do not alias BodyId to DocumentId | PM-00B before PM-01 schema |
+| O-01 | exact single-Body semantics: creation, Empty, valid one-solid result, no-effect/multi-solid outcomes | one Body in v1; do not alias BodyId to DocumentId | **CLOSED by ADR-0014 / PM-00B** |
 | O-02 | exact datum constructors and Mid semantics | only constructors justified by v1 workflows; no provider-parameter Mid shortcut | owning datum package, no later than PM-04 |
-| O-03 | projection curves, snapshot/refresh, atomic face-boundary capture | snapshot intent; exact supported curves or explicit UnsupportedCurve; no silent approximation | product matrix in PM-00A; final before PM-03 |
-| O-04 | support-frame construction, re-support and orientation | full stable O/U/V/N rule; preserve local 2D by default; no silent fallback | PM-00B before support schema |
-| O-05 | topology-reference selector, lineage and split/merge guarantees | semantic producer/stage/role lineage, fail closed, user repair; no Face[n]/Edge[n] | evidence in PM-00A; freeze in PM-00B |
-| O-06 | exact variants/inputs per modeling operation | freeze a bounded v1 matrix; lifecycle completeness over variant breadth | first matrix PM-00A; each owning operation contract |
+| O-03 | projection curves, snapshot/refresh, atomic face-boundary capture | snapshot intent; exact supported curves or explicit UnsupportedCurve; no silent approximation | **INITIAL MATRIX ACCEPTED by PM-00B; final before PM-03** |
+| O-04 | support-frame construction, re-support and orientation | full stable O/U/V/N rule; preserve local 2D by default; no silent fallback | **CLOSED by ADR-0014 / PM-00B** |
+| O-05 | topology-reference selector, lineage and split/merge guarantees | semantic producer/stage/role lineage, fail closed, user repair; no Face[n]/Edge[n] | **CLOSED by ADR-0014 / PM-00B** |
+| O-06 | exact variants/inputs per modeling operation | freeze a bounded v1 matrix; lifecycle completeness over variant breadth | **INITIAL MATRIX ACCEPTED by PM-00B; each owning operation contract remains authoritative** |
 | O-07 | Sketch Axis representation/editing/direction/visibility | Axis excluded from Profiles; any valid straight Sketch line may still be an axis source without role conversion | PM-04 before Shared-2D mutation |
 | O-08 | Published References/local frames and v1 UI scope | stable typed interface identity; no Assembly implementation | semantics by PM-00B; UI/final scope PM-06 |
-| O-09 | downstream failure commit, Delete, Suppress, retry/history semantics | preserve repairable downstream intent; separate Delete from Suppress; no hidden history entries | PM-00B before evaluator/commands |
+| O-09 | downstream failure commit, Delete, Suppress, retry/history semantics | preserve repairable downstream intent; separate Delete from Suppress; no hidden history entries | **CLOSED by ADR-0014 / PM-00B** |
 | O-10 | visibility, auto-hide, history inspection and performance budgets | visibility never changes evaluation; measure before optimize | each owning UI package; final budget by PM-06 |
-| O-11 | numerical tolerances, refine/healing, exact Profile->Kernel input, modeling semantics version | explicit versioned policy; no display tolerance leakage or escalating fuzzy success | evidence PM-00A; freeze PM-00B before first persisted solid |
-| O-12 | ID scopes, Part snapshot/read contract, transform direction, durable version vs DocumentRevision | distinguish Document/Body/local IDs and runtime revision; no Assembly solver | foundations PM-00B; minimal interface PM-06 |
+| O-11 | numerical tolerances, refine/healing, exact Profile->Kernel input, modeling semantics version | explicit versioned policy; no display tolerance leakage or escalating fuzzy success | **CLOSED by ADR-0014 / PM-00B** |
+| O-12 | ID scopes, Part snapshot/read contract, transform direction, durable version vs DocumentRevision | distinguish Document/Body/local IDs and runtime revision; no Assembly solver | **FOUNDATIONS CLOSED by ADR-0014 / PM-00B; minimal interface PM-06** |
 
 A package must not silently make a ledger decision owned by a later package if doing so would constrain that later decision durably. If a dependency is discovered, STOP and amend sequencing explicitly.
 
 ## 10. PM-00B — Part Feature Architecture Freeze
+
+**Status:** ACTIVE — Owner accepted 2026-10-03. ADR-0014 is accepted; this package is completing governance/documentation synchronization and the bounded PM-01 contract candidate.
 
 PM-00B is intentionally short and governance-heavy.
 
@@ -577,16 +579,12 @@ Planned Part features must not be documented as already implemented.
 
 ## 23. Activation boundary
 
-Program v1.3 is accepted and frozen. **PM-00A is completed** after A0 plus E01-E10 evidence and the Owner-review synthesis. No later PM package is active.
+Program v1.4 is accepted and frozen. **PM-00B is active as a governance-only architecture-freeze package.**
 
-Current legal next action:
+G0 and PM-00A are complete. The Owner accepted PM-00B and ADR-0014 on 2026-10-03, including O-01, O-04, O-05, O-09, O-11, O-12 foundations and the O-03/O-06 product-scope matrix.
 
-**Owner review of the proposed PM-00A Part Feature Architecture ADR candidate and the proposed PM-00B Part Feature Architecture Freeze Work Contract.**
+ADR-0014 now governs Part Feature architecture. PM-00B does not authorize production Body/Feature/Extrude mutation; its remaining work is repository synchronization, required internal documentation, the bounded PM-01 Work Contract candidate and DOCS/CLOSURE evidence.
 
-G0 and PM-00A are complete. PM-00A's final source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb` passed Windows FULL #1320. The evidence and recommendations do not themselves freeze D2 architecture.
-
-PM-00B remains inactive until explicit Owner acceptance of `work/PM-00B_PART_FEATURE_ARCHITECTURE_FREEZE.md`. PM-01 and all product solid-modeling packages remain inactive.
-
-After PM-00B, PM-01 still requires a separate production Work Contract and explicit Owner acceptance.
+PM-01 remains **NOT ACTIVE**. After PM-00B completes, PM-01 requires a separate explicit Owner acceptance before any durable Body/Feature schema, migration or user-facing Extrude Add implementation begins.
 
 Part Modeling v1 program acceptance must never be interpreted as permission to skip those boundaries.
