@@ -32,6 +32,9 @@ target_link_libraries(pm01c_feature_commands_test PRIVATE simplesolid2_applicati
 ss2_core_only_test(pm01c_feature_evaluator_test pm01c.feature_evaluator pm01c_feature_evaluator_test.cpp)
 target_link_libraries(pm01c_feature_evaluator_test PRIVATE simplesolid2_application simplesolid2_kernel simplesolid2_part)
 
+ss2_core_only_test(pm01e_extrude_draft_test pm01e.extrude_draft pm01e_extrude_draft_test.cpp)
+target_link_libraries(pm01e_extrude_draft_test PRIVATE simplesolid2_application simplesolid2_kernel simplesolid2_part)
+
 ss2_core_only_test(pm00a_e08_support_frame_stability_test pm00a.e08_support_frame_stability pm00a_e08_support_frame_stability_test.cpp)
 target_link_libraries(pm00a_e08_support_frame_stability_test PRIVATE simplesolid2_application simplesolid2_kernel simplesolid2_part)
 
@@ -91,6 +94,7 @@ set_tests_properties(part01.part_document_transaction PROPERTIES LABELS "tier-fa
 set_tests_properties(part01.document_session PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-part")
 set_tests_properties(pm01c.feature_commands PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part")
 set_tests_properties(pm01c.feature_evaluator PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part")
+set_tests_properties(pm01e.extrude_draft PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part")
 set_tests_properties(pm00a.e08_support_frame_stability PROPERTIES LABELS "tier-full-only;subsystem-application;subsystem-core;subsystem-part;subsystem-persistence")
 set_tests_properties(pm00a.e09_stale_publication PROPERTIES LABELS "tier-full-only;subsystem-application;subsystem-core;subsystem-part;subsystem-persistence")
 set_tests_properties(sk04a.line_commit_protocol PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-sketch")
