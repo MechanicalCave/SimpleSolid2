@@ -11,19 +11,27 @@ struct SolidTrianglePresentation final {
     Point3 first;
     Point3 second;
     Point3 third;
-    Vec3 normal;
+    Vec3 first_normal;
+    Vec3 second_normal;
+    Vec3 third_normal;
 
     [[nodiscard]] bool valid() const noexcept {
         return finite(first) &&
                finite(second) &&
                finite(third) &&
-               finite(normal) &&
+               finite(first_normal) &&
+               finite(second_normal) &&
+               finite(third_normal) &&
                cross(
                    second - first,
                    third - first)
                        .squaredLength() >
                    1.0e-24 &&
-               normal.squaredLength() >
+               first_normal.squaredLength() >
+                   1.0e-24 &&
+               second_normal.squaredLength() >
+                   1.0e-24 &&
+               third_normal.squaredLength() >
                    1.0e-24;
     }
 
