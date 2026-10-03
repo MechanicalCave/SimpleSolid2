@@ -1075,34 +1075,34 @@ presentationMeshForShape(
                     TopoDS::Face(
                         explorer.Current());
                 TopLoc_Location location;
-            const Handle(Poly_Triangulation)
-                triangulation =
-                    BRep_Tool::Triangulation(
-                        face,
-                        location);
-            if (triangulation.IsNull()) {
-                continue;
-            }
-            if (!triangulation->HasNormals()) {
-                BRepLib_ToolTriangulatedShape::
-                    ComputeNormals(
-                        face,
-                        triangulation);
-            }
-            if (!triangulation->HasNormals()) {
-                result.status =
-                    kernel::SolidPresentationStatus::
-                        provider_failure;
-                result.mesh.triangles.clear();
-                return result;
-            }
+                const Handle(Poly_Triangulation)
+                    triangulation =
+                        BRep_Tool::Triangulation(
+                            face,
+                            location);
+                if (triangulation.IsNull()) {
+                    continue;
+                }
+                if (!triangulation->HasNormals()) {
+                    BRepLib_ToolTriangulatedShape::
+                        ComputeNormals(
+                            face,
+                            triangulation);
+                }
+                if (!triangulation->HasNormals()) {
+                    result.status =
+                        kernel::SolidPresentationStatus::
+                            provider_failure;
+                    result.mesh.triangles.clear();
+                    return result;
+                }
 
-            const auto transform =
-                location.Transformation();
-            for (Standard_Integer index = 1;
-                 index <=
-                     triangulation->NbTriangles();
-                 ++index) {
+                const auto transform =
+                    location.Transformation();
+                for (Standard_Integer index = 1;
+                     index <=
+                         triangulation->NbTriangles();
+                     ++index) {
                 Standard_Integer first_index{};
                 Standard_Integer second_index{};
                 Standard_Integer third_index{};
@@ -1166,8 +1166,8 @@ presentationMeshForShape(
                     continue;
                 }
 
-                result.mesh.triangles.push_back(
-                    kernel::SolidMeshTriangle{
+                    result.mesh.triangles.push_back(
+                        kernel::SolidMeshTriangle{
                         {first.X(),
                          first.Y(),
                          first.Z()},
