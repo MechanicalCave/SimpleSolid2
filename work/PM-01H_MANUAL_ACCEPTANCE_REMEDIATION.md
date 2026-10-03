@@ -1,0 +1,96 @@
+# PM-01H — Manual Acceptance Remediation
+
+**Status:** ACTIVE REMEDIATION CHECKPOINT  
+**Parent Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
+**Authority:** ADR-0014 + ADR-0015  
+**Baseline:** `ede4e6050d09bb492101eb41cd35464565a2c841`
+
+## Trigger
+
+Owner manual Windows acceptance on 2026-10-03 found reproducible defects before PM-01 completion.
+
+Observed supported-profile matrix:
+
+- Line-only rectangle: first Extrude Add works;
+- whole Circle: first Extrude Add works;
+- Circle with hole: first Extrude Add works;
+- mixed Line + Arc profiles: first Extrude Add can be rejected or geometrically misinterpreted;
+- Add preview can overlap committed geometry and z-fight;
+- Cut preview does not communicate the subtractive result correctly and can tint the whole Body;
+- cylindrical presentation is visibly faceted/flat-shaded;
+- invalid/failed model state is not sufficiently visible in Tree.
+
+PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old candidate, not acceptance of these newly discovered defects.
+
+## H1 — Profile → Kernel fidelity blocker
+
+Goal: one canonical resolved Profile boundary meaning; the Kernel adapter must realize it without re-interpreting traversal semantics.
+
+Scope:
+
+1. add production regressions for first Add from mixed Line+Arc closed profiles;
+2. cover Arc traversal in both source-forward and source-reverse boundary uses;
+3. cover the same boundary through subsequent Add/Cut;
+4. fix only the adapter/provider translation necessary to preserve resolved boundary orientation;
+5. add a bounded Profile→Kernel face fidelity assertion where useful: loop cardinality/provenance and geometric executability;
+6. no provider handle persistence, no fuzzy escalation, no alternate Profile semantics.
+
+Acceptance:
+
+- valid mixed Line+Arc Profile reaches a valid one-solid first Add when geometrically admissible;
+- reverse boundary traversal produces the same intended curve segment with reversed orientation, not a different arc;
+- existing rectangle/Circle/hole behavior remains green;
+- zero false-Resolved lineage regression remains intact.
+
+## H2 — Extrude preview and solid presentation blocker
+
+Goal: preview must communicate the candidate operation without corrupting or duplicating committed Body presentation.
+
+Scope:
+
+- eliminate committed-body/preview z-fighting for Add;
+- Cut preview must show a comprehensible candidate/result instead of only whole-Body alarm tint;
+- verify preview clear/replace on parameter change, Finish, Cancel and stale context;
+- improve curved-surface presentation so cylindrical surfaces do not appear as visibly flat polygon panels at normal working zoom;
+- presentation policy remains non-semantic and cannot alter modeling results.
+
+Acceptance:
+
+- Add preview has no overlapping coplanar duplicate triangles;
+- Cut preview communicates removed/result geometry consistently;
+- committed Body presentation returns exactly after Cancel/Finish;
+- cylinder rendering is visually smooth enough for normal interaction while remaining bounded.
+
+## H3 — bounded PM-01 UX remediation
+
+After H1/H2 PASS:
+
+- move Body below Sketches in Part Tree;
+- show clear visual Tree state for Invalid Profile and Failed/Blocked/Suppressed Feature;
+- new Extrude draft defaults to a positive unit-aware distance equivalent to 10 mm in canonical authored units;
+- support command-first Extrude: activating Extrude without a selected Profile enters an explicit "select one valid Profile" state; selection-first remains supported.
+
+These are presentation/interaction changes only. They must not change durable Feature schema or modeling meaning.
+
+## Deferred decision — Feature highlight
+
+Selecting a Feature in Tree should improve identification in the viewport, but implementation is deferred until the visual meaning is fixed explicitly:
+
+- source Profile highlight;
+- Body state after that Feature;
+- or geometric delta contributed/removed by that Feature.
+
+Do not add provider topology picking or a speculative per-feature persistent geometry model merely to implement highlight.
+
+## Verification sequence
+
+1. H1 focused kernel/core regressions.
+2. H1 exact-head FULL before merge.
+3. Owner re-test of the five representative Profiles.
+4. H2 presentation/desktop regressions + exact-head FULL.
+5. Owner preview/cylinder re-test.
+6. H3 desktop interaction regressions + exact-head FULL.
+7. repeat the final PM-01 manual acceptance matrix.
+8. only then perform governance completion.
+
+PM-02 and later packages remain inactive.
