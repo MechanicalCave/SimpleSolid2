@@ -6,7 +6,7 @@
 **Previous accepted version:** 1.4 — 2026-10-03  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current baseline:** `main` after PM-00B completion, `ee1e67d7fa68167ce85414d90c1f8cdd20ac4697`  
+**Current completed checkpoint:** PM-01 Owner-tested main `afecfa9884bfeb53d5d0bb84ff110b3b280cf8d2`; final closure changes are work/governance-only  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
