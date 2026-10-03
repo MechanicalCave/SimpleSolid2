@@ -1,11 +1,13 @@
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 
+#include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <BRepGProp.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepCheck_Analyzer.hxx>
@@ -28,6 +30,7 @@
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
+#include <GProp_GProps.hxx>
 #include <BRepSweep_Prism.hxx>
 
 #include <algorithm>
@@ -838,6 +841,55 @@ void populateDiagnostics(
         BRepCheck_Analyzer{shape}.IsValid();
 }
 
+enum class VolumePresence {
+    none,
+    positive,
+    invalid,
+};
+
+[[nodiscard]] VolumePresence volumePresence(
+    const TopoDS_Shape& shape) {
+    if (shape.IsNull()) {
+        return VolumePresence::none;
+    }
+
+    bool found_solid = false;
+    double total_volume = 0.0;
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_SOLID};
+         explorer.More();
+         explorer.Next()) {
+        found_solid = true;
+        const auto solid =
+            TopoDS::Solid(
+                explorer.Current());
+        if (!BRepCheck_Analyzer{solid}.IsValid()) {
+            return VolumePresence::invalid;
+        }
+
+        GProp_GProps properties;
+        BRepGProp::VolumeProperties(
+            solid,
+            properties);
+        const double volume =
+            std::abs(properties.Mass());
+        if (!std::isfinite(volume)) {
+            return VolumePresence::invalid;
+        }
+        total_volume += volume;
+        if (!std::isfinite(total_volume)) {
+            return VolumePresence::invalid;
+        }
+    }
+
+    if (!found_solid ||
+        !(total_volume > 0.0)) {
+        return VolumePresence::none;
+    }
+    return VolumePresence::positive;
+}
+
 template <typename Operation>
 [[nodiscard]] bool upstreamExteriorUnchanged(
     Operation& operation,
@@ -977,187 +1029,23 @@ finishBoolean(
     return result;
 }
 
-} // namespace
-
-kernel::SolidModelingResult
-OcctSolidModelingKernel::extrude(
-    const kernel::LinearExtrudeInput& input,
-    kernel::RuntimeSolidHandle upstream) noexcept {
-    kernel::SolidModelingResult result;
-    if (!input.valid()) {
-        result.status =
-            kernel::SolidModelingStatus::
-                invalid_input;
-        return result;
-    }
-
-    if (input.operation ==
-            kernel::SolidBooleanOperation::cut &&
-        upstream == nullptr) {
-        result.status =
-            kernel::SolidModelingStatus::
-                missing_upstream;
-        return result;
-    }
-
-    const OcctRuntimeSolid* upstream_occt =
-        nullptr;
-    if (upstream != nullptr) {
-        upstream_occt =
-            dynamic_cast<
-                const OcctRuntimeSolid*>(
-                    upstream.get());
-        if (upstream_occt == nullptr) {
-            result.status =
-                kernel::SolidModelingStatus::
-                    provider_mismatch;
-            return result;
-        }
-    }
-
-    try {
-        const auto tool =
-            buildExtrudeTool(input);
-        if (!tool) {
-            result.status =
-                kernel::SolidModelingStatus::
-                    provider_failure;
-            return result;
-        }
-
-        const auto& tool_shape =
-            tool->first;
-        const auto& created =
-            tool->second;
-
-        if (upstream_occt == nullptr) {
-            populateDiagnostics(
-                result,
-                tool_shape);
-            if (result.solid_count != 1U) {
-                result.status =
-                    result.solid_count == 0U
-                        ? kernel::SolidModelingStatus::
-                              empty_result
-                        : kernel::SolidModelingStatus::
-                              multi_solid;
-                return result;
-            }
-            if (!result.brep_valid) {
-                result.status =
-                    kernel::SolidModelingStatus::
-                        invalid_brep;
-                return result;
-            }
-
-            const auto solid =
-                singleSolid(tool_shape);
-            if (!solid) {
-                result.status =
-                    kernel::SolidModelingStatus::
-                        provider_failure;
-                return result;
-            }
-
-            auto runtime =
-                std::make_shared<
-                    OcctRuntimeSolid>();
-            runtime->solid = *solid;
-
-            publishLineage(
-                result,
-                *runtime,
-                nullptr,
-                created,
-                [&tool_shape](
-                    const TopoDS_Face& source) {
-                    std::vector<TopoDS_Face>
-                        candidates;
-                    if (containsSameFace(
-                            tool_shape,
-                            source)) {
-                        candidates.push_back(
-                            source);
-                    }
-                    return candidates;
-                });
-
-            result.status =
-                kernel::SolidModelingStatus::ok;
-            result.solid =
-                std::move(runtime);
-            return result;
-        }
-
-        if (input.operation ==
-            kernel::SolidBooleanOperation::add) {
-            BRepAlgoAPI_Fuse fuse{
-                upstream_occt->solid,
-                tool_shape};
-            fuse.SetFuzzyValue(0.0);
-            fuse.Build();
-            return finishBoolean(
-                fuse,
-                *upstream_occt,
-                created,
-                input.operation);
-        }
-
-        BRepAlgoAPI_Cut cut{
-            upstream_occt->solid,
-            tool_shape};
-        cut.SetFuzzyValue(0.0);
-        cut.Build();
-        return finishBoolean(
-            cut,
-            *upstream_occt,
-            created,
-            input.operation);
-    } catch (const Standard_Failure&) {
-        result.status =
-            kernel::SolidModelingStatus::
-                provider_failure;
-        return result;
-    } catch (...) {
-        result.status =
-            kernel::SolidModelingStatus::
-                provider_failure;
-        return result;
-    }
-}
-
-
-kernel::SolidPresentationResult
-OcctSolidModelingKernel::presentationMesh(
-    kernel::RuntimeSolidHandle solid) noexcept {
+[[nodiscard]] kernel::SolidPresentationResult
+presentationMeshForShape(
+    const TopoDS_Shape& shape) noexcept {
     kernel::SolidPresentationResult result;
-    if (solid == nullptr) {
+    if (shape.IsNull()) {
         result.status =
             kernel::SolidPresentationStatus::
                 invalid_input;
         return result;
     }
 
-    const auto* runtime =
-        dynamic_cast<
-            const OcctRuntimeSolid*>(
-                solid.get());
-    if (runtime == nullptr) {
-        result.status =
-            kernel::SolidPresentationStatus::
-                provider_mismatch;
-        return result;
-    }
-
     try {
-        // Presentation-only policy. Smooth shading is carried by nodal
-        // normals; tessellation density is therefore restored to the original
-        // bounded values instead of paying for tiny flat facets.
         constexpr double linear_deflection_mm = 0.25;
         constexpr double angular_deflection_rad = 0.35;
 
         BRepMesh_IncrementalMesh mesher{
-            runtime->solid,
+            shape,
             linear_deflection_mm,
             false,
             angular_deflection_rad,
@@ -1171,7 +1059,7 @@ OcctSolidModelingKernel::presentationMesh(
         }
 
         for (TopExp_Explorer explorer{
-                 runtime->solid,
+                 shape,
                  TopAbs_FACE};
              explorer.More();
              explorer.Next()) {
@@ -1317,6 +1205,313 @@ OcctSolidModelingKernel::presentationMesh(
         result.mesh.triangles.clear();
         return result;
     }
+}
+
+} // namespace
+
+kernel::SolidModelingResult
+OcctSolidModelingKernel::extrude(
+    const kernel::LinearExtrudeInput& input,
+    kernel::RuntimeSolidHandle upstream) noexcept {
+    kernel::SolidModelingResult result;
+    if (!input.valid()) {
+        result.status =
+            kernel::SolidModelingStatus::
+                invalid_input;
+        return result;
+    }
+
+    if (input.operation ==
+            kernel::SolidBooleanOperation::cut &&
+        upstream == nullptr) {
+        result.status =
+            kernel::SolidModelingStatus::
+                missing_upstream;
+        return result;
+    }
+
+    const OcctRuntimeSolid* upstream_occt =
+        nullptr;
+    if (upstream != nullptr) {
+        upstream_occt =
+            dynamic_cast<
+                const OcctRuntimeSolid*>(
+                    upstream.get());
+        if (upstream_occt == nullptr) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_mismatch;
+            return result;
+        }
+    }
+
+    try {
+        const auto tool =
+            buildExtrudeTool(input);
+        if (!tool) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_failure;
+            return result;
+        }
+
+        const auto& tool_shape =
+            tool->first;
+        const auto& created =
+            tool->second;
+
+        if (upstream_occt == nullptr) {
+            populateDiagnostics(
+                result,
+                tool_shape);
+            if (result.solid_count != 1U) {
+                result.status =
+                    result.solid_count == 0U
+                        ? kernel::SolidModelingStatus::
+                              empty_result
+                        : kernel::SolidModelingStatus::
+                              multi_solid;
+                return result;
+            }
+            if (!result.brep_valid) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        invalid_brep;
+                return result;
+            }
+
+            const auto solid =
+                singleSolid(tool_shape);
+            if (!solid) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
+
+            auto runtime =
+                std::make_shared<
+                    OcctRuntimeSolid>();
+            runtime->solid = *solid;
+
+            publishLineage(
+                result,
+                *runtime,
+                nullptr,
+                created,
+                [&tool_shape](
+                    const TopoDS_Face& source) {
+                    std::vector<TopoDS_Face>
+                        candidates;
+                    if (containsSameFace(
+                            tool_shape,
+                            source)) {
+                        candidates.push_back(
+                            source);
+                    }
+                    return candidates;
+                });
+
+            result.status =
+                kernel::SolidModelingStatus::ok;
+            result.solid =
+                std::move(runtime);
+            return result;
+        }
+
+        if (input.operation ==
+            kernel::SolidBooleanOperation::add) {
+            BRepAlgoAPI_Fuse fuse{
+                upstream_occt->solid,
+                tool_shape};
+            fuse.SetFuzzyValue(0.0);
+            fuse.Build();
+            return finishBoolean(
+                fuse,
+                *upstream_occt,
+                created,
+                input.operation);
+        }
+
+        // A Cut that only touches the Body by face/edge/point has no
+        // volumetric modeling effect and must fail closed before we author it.
+        BRepAlgoAPI_Common overlap{
+            upstream_occt->solid,
+            tool_shape};
+        overlap.SetFuzzyValue(0.0);
+        overlap.Build();
+        if (!overlap.IsDone()) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_failure;
+            return result;
+        }
+        switch (volumePresence(
+                    overlap.Shape())) {
+        case VolumePresence::none:
+            result.status =
+                kernel::SolidModelingStatus::
+                    no_effect;
+            return result;
+        case VolumePresence::invalid:
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_failure;
+            return result;
+        case VolumePresence::positive:
+            break;
+        }
+
+        BRepAlgoAPI_Cut cut{
+            upstream_occt->solid,
+            tool_shape};
+        cut.SetFuzzyValue(0.0);
+        cut.Build();
+        return finishBoolean(
+            cut,
+            *upstream_occt,
+            created,
+            input.operation);
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+}
+
+
+kernel::SolidPresentationResult
+OcctSolidModelingKernel::extrudePreviewMesh(
+    const kernel::LinearExtrudeInput& input,
+    kernel::RuntimeSolidHandle upstream) noexcept {
+    kernel::SolidPresentationResult result;
+    if (!input.valid()) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+    if (input.operation ==
+            kernel::SolidBooleanOperation::cut &&
+        upstream == nullptr) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+
+    const OcctRuntimeSolid* upstream_occt =
+        nullptr;
+    if (upstream != nullptr) {
+        upstream_occt =
+            dynamic_cast<
+                const OcctRuntimeSolid*>(
+                    upstream.get());
+        if (upstream_occt == nullptr) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_mismatch;
+            return result;
+        }
+    }
+
+    try {
+        const auto tool =
+            buildExtrudeTool(input);
+        if (!tool) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+        const auto& tool_shape =
+            tool->first;
+
+        TopoDS_Shape delta_shape;
+        if (upstream_occt == nullptr) {
+            delta_shape = tool_shape;
+        } else if (
+            input.operation ==
+            kernel::SolidBooleanOperation::add) {
+            BRepAlgoAPI_Cut delta{
+                tool_shape,
+                upstream_occt->solid};
+            delta.SetFuzzyValue(0.0);
+            delta.Build();
+            if (!delta.IsDone()) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                return result;
+            }
+            delta_shape = delta.Shape();
+        } else {
+            BRepAlgoAPI_Common delta{
+                tool_shape,
+                upstream_occt->solid};
+            delta.SetFuzzyValue(0.0);
+            delta.Build();
+            if (!delta.IsDone()) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                return result;
+            }
+            delta_shape = delta.Shape();
+        }
+
+        if (volumePresence(delta_shape) !=
+            VolumePresence::positive) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+        return presentationMeshForShape(
+            delta_shape);
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        return result;
+    }
+}
+
+kernel::SolidPresentationResult
+OcctSolidModelingKernel::presentationMesh(
+    kernel::RuntimeSolidHandle solid) noexcept {
+    kernel::SolidPresentationResult result;
+    if (solid == nullptr) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+
+    const auto* runtime =
+        dynamic_cast<
+            const OcctRuntimeSolid*>(
+                solid.get());
+    if (runtime == nullptr) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_mismatch;
+        return result;
+    }
+
+    return presentationMeshForShape(
+        runtime->solid);
 }
 
 } // namespace simplesolid2::kernel_occt
