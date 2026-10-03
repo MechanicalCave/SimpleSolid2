@@ -50,6 +50,12 @@ public:
             std::optional<part::FeatureId>)>;
     using FeatureEditHandler =
         std::function<void(part::FeatureId)>;
+    using FeatureSuppressionHandler =
+        std::function<void(
+            part::FeatureId,
+            bool suppressed)>;
+    using FeatureDeleteHandler =
+        std::function<void(part::FeatureId)>;
     using BodySelectionHandler =
         std::function<void(
             std::optional<part::BodyId>)>;
@@ -110,6 +116,16 @@ public:
         feature_edit_handler_ =
             std::move(handler);
     }
+    void setFeatureSuppressionHandler(
+        FeatureSuppressionHandler handler) {
+        feature_suppression_handler_ =
+            std::move(handler);
+    }
+    void setFeatureDeleteHandler(
+        FeatureDeleteHandler handler) {
+        feature_delete_handler_ =
+            std::move(handler);
+    }
     void setBodySelectionHandler(
         BodySelectionHandler handler) {
         body_selection_handler_ =
@@ -168,6 +184,9 @@ private:
     QAction* edit_sketch_action_{};
     QAction* edit_profile_action_{};
     QAction* edit_feature_action_{};
+    QAction* suppress_feature_action_{};
+    QAction* unsuppress_feature_action_{};
+    QAction* delete_feature_action_{};
     ResultHandler result_handler_;
     SelectionHandler selection_handler_;
     SketchEditHandler sketch_edit_handler_;
@@ -175,6 +194,10 @@ private:
     ProfileEditHandler profile_edit_handler_;
     FeatureSelectionHandler feature_selection_handler_;
     FeatureEditHandler feature_edit_handler_;
+    FeatureSuppressionHandler
+        feature_suppression_handler_;
+    FeatureDeleteHandler
+        feature_delete_handler_;
     BodySelectionHandler body_selection_handler_;
     part::BodyEvaluationStatus body_status_{
         part::BodyEvaluationStatus::empty};

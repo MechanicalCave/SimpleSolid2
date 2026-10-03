@@ -261,7 +261,9 @@ QTreeWidgetItem* findProfileItem(
 
 
 QTreeWidgetItem* findFeatureItem(
-    QTreeWidget& tree) {
+    QTreeWidget& tree,
+    QStringView status =
+        QStringView{u"UpToDate"}) {
     const auto matches =
         tree.findItems(
             QStringLiteral("Extrude"),
@@ -271,7 +273,9 @@ QTreeWidgetItem* findFeatureItem(
     for (auto* item : matches) {
         if (item != nullptr &&
             item->text(0).contains(
-                QStringLiteral("[UpToDate]"))) {
+                QStringLiteral("[") +
+                status.toString() +
+                QStringLiteral("]"))) {
             return item;
         }
     }
@@ -494,6 +498,83 @@ int main(int argc, char* argv[]) {
     CHECK(
         feature_id_label->text() ==
         QStringLiteral("1"));
+
+    // Feature lifecycle is authored, Undoable, and drives automatic Profile
+    // visibility without introducing Body/Feature visibility state.
+    auto* suppress_feature =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "featureSuppressButton"));
+    auto* delete_feature =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "featureDeleteButton"));
+    CHECK(suppress_feature && delete_feature);
+
+    const auto undo_before_suppress =
+        session.undoDepth();
+    suppress_feature->click();
+    CHECK(
+        session.document().body()
+            .features.size() == 1U);
+    CHECK(
+        session.document().body()
+            .features.front().suppressed);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_suppress + 1U);
+    CHECK(viewport->solid_scene.empty());
+    CHECK(!viewport->profile_scene.profiles.empty());
+    CHECK(
+        findFeatureItem(
+            *tree,
+            QStringView{u"Suppressed"}) !=
+        nullptr);
+    CHECK(
+        suppress_feature->text() ==
+        QStringLiteral("Unsuppress Feature"));
+    CHECK(!edit_feature->isEnabled());
+
+    suppress_feature->click();
+    CHECK(
+        !session.document().body()
+             .features.front().suppressed);
+    CHECK(!viewport->solid_scene.empty());
+    CHECK(viewport->profile_scene.profiles.empty());
+    CHECK(
+        findFeatureItem(*tree) != nullptr);
+
+    feature_item =
+        findFeatureItem(*tree);
+    CHECK(feature_item != nullptr);
+    tree->clearSelection();
+    feature_item->setSelected(true);
+    tree->setCurrentItem(feature_item);
+    const auto undo_before_delete =
+        session.undoDepth();
+    delete_feature->click();
+    CHECK(
+        session.document().body()
+            .features.empty());
+    CHECK(
+        session.undoDepth() ==
+        undo_before_delete + 1U);
+    CHECK(viewport->solid_scene.empty());
+    CHECK(!viewport->profile_scene.profiles.empty());
+
+    workbench.requestUndo();
+    CHECK(
+        session.document().body()
+            .features.size() == 1U);
+    CHECK(
+        !session.document().body()
+             .features.front().suppressed);
+    CHECK(!viewport->solid_scene.empty());
+    CHECK(viewport->profile_scene.profiles.empty());
+    CHECK(
+        session.document().body()
+            .features.front().id ==
+        feature_id_before_edit);
 
     // Command Line enters the same draft API and CANCEL remains non-authoring.
     profile_item =
