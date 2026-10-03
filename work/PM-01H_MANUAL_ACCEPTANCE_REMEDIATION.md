@@ -31,7 +31,8 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 - **H4a COMPLETED — PASS:** PR #160, exact-head Windows FULL #1346 PASS on `818ed69a37ddee3a54be7b65c819cd67ab67dcc1`; merged to main as `af1800cbcde8f7b45b5c3cb2e10795f0b76e2a66`.
 - **H4b COMPLETED — PASS:** PR #161, exact-head Windows FULL #1348 PASS on `86b5a4238635953f013ea10be35c8d21bbb07b03`; merged to main as `53bde160abeabd854d99fb96535c528f8402858f`.
 - **Documentation sync COMPLETED — PASS:** PR #163, Windows DOCS #1350 PASS; latest main `f19b52f1cdc77ef1405aeb95a1a2ed042d9c8b02`.
-- **Owner re-test:** PENDING on latest main `f19b52f1cdc77ef1405aeb95a1a2ed042d9c8b02` (runtime-equivalent to gated H4b baseline `53bde160abeabd854d99fb96535c528f8402858f`); PM-01 remains ACTIVE until consolidated manual Windows acceptance passes.
+- **Owner re-test after H4:** PARTIAL PASS; remaining H5 findings are exact operation-delta preview/Profile z-fighting and a Cut face-contact case incorrectly accepted as effect.
+- **H5 ACTIVE:** exact Add/Cut delta preview + transient source-Profile hide + volumetric no-effect Cut.
 
 ## H1 — Profile → Kernel fidelity blocker
 
