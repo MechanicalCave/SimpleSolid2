@@ -1,5 +1,6 @@
 #include "project_hub_window.hpp"
 
+#include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 #include <simplesolid2/viewer_qt_occt/qt_occt_viewer_widget.hpp>
 
 #include <QApplication>
@@ -80,9 +81,14 @@ int main(int argc, char* argv[]) {
                 widget};
         };
 
+    simplesolid2::kernel_occt::
+        OcctSolidModelingKernel
+            solid_modeling_kernel;
+
     simplesolid2::ui::ProjectHubWindow window{
         recent_catalog,
-        std::move(viewport_factory)};
+        std::move(viewport_factory),
+        &solid_modeling_kernel};
     window.show();
 
     if (smoke_test) {

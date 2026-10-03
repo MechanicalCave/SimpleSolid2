@@ -18,6 +18,10 @@ class QPushButton;
 class QStackedWidget;
 class QWidget;
 
+namespace simplesolid2::kernel {
+class ISolidModelingKernel;
+}
+
 namespace simplesolid2::ui {
 
 class CadWorkbench;
@@ -44,6 +48,13 @@ public:
     ProjectHubWindow(
         std::filesystem::path recent_catalog_path,
         ViewportFactory viewport_factory,
+        QWidget* parent = nullptr);
+
+    ProjectHubWindow(
+        std::filesystem::path recent_catalog_path,
+        ViewportFactory viewport_factory,
+        kernel::ISolidModelingKernel*
+            solid_modeling_kernel,
         QWidget* parent = nullptr);
 
 protected:
@@ -99,6 +110,8 @@ private:
 
     application::internal::ProjectHubController controller_;
     ViewportFactory viewport_factory_;
+    kernel::ISolidModelingKernel*
+        solid_modeling_kernel_{};
 
     QStackedWidget* pages_{};
     QWidget* hub_page_{};

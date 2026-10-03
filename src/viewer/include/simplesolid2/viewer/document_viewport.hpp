@@ -6,6 +6,7 @@
 #include <simplesolid2/viewer/profile_presentation.hpp>
 #include <simplesolid2/viewer/reference_presentation.hpp>
 #include <simplesolid2/viewer/selection.hpp>
+#include <simplesolid2/viewer/solid_presentation.hpp>
 #include <simplesolid2/viewer/sketch_presentation.hpp>
 #include <simplesolid2/viewer/sketch_selection_query.hpp>
 #include <simplesolid2/viewer/spatial_pointer.hpp>
@@ -59,6 +60,12 @@ public:
 
     virtual bool setReferenceScene(
         const ReferenceScene& scene) = 0;
+
+    virtual bool setSolidScene(
+        const SolidScene& scene) {
+        return scene.valid() &&
+               scene.empty();
+    }
 
     virtual bool setSketchScene(
         const SketchScene& scene) = 0;

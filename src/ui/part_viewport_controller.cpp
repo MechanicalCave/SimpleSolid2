@@ -1,6 +1,8 @@
 #include "part_viewport_controller.hpp"
 #include "sketch_viewport_mapping.hpp"
 
+#include <simplesolid2/part/feature_evaluation.hpp>
+
 #include <QPointer>
 
 #include <algorithm>
@@ -469,6 +471,17 @@ PartViewportController::PartViewportController(
     }
 }
 
+void PartViewportController::setSolidModelingKernel(
+    kernel::ISolidModelingKernel* modeling_kernel) {
+    if (solid_modeling_kernel_ ==
+        modeling_kernel) {
+        return;
+    }
+    solid_modeling_kernel_ =
+        modeling_kernel;
+    refreshPresentation();
+}
+
 void PartViewportController::setDocumentSession(
     application::DocumentSession* session) {
     if (session_ != session) {
@@ -510,6 +523,12 @@ void PartViewportController::clear() {
     tree_->clear();
 
     if (viewport_ != nullptr) {
+        static_cast<void>(
+            viewport_->setSolidScene(
+                viewer::SolidScene{}));
+        static_cast<void>(
+            viewport_->setSolidScene(
+                viewer::SolidScene{}));
         static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));
@@ -590,6 +609,13 @@ void PartViewportController::refreshPresentation() {
         applySketchViewportMode();
     }
 
+    const auto solid_scene =
+        buildSolidScene();
+    const bool solid_ok =
+        solid_scene.has_value() &&
+        viewport_->setSolidScene(
+            *solid_scene);
+
     const bool reference_ok =
         viewport_->setReferenceScene(
             buildReferenceScene());
@@ -607,7 +633,10 @@ void PartViewportController::refreshPresentation() {
         viewport_->setSketchScene(*sketch_scene);
 
     setPresentationDegraded(
-        !reference_ok || !profile_ok || !sketch_ok);
+        !solid_ok ||
+        !reference_ok ||
+        !profile_ok ||
+        !sketch_ok);
 
     applySelectionToSurfaces();
 }
@@ -1887,6 +1916,65 @@ PartViewportController::buildReferenceScene() const {
     }
 
     return scene;
+}
+
+std::optional<viewer::SolidScene>
+PartViewportController::buildSolidScene() {
+    viewer::SolidScene scene;
+    if (session_ == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        return scene;
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            session_->document(),
+            *solid_modeling_kernel_);
+    if (evaluation.body_status !=
+            part::BodyEvaluationStatus::
+                up_to_date ||
+        evaluation.body_solid == nullptr) {
+        // Empty/Failed/Blocked/Suppressed-only histories publish no Body
+        // presentation. Never retain last-good geometry.
+        return scene;
+    }
+
+    const auto mesh =
+        solid_modeling_kernel_
+            ->presentationMesh(
+                evaluation.body_solid);
+    if (!mesh.ok()) {
+        return std::nullopt;
+    }
+
+    scene.triangles.reserve(
+        mesh.mesh.triangles.size());
+    for (const auto& triangle :
+         mesh.mesh.triangles) {
+        scene.triangles.push_back(
+            viewer::SolidTrianglePresentation{
+                {
+                    triangle.first.x,
+                    triangle.first.y,
+                    triangle.first.z},
+                {
+                    triangle.second.x,
+                    triangle.second.y,
+                    triangle.second.z},
+                {
+                    triangle.third.x,
+                    triangle.third.y,
+                    triangle.third.z},
+                {
+                    triangle.normal.x,
+                    triangle.normal.y,
+                    triangle.normal.z}});
+    }
+
+    return scene.valid()
+        ? std::optional<viewer::SolidScene>{
+              std::move(scene)}
+        : std::nullopt;
 }
 
 std::optional<viewer::ProfileRegionPresentation>

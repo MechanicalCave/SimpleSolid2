@@ -540,8 +540,20 @@ CadWorkbench::~CadWorkbench() = default;
 CadWorkbench::CadWorkbench(
     ViewportFactory viewport_factory,
     QWidget* parent)
+    : CadWorkbench{
+          std::move(viewport_factory),
+          nullptr,
+          parent} {}
+
+CadWorkbench::CadWorkbench(
+    ViewportFactory viewport_factory,
+    kernel::ISolidModelingKernel*
+        solid_modeling_kernel,
+    QWidget* parent)
     : QWidget{parent},
-      viewport_factory_{std::move(viewport_factory)} {
+      viewport_factory_{std::move(viewport_factory)},
+      solid_modeling_kernel_{
+          solid_modeling_kernel} {
     buildUi();
     deactivateDocument();
     setStatusText(
@@ -920,6 +932,9 @@ void CadWorkbench::buildUi() {
             *tree_controller_,
             viewport_,
             this);
+    viewport_controller_->
+        setSolidModelingKernel(
+            solid_modeling_kernel_);
     viewport_controller_->setSelectionChangedHandler(
         [this](
             const std::vector<core::BuiltinReferenceRole>&,

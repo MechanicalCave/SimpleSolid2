@@ -302,6 +302,7 @@ target_link_libraries(simplesolid2
     PRIVATE
         simplesolid2_ui
         simplesolid2_viewer_qt_occt
+        simplesolid2_kernel_occt
         Qt6::Widgets
 )
 
