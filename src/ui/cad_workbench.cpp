@@ -174,6 +174,83 @@ extrudeEvaluationText(
         "Extrude preview is unavailable.");
 }
 
+
+QString featureEvaluationStatusText(
+    part::FeatureEvaluationStatus status) {
+    switch (status) {
+    case part::FeatureEvaluationStatus::up_to_date:
+        return QStringLiteral("UpToDate");
+    case part::FeatureEvaluationStatus::failed:
+        return QStringLiteral("Failed");
+    case part::FeatureEvaluationStatus::blocked:
+        return QStringLiteral("Blocked");
+    case part::FeatureEvaluationStatus::suppressed:
+        return QStringLiteral("Suppressed");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString bodyEvaluationStatusText(
+    part::BodyEvaluationStatus status) {
+    switch (status) {
+    case part::BodyEvaluationStatus::empty:
+        return QStringLiteral("Empty");
+    case part::BodyEvaluationStatus::up_to_date:
+        return QStringLiteral("UpToDate");
+    case part::BodyEvaluationStatus::unavailable:
+        return QStringLiteral("Unavailable");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString featureEvaluationDiagnosticText(
+    part::FeatureEvaluationDiagnosticCode diagnostic) {
+    switch (diagnostic) {
+    case part::FeatureEvaluationDiagnosticCode::none:
+        return QStringLiteral("—");
+    case part::FeatureEvaluationDiagnosticCode::missing_profile:
+        return QStringLiteral("Missing Profile");
+    case part::FeatureEvaluationDiagnosticCode::unresolved_profile:
+        return QStringLiteral("Unresolved Profile");
+    case part::FeatureEvaluationDiagnosticCode::missing_upstream_body:
+        return QStringLiteral("Missing upstream Body");
+    case part::FeatureEvaluationDiagnosticCode::upstream_unavailable:
+        return QStringLiteral("Upstream Body unavailable");
+    case part::FeatureEvaluationDiagnosticCode::kernel_invalid_input:
+        return QStringLiteral("Kernel invalid input");
+    case part::FeatureEvaluationDiagnosticCode::kernel_provider_mismatch:
+        return QStringLiteral("Kernel provider mismatch");
+    case part::FeatureEvaluationDiagnosticCode::kernel_provider_failure:
+        return QStringLiteral("Kernel provider failure");
+    case part::FeatureEvaluationDiagnosticCode::invalid_brep:
+        return QStringLiteral("Invalid B-Rep");
+    case part::FeatureEvaluationDiagnosticCode::detached_add:
+        return QStringLiteral("Detached Add");
+    case part::FeatureEvaluationDiagnosticCode::no_effect:
+        return QStringLiteral("No effect");
+    case part::FeatureEvaluationDiagnosticCode::empty_result:
+        return QStringLiteral("Empty result");
+    case part::FeatureEvaluationDiagnosticCode::multi_solid:
+        return QStringLiteral("Multi-solid result");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString formatLengthForPart(
+    core::LengthValue value,
+    core::LengthUnit unit) {
+    return QStringLiteral("%1 %2")
+        .arg(
+            QString::number(
+                core::fromCanonicalLength(
+                    value,
+                    unit),
+                'g',
+                12),
+            fromUtf8(
+                core::lengthUnitSuffix(unit)));
+}
+
 std::string toUtf8(const QString& value) {
     const auto bytes = value.toUtf8();
     return std::string{
@@ -1127,6 +1204,8 @@ void CadWorkbench::buildUi() {
                         semantic);
             }
             if (primary) {
+                selected_feature_id_.reset();
+                selected_body_id_.reset();
                 refreshProfileProperties(*primary);
             } else if (selected_profile_id_) {
                 selected_profile_id_.reset();
@@ -1152,6 +1231,8 @@ void CadWorkbench::buildUi() {
                         semantic);
             }
             if (primary) {
+                selected_feature_id_.reset();
+                selected_body_id_.reset();
                 refreshProfileProperties(*primary);
             } else if (selected_profile_id_) {
                 selected_profile_id_.reset();
@@ -1166,6 +1247,32 @@ void CadWorkbench::buildUi() {
     tree_controller_->setProfileEditHandler(
         [this](part::ProfileId profile_id) {
             requestEditProfile(profile_id);
+        });
+    tree_controller_->setBodySelectionHandler(
+        [this](std::optional<part::BodyId> body_id) {
+            selected_body_id_ = body_id;
+            if (body_id) {
+                refreshBodyProperties(*body_id);
+            }
+        });
+    tree_controller_->setFeatureSelectionHandler(
+        [this](
+            const std::vector<part::FeatureId>& selected,
+            std::optional<part::FeatureId> primary) {
+            const auto semantic =
+                selected.size() == 1U && primary
+                    ? primary
+                    : std::nullopt;
+            selected_feature_id_ = semantic;
+            if (semantic) {
+                refreshFeatureProperties(*semantic);
+            }
+            syncActionState();
+        });
+    tree_controller_->setFeatureEditHandler(
+        [this](part::FeatureId feature_id) {
+            static_cast<void>(
+                startExtrudeEdit(feature_id));
         });
 
     viewport_controller_->setSketchPointerHandler(
@@ -1373,6 +1480,20 @@ void CadWorkbench::buildUi() {
     profile_holes_->setObjectName(
         QStringLiteral("profilePropertyHoles"));
 
+    profile_consuming_features_ =
+        new QComboBox(
+            profile_properties_page_);
+    profile_consuming_features_->setObjectName(
+        QStringLiteral(
+            "profileConsumingFeaturesCombo"));
+    profile_go_to_feature_button_ =
+        new QPushButton(
+            QStringLiteral("Go to Feature"),
+            profile_properties_page_);
+    profile_go_to_feature_button_->setObjectName(
+        QStringLiteral(
+            "profileGoToFeatureButton"));
+
     profile_visible_ =
         new QCheckBox(
             QStringLiteral("Visible"),
@@ -1425,6 +1546,11 @@ void CadWorkbench::buildUi() {
         QStringLiteral("Holes"),
         profile_holes_);
     profile_root->addRow(
+        QStringLiteral("Consuming Features"),
+        profile_consuming_features_);
+    profile_root->addRow(
+        profile_go_to_feature_button_);
+    profile_root->addRow(
         QStringLiteral("Visibility"),
         profile_visible_);
     profile_root->addRow(
@@ -1434,6 +1560,142 @@ void CadWorkbench::buildUi() {
 
     properties_stack_->addWidget(
         profile_properties_page_);
+
+    body_properties_page_ =
+        new QWidget(properties_stack_);
+    body_properties_page_->setObjectName(
+        QStringLiteral("bodyPropertiesPage"));
+    auto* body_root =
+        new QFormLayout(body_properties_page_);
+    body_root->setContentsMargins(0, 0, 0, 0);
+
+    body_identity_ =
+        new QLabel(body_properties_page_);
+    body_identity_->setObjectName(
+        QStringLiteral("bodyPropertyIdentity"));
+    body_status_ =
+        new QLabel(body_properties_page_);
+    body_status_->setObjectName(
+        QStringLiteral("bodyPropertyStatus"));
+    body_feature_count_ =
+        new QLabel(body_properties_page_);
+    body_feature_count_->setObjectName(
+        QStringLiteral("bodyPropertyFeatureCount"));
+
+    body_root->addRow(
+        QStringLiteral("BodyId"),
+        body_identity_);
+    body_root->addRow(
+        QStringLiteral("Status"),
+        body_status_);
+    body_root->addRow(
+        QStringLiteral("Ordered Features"),
+        body_feature_count_);
+    properties_stack_->addWidget(
+        body_properties_page_);
+
+    feature_properties_page_ =
+        new QWidget(properties_stack_);
+    feature_properties_page_->setObjectName(
+        QStringLiteral("featurePropertiesPage"));
+    auto* feature_root =
+        new QFormLayout(
+            feature_properties_page_);
+    feature_root->setContentsMargins(
+        0, 0, 0, 0);
+
+    feature_name_ =
+        new QLabel(feature_properties_page_);
+    feature_name_->setObjectName(
+        QStringLiteral("featurePropertyName"));
+    feature_identity_ =
+        new QLabel(feature_properties_page_);
+    feature_identity_->setObjectName(
+        QStringLiteral("featurePropertyIdentity"));
+    feature_status_ =
+        new QLabel(feature_properties_page_);
+    feature_status_->setObjectName(
+        QStringLiteral("featurePropertyStatus"));
+    feature_diagnostic_ =
+        new QLabel(feature_properties_page_);
+    feature_diagnostic_->setObjectName(
+        QStringLiteral("featurePropertyDiagnostic"));
+    feature_operation_ =
+        new QLabel(feature_properties_page_);
+    feature_operation_->setObjectName(
+        QStringLiteral("featurePropertyOperation"));
+    feature_extent_ =
+        new QLabel(feature_properties_page_);
+    feature_extent_->setObjectName(
+        QStringLiteral("featurePropertyExtent"));
+    feature_distance_ =
+        new QLabel(feature_properties_page_);
+    feature_distance_->setObjectName(
+        QStringLiteral("featurePropertyDistance"));
+    feature_direction_ =
+        new QLabel(feature_properties_page_);
+    feature_direction_->setObjectName(
+        QStringLiteral("featurePropertyDirection"));
+    feature_source_profile_ =
+        new QLabel(feature_properties_page_);
+    feature_source_profile_->setObjectName(
+        QStringLiteral("featurePropertySourceProfile"));
+    feature_source_sketch_ =
+        new QLabel(feature_properties_page_);
+    feature_source_sketch_->setObjectName(
+        QStringLiteral("featurePropertySourceSketch"));
+
+    feature_go_to_profile_button_ =
+        new QPushButton(
+            QStringLiteral("Go to Source Profile"),
+            feature_properties_page_);
+    feature_go_to_profile_button_->setObjectName(
+        QStringLiteral(
+            "featureGoToProfileButton"));
+    feature_edit_button_ =
+        new QPushButton(
+            QStringLiteral("Edit Extrude"),
+            feature_properties_page_);
+    feature_edit_button_->setObjectName(
+        QStringLiteral("featureEditExtrudeButton"));
+
+    feature_root->addRow(
+        QStringLiteral("Name"),
+        feature_name_);
+    feature_root->addRow(
+        QStringLiteral("FeatureId"),
+        feature_identity_);
+    feature_root->addRow(
+        QStringLiteral("Status"),
+        feature_status_);
+    feature_root->addRow(
+        QStringLiteral("Diagnostic"),
+        feature_diagnostic_);
+    feature_root->addRow(
+        QStringLiteral("Operation"),
+        feature_operation_);
+    feature_root->addRow(
+        QStringLiteral("Extent"),
+        feature_extent_);
+    feature_root->addRow(
+        QStringLiteral("Distance"),
+        feature_distance_);
+    feature_root->addRow(
+        QStringLiteral("Direction"),
+        feature_direction_);
+    feature_root->addRow(
+        QStringLiteral("Source Profile"),
+        feature_source_profile_);
+    feature_root->addRow(
+        QStringLiteral("Source Sketch"),
+        feature_source_sketch_);
+    feature_root->addRow(
+        feature_go_to_profile_button_);
+    feature_root->addRow(
+        feature_edit_button_);
+    properties_stack_->addWidget(
+        feature_properties_page_);
+
     properties_stack_->setCurrentWidget(
         document_properties_page_);
 
@@ -2521,6 +2783,65 @@ void CadWorkbench::buildUi() {
         this,
         [this] { deleteSelectedProfile(); });
     QObject::connect(
+        profile_go_to_feature_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (profile_consuming_features_ ==
+                    nullptr ||
+                profile_consuming_features_->
+                    currentIndex() < 0) {
+                return;
+            }
+            const auto bytes =
+                profile_consuming_features_->
+                    currentData()
+                    .toString()
+                    .toUtf8();
+            const auto id =
+                part::FeatureId::parse(
+                    std::string_view{
+                        bytes.constData(),
+                        static_cast<std::size_t>(
+                            bytes.size())});
+            if (id) {
+                navigateToFeature(*id);
+            }
+        });
+    QObject::connect(
+        feature_go_to_profile_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (selected_feature_id_ &&
+                document_session_ != nullptr) {
+                const auto* feature =
+                    document_session_->document()
+                        .findFeature(
+                            *selected_feature_id_);
+                if (feature != nullptr) {
+                    const auto profile =
+                        part::sourceProfileId(
+                            *feature);
+                    if (profile) {
+                        navigateToProfile(
+                            *profile);
+                    }
+                }
+            }
+        });
+    QObject::connect(
+        feature_edit_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (selected_feature_id_) {
+                static_cast<void>(
+                    startExtrudeEdit(
+                        *selected_feature_id_));
+            }
+        });
+    QObject::connect(
         sketch_button_,
         &QPushButton::clicked,
         this,
@@ -3239,6 +3560,9 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
     }
     if (viewport_controller_) {
         viewport_controller_->clearSolidPreview();
+        viewport_controller_->
+            setTransientProfileReveal(
+                std::nullopt);
     }
 
     syncActionState();
@@ -3247,6 +3571,79 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
     setStatusText(
         QStringLiteral(
             "Extrude active — enter a positive distance."));
+    if (extrude_distance_edit_ != nullptr) {
+        extrude_distance_edit_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+
+bool CadWorkbench::startExtrudeEdit(
+    part::FeatureId feature_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Edit Extrude requires an active Part and modeling Kernel."));
+        return false;
+    }
+    if (extrude_draft_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active Extrude before editing another Feature."));
+        return false;
+    }
+    if (active_sketch_id_ ||
+        sketch_support_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active Sketch context before Edit Extrude."));
+        return false;
+    }
+
+    auto draft =
+        application::ExtrudeDraft::beginEdit(
+            *document_session,
+            feature_id);
+    if (!draft) {
+        setStatusText(
+            QStringLiteral(
+                "Selected Feature is unavailable or Suppressed."));
+        return false;
+    }
+
+    extrude_draft_ =
+        std::move(*draft);
+    extrude_evaluation_.reset();
+    extrude_distance_input_valid_ =
+        extrude_draft_->valid();
+
+    if (extrude_distance_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            extrude_distance_edit_};
+        extrude_distance_edit_->setText(
+            formatLengthForPart(
+                extrude_draft_->distance(),
+                document_session->document()
+                    .lengthUnit()));
+    }
+
+    if (viewport_controller_) {
+        viewport_controller_->
+            setTransientProfileReveal(
+                extrude_draft_->profileId());
+    }
+
+    refreshExtrudePreview();
+    syncActionState();
+    syncExtrudeUi();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Edit Extrude active — source Profile is temporarily revealed."));
     if (extrude_distance_edit_ != nullptr) {
         extrude_distance_edit_->setFocus(
             Qt::OtherFocusReason);
@@ -3309,14 +3706,23 @@ bool CadWorkbench::finishExtrude() {
         return false;
     }
 
+    const auto committed_feature_id =
+        result.feature_id;
     extrude_draft_.reset();
     extrude_evaluation_.reset();
     extrude_distance_input_valid_ = false;
     if (viewport_controller_) {
         viewport_controller_->clearSolidPreview();
+        viewport_controller_->
+            setTransientProfileReveal(
+                std::nullopt);
     }
 
     refreshActiveContext();
+    if (committed_feature_id) {
+        navigateToFeature(
+            *committed_feature_id);
+    }
     syncExtrudeUi();
     notifyCadInputContextChanged();
     setStatusText(
@@ -3335,6 +3741,9 @@ void CadWorkbench::clearExtrudeRuntimeContext() {
     extrude_distance_input_valid_ = false;
     if (viewport_controller_) {
         viewport_controller_->clearSolidPreview();
+        viewport_controller_->
+            setTransientProfileReveal(
+                std::nullopt);
     }
     if (extrude_distance_edit_ != nullptr) {
         const QSignalBlocker blocked{
@@ -3427,6 +3836,9 @@ void CadWorkbench::syncExtrudeUi() {
 
     syncing_extrude_ui_ = true;
 
+    const bool editing =
+        extrude_draft_->mode() ==
+        application::ExtrudeDraftMode::edit;
     const bool add =
         extrude_draft_->operation() ==
         part::ExtrudeOperation::add;
@@ -3447,12 +3859,30 @@ void CadWorkbench::syncExtrudeUi() {
         one_side &&
         extrude_draft_->reversed());
 
-    const bool first_feature =
-        document_session_ != nullptr &&
-        document_session_->document()
-            .body().features.empty();
+    bool cut_allowed = false;
+    if (document_session_ != nullptr) {
+        const auto& features =
+            document_session_->document()
+                .body().features;
+        if (!editing) {
+            cut_allowed =
+                !features.empty();
+        } else if (extrude_draft_->featureId()) {
+            const auto found =
+                std::find_if(
+                    features.begin(),
+                    features.end(),
+                    [this](const part::PartFeature& feature) {
+                        return feature.id ==
+                            *extrude_draft_->featureId();
+                    });
+            cut_allowed =
+                found != features.end() &&
+                found != features.begin();
+        }
+    }
     extrude_cut_button_->setEnabled(
-        !first_feature);
+        cut_allowed);
 
     const bool committable =
         extrude_distance_input_valid_ &&
@@ -3475,11 +3905,21 @@ void CadWorkbench::syncExtrudeUi() {
                 "Preview unavailable."));
     }
 
+    if (extrude_finish_button_ != nullptr) {
+        extrude_finish_button_->setText(
+            editing
+                ? QStringLiteral("Finish Edit")
+                : QStringLiteral("Finish Extrude"));
+    }
+
     if (operations_placeholder_ != nullptr) {
         operations_placeholder_->setText(
             QStringLiteral(
-                "Extrude — %1 · %2%3")
+                "%1 — %2 · %3%4")
                 .arg(
+                    editing
+                        ? QStringLiteral("Edit Extrude")
+                        : QStringLiteral("Extrude"),
                     add
                         ? QStringLiteral("Add")
                         : QStringLiteral("Cut"),
@@ -4972,9 +5412,17 @@ void CadWorkbench::refreshActiveContext() {
     engineering_revision_->setEnabled(true);
 
     viewport_controller_->setDocumentSession(document_session);
+    refreshPartFeatureEvaluationSnapshot();
     reconcileSketchRuntimeContext();
     if (extrude_draft_) {
         refreshExtrudePreview();
+    }
+    if (selected_feature_id_) {
+        refreshFeatureProperties(
+            *selected_feature_id_);
+    } else if (selected_body_id_) {
+        refreshBodyProperties(
+            *selected_body_id_);
     }
     syncActionState();
     notifyDocumentStateChanged();
@@ -4995,6 +5443,8 @@ void CadWorkbench::clearActiveContext() {
     length_unit_combo_->setEnabled(false);
     syncing_precision_ui_ = false;
     selected_profile_id_.reset();
+    selected_feature_id_.reset();
+    selected_body_id_.reset();
     profile_name_->clear();
     profile_identity_->clear();
     profile_source_->clear();
@@ -5003,6 +5453,22 @@ void CadWorkbench::clearActiveContext() {
     profile_area_->clear();
     profile_perimeter_->clear();
     profile_holes_->clear();
+    profile_consuming_features_->clear();
+    profile_go_to_feature_button_->setEnabled(
+        false);
+    body_identity_->clear();
+    body_status_->clear();
+    body_feature_count_->clear();
+    feature_name_->clear();
+    feature_identity_->clear();
+    feature_status_->clear();
+    feature_diagnostic_->clear();
+    feature_operation_->clear();
+    feature_extent_->clear();
+    feature_distance_->clear();
+    feature_direction_->clear();
+    feature_source_profile_->clear();
+    feature_source_sketch_->clear();
     profile_visible_->setCheckState(
         Qt::PartiallyChecked);
 
@@ -5223,6 +5689,36 @@ void CadWorkbench::refreshProfileProperties(
             QStringLiteral("—"));
     }
 
+    {
+        const QSignalBlocker blocked{
+            profile_consuming_features_};
+        profile_consuming_features_->clear();
+        for (const auto& feature :
+             document_session->document()
+                 .body().features) {
+            const auto source =
+                part::sourceProfileId(feature);
+            if (!source ||
+                *source != profile_id) {
+                continue;
+            }
+            const auto label =
+                feature.name.empty()
+                    ? QStringLiteral("Feature %1")
+                          .arg(fromUtf8(
+                              feature.id.serialized()))
+                    : fromUtf8(feature.name);
+            profile_consuming_features_->
+                addItem(
+                    label,
+                    fromUtf8(
+                        feature.id.serialized()));
+        }
+    }
+    profile_go_to_feature_button_->setEnabled(
+        profile_consuming_features_->
+            count() > 0);
+
     bool explicit_profile_delete_enabled = true;
     if (sketch_interaction_controller_ &&
         sketch_interaction_controller_->active() &&
@@ -5239,6 +5735,274 @@ void CadWorkbench::refreshProfileProperties(
 
     properties_stack_->setCurrentWidget(
         profile_properties_page_);
+}
+
+
+void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
+    if (tree_controller_ == nullptr ||
+        document_session_ == nullptr) {
+        return;
+    }
+
+    std::vector<FeatureTreeEvaluationEntry>
+        entries;
+    part::BodyEvaluationStatus body_status =
+        document_session_->document()
+                .body().features.empty()
+            ? part::BodyEvaluationStatus::empty
+            : part::BodyEvaluationStatus::
+                  unavailable;
+
+    if (solid_modeling_kernel_ != nullptr) {
+        const auto evaluation =
+            part::evaluatePart(
+                document_session_->document(),
+                *solid_modeling_kernel_);
+        body_status =
+            evaluation.body_status;
+        entries.reserve(
+            evaluation.features.size());
+        for (const auto& feature :
+             evaluation.features) {
+            entries.push_back(
+                FeatureTreeEvaluationEntry{
+                    feature.feature_id,
+                    feature.status,
+                    feature.diagnostic});
+        }
+    } else {
+        entries.reserve(
+            document_session_->document()
+                .body().features.size());
+        for (const auto& feature :
+             document_session_->document()
+                 .body().features) {
+            entries.push_back(
+                FeatureTreeEvaluationEntry{
+                    feature.id,
+                    feature.suppressed
+                        ? part::FeatureEvaluationStatus::
+                              suppressed
+                        : part::FeatureEvaluationStatus::
+                              blocked,
+                    part::FeatureEvaluationDiagnosticCode::
+                        none});
+        }
+    }
+
+    tree_controller_->setEvaluationSnapshot(
+        body_status,
+        std::move(entries));
+}
+
+void CadWorkbench::refreshBodyProperties(
+    part::BodyId body_id) {
+    if (properties_stack_ == nullptr ||
+        document_session_ == nullptr ||
+        document_session_->document()
+                .body().id != body_id) {
+        return;
+    }
+
+    selected_body_id_ = body_id;
+    body_identity_->setText(
+        fromUtf8(body_id.serialized()));
+    body_feature_count_->setText(
+        QString::number(
+            static_cast<qulonglong>(
+                document_session_->document()
+                    .body().features.size())));
+
+    auto status =
+        document_session_->document()
+                .body().features.empty()
+            ? part::BodyEvaluationStatus::empty
+            : part::BodyEvaluationStatus::
+                  unavailable;
+    if (solid_modeling_kernel_ != nullptr) {
+        status =
+            part::evaluatePart(
+                document_session_->document(),
+                *solid_modeling_kernel_)
+                .body_status;
+    }
+    body_status_->setText(
+        bodyEvaluationStatusText(status));
+    properties_stack_->setCurrentWidget(
+        body_properties_page_);
+}
+
+void CadWorkbench::refreshFeatureProperties(
+    part::FeatureId feature_id) {
+    if (properties_stack_ == nullptr ||
+        document_session_ == nullptr) {
+        return;
+    }
+
+    const auto* feature =
+        document_session_->document()
+            .findFeature(feature_id);
+    if (feature == nullptr) {
+        selected_feature_id_.reset();
+        properties_stack_->setCurrentWidget(
+            document_properties_page_);
+        return;
+    }
+
+    const auto* extrude =
+        std::get_if<part::ExtrudeFeature>(
+            &feature->definition);
+    if (extrude == nullptr) {
+        return;
+    }
+
+    selected_feature_id_ = feature_id;
+    feature_name_->setText(
+        fromUtf8(feature->name));
+    feature_identity_->setText(
+        fromUtf8(feature->id.serialized()));
+    feature_operation_->setText(
+        extrude->operation ==
+                part::ExtrudeOperation::cut
+            ? QStringLiteral("Cut")
+            : QStringLiteral("Add"));
+
+    const auto unit =
+        document_session_->document()
+            .lengthUnit();
+    if (const auto* one =
+            std::get_if<
+                part::OneSidedExtrudeExtent>(
+                &extrude->extent)) {
+        feature_extent_->setText(
+            QStringLiteral("One Side"));
+        feature_distance_->setText(
+            formatLengthForPart(
+                one->distance,
+                unit));
+        feature_direction_->setText(
+            one->reversed
+                ? QStringLiteral("Reverse")
+                : QStringLiteral("Forward"));
+    } else if (const auto* midplane =
+                   std::get_if<
+                       part::MidplaneExtrudeExtent>(
+                       &extrude->extent)) {
+        feature_extent_->setText(
+            QStringLiteral("Midplane"));
+        feature_distance_->setText(
+            formatLengthForPart(
+                midplane->total_distance,
+                unit));
+        feature_direction_->setText(
+            QStringLiteral("Centered"));
+    }
+
+    feature_source_profile_->setText(
+        fromUtf8(
+            extrude->profile_id.serialized()));
+    const auto* profile =
+        document_session_->document()
+            .findProfile(
+                extrude->profile_id);
+    feature_source_sketch_->setText(
+        profile != nullptr
+            ? fromUtf8(
+                  profile->source_sketch_id
+                      .value())
+            : QStringLiteral("<missing>"));
+
+    auto status =
+        feature->suppressed
+            ? part::FeatureEvaluationStatus::
+                  suppressed
+            : part::FeatureEvaluationStatus::
+                  blocked;
+    auto diagnostic =
+        part::FeatureEvaluationDiagnosticCode::
+            none;
+    if (solid_modeling_kernel_ != nullptr) {
+        const auto evaluation =
+            part::evaluatePart(
+                document_session_->document(),
+                *solid_modeling_kernel_);
+        if (const auto* item =
+                evaluation.findFeature(
+                    feature_id)) {
+            status = item->status;
+            diagnostic =
+                item->diagnostic;
+        }
+    }
+    feature_status_->setText(
+        featureEvaluationStatusText(status));
+    feature_diagnostic_->setText(
+        featureEvaluationDiagnosticText(
+            diagnostic));
+    feature_go_to_profile_button_->setEnabled(
+        profile != nullptr);
+    feature_edit_button_->setEnabled(
+        !feature->suppressed &&
+        solid_modeling_kernel_ != nullptr &&
+        !extrude_draft_ &&
+        !active_sketch_id_);
+
+    properties_stack_->setCurrentWidget(
+        feature_properties_page_);
+}
+
+void CadWorkbench::navigateToProfile(
+    part::ProfileId profile_id) {
+    if (document_session_ == nullptr ||
+        document_session_->document()
+                .findProfile(profile_id) ==
+            nullptr) {
+        return;
+    }
+
+    selected_feature_id_.reset();
+    selected_body_id_.reset();
+    selected_profile_id_ = profile_id;
+    if (tree_controller_) {
+        tree_controller_->setProfileSelection(
+            {profile_id},
+            profile_id);
+    }
+    if (viewport_controller_) {
+        viewport_controller_->
+            setProfileSelectionFromTree(
+                {profile_id},
+                profile_id);
+    }
+    refreshProfileProperties(
+        profile_id);
+}
+
+void CadWorkbench::navigateToFeature(
+    part::FeatureId feature_id) {
+    if (document_session_ == nullptr ||
+        document_session_->document()
+                .findFeature(feature_id) ==
+            nullptr) {
+        return;
+    }
+
+    selected_profile_id_.reset();
+    selected_body_id_.reset();
+    selected_feature_id_ = feature_id;
+    if (tree_controller_) {
+        tree_controller_->setFeatureSelection(
+            {feature_id},
+            feature_id);
+    }
+    if (viewport_controller_) {
+        viewport_controller_->
+            setProfileSelectionFromTree(
+                {},
+                std::nullopt);
+    }
+    refreshFeatureProperties(
+        feature_id);
 }
 
 bool CadWorkbench::eventFilter(
