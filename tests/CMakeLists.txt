@@ -384,6 +384,36 @@ set_tests_properties(wb01.cad_workbench PROPERTIES
 )
 
 
+
+add_executable(pm01e_cad_workbench_extrude_test
+    pm01e_cad_workbench_extrude_test.cpp
+)
+
+target_include_directories(pm01e_cad_workbench_extrude_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(pm01e_cad_workbench_extrude_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_ui
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(pm01e_cad_workbench_extrude_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm01e.cad_workbench_extrude
+    COMMAND pm01e_cad_workbench_extrude_test
+)
+
+set_tests_properties(pm01e.cad_workbench_extrude PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer"
+)
+
 add_executable(wb01_viewer_camera_state_test
     viewer_camera_state_test.cpp
 )
@@ -1422,6 +1452,7 @@ set(_ss2_fast_tests
     part01.project_document_lifecycle
     part01.project_dirty_close
     wb01.cad_workbench
+    pm01e.cad_workbench_extrude
     wb01.viewer_camera_state
     wb01.viewer_navigation
     wb01.viewer_reference_presentation

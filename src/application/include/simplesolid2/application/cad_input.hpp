@@ -195,6 +195,11 @@ public:
         std::string_view text,
         CadInputContextGeneration expected_context_generation) = 0;
 
+    [[nodiscard]] virtual bool
+    acceptsEmptyCadInput() const noexcept {
+        return false;
+    }
+
     [[nodiscard]] virtual std::vector<CadDynamicInputField>
     cadDynamicInputFields() const {
         return {};

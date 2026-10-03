@@ -22,11 +22,13 @@
 #include <QMouseEvent>
 #include <QPlainTextEdit>
 #include <QPushButton>
+#include <QSignalBlocker>
 #include <QStackedWidget>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QVBoxLayout>
 
+#include <cctype>
 #include <cmath>
 #include <numbers>
 #include <string>
@@ -39,6 +41,138 @@
 
 namespace simplesolid2::ui {
 namespace {
+
+
+[[nodiscard]] std::string upperAsciiTrimmed(
+    std::string_view value) {
+    std::size_t first = 0U;
+    while (first < value.size() &&
+           std::isspace(
+               static_cast<unsigned char>(
+                   value[first])) != 0) {
+        ++first;
+    }
+
+    std::size_t last = value.size();
+    while (last > first &&
+           std::isspace(
+               static_cast<unsigned char>(
+                   value[last - 1U])) != 0) {
+        --last;
+    }
+
+    std::string result;
+    result.reserve(last - first);
+    for (std::size_t index = first;
+         index < last;
+         ++index) {
+        result.push_back(
+            static_cast<char>(
+                std::toupper(
+                    static_cast<unsigned char>(
+                        value[index]))));
+    }
+    return result;
+}
+
+[[nodiscard]] QString
+extrudeEvaluationText(
+    const application::ExtrudeDraftEvaluationResult&
+        evaluation) {
+    using Status =
+        application::ExtrudeDraftEvaluationStatus;
+
+    if (evaluation.status == Status::ok) {
+        return evaluation.previewSolidAvailable()
+            ? QStringLiteral("Preview ready.")
+            : QStringLiteral(
+                  "Feature is valid; final Body preview is unavailable.");
+    }
+
+    if (evaluation.status ==
+        Status::target_failed) {
+        if (evaluation.evaluation_diagnostic) {
+            switch (*evaluation.evaluation_diagnostic) {
+            case part::FeatureEvaluationDiagnosticCode::
+                missing_upstream_body:
+                return QStringLiteral(
+                    "Cut requires a valid upstream Body.");
+            case part::FeatureEvaluationDiagnosticCode::
+                unresolved_profile:
+                return QStringLiteral(
+                    "Source Profile is unresolved.");
+            case part::FeatureEvaluationDiagnosticCode::
+                detached_add:
+                return QStringLiteral(
+                    "Add is detached from the current Body.");
+            case part::FeatureEvaluationDiagnosticCode::
+                no_effect:
+                return QStringLiteral(
+                    "Extrude has no modeling effect.");
+            case part::FeatureEvaluationDiagnosticCode::
+                empty_result:
+                return QStringLiteral(
+                    "Extrude would produce an empty Body.");
+            case part::FeatureEvaluationDiagnosticCode::
+                multi_solid:
+                return QStringLiteral(
+                    "Extrude would produce multiple solids.");
+            case part::FeatureEvaluationDiagnosticCode::
+                kernel_invalid_input:
+            case part::FeatureEvaluationDiagnosticCode::
+                kernel_provider_mismatch:
+            case part::FeatureEvaluationDiagnosticCode::
+                kernel_provider_failure:
+            case part::FeatureEvaluationDiagnosticCode::
+                invalid_brep:
+                return QStringLiteral(
+                    "Kernel rejected the current Extrude.");
+            case part::FeatureEvaluationDiagnosticCode::
+                missing_profile:
+                return QStringLiteral(
+                    "Source Profile is missing.");
+            case part::FeatureEvaluationDiagnosticCode::
+                upstream_unavailable:
+                return QStringLiteral(
+                    "Upstream Body is unavailable.");
+            case part::FeatureEvaluationDiagnosticCode::none:
+                break;
+            }
+        }
+        return QStringLiteral(
+            "Current Extrude cannot be finished.");
+    }
+
+    switch (evaluation.status) {
+    case Status::stale_document:
+    case Status::stale_revision:
+        return QStringLiteral(
+            "Extrude context is stale; cancel and restart.");
+    case Status::invalid_draft:
+        return QStringLiteral(
+            "Enter a positive extrusion distance.");
+    case Status::missing_profile:
+        return QStringLiteral(
+            "Source Profile is missing.");
+    case Status::missing_feature:
+        return QStringLiteral(
+            "Edited Feature is missing.");
+    case Status::suppressed_feature:
+        return QStringLiteral(
+            "Suppressed Feature cannot be edited.");
+    case Status::feature_id_exhausted:
+        return QStringLiteral(
+            "FeatureId allocation is exhausted.");
+    case Status::invalid_candidate:
+        return QStringLiteral(
+            "Current Extrude candidate is invalid.");
+    case Status::target_failed:
+    case Status::ok:
+        break;
+    }
+    return QStringLiteral(
+        "Extrude preview is unavailable.");
+}
 
 std::string toUtf8(const QString& value) {
     const auto bytes = value.toUtf8();
@@ -722,6 +856,16 @@ void CadWorkbench::buildUi() {
         0,
         sketch_button_);
 
+    extrude_button_ =
+        new QPushButton(
+            QStringLiteral("Extrude"),
+            shell_);
+    extrude_button_->setObjectName(
+        QStringLiteral("extrudeToolButton"));
+    shell_->editorToolsLayout().insertWidget(
+        1,
+        extrude_button_);
+
     select_sketch_button_ =
         new QPushButton(
             QStringLiteral("Select"),
@@ -992,6 +1136,7 @@ void CadWorkbench::buildUi() {
                 }
             }
             syncSketchInteractionUi();
+            syncActionState();
         });
     viewport_controller_->setProfileSelectionChangedHandler(
         [this](
@@ -1016,6 +1161,7 @@ void CadWorkbench::buildUi() {
                 }
             }
             syncSketchInteractionUi();
+            syncActionState();
         });
     tree_controller_->setProfileEditHandler(
         [this](part::ProfileId profile_id) {
@@ -1705,6 +1851,133 @@ void CadWorkbench::buildUi() {
         QStringLiteral("cancelSketchLineButton"));
     operations_layout->addWidget(
         cancel_line_button_);
+
+
+    extrude_operations_widget_ =
+        new QWidget(operations_content);
+    extrude_operations_widget_->setObjectName(
+        QStringLiteral("extrudeOperationsWidget"));
+    auto* extrude_operations_layout =
+        new QVBoxLayout(
+            extrude_operations_widget_);
+    extrude_operations_layout->setContentsMargins(
+        0, 0, 0, 0);
+
+    auto* extrude_operation_row =
+        new QWidget(
+            extrude_operations_widget_);
+    auto* extrude_operation_layout =
+        new QHBoxLayout(
+            extrude_operation_row);
+    extrude_operation_layout->setContentsMargins(
+        0, 0, 0, 0);
+    extrude_add_button_ =
+        new QPushButton(
+            QStringLiteral("Add"),
+            extrude_operation_row);
+    extrude_add_button_->setObjectName(
+        QStringLiteral("extrudeAddButton"));
+    extrude_add_button_->setCheckable(true);
+    extrude_cut_button_ =
+        new QPushButton(
+            QStringLiteral("Cut"),
+            extrude_operation_row);
+    extrude_cut_button_->setObjectName(
+        QStringLiteral("extrudeCutButton"));
+    extrude_cut_button_->setCheckable(true);
+    extrude_operation_layout->addWidget(
+        extrude_add_button_);
+    extrude_operation_layout->addWidget(
+        extrude_cut_button_);
+    extrude_operations_layout->addWidget(
+        extrude_operation_row);
+
+    auto* extrude_extent_row =
+        new QWidget(
+            extrude_operations_widget_);
+    auto* extrude_extent_layout =
+        new QHBoxLayout(
+            extrude_extent_row);
+    extrude_extent_layout->setContentsMargins(
+        0, 0, 0, 0);
+    extrude_one_side_button_ =
+        new QPushButton(
+            QStringLiteral("One Side"),
+            extrude_extent_row);
+    extrude_one_side_button_->setObjectName(
+        QStringLiteral("extrudeOneSideButton"));
+    extrude_one_side_button_->setCheckable(true);
+    extrude_midplane_button_ =
+        new QPushButton(
+            QStringLiteral("Midplane"),
+            extrude_extent_row);
+    extrude_midplane_button_->setObjectName(
+        QStringLiteral("extrudeMidplaneButton"));
+    extrude_midplane_button_->setCheckable(true);
+    extrude_extent_layout->addWidget(
+        extrude_one_side_button_);
+    extrude_extent_layout->addWidget(
+        extrude_midplane_button_);
+    extrude_operations_layout->addWidget(
+        extrude_extent_row);
+
+    extrude_reverse_button_ =
+        new QPushButton(
+            QStringLiteral("Reverse"),
+            extrude_operations_widget_);
+    extrude_reverse_button_->setObjectName(
+        QStringLiteral("extrudeReverseButton"));
+    extrude_reverse_button_->setCheckable(true);
+    extrude_operations_layout->addWidget(
+        extrude_reverse_button_);
+
+    auto* extrude_distance_form =
+        new QFormLayout;
+    extrude_distance_edit_ =
+        new QLineEdit(
+            extrude_operations_widget_);
+    extrude_distance_edit_->setObjectName(
+        QStringLiteral("extrudeDistanceEdit"));
+    extrude_distance_edit_->setPlaceholderText(
+        QStringLiteral("e.g. 10 mm"));
+    extrude_distance_form->addRow(
+        QStringLiteral("Distance"),
+        extrude_distance_edit_);
+    extrude_operations_layout->addLayout(
+        extrude_distance_form);
+
+    extrude_result_label_ =
+        new QLabel(
+            QStringLiteral(
+                "Enter a positive extrusion distance."),
+            extrude_operations_widget_);
+    extrude_result_label_->setObjectName(
+        QStringLiteral("extrudeResultLabel"));
+    extrude_result_label_->setWordWrap(true);
+    extrude_operations_layout->addWidget(
+        extrude_result_label_);
+
+    extrude_finish_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Extrude"),
+            extrude_operations_widget_);
+    extrude_finish_button_->setObjectName(
+        QStringLiteral("extrudeFinishButton"));
+    extrude_operations_layout->addWidget(
+        extrude_finish_button_);
+
+    extrude_cancel_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel"),
+            extrude_operations_widget_);
+    extrude_cancel_button_->setObjectName(
+        QStringLiteral("extrudeCancelButton"));
+    extrude_operations_layout->addWidget(
+        extrude_cancel_button_);
+
+    extrude_operations_widget_->setVisible(false);
+    operations_layout->addWidget(
+        extrude_operations_widget_);
 
     profile_operations_widget_ =
         new QWidget(operations_content);
@@ -2413,6 +2686,152 @@ void CadWorkbench::buildUi() {
                 sketch::EntityRole::construction);
         });
 
+
+    QObject::connect(
+        extrude_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            static_cast<void>(
+                startExtrudeFromSelectedProfile());
+        });
+    QObject::connect(
+        extrude_add_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (!extrude_draft_) return;
+            if (extrude_draft_->setOperation(
+                    part::ExtrudeOperation::add)) {
+                refreshExtrudePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        extrude_cut_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (!extrude_draft_ ||
+                document_session_ == nullptr) {
+                return;
+            }
+            if (document_session_->document()
+                    .body().features.empty()) {
+                setStatusText(
+                    QStringLiteral(
+                        "The first solid-producing Extrude must be Add."));
+                syncExtrudeUi();
+                return;
+            }
+            if (extrude_draft_->setOperation(
+                    part::ExtrudeOperation::cut)) {
+                refreshExtrudePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        extrude_one_side_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (!extrude_draft_) return;
+            if (extrude_draft_->setExtentMode(
+                    application::
+                        ExtrudeDraftExtentMode::
+                            one_side)) {
+                refreshExtrudePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        extrude_midplane_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (!extrude_draft_) return;
+            if (extrude_draft_->setExtentMode(
+                    application::
+                        ExtrudeDraftExtentMode::
+                            midplane)) {
+                refreshExtrudePreview();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        extrude_reverse_button_,
+        &QPushButton::clicked,
+        this,
+        [this](bool checked) {
+            if (!extrude_draft_) return;
+            if (!extrude_draft_->setReversed(
+                    checked)) {
+                syncExtrudeUi();
+                return;
+            }
+            refreshExtrudePreview();
+            notifyCadInputContextChanged();
+        });
+    QObject::connect(
+        extrude_distance_edit_,
+        &QLineEdit::textChanged,
+        this,
+        [this](const QString& text_value) {
+            if (syncing_extrude_ui_ ||
+                !extrude_draft_ ||
+                document_session_ == nullptr) {
+                return;
+            }
+
+            const auto parsed =
+                application::parseBareCadDistance(
+                    toUtf8(text_value),
+                    application::CadInputNumberFormat{
+                        toUtf8(
+                            QLocale{}.decimalPoint()),
+                        document_session_->document()
+                            .lengthUnit()});
+            if (!parsed || !(*parsed > 0.0)) {
+                extrude_distance_input_valid_ =
+                    false;
+                extrude_evaluation_.reset();
+                if (viewport_controller_) {
+                    viewport_controller_->
+                        clearSolidPreview();
+                }
+                syncExtrudeUi();
+                return;
+            }
+
+            static_cast<void>(
+                setExtrudeDistance(
+                    core::LengthValue{*parsed},
+                    toUtf8(text_value)));
+        });
+    QObject::connect(
+        extrude_distance_edit_,
+        &QLineEdit::returnPressed,
+        this,
+        [this] {
+            static_cast<void>(
+                finishExtrude());
+        });
+    QObject::connect(
+        extrude_finish_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            static_cast<void>(
+                finishExtrude());
+        });
+    QObject::connect(
+        extrude_cancel_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            cancelExtrude();
+        });
+
     QObject::connect(
         profile_add_area_button_,
         &QPushButton::clicked,
@@ -2502,6 +2921,7 @@ void CadWorkbench::buildUi() {
         });
 
     syncSketchInteractionUi();
+    syncExtrudeUi();
 }
 
 bool CadWorkbench::activateDocument(
@@ -2521,6 +2941,7 @@ bool CadWorkbench::activateDocument(
     }
 
     captureActiveViewState();
+    clearExtrudeRuntimeContext();
     clearSketchRuntimeContext();
     if (viewport_controller_ != nullptr) {
         viewport_controller_->clear();
@@ -2541,6 +2962,7 @@ void CadWorkbench::deactivateDocument() {
         captureActiveViewState();
     }
 
+    clearExtrudeRuntimeContext();
     clearSketchRuntimeContext();
     document_session_ = nullptr;
     workspace_root_.clear();
@@ -2749,6 +3171,450 @@ void CadWorkbench::deleteSelectedProfile() {
     setStatusText(
         QStringLiteral(
             "Profile deleted — source Sketch geometry is unchanged."));
+}
+
+
+bool CadWorkbench::startExtrudeFromSelectedProfile() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Extrude requires an active Part and modeling Kernel."));
+        return false;
+    }
+    if (extrude_draft_) {
+        setStatusText(
+            QStringLiteral(
+                "An Extrude operation is already active."));
+        return false;
+    }
+    if (active_sketch_id_ ||
+        sketch_support_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active Sketch context before Extrude."));
+        return false;
+    }
+    if (!selected_profile_id_) {
+        setStatusText(
+            QStringLiteral(
+                "Select exactly one valid Profile before Extrude."));
+        return false;
+    }
+
+    const auto profile_evaluation =
+        document_session->document()
+            .evaluateProfile(
+                *selected_profile_id_);
+    if (!profile_evaluation ||
+        !profile_evaluation->valid()) {
+        setStatusText(
+            QStringLiteral(
+                "Selected Profile is not valid for Extrude."));
+        return false;
+    }
+
+    auto draft =
+        application::ExtrudeDraft::beginCreate(
+            *document_session,
+            *selected_profile_id_);
+    if (!draft) {
+        setStatusText(
+            QStringLiteral(
+                "Extrude draft could not be created."));
+        return false;
+    }
+
+    extrude_draft_ =
+        std::move(*draft);
+    extrude_evaluation_.reset();
+    extrude_distance_input_valid_ = false;
+
+    if (extrude_distance_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            extrude_distance_edit_};
+        extrude_distance_edit_->clear();
+    }
+    if (viewport_controller_) {
+        viewport_controller_->clearSolidPreview();
+    }
+
+    syncActionState();
+    syncExtrudeUi();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Extrude active — enter a positive distance."));
+    if (extrude_distance_edit_ != nullptr) {
+        extrude_distance_edit_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::cancelExtrude() {
+    if (!extrude_draft_) {
+        return;
+    }
+
+    extrude_draft_.reset();
+    extrude_evaluation_.reset();
+    extrude_distance_input_valid_ = false;
+    if (viewport_controller_) {
+        viewport_controller_->clearSolidPreview();
+    }
+
+    syncActionState();
+    syncExtrudeUi();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Extrude cancelled — no authored change."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+bool CadWorkbench::finishExtrude() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        !extrude_draft_ ||
+        !extrude_evaluation_ ||
+        !extrude_distance_input_valid_) {
+        setStatusText(
+            QStringLiteral(
+                "Extrude cannot finish until the current preview is valid."));
+        return false;
+    }
+
+    const auto result =
+        application::finishExtrudeDraft(
+            *document_session,
+            *extrude_draft_,
+            *extrude_evaluation_,
+            *solid_modeling_kernel_);
+    if (!result.ok()) {
+        setStatusText(
+            result.diagnostic.empty()
+                ? QStringLiteral(
+                      "Extrude Finish was rejected.")
+                : fromUtf8(
+                      result.diagnostic));
+        refreshExtrudePreview();
+        return false;
+    }
+
+    extrude_draft_.reset();
+    extrude_evaluation_.reset();
+    extrude_distance_input_valid_ = false;
+    if (viewport_controller_) {
+        viewport_controller_->clearSolidPreview();
+    }
+
+    refreshActiveContext();
+    syncExtrudeUi();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Extrude finished — Feature committed."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::clearExtrudeRuntimeContext() {
+    extrude_draft_.reset();
+    extrude_evaluation_.reset();
+    extrude_distance_input_valid_ = false;
+    if (viewport_controller_) {
+        viewport_controller_->clearSolidPreview();
+    }
+    if (extrude_distance_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            extrude_distance_edit_};
+        extrude_distance_edit_->clear();
+    }
+    syncExtrudeUi();
+}
+
+bool CadWorkbench::setExtrudeDistance(
+    core::LengthValue distance,
+    std::optional<std::string_view>
+        display_text) {
+    if (!extrude_draft_ ||
+        !distance.finite() ||
+        !(distance.millimetres > 0.0)) {
+        return false;
+    }
+    if (!extrude_draft_->setDistance(
+            distance)) {
+        return false;
+    }
+
+    extrude_distance_input_valid_ = true;
+    if (display_text &&
+        extrude_distance_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            extrude_distance_edit_};
+        extrude_distance_edit_->setText(
+            fromUtf8(*display_text));
+    }
+
+    refreshExtrudePreview();
+    notifyCadInputContextChanged();
+    return true;
+}
+
+void CadWorkbench::refreshExtrudePreview() {
+    extrude_evaluation_.reset();
+
+    if (viewport_controller_) {
+        viewport_controller_->clearSolidPreview();
+    }
+
+    if (!extrude_draft_ ||
+        !extrude_distance_input_valid_ ||
+        document_session_ == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        syncExtrudeUi();
+        return;
+    }
+
+    auto evaluation =
+        document_session_->evaluateExtrudeDraft(
+            *extrude_draft_,
+            *solid_modeling_kernel_);
+    if (evaluation.previewSolidAvailable() &&
+        viewport_controller_ != nullptr) {
+        const auto tone =
+            extrude_draft_->operation() ==
+                    part::ExtrudeOperation::cut
+                ? viewer::SolidPreviewTone::
+                      subtractive
+                : viewer::SolidPreviewTone::
+                      additive;
+        if (!viewport_controller_->
+                setSolidPreview(
+                    evaluation.body_solid,
+                    tone)) {
+            evaluation.body_solid.reset();
+        }
+    }
+
+    extrude_evaluation_ =
+        std::move(evaluation);
+    syncExtrudeUi();
+}
+
+void CadWorkbench::syncExtrudeUi() {
+    const bool active =
+        extrude_draft_.has_value();
+
+    if (extrude_operations_widget_ != nullptr) {
+        extrude_operations_widget_->
+            setVisible(active);
+    }
+    if (!active) {
+        return;
+    }
+
+    syncing_extrude_ui_ = true;
+
+    const bool add =
+        extrude_draft_->operation() ==
+        part::ExtrudeOperation::add;
+    extrude_add_button_->setChecked(add);
+    extrude_cut_button_->setChecked(!add);
+
+    const bool one_side =
+        extrude_draft_->extentMode() ==
+        application::ExtrudeDraftExtentMode::
+            one_side;
+    extrude_one_side_button_->setChecked(
+        one_side);
+    extrude_midplane_button_->setChecked(
+        !one_side);
+    extrude_reverse_button_->setEnabled(
+        one_side);
+    extrude_reverse_button_->setChecked(
+        one_side &&
+        extrude_draft_->reversed());
+
+    const bool first_feature =
+        document_session_ != nullptr &&
+        document_session_->document()
+            .body().features.empty();
+    extrude_cut_button_->setEnabled(
+        !first_feature);
+
+    const bool committable =
+        extrude_distance_input_valid_ &&
+        extrude_evaluation_ &&
+        extrude_evaluation_->committable();
+    extrude_finish_button_->setEnabled(
+        committable);
+
+    if (!extrude_distance_input_valid_) {
+        extrude_result_label_->setText(
+            QStringLiteral(
+                "Enter a positive extrusion distance."));
+    } else if (extrude_evaluation_) {
+        extrude_result_label_->setText(
+            extrudeEvaluationText(
+                *extrude_evaluation_));
+    } else {
+        extrude_result_label_->setText(
+            QStringLiteral(
+                "Preview unavailable."));
+    }
+
+    if (operations_placeholder_ != nullptr) {
+        operations_placeholder_->setText(
+            QStringLiteral(
+                "Extrude — %1 · %2%3")
+                .arg(
+                    add
+                        ? QStringLiteral("Add")
+                        : QStringLiteral("Cut"),
+                    one_side
+                        ? QStringLiteral("One Side")
+                        : QStringLiteral("Midplane"),
+                    one_side &&
+                            extrude_draft_->reversed()
+                        ? QStringLiteral(" · Reverse")
+                        : QString{}));
+    }
+
+    syncing_extrude_ui_ = false;
+}
+
+application::CadInputSubmitResult
+CadWorkbench::submitExtrudeCadInput(
+    std::string_view text) {
+    if (!extrude_draft_ ||
+        document_session_ == nullptr) {
+        return {
+            false,
+            "No active Extrude draft."};
+    }
+
+    const auto keyword =
+        upperAsciiTrimmed(text);
+    if (keyword.empty() ||
+        keyword == "FINISH") {
+        return finishExtrude()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Extrude Finish was rejected."};
+    }
+    if (keyword == "CANCEL") {
+        cancelExtrude();
+        return {true, {}};
+    }
+    if (keyword == "ADD") {
+        if (!extrude_draft_->setOperation(
+                part::ExtrudeOperation::add)) {
+            return {
+                false,
+                "ADD could not be applied."};
+        }
+        refreshExtrudePreview();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+    if (keyword == "CUT") {
+        if (document_session_->document()
+                .body().features.empty()) {
+            return {
+                false,
+                "The first solid-producing Extrude must be ADD."};
+        }
+        if (!extrude_draft_->setOperation(
+                part::ExtrudeOperation::cut)) {
+            return {
+                false,
+                "CUT could not be applied."};
+        }
+        refreshExtrudePreview();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+    if (keyword == "REVERSE") {
+        if (extrude_draft_->extentMode() !=
+            application::ExtrudeDraftExtentMode::
+                one_side) {
+            return {
+                false,
+                "REVERSE is available only for ONESIDE Extrude."};
+        }
+        if (!extrude_draft_->setReversed(
+                !extrude_draft_->reversed())) {
+            return {
+                false,
+                "REVERSE could not be applied."};
+        }
+        refreshExtrudePreview();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+    if (keyword == "MIDPLANE") {
+        if (!extrude_draft_->setExtentMode(
+                application::
+                    ExtrudeDraftExtentMode::
+                        midplane)) {
+            return {
+                false,
+                "MIDPLANE could not be applied."};
+        }
+        refreshExtrudePreview();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+    if (keyword == "ONESIDE") {
+        if (!extrude_draft_->setExtentMode(
+                application::
+                    ExtrudeDraftExtentMode::
+                        one_side)) {
+            return {
+                false,
+                "ONESIDE could not be applied."};
+        }
+        refreshExtrudePreview();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+
+    const auto distance =
+        application::parseBareCadDistance(
+            text,
+            application::CadInputNumberFormat{
+                toUtf8(
+                    QLocale{}.decimalPoint()),
+                document_session_->document()
+                    .lengthUnit()});
+    if (!distance || !(*distance > 0.0)) {
+        return {
+            false,
+            "Extrude expects ADD, CUT, REVERSE, MIDPLANE, ONESIDE, FINISH, CANCEL or a positive Length."};
+    }
+
+    if (!setExtrudeDistance(
+            core::LengthValue{*distance},
+            text)) {
+        return {
+            false,
+            "Extrude distance could not be applied."};
+    }
+    return {true, {}};
 }
 
 void CadWorkbench::setSketchSelectionRole(
@@ -3451,6 +4317,15 @@ std::string CadWorkbench::cadInputPrompt() const {
 
 application::CadInputContextGeneration
 CadWorkbench::cadInputContextGeneration() const noexcept {
+    if (extrude_draft_) {
+        constexpr application::CadInputContextGeneration
+            extrude_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 63U};
+        return extrude_namespace |
+               (extrude_draft_->generation() &
+                (extrude_namespace - 1U));
+    }
     return sketch_interaction_controller_
                ? sketch_interaction_controller_->
                      cadInputContextGeneration()
@@ -3459,6 +4334,15 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
 
 std::vector<application::CadDynamicInputField>
 CadWorkbench::cadDynamicInputFields() const {
+    if (extrude_draft_) {
+        return {
+            application::CadDynamicInputField{
+                application::
+                    CadDynamicInputFieldSemantic::
+                        distance,
+                "Distance"}};
+    }
+
     if (!sketch_interaction_controller_ ||
         !sketch_interaction_controller_->active()) {
         return {};
@@ -3489,6 +4373,32 @@ CadWorkbench::lockCadDynamicInputField(
             false,
             "CAD input semantic context is stale."};
     }
+    if (extrude_draft_) {
+        if (index != 0U ||
+            document_session_ == nullptr) {
+            return {
+                false,
+                "Extrude has one Distance input field."};
+        }
+        const auto distance =
+            application::parseBareCadDistance(
+                text,
+                application::CadInputNumberFormat{
+                    toUtf8(
+                        QLocale{}.decimalPoint()),
+                    document_session_->document()
+                        .lengthUnit()});
+        if (!distance || !(*distance > 0.0) ||
+            !setExtrudeDistance(
+                core::LengthValue{*distance},
+                text)) {
+            return {
+                false,
+                "Extrude Distance expects a positive Length."};
+        }
+        return {true, {}};
+    }
+
     if (!sketch_interaction_controller_) {
         return {
             false,
@@ -3528,6 +4438,15 @@ CadWorkbench::submitCadDynamicInputRequest(
             false,
             "CAD input semantic context is stale."};
     }
+    if (extrude_draft_) {
+        return finishExtrude()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Extrude Finish was rejected."};
+    }
+
     if (!sketch_interaction_controller_ ||
         !sketch_interaction_controller_->active()) {
         return {
@@ -3552,6 +4471,28 @@ CadWorkbench::submitCadInput(
     if (expected_context_generation != cadInputContextGeneration()) {
         return {false, "CAD input semantic context is stale."};
     }
+
+    if (extrude_draft_) {
+        auto result =
+            submitExtrudeCadInput(text);
+        if (!result.accepted &&
+            status_ != nullptr &&
+            !result.diagnostic.empty()) {
+            setStatusText(
+                fromUtf8(result.diagnostic));
+        }
+        return result;
+    }
+
+    if (upperAsciiTrimmed(text) == "EXTRUDE") {
+        return startExtrudeFromSelectedProfile()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "EXTRUDE requires one selected valid Profile."};
+    }
+
     if (!sketch_interaction_controller_) {
         return {false, "No active CAD command context."};
     }
@@ -3586,6 +4527,11 @@ CadWorkbench::submitCadInput(
     return result;
 }
 QString CadWorkbench::cadInputPromptText() const {
+    if (extrude_draft_) {
+        return QStringLiteral(
+            "Command: EXTRUDE — ADD/CUT · ONESIDE/MIDPLANE · REVERSE · Distance · FINISH/CANCEL");
+    }
+
     if (!sketch_interaction_controller_ ||
         !sketch_interaction_controller_->active()) {
         return QStringLiteral("Command:");
@@ -4027,11 +4973,15 @@ void CadWorkbench::refreshActiveContext() {
 
     viewport_controller_->setDocumentSession(document_session);
     reconcileSketchRuntimeContext();
+    if (extrude_draft_) {
+        refreshExtrudePreview();
+    }
     syncActionState();
     notifyDocumentStateChanged();
 }
 
 void CadWorkbench::clearActiveContext() {
+    clearExtrudeRuntimeContext();
     clearSketchRuntimeContext();
     active_path_->setText(QStringLiteral("No Part is open."));
     active_id_->clear();
@@ -4331,6 +5281,23 @@ bool CadWorkbench::eventFilter(
         event->type() == QEvent::KeyPress) {
         auto* key_event =
             static_cast<QKeyEvent*>(event);
+
+        if (watched == viewport_widget_ &&
+            extrude_draft_) {
+            if (key_event->key() ==
+                Qt::Key_Escape) {
+                cancelExtrude();
+                return true;
+            }
+            if (key_event->key() ==
+                    Qt::Key_Return ||
+                key_event->key() ==
+                    Qt::Key_Enter) {
+                static_cast<void>(
+                    finishExtrude());
+                return true;
+            }
+        }
 
         const bool profile_delete_context =
             watched == viewport_widget_ &&
@@ -5467,9 +6434,13 @@ void CadWorkbench::syncActionState() {
 
     apply_button_->setEnabled(active);
     undo_button_->setEnabled(
-        active && document_session->canUndo());
+        active &&
+        !extrude_draft_ &&
+        document_session->canUndo());
     redo_button_->setEnabled(
-        active && document_session->canRedo());
+        active &&
+        !extrude_draft_ &&
+        document_session->canRedo());
     // Save remains available for a clean active Document so an explicit
     // Save can revalidate the native-file checkpoint and report an external
     // file conflict as required by ADR-0013.
@@ -5490,7 +6461,20 @@ void CadWorkbench::syncActionState() {
     sketch_button_->setEnabled(
         active &&
         !editing_sketch &&
-        !sketch_support_pick_active_);
+        !sketch_support_pick_active_ &&
+        !extrude_draft_);
+
+    if (extrude_button_ != nullptr) {
+        extrude_button_->setVisible(
+            !editing_sketch);
+        extrude_button_->setEnabled(
+            active &&
+            !editing_sketch &&
+            !sketch_support_pick_active_ &&
+            !extrude_draft_ &&
+            selected_profile_id_.has_value() &&
+            solid_modeling_kernel_ != nullptr);
+    }
 
     select_sketch_button_->setVisible(
         editing_sketch);
@@ -5540,6 +6524,7 @@ void CadWorkbench::syncActionState() {
         editing_sketch);
 
     syncSketchInteractionUi();
+    syncExtrudeUi();
 }
 
 void CadWorkbench::notifyCadInputContextChanged() {
