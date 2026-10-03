@@ -1,9 +1,9 @@
 version: 1
-status: completed
-active_work: "work/PM-00B_PART_FEATURE_ARCHITECTURE_FREEZE.md"
+status: active
+active_work: "work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.4"
+program_roadmap_version: "1.5"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -19,13 +19,14 @@ accepted_adrs:
   - "adr/ADR-0012-revision-bound-part-transactions-and-validated-reconstruction.md"
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
   - "adr/ADR-0014-part-feature-architecture-references-and-modeling-semantics.md"
+  - "adr/ADR-0015-extrude-feature-scope-preview-and-presentation.md"
 next:
-  - PM-00B is COMPLETED — PASS; source candidate 4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9, Windows FULL #1323, core-only 19/19 PASS, kernel-native 27/27 PASS, desktop FULL 84/84 PASS
-  - ADR-0014 is accepted and listed in accepted_adrs
-  - Owner review and separate explicit acceptance/amendment of work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md is the next legal action
-  - PM-01 remains NOT ACTIVE
-  - keep production Body/Feature schema, migration, Part Feature Tree behavior and user-facing Extrude Add inactive
+  - PM-01 is ACTIVE by explicit Owner acceptance on 2026-10-03 under ADR-0014 and ADR-0015
+  - implement the accepted Extrude Feature vertical slice in bounded checkpoints: semantic/schema foundation -> Kernel Add/Cut -> evaluator/commands -> Viewer/preview -> Tree/Properties/Command Line -> persistence/docs/acceptance
+  - first solid-producing Feature is Add; later ordered Extrude Features may be Add or Cut; OneSide and Midplane are in scope
+  - PM-02 and later Part Modeling packages remain NOT ACTIVE
 notes:
+  - Owner explicitly accepted the expanded PM-01 plan on 2026-10-03 before production mutation: multiple ordered Extrude Add/Cut Features, OneSide/Midplane, OneSide Reverse, dynamic preview with one Finish, automatic consumed-Profile visibility plus Profile/Feature discoverability, Command Line parity and bounded provider-neutral solid/preview Viewer API. ADR-0015 records the deliberate amendment of the earlier O-06 slice.
   - PM-00B completed its governance/architecture freeze deliverables on exact source candidate 4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9. Windows FULL #1323 passed core-only 19/19, kernel-native 27/27 and desktop FULL 84/84. Closure changes after that candidate are restricted to work/** status/evidence synchronization.
   - Owner explicitly accepted PM-00B Part Feature Architecture Freeze and proposed ADR-0014 on 2026-10-03, including O-01, O-04, O-05, O-09, O-11, O-12 and the O-03/O-06 matrix. This authorizes governance/architecture freeze only; PM-01 production mutation remains separately gated.
   - E10 completed on exact source candidate ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb with Windows FULL #1320 PASS. Core-only 19/19, kernel-native 27/27 including pm00a.e10_numerical_policy, and desktop FULL 84/84 all passed. E10 proved display/pick state cannot enter the neutral/kernel-native modeling path, explicit refine policy changes provider topology without changing the bounded semantic source-face outcome, invalid gaps fail without fuzzy escalation, and the near-threshold family is deterministic with at least one measured acceptance transition. False-Resolved count remains 0.
