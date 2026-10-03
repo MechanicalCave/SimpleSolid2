@@ -35,7 +35,8 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 - **H5 COMPLETED — PASS:** PR #165, exact-head Windows FULL #1359 PASS on `0fd15f815b1913e144070e508e7a565dca33fae5`; merged to main as `eac7d26973949bc3275fe6b4bd4d68c1c54cdc6c`.
 - **H5 documentation sync COMPLETED — PASS:** PR #166, Windows DOCS #1360 PASS; latest main `2e98164a91e93717e4cfbcf886ce467bc503d31e`.
 - **Owner re-test after H5:** PARTIAL PASS; exact delta/no-effect behavior is improved, but committed Body and preview still share the subtractive orange appearance during preview.
-- **H6 ACTIVE:** isolate committed Body and preview shading state in the Qt/OCCT Viewer; no modeling or authored semantics change.
+- **H6 COMPLETED — PASS:** PR #169, exact-head Windows FULL #1364 PASS on `60f2a7ac6ed894e77c751449b370ee4322c870ae`; merged to main as `ca5592d07a271c83c9752fb654cded2c7b3d83c6`.
+- **Owner H6 re-test:** PENDING on latest main; only Add/Cut preview color isolation needs manual confirmation before PM-01 governance completion.
 
 ## H1 — Profile → Kernel fidelity blocker
 

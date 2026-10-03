@@ -1,10 +1,10 @@
 # PM-01 — Final Acceptance Matrix
 
-**Status:** PENDING H6 REMEDIATION + OWNER MANUAL WINDOWS ACCEPTANCE  
+**Status:** PENDING OWNER MANUAL WINDOWS ACCEPTANCE  
 **Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
 **Architecture:** ADR-0014 + ADR-0015  
-**Runtime baseline merged to main:** `eac7d26973949bc3275fe6b4bd4d68c1c54cdc6c`  
-**Latest runtime exact-head gate:** Windows FULL #1359 — PASS on `0fd15f815b1913e144070e508e7a565dca33fae5`
+**Runtime baseline merged to main:** `ca5592d07a271c83c9752fb654cded2c7b3d83c6`  
+**Latest runtime exact-head gate:** Windows FULL #1364 — PASS on `60f2a7ac6ed894e77c751449b370ee4322c870ae`
 
 ## 1. Automated acceptance coverage
 
@@ -112,8 +112,8 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 
 ## 4. Manual result
 
-**Owner Windows result:** PARTIAL PASS — H6 Viewer style isolation required  
+**Owner Windows result:** PENDING RETEST — H6 automated PASS  
 **Date:** 2026-10-03  
 **Last Owner-tested candidate:** `26dd32f65d2d1497d3d3ee55ca52ab69182f93fb`  
-**Next Owner-test candidate:** PENDING H6 runtime gate  
-**Notes:** H5 exact-delta/no-effect behavior is automated PASS, but Owner retest on `26dd32f...` found a remaining Viewer-only defect: committed Body receives the preview orange appearance while Extrude preview is active. H6 isolates Body/preview shading state in Qt/OCCT; PM-01 remains ACTIVE.
+**Next Owner-test candidate:** `ca5592d07a271c83c9752fb654cded2c7b3d83c6`  
+**Notes:** H5 exact-delta/no-effect behavior is automated PASS. H6 isolates committed Body and transient preview shading state in Qt/OCCT and passed exact-head Windows FULL #1364. One Owner Windows retest of Add/Cut preview color isolation remains before PM-01 governance completion.
