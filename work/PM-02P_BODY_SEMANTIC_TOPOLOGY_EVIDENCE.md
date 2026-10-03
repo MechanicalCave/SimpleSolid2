@@ -537,6 +537,10 @@ STOP also if an accepted PM-02 product case cannot be represented by ADR-0016 wi
 
 ## Documentation impact
 
+Internal docs: required
+User/Product docs: not required
+Reason: PM-02P changes architecture/governance and evidence only; it introduces no user-visible product behavior.
+
 Classification:
 
 ```text
