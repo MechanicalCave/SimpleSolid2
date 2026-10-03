@@ -1452,6 +1452,7 @@ set(_ss2_fast_tests
     part01.project_document_lifecycle
     part01.project_dirty_close
     wb01.cad_workbench
+    pm01e.cad_workbench_extrude
     wb01.viewer_camera_state
     wb01.viewer_navigation
     wb01.viewer_reference_presentation

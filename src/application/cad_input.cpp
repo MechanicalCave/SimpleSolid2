@@ -490,6 +490,38 @@ CadInputSubmitResult CadInputSession::submit() {
             return result;
         }
 
+        if (endpoint_ != nullptr &&
+            endpoint_->acceptsEmptyCadInput()) {
+            auto* const target = endpoint_;
+            const auto endpoint_generation =
+                endpoint_generation_;
+            const auto current_context =
+                target->cadInputContextGeneration();
+
+            auto result =
+                target->submitCadInput(
+                    {},
+                    current_context);
+
+            if (endpoint_ != target ||
+                endpoint_generation_ !=
+                    endpoint_generation) {
+                CadInputSubmitResult stale{
+                    false,
+                    "CAD input endpoint changed during empty submission."};
+                diagnostic_ = stale.diagnostic;
+                return stale;
+            }
+
+            observed_context_generation_ =
+                endpoint_->cadInputContextGeneration();
+            diagnostic_ = result.diagnostic;
+            if (result.accepted) {
+                diagnostic_.clear();
+            }
+            return result;
+        }
+
         CadInputSubmitResult result{
             false,
             "CAD input buffer is empty."};

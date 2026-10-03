@@ -138,6 +138,14 @@ public:
         solid_preview = scene;
         return true;
     }
+    bool setProfileScene(
+        const viewer::ProfileScene& scene) override {
+        return scene.valid();
+    }
+    bool setProfilePreviewScene(
+        const viewer::ProfilePreviewScene& scene) override {
+        return scene.valid();
+    }
     bool setSketchScene(
         const viewer::SketchScene& scene) override {
         return scene.valid();
@@ -406,6 +414,30 @@ int main(int argc, char* argv[]) {
     CHECK(
         session.undoDepth() ==
         undo_before_cancel);
+    CHECK(viewport->solid_preview.empty());
+
+    // Global Command Line empty Enter is Finish only while Extrude owns the
+    // semantic endpoint; legacy empty-Enter behavior remains default elsewhere.
+    profile_item =
+        findProfileItem(*tree);
+    CHECK(profile_item != nullptr);
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+
+    application::CadInputSession input;
+    input.attachEndpoint(&workbench);
+    input.setBuffer("EXTRUDE");
+    CHECK(input.submit().accepted);
+    input.setBuffer("3mm");
+    CHECK(input.submit().accepted);
+    const auto before_enter_count =
+        session.document().body()
+            .features.size();
+    CHECK(input.submit().accepted);
+    CHECK(
+        session.document().body()
+            .features.size() ==
+        before_enter_count + 1U);
     CHECK(viewport->solid_preview.empty());
 
     return EXIT_SUCCESS;

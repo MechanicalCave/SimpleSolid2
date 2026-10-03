@@ -2809,6 +2809,14 @@ void CadWorkbench::buildUi() {
                     toUtf8(text_value)));
         });
     QObject::connect(
+        extrude_distance_edit_,
+        &QLineEdit::returnPressed,
+        this,
+        [this] {
+            static_cast<void>(
+                finishExtrude());
+        });
+    QObject::connect(
         extrude_finish_button_,
         &QPushButton::clicked,
         this,
@@ -4965,6 +4973,9 @@ void CadWorkbench::refreshActiveContext() {
 
     viewport_controller_->setDocumentSession(document_session);
     reconcileSketchRuntimeContext();
+    if (extrude_draft_) {
+        refreshExtrudePreview();
+    }
     syncActionState();
     notifyDocumentStateChanged();
 }
@@ -6513,6 +6524,7 @@ void CadWorkbench::syncActionState() {
         editing_sketch);
 
     syncSketchInteractionUi();
+    syncExtrudeUi();
 }
 
 void CadWorkbench::notifyCadInputContextChanged() {

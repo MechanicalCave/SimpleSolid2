@@ -137,6 +137,10 @@ public:
         std::string_view text,
         application::CadInputContextGeneration
             expected_context_generation) override;
+    [[nodiscard]] bool
+    acceptsEmptyCadInput() const noexcept override {
+        return extrude_draft_.has_value();
+    }
     [[nodiscard]] std::vector<
         application::CadDynamicInputField>
     cadDynamicInputFields() const override;
