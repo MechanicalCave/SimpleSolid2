@@ -144,6 +144,11 @@ public:
         const sketch::DirectManipulationGeometry& geometry);
     void clearSketchPreview();
 
+    [[nodiscard]] bool setSolidPreview(
+        kernel::RuntimeSolidHandle solid,
+        viewer::SolidPreviewTone tone);
+    void clearSolidPreview();
+
     [[nodiscard]] bool setProfileDraftPreview(
         const std::optional<sketch::RegionCandidate2D>& region,
         bool show_boundary = false,
@@ -325,6 +330,10 @@ private:
     application::DocumentSession* session_{};
     kernel::ISolidModelingKernel*
         solid_modeling_kernel_{};
+    std::optional<core::DocumentRevision>
+        solid_scene_revision_;
+    std::optional<viewer::SolidScene>
+        solid_scene_cache_;
     std::optional<sketch::SketchId>
         sketch_edit_id_;
     viewer::PrimaryPointerRouting

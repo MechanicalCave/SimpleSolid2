@@ -88,6 +88,54 @@ int main(int argc, char* argv[]) {
                  camera->projection ==
                      viewer::CameraProjection::orthographic;
 
+            viewer::SolidScene solid_scene;
+            solid_scene.triangles.push_back(
+                viewer::SolidTrianglePresentation{
+                    {0.0, 0.0, 0.0},
+                    {20.0, 0.0, 0.0},
+                    {0.0, 20.0, 0.0},
+                    {0.0, 0.0, 1.0}});
+            ok = ok &&
+                 solid_scene.valid() &&
+                 widget.setSolidScene(
+                     solid_scene);
+
+            viewer::SolidPreviewScene
+                solid_preview;
+            solid_preview.triangles =
+                solid_scene.triangles;
+            solid_preview.tone =
+                viewer::SolidPreviewTone::
+                    subtractive;
+            widget.resetRuntimeDiagnostics();
+            ok = ok &&
+                 solid_preview.valid() &&
+                 widget.setSolidPreviewScene(
+                     solid_preview);
+            const auto solid_preview_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 solid_preview_metrics.
+                         update_current_viewer_calls == 1U;
+
+            widget.resetRuntimeDiagnostics();
+            ok = ok &&
+                 widget.setSolidPreviewScene(
+                     solid_preview);
+            const auto same_solid_preview_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 same_solid_preview_metrics.
+                         update_current_viewer_calls == 0U &&
+                 same_solid_preview_metrics.
+                         redraw_calls == 0U;
+
+            ok = ok &&
+                 widget.setSolidPreviewScene(
+                     viewer::SolidPreviewScene{}) &&
+                 widget.setSolidScene(
+                     viewer::SolidScene{});
+
             // R10 Construction cadence is a provider presentation effect.
             // Short/long committed Lines and preview Lines share the same
             // construction flag without authored dash segmentation.

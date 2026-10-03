@@ -99,6 +99,14 @@ public:
         return true;
     }
 
+    bool setSolidPreviewScene(
+        const viewer::SolidPreviewScene& scene) override {
+        ++solid_preview_scene_calls_;
+        if (!scene.valid()) return false;
+        solid_preview_scene_ = scene;
+        return true;
+    }
+
     bool setSketchScene(
         const viewer::SketchScene& scene) override {
         ++sketch_scene_calls_;
@@ -177,9 +185,12 @@ public:
     viewer::CameraState camera_;
     viewer::ReferenceScene reference_scene_;
     viewer::SolidScene solid_scene_;
+    viewer::SolidPreviewScene
+        solid_preview_scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene preview_scene_;
     std::size_t solid_scene_calls_{};
+    std::size_t solid_preview_scene_calls_{};
     std::size_t sketch_scene_calls_{};
     std::size_t preview_scene_calls_{};
     bool fail_preview_{};
@@ -201,9 +212,13 @@ class FakeSolidKernel final
     : public kernel::ISolidModelingKernel {
 public:
     bool fail_mesh{};
+    std::size_t extrude_calls{};
+    std::size_t mesh_calls{};
+
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
         kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        ++extrude_calls;
         kernel::SolidModelingResult result;
         if (!input.valid()) {
             result.status =
@@ -232,6 +247,7 @@ public:
     kernel::SolidPresentationResult
     presentationMesh(
         kernel::RuntimeSolidHandle solid) noexcept override {
+        ++mesh_calls;
         if (fail_mesh) {
             return {
                 kernel::SolidPresentationStatus::
@@ -776,6 +792,47 @@ int main(int argc, char* argv[]) {
         CHECK(
             viewport.solid_scene_
                 .triangles.size() == 1U);
+
+        const auto extrude_calls_after_publish =
+            solid_kernel.extrude_calls;
+        const auto mesh_calls_after_publish =
+            solid_kernel.mesh_calls;
+        controller.refreshPresentation();
+        CHECK(
+            solid_kernel.extrude_calls ==
+            extrude_calls_after_publish);
+        CHECK(
+            solid_kernel.mesh_calls ==
+            mesh_calls_after_publish);
+
+        auto preview_solid =
+            std::make_shared<FakeSolid>();
+        CHECK(
+            controller.setSolidPreview(
+                preview_solid,
+                viewer::SolidPreviewTone::
+                    additive));
+        CHECK(
+            viewport.solid_preview_scene_
+                .triangles.size() == 1U);
+        controller.clearSolidPreview();
+        CHECK(
+            viewport.solid_preview_scene_
+                .triangles.empty());
+
+        auto properties =
+            solid_session.document()
+                .properties();
+        properties.title =
+            "PM-01D cache invalidation";
+        const auto property_change =
+            solid_session.execute(
+                application::
+                    SetDocumentPropertiesCommand{
+                        std::move(properties)});
+        CHECK(
+            property_change.ok() &&
+            property_change.changed);
 
         solid_kernel.fail_mesh = true;
         controller.refreshPresentation();
