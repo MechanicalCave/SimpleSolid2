@@ -1149,13 +1149,11 @@ OcctSolidModelingKernel::presentationMesh(
     }
 
     try {
-        // Presentation-only policy. These values are intentionally private to
-        // the provider and never participate in modeling semantics.
-        // Presentation-only quality. Keep this independent from
-        // modeling tolerances: denser angular tessellation prevents ordinary
-        // cylindrical faces from reading as coarse polygon panels.
-        constexpr double linear_deflection_mm = 0.10;
-        constexpr double angular_deflection_rad = 0.08;
+        // Presentation-only policy. Smooth shading is carried by nodal
+        // normals; tessellation density is therefore restored to the original
+        // bounded values instead of paying for tiny flat facets.
+        constexpr double linear_deflection_mm = 0.25;
+        constexpr double angular_deflection_rad = 0.35;
 
         BRepMesh_IncrementalMesh mesher{
             runtime->solid,
@@ -1188,6 +1186,16 @@ OcctSolidModelingKernel::presentationMesh(
             if (triangulation.IsNull()) {
                 continue;
             }
+            if (!triangulation->HasNormals()) {
+                triangulation->ComputeNormals();
+            }
+            if (!triangulation->HasNormals()) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                result.mesh.triangles.clear();
+                return result;
+            }
 
             const auto transform =
                 location.Transformation();
@@ -1216,11 +1224,30 @@ OcctSolidModelingKernel::presentationMesh(
                         ->Node(third_index)
                         .Transformed(transform);
 
+                gp_Dir first_normal =
+                    triangulation->Normal(
+                        first_index);
+                gp_Dir second_normal =
+                    triangulation->Normal(
+                        second_index);
+                gp_Dir third_normal =
+                    triangulation->Normal(
+                        third_index);
+                first_normal.Transform(transform);
+                second_normal.Transform(transform);
+                third_normal.Transform(transform);
+
                 if (face.Orientation() ==
                     TopAbs_REVERSED) {
                     std::swap(
                         second,
                         third);
+                    std::swap(
+                        second_normal,
+                        third_normal);
+                    first_normal.Reverse();
+                    second_normal.Reverse();
+                    third_normal.Reverse();
                 }
 
                 const gp_Vec first_edge{
@@ -1239,8 +1266,6 @@ OcctSolidModelingKernel::presentationMesh(
                     continue;
                 }
 
-                const gp_Vec normal =
-                    cross / magnitude;
                 result.mesh.triangles.push_back(
                     kernel::SolidMeshTriangle{
                         {first.X(),
@@ -1252,9 +1277,15 @@ OcctSolidModelingKernel::presentationMesh(
                         {third.X(),
                          third.Y(),
                          third.Z()},
-                        {normal.X(),
-                         normal.Y(),
-                         normal.Z()}});
+                        {first_normal.X(),
+                         first_normal.Y(),
+                         first_normal.Z()},
+                        {second_normal.X(),
+                         second_normal.Y(),
+                         second_normal.Z()},
+                        {third_normal.X(),
+                         third_normal.Y(),
+                         third_normal.Z()}});
             }
         }
 
