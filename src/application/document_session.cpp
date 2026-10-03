@@ -89,6 +89,10 @@ DocumentSession::DocumentSession(
     absorbSketchEntityIdCursors(document_.state());
     profile_id_cursor_.preserve(
         document_.state().next_profile_id);
+    body_id_cursor_.preserve(
+        document_.state().next_body_id);
+    feature_id_cursor_.preserve(
+        document_.state().body.next_feature_id);
 }
 
 DocumentSession::DocumentSession(
@@ -108,6 +112,10 @@ DocumentSession::DocumentSession(
     absorbSketchEntityIdCursors(document_.state());
     profile_id_cursor_.preserve(
         document_.state().next_profile_id);
+    body_id_cursor_.preserve(
+        document_.state().next_body_id);
+    feature_id_cursor_.preserve(
+        document_.state().body.next_feature_id);
 }
 
 DocumentSessionResult DocumentSession::verifyRevision() const {
@@ -129,6 +137,7 @@ DocumentSessionResult DocumentSession::commitCommandState(
 
     applySketchEntityIdCursors(after);
     applyProfileIdCursor(after);
+    applyBodyFeatureIdCursors(after);
 
     if (after == document_.state()) {
         return success(false);
@@ -153,6 +162,14 @@ DocumentSessionResult DocumentSession::commitCommandState(
         profile_id_cursor_;
     prepared_profile_id_cursor.preserve(
         pending.after.next_profile_id);
+    auto prepared_body_id_cursor =
+        body_id_cursor_;
+    prepared_body_id_cursor.preserve(
+        pending.after.next_body_id);
+    auto prepared_feature_id_cursor =
+        feature_id_cursor_;
+    prepared_feature_id_cursor.preserve(
+        pending.after.body.next_feature_id);
 
     part::PartDocumentTransaction transaction{document_};
     transaction.replaceState(pending.after);
@@ -181,6 +198,10 @@ DocumentSessionResult DocumentSession::commitCommandState(
         prepared_entity_id_cursors);
     profile_id_cursor_ =
         prepared_profile_id_cursor;
+    body_id_cursor_ =
+        prepared_body_id_cursor;
+    feature_id_cursor_ =
+        prepared_feature_id_cursor;
     expected_revision_ = document_.revision();
     return success(true);
 }
@@ -1393,7 +1414,7 @@ CreateProfileResult DocumentSession::execute(
             *id,
             command.source_sketch_id,
             defaultProfileName(*id),
-            true,
+            part::ProfileVisibilityPolicy::automatic,
             command.region_intent});
 
     const auto committed =
@@ -1488,8 +1509,15 @@ DocumentSessionResult DocumentSession::execute(
             path_);
     }
 
+    if (!part::isProfileVisibilityPolicy(
+            command.visibility)) {
+        return failure(
+            DocumentSessionErrorCode::invalid_command,
+            "Set Profile Properties contains an invalid visibility policy",
+            path_);
+    }
     profile->name = command.name;
-    profile->visible = command.visible;
+    profile->visibility = command.visibility;
     return commitCommandState(
         std::move(after),
         "Part transaction failed while setting Profile properties");
@@ -1538,6 +1566,8 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
         expected_current;
     applyProfileIdCursor(
         adjusted_expected);
+    applyBodyFeatureIdCursors(
+        adjusted_expected);
     if (document_.state() != adjusted_expected) {
         return failure(
             DocumentSessionErrorCode::history_diverged,
@@ -1548,6 +1578,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
     auto adjusted_target = target;
     applySketchEntityIdCursors(adjusted_target);
     applyProfileIdCursor(adjusted_target);
+    applyBodyFeatureIdCursors(adjusted_target);
 
     part::PartDocumentTransaction transaction{document_};
     transaction.replaceState(std::move(adjusted_target));
@@ -1564,6 +1595,10 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
     absorbSketchEntityIdCursors(document_.state());
     profile_id_cursor_.preserve(
         document_.state().next_profile_id);
+    body_id_cursor_.preserve(
+        document_.state().next_body_id);
+    feature_id_cursor_.preserve(
+        document_.state().body.next_feature_id);
     return success(true);
 }
 
@@ -1616,6 +1651,14 @@ void DocumentSession::applyProfileIdCursor(
     part::PartAuthoredState& state) const noexcept {
     state.next_profile_id.preserve(
         profile_id_cursor_);
+}
+
+void DocumentSession::applyBodyFeatureIdCursors(
+    part::PartAuthoredState& state) const noexcept {
+    state.next_body_id.preserve(
+        body_id_cursor_);
+    state.body.next_feature_id.preserve(
+        feature_id_cursor_);
 }
 
 DocumentSessionResult DocumentSession::undo() {
