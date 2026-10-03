@@ -4013,7 +4013,8 @@ void CadWorkbench::cancelExtrude() {
     if (viewport_controller_) {
         viewport_controller_->clearSolidPreview();
         viewport_controller_->
-            setTransientProfileReveal(
+            setTransientProfilePresentationOverride(
+                std::nullopt,
                 std::nullopt);
     }
 
@@ -4069,7 +4070,8 @@ bool CadWorkbench::finishExtrude() {
     if (viewport_controller_) {
         viewport_controller_->clearSolidPreview();
         viewport_controller_->
-            setTransientProfileReveal(
+            setTransientProfilePresentationOverride(
+                std::nullopt,
                 std::nullopt);
     }
 
@@ -4101,7 +4103,8 @@ void CadWorkbench::clearExtrudeRuntimeContext() {
     if (viewport_controller_) {
         viewport_controller_->clearSolidPreview();
         viewport_controller_->
-            setTransientProfileReveal(
+            setTransientProfilePresentationOverride(
+                std::nullopt,
                 std::nullopt);
     }
     if (extrude_distance_edit_ != nullptr) {
