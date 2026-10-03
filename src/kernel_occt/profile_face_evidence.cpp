@@ -2096,6 +2096,7 @@ buildSurfaceBooleanLineageEvidence(
             BRepAlgoAPI_Fuse operation{
                 base->shape,
                 tool->shape};
+            operation.SetFuzzyValue(0.0);
             publish(operation);
             return evidence;
         }
@@ -2122,6 +2123,7 @@ buildSurfaceBooleanLineageEvidence(
             BRepAlgoAPI_Cut operation{
                 base->shape,
                 tool->shape};
+            operation.SetFuzzyValue(0.0);
             publish(operation);
             return evidence;
         }
@@ -2208,6 +2210,7 @@ buildSurfaceDeleteRecreateEvidence() noexcept {
         BRepAlgoAPI_Cut cut{
             base->shape,
             delete_tool->shape};
+        cut.SetFuzzyValue(0.0);
         cut.Build();
         if (!cut.IsDone()) {
             evidence.after_delete_shape.status =
@@ -2229,6 +2232,11 @@ buildSurfaceDeleteRecreateEvidence() noexcept {
         if (!evidence.after_delete_shape.ok()) {
             return evidence;
         }
+
+        populateBodyTopologyEvidence(
+            evidence.after_delete_topology,
+            evidence.after_delete_shape,
+            after_delete);
 
         evidence.delete_history =
             historyEvidence(
@@ -2266,6 +2274,7 @@ buildSurfaceDeleteRecreateEvidence() noexcept {
         BRepAlgoAPI_Fuse fuse{
             after_delete,
             replacement->shape};
+        fuse.SetFuzzyValue(0.0);
         fuse.Build();
         if (!fuse.IsDone()) {
             evidence.after_recreate_shape.status =
@@ -2287,6 +2296,11 @@ buildSurfaceDeleteRecreateEvidence() noexcept {
         if (!evidence.after_recreate_shape.ok()) {
             return evidence;
         }
+
+        populateBodyTopologyEvidence(
+            evidence.after_recreate_topology,
+            evidence.after_recreate_shape,
+            after_recreate);
 
         // The old carrier was semantically deleted in the previous stage and
         // is not an input to this Fuse. Geometry equality cannot recreate a
@@ -2377,6 +2391,7 @@ buildCutExposedSurfaceEvidence() noexcept {
         BRepAlgoAPI_Cut cut{
             base->shape,
             tool->shape};
+        cut.SetFuzzyValue(0.0);
         cut.Build();
         if (!cut.IsDone()) {
             evidence.result_shape.status =
@@ -2814,6 +2829,10 @@ buildFaceMergeHistoryEvidence(
         }
 
         populateShapeEvidence(
+            evidence.shape,
+            result);
+        populateBodyTopologyEvidence(
+            evidence.topology,
             evidence.shape,
             result);
 
