@@ -3572,7 +3572,6 @@ void CadWorkbench::toggleSelectedFeatureSuppressed() {
 
     refreshActiveContext();
     navigateToFeature(feature_id);
-    notifyDocumentStateChanged();
     setStatusText(
         suppress
             ? QStringLiteral(
@@ -3629,7 +3628,6 @@ void CadWorkbench::deleteSelectedFeature() {
             nullptr) {
         navigateToProfile(*source_profile);
     }
-    notifyDocumentStateChanged();
     setStatusText(
         QStringLiteral(
             "Feature deleted — source Profile preserved; Undo is available."));
