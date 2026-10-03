@@ -52,4 +52,19 @@ ss2_assert_no_pattern(
     "(OpenCASCADE|TopoDS_|BRep[A-Z]|AIS_|V3d_|Qt6|#include[ \t]*<Q[A-Z])"
     "public OCCT evidence header leaks provider handles")
 
+file(GLOB_RECURSE provider_kernel_files
+    "${SOURCE_ROOT}/src/kernel_occt/*.hpp"
+    "${SOURCE_ROOT}/src/kernel_occt/*.cpp"
+)
+foreach(path IN LISTS provider_kernel_files)
+    ss2_assert_no_pattern(
+        "${path}"
+        "simplesolid2/(viewer|ui)"
+        "Kernel provider depends on Viewer/UI")
+    ss2_assert_no_pattern(
+        "${path}"
+        "(AIS_|V3d_|Qt6|#include[ \t]*<Q[A-Z])"
+        "Kernel provider contains presentation/UI types")
+endforeach()
+
 message(STATUS "PM-00A Kernel boundaries verified")
