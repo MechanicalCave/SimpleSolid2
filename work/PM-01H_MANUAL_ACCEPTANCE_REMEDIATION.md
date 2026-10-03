@@ -20,7 +20,7 @@ Observed supported-profile matrix:
 - cylindrical presentation is visibly faceted/flat-shaded;
 - invalid/failed model state is not sufficiently visible in Tree.
 
-PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old candidate, not acceptance of these newly discovered defects.
+At the time of this trigger PM-01 remained ACTIVE. The earlier runtime/docs gates were evidence for the pre-remediation candidate, not acceptance of the defects recorded below. This remediation checkpoint is now closed by the completed H1-H7 evidence and final Owner PASS.
 
 ## Progress
 
