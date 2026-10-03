@@ -45,11 +45,15 @@ foreach(path IN LISTS part_files)
         "Part contains provider topology/UI identity")
 endforeach()
 
-set(provider_header
-    "${SOURCE_ROOT}/src/kernel_occt/include/simplesolid2/kernel_occt/profile_face_evidence.hpp")
-ss2_assert_no_pattern(
-    "${provider_header}"
-    "(OpenCASCADE|TopoDS_|BRep[A-Z]|AIS_|V3d_|Qt6|#include[ \t]*<Q[A-Z])"
-    "public OCCT evidence header leaks provider handles")
+file(GLOB_RECURSE provider_headers
+    "${SOURCE_ROOT}/src/kernel_occt/include/*.hpp"
+)
+
+foreach(provider_header IN LISTS provider_headers)
+    ss2_assert_no_pattern(
+        "${provider_header}"
+        "(OpenCASCADE|TopoDS_|BRep[A-Z]|AIS_|V3d_|Qt6|#include[ \t]*<Q[A-Z])"
+        "public OCCT provider header leaks provider handles")
+endforeach()
 
 message(STATUS "PM-00A Kernel boundaries verified")
