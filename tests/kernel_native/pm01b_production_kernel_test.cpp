@@ -205,6 +205,24 @@ int main() {
         kernel::ReferenceStatus::resolved);
     CHECK(resolvedSides(base) == 4U);
 
+    const auto base_mesh =
+        provider.presentationMesh(
+            base.solid);
+    CHECK(base_mesh.ok());
+    CHECK(!base_mesh.mesh.triangles.empty());
+    for (const auto& triangle :
+         base_mesh.mesh.triangles) {
+        CHECK(triangle.valid());
+    }
+
+    const auto missing_mesh =
+        provider.presentationMesh({});
+    CHECK(!missing_mesh.ok());
+    CHECK(
+        missing_mesh.status ==
+        kernel::SolidPresentationStatus::
+            invalid_input);
+
     const auto holed =
         provider.extrude(
             forward(
@@ -390,6 +408,15 @@ int main() {
     CHECK(
         mismatch.status ==
         kernel::SolidModelingStatus::
+            provider_mismatch);
+
+    const auto foreign_mesh =
+        provider.presentationMesh(
+            foreign);
+    CHECK(!foreign_mesh.ok());
+    CHECK(
+        foreign_mesh.status ==
+        kernel::SolidPresentationStatus::
             provider_mismatch);
 
     // Cut can never start an Empty Body.

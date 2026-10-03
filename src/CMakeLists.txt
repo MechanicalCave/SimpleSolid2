@@ -164,6 +164,7 @@ foreach(_target IN ITEMS
         TKG3d
         TKGeomBase
         TKBRep
+        TKMesh
         TKTopAlgo
         TKPrim
         TKBO
@@ -195,6 +196,7 @@ target_link_libraries(simplesolid2_kernel_occt
         TKG3d
         TKGeomBase
         TKBRep
+        TKMesh
         TKTopAlgo
         TKPrim
         TKBO

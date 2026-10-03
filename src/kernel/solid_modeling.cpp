@@ -1,5 +1,6 @@
 #include <simplesolid2/kernel/solid_modeling.hpp>
 
+#include <algorithm>
 #include <cmath>
 
 namespace simplesolid2::kernel {
@@ -18,6 +19,51 @@ namespace {
 }
 
 } // namespace
+
+bool SolidMeshTriangle::valid() const noexcept {
+    const auto finite_point =
+        [](const Point3& point) noexcept {
+            return std::isfinite(point.x) &&
+                   std::isfinite(point.y) &&
+                   std::isfinite(point.z);
+        };
+    if (!finite_point(first) ||
+        !finite_point(second) ||
+        !finite_point(third) ||
+        !finite_point(normal)) {
+        return false;
+    }
+
+    const double abx = second.x - first.x;
+    const double aby = second.y - first.y;
+    const double abz = second.z - first.z;
+    const double acx = third.x - first.x;
+    const double acy = third.y - first.y;
+    const double acz = third.z - first.z;
+    const double cx = aby * acz - abz * acy;
+    const double cy = abz * acx - abx * acz;
+    const double cz = abx * acy - aby * acx;
+    const double area2 =
+        cx * cx + cy * cy + cz * cz;
+    const double normal2 =
+        normal.x * normal.x +
+        normal.y * normal.y +
+        normal.z * normal.z;
+    return std::isfinite(area2) &&
+           std::isfinite(normal2) &&
+           area2 > 0.0 &&
+           normal2 > 0.0;
+}
+
+bool SolidPresentationMesh::valid() const noexcept {
+    return !triangles.empty() &&
+           std::all_of(
+               triangles.begin(),
+               triangles.end(),
+               [](const SolidMeshTriangle& item) {
+                   return item.valid();
+               });
+}
 
 bool ExtrudeFaceRole::valid() const noexcept {
     if (kind == ExtrudeGeneratedFaceRoleKind::cap) {
@@ -79,6 +125,16 @@ bool LinearExtrudeInput::valid() const noexcept {
     return forward_one_side ||
            reverse_one_side ||
            midplane;
+}
+
+SolidPresentationResult
+ISolidModelingKernel::presentationMesh(
+    RuntimeSolidHandle solid) noexcept {
+    return {
+        solid
+            ? SolidPresentationStatus::unsupported
+            : SolidPresentationStatus::invalid_input,
+        {}};
 }
 
 } // namespace simplesolid2::kernel
