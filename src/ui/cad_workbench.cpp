@@ -941,6 +941,7 @@ void CadWorkbench::buildUi() {
             shell_);
     extrude_button_->setObjectName(
         QStringLiteral("extrudeToolButton"));
+    extrude_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
         1,
         extrude_button_);
@@ -1217,6 +1218,9 @@ void CadWorkbench::buildUi() {
                 }
             }
             syncSketchInteractionUi();
+            if (semantic) {
+                tryCompleteExtrudeProfilePick();
+            }
             syncActionState();
         });
     viewport_controller_->setProfileSelectionChangedHandler(
@@ -1244,6 +1248,9 @@ void CadWorkbench::buildUi() {
                 }
             }
             syncSketchInteractionUi();
+            if (semantic) {
+                tryCompleteExtrudeProfilePick();
+            }
             syncActionState();
         });
     tree_controller_->setProfileEditHandler(
@@ -3071,8 +3078,12 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
+            if (extrude_profile_pick_active_) {
+                cancelExtrudeProfilePick();
+                return;
+            }
             static_cast<void>(
-                startExtrudeFromSelectedProfile());
+                startExtrudeTool());
         });
     QObject::connect(
         extrude_add_button_,
@@ -3667,6 +3678,108 @@ void CadWorkbench::deleteFeature(
             "Feature deleted — dependents remain authored and are reevaluated from current history."));
 }
 
+bool CadWorkbench::startExtrudeTool() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Extrude requires an active Part and modeling Kernel."));
+        return false;
+    }
+    if (extrude_draft_) {
+        setStatusText(
+            QStringLiteral(
+                "An Extrude operation is already active."));
+        return false;
+    }
+    if (active_sketch_id_ ||
+        sketch_support_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active Sketch context before Extrude."));
+        return false;
+    }
+
+    if (selected_profile_id_) {
+        const auto evaluation =
+            document_session->document()
+                .evaluateProfile(
+                    *selected_profile_id_);
+        if (evaluation &&
+            evaluation->valid()) {
+            return startExtrudeFromSelectedProfile();
+        }
+    }
+
+    extrude_profile_pick_active_ = true;
+    ++extrude_profile_pick_generation_;
+    if (extrude_profile_pick_generation_ == 0U) {
+        ++extrude_profile_pick_generation_;
+    }
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Extrude active — select one valid Profile in the Tree or viewport; Esc/CANCEL exits."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::cancelExtrudeProfilePick() {
+    if (!extrude_profile_pick_active_) {
+        return;
+    }
+
+    extrude_profile_pick_active_ = false;
+    ++extrude_profile_pick_generation_;
+    if (extrude_profile_pick_generation_ == 0U) {
+        ++extrude_profile_pick_generation_;
+    }
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Extrude profile selection cancelled — no authored change."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+void CadWorkbench::tryCompleteExtrudeProfilePick() {
+    if (!extrude_profile_pick_active_ ||
+        !selected_profile_id_) {
+        return;
+    }
+
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        cancelExtrudeProfilePick();
+        return;
+    }
+
+    const auto evaluation =
+        document_session->document()
+            .evaluateProfile(
+                *selected_profile_id_);
+    if (!evaluation ||
+        !evaluation->valid()) {
+        setStatusText(
+            QStringLiteral(
+                "Selected Profile is Invalid — select one valid Profile for Extrude or cancel."));
+        return;
+    }
+
+    static_cast<void>(
+        startExtrudeFromSelectedProfile());
+}
+
 bool CadWorkbench::startExtrudeFromSelectedProfile() {
     auto* document_session =
         activeDocumentSession();
@@ -3720,15 +3833,30 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
         return false;
     }
 
+    constexpr core::LengthValue
+        default_extrude_distance{10.0};
+    if (!draft->setDistance(
+            default_extrude_distance)) {
+        setStatusText(
+            QStringLiteral(
+                "Extrude default distance could not be initialized."));
+        return false;
+    }
+
+    extrude_profile_pick_active_ = false;
     extrude_draft_ =
         std::move(*draft);
     extrude_evaluation_.reset();
-    extrude_distance_input_valid_ = false;
+    extrude_distance_input_valid_ = true;
 
     if (extrude_distance_edit_ != nullptr) {
         const QSignalBlocker blocked{
             extrude_distance_edit_};
-        extrude_distance_edit_->clear();
+        extrude_distance_edit_->setText(
+            formatLengthForPart(
+                extrude_draft_->distance(),
+                document_session->document()
+                    .lengthUnit()));
     }
     if (viewport_controller_) {
         viewport_controller_->clearSolidPreview();
@@ -3737,12 +3865,13 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
                 std::nullopt);
     }
 
+    refreshExtrudePreview();
     syncActionState();
     syncExtrudeUi();
     notifyCadInputContextChanged();
     setStatusText(
         QStringLiteral(
-            "Extrude active — enter a positive distance."));
+            "Extrude active — default distance applied; adjust parameters or Finish."));
     if (extrude_distance_edit_ != nullptr) {
         extrude_distance_edit_->setFocus(
             Qt::OtherFocusReason);
@@ -3760,6 +3889,12 @@ bool CadWorkbench::startExtrudeEdit(
         setStatusText(
             QStringLiteral(
                 "Edit Extrude requires an active Part and modeling Kernel."));
+        return false;
+    }
+    if (extrude_profile_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Cancel the active Extrude Profile selection before editing a Feature."));
         return false;
     }
     if (extrude_draft_) {
@@ -3911,6 +4046,7 @@ bool CadWorkbench::finishExtrude() {
 }
 
 void CadWorkbench::clearExtrudeRuntimeContext() {
+    extrude_profile_pick_active_ = false;
     extrude_draft_.reset();
     extrude_evaluation_.reset();
     extrude_distance_input_valid_ = false;
@@ -4951,6 +5087,15 @@ std::string CadWorkbench::cadInputPrompt() const {
 
 application::CadInputContextGeneration
 CadWorkbench::cadInputContextGeneration() const noexcept {
+    if (extrude_profile_pick_active_) {
+        constexpr application::CadInputContextGeneration
+            extrude_pick_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 62U};
+        return extrude_pick_namespace |
+               (extrude_profile_pick_generation_ &
+                (extrude_pick_namespace - 1U));
+    }
     if (extrude_draft_) {
         constexpr application::CadInputContextGeneration
             extrude_namespace =
@@ -4968,6 +5113,9 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
 
 std::vector<application::CadDynamicInputField>
 CadWorkbench::cadDynamicInputFields() const {
+    if (extrude_profile_pick_active_) {
+        return {};
+    }
     if (extrude_draft_) {
         return {
             application::CadDynamicInputField{
@@ -5106,6 +5254,22 @@ CadWorkbench::submitCadInput(
         return {false, "CAD input semantic context is stale."};
     }
 
+    if (extrude_profile_pick_active_) {
+        const auto keyword =
+            upperAsciiTrimmed(text);
+        if (keyword == "CANCEL" ||
+            keyword == "ESC") {
+            cancelExtrudeProfilePick();
+            return {true, {}};
+        }
+        if (keyword == "EXTRUDE") {
+            return {true, {}};
+        }
+        return {
+            false,
+            "EXTRUDE is waiting for one valid Profile selection; use Tree/viewport or CANCEL."};
+    }
+
     if (extrude_draft_) {
         auto result =
             submitExtrudeCadInput(text);
@@ -5119,12 +5283,12 @@ CadWorkbench::submitCadInput(
     }
 
     if (upperAsciiTrimmed(text) == "EXTRUDE") {
-        return startExtrudeFromSelectedProfile()
+        return startExtrudeTool()
             ? application::CadInputSubmitResult{
                   true, {}}
             : application::CadInputSubmitResult{
                   false,
-                  "EXTRUDE requires one selected valid Profile."};
+                  "EXTRUDE could not be activated."};
     }
 
     if (!sketch_interaction_controller_) {
@@ -5161,6 +5325,10 @@ CadWorkbench::submitCadInput(
     return result;
 }
 QString CadWorkbench::cadInputPromptText() const {
+    if (extrude_profile_pick_active_) {
+        return QStringLiteral(
+            "Command: EXTRUDE — Select one valid Profile · CANCEL/Esc");
+    }
     if (extrude_draft_) {
         return QStringLiteral(
             "Command: EXTRUDE — ADD/CUT · ONESIDE/MIDPLANE · REVERSE · Distance · FINISH/CANCEL");
@@ -6176,6 +6344,7 @@ void CadWorkbench::refreshFeatureProperties(
     feature_go_to_profile_button_->setEnabled(
         profile != nullptr);
     const bool lifecycle_available =
+        !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         !active_sketch_id_ &&
         !sketch_support_pick_active_;
@@ -6300,6 +6469,13 @@ bool CadWorkbench::eventFilter(
         event->type() == QEvent::KeyPress) {
         auto* key_event =
             static_cast<QKeyEvent*>(event);
+
+        if (watched == viewport_widget_ &&
+            extrude_profile_pick_active_ &&
+            key_event->key() == Qt::Key_Escape) {
+            cancelExtrudeProfilePick();
+            return true;
+        }
 
         if (watched == viewport_widget_ &&
             extrude_draft_) {
@@ -7454,10 +7630,12 @@ void CadWorkbench::syncActionState() {
     apply_button_->setEnabled(active);
     undo_button_->setEnabled(
         active &&
+        !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         document_session->canUndo());
     redo_button_->setEnabled(
         active &&
+        !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         document_session->canRedo());
     // Save remains available for a clean active Document so an explicit
@@ -7481,6 +7659,7 @@ void CadWorkbench::syncActionState() {
         active &&
         !editing_sketch &&
         !sketch_support_pick_active_ &&
+        !extrude_profile_pick_active_ &&
         !extrude_draft_);
 
     if (extrude_button_ != nullptr) {
@@ -7491,8 +7670,10 @@ void CadWorkbench::syncActionState() {
             !editing_sketch &&
             !sketch_support_pick_active_ &&
             !extrude_draft_ &&
-            selected_profile_id_.has_value() &&
             solid_modeling_kernel_ != nullptr);
+        extrude_button_->setChecked(
+            extrude_profile_pick_active_ ||
+            extrude_draft_.has_value());
     }
 
     select_sketch_button_->setVisible(

@@ -168,7 +168,10 @@ private:
     void applyProfileProperties();
     void deleteSelectedProfile();
 
+    [[nodiscard]] bool startExtrudeTool();
     [[nodiscard]] bool startExtrudeFromSelectedProfile();
+    void cancelExtrudeProfilePick();
+    void tryCompleteExtrudeProfilePick();
     [[nodiscard]] bool startExtrudeEdit(
         part::FeatureId feature_id);
     void setFeatureSuppressed(
@@ -455,6 +458,9 @@ private:
     std::optional<
         application::ExtrudeDraftEvaluationResult>
         extrude_evaluation_;
+    bool extrude_profile_pick_active_{};
+    application::CadInputContextGeneration
+        extrude_profile_pick_generation_{};
     bool extrude_distance_input_valid_{};
     bool syncing_extrude_ui_{};
 

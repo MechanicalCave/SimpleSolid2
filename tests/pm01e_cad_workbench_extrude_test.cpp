@@ -321,8 +321,15 @@ int main(int argc, char* argv[]) {
     auto* profile_item =
         findProfileItem(*tree);
     CHECK(profile_item != nullptr);
-    profile_item->setSelected(true);
-    tree->setCurrentItem(profile_item);
+
+    auto* root_item = tree->topLevelItem(0);
+    CHECK(root_item != nullptr);
+    CHECK(root_item->childCount() >= 1);
+    CHECK(
+        root_item
+            ->child(root_item->childCount() - 1)
+            ->text(0)
+            .startsWith(QStringLiteral("Body")));
 
     auto* extrude =
         workbench.findChild<QPushButton*>(
@@ -356,16 +363,26 @@ int main(int argc, char* argv[]) {
         extrude && distance && reverse &&
         midplane && one_side &&
         finish && cancel);
+    // Command-first Extrude is available without a preselected Profile.
     CHECK(extrude->isEnabled());
+    CHECK(!extrude->isChecked());
 
     const auto undo_before =
         session.undoDepth();
     extrude->click();
-    CHECK(!finish->isEnabled());
+    CHECK(extrude->isChecked());
+    CHECK(
+        workbench.cadInputPrompt().find(
+            "Select one valid Profile") !=
+        std::string::npos);
     CHECK(viewport->solid_preview.empty());
 
-    distance->setText(
-        QStringLiteral("10 mm"));
+    // Selecting one valid Profile completes the pick state and immediately
+    // starts the same Extrude draft with the product default 10 mm preview.
+    profile_item->setSelected(true);
+    tree->setCurrentItem(profile_item);
+    CHECK(distance->text().contains(
+        QStringLiteral("10")));
     CHECK(finish->isEnabled());
     CHECK(!viewport->solid_preview.empty());
     CHECK(
@@ -631,6 +648,9 @@ int main(int argc, char* argv[]) {
         workbench.cadInputPrompt().find(
             "EXTRUDE") !=
         std::string::npos);
+    CHECK(distance->text().contains(
+        QStringLiteral("10")));
+    CHECK(!viewport->solid_preview.empty());
 
     result =
         workbench.submitCadInput(
