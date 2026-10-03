@@ -428,6 +428,12 @@ int main(int argc, char* argv[]) {
     CHECK(
         viewport->solid_preview.tone ==
         viewer::SolidPreviewTone::additive);
+    // H5: a ready solid preview hides only the rendered source Profile.
+    // The authored automatic visibility policy remains untouched.
+    CHECK(viewport->profile_scene.profiles.empty());
+    CHECK(
+        session.document().profilePresentationVisible(
+            profile_id));
 
     reverse->click();
     CHECK(reverse->isChecked());
