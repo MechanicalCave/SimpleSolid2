@@ -19,11 +19,13 @@ Responsive transitions are presentation-only: they do not mutate the Document, r
 
 The Workbench binds exactly one active `DocumentSession` at a time. Switching Document Tabs replaces the active Part/Tree/Properties/Viewer projection and invalidates stale CAD-input/edit context.
 
-For Part, Document Tree now projects the built-in Origin, source-Sketch/Profile hierarchy and one Body with ordered Feature rows. Body/Feature rows carry semantic IDs and current derived evaluation status, but Tree item addresses are never CAD identity.
+For Part, Document Tree projects the built-in Origin and source-Sketch/Profile hierarchy before the single Body with its ordered Feature rows, so the visual order reads from authored inputs to modeled result. Body/Feature rows carry semantic IDs and current derived evaluation status, but Tree item addresses are never CAD identity. Invalid Profiles and Failed/Blocked Features retain explicit status labels and receive bold visual emphasis; Suppressed remains explicitly labeled and italic. These cues are projections of semantic/evaluation state, not new authored flags.
 
 Properties can inspect Body status/Feature count and Feature name, FeatureId, evaluation status/diagnostic, operation, extent, distance/direction and source Profile/Sketch. Profile Properties expose consuming Features. Navigation between Feature and Profile changes runtime selection only.
 
-Feature lifecycle actions from Properties and Tree share the same semantic handlers: Edit Extrude, Suppress/Unsuppress and Delete. They are disabled while an incompatible active Sketch/Extrude modeling context owns input.
+Feature lifecycle actions from Properties and Tree share the same semantic handlers: Edit Extrude, Suppress/Unsuppress and Delete. They are disabled while an incompatible active Sketch/Extrude modeling context owns input, including the runtime-only command-first Extrude Profile-selection state.
+
+Create Extrude supports both selection-first and command-first entry. Without an admissible preselection, Extrude owns an explicit CAD-input context that waits for exactly one valid Profile from Tree/viewport; Esc, toolbar toggle or Command Line CANCEL exits without mutation. The pick context has its own runtime generation so stale input cannot cross activations. Once a valid Profile is accepted, the ordinary revision-bound `ExtrudeDraft` starts and the product UI applies a 10 mm canonical default distance. The underlying application draft API remains capable of incomplete input and does not own that UI default.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
 ## Origin and reference scene
