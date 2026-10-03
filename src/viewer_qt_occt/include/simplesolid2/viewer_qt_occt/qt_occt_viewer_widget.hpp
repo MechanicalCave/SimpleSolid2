@@ -30,6 +30,9 @@ struct QtOcctRuntimeDiagnostics final {
     std::uint64_t sketch_rectangle_token_comparisons{};
     bool solid_committed_displayed{};
     bool solid_preview_displayed{};
+    bool solid_committed_style_expected{};
+    bool solid_preview_style_expected{};
+    bool solid_shading_styles_isolated{};
 };
 
 class QtOcctViewerWidget final

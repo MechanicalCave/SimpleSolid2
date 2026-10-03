@@ -108,7 +108,13 @@ int main(int argc, char* argv[]) {
                  committed_solid_metrics.
                          solid_committed_displayed &&
                  !committed_solid_metrics.
-                          solid_preview_displayed;
+                          solid_preview_displayed &&
+                 committed_solid_metrics.
+                         solid_committed_style_expected &&
+                 committed_solid_metrics.
+                         solid_preview_style_expected &&
+                 committed_solid_metrics.
+                         solid_shading_styles_isolated;
 
             viewer::SolidPreviewScene
                 solid_preview;
@@ -130,7 +136,41 @@ int main(int argc, char* argv[]) {
                  solid_preview_metrics.
                          solid_committed_displayed &&
                  solid_preview_metrics.
-                         solid_preview_displayed;
+                         solid_preview_displayed &&
+                 solid_preview_metrics.
+                         solid_committed_style_expected &&
+                 solid_preview_metrics.
+                         solid_preview_style_expected &&
+                 solid_preview_metrics.
+                         solid_shading_styles_isolated;
+
+            // H6: replacing orange Cut preview with blue Add preview must
+            // change only the preview-owned shading aspect.
+            viewer::SolidPreviewScene additive_preview =
+                solid_preview;
+            additive_preview.tone =
+                viewer::SolidPreviewTone::additive;
+            ok = ok &&
+                 widget.setSolidPreviewScene(
+                     additive_preview);
+            const auto additive_preview_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 additive_preview_metrics.
+                         solid_committed_displayed &&
+                 additive_preview_metrics.
+                         solid_preview_displayed &&
+                 additive_preview_metrics.
+                         solid_committed_style_expected &&
+                 additive_preview_metrics.
+                         solid_preview_style_expected &&
+                 additive_preview_metrics.
+                         solid_shading_styles_isolated;
+
+            // Restore subtractive preview for same-scene no-op coverage.
+            ok = ok &&
+                 widget.setSolidPreviewScene(
+                     solid_preview);
 
             widget.resetRuntimeDiagnostics();
             ok = ok &&
@@ -153,7 +193,13 @@ int main(int argc, char* argv[]) {
                  cleared_solid_preview_metrics.
                          solid_committed_displayed &&
                  !cleared_solid_preview_metrics.
-                          solid_preview_displayed;
+                          solid_preview_displayed &&
+                 cleared_solid_preview_metrics.
+                         solid_committed_style_expected &&
+                 cleared_solid_preview_metrics.
+                         solid_preview_style_expected &&
+                 cleared_solid_preview_metrics.
+                         solid_shading_styles_isolated;
 
             ok = ok &&
                  widget.setSolidScene(

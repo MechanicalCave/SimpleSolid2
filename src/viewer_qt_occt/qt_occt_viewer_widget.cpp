@@ -35,6 +35,7 @@
 #include <Poly_Triangle.hxx>
 #include <Poly_Triangulation.hxx>
 #include <Prs3d_PointAspect.hxx>
+#include <Prs3d_ShadingAspect.hxx>
 #include <Quantity_Color.hxx>
 #include <Standard_Failure.hxx>
 #include <TCollection_ExtendedString.hxx>
@@ -72,6 +73,78 @@
 
 namespace simplesolid2::viewer_qt_occt {
 namespace {
+
+[[nodiscard]] Quantity_Color committedSolidColor() {
+    return {
+        0.72, 0.74, 0.78,
+        Quantity_TOC_RGB};
+}
+
+[[nodiscard]] Quantity_Color previewSolidColor(
+    viewer::SolidPreviewTone tone) {
+    return tone ==
+                   viewer::SolidPreviewTone::subtractive
+               ? Quantity_Color{
+                     0.78, 0.52, 0.36,
+                     Quantity_TOC_RGB}
+               : Quantity_Color{
+                     0.20, 0.78, 0.92,
+                     Quantity_TOC_RGB};
+}
+
+constexpr double kCommittedSolidTransparency = 0.0;
+constexpr double kPreviewSolidTransparency = 0.30;
+
+[[nodiscard]] bool sameColor(
+    const Quantity_Color& left,
+    const Quantity_Color& right) noexcept {
+    // OCCT presentation aspects may round through ShortReal-backed storage.
+    // This is display-state verification, not modeling tolerance.
+    constexpr double epsilon = 1.0e-6;
+    return std::abs(left.Red() - right.Red()) <= epsilon &&
+           std::abs(left.Green() - right.Green()) <= epsilon &&
+           std::abs(left.Blue() - right.Blue()) <= epsilon;
+}
+
+void setOwnedSolidShadingStyle(
+    const Handle(AIS_InteractiveObject)& object,
+    const Quantity_Color& color,
+    double transparency) {
+    if (object.IsNull()) return;
+
+    // AIS_Triangulation may otherwise inherit shading attributes through the
+    // context/default drawer. Body and preview must own independent aspects:
+    // changing preview color/transparency may never mutate committed Body.
+    const auto drawer = object->Attributes();
+    drawer->SetupOwnShadingAspect();
+    const auto shading = drawer->ShadingAspect();
+    shading->SetColor(color);
+    shading->SetTransparency(transparency);
+}
+
+[[nodiscard]] bool solidStyleMatches(
+    const Handle(AIS_InteractiveObject)& object,
+    const Quantity_Color& color,
+    double transparency) noexcept {
+    if (object.IsNull() ||
+        object->Attributes().IsNull()) {
+        return false;
+    }
+
+    const auto shading =
+        object->Attributes()->ShadingAspect();
+    if (shading.IsNull()) {
+        return false;
+    }
+
+    constexpr double epsilon = 1.0e-6;
+    return sameColor(
+               shading->Color(),
+               color) &&
+           std::abs(
+               shading->Transparency() -
+               transparency) <= epsilon;
+}
 
 void logProviderFailure(
     const char* operation,
@@ -561,6 +634,38 @@ public:
             !solid_preview_object_.IsNull() &&
             context_->IsDisplayed(
                 solid_preview_object_);
+        result.solid_committed_style_expected =
+            solidStyleMatches(
+                solid_object_,
+                committedSolidColor(),
+                kCommittedSolidTransparency);
+        result.solid_preview_style_expected =
+            solid_preview_scene_.empty()
+                ? solid_preview_object_.IsNull()
+                : solidStyleMatches(
+                      solid_preview_object_,
+                      previewSolidColor(
+                          solid_preview_scene_.tone),
+                      kPreviewSolidTransparency);
+        if (!solid_object_.IsNull() &&
+            !solid_preview_object_.IsNull() &&
+            !solid_object_->Attributes().IsNull() &&
+            !solid_preview_object_->
+                 Attributes().IsNull()) {
+            const auto committed_shading =
+                solid_object_->Attributes()->
+                    ShadingAspect();
+            const auto preview_shading =
+                solid_preview_object_->Attributes()->
+                    ShadingAspect();
+            result.solid_shading_styles_isolated =
+                !committed_shading.IsNull() &&
+                !preview_shading.IsNull() &&
+                committed_shading != preview_shading;
+        } else {
+            result.solid_shading_styles_isolated =
+                solid_preview_object_.IsNull();
+        }
         return result;
     }
 
@@ -1290,21 +1395,11 @@ public:
             return;
         }
 
-        // H4b preview is the isolated Extrude tool volume. The committed Body
-        // therefore remains visible in its normal opaque presentation while
-        // the translucent Add/Cut tool is overlaid.
+        // H6: style is owned by the committed triangulation itself. This
+        // synchronization controls visibility only; preview replacement must
+        // never recolor or reconfigure the committed Body through the context.
         context_->Display(
             solid_object_,
-            false);
-        context_->SetColor(
-            solid_object_,
-            Quantity_Color{
-                0.72, 0.74, 0.78,
-                Quantity_TOC_RGB},
-            false);
-        context_->SetTransparency(
-            solid_object_,
-            0.0,
             false);
         context_->Deactivate(
             solid_object_);
@@ -1339,15 +1434,13 @@ public:
                 return false;
             }
 
+            setOwnedSolidShadingStyle(
+                object,
+                committedSolidColor(),
+                kCommittedSolidTransparency);
             solid_object_ = object;
             context_->Display(
                 solid_object_,
-                false);
-            context_->SetColor(
-                solid_object_,
-                Quantity_Color{
-                    0.72, 0.74, 0.78,
-                    Quantity_TOC_RGB},
                 false);
             context_->Deactivate(
                 solid_object_);
@@ -1395,38 +1488,25 @@ public:
                 return false;
             }
 
+            setOwnedSolidShadingStyle(
+                object,
+                previewSolidColor(scene.tone),
+                kPreviewSolidTransparency);
+            // Keep coplanar preview boundaries stable against the opaque Body.
+            // This is display-only depth bias, never modeling input.
+            object->SetPolygonOffsets(
+                Aspect_POM_Fill,
+                -1.0F,
+                -1.0F);
             solid_preview_object_ = object;
             context_->Display(
                 solid_preview_object_,
                 false);
-            context_->SetColor(
-                solid_preview_object_,
-                scene.tone ==
-                        viewer::SolidPreviewTone::
-                            subtractive
-                    ? Quantity_Color{
-                          0.78, 0.52, 0.36,
-                          Quantity_TOC_RGB}
-                    : Quantity_Color{
-                          0.20, 0.78, 0.92,
-                          Quantity_TOC_RGB},
-                false);
-            context_->SetTransparency(
-                solid_preview_object_,
-                0.30,
-                false);
-            // Keep coplanar preview boundaries stable against the opaque Body.
-            // This is display-only depth bias, never modeling input.
-            solid_preview_object_->SetPolygonOffsets(
-                Aspect_POM_Fill,
-                -1.0F,
-                -1.0F);
             context_->Deactivate(
                 solid_preview_object_);
             solid_preview_scene_ = scene;
-            // The preview mesh is only the transient Extrude tool volume.
-            // Keep the committed Body opaque/default and overlay this tool
-            // with Add/Cut tone, matching the semantic operation being edited.
+            // The preview mesh is the exact transient operation delta.
+            // Its owned shading aspect is independent from the committed Body.
             syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
