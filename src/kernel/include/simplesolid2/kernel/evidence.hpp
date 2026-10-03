@@ -116,6 +116,70 @@ enum class FaceSurfaceKind {
     other,
 };
 
+enum class EvidenceSurfaceCarrierRoleKind {
+    start_cap,
+    end_cap,
+    side,
+};
+
+// PM-02P.B evidence-only semantic carrier record. The role/provenance is the
+// semantic claim; provider geometry classification corroborates that claim
+// but does not define identity.
+struct EvidenceSurfaceCarrierRecord final {
+    EvidenceSurfaceCarrierRoleKind role{
+        EvidenceSurfaceCarrierRoleKind::side};
+    std::optional<BoundaryUseProvenance> provenance;
+    ReferenceStatus status{ReferenceStatus::unsupported};
+    std::size_t candidate_face_count{};
+    FaceSurfaceKind semantic_surface_kind{
+        FaceSurfaceKind::other};
+    std::optional<FaceSurfaceKind>
+        provider_surface_kind;
+    std::optional<Frame3> canonical_frame;
+
+    friend bool operator==(
+        const EvidenceSurfaceCarrierRecord&,
+        const EvidenceSurfaceCarrierRecord&) = default;
+};
+
+struct ExtrudeSurfaceCarrierEvidence final {
+    ShapeEvidence shape;
+    BodyTopologyInventoryEvidence topology;
+    EvidenceSurfaceCarrierRecord start_cap;
+    EvidenceSurfaceCarrierRecord end_cap;
+    std::vector<EvidenceSurfaceCarrierRecord> sides;
+    std::size_t unique_claimed_face_count{};
+    std::size_t unclaimed_face_count{};
+    std::size_t multiply_claimed_face_count{};
+    std::size_t claim_outside_body_count{};
+
+    [[nodiscard]] bool completeFaceClaims() const noexcept {
+        if (!(shape.ok() &&
+              shape.solid_count == 1U &&
+              topology.complete() &&
+              topology.faces.provider_unique_count ==
+                  unique_claimed_face_count &&
+              unclaimed_face_count == 0U &&
+              multiply_claimed_face_count == 0U &&
+              claim_outside_body_count == 0U &&
+              start_cap.status == ReferenceStatus::resolved &&
+              end_cap.status == ReferenceStatus::resolved)) {
+            return false;
+        }
+
+        for (const auto& side : sides) {
+            if (side.status != ReferenceStatus::resolved) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    friend bool operator==(
+        const ExtrudeSurfaceCarrierEvidence&,
+        const ExtrudeSurfaceCarrierEvidence&) = default;
+};
+
 struct FaceGeometryDiagnostics final {
     FaceSurfaceKind surface_kind{
         FaceSurfaceKind::other};

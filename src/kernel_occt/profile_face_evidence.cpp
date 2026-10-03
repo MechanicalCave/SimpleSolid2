@@ -458,6 +458,209 @@ facesFromGeneratedShape(
     return faces;
 }
 
+void appendUniqueFace(
+    std::vector<TopoDS_Face>& faces,
+    const TopoDS_Face& candidate) {
+    const bool duplicate =
+        std::any_of(
+            faces.begin(),
+            faces.end(),
+            [&candidate](const TopoDS_Face& existing) {
+                return existing.IsSame(candidate);
+            });
+    if (!duplicate) {
+        faces.push_back(candidate);
+    }
+}
+
+[[nodiscard]] std::vector<TopoDS_Face>
+uniqueFacesFromShape(
+    const TopoDS_Shape& shape) {
+    std::vector<TopoDS_Face> result;
+    if (shape.IsNull()) {
+        return result;
+    }
+
+    TopTools_IndexedMapOfShape unique;
+    TopExp::MapShapes(
+        shape,
+        TopAbs_FACE,
+        unique);
+    result.reserve(
+        static_cast<std::size_t>(
+            unique.Extent()));
+    for (Standard_Integer index = 1;
+         index <= unique.Extent();
+         ++index) {
+        result.push_back(
+            TopoDS::Face(
+                unique.FindKey(index)));
+    }
+    return result;
+}
+
+[[nodiscard]] std::vector<TopoDS_Face>
+uniqueFacesFromGeneratedShape(
+    const TopoDS_Shape& shape) {
+    std::vector<TopoDS_Face> result;
+    for (const auto& face :
+         facesFromGeneratedShape(shape)) {
+        appendUniqueFace(
+            result,
+            face);
+    }
+    return result;
+}
+
+[[nodiscard]] kernel::FaceSurfaceKind
+semanticSurfaceKind(
+    const kernel::BoundaryUse2D& use) noexcept {
+    return std::holds_alternative<kernel::Line2>(
+               use.curve)
+        ? kernel::FaceSurfaceKind::plane
+        : kernel::FaceSurfaceKind::cylinder;
+}
+
+[[nodiscard]] std::optional<kernel::Frame3>
+shiftedCarrierFrame(
+    const kernel::Frame3& source,
+    double normal_offset) noexcept {
+    kernel::Frame3 result = source;
+    result.origin.x +=
+        result.normal.x * normal_offset;
+    result.origin.y +=
+        result.normal.y * normal_offset;
+    result.origin.z +=
+        result.normal.z * normal_offset;
+    return result.valid()
+        ? std::optional<kernel::Frame3>{result}
+        : std::nullopt;
+}
+
+[[nodiscard]] std::optional<kernel::Frame3>
+lineSideCarrierFrame(
+    const kernel::PlanarProfileInput& input,
+    const kernel::BoundaryUse2D& use) {
+    const auto* line =
+        std::get_if<kernel::Line2>(
+            &use.curve);
+    if (line == nullptr) {
+        return std::nullopt;
+    }
+
+    const kernel::Point2 direction2{
+        line->end.u - line->start.u,
+        line->end.v - line->start.v};
+    const gp_Vec u_vector =
+        vector3(
+            input.frame,
+            direction2);
+    if (!(u_vector.SquareMagnitude() > 0.0)) {
+        return std::nullopt;
+    }
+
+    const gp_Dir u{u_vector};
+    const gp_Dir v{
+        input.frame.normal.x,
+        input.frame.normal.y,
+        input.frame.normal.z};
+    const gp_Vec n_vector =
+        gp_Vec{u}.Crossed(
+            gp_Vec{v});
+    if (!(n_vector.SquareMagnitude() > 0.0)) {
+        return std::nullopt;
+    }
+    const gp_Dir n{n_vector};
+
+    const auto origin =
+        point3(
+            input.frame,
+            line->start);
+
+    kernel::Frame3 result;
+    result.origin = {
+        origin.X(),
+        origin.Y(),
+        origin.Z()};
+    result.u_axis = {
+        u.X(),
+        u.Y(),
+        u.Z()};
+    // The canonical carrier V direction is the source Sketch support normal,
+    // not the signed Extrude direction. This keeps one planar carrier frame
+    // stable when extent direction/length changes.
+    result.v_axis = {
+        v.X(),
+        v.Y(),
+        v.Z()};
+    result.normal = {
+        n.X(),
+        n.Y(),
+        n.Z()};
+
+    return result.valid()
+        ? std::optional<kernel::Frame3>{result}
+        : std::nullopt;
+}
+
+[[nodiscard]] kernel::ReferenceStatus
+referenceStatus(
+    std::size_t count) noexcept;
+
+[[nodiscard]] kernel::FaceGeometryDiagnostics
+faceGeometryDiagnostics(
+    const TopoDS_Face& face);
+
+[[nodiscard]] kernel::FaceGeometryDiagnostics
+faceGeometryDiagnostics(
+    const TopoDS_Face& face);
+
+[[nodiscard]] kernel::EvidenceSurfaceCarrierRecord
+surfaceCarrierRecord(
+    kernel::EvidenceSurfaceCarrierRoleKind role,
+    std::optional<kernel::BoundaryUseProvenance> provenance,
+    kernel::FaceSurfaceKind semantic_kind,
+    const std::vector<TopoDS_Face>& candidates,
+    std::optional<kernel::Frame3> canonical_frame) {
+    kernel::EvidenceSurfaceCarrierRecord result;
+    result.role = role;
+    result.provenance =
+        std::move(provenance);
+    result.status =
+        referenceStatus(
+            candidates.size());
+    result.candidate_face_count =
+        candidates.size();
+    result.semantic_surface_kind =
+        semantic_kind;
+    result.canonical_frame =
+        std::move(canonical_frame);
+
+    if (candidates.size() == 1U) {
+        result.provider_surface_kind =
+            faceGeometryDiagnostics(
+                candidates.front())
+                .surface_kind;
+    }
+    return result;
+}
+
+[[nodiscard]] bool claimFace(
+    const std::vector<TopoDS_Face>& provider_faces,
+    std::vector<std::size_t>& claim_counts,
+    const TopoDS_Face& candidate) {
+    for (std::size_t index = 0U;
+         index < provider_faces.size();
+         ++index) {
+        if (provider_faces[index].IsSame(
+                candidate)) {
+            ++claim_counts[index];
+            return true;
+        }
+    }
+    return false;
+}
+
 [[nodiscard]] kernel::FaceSurfaceKind
 surfaceKind(
     GeomAbs_SurfaceType type) noexcept {
@@ -1209,6 +1412,269 @@ buildExtrudeTopologyInventoryEvidence(
         return evidence;
     } catch (...) {
         evidence.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::ExtrudeSurfaceCarrierEvidence
+buildExtrudeSurfaceCarrierEvidence(
+    const kernel::PlanarProfileInput& input,
+    double distance) noexcept {
+    kernel::ExtrudeSurfaceCarrierEvidence evidence;
+
+    if (!input.valid() ||
+        !std::isfinite(distance) ||
+        distance == 0.0) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::invalid_input;
+        evidence.topology.status =
+            kernel::EvidenceStatus::invalid_input;
+        return evidence;
+    }
+
+    try {
+        const auto built =
+            buildProfileFace(input);
+        if (!built) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            evidence.topology.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const gp_Vec vector{
+            input.frame.normal.x * distance,
+            input.frame.normal.y * distance,
+            input.frame.normal.z * distance};
+
+        BRepSweep_Prism sweep{
+            built->face,
+            vector,
+            false,
+            true};
+
+        const TopoDS_Shape shape =
+            sweep.Shape();
+        if (shape.IsNull()) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            evidence.topology.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.shape,
+            shape);
+        if (!evidence.shape.ok()) {
+            evidence.topology.status =
+                evidence.shape.status;
+            return evidence;
+        }
+
+        evidence.topology.status =
+            evidence.shape.status;
+        evidence.topology.brep_valid =
+            evidence.shape.brep_valid;
+        evidence.topology.solid_count =
+            evidence.shape.solid_count;
+        populateTopologyInventory(
+            evidence.topology.faces,
+            shape,
+            TopAbs_FACE);
+        populateTopologyInventory(
+            evidence.topology.edges,
+            shape,
+            TopAbs_EDGE);
+        populateTopologyInventory(
+            evidence.topology.vertices,
+            shape,
+            TopAbs_VERTEX);
+
+        const auto provider_faces =
+            uniqueFacesFromShape(shape);
+        std::vector<std::size_t> claim_counts(
+            provider_faces.size(),
+            0U);
+
+        const auto start_faces =
+            uniqueFacesFromGeneratedShape(
+                sweep.FirstShape());
+        evidence.start_cap =
+            surfaceCarrierRecord(
+                kernel::EvidenceSurfaceCarrierRoleKind::
+                    start_cap,
+                std::nullopt,
+                kernel::FaceSurfaceKind::plane,
+                start_faces,
+                shiftedCarrierFrame(
+                    input.frame,
+                    0.0));
+        for (const auto& face : start_faces) {
+            if (!claimFace(
+                    provider_faces,
+                    claim_counts,
+                    face)) {
+                ++evidence.claim_outside_body_count;
+            }
+        }
+
+        const auto end_faces =
+            uniqueFacesFromGeneratedShape(
+                sweep.LastShape());
+        evidence.end_cap =
+            surfaceCarrierRecord(
+                kernel::EvidenceSurfaceCarrierRoleKind::
+                    end_cap,
+                std::nullopt,
+                kernel::FaceSurfaceKind::plane,
+                end_faces,
+                shiftedCarrierFrame(
+                    input.frame,
+                    distance));
+        for (const auto& face : end_faces) {
+            if (!claimFace(
+                    provider_faces,
+                    claim_counts,
+                    face)) {
+                ++evidence.claim_outside_body_count;
+            }
+        }
+
+        evidence.sides.reserve(
+            built->source_edges.size());
+        for (std::size_t source_index = 0U;
+             source_index <
+                 built->source_edges.size();
+             ++source_index) {
+            const auto& source =
+                built->source_edges[source_index];
+
+            std::vector<TopoDS_Face>
+                candidate_faces;
+            const auto basis_edges =
+                matchingFaceEdges(
+                    built->face,
+                    source.edge);
+            for (const auto& basis_edge :
+                 basis_edges) {
+                const auto generated =
+                    sweep.Shape(
+                        basis_edge);
+                for (const auto& face :
+                     uniqueFacesFromGeneratedShape(
+                         generated)) {
+                    appendUniqueFace(
+                        candidate_faces,
+                        face);
+                }
+            }
+
+            // Source edges and resolved Profile boundary uses preserve the
+            // same semantic order/provenance inside this evidence adapter.
+            const auto* semantic_use =
+                [&input, &source]()
+                    -> const kernel::BoundaryUse2D* {
+                    for (const auto& use :
+                         input.outer.boundary) {
+                        if (use.provenance ==
+                            source.provenance) {
+                            return &use;
+                        }
+                    }
+                    for (const auto& loop :
+                         input.holes) {
+                        for (const auto& use :
+                             loop.boundary) {
+                            if (use.provenance ==
+                                source.provenance) {
+                                return &use;
+                            }
+                        }
+                    }
+                    return nullptr;
+                }();
+
+            const auto semantic_kind =
+                semantic_use != nullptr
+                    ? semanticSurfaceKind(
+                          *semantic_use)
+                    : kernel::FaceSurfaceKind::other;
+            const auto frame =
+                semantic_use != nullptr &&
+                        semantic_kind ==
+                            kernel::FaceSurfaceKind::plane
+                    ? lineSideCarrierFrame(
+                          input,
+                          *semantic_use)
+                    : std::nullopt;
+
+            evidence.sides.push_back(
+                surfaceCarrierRecord(
+                    kernel::EvidenceSurfaceCarrierRoleKind::
+                        side,
+                    source.provenance,
+                    semantic_kind,
+                    candidate_faces,
+                    frame));
+
+            for (const auto& face :
+                 candidate_faces) {
+                if (!claimFace(
+                        provider_faces,
+                        claim_counts,
+                        face)) {
+                    ++evidence.claim_outside_body_count;
+                }
+            }
+        }
+
+        for (std::size_t index = 0U;
+             index < claim_counts.size();
+             ++index) {
+            if (claim_counts[index] == 0U) {
+                ++evidence.unclaimed_face_count;
+                evidence.topology.faces
+                    .catalog[index]
+                    .accounting_class =
+                    kernel::
+                        EvidenceTopologyAccountingClass::
+                            integrity_failure;
+                continue;
+            }
+            if (claim_counts[index] > 1U) {
+                ++evidence.multiply_claimed_face_count;
+                evidence.topology.faces
+                    .catalog[index]
+                    .accounting_class =
+                    kernel::
+                        EvidenceTopologyAccountingClass::
+                            integrity_failure;
+                continue;
+            }
+
+            ++evidence.unique_claimed_face_count;
+            evidence.topology.faces
+                .catalog[index]
+                .accounting_class =
+                kernel::
+                    EvidenceTopologyAccountingClass::
+                        referenceable;
+        }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        evidence.topology.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        evidence.topology.status =
             kernel::EvidenceStatus::provider_failure;
         return evidence;
     }
