@@ -26,8 +26,9 @@ next:
   - PM-00A E06 is COMPLETED — PASS; source candidate 44eda36ba6bdc19d8c252831937fb86f8afabde7, Kernel-focused #1305, Windows FULL #1306, false-Resolved 0
   - PM-00A E07 is COMPLETED — PASS for E07-01 through E07-06; accumulated source candidate 44eda36ba6bdc19d8c252831937fb86f8afabde7, Windows FULL #1306, kernel-native 24/24 PASS
   - PM-00A E08 is COMPLETED — PASS; source candidate 51a223dc7f380c8545de2238ef5d3a6ca9e7345d, Windows FULL #1311, core-only 18/18 PASS, kernel-native 25/25 PASS, desktop 84/84 PASS, false-Resolved 0
-  - execute E09 next: stale generation/session publication evidence
-  - E09 must prove stale results cannot publish after revision advance, DocumentSession replacement, geometrically identical stale completion, cancellation/failure, or newer-request replacement
+  - PM-00A E09 is COMPLETED — PASS; source candidate 018966aa143a006cdd39429a201755c54c3e7948, Windows FULL #1313, core-only 19/19 PASS, kernel-native 26/26 PASS, desktop 84/84 PASS, stale publications 0
+  - execute E10 next: tolerance/refine/healing matrix and O-11 evidence
+  - E10 must keep modeling outcomes independent of camera/pick/display settings, compare explicit refine/unify policy, fail closed on clearly invalid geometry, sweep near-threshold cases, and make modeling-semantics policy/version changes explicit
   - preserve E06 rule that provider periodic seam is diagnostic only and never semantic identity
   - preserve E02 stage-scoped resolution and separation of reference status from geometric failure
   - preserve E03/E04 fail-closed cardinality and provider-history-as-evidence-only rule
@@ -36,6 +37,7 @@ next:
   - PM-00B Part Feature Architecture Freeze remains separate after PM-00A evidence
   - PM-01 First Solid Vertical Slice, Body/Feature persistence, Part Feature Tree product behavior, Assembly/Drawing and multi-body remain inactive
 notes:
+  - E09 completed on exact source candidate 018966aa143a006cdd39429a201755c54c3e7948 with Windows FULL #1313 PASS. The core-only stale-publication regression passed in core-only 19/19 and kernel-native aggregate 26/26 while complete desktop remained 84/84 PASS. Revision advance, canonical DocumentSession replacement, geometrically identical stale request completion, and cancelled/failed older requests all rejected publication; stale publications 0. The publication gate remains test-local evidence only and freezes no production API or persistent session identity.
   - E08 completed on exact source candidate 51a223dc7f380c8545de2238ef5d3a6ca9e7345d with Windows FULL #1311 PASS. The core-only support-frame regression passed in core-only (18/18), kernel-native aggregate (25/25) and the complete desktop FULL remained 84/84 PASS. XY/XZ/YZ frames stayed deterministic across geometry edits, reordered evidence traversal and cold Save/Close/Reopen; unsupported Origin point/axes remained Unsupported; future planar-face support semantics were not invented. False-Resolved count 0.
   - E06 completed on exact source candidate 44eda36ba6bdc19d8c252831937fb86f8afabde7 with Kernel-focused #1305 PASS and Windows FULL #1306 PASS. Full 360-degree Revolve, provenance-bound semantic side resolution, non-semantic provider seam, dimension-edit stability and cold replay all passed with false-Resolved count 0.
   - E07 is now fully COMPLETED — PASS. E07-06 is supplied by E06 cold replay; accumulated kernel-native suite on #1306 is 24/24 PASS.
