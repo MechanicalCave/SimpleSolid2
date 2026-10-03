@@ -1151,8 +1151,11 @@ OcctSolidModelingKernel::presentationMesh(
     try {
         // Presentation-only policy. These values are intentionally private to
         // the provider and never participate in modeling semantics.
-        constexpr double linear_deflection_mm = 0.25;
-        constexpr double angular_deflection_rad = 0.35;
+        // Presentation-only quality. Keep this independent from
+        // modeling tolerances: denser angular tessellation prevents ordinary
+        // cylindrical faces from reading as coarse polygon panels.
+        constexpr double linear_deflection_mm = 0.10;
+        constexpr double angular_deflection_rad = 0.08;
 
         BRepMesh_IncrementalMesh mesher{
             runtime->solid,
