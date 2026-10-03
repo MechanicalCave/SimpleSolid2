@@ -436,7 +436,23 @@ The owning E01/E02/E03/E04/E05/E06 regressions contain the required teardown/col
 
 E07-06 is supplied by E06: the semantic revolved side remains Resolved after provider teardown/rebuild while the periodic seam remains Unsupported.
 
-**Next:** execute E08 support-frame stability evidence.
+### E08 — support-frame stability
+
+**Status:** COMPLETED — PASS  
+**Exact source candidate:** `51a223dc7f380c8545de2238ef5d3a6ca9e7345d`  
+**Windows FULL:** #1311 — PASS  
+**Core-only:** 18/18 PASS  
+**Kernel-native aggregate:** 25/25 PASS  
+**Desktop FULL:** 84/84 PASS  
+**False-Resolved:** 0
+
+See `work/PM-00A_E08_SUPPORT_FRAME_STABILITY_EVIDENCE.md`.
+
+E08 proves the currently accepted Origin-plane Sketch support frame is semantic and deterministic. XY, XZ and YZ reconstruct the same right-handed O/U/V/N frame across unchanged reevaluation, source Rectangle/Profile geometry edits, reordered evidence traversal and cold Save/Close/Reopen.
+
+Origin point and axes remain Unsupported as Sketch supports. PM-00A does not invent planar-face support or face-derived frame semantics; those remain future bounded architecture work.
+
+**Next:** execute E09 stale generation/session publication evidence.
 
 ## 8. Acceptance asymmetry
 
