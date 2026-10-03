@@ -217,24 +217,44 @@ E02 exact source candidate `953cdca42978916754f6ae6cc68d86352aad35ac` passed Ker
 
 This remains architecture evidence only. It does not add a durable topology-reference schema, Body/Feature persistence, Part Feature Tree behavior or product Extrude/Cut/Fillet commands.
 
+<!-- section-id: internal.part-documents.pm00a-e06-revolve -->
+## PM-00A E06 full-Revolve periodic-seam evidence
+
+PM-00A E06 adds transient full-Revolve evidence without activating a product Revolve feature.
+
+The bounded OCCT provider consumes a valid neutral Profile plus an evidence-only local 2D axis origin/direction and performs a full 360-degree revolve. The axis input is not a durable Axis/Datum definition.
+
+For every Profile boundary use, the provider records the uniquely generated face when cardinality is one and keeps the original boundary-use provenance as the semantic meaning. Provider topology handles remain transient.
+
+Full rotation produces real periodic/seam topology. Seam edges are detected as provider diagnostics, including count and total length, but they have no authored source record and therefore remain `Unsupported` as semantic references. A seam, face ordinal or traversal position cannot become durable Part identity.
+
+The accepted E06 dimension edit changes Profile height and outer radius. Provider seam geometry changes, while the semantic outer revolved side remains `Resolved` with the same source provenance and candidate cardinality one.
+
+Cold replay destroys the first provider sweep/B-Rep/TopoDS state and reconstructs the same legal Profile + evidence-axis input. The semantic revolved side reproduces as `Resolved`; the periodic seam remains non-semantic. This supplies E07-06.
+
+E06 exact source candidate `44eda36ba6bdc19d8c252831937fb86f8afabde7` passed Kernel-focused #1305 and Windows FULL #1306 with zero false-Resolved outcomes.
+
+This remains architecture evidence only. It does not add a durable topology-reference schema, Axis/Datum persistence, Body/Feature persistence, Part Feature Tree behavior or a product Revolve command.
+
 <!-- section-id: internal.part-documents.pm00a-e07-cold-replay -->
 ## PM-00A E07 accumulated cold-rebuild parity
 
 PM-00A E07 replays accepted topology-reference outcomes after previous runtime/provider state is destroyed.
 
-Phase 1 covers E07-01 through E07-05. No new duplicate harness is added because the owning E01/E02/E03/E04/E05 regressions already perform the required cold boundary. Windows FULL #1286 runs those regressions together on one exact source candidate.
+The complete E07-01 through E07-06 matrix is now **COMPLETED — PASS**.
 
-The accumulated kernel-native result on `953cdca42978916754f6ae6cc68d86352aad35ac` is 23/23 PASS, including:
+The accumulated kernel-native result on exact source candidate `44eda36ba6bdc19d8c252831937fb86f8afabde7` is **24/24 PASS** in Windows FULL #1306, including:
 
 - E01 authored Profile Save/Close/Reopen with stable Extrude cap/side semantic roles;
 - E02 provider/B-Rep/history teardown followed by the same stage-scoped multi-stage outcomes;
 - E03 split replay remaining Ambiguous;
 - E04 merge/lost-distinction replay remaining Ambiguous/Missing according to the accepted source-row meaning;
-- E05 authored reopen preserving Missing for a removed target despite a geometry-similar/identical decoy.
+- E05 authored reopen preserving Missing for a removed target despite a geometry-similar/identical decoy;
+- E06 full-Revolve replay preserving the semantic revolved side as Resolved while provider periodic seam topology remains Unsupported.
 
-Cold rebuild therefore does not depend on previous-process OCCT handles, provider ordering or history caches, and it does not repair Missing/Ambiguous references by geometry similarity.
+Cold rebuild therefore does not depend on previous-process OCCT handles, provider ordering or history caches. It also does not repair Missing/Ambiguous references by geometry similarity or promote provider periodic seams to semantic identity.
 
-E07-06 is still pending because it depends on E06 full-Revolve / periodic-seam evidence. The whole E07 package is not considered completed until the revolved semantic side also reconstructs as Resolved while the provider seam remains non-semantic.
+No duplicate E07 execution framework is introduced: the owning regressions remain the executable source of the cold boundary.
 
 This is evidence synthesis only. It does not introduce a persistent topology-reference schema, Body/Feature persistence or product solid-modeling behavior.
 
