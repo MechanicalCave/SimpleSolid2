@@ -14,7 +14,6 @@
 #include <TopoDS.hxx>
 #include <TopoDS_Face.hxx>
 #include <TopoDS_Shape.hxx>
-#include <TopTools_ListIteratorOfListOfShape.hxx>
 #include <gp_Pnt.hxx>
 
 #include <array>
@@ -161,12 +160,8 @@ std::size_t uniqueModifiedFaceCount(
 
     const auto& modified =
         fuse.Modified(source);
-    for (TopTools_ListIteratorOfListOfShape
-             iterator{modified};
-         iterator.More();
-         iterator.Next()) {
-        const auto& current =
-            iterator.Value();
+    for (const auto& current :
+         modified) {
         if (current.ShapeType() !=
             TopAbs_FACE) {
             continue;
