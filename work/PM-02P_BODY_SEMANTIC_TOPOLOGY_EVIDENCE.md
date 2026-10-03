@@ -535,7 +535,7 @@ STOP immediately for Owner review if evidence requires or suggests:
 
 STOP also if an accepted PM-02 product case cannot be represented by ADR-0016 without changing its D2 identity/reference model.
 
-## 18. Documentation Impact
+## Documentation impact
 
 Classification:
 
