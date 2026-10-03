@@ -358,9 +358,10 @@ int main() {
     CHECK(holed.solid_count == 1U);
     CHECK(resolvedSides(holed) == 5U);
 
-    // Curved-surface display quality is presentation-only but must not
-    // regress to the visibly coarse cylinder tessellation found by manual
-    // PM-01 acceptance.
+    // Curved-surface display quality is carried by smooth nodal normals,
+    // not by excessive tessellation density. A cylinder therefore keeps the
+    // original bounded mesh policy while at least one lateral triangle has
+    // varying vertex normals suitable for interpolated shading.
     const auto cylinder =
         provider.extrude(
             forward(
@@ -374,8 +375,32 @@ int main() {
             cylinder.solid);
     CHECK(cylinder_mesh.ok());
     CHECK(
-        cylinder_mesh.mesh.triangles.size() >=
+        cylinder_mesh.mesh.triangles.size() <
         160U);
+    const auto normal_distance2 =
+        [](const kernel::Point3& lhs,
+           const kernel::Point3& rhs) {
+            const double dx = lhs.x - rhs.x;
+            const double dy = lhs.y - rhs.y;
+            const double dz = lhs.z - rhs.z;
+            return dx * dx + dy * dy + dz * dz;
+        };
+    bool has_smooth_curved_triangle = false;
+    for (const auto& triangle :
+         cylinder_mesh.mesh.triangles) {
+        if (normal_distance2(
+                triangle.first_normal,
+                triangle.second_normal) >
+                1.0e-4 ||
+            normal_distance2(
+                triangle.first_normal,
+                triangle.third_normal) >
+                1.0e-4) {
+            has_smooth_curved_triangle = true;
+            break;
+        }
+    }
+    CHECK(has_smooth_curved_triangle);
 
     // Mixed Line+Arc Profile: reversing traversal must preserve the same
     // geometric upper semicircle instead of reflecting it to the lower side.

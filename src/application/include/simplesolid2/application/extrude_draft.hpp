@@ -165,7 +165,11 @@ struct ExtrudeDraftEvaluationResult final {
     std::string name;
     part::BodyEvaluationStatus body_status{
         part::BodyEvaluationStatus::unavailable};
+    // Full candidate Body remains the authority for Finish validity.
     kernel::RuntimeSolidHandle body_solid;
+    // Runtime-only raw Extrude tool used solely for operation preview.
+    // It is never authored and never substitutes for candidate validation.
+    kernel::RuntimeSolidHandle preview_tool_solid;
     std::optional<
         part::FeatureEvaluationDiagnosticCode>
         evaluation_diagnostic;
@@ -181,7 +185,7 @@ struct ExtrudeDraftEvaluationResult final {
                body_status ==
                    part::BodyEvaluationStatus::
                        up_to_date &&
-               body_solid != nullptr;
+               preview_tool_solid != nullptr;
     }
 };
 

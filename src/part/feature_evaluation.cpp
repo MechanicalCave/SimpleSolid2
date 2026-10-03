@@ -57,9 +57,10 @@ kernelOperation(
         : kernel::SolidBooleanOperation::add;
 }
 
-[[nodiscard]] std::optional<
-    kernel::LinearExtrudeInput>
-kernelInput(
+} // namespace
+
+std::optional<kernel::LinearExtrudeInput>
+makeKernelExtrudeInput(
     const PartDocument& document,
     const ExtrudeFeature& feature) {
     auto profile =
@@ -133,6 +134,8 @@ kernelInput(
               std::move(result)}
         : std::nullopt;
 }
+
+namespace {
 
 [[nodiscard]] FeatureFaceRoleKind
 partCapRole(
@@ -418,7 +421,7 @@ PartEvaluation evaluatePart(
         }
 
         auto input =
-            kernelInput(
+            makeKernelExtrudeInput(
                 document,
                 *extrude);
         if (!input) {

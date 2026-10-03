@@ -3,6 +3,7 @@
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/kernel/reference_status.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
+#include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/feature_id.hpp>
 #include <simplesolid2/sketch/entity_id.hpp>
 
@@ -109,6 +110,15 @@ struct PartEvaluation final {
     [[nodiscard]] const FeatureEvaluation*
     findFeature(FeatureId id) const noexcept;
 };
+
+// Builds the exact provider-neutral modeling input for one authored
+// Extrude definition. This is transient derived data shared by evaluation
+// and runtime preview; it is never persisted.
+[[nodiscard]] std::optional<
+    kernel::LinearExtrudeInput>
+makeKernelExtrudeInput(
+    const PartDocument& document,
+    const ExtrudeFeature& feature);
 
 [[nodiscard]] PartEvaluation evaluatePart(
     const PartDocument& document,

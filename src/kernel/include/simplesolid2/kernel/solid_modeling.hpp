@@ -27,7 +27,12 @@ struct SolidMeshTriangle final {
     Point3 first;
     Point3 second;
     Point3 third;
-    Point3 normal;
+    // Presentation-only per-vertex normals. They preserve smooth shading
+    // within one provider surface while allowing sharp normals at B-Rep
+    // face boundaries. They carry no CAD identity.
+    Point3 first_normal;
+    Point3 second_normal;
+    Point3 third_normal;
 
     [[nodiscard]] bool valid() const noexcept;
 

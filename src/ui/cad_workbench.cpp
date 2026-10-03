@@ -4183,9 +4183,9 @@ void CadWorkbench::refreshExtrudePreview() {
                       additive;
         if (!viewport_controller_->
                 setSolidPreview(
-                    evaluation.body_solid,
+                    evaluation.preview_tool_solid,
                     tone)) {
-            evaluation.body_solid.reset();
+            evaluation.preview_tool_solid.reset();
         }
     }
 

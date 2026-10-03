@@ -27,7 +27,10 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 - **H1 COMPLETED — PASS:** PR #155, exact-head Windows FULL #1341 PASS on `b74dae97e3740c1a583ef2a56c1505ef271003e4`; merged to main as `b8b89c204afeadf42ff25bd99cf4a9279c242f64`.
 - **H2 COMPLETED — PASS:** PR #156, exact-head Windows FULL #1342 PASS on `3dbe6b0de2ae7dd7805f132eea71fe51d184b0d0`; merged to main as `f80f5426dfb7c896f52a580505f328eea927da38`.
 - **H3 COMPLETED — PASS:** PR #157, exact-head Windows FULL #1343 PASS on `931fa47e93333832778b56349bd8b6ee6ddfd64c`; merged to main as `78558b825f1ec2b0ad622166774774ac26e5f417`.
-- **Owner re-test:** PENDING on the consolidated H1/H2/H3 candidate; H1, H2 and H3 retain separate exact-head FULL evidence for diagnosis.
+- **Owner re-test after H1/H2/H3:** PARTIAL PASS; remaining H4 findings are recorded below.
+- **H4a COMPLETED — PASS:** PR #160, exact-head Windows FULL #1346 PASS on `818ed69a37ddee3a54be7b65c819cd67ab67dcc1`; merged to main as `af1800cbcde8f7b45b5c3cb2e10795f0b76e2a66`.
+- **H4b ACTIVE:** operation-only Extrude preview plus smooth nodal-normal presentation at restored bounded tessellation density.
+- **Owner re-test:** PENDING on the consolidated H1-H4b candidate after H4b exact-head gate.
 
 ## H1 — Profile → Kernel fidelity blocker
 

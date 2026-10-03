@@ -48,9 +48,15 @@ viewerSolidScene(
                 {triangle.third.x,
                  triangle.third.y,
                  triangle.third.z},
-                {triangle.normal.x,
-                 triangle.normal.y,
-                 triangle.normal.z}});
+                {triangle.first_normal.x,
+                 triangle.first_normal.y,
+                 triangle.first_normal.z},
+                {triangle.second_normal.x,
+                 triangle.second_normal.y,
+                 triangle.second_normal.z},
+                {triangle.third_normal.x,
+                 triangle.third_normal.y,
+                 triangle.third_normal.z}});
     }
     return scene.valid()
         ? std::optional<viewer::SolidScene>{
