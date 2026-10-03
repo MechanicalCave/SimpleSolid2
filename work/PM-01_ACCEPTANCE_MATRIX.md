@@ -106,7 +106,7 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 
 ## 4. Manual result
 
-**Owner Windows result:** PENDING  
-**Date:** PENDING  
-**Final tested candidate:** PENDING  
-**Notes:** PENDING
+**Owner Windows result:** FAIL — remediation required  
+**Date:** 2026-10-03  
+**Final tested candidate:** `ede4e6050d09bb492101eb41cd35464565a2c841`  
+**Notes:** Manual acceptance found supported-profile and presentation defects before completion. Rectangle, whole Circle and Circle-with-hole first Add succeed; mixed Line+Arc Profiles can be rejected or misinterpreted by Extrude. Add/Cut preview and curved-surface presentation also require remediation. See `work/PM-01H_MANUAL_ACCEPTANCE_REMEDIATION.md`.
