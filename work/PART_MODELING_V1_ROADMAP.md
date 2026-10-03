@@ -1,6 +1,6 @@
 # Part Modeling v1 — Program Roadmap
 
-**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 ACTIVE  
+**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; NO LATER PACKAGE ACTIVE  
 **Version:** 1.5  
 **Owner acceptance:** 2026-10-03  
 **Previous accepted version:** 1.4 — 2026-10-03  
@@ -124,7 +124,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | G0 | **Sketcher profile-authoring readiness re-test** | prove current Sketcher can deliberately author practical Profiles after SR-01/02/03 | **COMPLETED — PASS on `16df8d1940a1f438a66cbd6964a881ba24718c0d`** |
 | 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | **COMPLETED — PASS; final source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb`, Windows FULL #1320; Owner-review synthesis prepared** |
 | 2 | **PM-00B — Part Feature Architecture Freeze** | Owner-approved ADR/contract freeze for first solid workflow based on PM-00A evidence | **COMPLETED — PASS; source candidate `4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9`, Windows FULL #1323** |
-| 3 | **PM-01 — Extrude Feature Vertical Slice: Body / Feature / Add / Cut** | durable Body/Feature architecture plus complete Extrude Add/Cut OneSide/Midplane lifecycle | **ACTIVE — Owner accepted 2026-10-03; ADR-0015** |
+| 3 | **PM-01 — Extrude Feature Vertical Slice: Body / Feature / Add / Cut** | durable Body/Feature architecture plus complete Extrude Add/Cut OneSide/Midplane lifecycle | **COMPLETED — PASS; Owner final manual acceptance 2026-10-03; runtime FULL #1369, docs #1370** |
 | 4 | **PM-02 — Datum Plane / Sketch Support** | offset datum from stable source, Sketch/Profile on datum and reuse of the PM-01 Extrude Feature from datum-backed Profiles | future separate Work Contract |
 | 5 | **PM-03 — Face Support / Semantic Topology References / Projection** | planar-face support, repair, exact bounded projection and resolver expansion without silent rebinding | future separate Work Contract |
 | 6 | **PM-04 — Axis / Datums / Revolve** | Axis semantics, remaining required datums and complete Revolve Add/Cut lifecycle | future separate Work Contract |
@@ -351,9 +351,11 @@ PM-00B must not become a second research phase or a general modeling-framework i
 
 ## 11. PM-01 — Extrude Feature Vertical Slice: Body / Feature / Add / Cut
 
-**Status:** ACTIVE — Owner accepted 2026-10-03 under ADR-0015.
+**Status:** COMPLETED — PASS. Owner accepted activation 2026-10-03 under ADR-0015 and reported final manual Windows PASS 2026-10-03.
 
 PM-01 is the first authorized production-solid package.
+
+**Completion evidence:** runtime remediation through H7 is merged; Windows FULL #1369 PASS on `aaab5610f8f7c6fa3036d8123849523d06dd66e1`; internal + PL/EN Product docs/Product Browser Windows DOCS #1370 PASS; Owner final manual acceptance PASS on `afecfa9884bfeb53d5d0bb84ff110b3b280cf8d2`. PM-02 is not activated by this completion.
 
 Minimum complete workflow:
 
