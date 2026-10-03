@@ -43,6 +43,64 @@ struct ShapeEvidence final {
         const ShapeEvidence&) = default;
 };
 
+enum class EvidenceTopologyAccountingClass {
+    referenceable,
+    known_representation_artifact,
+    semantically_unsupported,
+    integrity_failure,
+};
+
+// PM-02P evidence-only topology accounting. These records deliberately carry
+// no provider handle, topology ordinal or durable selector meaning. Later
+// checkpoints may enrich semantic classification after the inventory harness
+// has proved that no current B-Rep subshape disappears from accounting.
+struct EvidenceTopologyRecord final {
+    EvidenceTopologyAccountingClass accounting_class{
+        EvidenceTopologyAccountingClass::semantically_unsupported};
+
+    friend bool operator==(
+        const EvidenceTopologyRecord&,
+        const EvidenceTopologyRecord&) = default;
+};
+
+struct EvidenceTopologyKindInventory final {
+    // Explorer occurrences are recorded independently from the unique
+    // provider subshape set used to populate the evidence catalog.
+    std::size_t provider_occurrence_count{};
+    std::size_t provider_unique_count{};
+    std::vector<EvidenceTopologyRecord> catalog;
+
+    [[nodiscard]] bool complete() const noexcept {
+        return provider_unique_count == catalog.size();
+    }
+
+    friend bool operator==(
+        const EvidenceTopologyKindInventory&,
+        const EvidenceTopologyKindInventory&) = default;
+};
+
+struct BodyTopologyInventoryEvidence final {
+    EvidenceStatus status{EvidenceStatus::provider_failure};
+    bool brep_valid{false};
+    std::size_t solid_count{};
+    EvidenceTopologyKindInventory faces;
+    EvidenceTopologyKindInventory edges;
+    EvidenceTopologyKindInventory vertices;
+
+    [[nodiscard]] bool complete() const noexcept {
+        return status == EvidenceStatus::ok &&
+               brep_valid &&
+               solid_count == 1U &&
+               faces.complete() &&
+               edges.complete() &&
+               vertices.complete();
+    }
+
+    friend bool operator==(
+        const BodyTopologyInventoryEvidence&,
+        const BodyTopologyInventoryEvidence&) = default;
+};
+
 enum class ExtrudeFaceRoleKind {
     start_cap,
     end_cap,
