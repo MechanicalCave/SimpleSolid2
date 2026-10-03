@@ -287,6 +287,32 @@ The first PM-00A frame is the existing Origin-plane Sketch support frame establi
 
 E08 gathers O-04 evidence; it does not activate planar-face Sketch support.
 
+## 12A. E08 execution result
+
+**E08 status:** COMPLETED — PASS  
+**Exact source candidate:** `51a223dc7f380c8545de2238ef5d3a6ca9e7345d`  
+**Windows FULL:** #1311 — PASS  
+**Core-only:** 18/18 PASS  
+**Kernel-native aggregate:** 25/25 PASS  
+**Desktop FULL:** 84/84 PASS  
+**False-Resolved:** 0  
+**Evidence report:** `work/PM-00A_E08_SUPPORT_FRAME_STABILITY_EVIDENCE.md`
+
+All E08-01…E08-04 expectations are satisfied.
+
+Key findings:
+
+- XY reconstructs U=X, V=Y, N=+Z;
+- XZ reconstructs U=X, V=Z, N=-Y;
+- YZ reconstructs U=Y, V=Z, N=+X;
+- source Rectangle/Profile geometry edits do not rotate, mirror or flip the support frame;
+- changing the order in which independent support evidence is evaluated does not change O/U/V/N;
+- cold Save/Close/Reopen reproduces the exact same frames after the original DocumentSession and transient Kernel inputs leave scope;
+- Origin point and axes are Unsupported as Sketch supports;
+- future planar-face support/frame semantics remain unrepresented and are not invented by PM-00A.
+
+The evidence is core-only by design: the accepted Origin-plane frame is derived from durable Part support + SketchPlacement semantics and has no Qt, Viewer, camera, OCCT face parameterization or provider-topology input.
+
 ## 13. E09 — stale generation/session result
 
 Goal: prove runtime evaluation publication cannot cross revision/session ownership.
