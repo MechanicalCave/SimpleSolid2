@@ -1,6 +1,8 @@
 #include <simplesolid2/application/document_session.hpp>
 
 #include <algorithm>
+#include <cstddef>
+#include <iterator>
 #include <cmath>
 #include <numbers>
 #include <set>
