@@ -1745,6 +1745,26 @@ DocumentSession::evaluateExtrudeDraft(
         return result;
     }
 
+    // Presentation uses the raw Extrude tool, not the complete candidate
+    // Body. Full candidate evaluation above remains the sole authority for
+    // whether Finish is legal. Force Add only for isolated tool generation:
+    // Cut semantics are still validated against the upstream Body above.
+    auto preview_input =
+        part::makeKernelExtrudeInput(
+            *candidate.document,
+            definition);
+    if (preview_input) {
+        preview_input->operation =
+            kernel::SolidBooleanOperation::add;
+        const auto preview_tool =
+            modeling_kernel.extrude(
+                *preview_input);
+        if (preview_tool.ok()) {
+            result.preview_tool_solid =
+                preview_tool.solid;
+        }
+    }
+
     result.status =
         ExtrudeDraftEvaluationStatus::ok;
     return result;
