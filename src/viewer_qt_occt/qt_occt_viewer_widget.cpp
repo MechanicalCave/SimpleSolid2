@@ -549,6 +549,15 @@ public:
         auto result = runtime_diagnostics_;
         result.sketch_native_objects_current =
             sketch_objects_.size();
+        result.solid_committed_displayed =
+            !context_.IsNull() &&
+            !solid_object_.IsNull() &&
+            context_->IsDisplayed(solid_object_);
+        result.solid_preview_displayed =
+            !context_.IsNull() &&
+            !solid_preview_object_.IsNull() &&
+            context_->IsDisplayed(
+                solid_preview_object_);
         return result;
     }
 
@@ -1272,6 +1281,25 @@ public:
         }
     }
 
+    void syncCommittedSolidVisibilityForPreview() {
+        if (context_.IsNull() ||
+            solid_object_.IsNull()) {
+            return;
+        }
+
+        if (solid_preview_scene_.empty()) {
+            context_->Display(
+                solid_object_,
+                false);
+            context_->Deactivate(
+                solid_object_);
+        } else {
+            context_->Erase(
+                solid_object_,
+                false);
+        }
+    }
+
     bool setSolidScene(
         const viewer::SolidScene& scene) {
         if (!scene.valid()) return false;
@@ -1318,6 +1346,7 @@ public:
             context_->Deactivate(
                 solid_object_);
             solid_scene_ = scene;
+            syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
         } catch (...) {
@@ -1344,6 +1373,7 @@ public:
 
         if (scene.empty()) {
             solid_preview_scene_ = scene;
+            syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
         }
@@ -1373,7 +1403,7 @@ public:
                         viewer::SolidPreviewTone::
                             subtractive
                     ? Quantity_Color{
-                          0.94, 0.30, 0.18,
+                          0.78, 0.52, 0.36,
                           Quantity_TOC_RGB}
                     : Quantity_Color{
                           0.20, 0.78, 0.92,
@@ -1381,11 +1411,18 @@ public:
                 false);
             context_->SetTransparency(
                 solid_preview_object_,
-                0.45,
+                0.30,
                 false);
             context_->Deactivate(
                 solid_preview_object_);
             solid_preview_scene_ = scene;
+            // The preview mesh is the complete evaluated candidate Body.
+            // Keeping the committed Body visible underneath would overlay
+            // identical unchanged faces (Add z-fighting) and would hide the
+            // removed region of a Cut. While a preview is active, present
+            // exactly one candidate Body and restore committed presentation
+            // when the preview clears.
+            syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
         } catch (...) {
@@ -3536,7 +3573,9 @@ public:
         }
 
         solid_preview_object_.Nullify();
-        solid_preview_scene_.triangles.clear();
+        solid_preview_scene_ =
+            viewer::SolidPreviewScene{};
+        syncCommittedSolidVisibilityForPreview();
     }
 
     void clearProfileScene() noexcept {
