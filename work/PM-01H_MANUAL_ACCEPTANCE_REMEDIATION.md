@@ -39,7 +39,8 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 - **H6 documentation sync COMPLETED — PASS:** PR #171, Windows DOCS #1367 PASS; latest main `d2655331c6713d87fc61564e75300b61312dfb37`.
 - **Owner H6 re-test:** PASS for Add/Cut preview color isolation on latest main; a separate H7 history-prefix presentation defect was discovered during broader manual use.
 - **H7 COMPLETED — PASS:** PR #173, exact-head Windows FULL #1369 PASS on `aaab5610f8f7c6fa3036d8123849523d06dd66e1`; merged to main as `48377c5a5a81673e901e22d3534d3f049912d2a6`.
-- **H7 documentation sync:** ACTIVE; Owner focused manual re-test remains required after docs/Product Browser gate.
+- **H7 documentation sync COMPLETED — PASS:** PR #174, Windows DOCS #1370 PASS; latest main `2e798844621191d002f209c6b35bd2e2a083d730`.
+- **Owner H7 re-test:** PENDING on latest main `2e798844621191d002f209c6b35bd2e2a083d730`; only the reproduced higher-Feature invalidation / lower-history prefix case remains before PM-01 governance completion.
 
 ## H1 — Profile → Kernel fidelity blocker
 
