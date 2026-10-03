@@ -1,6 +1,6 @@
 # PM-01 — Final Acceptance Matrix
 
-**Status:** PENDING OWNER MANUAL WINDOWS ACCEPTANCE  
+**Status:** PENDING H6 REMEDIATION + OWNER MANUAL WINDOWS ACCEPTANCE  
 **Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
 **Architecture:** ADR-0014 + ADR-0015  
 **Runtime baseline merged to main:** `eac7d26973949bc3275fe6b4bd4d68c1c54cdc6c`  
@@ -112,8 +112,8 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 
 ## 4. Manual result
 
-**Owner Windows result:** PENDING RETEST — H5 automated PASS  
+**Owner Windows result:** PARTIAL PASS — H6 Viewer style isolation required  
 **Date:** 2026-10-03  
-**Last Owner-tested candidate:** `ef2877fb75cb3745119fc44dbcd018734bf2e044`  
-**Next Owner-test candidate:** `2e98164a91e93717e4cfbcf886ce467bc503d31e` (runtime baseline `eac7d26973949bc3275fe6b4bd4d68c1c54cdc6c`)  
-**Notes:** Owner H4 retest exposed H5 exact-delta preview/Profile z-fighting and zero-volume Cut issues. H5 is exact-head automated PASS in Windows FULL #1359 and its as-built documentation/Product Browser passed Windows DOCS #1360. Only a new Owner Windows retest remains before PM-01 governance completion.
+**Last Owner-tested candidate:** `26dd32f65d2d1497d3d3ee55ca52ab69182f93fb`  
+**Next Owner-test candidate:** PENDING H6 runtime gate  
+**Notes:** H5 exact-delta/no-effect behavior is automated PASS, but Owner retest on `26dd32f...` found a remaining Viewer-only defect: committed Body receives the preview orange appearance while Extrude preview is active. H6 isolates Body/preview shading state in Qt/OCCT; PM-01 remains ACTIVE.
