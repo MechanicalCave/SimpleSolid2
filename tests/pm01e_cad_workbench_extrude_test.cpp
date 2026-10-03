@@ -495,6 +495,82 @@ int main(int argc, char* argv[]) {
         feature_id_label->text() ==
         QStringLiteral("1"));
 
+    // Suppress is not visibility: identity/inputs stay authored, automatic
+    // source Profile visibility returns, and Undo restores the evaluated Body.
+    auto* suppress_feature =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "featureSuppressButton"));
+    auto* delete_feature =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "featureDeleteButton"));
+    auto* undo_document =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "undoDocumentButton"));
+    CHECK(
+        suppress_feature &&
+        delete_feature &&
+        undo_document);
+
+    const auto lifecycle_feature_id =
+        session.document().body()
+            .features.front().id;
+    suppress_feature->click();
+    CHECK(
+        session.document()
+            .findFeature(lifecycle_feature_id)
+            ->suppressed);
+    CHECK(
+        session.document()
+            .profilePresentationVisible(
+                profile_id));
+    CHECK(viewport->solid_scene.empty());
+    CHECK(
+        suppress_feature->text() ==
+        QStringLiteral(
+            "Unsuppress Feature"));
+
+    undo_document->click();
+    CHECK(
+        !session.document()
+             .findFeature(lifecycle_feature_id)
+             ->suppressed);
+    CHECK(
+        !session.document()
+             .profilePresentationVisible(
+                 profile_id));
+    CHECK(!viewport->solid_scene.empty());
+
+    feature_item =
+        findFeatureItem(*tree);
+    CHECK(feature_item != nullptr);
+    feature_item->setSelected(true);
+    tree->setCurrentItem(feature_item);
+    delete_feature->click();
+    CHECK(
+        session.document().findFeature(
+            lifecycle_feature_id) == nullptr);
+    CHECK(
+        session.document().findProfile(
+            profile_id) != nullptr);
+    CHECK(
+        session.document()
+            .profilePresentationVisible(
+                profile_id));
+    CHECK(viewport->solid_scene.empty());
+
+    undo_document->click();
+    CHECK(
+        session.document().findFeature(
+            lifecycle_feature_id) != nullptr);
+    CHECK(
+        !session.document()
+             .profilePresentationVisible(
+                 profile_id));
+    CHECK(!viewport->solid_scene.empty());
+
     // Command Line enters the same draft API and CANCEL remains non-authoring.
     profile_item =
         findProfileItem(*tree);

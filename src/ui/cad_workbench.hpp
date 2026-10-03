@@ -167,6 +167,8 @@ private:
         core::LengthUnit unit);
     void applyProfileProperties();
     void deleteSelectedProfile();
+    void toggleSelectedFeatureSuppressed();
+    void deleteSelectedFeature();
 
     [[nodiscard]] bool startExtrudeFromSelectedProfile();
     [[nodiscard]] bool startExtrudeEdit(
@@ -372,6 +374,8 @@ private:
     QLabel* feature_source_sketch_{};
     QPushButton* feature_go_to_profile_button_{};
     QPushButton* feature_edit_button_{};
+    QPushButton* feature_suppress_button_{};
+    QPushButton* feature_delete_button_{};
 
     QLabel* operations_placeholder_{};
     QWidget* precision_operations_widget_{};

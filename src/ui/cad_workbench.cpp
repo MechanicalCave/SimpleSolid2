@@ -1660,6 +1660,18 @@ void CadWorkbench::buildUi() {
             feature_properties_page_);
     feature_edit_button_->setObjectName(
         QStringLiteral("featureEditExtrudeButton"));
+    feature_suppress_button_ =
+        new QPushButton(
+            QStringLiteral("Suppress Feature"),
+            feature_properties_page_);
+    feature_suppress_button_->setObjectName(
+        QStringLiteral("featureSuppressButton"));
+    feature_delete_button_ =
+        new QPushButton(
+            QStringLiteral("Delete Feature"),
+            feature_properties_page_);
+    feature_delete_button_->setObjectName(
+        QStringLiteral("featureDeleteButton"));
 
     feature_root->addRow(
         QStringLiteral("Name"),
@@ -1695,6 +1707,10 @@ void CadWorkbench::buildUi() {
         feature_go_to_profile_button_);
     feature_root->addRow(
         feature_edit_button_);
+    feature_root->addRow(
+        feature_suppress_button_);
+    feature_root->addRow(
+        feature_delete_button_);
     properties_stack_->addWidget(
         feature_properties_page_);
 
@@ -2844,6 +2860,20 @@ void CadWorkbench::buildUi() {
             }
         });
     QObject::connect(
+        feature_suppress_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            toggleSelectedFeatureSuppressed();
+        });
+    QObject::connect(
+        feature_delete_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            deleteSelectedFeature();
+        });
+    QObject::connect(
         sketch_button_,
         &QPushButton::clicked,
         this,
@@ -3496,6 +3526,114 @@ void CadWorkbench::deleteSelectedProfile() {
             "Profile deleted — source Sketch geometry is unchanged."));
 }
 
+
+
+void CadWorkbench::toggleSelectedFeatureSuppressed() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        !selected_feature_id_) {
+        return;
+    }
+    if (extrude_draft_ || active_sketch_id_ ||
+        sketch_support_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active edit context before changing Feature suppression."));
+        return;
+    }
+
+    const auto feature_id =
+        *selected_feature_id_;
+    const auto* feature =
+        document_session->document()
+            .findFeature(feature_id);
+    if (feature == nullptr) {
+        selected_feature_id_.reset();
+        refreshActiveContext();
+        return;
+    }
+
+    const bool suppress =
+        !feature->suppressed;
+    const auto result =
+        document_session->execute(
+            application::
+                SetFeatureSuppressedCommand{
+                    feature_id,
+                    document_session->document()
+                        .revision(),
+                    suppress});
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        refreshActiveContext();
+        return;
+    }
+
+    refreshActiveContext();
+    navigateToFeature(feature_id);
+    notifyDocumentStateChanged();
+    setStatusText(
+        suppress
+            ? QStringLiteral(
+                  "Feature suppressed — identity and inputs preserved.")
+            : QStringLiteral(
+                  "Feature unsuppressed — Body reevaluated."));
+}
+
+void CadWorkbench::deleteSelectedFeature() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        !selected_feature_id_) {
+        return;
+    }
+    if (extrude_draft_ || active_sketch_id_ ||
+        sketch_support_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active edit context before deleting a Feature."));
+        return;
+    }
+
+    const auto feature_id =
+        *selected_feature_id_;
+    const auto* feature =
+        document_session->document()
+            .findFeature(feature_id);
+    if (feature == nullptr) {
+        selected_feature_id_.reset();
+        refreshActiveContext();
+        return;
+    }
+
+    const auto source_profile =
+        part::sourceProfileId(*feature);
+    const auto result =
+        document_session->execute(
+            application::DeleteFeatureCommand{
+                feature_id,
+                document_session->document()
+                    .revision()});
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        refreshActiveContext();
+        return;
+    }
+
+    selected_feature_id_.reset();
+    refreshActiveContext();
+    if (source_profile &&
+        document_session->document()
+                .findProfile(*source_profile) !=
+            nullptr) {
+        navigateToProfile(*source_profile);
+    }
+    notifyDocumentStateChanged();
+    setStatusText(
+        QStringLiteral(
+            "Feature deleted — source Profile preserved; Undo is available."));
+}
 
 bool CadWorkbench::startExtrudeFromSelectedProfile() {
     auto* document_session =
@@ -6001,11 +6139,22 @@ void CadWorkbench::refreshFeatureProperties(
             diagnostic));
     feature_go_to_profile_button_->setEnabled(
         profile != nullptr);
+    const bool lifecycle_available =
+        !extrude_draft_ &&
+        !active_sketch_id_ &&
+        !sketch_support_pick_active_;
     feature_edit_button_->setEnabled(
         !feature->suppressed &&
         solid_modeling_kernel_ != nullptr &&
-        !extrude_draft_ &&
-        !active_sketch_id_);
+        lifecycle_available);
+    feature_suppress_button_->setText(
+        feature->suppressed
+            ? QStringLiteral("Unsuppress Feature")
+            : QStringLiteral("Suppress Feature"));
+    feature_suppress_button_->setEnabled(
+        lifecycle_available);
+    feature_delete_button_->setEnabled(
+        lifecycle_available);
 
     properties_stack_->setCurrentWidget(
         feature_properties_page_);
