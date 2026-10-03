@@ -1,12 +1,17 @@
 # PM-00B — Part Feature Architecture Freeze
 
-**Status:** ACTIVE  
+**Status:** COMPLETED — PASS  
 **Owner acceptance:** 2026-10-03  
 **Decision class:** D2 architecture-freeze Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.4  
 **Entry gate:** PM-00A COMPLETED — PASS, final source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb`, Windows FULL #1320  
-**Primary review input:** `work/PM-00A_PART_FEATURE_ARCHITECTURE_ADR_CANDIDATE.md`
+**Primary review input:** `work/PM-00A_PART_FEATURE_ARCHITECTURE_ADR_CANDIDATE.md`  
+**Final source candidate:** `4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9`  
+**Windows FULL:** #1323 — PASS  
+**Core-only:** 19/19 PASS  
+**Kernel-native:** 27/27 PASS  
+**Desktop FULL:** 84/84 PASS
 
 ## 1. Goal
 
@@ -88,6 +93,8 @@ If an Owner-requested architecture change requires new executable evidence, STOP
 
 No manual UI verification is required because PM-00B has no user-visible product implementation.
 
+Final verification on exact source candidate `4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9` passed Windows FULL #1323: core-only 19/19, kernel-native 27/27 and desktop FULL 84/84, with all dispatcher/parity/benchmark steps green.
+
 ## 8. STOP conditions
 
 STOP and return to Owner if the proposed freeze would require:
@@ -111,6 +118,6 @@ Reason: PM-00B accepts durable Part Feature architecture that maintainers must u
 
 ## 10. Completion boundary
 
-PM-00B acceptance does not activate PM-01.
+PM-00B is COMPLETED — PASS. ADR-0014, the roadmap/decision ledger, required internal documentation and the bounded PM-01 candidate are synchronized.
 
-After PM-00B completion, the Owner must separately accept the bounded PM-01 Work Contract before any durable Body/Feature schema or Extrude Add production mutation begins.
+PM-00B completion does not activate PM-01. The Owner must separately accept `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md` before any durable Body/Feature schema, migration or Extrude Add production mutation begins.

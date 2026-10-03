@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/PM-00B_PART_FEATURE_ARCHITECTURE_FREEZE.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
@@ -20,12 +20,13 @@ accepted_adrs:
   - "adr/ADR-0013-guarded-native-save-and-file-checkpoints.md"
   - "adr/ADR-0014-part-feature-architecture-references-and-modeling-semantics.md"
 next:
-  - PM-00B is ACTIVE by explicit Owner acceptance on 2026-10-03
-  - ADR-0014 is accepted in the Owner-reviewed PM-00A candidate wording
-  - complete governance/internal-documentation synchronization and DOCS/CLOSURE verification
-  - PM-01 First Solid Vertical Slice remains NOT ACTIVE and requires separate explicit Owner acceptance
-  - keep production Body/Feature schema, migration and user-facing Extrude Add mutation inactive
+  - PM-00B is COMPLETED — PASS; source candidate 4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9, Windows FULL #1323, core-only 19/19 PASS, kernel-native 27/27 PASS, desktop FULL 84/84 PASS
+  - ADR-0014 is accepted and listed in accepted_adrs
+  - Owner review and separate explicit acceptance/amendment of work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md is the next legal action
+  - PM-01 remains NOT ACTIVE
+  - keep production Body/Feature schema, migration, Part Feature Tree behavior and user-facing Extrude Add inactive
 notes:
+  - PM-00B completed its governance/architecture freeze deliverables on exact source candidate 4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9. Windows FULL #1323 passed core-only 19/19, kernel-native 27/27 and desktop FULL 84/84. Closure changes after that candidate are restricted to work/** status/evidence synchronization.
   - Owner explicitly accepted PM-00B Part Feature Architecture Freeze and proposed ADR-0014 on 2026-10-03, including O-01, O-04, O-05, O-09, O-11, O-12 and the O-03/O-06 matrix. This authorizes governance/architecture freeze only; PM-01 production mutation remains separately gated.
   - E10 completed on exact source candidate ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb with Windows FULL #1320 PASS. Core-only 19/19, kernel-native 27/27 including pm00a.e10_numerical_policy, and desktop FULL 84/84 all passed. E10 proved display/pick state cannot enter the neutral/kernel-native modeling path, explicit refine policy changes provider topology without changing the bounded semantic source-face outcome, invalid gaps fail without fuzzy escalation, and the near-threshold family is deterministic with at least one measured acceptance transition. False-Resolved count remains 0.
   - PM-00A E01-E10 and required synthesis deliverables are complete. Their Owner-review architecture was accepted without amendment on 2026-10-03 and is now normative as ADR-0014; no durable Body/Feature production schema is authorized until separately accepted PM-01.

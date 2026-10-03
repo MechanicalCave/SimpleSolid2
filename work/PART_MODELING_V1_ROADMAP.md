@@ -123,7 +123,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | --- | --- | --- | --- |
 | G0 | **Sketcher profile-authoring readiness re-test** | prove current Sketcher can deliberately author practical Profiles after SR-01/02/03 | **COMPLETED — PASS on `16df8d1940a1f438a66cbd6964a881ba24718c0d`** |
 | 1 | **PM-00A — Part Modeling Architecture Evidence Gate** | first establish Verification Topology (semantic/core, kernel-native, desktop), then prove reference lineage, support frames, Profile->Kernel boundary, numerical policy and cold rebuild assumptions before durable solid schema | **COMPLETED — PASS; final source candidate `ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb`, Windows FULL #1320; Owner-review synthesis prepared** |
-| 2 | **PM-00B — Part Feature Architecture Freeze** | Owner-approved ADR/contract freeze for first solid workflow based on PM-00A evidence | **ACTIVE — Owner accepted 2026-10-03; governance-only freeze in progress** |
+| 2 | **PM-00B — Part Feature Architecture Freeze** | Owner-approved ADR/contract freeze for first solid workflow based on PM-00A evidence | **COMPLETED — PASS; source candidate `4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9`, Windows FULL #1323** |
 | 3 | **PM-01 — First Solid Vertical Slice: Body / Feature / Extrude Add** | minimum durable Body/Feature architecture plus one complete Extrude Add lifecycle | future separate Work Contract |
 | 4 | **PM-02 — Datum Plane / Sketch Support / Extrude Cut** | offset datum from stable source, Sketch on datum, Cut, downstream recompute/failure behavior | future separate Work Contract |
 | 5 | **PM-03 — Face Support / Semantic Topology References / Projection** | planar-face support, repair, exact bounded projection and resolver expansion without silent rebinding | future separate Work Contract |
@@ -335,7 +335,7 @@ A package must not silently make a ledger decision owned by a later package if d
 
 ## 10. PM-00B — Part Feature Architecture Freeze
 
-**Status:** ACTIVE — Owner accepted 2026-10-03. ADR-0014 is accepted; this package is completing governance/documentation synchronization and the bounded PM-01 contract candidate.
+**Status:** COMPLETED — PASS. Owner accepted 2026-10-03; ADR-0014 is accepted and synchronized; source candidate `4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9` passed Windows FULL #1323.
 
 PM-00B is intentionally short and governance-heavy.
 
@@ -579,12 +579,14 @@ Planned Part features must not be documented as already implemented.
 
 ## 23. Activation boundary
 
-Program v1.4 is accepted and frozen. **PM-00B is active as a governance-only architecture-freeze package.**
+Program v1.4 is accepted and frozen. **G0, PM-00A and PM-00B are COMPLETED — PASS.**
 
-G0 and PM-00A are complete. The Owner accepted PM-00B and ADR-0014 on 2026-10-03, including O-01, O-04, O-05, O-09, O-11, O-12 foundations and the O-03/O-06 product-scope matrix.
+PM-00B's final source candidate `4cf065c844a523be4e7c2ae88b4d78a1ae89d7e9` passed Windows FULL #1323 with core-only 19/19, kernel-native 27/27 and desktop FULL 84/84. ADR-0014 is now the accepted Part Feature architecture authority.
 
-ADR-0014 now governs Part Feature architecture. PM-00B does not authorize production Body/Feature/Extrude mutation; its remaining work is repository synchronization, required internal documentation, the bounded PM-01 Work Contract candidate and DOCS/CLOSURE evidence.
+Current legal next action:
 
-PM-01 remains **NOT ACTIVE**. After PM-00B completes, PM-01 requires a separate explicit Owner acceptance before any durable Body/Feature schema, migration or user-facing Extrude Add implementation begins.
+**Owner review and explicit acceptance or amendment of `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`.**
 
-Part Modeling v1 program acceptance must never be interpreted as permission to skip those boundaries.
+PM-01 remains **NOT ACTIVE**. No durable Body/Feature schema, migration, Part Feature Tree product behavior or user-facing Extrude Add implementation is authorized until that separate acceptance.
+
+Part Modeling v1 program acceptance and PM-00B completion must never be interpreted as permission to skip the PM-01 boundary.
