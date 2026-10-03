@@ -55,12 +55,13 @@ kernel::BoundaryUse2D lineUse(
     std::string_view source,
     std::uint32_t loop_index,
     std::uint32_t use_index,
-    bool hole = false) {
+    bool hole = false,
+    bool reversed = false) {
     return {
         kernel::Line2{start, end},
-        0.0,
-        1.0,
-        true,
+        reversed ? 1.0 : 0.0,
+        reversed ? 0.0 : 1.0,
+        !reversed,
         false,
         false,
         kernel::BoundaryUseProvenance{
@@ -127,6 +128,52 @@ kernel::PlanarProfileInput rectangle(
         lineUse({40.0, 0.0}, {40.0, 30.0}, "right", 0U, 1U),
         lineUse({40.0, 30.0}, {0.0, 30.0}, "top", 0U, 2U),
         lineUse({0.0, 30.0}, {0.0, 0.0}, "left", 0U, 3U),
+    };
+    CHECK(profile.valid());
+    return profile;
+}
+
+kernel::PlanarProfileInput reversedRectangle(
+    kernel::Frame3 frame = {}) {
+    kernel::PlanarProfileInput profile;
+    profile.frame = frame;
+
+    // Preserve the authored Line2 direction/provenance but reverse only the
+    // legal loop traversal. Canonical carrier frames must therefore remain
+    // unchanged by traversal representation.
+    profile.outer.boundary = {
+        lineUse(
+            {0.0, 30.0},
+            {0.0, 0.0},
+            "left",
+            0U,
+            3U,
+            false,
+            true),
+        lineUse(
+            {40.0, 30.0},
+            {0.0, 30.0},
+            "top",
+            0U,
+            2U,
+            false,
+            true),
+        lineUse(
+            {40.0, 0.0},
+            {40.0, 30.0},
+            "right",
+            0U,
+            1U,
+            false,
+            true),
+        lineUse(
+            {0.0, 0.0},
+            {40.0, 0.0},
+            "bottom",
+            0U,
+            0U,
+            false,
+            true),
     };
     CHECK(profile.valid());
     return profile;
@@ -417,6 +464,38 @@ void verifyOtherOriginFrames() {
             yz_bottom_expected));
 }
 
+void verifyTraversalReversal() {
+    const auto forward =
+        kernel_occt::buildExtrudeSurfaceCarrierEvidence(
+            rectangle(),
+            10.0);
+    const auto reversed =
+        kernel_occt::buildExtrudeSurfaceCarrierEvidence(
+            reversedRectangle(),
+            10.0);
+
+    verifyCommon(forward, 6U, 4U);
+    verifyCommon(reversed, 6U, 4U);
+
+    for (const auto& before : forward.sides) {
+        CHECK(before.provenance.has_value());
+        const auto* after =
+            findSide(
+                reversed,
+                before.provenance->source_entity);
+        CHECK(after != nullptr);
+        CHECK(
+            after->semantic_surface_kind ==
+            before.semantic_surface_kind);
+        CHECK(before.canonical_frame.has_value());
+        CHECK(after->canonical_frame.has_value());
+        CHECK(
+            near(
+                *after->canonical_frame,
+                *before.canonical_frame));
+    }
+}
+
 void verifyCurvedAndHoleCarriers() {
     const auto circle =
         kernel_occt::buildExtrudeSurfaceCarrierEvidence(
@@ -488,6 +567,7 @@ void verifyCurvedAndHoleCarriers() {
 int main() {
     verifyRectangleXY();
     verifyOtherOriginFrames();
+    verifyTraversalReversal();
     verifyCurvedAndHoleCarriers();
 
     std::cout
