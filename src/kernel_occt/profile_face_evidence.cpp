@@ -42,6 +42,7 @@
 #include <iostream>
 #include <numbers>
 #include <optional>
+#include <string>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -611,10 +612,6 @@ referenceStatus(
 faceGeometryDiagnostics(
     const TopoDS_Face& face);
 
-[[nodiscard]] kernel::FaceGeometryDiagnostics
-faceGeometryDiagnostics(
-    const TopoDS_Face& face);
-
 [[nodiscard]] kernel::EvidenceSurfaceCarrierRecord
 surfaceCarrierRecord(
     kernel::EvidenceSurfaceCarrierRoleKind role,
@@ -659,6 +656,304 @@ surfaceCarrierRecord(
         }
     }
     return false;
+}
+
+
+[[nodiscard]] const kernel::BoundaryUse2D*
+findBoundaryUse(
+    const kernel::PlanarProfileInput& input,
+    const kernel::BoundaryUseProvenance& provenance) {
+    for (const auto& use : input.outer.boundary) {
+        if (use.provenance == provenance) {
+            return &use;
+        }
+    }
+    for (const auto& loop : input.holes) {
+        for (const auto& use : loop.boundary) {
+            if (use.provenance == provenance) {
+                return &use;
+            }
+        }
+    }
+    return nullptr;
+}
+
+[[nodiscard]] kernel::BoundaryUse2D
+evidenceLineUse(
+    kernel::Point2 start,
+    kernel::Point2 end,
+    std::string source,
+    std::uint32_t use_index) {
+    return {
+        kernel::Line2{start, end},
+        0.0,
+        1.0,
+        true,
+        false,
+        false,
+        kernel::BoundaryUseProvenance{
+            std::move(source),
+            0U,
+            use_index,
+            false},
+    };
+}
+
+[[nodiscard]] kernel::PlanarProfileInput
+evidenceRectangleProfile(
+    double x0,
+    double y0,
+    double x1,
+    double y1,
+    double z,
+    const std::string& prefix) {
+    kernel::PlanarProfileInput input;
+    input.frame.origin = {0.0, 0.0, z};
+    input.outer.boundary = {
+        evidenceLineUse(
+            {x0, y0},
+            {x1, y0},
+            prefix + "-bottom",
+            0U),
+        evidenceLineUse(
+            {x1, y0},
+            {x1, y1},
+            prefix + "-right",
+            1U),
+        evidenceLineUse(
+            {x1, y1},
+            {x0, y1},
+            prefix + "-top",
+            2U),
+        evidenceLineUse(
+            {x0, y1},
+            {x0, y0},
+            prefix + "-left",
+            3U),
+    };
+    return input;
+}
+
+struct EvidencePrismSide final {
+    kernel::BoundaryUseProvenance provenance;
+    kernel::FaceSurfaceKind semantic_kind{
+        kernel::FaceSurfaceKind::other};
+    std::optional<kernel::Frame3> canonical_frame;
+    TopoDS_Face face;
+};
+
+struct EvidencePrismBuild final {
+    TopoDS_Shape shape;
+    TopoDS_Face start_cap;
+    TopoDS_Face end_cap;
+    std::optional<kernel::Frame3> start_frame;
+    std::optional<kernel::Frame3> end_frame;
+    std::vector<EvidencePrismSide> sides;
+};
+
+[[nodiscard]] std::optional<EvidencePrismBuild>
+buildEvidencePrism(
+    const kernel::PlanarProfileInput& input,
+    double distance) {
+    if (!input.valid() ||
+        !std::isfinite(distance) ||
+        distance == 0.0) {
+        return std::nullopt;
+    }
+
+    const auto built =
+        buildProfileFace(input);
+    if (!built) {
+        return std::nullopt;
+    }
+
+    BRepSweep_Prism sweep{
+        built->face,
+        gp_Vec{
+            input.frame.normal.x * distance,
+            input.frame.normal.y * distance,
+            input.frame.normal.z * distance},
+        false,
+        true};
+
+    const TopoDS_Shape shape =
+        sweep.Shape();
+    if (shape.IsNull()) {
+        return std::nullopt;
+    }
+
+    const auto start_faces =
+        uniqueFacesFromGeneratedShape(
+            sweep.FirstShape());
+    const auto end_faces =
+        uniqueFacesFromGeneratedShape(
+            sweep.LastShape());
+    if (start_faces.size() != 1U ||
+        end_faces.size() != 1U) {
+        return std::nullopt;
+    }
+
+    EvidencePrismBuild result;
+    result.shape = shape;
+    result.start_cap = start_faces.front();
+    result.end_cap = end_faces.front();
+    result.start_frame =
+        shiftedCarrierFrame(
+            input.frame,
+            0.0);
+    result.end_frame =
+        shiftedCarrierFrame(
+            input.frame,
+            distance);
+
+    result.sides.reserve(
+        built->source_edges.size());
+    for (const auto& source :
+         built->source_edges) {
+        std::vector<TopoDS_Face> candidates;
+        const auto basis_edges =
+            matchingFaceEdges(
+                built->face,
+                source.edge);
+        for (const auto& basis_edge :
+             basis_edges) {
+            const auto generated =
+                sweep.Shape(
+                    basis_edge);
+            for (const auto& face :
+                 uniqueFacesFromGeneratedShape(
+                     generated)) {
+                appendUniqueFace(
+                    candidates,
+                    face);
+            }
+        }
+        if (candidates.size() != 1U) {
+            return std::nullopt;
+        }
+
+        const auto* use =
+            findBoundaryUse(
+                input,
+                source.provenance);
+        if (use == nullptr) {
+            return std::nullopt;
+        }
+
+        const auto kind =
+            semanticSurfaceKind(*use);
+        result.sides.push_back({
+            source.provenance,
+            kind,
+            kind == kernel::FaceSurfaceKind::plane
+                ? lineSideCarrierFrame(input, *use)
+                : std::nullopt,
+            candidates.front(),
+        });
+    }
+
+    return result;
+}
+
+[[nodiscard]] const EvidencePrismSide*
+findPrismSide(
+    const EvidencePrismBuild& prism,
+    const std::string& source_entity) {
+    const auto found =
+        std::find_if(
+            prism.sides.begin(),
+            prism.sides.end(),
+            [&source_entity](
+                const EvidencePrismSide& side) {
+                return side.provenance.source_entity ==
+                       source_entity;
+            });
+    return found == prism.sides.end()
+        ? nullptr
+        : &*found;
+}
+
+void populateBodyTopologyEvidence(
+    kernel::BodyTopologyInventoryEvidence& topology,
+    const kernel::ShapeEvidence& shape_evidence,
+    const TopoDS_Shape& shape) {
+    topology.status =
+        shape_evidence.status;
+    topology.brep_valid =
+        shape_evidence.brep_valid;
+    topology.solid_count =
+        shape_evidence.solid_count;
+    populateTopologyInventory(
+        topology.faces,
+        shape,
+        TopAbs_FACE);
+    populateTopologyInventory(
+        topology.edges,
+        shape,
+        TopAbs_EDGE);
+    populateTopologyInventory(
+        topology.vertices,
+        shape,
+        TopAbs_VERTEX);
+}
+
+[[nodiscard]] kernel::ReferenceStatus
+surfaceStatusFromSingleCarrierLineage(
+    std::size_t descendant_face_count) noexcept {
+    return descendant_face_count == 0U
+        ? kernel::ReferenceStatus::missing
+        : kernel::ReferenceStatus::resolved;
+}
+
+[[nodiscard]] std::size_t
+countSurfaceKind(
+    const std::vector<TopoDS_Shape>& faces,
+    kernel::FaceSurfaceKind expected) {
+    std::size_t count = 0U;
+    for (const auto& shape : faces) {
+        if (shape.ShapeType() != TopAbs_FACE) {
+            continue;
+        }
+        if (faceGeometryDiagnostics(
+                TopoDS::Face(shape))
+                .surface_kind == expected) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+[[nodiscard]] bool nearEvidenceValue(
+    double first,
+    double second) noexcept {
+    const double scale =
+        std::max({
+            1.0,
+            std::abs(first),
+            std::abs(second)});
+    return std::abs(first - second) <=
+           1.0e-9 * scale;
+}
+
+[[nodiscard]] bool nearEvidencePoint(
+    const kernel::Point3& first,
+    const kernel::Point3& second) noexcept {
+    return nearEvidenceValue(first.x, second.x) &&
+           nearEvidenceValue(first.y, second.y) &&
+           nearEvidenceValue(first.z, second.z);
+}
+
+[[nodiscard]] bool sameGeometryDiagnostics(
+    const kernel::FaceGeometryDiagnostics& first,
+    const kernel::FaceGeometryDiagnostics& second) noexcept {
+    return first.surface_kind == second.surface_kind &&
+           nearEvidenceValue(first.area, second.area) &&
+           nearEvidencePoint(
+               first.centroid,
+               second.centroid) &&
+           nearEvidencePoint(
+               first.surface_axis,
+               second.surface_axis);
 }
 
 [[nodiscard]] kernel::FaceSurfaceKind
