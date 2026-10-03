@@ -18,6 +18,7 @@
 #include <TopTools_ListOfShape.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
+#include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 #include <BRepSweep_Prism.hxx>
@@ -819,6 +820,42 @@ void populateDiagnostics(
 }
 
 template <typename Operation>
+[[nodiscard]] bool upstreamExteriorUnchanged(
+    Operation& operation,
+    const TopoDS_Solid& upstream,
+    const TopoDS_Shape& result) {
+    if (countSubshapes(
+            upstream,
+            TopAbs_FACE) !=
+        countSubshapes(
+            result,
+            TopAbs_FACE)) {
+        return false;
+    }
+
+    for (TopExp_Explorer explorer{
+             upstream,
+             TopAbs_FACE};
+         explorer.More();
+         explorer.Next()) {
+        const auto source =
+            TopoDS::Face(
+                explorer.Current());
+        const auto descendants =
+            descendantFaces(
+                operation,
+                source,
+                result);
+        if (descendants.size() != 1U ||
+            !descendants.front().IsSame(
+                source)) {
+            return false;
+        }
+    }
+    return true;
+}
+
+template <typename Operation>
 kernel::SolidModelingResult
 finishBoolean(
     Operation& operation,
@@ -888,8 +925,10 @@ finishBoolean(
         return result;
     }
 
-    if (solid->IsSame(
-            upstream.solid)) {
+    if (upstreamExteriorUnchanged(
+            operation,
+            upstream.solid,
+            shape)) {
         result.status =
             kernel::SolidModelingStatus::
                 no_effect;

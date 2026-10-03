@@ -3,8 +3,10 @@
 
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 using namespace simplesolid2;
@@ -54,6 +56,34 @@ kernel::PlanarProfileInput rectangle(
         lineUse({x1, y1}, {x0, y1}, "top"),
         lineUse({x0, y1}, {x0, y0}, "left"),
     };
+    CHECK(profile.valid());
+    return profile;
+}
+
+kernel::PlanarProfileInput rectangleWithHole() {
+    auto profile =
+        rectangle(
+            0.0, 0.0,
+            40.0, 30.0);
+    kernel::ProfileLoopInput hole;
+    hole.boundary.push_back(
+        kernel::BoundaryUse2D{
+            kernel::Circle2{
+                {20.0, 15.0},
+                5.0},
+            0.0,
+            1.0,
+            true,
+            false,
+            true,
+            kernel::BoundaryUseProvenance{
+                "hole-circle",
+                1U,
+                0U,
+                true},
+        });
+    profile.holes.push_back(
+        std::move(hole));
     CHECK(profile.valid());
     return profile;
 }
@@ -174,6 +204,15 @@ int main() {
             ->status ==
         kernel::ReferenceStatus::resolved);
     CHECK(resolvedSides(base) == 4U);
+
+    const auto holed =
+        provider.extrude(
+            forward(
+                rectangleWithHole(),
+                10.0));
+    CHECK(holed.ok());
+    CHECK(holed.solid_count == 1U);
+    CHECK(resolvedSides(holed) == 5U);
 
     // Attached chained Add: remains one Body; the coincident profile cap may
     // disappear into the Boolean, but no missing/merged role is promoted to
