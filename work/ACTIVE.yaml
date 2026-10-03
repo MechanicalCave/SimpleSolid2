@@ -1,5 +1,5 @@
 version: 1
-status: active
+status: completed
 active_work: "work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
@@ -21,11 +21,13 @@ accepted_adrs:
   - "adr/ADR-0014-part-feature-architecture-references-and-modeling-semantics.md"
   - "adr/ADR-0015-extrude-feature-scope-preview-and-presentation.md"
 next:
-  - PM-01 is ACTIVE by explicit Owner acceptance on 2026-10-03 under ADR-0014 and ADR-0015
-  - implement the accepted Extrude Feature vertical slice in bounded checkpoints: semantic/schema foundation -> Kernel Add/Cut -> evaluator/commands -> Viewer/preview -> Tree/Properties/Command Line -> persistence/docs/acceptance
-  - first solid-producing Feature is Add; later ordered Extrude Features may be Add or Cut; OneSide and Midplane are in scope
-  - PM-02 and later Part Modeling packages remain NOT ACTIVE
+  - PM-01 is COMPLETED — PASS after runtime FULL #1369, docs #1370, closure-ready evidence synchronization and Owner final manual Windows PASS on 2026-10-03
+  - no production CAD Work Contract is active after PM-01 completion
+  - PM-02 Datum Plane / Sketch Support is the next roadmap package but remains NOT ACTIVE
+  - PM-02 requires its own bounded Work Contract and explicit Owner acceptance before any production mutation
+  - keep PM-03 and later Part Modeling packages inactive
 notes:
+  - PM-01 is COMPLETED — PASS. Owner final manual Windows acceptance on 2026-10-03 reported no remaining defects on `afecfa9884bfeb53d5d0bb84ff110b3b280cf8d2`. Runtime evidence includes Windows FULL #1369; H7 docs/Product Browser evidence includes Windows DOCS #1370. PM-02+ remain inactive until separately accepted.
   - PM-01H H7 current-revision resolved history-prefix presentation is implemented and merged as 48377c5a5a81673e901e22d3534d3f049912d2a6. Exact-head Windows FULL #1369 PASS on aaab5610f8f7c6fa3036d8123849523d06dd66e1; H7 internal + PL/EN Product docs/Product Browser PR #174 passed Windows DOCS #1370 and is merged on latest main 2e798844621191d002f209c6b35bd2e2a083d730. The only remaining PM-01 acceptance gate is focused Owner Windows re-test of higher-Feature invalidation / lower-history prefix presentation; after PASS, perform governance completion. PM-02+ remain inactive.
   - PM-01H H4a/H4b remediation is implemented and merged through runtime baseline 53bde160abeabd854d99fb96535c528f8402858f. H4a exact-head Windows FULL #1346 PASS; H4b exact-head Windows FULL #1348 PASS. As-built docs/Product Browser sync PR #163 passed Windows DOCS #1350 and is merged on latest main f19b52f1cdc77ef1405aeb95a1a2ed042d9c8b02. The only remaining PM-01 acceptance gate is consolidated Owner Windows re-test; after PASS, perform governance completion. PM-02+ remain inactive.
   - PM-01H H1/H2/H3 remediation is implemented and merged through 78558b825f1ec2b0ad622166774774ac26e5f417. Exact-head Windows FULL #1341/#1342/#1343 PASS. Remaining PM-01H gate is consolidated Owner Windows re-test plus documentation/browser sync; Feature viewport highlight remains a deferred UX decision, not implemented semantics.
