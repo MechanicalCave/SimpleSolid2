@@ -288,7 +288,7 @@ PR #152 was superseded by #153 and closed without merge after its runner-side LN
 
 Runtime implementation completed through PM-01G and manual-remediation checkpoints H1-H7. Final runtime evidence includes Windows FULL #1369 PASS on `aaab5610f8f7c6fa3036d8123849523d06dd66e1`; H7 docs/Product Browser passed Windows DOCS #1370. Owner manual Windows acceptance PASS was reported on `afecfa9884bfeb53d5d0bb84ff110b3b280cf8d2`.
 
-PM-01 completion obligations are satisfied subject only to the exact-head work/governance closure gate for this final status synchronization.
+PM-01 completion obligations are satisfied. This final work/governance status synchronization must pass its exact-head closure gate before merge; that gate validates repository invariants only and does not reopen runtime acceptance.
 
 PM-02 and later packages remain inactive.
 
