@@ -518,6 +518,7 @@ struct BooleanIntersectionEdgeEvidence final {
     bool all_provider_curves_match_kind{false};
     EvidenceSurfaceCarrierKey first_surface;
     EvidenceSurfaceCarrierKey second_surface;
+    bool absent_from_both_source_shapes{false};
 
     [[nodiscard]] bool ok() const noexcept {
         return shape.ok() &&
