@@ -18,6 +18,11 @@ public:
         kernel::RuntimeSolidHandle upstream = {}) noexcept override;
 
     [[nodiscard]] kernel::SolidPresentationResult
+    extrudePreviewMesh(
+        const kernel::LinearExtrudeInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override;
+
+    [[nodiscard]] kernel::SolidPresentationResult
     presentationMesh(
         kernel::RuntimeSolidHandle solid) noexcept override;
 };

@@ -142,6 +142,27 @@ bool LinearExtrudeInput::valid() const noexcept {
 }
 
 SolidPresentationResult
+ISolidModelingKernel::extrudePreviewMesh(
+    const LinearExtrudeInput& input,
+    RuntimeSolidHandle upstream) noexcept {
+    if (!input.valid()) {
+        return {
+            SolidPresentationStatus::invalid_input,
+            {}};
+    }
+    if (input.operation ==
+            SolidBooleanOperation::cut &&
+        upstream == nullptr) {
+        return {
+            SolidPresentationStatus::invalid_input,
+            {}};
+    }
+    return {
+        SolidPresentationStatus::unsupported,
+        {}};
+}
+
+SolidPresentationResult
 ISolidModelingKernel::presentationMesh(
     RuntimeSolidHandle solid) noexcept {
     return {

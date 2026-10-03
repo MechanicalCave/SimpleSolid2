@@ -145,6 +145,29 @@ MeshBounds meshBoundsY(
     return bounds;
 }
 
+struct MeshBoundsX final {
+    double min_x{std::numeric_limits<double>::infinity()};
+    double max_x{-std::numeric_limits<double>::infinity()};
+};
+
+MeshBoundsX meshBoundsX(
+    const kernel::SolidPresentationMesh& mesh) {
+    MeshBoundsX bounds;
+    const auto include =
+        [&bounds](const kernel::Point3& point) {
+            bounds.min_x =
+                std::min(bounds.min_x, point.x);
+            bounds.max_x =
+                std::max(bounds.max_x, point.x);
+        };
+    for (const auto& triangle : mesh.triangles) {
+        include(triangle.first);
+        include(triangle.second);
+        include(triangle.third);
+    }
+    return bounds;
+}
+
 kernel::PlanarProfileInput rectangle(
     double x0,
     double y0,
@@ -340,6 +363,52 @@ int main() {
          base_mesh.mesh.triangles) {
         CHECK(triangle.valid());
     }
+
+    // H5 exact operation-delta preview: the tool spans x=30..50 while
+    // the accepted base spans x=0..40. Add must preview only x=40..50;
+    // Cut must preview only the material actually removable, x=30..40.
+    const auto overlapping_add_input =
+        forward(
+            rectangle(
+                30.0, 5.0,
+                50.0, 15.0),
+            10.0,
+            kernel::SolidBooleanOperation::add);
+    const auto add_delta =
+        provider.extrudePreviewMesh(
+            overlapping_add_input,
+            base.solid);
+    CHECK(add_delta.ok());
+    const auto add_delta_x =
+        meshBoundsX(add_delta.mesh);
+    constexpr double delta_epsilon = 1.0e-7;
+    CHECK(
+        add_delta_x.min_x >=
+        40.0 - delta_epsilon);
+    CHECK(
+        add_delta_x.max_x <=
+        50.0 + delta_epsilon);
+
+    const auto overlapping_cut_input =
+        forward(
+            rectangle(
+                30.0, 5.0,
+                50.0, 15.0),
+            10.0,
+            kernel::SolidBooleanOperation::cut);
+    const auto cut_delta =
+        provider.extrudePreviewMesh(
+            overlapping_cut_input,
+            base.solid);
+    CHECK(cut_delta.ok());
+    const auto cut_delta_x =
+        meshBoundsX(cut_delta.mesh);
+    CHECK(
+        cut_delta_x.min_x >=
+        30.0 - delta_epsilon);
+    CHECK(
+        cut_delta_x.max_x <=
+        40.0 + delta_epsilon);
 
     const auto missing_mesh =
         provider.presentationMesh({});
@@ -565,6 +634,55 @@ int main() {
     CHECK(!cut_no_effect.ok());
     CHECK(
         cut_no_effect.status ==
+        kernel::SolidModelingStatus::
+            no_effect);
+
+    // H5 volumetric no-effect: touching an upstream Body without
+    // positive common volume is not a legal Cut Feature.
+    const auto face_touch_cut =
+        provider.extrude(
+            forward(
+                rectangle(
+                    5.0, 5.0,
+                    15.0, 15.0,
+                    {0.0, 0.0, 10.0}),
+                10.0,
+                kernel::SolidBooleanOperation::cut),
+            base.solid);
+    CHECK(!face_touch_cut.ok());
+    CHECK(
+        face_touch_cut.status ==
+        kernel::SolidModelingStatus::
+            no_effect);
+
+    const auto edge_touch_cut =
+        provider.extrude(
+            forward(
+                rectangle(
+                    40.0, 30.0,
+                    50.0, 40.0),
+                10.0,
+                kernel::SolidBooleanOperation::cut),
+            base.solid);
+    CHECK(!edge_touch_cut.ok());
+    CHECK(
+        edge_touch_cut.status ==
+        kernel::SolidModelingStatus::
+            no_effect);
+
+    const auto point_touch_cut =
+        provider.extrude(
+            forward(
+                rectangle(
+                    40.0, 30.0,
+                    50.0, 40.0,
+                    {0.0, 0.0, 10.0}),
+                10.0,
+                kernel::SolidBooleanOperation::cut),
+            base.solid);
+    CHECK(!point_touch_cut.ok());
+    CHECK(
+        point_touch_cut.status ==
         kernel::SolidModelingStatus::
             no_effect);
 

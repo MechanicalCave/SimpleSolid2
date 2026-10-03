@@ -79,6 +79,33 @@ public:
     }
 
     kernel::SolidPresentationResult
+    extrudePreviewMesh(
+        const kernel::LinearExtrudeInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        if (!input.valid() ||
+            (input.operation ==
+                 kernel::SolidBooleanOperation::cut &&
+             upstream == nullptr)) {
+            return {
+                kernel::SolidPresentationStatus::
+                    invalid_input,
+                {}};
+        }
+        kernel::SolidPresentationMesh mesh;
+        mesh.triangles.push_back(
+            {
+                {0.0, 0.0, 0.0},
+                {10.0, 0.0, 0.0},
+                {0.0, 10.0, 0.0},
+                {0.0, 0.0, 1.0},
+                {0.0, 0.0, 1.0},
+                {0.0, 0.0, 1.0}});
+        return {
+            kernel::SolidPresentationStatus::ok,
+            std::move(mesh)};
+    }
+
+    kernel::SolidPresentationResult
     presentationMesh(
         kernel::RuntimeSolidHandle solid) noexcept override {
         if (dynamic_cast<const FakeSolid*>(
@@ -401,6 +428,12 @@ int main(int argc, char* argv[]) {
     CHECK(
         viewport->solid_preview.tone ==
         viewer::SolidPreviewTone::additive);
+    // H5: a ready solid preview hides only the rendered source Profile.
+    // The authored automatic visibility policy remains untouched.
+    CHECK(viewport->profile_scene.profiles.empty());
+    CHECK(
+        session.document().profilePresentationVisible(
+            profile_id));
 
     reverse->click();
     CHECK(reverse->isChecked());
@@ -474,9 +507,17 @@ int main(int argc, char* argv[]) {
     const auto undo_before_edit =
         session.undoDepth();
     edit_feature->click();
-    CHECK(!viewport->profile_scene.profiles.empty());
+    CHECK(viewport->profile_scene.profiles.empty());
     CHECK(distance->text().contains(
         QStringLiteral("10")));
+
+    // Invalid text clears the preview and reveals the source Profile only as
+    // transient diagnostic presentation.
+    distance->clear();
+    CHECK(!finish->isEnabled());
+    CHECK(viewport->solid_preview.empty());
+    CHECK(!viewport->profile_scene.profiles.empty());
+
     distance->setText(
         QStringLiteral("12 mm"));
     // Typing updates the draft immediately but expensive Body evaluation /
@@ -484,6 +525,7 @@ int main(int argc, char* argv[]) {
     CHECK(!finish->isEnabled());
     waitForPreviewDebounce();
     CHECK(finish->isEnabled());
+    CHECK(viewport->profile_scene.profiles.empty());
     finish->click();
 
     CHECK(

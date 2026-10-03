@@ -1296,6 +1296,16 @@ public:
         context_->Display(
             solid_object_,
             false);
+        context_->SetColor(
+            solid_object_,
+            Quantity_Color{
+                0.72, 0.74, 0.78,
+                Quantity_TOC_RGB},
+            false);
+        context_->SetTransparency(
+            solid_object_,
+            0.0,
+            false);
         context_->Deactivate(
             solid_object_);
     }
@@ -1405,6 +1415,12 @@ public:
                 solid_preview_object_,
                 0.30,
                 false);
+            // Keep coplanar preview boundaries stable against the opaque Body.
+            // This is display-only depth bias, never modeling input.
+            solid_preview_object_->SetPolygonOffsets(
+                Aspect_POM_Fill,
+                -1.0F,
+                -1.0F);
             context_->Deactivate(
                 solid_preview_object_);
             solid_preview_scene_ = scene;

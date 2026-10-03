@@ -1,11 +1,13 @@
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 
+#include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
 #include <BRepMesh_IncrementalMesh.hxx>
+#include <BRepGProp.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRep_Tool.hxx>
 #include <BRepCheck_Analyzer.hxx>
@@ -28,6 +30,7 @@
 #include <gp_Dir.hxx>
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
+#include <GProp_GProps.hxx>
 #include <BRepSweep_Prism.hxx>
 
 #include <algorithm>
@@ -838,6 +841,55 @@ void populateDiagnostics(
         BRepCheck_Analyzer{shape}.IsValid();
 }
 
+enum class VolumePresence {
+    none,
+    positive,
+    invalid,
+};
+
+[[nodiscard]] VolumePresence volumePresence(
+    const TopoDS_Shape& shape) {
+    if (shape.IsNull()) {
+        return VolumePresence::none;
+    }
+
+    bool found_solid = false;
+    double total_volume = 0.0;
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_SOLID};
+         explorer.More();
+         explorer.Next()) {
+        found_solid = true;
+        const auto solid =
+            TopoDS::Solid(
+                explorer.Current());
+        if (!BRepCheck_Analyzer{solid}.IsValid()) {
+            return VolumePresence::invalid;
+        }
+
+        GProp_GProps properties;
+        BRepGProp::VolumeProperties(
+            solid,
+            properties);
+        const double volume =
+            std::abs(properties.Mass());
+        if (!std::isfinite(volume)) {
+            return VolumePresence::invalid;
+        }
+        total_volume += volume;
+        if (!std::isfinite(total_volume)) {
+            return VolumePresence::invalid;
+        }
+    }
+
+    if (!found_solid ||
+        !(total_volume > 0.0)) {
+        return VolumePresence::none;
+    }
+    return VolumePresence::positive;
+}
+
 template <typename Operation>
 [[nodiscard]] bool upstreamExteriorUnchanged(
     Operation& operation,
@@ -977,6 +1029,193 @@ finishBoolean(
     return result;
 }
 
+[[nodiscard]] kernel::SolidPresentationResult
+presentationMeshForShape(
+    const TopoDS_Shape& shape) noexcept {
+    kernel::SolidPresentationResult result;
+    if (shape.IsNull()) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+
+    try {
+        constexpr double linear_deflection_mm = 0.25;
+        constexpr double angular_deflection_rad = 0.35;
+
+        BRepMesh_IncrementalMesh mesher{
+            shape,
+            linear_deflection_mm,
+            false,
+            angular_deflection_rad,
+            true};
+        mesher.Perform();
+        if (!mesher.IsDone()) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+
+        for (TopExp_Explorer solid_explorer{
+                 shape,
+                 TopAbs_SOLID};
+             solid_explorer.More();
+             solid_explorer.Next()) {
+            const auto presentation_solid =
+                TopoDS::Solid(
+                    solid_explorer.Current());
+            for (TopExp_Explorer explorer{
+                     presentation_solid,
+                     TopAbs_FACE};
+                 explorer.More();
+                 explorer.Next()) {
+                const auto face =
+                    TopoDS::Face(
+                        explorer.Current());
+                TopLoc_Location location;
+                const Handle(Poly_Triangulation)
+                    triangulation =
+                        BRep_Tool::Triangulation(
+                            face,
+                            location);
+                if (triangulation.IsNull()) {
+                    continue;
+                }
+                if (!triangulation->HasNormals()) {
+                    BRepLib_ToolTriangulatedShape::
+                        ComputeNormals(
+                            face,
+                            triangulation);
+                }
+                if (!triangulation->HasNormals()) {
+                    result.status =
+                        kernel::SolidPresentationStatus::
+                            provider_failure;
+                    result.mesh.triangles.clear();
+                    return result;
+                }
+
+                const auto transform =
+                    location.Transformation();
+                for (Standard_Integer index = 1;
+                     index <=
+                         triangulation->NbTriangles();
+                     ++index) {
+                Standard_Integer first_index{};
+                Standard_Integer second_index{};
+                Standard_Integer third_index{};
+                triangulation->Triangle(index).Get(
+                    first_index,
+                    second_index,
+                    third_index);
+
+                gp_Pnt first =
+                    triangulation
+                        ->Node(first_index)
+                        .Transformed(transform);
+                gp_Pnt second =
+                    triangulation
+                        ->Node(second_index)
+                        .Transformed(transform);
+                gp_Pnt third =
+                    triangulation
+                        ->Node(third_index)
+                        .Transformed(transform);
+
+                gp_Dir first_normal =
+                    triangulation->Normal(
+                        first_index);
+                gp_Dir second_normal =
+                    triangulation->Normal(
+                        second_index);
+                gp_Dir third_normal =
+                    triangulation->Normal(
+                        third_index);
+                first_normal.Transform(transform);
+                second_normal.Transform(transform);
+                third_normal.Transform(transform);
+
+                if (face.Orientation() ==
+                    TopAbs_REVERSED) {
+                    std::swap(
+                        second,
+                        third);
+                    std::swap(
+                        second_normal,
+                        third_normal);
+                    first_normal.Reverse();
+                    second_normal.Reverse();
+                    third_normal.Reverse();
+                }
+
+                const gp_Vec first_edge{
+                    first,
+                    second};
+                const gp_Vec second_edge{
+                    first,
+                    third};
+                const gp_Vec cross =
+                    first_edge.Crossed(
+                        second_edge);
+                const double magnitude =
+                    cross.Magnitude();
+                if (!std::isfinite(magnitude) ||
+                    !(magnitude > 0.0)) {
+                    continue;
+                }
+
+                    result.mesh.triangles.push_back(
+                        kernel::SolidMeshTriangle{
+                        {first.X(),
+                         first.Y(),
+                         first.Z()},
+                        {second.X(),
+                         second.Y(),
+                         second.Z()},
+                        {third.X(),
+                         third.Y(),
+                         third.Z()},
+                        {first_normal.X(),
+                         first_normal.Y(),
+                         first_normal.Z()},
+                        {second_normal.X(),
+                         second_normal.Y(),
+                         second_normal.Z()},
+                        {third_normal.X(),
+                         third_normal.Y(),
+                         third_normal.Z()}});
+            }
+            }
+        }
+
+        if (!result.mesh.valid()) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            result.mesh.triangles.clear();
+            return result;
+        }
+
+        result.status =
+            kernel::SolidPresentationStatus::ok;
+        return result;
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        result.mesh.triangles.clear();
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        result.mesh.triangles.clear();
+        return result;
+    }
+}
+
 } // namespace
 
 kernel::SolidModelingResult
@@ -1103,6 +1342,35 @@ OcctSolidModelingKernel::extrude(
                 input.operation);
         }
 
+        // A Cut that only touches the Body by face/edge/point has no
+        // volumetric modeling effect and must fail closed before we author it.
+        BRepAlgoAPI_Common overlap{
+            upstream_occt->solid,
+            tool_shape};
+        overlap.SetFuzzyValue(0.0);
+        overlap.Build();
+        if (!overlap.IsDone()) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_failure;
+            return result;
+        }
+        switch (volumePresence(
+                    overlap.Shape())) {
+        case VolumePresence::none:
+            result.status =
+                kernel::SolidModelingStatus::
+                    no_effect;
+            return result;
+        case VolumePresence::invalid:
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_failure;
+            return result;
+        case VolumePresence::positive:
+            break;
+        }
+
         BRepAlgoAPI_Cut cut{
             upstream_occt->solid,
             tool_shape};
@@ -1128,6 +1396,108 @@ OcctSolidModelingKernel::extrude(
 
 
 kernel::SolidPresentationResult
+OcctSolidModelingKernel::extrudePreviewMesh(
+    const kernel::LinearExtrudeInput& input,
+    kernel::RuntimeSolidHandle upstream) noexcept {
+    kernel::SolidPresentationResult result;
+    if (!input.valid()) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+    if (input.operation ==
+            kernel::SolidBooleanOperation::cut &&
+        upstream == nullptr) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+
+    const OcctRuntimeSolid* upstream_occt =
+        nullptr;
+    if (upstream != nullptr) {
+        upstream_occt =
+            dynamic_cast<
+                const OcctRuntimeSolid*>(
+                    upstream.get());
+        if (upstream_occt == nullptr) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_mismatch;
+            return result;
+        }
+    }
+
+    try {
+        const auto tool =
+            buildExtrudeTool(input);
+        if (!tool) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+        const auto& tool_shape =
+            tool->first;
+
+        TopoDS_Shape delta_shape;
+        if (upstream_occt == nullptr) {
+            delta_shape = tool_shape;
+        } else if (
+            input.operation ==
+            kernel::SolidBooleanOperation::add) {
+            BRepAlgoAPI_Cut delta{
+                tool_shape,
+                upstream_occt->solid};
+            delta.SetFuzzyValue(0.0);
+            delta.Build();
+            if (!delta.IsDone()) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                return result;
+            }
+            delta_shape = delta.Shape();
+        } else {
+            BRepAlgoAPI_Common delta{
+                tool_shape,
+                upstream_occt->solid};
+            delta.SetFuzzyValue(0.0);
+            delta.Build();
+            if (!delta.IsDone()) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                return result;
+            }
+            delta_shape = delta.Shape();
+        }
+
+        if (volumePresence(delta_shape) !=
+            VolumePresence::positive) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+        return presentationMeshForShape(
+            delta_shape);
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        return result;
+    }
+}
+
+kernel::SolidPresentationResult
 OcctSolidModelingKernel::presentationMesh(
     kernel::RuntimeSolidHandle solid) noexcept {
     kernel::SolidPresentationResult result;
@@ -1149,174 +1519,8 @@ OcctSolidModelingKernel::presentationMesh(
         return result;
     }
 
-    try {
-        // Presentation-only policy. Smooth shading is carried by nodal
-        // normals; tessellation density is therefore restored to the original
-        // bounded values instead of paying for tiny flat facets.
-        constexpr double linear_deflection_mm = 0.25;
-        constexpr double angular_deflection_rad = 0.35;
-
-        BRepMesh_IncrementalMesh mesher{
-            runtime->solid,
-            linear_deflection_mm,
-            false,
-            angular_deflection_rad,
-            true};
-        mesher.Perform();
-        if (!mesher.IsDone()) {
-            result.status =
-                kernel::SolidPresentationStatus::
-                    provider_failure;
-            return result;
-        }
-
-        for (TopExp_Explorer explorer{
-                 runtime->solid,
-                 TopAbs_FACE};
-             explorer.More();
-             explorer.Next()) {
-            const auto face =
-                TopoDS::Face(
-                    explorer.Current());
-            TopLoc_Location location;
-            const Handle(Poly_Triangulation)
-                triangulation =
-                    BRep_Tool::Triangulation(
-                        face,
-                        location);
-            if (triangulation.IsNull()) {
-                continue;
-            }
-            if (!triangulation->HasNormals()) {
-                BRepLib_ToolTriangulatedShape::
-                    ComputeNormals(
-                        face,
-                        triangulation);
-            }
-            if (!triangulation->HasNormals()) {
-                result.status =
-                    kernel::SolidPresentationStatus::
-                        provider_failure;
-                result.mesh.triangles.clear();
-                return result;
-            }
-
-            const auto transform =
-                location.Transformation();
-            for (Standard_Integer index = 1;
-                 index <=
-                     triangulation->NbTriangles();
-                 ++index) {
-                Standard_Integer first_index{};
-                Standard_Integer second_index{};
-                Standard_Integer third_index{};
-                triangulation->Triangle(index).Get(
-                    first_index,
-                    second_index,
-                    third_index);
-
-                gp_Pnt first =
-                    triangulation
-                        ->Node(first_index)
-                        .Transformed(transform);
-                gp_Pnt second =
-                    triangulation
-                        ->Node(second_index)
-                        .Transformed(transform);
-                gp_Pnt third =
-                    triangulation
-                        ->Node(third_index)
-                        .Transformed(transform);
-
-                gp_Dir first_normal =
-                    triangulation->Normal(
-                        first_index);
-                gp_Dir second_normal =
-                    triangulation->Normal(
-                        second_index);
-                gp_Dir third_normal =
-                    triangulation->Normal(
-                        third_index);
-                first_normal.Transform(transform);
-                second_normal.Transform(transform);
-                third_normal.Transform(transform);
-
-                if (face.Orientation() ==
-                    TopAbs_REVERSED) {
-                    std::swap(
-                        second,
-                        third);
-                    std::swap(
-                        second_normal,
-                        third_normal);
-                    first_normal.Reverse();
-                    second_normal.Reverse();
-                    third_normal.Reverse();
-                }
-
-                const gp_Vec first_edge{
-                    first,
-                    second};
-                const gp_Vec second_edge{
-                    first,
-                    third};
-                const gp_Vec cross =
-                    first_edge.Crossed(
-                        second_edge);
-                const double magnitude =
-                    cross.Magnitude();
-                if (!std::isfinite(magnitude) ||
-                    !(magnitude > 0.0)) {
-                    continue;
-                }
-
-                result.mesh.triangles.push_back(
-                    kernel::SolidMeshTriangle{
-                        {first.X(),
-                         first.Y(),
-                         first.Z()},
-                        {second.X(),
-                         second.Y(),
-                         second.Z()},
-                        {third.X(),
-                         third.Y(),
-                         third.Z()},
-                        {first_normal.X(),
-                         first_normal.Y(),
-                         first_normal.Z()},
-                        {second_normal.X(),
-                         second_normal.Y(),
-                         second_normal.Z()},
-                        {third_normal.X(),
-                         third_normal.Y(),
-                         third_normal.Z()}});
-            }
-        }
-
-        if (!result.mesh.valid()) {
-            result.status =
-                kernel::SolidPresentationStatus::
-                    provider_failure;
-            result.mesh.triangles.clear();
-            return result;
-        }
-
-        result.status =
-            kernel::SolidPresentationStatus::ok;
-        return result;
-    } catch (const Standard_Failure&) {
-        result.status =
-            kernel::SolidPresentationStatus::
-                provider_failure;
-        result.mesh.triangles.clear();
-        return result;
-    } catch (...) {
-        result.status =
-            kernel::SolidPresentationStatus::
-                provider_failure;
-        result.mesh.triangles.clear();
-        return result;
-    }
+    return presentationMeshForShape(
+        runtime->solid);
 }
 
 } // namespace simplesolid2::kernel_occt

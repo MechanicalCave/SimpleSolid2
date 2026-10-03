@@ -147,6 +147,9 @@ public:
     [[nodiscard]] bool setSolidPreview(
         kernel::RuntimeSolidHandle solid,
         viewer::SolidPreviewTone tone);
+    [[nodiscard]] bool setSolidPreview(
+        const kernel::SolidPresentationMesh& mesh,
+        viewer::SolidPreviewTone tone);
     void clearSolidPreview();
 
     [[nodiscard]] bool setProfileDraftPreview(
@@ -247,6 +250,9 @@ public:
 
     void setTransientProfileReveal(
         std::optional<part::ProfileId> profile_id);
+    void setTransientProfilePresentationOverride(
+        std::optional<part::ProfileId> reveal_profile_id,
+        std::optional<part::ProfileId> hide_profile_id);
 
     [[nodiscard]] bool projectSketchEntitySelection(
         const std::vector<sketch::EntityId>& selected,
@@ -360,6 +366,8 @@ private:
         profile_bindings_;
     std::optional<part::ProfileId>
         transient_profile_reveal_;
+    std::optional<part::ProfileId>
+        transient_profile_hide_;
     std::uint64_t next_presentation_token_{
         0x10000U};
     bool sketch_grip_projection_valid_{};

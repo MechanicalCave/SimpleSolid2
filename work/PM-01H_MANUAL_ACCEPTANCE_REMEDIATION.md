@@ -31,7 +31,8 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 - **H4a COMPLETED — PASS:** PR #160, exact-head Windows FULL #1346 PASS on `818ed69a37ddee3a54be7b65c819cd67ab67dcc1`; merged to main as `af1800cbcde8f7b45b5c3cb2e10795f0b76e2a66`.
 - **H4b COMPLETED — PASS:** PR #161, exact-head Windows FULL #1348 PASS on `86b5a4238635953f013ea10be35c8d21bbb07b03`; merged to main as `53bde160abeabd854d99fb96535c528f8402858f`.
 - **Documentation sync COMPLETED — PASS:** PR #163, Windows DOCS #1350 PASS; latest main `f19b52f1cdc77ef1405aeb95a1a2ed042d9c8b02`.
-- **Owner re-test:** PENDING on latest main `f19b52f1cdc77ef1405aeb95a1a2ed042d9c8b02` (runtime-equivalent to gated H4b baseline `53bde160abeabd854d99fb96535c528f8402858f`); PM-01 remains ACTIVE until consolidated manual Windows acceptance passes.
+- **Owner re-test after H4:** PARTIAL PASS; remaining H5 findings are exact operation-delta preview/Profile z-fighting and a Cut face-contact case incorrectly accepted as effect.
+- **H5 ACTIVE:** exact Add/Cut delta preview + transient source-Profile hide + volumetric no-effect Cut.
 
 ## H1 — Profile → Kernel fidelity blocker
 
@@ -119,6 +120,44 @@ Owner re-test on the merged H1/H2/H3 candidate found four remaining presentation
 - restore the pre-H2 display tessellation density after smooth shading is implemented;
 - render neutral solid triangles with smoothing continuity rather than rebuilding every triangle as an independent planar BRep face;
 - preserve sharp edges by smoothing only within compatible local normal groups; do not alter modeled geometry, tolerances or topology identity.
+
+## H5 — exact operation delta preview + volumetric no-effect
+
+Owner re-test on latest main after H4 found two remaining PM-01 acceptance defects.
+
+### H5a — exact operation delta preview
+
+Accepted presentation semantics:
+
+- committed Body remains in its normal opaque/default presentation;
+- Add preview shows only material that would actually be added: `tool - upstream Body`;
+- Cut preview shows only material that would actually be removed: `tool ∩ upstream Body`;
+- preview tone is additive blue for Add and subtractive orange for Cut;
+- when a valid solid preview is ready, the source Profile is hidden transiently to avoid coplanar z-fighting against a Body face; authored Profile visibility policy is unchanged and normal visibility returns on invalid preview, Cancel, Finish or context exit;
+- full candidate Body evaluation remains authoritative for whether Finish is legal;
+- delta preview is runtime-only derived geometry and must not enter persistence, semantic identity or topology picking.
+
+### H5b — volumetric no-effect
+
+PM-01 already requires explicit Failed for no-effect Add/Cut. H5b strengthens provider evaluation so geometric contact without removed/added volume cannot pass as a modeling effect.
+
+For Cut:
+
+- compute/check the volumetric common between upstream Body and Extrude tool;
+- face/edge/point-only contact counts as zero volumetric effect and returns `no_effect`;
+- only positive-volume intersection may continue to the Boolean Cut;
+- Finish is disabled for `no_effect` and no Feature/Undo entry may be authored.
+
+Existing post-Boolean unchanged-result checks remain a secondary invariant, not the sole no-effect detector.
+
+Acceptance regressions:
+
+- Add delta excludes the portion of tool already inside upstream Body;
+- Cut delta equals only the upstream/tool volumetric overlap;
+- Cut tool touching only a Body face is `no_effect`;
+- Cut tool touching only an edge/point is `no_effect`;
+- ordinary volumetric Cut remains accepted;
+- source Profile does not z-fight while a valid preview is active and its authored visibility state is not mutated.
 
 ## Verification sequence
 

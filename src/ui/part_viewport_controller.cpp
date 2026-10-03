@@ -538,6 +538,7 @@ void PartViewportController::setDocumentSession(
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
         transient_profile_reveal_.reset();
+        transient_profile_hide_.reset();
         solid_scene_revision_.reset();
         solid_scene_cache_.reset();
         clearSolidPreview();
@@ -567,6 +568,7 @@ void PartViewportController::clear() {
     sketch_entity_bindings_.clear();
     profile_bindings_.clear();
     transient_profile_reveal_.reset();
+    transient_profile_hide_.reset();
     solid_scene_revision_.reset();
     solid_scene_cache_.reset();
     clearSketchSelectionBoxOverlay();
@@ -895,8 +897,7 @@ bool PartViewportController::setSketchGeometryPreview(
 bool PartViewportController::setSolidPreview(
     kernel::RuntimeSolidHandle solid,
     viewer::SolidPreviewTone tone) {
-    if (viewport_ == nullptr ||
-        solid_modeling_kernel_ == nullptr ||
+    if (solid_modeling_kernel_ == nullptr ||
         solid == nullptr) {
         return false;
     }
@@ -906,14 +907,28 @@ bool PartViewportController::setSolidPreview(
             presentationMesh(
                 std::move(solid));
     if (!mesh.ok()) {
-        static_cast<void>(
-            viewport_->setSolidPreviewScene(
-                viewer::SolidPreviewScene{}));
+        if (viewport_ != nullptr) {
+            static_cast<void>(
+                viewport_->setSolidPreviewScene(
+                    viewer::SolidPreviewScene{}));
+        }
+        return false;
+    }
+    return setSolidPreview(
+        mesh.mesh,
+        tone);
+}
+
+bool PartViewportController::setSolidPreview(
+    const kernel::SolidPresentationMesh& mesh,
+    viewer::SolidPreviewTone tone) {
+    if (viewport_ == nullptr ||
+        !mesh.valid()) {
         return false;
     }
 
     const auto scene =
-        viewerSolidScene(mesh.mesh);
+        viewerSolidScene(mesh);
     if (!scene) {
         static_cast<void>(
             viewport_->setSolidPreviewScene(
@@ -1694,20 +1709,43 @@ void PartViewportController::setProfileSelectionFromTree(
 
 void PartViewportController::setTransientProfileReveal(
     std::optional<part::ProfileId> profile_id) {
-    if (profile_id &&
-        (session_ == nullptr ||
-         session_->document().findProfile(
-             *profile_id) == nullptr)) {
-        profile_id.reset();
-    }
+    setTransientProfilePresentationOverride(
+        profile_id,
+        transient_profile_hide_);
+}
+
+void PartViewportController::
+setTransientProfilePresentationOverride(
+    std::optional<part::ProfileId> reveal_profile_id,
+    std::optional<part::ProfileId> hide_profile_id) {
+    const auto sanitize =
+        [this](
+            std::optional<part::ProfileId> id) {
+            if (id &&
+                (session_ == nullptr ||
+                 session_->document().findProfile(
+                     *id) == nullptr)) {
+                id.reset();
+            }
+            return id;
+        };
+
+    reveal_profile_id =
+        sanitize(reveal_profile_id);
+    hide_profile_id =
+        sanitize(hide_profile_id);
 
     if (transient_profile_reveal_ ==
-        profile_id) {
+            reveal_profile_id &&
+        transient_profile_hide_ ==
+            hide_profile_id) {
         return;
     }
 
     transient_profile_reveal_ =
-        profile_id;
+        reveal_profile_id;
+    transient_profile_hide_ =
+        hide_profile_id;
     refreshPresentation();
 }
 
@@ -2173,6 +2211,14 @@ PartViewportController::buildProfileScene() {
 
     for (const auto& profile :
          session_->document().profiles()) {
+        const bool transient_hide =
+            transient_profile_hide_ &&
+            *transient_profile_hide_ ==
+                profile.id;
+        if (transient_hide) {
+            continue;
+        }
+
         const bool transient_reveal =
             transient_profile_reveal_ &&
             *transient_profile_reveal_ ==
