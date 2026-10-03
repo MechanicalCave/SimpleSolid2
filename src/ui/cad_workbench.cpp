@@ -941,6 +941,7 @@ void CadWorkbench::buildUi() {
             shell_);
     extrude_button_->setObjectName(
         QStringLiteral("extrudeToolButton"));
+    extrude_button_->setCheckable(true);
     shell_->editorToolsLayout().insertWidget(
         1,
         extrude_button_);
@@ -1217,6 +1218,7 @@ void CadWorkbench::buildUi() {
                 }
             }
             syncSketchInteractionUi();
+            tryCompleteExtrudeProfilePick();
             syncActionState();
         });
     viewport_controller_->setProfileSelectionChangedHandler(
@@ -1244,6 +1246,7 @@ void CadWorkbench::buildUi() {
                 }
             }
             syncSketchInteractionUi();
+            tryCompleteExtrudeProfilePick();
             syncActionState();
         });
     tree_controller_->setProfileEditHandler(
@@ -3071,8 +3074,12 @@ void CadWorkbench::buildUi() {
         &QPushButton::clicked,
         this,
         [this] {
+            if (extrude_profile_pick_active_) {
+                cancelExtrudeProfilePick();
+                return;
+            }
             static_cast<void>(
-                startExtrudeFromSelectedProfile());
+                startExtrudeTool());
         });
     QObject::connect(
         extrude_add_button_,
