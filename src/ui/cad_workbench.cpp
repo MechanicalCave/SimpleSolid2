@@ -247,8 +247,10 @@ QString formatLengthForPart(
                     unit),
                 'g',
                 12),
-            fromUtf8(
-                core::lengthUnitSuffix(unit)));
+            QString::fromLatin1(
+            core::lengthUnitSuffix(unit).data(),
+            static_cast<qsizetype>(
+                core::lengthUnitSuffix(unit).size())));
 }
 
 std::string toUtf8(const QString& value) {
@@ -3661,6 +3663,9 @@ void CadWorkbench::cancelExtrude() {
     extrude_distance_input_valid_ = false;
     if (viewport_controller_) {
         viewport_controller_->clearSolidPreview();
+        viewport_controller_->
+            setTransientProfileReveal(
+                std::nullopt);
     }
 
     syncActionState();
@@ -3972,8 +3977,27 @@ CadWorkbench::submitExtrudeCadInput(
         return {true, {}};
     }
     if (keyword == "CUT") {
-        if (document_session_->document()
-                .body().features.empty()) {
+        const auto& features =
+            document_session_->document()
+                .body().features;
+        bool cut_allowed =
+            !features.empty();
+        if (extrude_draft_->mode() ==
+                application::ExtrudeDraftMode::edit &&
+            extrude_draft_->featureId()) {
+            const auto found =
+                std::find_if(
+                    features.begin(),
+                    features.end(),
+                    [this](const part::PartFeature& feature) {
+                        return feature.id ==
+                            *extrude_draft_->featureId();
+                    });
+            cut_allowed =
+                found != features.end() &&
+                found != features.begin();
+        }
+        if (!cut_allowed) {
             return {
                 false,
                 "The first solid-producing Extrude must be ADD."};
@@ -5963,6 +5987,11 @@ void CadWorkbench::navigateToProfile(
     selected_feature_id_.reset();
     selected_body_id_.reset();
     selected_profile_id_ = profile_id;
+    if (document_tree_ != nullptr) {
+        const QSignalBlocker blocked{
+            document_tree_};
+        document_tree_->clearSelection();
+    }
     if (tree_controller_) {
         tree_controller_->setProfileSelection(
             {profile_id},
@@ -5990,6 +6019,11 @@ void CadWorkbench::navigateToFeature(
     selected_profile_id_.reset();
     selected_body_id_.reset();
     selected_feature_id_ = feature_id;
+    if (document_tree_ != nullptr) {
+        const QSignalBlocker blocked{
+            document_tree_};
+        document_tree_->clearSelection();
+    }
     if (tree_controller_) {
         tree_controller_->setFeatureSelection(
             {feature_id},
