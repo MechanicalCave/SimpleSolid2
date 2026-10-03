@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <string>
+#include <utility>
 
 using namespace simplesolid2;
 
