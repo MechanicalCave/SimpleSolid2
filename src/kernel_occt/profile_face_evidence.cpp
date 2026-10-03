@@ -29,6 +29,7 @@
 #include <TopoDS_Vertex.hxx>
 #include <TopoDS_Wire.hxx>
 #include <TopTools_ListOfShape.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
 #include <gp_Ax1.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
@@ -392,6 +393,32 @@ buildProfileFace(
         ++count;
     }
     return count;
+}
+
+void populateTopologyInventory(
+    kernel::EvidenceTopologyKindInventory& evidence,
+    const TopoDS_Shape& shape,
+    TopAbs_ShapeEnum kind) {
+    evidence.provider_occurrence_count =
+        countSubshapes(
+            shape,
+            kind);
+
+    TopTools_IndexedMapOfShape unique;
+    TopExp::MapShapes(
+        shape,
+        kind,
+        unique);
+
+    evidence.provider_unique_count =
+        static_cast<std::size_t>(
+            unique.Extent());
+
+    // PM-02P.A proves complete accounting only. Semantic promotion to
+    // Referenceable / RepresentationArtifact is intentionally owned by
+    // later PM-02P checkpoints rather than guessed here.
+    evidence.catalog.resize(
+        evidence.provider_unique_count);
 }
 
 [[nodiscard]] std::size_t countShapeOrSubshapes(
@@ -1102,6 +1129,86 @@ kernel::ExtrudeEvidence buildProfileExtrudeEvidence(
         return evidence;
     } catch (...) {
         evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::BodyTopologyInventoryEvidence
+buildExtrudeTopologyInventoryEvidence(
+    const kernel::PlanarProfileInput& input,
+    double distance) noexcept {
+    kernel::BodyTopologyInventoryEvidence evidence;
+
+    if (!input.valid() ||
+        !std::isfinite(distance) ||
+        distance == 0.0) {
+        evidence.status =
+            kernel::EvidenceStatus::invalid_input;
+        return evidence;
+    }
+
+    try {
+        const auto built =
+            buildProfileFace(input);
+        if (!built) {
+            evidence.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const gp_Vec vector{
+            input.frame.normal.x * distance,
+            input.frame.normal.y * distance,
+            input.frame.normal.z * distance};
+
+        BRepSweep_Prism sweep{
+            built->face,
+            vector,
+            false,
+            true};
+
+        const TopoDS_Shape shape =
+            sweep.Shape();
+        if (shape.IsNull()) {
+            evidence.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        const BRepCheck_Analyzer analyzer{
+            shape};
+        evidence.brep_valid =
+            analyzer.IsValid();
+        evidence.solid_count =
+            countSubshapes(
+                shape,
+                TopAbs_SOLID);
+
+        populateTopologyInventory(
+            evidence.faces,
+            shape,
+            TopAbs_FACE);
+        populateTopologyInventory(
+            evidence.edges,
+            shape,
+            TopAbs_EDGE);
+        populateTopologyInventory(
+            evidence.vertices,
+            shape,
+            TopAbs_VERTEX);
+
+        evidence.status =
+            evidence.brep_valid
+                ? kernel::EvidenceStatus::ok
+                : kernel::EvidenceStatus::invalid_brep;
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.status =
             kernel::EvidenceStatus::provider_failure;
         return evidence;
     }

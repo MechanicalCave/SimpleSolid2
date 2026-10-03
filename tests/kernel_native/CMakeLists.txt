@@ -218,6 +218,27 @@ set_tests_properties(pm01b.production_kernel PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;subsystem-part;native"
 )
 
+add_executable(pm02p_a_topology_inventory_test
+    pm02p_a_topology_inventory_test.cpp
+)
+
+target_link_libraries(pm02p_a_topology_inventory_test
+    PRIVATE
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+)
+
+target_compile_features(pm02p_a_topology_inventory_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm02p.a_topology_inventory
+    COMMAND pm02p_a_topology_inventory_test
+)
+
+set_tests_properties(pm02p.a_topology_inventory PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;native"
+)
+
 add_custom_target(ss2_tests_subsystem_kernel
     DEPENDS
         pm00a_kernel_native_smoke_test
@@ -229,6 +250,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm00a_e06_revolve_evidence_test
         pm00a_e10_numerical_policy_evidence_test
         pm01b_production_kernel_test
+        pm02p_a_topology_inventory_test
 )
 
 foreach(_forbidden_target IN ITEMS
