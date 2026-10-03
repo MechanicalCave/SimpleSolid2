@@ -27,8 +27,9 @@ next:
   - PM-00A E07 is COMPLETED — PASS for E07-01 through E07-06; accumulated source candidate 44eda36ba6bdc19d8c252831937fb86f8afabde7, Windows FULL #1306, kernel-native 24/24 PASS
   - PM-00A E08 is COMPLETED — PASS; source candidate 51a223dc7f380c8545de2238ef5d3a6ca9e7345d, Windows FULL #1311, core-only 18/18 PASS, kernel-native 25/25 PASS, desktop 84/84 PASS, false-Resolved 0
   - PM-00A E09 is COMPLETED — PASS; source candidate 018966aa143a006cdd39429a201755c54c3e7948, Windows FULL #1313, core-only 19/19 PASS, kernel-native 26/26 PASS, desktop 84/84 PASS, stale publications 0
-  - execute E10 next: tolerance/refine/healing matrix and O-11 evidence
-  - E10 must keep modeling outcomes independent of camera/pick/display settings, compare explicit refine/unify policy, fail closed on clearly invalid geometry, sweep near-threshold cases, and make modeling-semantics policy/version changes explicit
+  - PM-00A is COMPLETED — PASS; final source candidate ac34a713c6fee4a53d513bfcce2a2044ce1a0ffb, Windows FULL #1320, core-only 19/19 PASS, kernel-native 27/27 PASS, desktop 84/84 PASS, false-Resolved 0
+  - Owner review is the next legal action: work/PM-00A_PART_FEATURE_ARCHITECTURE_ADR_CANDIDATE.md plus work/PM-00B_PART_FEATURE_ARCHITECTURE_FREEZE.md
+  - keep production solid-modeling mutation inactive; PM-00B and PM-01 remain inactive until their separate explicit Owner acceptance
   - preserve E06 rule that provider periodic seam is diagnostic only and never semantic identity
   - preserve E02 stage-scoped resolution and separation of reference status from geometric failure
   - preserve E03/E04 fail-closed cardinality and provider-history-as-evidence-only rule
@@ -43,14 +44,14 @@ notes:
   - E08 completed on exact source candidate 51a223dc7f380c8545de2238ef5d3a6ca9e7345d with Windows FULL #1311 PASS. The core-only support-frame regression passed in core-only (18/18), kernel-native aggregate (25/25) and the complete desktop FULL remained 84/84 PASS. XY/XZ/YZ frames stayed deterministic across geometry edits, reordered evidence traversal and cold Save/Close/Reopen; unsupported Origin point/axes remained Unsupported; future planar-face support semantics were not invented. False-Resolved count 0.
   - E06 completed on exact source candidate 44eda36ba6bdc19d8c252831937fb86f8afabde7 with Kernel-focused #1305 PASS and Windows FULL #1306 PASS. Full 360-degree Revolve, provenance-bound semantic side resolution, non-semantic provider seam, dimension-edit stability and cold replay all passed with false-Resolved count 0.
   - E07 is now fully COMPLETED — PASS. E07-06 is supplied by E06 cold replay; accumulated kernel-native suite on #1306 is 24/24 PASS.
-  - E07 Phase 1 completed E07-01 through E07-05 using the existing cold-replay assertions executed together on source candidate 953cdca42978916754f6ae6cc68d86352aad35ac in Windows FULL #1286. Kernel-native 23/23 PASS. E07-06 remains pending E06 and the whole E07 package is not yet complete.
+  - E07 Phase 1 completed E07-01 through E07-05 on source candidate 953cdca42978916754f6ae6cc68d86352aad35ac in Windows FULL #1286, kernel-native 23/23 PASS. E07-06 was pending at that checkpoint and was later completed by E06/#1306.
   - E02 completed on exact source candidate 953cdca42978916754f6ae6cc68d86352aad35ac with Kernel-focused #1285 PASS and Windows FULL #1286 PASS. Stable stage-scoped lineage, upstream height rebuild, source-face removal, real Cut->Fillet lineage, geometric-failure separation and stage ambiguity all passed with false-Resolved count 0.
   - E02 focused #1284 exposed a whole-Cut-result edge-cardinality error; the accepted fix scopes Fillet input candidates to the already-resolved Cut face instead of choosing among geometry-similar edges in the whole Body.
   - E03/E04 completed on exact source candidate 30886e0d47a8f0bbfba5ab9048cf22fb9fa7be25 with Kernel-focused #1274 PASS and Windows FULL #1275 PASS. Split -> Ambiguous, deletion -> Missing, merge collapse -> Ambiguous without independent semantic winner, semantic winner -> Resolved/Missing, aggregate requests -> Unsupported. False-Resolved count 0.
   - E05 completed on exact source candidate 7e0d6109cf927a2e8d85d2794b5718dcc2feab22 with Windows FULL #1252 PASS. Equal/similar faces remain distinct by provenance; removed-source exact-geometry replacements remain Missing; closer decoys cannot steal identity; similarity-only evidence is Ambiguous/Unsupported and never Resolved. False-Resolved count 0.
   - Kernel-focused CI dispatcher defect found by #1248 was fixed independently in PR #120; main now forwards -NoConfigure through ss2.ps1 check while final E05 verification remained exact-head FULL.
   - E01 completed on exact source candidate 476258b74751a251c1c4fdf7dabaa03b3da63976 with Windows FULL #1228 PASS. Rectangle + Circle-hole Extrude roles, distance edit, dimension edit, cold replay and missing-source fail-closed behavior all passed with zero false Resolved.
-  - PM-00A is ACTIVE under Part Modeling v1 Roadmap v1.3 after explicit Owner acceptance on 2026-10-02.
+  - PM-00A was explicitly Owner-accepted on 2026-10-02 and is now COMPLETED — PASS after A0, E01-E10 and completion synthesis.
   - G0 Sketcher profile-authoring readiness is COMPLETED — PASS on exact candidate 16df8d1940a1f438a66cbd6964a881ba24718c0d.
   - Phase A0 completed on exact source candidate 8438cd739e55a390b1df8d4b7ddaa9e6c070e237 with Windows FULL #1206 PASS. Desktop, core-only no-Qt/no-OCCT and kernel-native Release OCCT-without-Qt all passed on that SHA.
   - A0.2 cold-model rebuild proved durable Rectangle + Circle-hole Profile -> neutral Kernel input -> OCCT evidence -> Save/Close/Reopen -> deterministic neutral input/evidence without previous runtime/provider state.
