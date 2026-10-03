@@ -262,8 +262,8 @@ QTreeWidgetItem* findProfileItem(
 
 QTreeWidgetItem* findFeatureItem(
     QTreeWidget& tree,
-    QStringView status =
-        QStringView{u"UpToDate"}) {
+    const QString& status =
+        QStringLiteral("UpToDate")) {
     const auto matches =
         tree.findItems(
             QStringLiteral("Extrude"),
@@ -274,7 +274,7 @@ QTreeWidgetItem* findFeatureItem(
         if (item != nullptr &&
             item->text(0).contains(
                 QStringLiteral("[") +
-                status.toString() +
+                status +
                 QStringLiteral("]"))) {
             return item;
         }
@@ -528,12 +528,33 @@ int main(int argc, char* argv[]) {
     CHECK(
         findFeatureItem(
             *tree,
-            QStringView{u"Suppressed"}) !=
+            QStringLiteral("Suppressed")) !=
         nullptr);
     CHECK(
         suppress_feature->text() ==
         QStringLiteral("Unsuppress Feature"));
     CHECK(!edit_feature->isEnabled());
+
+    workbench.requestUndo();
+    CHECK(
+        session.document().body()
+            .features.size() == 1U);
+    CHECK(
+        !session.document().body()
+             .features.front().suppressed);
+    CHECK(
+        session.document().body()
+            .features.front().id ==
+        feature_id_before_edit);
+    CHECK(!viewport->solid_scene.empty());
+    CHECK(viewport->profile_scene.profiles.empty());
+
+    workbench.requestRedo();
+    CHECK(
+        session.document().body()
+            .features.front().suppressed);
+    CHECK(viewport->solid_scene.empty());
+    CHECK(!viewport->profile_scene.profiles.empty());
 
     suppress_feature->click();
     CHECK(
@@ -575,6 +596,24 @@ int main(int argc, char* argv[]) {
         session.document().body()
             .features.front().id ==
         feature_id_before_edit);
+
+    workbench.requestRedo();
+    CHECK(
+        session.document().body()
+            .features.empty());
+    CHECK(viewport->solid_scene.empty());
+    CHECK(!viewport->profile_scene.profiles.empty());
+
+    workbench.requestUndo();
+    CHECK(
+        session.document().body()
+            .features.size() == 1U);
+    CHECK(
+        session.document().body()
+            .features.front().id ==
+        feature_id_before_edit);
+    CHECK(!viewport->solid_scene.empty());
+    CHECK(viewport->profile_scene.profiles.empty());
 
     // Command Line enters the same draft API and CANCEL remains non-authoring.
     profile_item =
