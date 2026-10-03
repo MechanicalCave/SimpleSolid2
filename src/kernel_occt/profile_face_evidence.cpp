@@ -611,6 +611,10 @@ referenceStatus(
 faceGeometryDiagnostics(
     const TopoDS_Face& face);
 
+[[nodiscard]] kernel::FaceGeometryDiagnostics
+faceGeometryDiagnostics(
+    const TopoDS_Face& face);
+
 [[nodiscard]] kernel::EvidenceSurfaceCarrierRecord
 surfaceCarrierRecord(
     kernel::EvidenceSurfaceCarrierRoleKind role,
