@@ -28,6 +28,8 @@ struct QtOcctRuntimeDiagnostics final {
     std::size_t sketch_rectangle_segments{};
     std::uint64_t sketch_rectangle_token_lookups{};
     std::uint64_t sketch_rectangle_token_comparisons{};
+    bool solid_committed_displayed{};
+    bool solid_preview_displayed{};
 };
 
 class QtOcctViewerWidget final

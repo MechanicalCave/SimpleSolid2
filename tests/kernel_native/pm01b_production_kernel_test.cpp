@@ -163,6 +163,29 @@ kernel::PlanarProfileInput rectangle(
     return profile;
 }
 
+kernel::PlanarProfileInput circleProfile(
+    double radius = 10.0) {
+    kernel::PlanarProfileInput profile;
+    profile.outer.boundary.push_back(
+        kernel::BoundaryUse2D{
+            kernel::Circle2{
+                {0.0, 0.0},
+                radius},
+            0.0,
+            1.0,
+            true,
+            false,
+            true,
+            kernel::BoundaryUseProvenance{
+                "outer-circle",
+                0U,
+                0U,
+                false},
+        });
+    CHECK(profile.valid());
+    return profile;
+}
+
 kernel::PlanarProfileInput rectangleWithHole() {
     auto profile =
         rectangle(
@@ -334,6 +357,25 @@ int main() {
     CHECK(holed.ok());
     CHECK(holed.solid_count == 1U);
     CHECK(resolvedSides(holed) == 5U);
+
+    // Curved-surface display quality is presentation-only but must not
+    // regress to the visibly coarse cylinder tessellation found by manual
+    // PM-01 acceptance.
+    const auto cylinder =
+        provider.extrude(
+            forward(
+                circleProfile(),
+                10.0));
+    CHECK(cylinder.ok());
+    CHECK(cylinder.solid_count == 1U);
+    CHECK(resolvedSides(cylinder) == 1U);
+    const auto cylinder_mesh =
+        provider.presentationMesh(
+            cylinder.solid);
+    CHECK(cylinder_mesh.ok());
+    CHECK(
+        cylinder_mesh.mesh.triangles.size() >=
+        160U);
 
     // Mixed Line+Arc Profile: reversing traversal must preserve the same
     // geometric upper semicircle instead of reflecting it to the lower side.

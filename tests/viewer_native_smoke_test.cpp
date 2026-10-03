@@ -100,6 +100,14 @@ int main(int argc, char* argv[]) {
                  widget.setSolidScene(
                      solid_scene);
 
+            const auto committed_solid_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 committed_solid_metrics.
+                         solid_committed_displayed &&
+                 !committed_solid_metrics.
+                          solid_preview_displayed;
+
             viewer::SolidPreviewScene
                 solid_preview;
             solid_preview.triangles =
@@ -116,7 +124,11 @@ int main(int argc, char* argv[]) {
                 widget.runtimeDiagnostics();
             ok = ok &&
                  solid_preview_metrics.
-                         update_current_viewer_calls == 1U;
+                         update_current_viewer_calls == 1U &&
+                 !solid_preview_metrics.
+                          solid_committed_displayed &&
+                 solid_preview_metrics.
+                         solid_preview_displayed;
 
             widget.resetRuntimeDiagnostics();
             ok = ok &&
@@ -132,7 +144,16 @@ int main(int argc, char* argv[]) {
 
             ok = ok &&
                  widget.setSolidPreviewScene(
-                     viewer::SolidPreviewScene{}) &&
+                     viewer::SolidPreviewScene{});
+            const auto cleared_solid_preview_metrics =
+                widget.runtimeDiagnostics();
+            ok = ok &&
+                 cleared_solid_preview_metrics.
+                         solid_committed_displayed &&
+                 !cleared_solid_preview_metrics.
+                          solid_preview_displayed;
+
+            ok = ok &&
                  widget.setSolidScene(
                      viewer::SolidScene{});
 
