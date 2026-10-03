@@ -5469,6 +5469,9 @@ void CadWorkbench::clearActiveContext() {
     selected_profile_id_.reset();
     selected_feature_id_.reset();
     selected_body_id_.reset();
+    part_evaluation_revision_.reset();
+    body_evaluation_status_.reset();
+    feature_evaluation_statuses_.clear();
     profile_name_->clear();
     profile_identity_->clear();
     profile_source_->clear();
@@ -5765,12 +5768,14 @@ void CadWorkbench::refreshProfileProperties(
 void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
     if (tree_controller_ == nullptr ||
         document_session_ == nullptr) {
+        part_evaluation_revision_.reset();
+        body_evaluation_status_.reset();
+        feature_evaluation_statuses_.clear();
         return;
     }
 
-    std::vector<FeatureTreeEvaluationEntry>
-        entries;
-    part::BodyEvaluationStatus body_status =
+    feature_evaluation_statuses_.clear();
+    auto body_status =
         document_session_->document()
                 .body().features.empty()
             ? part::BodyEvaluationStatus::empty
@@ -5784,25 +5789,25 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                 *solid_modeling_kernel_);
         body_status =
             evaluation.body_status;
-        entries.reserve(
+        feature_evaluation_statuses_.reserve(
             evaluation.features.size());
         for (const auto& feature :
              evaluation.features) {
-            entries.push_back(
-                FeatureTreeEvaluationEntry{
+            feature_evaluation_statuses_.push_back(
+                FeatureEvaluationUiState{
                     feature.feature_id,
                     feature.status,
                     feature.diagnostic});
         }
     } else {
-        entries.reserve(
+        feature_evaluation_statuses_.reserve(
             document_session_->document()
                 .body().features.size());
         for (const auto& feature :
              document_session_->document()
                  .body().features) {
-            entries.push_back(
-                FeatureTreeEvaluationEntry{
+            feature_evaluation_statuses_.push_back(
+                FeatureEvaluationUiState{
                     feature.id,
                     feature.suppressed
                         ? part::FeatureEvaluationStatus::
@@ -5812,6 +5817,25 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                     part::FeatureEvaluationDiagnosticCode::
                         none});
         }
+    }
+
+    part_evaluation_revision_ =
+        document_session_->document()
+            .revision();
+    body_evaluation_status_ =
+        body_status;
+
+    std::vector<FeatureTreeEvaluationEntry>
+        entries;
+    entries.reserve(
+        feature_evaluation_statuses_.size());
+    for (const auto& feature :
+         feature_evaluation_statuses_) {
+        entries.push_back(
+            FeatureTreeEvaluationEntry{
+                feature.feature_id,
+                feature.status,
+                feature.diagnostic});
     }
 
     tree_controller_->setEvaluationSnapshot(
@@ -5837,19 +5861,20 @@ void CadWorkbench::refreshBodyProperties(
                 document_session_->document()
                     .body().features.size())));
 
-    auto status =
+    const auto current_revision =
         document_session_->document()
-                .body().features.empty()
-            ? part::BodyEvaluationStatus::empty
-            : part::BodyEvaluationStatus::
-                  unavailable;
-    if (solid_modeling_kernel_ != nullptr) {
-        status =
-            part::evaluatePart(
-                document_session_->document(),
-                *solid_modeling_kernel_)
-                .body_status;
-    }
+            .revision();
+    const auto status =
+        part_evaluation_revision_ &&
+                *part_evaluation_revision_ ==
+                    current_revision &&
+                body_evaluation_status_
+            ? *body_evaluation_status_
+            : (document_session_->document()
+                       .body().features.empty()
+                   ? part::BodyEvaluationStatus::empty
+                   : part::BodyEvaluationStatus::
+                         unavailable);
     body_status_->setText(
         bodyEvaluationStatusText(status));
     properties_stack_->setCurrentWidget(
@@ -5945,17 +5970,28 @@ void CadWorkbench::refreshFeatureProperties(
     auto diagnostic =
         part::FeatureEvaluationDiagnosticCode::
             none;
-    if (solid_modeling_kernel_ != nullptr) {
-        const auto evaluation =
-            part::evaluatePart(
-                document_session_->document(),
-                *solid_modeling_kernel_);
-        if (const auto* item =
-                evaluation.findFeature(
-                    feature_id)) {
-            status = item->status;
+    if (part_evaluation_revision_ &&
+        *part_evaluation_revision_ ==
+            document_session_->document()
+                .revision()) {
+        const auto found =
+            std::find_if(
+                feature_evaluation_statuses_
+                    .begin(),
+                feature_evaluation_statuses_
+                    .end(),
+                [feature_id](
+                    const FeatureEvaluationUiState&
+                        item) {
+                    return item.feature_id ==
+                           feature_id;
+                });
+        if (found !=
+            feature_evaluation_statuses_
+                .end()) {
+            status = found->status;
             diagnostic =
-                item->diagnostic;
+                found->diagnostic;
         }
     }
     feature_status_->setText(

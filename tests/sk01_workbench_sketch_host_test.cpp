@@ -3108,13 +3108,23 @@ int main(int argc, char* argv[]) {
     auto* root =
         tree->topLevelItem(0);
     CHECK(root != nullptr);
-    CHECK(root->childCount() == 2);
+    CHECK(root->childCount() == 3);
+    QTreeWidgetItem* sketches_node = nullptr;
+    for (int index = 0;
+         index < root->childCount();
+         ++index) {
+        auto* item = root->child(index);
+        if (item != nullptr &&
+            item->text(0) ==
+                QStringLiteral("Sketches")) {
+            sketches_node = item;
+            break;
+        }
+    }
+    CHECK(sketches_node != nullptr);
+    CHECK(sketches_node->childCount() == 1);
     CHECK(
-        root->child(1)->text(0) ==
-        QStringLiteral("Sketches"));
-    CHECK(root->child(1)->childCount() == 1);
-    CHECK(
-        root->child(1)->child(0)->text(0) ==
+        sketches_node->child(0)->text(0) ==
         QStringLiteral("Sketch 1"));
 
     const auto authored_after_create =
@@ -3179,7 +3189,6 @@ int main(int argc, char* argv[]) {
             viewport->scene().grid->v_axis,
             0.0, 1.0, 0.0));
 
-    auto* sketches_node = root->child(1);
     CHECK(sketches_node != nullptr);
     auto* sketch_item = sketches_node->child(0);
     CHECK(sketch_item != nullptr);

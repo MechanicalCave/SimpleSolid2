@@ -15,6 +15,7 @@
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <vector>
 
 class QCheckBox;
 class QComboBox;
@@ -256,6 +257,14 @@ private:
         const application::DocumentSessionDiagnostic& diagnostic);
     void setStatusText(const QString& message);
 
+    struct FeatureEvaluationUiState final {
+        part::FeatureId feature_id;
+        part::FeatureEvaluationStatus status{
+            part::FeatureEvaluationStatus::blocked};
+        part::FeatureEvaluationDiagnosticCode diagnostic{
+            part::FeatureEvaluationDiagnosticCode::none};
+    };
+
     application::DocumentSession* document_session_{};
     std::filesystem::path workspace_root_;
     ViewportFactory viewport_factory_;
@@ -334,6 +343,12 @@ private:
         selected_feature_id_;
     std::optional<part::BodyId>
         selected_body_id_;
+    std::optional<core::DocumentRevision>
+        part_evaluation_revision_;
+    std::optional<part::BodyEvaluationStatus>
+        body_evaluation_status_;
+    std::vector<FeatureEvaluationUiState>
+        feature_evaluation_statuses_;
     QLineEdit* number_{};
     QLineEdit* title_{};
     QPlainTextEdit* description_{};
