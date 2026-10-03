@@ -1,7 +1,7 @@
 # PM-00A — Part Modeling Architecture Recommendations
 
 **Status:** OWNER REVIEW COMPLETED — ACCEPTED VIA ADR-0014 ON 2026-10-03  
-**Decision class:** D2 proposals only; not accepted architecture  
+**Decision class:** D2 evidence synthesis; accepted normative architecture is ADR-0014  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.3  
 **Evidence contract:** `work/PM-00A_PART_MODELING_ARCHITECTURE_EVIDENCE_GATE.md`  
@@ -178,7 +178,7 @@ Owning package contracts may narrow this matrix. Expanding it requires explicit 
 | stale revision/session/request completion | rejected publication; never current |
 | geometry similarity only | cannot produce Resolved |
 
-## 11. Risks / counterarguments for Owner review
+## 11. Risks / counterarguments
 
 - Explicit refine/unify can reduce technical topology but can also collapse distinctions; O-05 must remain authoritative and regressions must accompany every operation using the policy.
 - Rejecting no-effect features is simpler and cleaner but may feel stricter than some CAD products; accepting them would require a clear semantic reason rather than provider convenience.
