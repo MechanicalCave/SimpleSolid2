@@ -17,6 +17,7 @@
 #include <iomanip>
 #include <iostream>
 #include <string_view>
+#include <type_traits>
 #include <vector>
 
 using namespace simplesolid2;
@@ -58,6 +59,18 @@ struct PresentationSettings final {
     bool osnap_glyphs{};
     int projection_mode{};
 };
+
+using ExtrudeEvidenceFunction =
+    kernel::ExtrudeEvidence (*)(
+        const kernel::PlanarProfileInput&,
+        double) noexcept;
+
+static_assert(
+    std::is_same_v<
+        decltype(
+            &kernel_occt::
+                buildProfileExtrudeEvidence),
+        ExtrudeEvidenceFunction>);
 
 [[nodiscard]] std::size_t countSubshapes(
     const TopoDS_Shape& shape,
@@ -320,6 +333,11 @@ int main() {
     CHECK(adjacent_refined.brep_valid);
     CHECK(adjacent_refined.solid_count == 1U);
     CHECK(
+        adjacent_raw.face_count !=
+            adjacent_refined.face_count ||
+        adjacent_raw.edge_count !=
+            adjacent_refined.edge_count);
+    CHECK(
         exact_no_refine.version !=
         exact_refine.version);
 
@@ -349,6 +367,10 @@ int main() {
             1.0e-3,
         };
 
+    constexpr double
+        measured_provider_profile_limit =
+            1.0e-7;
+
     for (const auto gap : profile_gaps) {
         const auto input =
             rectangleWithClosingGap(gap);
@@ -361,7 +383,33 @@ int main() {
                 input);
         CHECK(first == second);
         printProfile(gap, first);
+
+        if (gap <=
+            measured_provider_profile_limit) {
+            CHECK(first.ok());
+            CHECK(first.face_count == 1U);
+            CHECK(first.wire_count == 1U);
+            CHECK(first.edge_count == 4U);
+        } else {
+            CHECK(
+                first.status ==
+                kernel::EvidenceStatus::
+                    invalid_brep);
+            CHECK(!first.brep_valid);
+        }
     }
+
+    // E10-05: a clearly non-closed semantic boundary is not rescued by
+    // escalating tolerance. The provider returns invalid B-Rep evidence.
+    const auto clearly_invalid =
+        kernel_occt::buildProfileFaceEvidence(
+            rectangleWithClosingGap(
+                1.0e-3));
+    CHECK(
+        clearly_invalid.status ==
+        kernel::EvidenceStatus::
+            invalid_brep);
+    CHECK(!clearly_invalid.brep_valid);
 
     // Explicit Boolean fuzzy-policy sweep. This is measurement only: the
     // sampled values are candidates, not accepted Product tolerances.
@@ -387,12 +435,23 @@ int main() {
             1.0e-5,
         };
 
+    constexpr double
+        measured_provider_boolean_limit =
+            1.0e-7;
+
     for (const auto fuzzy :
          fuzzy_candidates) {
         const EvidencePolicy policy{
-            "e10-measure-fuzzy",
+            fuzzy == 0.0
+                ? "e10-policy-no-added-fuzzy"
+                : "e10-policy-explicit-fuzzy-candidate",
             fuzzy,
             false};
+        const double observed_join_limit =
+            std::max(
+                measured_provider_boolean_limit,
+                fuzzy);
+
         for (const auto gap :
              boolean_gaps) {
             const auto first =
@@ -409,12 +468,38 @@ int main() {
                 gap,
                 policy,
                 first);
+
+            CHECK(first.provider_done);
+            CHECK(first.brep_valid);
+            const std::size_t
+                expected_solid_count =
+                    gap <= observed_join_limit
+                        ? 1U
+                        : 2U;
+            CHECK(
+                first.solid_count ==
+                expected_solid_count);
         }
     }
 
-    // This commit is intentionally a measurement-only probe. Failing here
-    // makes ctest --output-on-failure publish the measured matrix in CI.
-    std::cerr
-        << "E10_MEASUREMENT_ONLY intentional_stop=1\n";
-    return EXIT_FAILURE;
+    // E10-07: policy identity is explicit in the evidence. The same authored
+    // geometry under a changed refine/fuzzy candidate is never described as
+    // the same unnamed modeling policy.
+    CHECK(
+        exact_no_refine.version ==
+        std::string_view{
+            "e10-measure-exact-v0"});
+    CHECK(
+        exact_refine.version ==
+        std::string_view{
+            "e10-measure-refine-v1"});
+
+    std::cout
+        << "PM00A_E10_PASS rows=E10-01..E10-07"
+        << " provider_profile_transition=1e-7_to_1e-6"
+        << " provider_boolean_transition=1e-7_to_1e-6"
+        << " ss2_added_fuzzy=0"
+        << " healing=none"
+        << '\n';
+    return EXIT_SUCCESS;
 }
