@@ -305,6 +305,56 @@ struct BooleanSubshapeHistoryEvidence final {
 };
 
 enum class SurfaceBooleanProbeScenario {
+    add_trim,
+    cut_trim_and_expose,
+    cut_split,
+    cut_delete,
+};
+
+// PM-02P.B evidence-only distinction between one bounded Face realization and
+// the semantic Surface carrier that may survive trimming/splitting. Nothing
+// here is a durable selector or production topology API.
+struct SurfaceBooleanLineageEvidence final {
+    ShapeEvidence shape;
+    BodyTopologyInventoryEvidence topology;
+
+    BooleanSubshapeHistoryEvidence source_face_history;
+    ReferenceStatus strict_face_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus surface_status{
+        ReferenceStatus::unsupported};
+    std::size_t surface_realization_count{};
+    FaceSurfaceKind surface_kind{
+        FaceSurfaceKind::other};
+    bool all_surface_realizations_match_kind{false};
+    std::optional<Frame3> source_frame;
+    std::optional<Frame3> resolved_surface_frame;
+
+    // Used by the Cut pocket scenario to prove that a semantic tool Surface
+    // can become a current material Body boundary with its own canonical
+    // frame. Unsupported means the scenario does not request this evidence.
+    BooleanSubshapeHistoryEvidence tool_surface_history;
+    ReferenceStatus tool_surface_status{
+        ReferenceStatus::unsupported};
+    std::size_t tool_surface_realization_count{};
+    FaceSurfaceKind tool_surface_kind{
+        FaceSurfaceKind::other};
+    bool all_tool_realizations_match_kind{false};
+    std::optional<Frame3> tool_source_frame;
+    std::optional<Frame3> resolved_tool_surface_frame;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return shape.ok() &&
+               shape.solid_count == 1U &&
+               topology.complete();
+    }
+
+    friend bool operator==(
+        const SurfaceBooleanLineageEvidence&,
+        const SurfaceBooleanLineageEvidence&) = default;
+};
+
+enum class SurfaceBooleanProbeScenario {
     attached_add_trim,
     cut_trim,
     cut_split,
