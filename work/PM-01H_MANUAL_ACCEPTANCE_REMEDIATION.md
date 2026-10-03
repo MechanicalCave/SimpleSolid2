@@ -1,6 +1,6 @@
 # PM-01H — Manual Acceptance Remediation
 
-**Status:** ACTIVE REMEDIATION CHECKPOINT  
+**Status:** COMPLETED — PASS; REMEDIATION CLOSED  
 **Parent Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
 **Authority:** ADR-0014 + ADR-0015  
 **Baseline:** `ede4e6050d09bb492101eb41cd35464565a2c841`
@@ -20,7 +20,7 @@ Observed supported-profile matrix:
 - cylindrical presentation is visibly faceted/flat-shaded;
 - invalid/failed model state is not sufficiently visible in Tree.
 
-PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old candidate, not acceptance of these newly discovered defects.
+At the time of this trigger PM-01 remained ACTIVE. The earlier runtime/docs gates were evidence for the pre-remediation candidate, not acceptance of the defects recorded below. This remediation checkpoint is now closed by the completed H1-H7 evidence and final Owner PASS.
 
 ## Progress
 
@@ -40,7 +40,8 @@ PM-01 remains ACTIVE. The previous runtime/docs gates are evidence for the old c
 - **Owner H6 re-test:** PASS for Add/Cut preview color isolation on latest main; a separate H7 history-prefix presentation defect was discovered during broader manual use.
 - **H7 COMPLETED — PASS:** PR #173, exact-head Windows FULL #1369 PASS on `aaab5610f8f7c6fa3036d8123849523d06dd66e1`; merged to main as `48377c5a5a81673e901e22d3534d3f049912d2a6`.
 - **H7 documentation sync COMPLETED — PASS:** PR #174, Windows DOCS #1370 PASS; latest main `2e798844621191d002f209c6b35bd2e2a083d730`.
-- **Owner H7 re-test:** PENDING on latest main `2e798844621191d002f209c6b35bd2e2a083d730`; only the reproduced higher-Feature invalidation / lower-history prefix case remains before PM-01 governance completion.
+- **Owner H7 re-test:** PASS on `afecfa9884bfeb53d5d0bb84ff110b3b280cf8d2`; lower-history current-revision prefix remains visible after higher-Feature invalidation, first-Feature failure remains empty, and repair restores the complete Body.
+- **PM-01H result:** COMPLETED — PASS. Owner reports no remaining PM-01 defects at this acceptance checkpoint.
 
 ## H1 — Profile → Kernel fidelity blocker
 

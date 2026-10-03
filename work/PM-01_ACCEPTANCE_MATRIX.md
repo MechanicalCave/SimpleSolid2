@@ -1,6 +1,6 @@
 # PM-01 — Final Acceptance Matrix
 
-**Status:** PENDING OWNER MANUAL WINDOWS ACCEPTANCE  
+**Status:** COMPLETED — PASS  
 **Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
 **Architecture:** ADR-0014 + ADR-0015  
 **Runtime baseline merged to main:** `48377c5a5a81673e901e22d3534d3f049912d2a6`  
@@ -29,7 +29,7 @@
 | Manual-remediation H6: independent committed-Body / Add / Cut OCCT shading aspects; preview replacement/clear cannot recolor Body | PR #169, Windows FULL #1364 | PASS |
 | Manual-remediation H7: current-revision resolved lower-history prefix remains visible when a higher active Feature fails/blocks; final Body remains Unavailable | PR #173, Windows FULL #1369 | PASS |
 | As-built docs + PL/EN product docs + generated Product Browser | PR #163/#166/#171/#174, Windows DOCS #1350/#1360/#1367/#1370 | PASS |
-| Supported Windows integrated manual workflow | Section 3 below | PENDING OWNER |
+| Supported Windows integrated manual workflow | Owner manual Windows acceptance on `afecfa9884bfeb53d5d0bb84ff110b3b280cf8d2` | PASS |
 
 The runtime acceptance matrix has zero known false-Resolved semantic topology outcomes. PM-01 does not authorize face/edge topology picking, provider-native durable identity, adaptive fuzzy healing, multi-body or later Part-v1 operations.
 
@@ -114,8 +114,8 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 
 ## 4. Manual result
 
-**Owner Windows result:** PENDING RETEST — H7 automated PASS  
+**Owner Windows result:** PASS — no remaining PM-01 defects found at this acceptance checkpoint  
 **Date:** 2026-10-03  
-**Last Owner-tested candidate:** `540f24a8f89fcb30ba1de6d8273e50f27db93f20`  
-**Next Owner-test candidate:** `2e798844621191d002f209c6b35bd2e2a083d730` (runtime baseline `48377c5a5a81673e901e22d3534d3f049912d2a6`)  
-**Notes:** H6 preview color isolation is manually confirmed PASS. H7 current-revision lower-history prefix presentation passed exact-head Windows FULL #1369; H7 internal + PL/EN Product docs/Product Browser passed Windows DOCS #1370. Only the focused Owner Windows retest of higher-Feature invalidation remains before PM-01 governance completion.
+**Last Owner-tested candidate:** `afecfa9884bfeb53d5d0bb84ff110b3b280cf8d2`  
+**Next Owner-test candidate:** none — PM-01 accepted for governance completion  
+**Notes:** Owner reports PASS for the complete current PM-01 acceptance checkpoint on `afecfa9884bfeb53d5d0bb84ff110b3b280cf8d2`, including H7 higher-Feature invalidation / lower-history prefix presentation. Runtime evidence remains Windows FULL #1369 on `aaab5610f8f7c6fa3036d8123849523d06dd66e1`; H7 docs/Product Browser evidence remains Windows DOCS #1370. No PM-01 defect remains open at closure.
