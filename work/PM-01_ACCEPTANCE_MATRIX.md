@@ -1,10 +1,10 @@
 # PM-01 — Final Acceptance Matrix
 
-**Status:** PENDING H5 REMEDIATION + OWNER MANUAL WINDOWS ACCEPTANCE  
+**Status:** PENDING H5 DOCS SYNC + OWNER MANUAL WINDOWS ACCEPTANCE  
 **Work Contract:** `work/PM-01_FIRST_SOLID_VERTICAL_SLICE.md`  
 **Architecture:** ADR-0014 + ADR-0015  
-**Runtime baseline merged to main:** `53bde160abeabd854d99fb96535c528f8402858f`  
-**Latest runtime exact-head gate:** Windows FULL #1348 — PASS on `86b5a4238635953f013ea10be35c8d21bbb07b03`
+**Runtime baseline merged to main:** `eac7d26973949bc3275fe6b4bd4d68c1c54cdc6c`  
+**Latest runtime exact-head gate:** Windows FULL #1359 — PASS on `0fd15f815b1913e144070e508e7a565dca33fae5`
 
 ## 1. Automated acceptance coverage
 
@@ -25,6 +25,7 @@
 | Manual-remediation H3: Tree/default-distance/command-first Extrude UX | PR #157, Windows FULL #1343 | PASS |
 | Manual-remediation H4a: debounced typing + live Tree diagnostics/warning icons | PR #160, Windows FULL #1346 | PASS |
 | Manual-remediation H4b: operation-only preview + nodal-normal smooth shading + restored mesh density | PR #161, Windows FULL #1348 | PASS |
+| Manual-remediation H5: exact Add/Cut material delta preview, transient Profile hide, volumetric zero-effect Cut rejection | PR #165, Windows FULL #1359 | PASS |
 | As-built docs + PL/EN product docs + generated Product Browser | PR #163, Windows DOCS #1350 | PASS |
 | Supported Windows integrated manual workflow | Section 3 below | PENDING OWNER |
 
@@ -111,7 +112,7 @@ Use a clean supported Windows launch and a normal Project/Part. Record PASS/FAIL
 
 ## 4. Manual result
 
-**Owner Windows result:** PARTIAL PASS — H5 remediation required  
+**Owner Windows result:** PARTIAL PASS — H5 runtime remediation complete; final retest pending  
 **Date:** 2026-10-03  
 **Final tested candidate:** `ef2877fb75cb3745119fc44dbcd018734bf2e044`  
-**Notes:** H1-H4b substantially improved the workflow, but Owner re-test still found two H5 blockers: raw-tool preview visually covers unaffected Body regions/source Profile, and a zero-volume Cut contact can be accepted. H5 implements exact Add/Cut operation delta preview, transient source-Profile hide during valid preview, and volumetric Cut no-effect rejection. A new exact-head runtime gate and Owner retest are required before PM-01 completion.
+**Notes:** H1-H4b substantially improved the workflow, but Owner re-test still found two H5 blockers: raw-tool preview visually covered unaffected Body regions/source Profile, and a zero-volume Cut contact could be accepted. H5 now implements exact Add/Cut material delta preview, transient source-Profile hide during valid preview, and volumetric Cut no-effect rejection. Exact-head Windows FULL #1359 PASS. Final Owner retest is still required before PM-01 completion.
