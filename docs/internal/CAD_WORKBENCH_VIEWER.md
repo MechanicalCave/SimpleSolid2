@@ -281,7 +281,9 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 
 The concrete Qt/OCCT provider presents the current derived Body solid and a separately replaceable transient Extrude preview alongside Origin, Sketch and Profile scenes.
 
-The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude preview is runtime-only and is cleared on Finish, Cancel, context replacement or stale/failed draft. Feature edit may request a transient source-Profile reveal without changing the Profile visibility policy.
+The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude preview is runtime-only and contains the complete evaluated candidate Body. While that preview is active, the concrete provider erases the committed Body presentation and shows exactly one candidate Body; this prevents identical Add faces from z-fighting and prevents the old Body from masking geometry removed by Cut. Clearing preview on Finish, Cancel, context replacement or stale/failed draft restores the committed presentation. Feature edit may request a transient source-Profile reveal without changing the Profile visibility policy.
+
+Solid tessellation quality is provider-private presentation policy. PM-01H tightened the display-only OCCT meshing parameters for visibly smoother cylindrical surfaces without changing modeling tolerances, B-Rep meaning or semantic references. The neutral solid mesh normals remain presentation data.
 
 PM-01 solid/preview presentation carries no durable semantic topology identity. Face/edge subshape picking is deliberately absent. Existing provider selection/detection cleanup rules still apply before presentation replacement/removal.
 
