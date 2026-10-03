@@ -565,11 +565,13 @@ Responsive transitions are presentation-only: they do not mutate the Document, r
 
 The Workbench binds exactly one active `DocumentSession` at a time. Switching Document Tabs replaces the active Part/Tree/Properties/Viewer projection and invalidates stale CAD-input/edit context.
 
-For Part, Document Tree now projects the built-in Origin, source-Sketch/Profile hierarchy and one Body with ordered Feature rows. Body/Feature rows carry semantic IDs and current derived evaluation status, but Tree item addresses are never CAD identity.
+For Part, Document Tree projects the built-in Origin and source-Sketch/Profile hierarchy before the single Body with its ordered Feature rows, so the visual order reads from authored inputs to modeled result. Body/Feature rows carry semantic IDs and current derived evaluation status, but Tree item addresses are never CAD identity. Invalid Profiles and Failed/Blocked Features retain explicit status labels and receive bold visual emphasis; Suppressed remains explicitly labeled and italic. These cues are projections of semantic/evaluation state, not new authored flags.
 
 Properties can inspect Body status/Feature count and Feature name, FeatureId, evaluation status/diagnostic, operation, extent, distance/direction and source Profile/Sketch. Profile Properties expose consuming Features. Navigation between Feature and Profile changes runtime selection only.
 
-Feature lifecycle actions from Properties and Tree share the same semantic handlers: Edit Extrude, Suppress/Unsuppress and Delete. They are disabled while an incompatible active Sketch/Extrude modeling context owns input.
+Feature lifecycle actions from Properties and Tree share the same semantic handlers: Edit Extrude, Suppress/Unsuppress and Delete. They are disabled while an incompatible active Sketch/Extrude modeling context owns input, including the runtime-only command-first Extrude Profile-selection state.
+
+Create Extrude supports both selection-first and command-first entry. Without an admissible preselection, Extrude owns an explicit CAD-input context that waits for exactly one valid Profile from Tree/viewport; Esc, toolbar toggle or Command Line CANCEL exits without mutation. The pick context has its own runtime generation so stale input cannot cross activations. Once a valid Profile is accepted, the ordinary revision-bound `ExtrudeDraft` starts and the product UI applies a 10 mm canonical default distance. The underlying application draft API remains capable of incomplete input and does not own that UI default.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
 ## Origin and reference scene
@@ -825,7 +827,9 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 
 The concrete Qt/OCCT provider presents the current derived Body solid and a separately replaceable transient Extrude preview alongside Origin, Sketch and Profile scenes.
 
-The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude preview is runtime-only and is cleared on Finish, Cancel, context replacement or stale/failed draft. Feature edit may request a transient source-Profile reveal without changing the Profile visibility policy.
+The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude preview is runtime-only and contains the complete evaluated candidate Body. While that preview is active, the concrete provider erases the committed Body presentation and shows exactly one candidate Body; this prevents identical Add faces from z-fighting and prevents the old Body from masking geometry removed by Cut. Clearing preview on Finish, Cancel, context replacement or stale/failed draft restores the committed presentation. Feature edit may request a transient source-Profile reveal without changing the Profile visibility policy.
+
+Solid tessellation quality is provider-private presentation policy. PM-01H tightened the display-only OCCT meshing parameters for visibly smoother cylindrical surfaces without changing modeling tolerances, B-Rep meaning or semantic references. The neutral solid mesh normals remain presentation data.
 
 PM-01 solid/preview presentation carries no durable semantic topology identity. Face/edge subshape picking is deliberately absent. Existing provider selection/detection cleanup rules still apply before presentation replacement/removal.
 
@@ -2548,16 +2552,16 @@ Profile remains Part semantics based on authored 2D geometry and is now a durabl
 
 Every current Part has exactly one durable **Body**. The Body may be empty or contain an ordered Feature history. The only production Feature family currently available is **Extrude**.
 
-To create an Extrude, select one valid Profile and use **Extrude** or enter `EXTRUDE`. The first Feature that creates a solid in an Empty Body must be **Add**. Later Extrudes may be **Add** or **Cut**. Every successful stage must still produce exactly one solid; detached Add, no-effect Add/Cut, a Cut that removes the whole solid, or a multi-solid result is rejected explicitly and is not committed.
+Extrude supports two equivalent activation paths. **Selection-first:** select exactly one valid Profile and use **Extrude** or enter `EXTRUDE`. **Command-first:** start **Extrude** with no Profile selected; the Workbench enters an explicit selection state and waits for one valid Profile chosen in Tree or viewport. Clicking Extrude again, pressing **Esc**, or entering `CANCEL` leaves that state without authored mutation. The first Feature that creates a solid in an Empty Body must be **Add**. Later Extrudes may be **Add** or **Cut**. Every successful stage must still produce exactly one solid; detached Add, no-effect Add/Cut, a Cut that removes the whole solid, or a multi-solid result is rejected explicitly and is not committed.
 
 Available extent semantics:
 
 - **OneSide** — Length is the full distance from the Profile plane; **Reverse** switches direction relative to the support normal;
 - **Midplane** — Length is the total symmetric distance across both sides of the Profile plane; Reverse is not meaningful and is not authored.
 
-Changing a valid parameter updates the dynamic preview. **Finish** performs exactly one durable commit and creates one Undo step. **Cancel**, invalid input or stale preview/context creates no partial authored change. Editing an existing Extrude from Properties or Tree uses the same draft, preserves `FeatureId` and again requires one Finish.
+A new Create Extrude starts with a default **10 mm** canonical distance, displayed in the current Part unit, so a valid Profile immediately shows preview and direction. Changing a valid parameter updates the dynamic preview. During preview the Viewer presents one complete candidate result Body instead of overlaying it on the committed Body; Add therefore does not duplicate shared faces and Cut shows the actual post-subtraction shape. **Finish** performs exactly one durable commit and creates one Undo step. **Cancel**, invalid input or stale preview/context creates no partial authored change and restores committed Body presentation. Editing an existing Extrude from Properties or Tree uses the same draft, preserves `FeatureId` and again requires one Finish.
 
-Document Tree shows the Body and ordered Features with their current status. Feature Properties shows `FeatureId`, status/diagnostic, Add/Cut, extent, Length, direction and the source Profile/Sketch. Navigation works Feature → Profile and Profile → consuming Feature without changing ownership: the Profile remains owned by its Sketch.
+Document Tree shows Origin and source Sketch/Profile objects first, with the **Body** and its ordered Features logically below those sources. Invalid Profiles and Failed/Blocked Features keep explicit status text and receive stronger visual emphasis in Tree; Suppressed remains explicitly labeled and italic. Feature Properties shows `FeatureId`, status/diagnostic, Add/Cut, extent, Length, direction and the source Profile/Sketch. Navigation works Feature → Profile and Profile → consuming Feature without changing ownership: the Profile remains owned by its Sketch.
 
 **Suppress Feature** preserves FeatureId and parameters while removing the Feature contribution from current evaluation. **Unsuppress** reevaluates from current authored state. **Delete Feature** removes that Feature, preserves its source Profile and does not rewrite remaining dependencies; downstream Features may become Failed/Blocked. Suppress, Unsuppress and Delete participate in Undo/Redo.
 
@@ -3233,16 +3237,16 @@ Profile pozostaje semantyką Part opartą na geometrii 2D i jest trwałym źród
 
 Każdy obecny Part ma dokładnie jeden trwały **Body**. Body może być pusty albo zawierać uporządkowaną historię Feature. Obecnie jedyną dostępną rodziną Feature jest **Extrude**.
 
-Aby utworzyć Extrude, wybierz jeden poprawny Profile i użyj **Extrude** albo wpisz `EXTRUDE`. Pierwszy Feature tworzący bryłę w pustym Body musi być **Add**. Kolejne Extrude mogą być **Add** albo **Cut**. Każdy poprawny etap musi nadal dawać dokładnie jedną bryłę; detached Add, no-effect Add/Cut, wycięcie do zera albo wynik wielobryłowy są odrzucane jawnie i nie są zatwierdzane.
+Extrude obsługuje dwie równorzędne drogi aktywacji. **Selection-first:** wybierz dokładnie jeden poprawny Profile i użyj **Extrude** albo wpisz `EXTRUDE`. **Command-first:** uruchom **Extrude** bez zaznaczonego Profile; Workbench przechodzi wtedy do jawnego stanu wyboru i czeka na jeden poprawny Profile wskazany w Tree albo viewport. Ponowne kliknięcie Extrude, **Esc** lub `CANCEL` opuszcza ten stan bez authored mutation. Pierwszy Feature tworzący bryłę w pustym Body musi być **Add**. Kolejne Extrude mogą być **Add** albo **Cut**. Każdy poprawny etap musi nadal dawać dokładnie jedną bryłę; detached Add, no-effect Add/Cut, wycięcie do zera albo wynik wielobryłowy są odrzucane jawnie i nie są zatwierdzane.
 
 Dostępne extent semantics:
 
 - **OneSide** — Length jest pełną długością od płaszczyzny Profile; **Reverse** zmienia kierunek względem normalnej supportu;
 - **Midplane** — Length jest całkowitą długością symetryczną po obu stronach płaszczyzny; Reverse nie ma tutaj znaczenia i nie jest zapisywany.
 
-Zmiana poprawnego parametru aktualizuje dynamiczny preview. **Finish** wykonuje dokładnie jedno trwałe zatwierdzenie i tworzy jeden krok Undo. **Cancel**, niepoprawne dane albo stale preview/context nie zapisują częściowej zmiany. Edycja istniejącego Extrude przez Properties lub Tree używa tego samego draftu, zachowuje `FeatureId` i ponownie wymaga jednego Finish.
+Nowy Create Extrude rozpoczyna się z domyślnym dystansem **10 mm** w kanonicznej geometrii, prezentowanym w bieżącej jednostce Parta, dzięki czemu poprawny Profile od razu otrzymuje preview i widoczny kierunek. Zmiana poprawnego parametru aktualizuje dynamiczny preview. Podczas preview Viewer pokazuje jeden kompletny kandydat wynikowego Body zamiast nakładać go na committed Body; dzięki temu Add nie dubluje wspólnych powierzchni, a Cut pokazuje rzeczywisty kształt po odjęciu. **Finish** wykonuje dokładnie jedno trwałe zatwierdzenie i tworzy jeden krok Undo. **Cancel**, niepoprawne dane albo stale preview/context nie zapisują częściowej zmiany i przywracają prezentację committed Body. Edycja istniejącego Extrude przez Properties lub Tree używa tego samego draftu, zachowuje `FeatureId` i ponownie wymaga jednego Finish.
 
-Document Tree pokazuje Body oraz uporządkowane Feature z bieżącym statusem. Properties Feature pokazuje m.in. `FeatureId`, status/diagnostic, Add/Cut, extent, Length, kierunek oraz źródłowy Profile i Sketch. Można przejść Feature → Profile oraz Profile → consuming Feature bez zmiany własności: Profile nadal należy do swojego Sketchu.
+Document Tree pokazuje najpierw Origin i źródłowe Sketch/Profile, a **Body** z uporządkowanymi Feature znajduje się logicznie poniżej tych źródeł. Profile Invalid oraz Feature Failed/Blocked mają jawny tekst statusu i mocniejsze wyróżnienie w Tree; Suppressed pozostaje opisany i zapisany kursywą. Properties Feature pokazuje m.in. `FeatureId`, status/diagnostic, Add/Cut, extent, Length, kierunek oraz źródłowy Profile i Sketch. Można przejść Feature → Profile oraz Profile → consuming Feature bez zmiany własności: Profile nadal należy do swojego Sketchu.
 
 **Suppress Feature** zachowuje FeatureId i parametry, ale usuwa wkład Feature z bieżącej ewaluacji. **Unsuppress** ponownie przelicza model z aktualnego authored state. **Delete Feature** usuwa sam Feature, pozostawia źródłowy Profile i nie przepisuje automatycznie pozostałych zależności; dalsze Feature mogą stać się Failed/Blocked. Suppress, Unsuppress i Delete są obsługiwane przez Undo/Redo.
 
