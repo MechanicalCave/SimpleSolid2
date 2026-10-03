@@ -4,6 +4,7 @@
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
 
 #include <cmath>
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <optional>
