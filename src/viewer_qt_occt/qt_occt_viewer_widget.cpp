@@ -98,7 +98,9 @@ constexpr double kPreviewSolidTransparency = 0.30;
 [[nodiscard]] bool sameColor(
     const Quantity_Color& left,
     const Quantity_Color& right) noexcept {
-    constexpr double epsilon = 1.0e-12;
+    // OCCT presentation aspects may round through ShortReal-backed storage.
+    // This is display-state verification, not modeling tolerance.
+    constexpr double epsilon = 1.0e-6;
     return std::abs(left.Red() - right.Red()) <= epsilon &&
            std::abs(left.Green() - right.Green()) <= epsilon &&
            std::abs(left.Blue() - right.Blue()) <= epsilon;
@@ -113,11 +115,11 @@ void setOwnedSolidShadingStyle(
     // AIS_Triangulation may otherwise inherit shading attributes through the
     // context/default drawer. Body and preview must own independent aspects:
     // changing preview color/transparency may never mutate committed Body.
-    Handle(Prs3d_ShadingAspect) shading =
-        new Prs3d_ShadingAspect();
+    const auto drawer = object->Attributes();
+    drawer->SetupOwnShadingAspect();
+    const auto shading = drawer->ShadingAspect();
     shading->SetColor(color);
     shading->SetTransparency(transparency);
-    object->Attributes()->SetShadingAspect(shading);
 }
 
 [[nodiscard]] bool solidStyleMatches(
@@ -135,7 +137,7 @@ void setOwnedSolidShadingStyle(
         return false;
     }
 
-    constexpr double epsilon = 1.0e-12;
+    constexpr double epsilon = 1.0e-6;
     return sameColor(
                shading->Color(),
                color) &&
