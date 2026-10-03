@@ -200,6 +200,7 @@ class FakeSolid final
 class FakeSolidKernel final
     : public kernel::ISolidModelingKernel {
 public:
+    bool fail_mesh{};
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
         kernel::RuntimeSolidHandle upstream = {}) noexcept override {
@@ -231,6 +232,12 @@ public:
     kernel::SolidPresentationResult
     presentationMesh(
         kernel::RuntimeSolidHandle solid) noexcept override {
+        if (fail_mesh) {
+            return {
+                kernel::SolidPresentationStatus::
+                    provider_failure,
+                {}};
+        }
         if (!solid) {
             return {
                 kernel::SolidPresentationStatus::
@@ -770,6 +777,22 @@ int main(int argc, char* argv[]) {
             viewport.solid_scene_
                 .triangles.size() == 1U);
 
+        solid_kernel.fail_mesh = true;
+        controller.refreshPresentation();
+        CHECK(
+            viewport.solid_scene_
+                .triangles.empty());
+        CHECK(
+            controller.presentationDegraded());
+
+        solid_kernel.fail_mesh = false;
+        controller.refreshPresentation();
+        CHECK(
+            viewport.solid_scene_
+                .triangles.size() == 1U);
+        CHECK(
+            !controller.presentationDegraded());
+
         const auto delete_profile =
             solid_session.execute(
                 application::DeleteProfileCommand{
@@ -781,6 +804,8 @@ int main(int argc, char* argv[]) {
         CHECK(
             viewport.solid_scene_
                 .triangles.empty());
+        CHECK(
+            !controller.presentationDegraded());
 
         CHECK(solid_session.undo().changed);
         controller.refreshPresentation();
@@ -793,6 +818,7 @@ int main(int argc, char* argv[]) {
         CHECK(
             viewport.solid_scene_
                 .triangles.empty());
+        controller.clear();
     }
 
     return EXIT_SUCCESS;

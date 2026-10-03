@@ -611,10 +611,19 @@ void PartViewportController::refreshPresentation() {
 
     const auto solid_scene =
         buildSolidScene();
-    const bool solid_ok =
-        solid_scene.has_value() &&
-        viewport_->setSolidScene(
-            *solid_scene);
+    bool solid_ok = false;
+    if (solid_scene) {
+        solid_ok =
+            viewport_->setSolidScene(
+                *solid_scene);
+    } else {
+        // Presentation generation failed. Clear any previously published
+        // Body before reporting degradation; stale solid geometry is never
+        // allowed to remain current truth.
+        static_cast<void>(
+            viewport_->setSolidScene(
+                viewer::SolidScene{}));
+    }
 
     const bool reference_ok =
         viewport_->setReferenceScene(
