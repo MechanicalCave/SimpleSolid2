@@ -193,6 +193,7 @@ public:
     runtimeDiagnostics() const noexcept;
 
 protected:
+    bool event(QEvent* event) override;
     QPaintEngine* paintEngine() const override;
     void paintEvent(QPaintEvent* event) override;
     void resizeEvent(QResizeEvent* event) override;
@@ -202,7 +203,6 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
-    void keyPressEvent(QKeyEvent* event) override;
     void leaveEvent(QEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
 
