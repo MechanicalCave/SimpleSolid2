@@ -5,6 +5,7 @@
 #include <simplesolid2/part/profile_kernel_input.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <utility>
 
