@@ -83,6 +83,12 @@ QString featureDiagnosticText(
         return QStringLiteral("Missing Profile");
     case part::FeatureEvaluationDiagnosticCode::unresolved_profile:
         return QStringLiteral("Unresolved Profile");
+    case part::FeatureEvaluationDiagnosticCode::sketch_support_missing:
+        return QStringLiteral("Sketch support Missing");
+    case part::FeatureEvaluationDiagnosticCode::sketch_support_ambiguous:
+        return QStringLiteral("Sketch support Ambiguous");
+    case part::FeatureEvaluationDiagnosticCode::sketch_support_unsupported:
+        return QStringLiteral("Sketch support Unsupported");
     case part::FeatureEvaluationDiagnosticCode::missing_upstream_body:
         return QStringLiteral("Missing upstream Body");
     case part::FeatureEvaluationDiagnosticCode::upstream_unavailable:
@@ -103,6 +109,8 @@ QString featureDiagnosticText(
         return QStringLiteral("Empty result");
     case part::FeatureEvaluationDiagnosticCode::multi_solid:
         return QStringLiteral("Multi-solid result");
+    case part::FeatureEvaluationDiagnosticCode::topology_integrity_failure:
+        return QStringLiteral("Topology integrity failure");
     }
     return QStringLiteral("Unknown");
 }
