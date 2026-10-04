@@ -276,8 +276,8 @@ int main(int argc, char* argv[]) {
     // semantic priority. A controller-like callback may project the chosen
     // PresentationToken back as preselection.
     int body_preselection_intents = 0;
-    int body_preselection_valid_intents = 0;
-    int body_preselection_invalid_intents = 0;
+    int body_preselection_current_intents = 0;
+    int body_preselection_clear_intents = 0;
     viewer::BodyTopologyPickQueryResult
         last_body_preselection_query;
     viewer::ViewportPoint2
@@ -285,18 +285,23 @@ int main(int argc, char* argv[]) {
     widget.setBodyTopologyPreselectionIntentHandler(
         [&widget,
          &body_preselection_intents,
-         &body_preselection_valid_intents,
-         &body_preselection_invalid_intents,
+         &body_preselection_current_intents,
+         &body_preselection_clear_intents,
          &last_body_preselection_query,
          &last_body_preselection_point,
          body_vertex_token](
             const viewer::BodyTopologyPickQueryResult& query,
             viewer::ViewportPoint2 point) {
             ++body_preselection_intents;
-            if (query.valid()) {
-                ++body_preselection_valid_intents;
+            CHECK(query.valid());
+            const bool current_pick_intent =
+                query.completed &&
+                query.generation.valid() &&
+                point.valid();
+            if (current_pick_intent) {
+                ++body_preselection_current_intents;
             } else {
-                ++body_preselection_invalid_intents;
+                ++body_preselection_clear_intents;
             }
             last_body_preselection_query = query;
             last_body_preselection_point = point;
@@ -409,10 +414,10 @@ int main(int argc, char* argv[]) {
     // highlight through the control.
     const int intents_before_hud_hover =
         body_preselection_intents;
-    const int valid_before_hud_hover =
-        body_preselection_valid_intents;
-    const int invalid_before_hud_hover =
-        body_preselection_invalid_intents;
+    const int current_before_hud_hover =
+        body_preselection_current_intents;
+    const int clear_before_hud_hover =
+        body_preselection_clear_intents;
     sendMouseMove(
         widget,
         {
@@ -422,11 +427,11 @@ int main(int argc, char* argv[]) {
         body_preselection_intents >
         intents_before_hud_hover);
     CHECK(
-        body_preselection_invalid_intents >
-        invalid_before_hud_hover);
+        body_preselection_clear_intents >
+        clear_before_hud_hover);
     CHECK(
-        body_preselection_valid_intents ==
-        valid_before_hud_hover);
+        body_preselection_current_intents ==
+        current_before_hud_hover);
     CHECK(
         !last_body_preselection_query.valid());
 
