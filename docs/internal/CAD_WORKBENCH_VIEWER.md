@@ -81,6 +81,129 @@ PM-01 does not expose face/edge topology picking. Solid presentation is display-
 
 Presentation setters report failure to the Workbench. A successful authored CAD command is not rolled back because a later Viewer refresh fails; recovery retries presentation from current authored state.
 
+<!-- section-id: internal.cad-workbench-viewer.accepted-next-pm02-visual-topology -->
+## Accepted next PM-02 viewport visual-style and Feature-contribution boundary
+
+This section records an accepted **next production design input**. It is not current as-built behavior. Until the separate PM-02 Work Contract is explicitly activated, the current Viewer boundary above remains authoritative: Body subshape picking is absent and current Part presentation remains the existing PM-01 display path.
+
+The proposed PM-02 Viewer work keeps presentation state independent from authored CAD state.
+
+### View Style HUD
+
+The viewport navigation/presentation HUD should group one single-select View Style control with the existing provider-surface navigation controls:
+
+```text
+HOME    ORTHO/PERSP    Shaded + Edges ▾
+```
+
+Required target styles are:
+
+- Shaded;
+- Shaded + Edges;
+- Shaded + Hidden Edges.
+
+View Style is presentation state only. It must not increment DocumentRevision, set Part dirty state, create CAD Undo/Redo history or serialize into the Part document. A later application/workspace preference may remember it outside CAD authored state.
+
+Hidden-edge rendering is visual only. Showing occluded edges must not silently enable select-through of occluded topology. A future explicit Select Through/X-Ray mode would be a separate product decision.
+
+### Independent overlay layers
+
+Target presentation order is conceptually:
+
+```text
+Base View Style
+-> persistent Feature Contribution
+-> temporary tree hover
+-> direct Face/Edge/Vertex hover/selection
+-> semantic support/target overlay
+-> active command preview
+-> failure/ambiguity diagnostics
+```
+
+Exact drawing order may be provider-private, but the semantic roles must remain independent. Changing View Style cannot change semantic selection, reference resolution or command targets.
+
+Direct viewport topology interaction and Document Tree Feature interaction deliberately use different presentation roles so the user can distinguish "I selected geometry" from "I am inspecting design history".
+
+### Direct topology and semantic carriers
+
+PM-02 direct interaction targets bounded current topology:
+
+- Face;
+- Edge;
+- Vertex.
+
+Part immediately maps the fresh runtime topology token to the stage-scoped semantic catalog. Surface / Curve / Point carrier visualization appears only when required by the active command or inspection context.
+
+Examples:
+
+- planar Face selected for Sketch -> bounded Face highlight plus semantic Surface/support-plane overlay and U/V frame;
+- Edge inspection -> material Edge highlight plus optional semantic Curve cue;
+- Vertex inspection -> Vertex marker plus semantic Point information.
+
+The carrier cue is never Viewer-owned CAD identity.
+
+### Current Feature Contribution
+
+Ordinary Feature hover/selection in Document Tree targets **Current Feature Contribution**, not historical Body replacement.
+
+For Feature `F`, Current Feature Contribution is a set-valued query against the currently authoritative displayed Body stage:
+
+> current semantic topology that still carries design meaning produced directly by F.
+
+For Faces, every current Face realization whose semantic Surface carrier producer is `F` participates. If later Booleans split one prior Face realization into several current fragments while the same producer Surface survives, all fragments are highlighted. This set-valued display is not a singular FaceReference lookup and is not Ambiguous merely because multiple fragments exist.
+
+Deleted semantic output is not ghosted as current contribution.
+
+For Edges/Vertices, direct semantic provenance determines direct Feature contribution. Boundary Edges/Vertices around highlighted Faces may additionally be drawn as a presentation envelope without being reclassified as Feature-owned semantic topology.
+
+A shared Edge/Vertex involving carriers from several Features is not assigned an arbitrary owner merely for coloring.
+
+### Cut Feature contribution
+
+For a Cut Feature, direct contribution is the current semantic topology introduced by that Cut, for example:
+
+- Cut-exposed tool Surfaces;
+- Boolean-created material intersection Edges with direct Cut provenance;
+- directly generated semantic Points/Vertices where defensible.
+
+An upstream Surface merely trimmed by the Cut retains its original semantic producer and therefore remains part of the upstream Feature's contribution.
+
+### Tree hover versus tree selection
+
+Feature tree hover:
+
+- shows temporary Current Feature Contribution;
+- does not change primary selection or Properties authority;
+- disappears on hover exit;
+- creates no authored mutation.
+
+Feature tree selection:
+
+- makes the Feature the Tree/Properties selection;
+- shows persistent Current Feature Contribution;
+- keeps the current Body in the current base View Style;
+- does not automatically switch the Body to the historical stage after that Feature.
+
+An active modeling command may suppress lower-priority tree hover so target/preview cues remain unambiguous.
+
+### Three distinct history presentations
+
+The following are intentionally different concepts:
+
+```text
+Current Feature Contribution
+!= Operation Scope / Delta
+!= Historical Stage Preview
+```
+
+Current Feature Contribution is the default Tree hover/selection behavior.
+
+Operation Scope / Delta means the material volume added/removed by the Feature at its own upstream stage. It may later use a translucent Add/Cut ghost overlay and remains optional unless separately promoted into the production acceptance gate.
+
+Historical Stage Preview means displaying the entire Body at `BodyStageRef::AfterFeature(F)`. If later productized, it requires an explicit action; ordinary Feature selection does not rewind the Body.
+
+The detailed accepted design input is `work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`.
+
 <!-- section-id: internal.cad-workbench-viewer.sr02-latency -->
 ## SR-02 Sketch interaction and presentation latency
 
