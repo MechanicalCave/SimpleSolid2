@@ -27,15 +27,50 @@ void check(bool value, const char* expression, int line) {
 }
 #define CHECK(expr) check(static_cast<bool>(expr), #expr, __LINE__)
 
+template <typename Token>
+void appendUniqueRuntimeToken(
+    std::vector<Token>& tokens,
+    Token token) {
+    if (std::find(
+            tokens.begin(),
+            tokens.end(),
+            token) ==
+        tokens.end()) {
+        tokens.push_back(token);
+    }
+}
+
 class FakeSolid final
     : public kernel::RuntimeSolid {
 public:
+    struct Edge final {
+        kernel::RuntimeEdgeToken token;
+        std::vector<kernel::RuntimeSurfaceToken>
+            surfaces;
+        kernel::CurveKind kind{
+            kernel::CurveKind::line};
+        bool seam{false};
+    };
+
+    struct Vertex final {
+        kernel::RuntimeVertexToken token;
+        std::vector<kernel::RuntimeSurfaceToken>
+            surfaces;
+        std::vector<kernel::RuntimeEdgeToken>
+            incident_edges;
+        kernel::Point3 point;
+    };
+
     std::vector<kernel::RuntimeFaceToken>
         tokens;
     std::vector<kernel::RuntimeSurfaceToken>
         surface_tokens;
+    std::vector<Edge> edges;
+    std::vector<Vertex> vertices;
     std::uint64_t next_token{1U};
     std::uint64_t next_surface_token{1U};
+    std::uint64_t next_edge_token{1U};
+    std::uint64_t next_vertex_token{1U};
 };
 
 class FakeKernel final
@@ -47,6 +82,11 @@ public:
     bool split_first_inherited_surface{false};
     bool alias_first_two_inherited_surfaces{false};
     bool first_survives_second_missing{false};
+    bool emit_semantic_subshapes{false};
+    bool split_first_inherited_edge{false};
+    bool replace_first_inherited_edge{false};
+    bool replace_first_inherited_vertex_same_point{false};
+    bool duplicate_first_new_edge_branch{false};
 
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
@@ -117,6 +157,10 @@ public:
                 existing->next_token;
             runtime->next_surface_token =
                 existing->next_surface_token;
+            runtime->next_edge_token =
+                existing->next_edge_token;
+            runtime->next_vertex_token =
+                existing->next_vertex_token;
             CHECK(
                 existing->tokens.size() ==
                 existing->surface_tokens.size());
@@ -312,6 +356,364 @@ public:
                     std::nullopt,
                     use.provenance,
                 });
+        }
+
+        if (emit_semantic_subshapes) {
+            const FakeSolid* existing =
+                upstream
+                    ? dynamic_cast<
+                          const FakeSolid*>(
+                          upstream.get())
+                    : nullptr;
+            if (upstream && existing == nullptr) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_mismatch;
+                return result;
+            }
+
+            std::map<std::uint64_t,
+                     kernel::RuntimeEdgeToken>
+                edge_descendant;
+
+            std::optional<FakeSolid::Edge>
+                replacement_edge;
+            if (existing != nullptr) {
+                for (std::size_t index = 0U;
+                     index < existing->edges.size();
+                     ++index) {
+                    const auto& source =
+                        existing->edges[index];
+
+                    if (replace_first_inherited_edge &&
+                        index == 0U) {
+                        result.inherited_edge_realizations
+                            .push_back(
+                                {
+                                    source.token,
+                                    kernel::ReferenceStatus::
+                                        missing,
+                                    0U,
+                                    {},
+                                });
+                        replacement_edge = source;
+                        continue;
+                    }
+
+                    if (split_first_inherited_edge &&
+                        index == 0U) {
+                        const kernel::RuntimeEdgeToken
+                            first{
+                                runtime->next_edge_token++};
+                        const kernel::RuntimeEdgeToken
+                            second{
+                                runtime->next_edge_token++};
+                        runtime->edges.push_back(
+                            {
+                                first,
+                                source.surfaces,
+                                source.kind,
+                                source.seam,
+                            });
+                        runtime->edges.push_back(
+                            {
+                                second,
+                                source.surfaces,
+                                source.kind,
+                                source.seam,
+                            });
+                        edge_descendant.emplace(
+                            source.token.value,
+                            first);
+                        result.inherited_edge_realizations
+                            .push_back(
+                                {
+                                    source.token,
+                                    kernel::ReferenceStatus::
+                                        ambiguous,
+                                    2U,
+                                    {first, second},
+                                });
+                        continue;
+                    }
+
+                    const kernel::RuntimeEdgeToken token{
+                        runtime->next_edge_token++};
+                    runtime->edges.push_back(
+                        {
+                            token,
+                            source.surfaces,
+                            source.kind,
+                            source.seam,
+                        });
+                    edge_descendant.emplace(
+                        source.token.value,
+                        token);
+                    result.inherited_edge_realizations
+                        .push_back(
+                            {
+                                source.token,
+                                kernel::ReferenceStatus::
+                                    resolved,
+                                1U,
+                                {token},
+                            });
+                }
+            }
+
+            const auto add_edge =
+                [&runtime](
+                    kernel::RuntimeSurfaceToken first,
+                    kernel::RuntimeSurfaceToken second) {
+                    const kernel::RuntimeEdgeToken token{
+                        runtime->next_edge_token++};
+                    runtime->edges.push_back(
+                        {
+                            token,
+                            {first, second},
+                            kernel::CurveKind::line,
+                            false,
+                        });
+                    return token;
+                };
+
+            CHECK(result.new_surfaces.size() == 6U);
+            std::vector<kernel::RuntimeSurfaceToken>
+                feature_surfaces;
+            feature_surfaces.reserve(6U);
+            for (const auto& surface :
+                 result.new_surfaces) {
+                CHECK(surface.resolved_token.has_value());
+                feature_surfaces.push_back(
+                    *surface.resolved_token);
+            }
+
+            const auto s0 = feature_surfaces[0];
+            const auto s1 = feature_surfaces[1];
+            const auto s2 = feature_surfaces[2];
+            const auto s3 = feature_surfaces[3];
+            const auto s4 = feature_surfaces[4];
+            const auto s5 = feature_surfaces[5];
+
+            std::vector<kernel::RuntimeEdgeToken>
+                new_edges = {
+                    add_edge(s0, s2),
+                    add_edge(s0, s3),
+                    add_edge(s0, s4),
+                    add_edge(s0, s5),
+                    add_edge(s1, s2),
+                    add_edge(s1, s3),
+                    add_edge(s1, s4),
+                    add_edge(s1, s5),
+                    add_edge(s2, s3),
+                    add_edge(s3, s4),
+                    add_edge(s4, s5),
+                    add_edge(s5, s2),
+                };
+
+            if (duplicate_first_new_edge_branch) {
+                const auto& first =
+                    runtime->edges[
+                        runtime->edges.size() -
+                        new_edges.size()];
+                add_edge(
+                    first.surfaces[0],
+                    first.surfaces[1]);
+            }
+
+            if (replacement_edge) {
+                const kernel::RuntimeEdgeToken token{
+                    runtime->next_edge_token++};
+                edge_descendant.emplace(
+                    replacement_edge->token.value,
+                    token);
+                runtime->edges.push_back(
+                    {
+                        token,
+                        replacement_edge->surfaces,
+                        replacement_edge->kind,
+                        replacement_edge->seam,
+                    });
+            }
+
+            std::optional<FakeSolid::Vertex>
+                replacement_vertex;
+            if (existing != nullptr) {
+                for (std::size_t index = 0U;
+                     index < existing->vertices.size();
+                     ++index) {
+                    const auto& source =
+                        existing->vertices[index];
+                    if (replace_first_inherited_vertex_same_point &&
+                        index == 0U) {
+                        result.inherited_vertex_realizations
+                            .push_back(
+                                {
+                                    source.token,
+                                    kernel::ReferenceStatus::
+                                        missing,
+                                    0U,
+                                    {},
+                                });
+                        replacement_vertex = source;
+                        continue;
+                    }
+
+                    const kernel::RuntimeVertexToken token{
+                        runtime->next_vertex_token++};
+                    std::vector<kernel::RuntimeEdgeToken>
+                        incident;
+                    for (const auto old_edge :
+                         source.incident_edges) {
+                        const auto mapped =
+                            edge_descendant.find(
+                                old_edge.value);
+                        if (mapped !=
+                            edge_descendant.end()) {
+                            appendUniqueRuntimeToken(
+                                incident,
+                                mapped->second);
+                        }
+                    }
+                    runtime->vertices.push_back(
+                        {
+                            token,
+                            source.surfaces,
+                            std::move(incident),
+                            source.point,
+                        });
+                    result.inherited_vertex_realizations
+                        .push_back(
+                            {
+                                source.token,
+                                kernel::ReferenceStatus::
+                                    resolved,
+                                1U,
+                                {token},
+                            });
+                }
+            }
+
+            const auto add_vertex =
+                [&runtime](
+                    std::vector<kernel::RuntimeSurfaceToken>
+                        surfaces,
+                    std::vector<kernel::RuntimeEdgeToken>
+                        edges,
+                    kernel::Point3 point) {
+                    const kernel::RuntimeVertexToken token{
+                        runtime->next_vertex_token++};
+                    runtime->vertices.push_back(
+                        {
+                            token,
+                            std::move(surfaces),
+                            std::move(edges),
+                            point,
+                        });
+                    return token;
+                };
+
+            const double z0 = input.start_offset_mm;
+            const double z1 = input.end_offset_mm;
+            add_vertex(
+                {s0, s2, s5},
+                {new_edges[0], new_edges[3], new_edges[11]},
+                {0.0, 0.0, z0});
+            add_vertex(
+                {s0, s2, s3},
+                {new_edges[0], new_edges[1], new_edges[8]},
+                {1.0, 0.0, z0});
+            add_vertex(
+                {s0, s3, s4},
+                {new_edges[1], new_edges[2], new_edges[9]},
+                {1.0, 1.0, z0});
+            add_vertex(
+                {s0, s4, s5},
+                {new_edges[2], new_edges[3], new_edges[10]},
+                {0.0, 1.0, z0});
+            add_vertex(
+                {s1, s2, s5},
+                {new_edges[4], new_edges[7], new_edges[11]},
+                {0.0, 0.0, z1});
+            add_vertex(
+                {s1, s2, s3},
+                {new_edges[4], new_edges[5], new_edges[8]},
+                {1.0, 0.0, z1});
+            add_vertex(
+                {s1, s3, s4},
+                {new_edges[5], new_edges[6], new_edges[9]},
+                {1.0, 1.0, z1});
+            add_vertex(
+                {s1, s4, s5},
+                {new_edges[6], new_edges[7], new_edges[10]},
+                {0.0, 1.0, z1});
+
+            if (replacement_vertex) {
+                const kernel::RuntimeVertexToken token{
+                    runtime->next_vertex_token++};
+                std::vector<kernel::RuntimeEdgeToken>
+                    incident;
+                for (const auto old_edge :
+                     replacement_vertex->incident_edges) {
+                    const auto mapped =
+                        edge_descendant.find(
+                            old_edge.value);
+                    if (mapped !=
+                        edge_descendant.end()) {
+                        appendUniqueRuntimeToken(
+                            incident,
+                            mapped->second);
+                    }
+                }
+                runtime->vertices.push_back(
+                    {
+                        token,
+                        replacement_vertex->surfaces,
+                        std::move(incident),
+                        // Deliberately exact same XYZ. Semantic provenance,
+                        // not coordinates, decides replacement identity.
+                        replacement_vertex->point,
+                    });
+            }
+
+            result.current_edges.reserve(
+                runtime->edges.size());
+            result.current_edge_semantics.reserve(
+                runtime->edges.size());
+            for (const auto& edge :
+                 runtime->edges) {
+                result.current_edges.push_back(
+                    edge.token);
+                result.current_edge_semantics.push_back(
+                    {
+                        edge.token,
+                        edge.kind,
+                        edge.seam,
+                        edge.surfaces,
+                    });
+            }
+
+            result.current_vertices.reserve(
+                runtime->vertices.size());
+            result.current_vertex_semantics.reserve(
+                runtime->vertices.size());
+            for (const auto& vertex :
+                 runtime->vertices) {
+                result.current_vertices.push_back(
+                    vertex.token);
+                result.current_vertex_semantics.push_back(
+                    {
+                        vertex.token,
+                        vertex.surfaces,
+                        vertex.incident_edges,
+                        vertex.point,
+                    });
+            }
+
+            result.edge_count =
+                result.current_edges.size();
+            result.vertex_count =
+                result.current_vertices.size();
         }
 
         result.status =
