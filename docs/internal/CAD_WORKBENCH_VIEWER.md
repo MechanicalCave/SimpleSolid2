@@ -142,6 +142,48 @@ Examples:
 
 The carrier cue is never Viewer-owned CAD identity.
 
+### Direct topology acquisition
+
+Ordinary Body topology acquisition targets current bounded Face / Edge / Vertex presentation and then immediately maps the fresh PresentationToken back to the current semantic topology catalog.
+
+The ordinary all-kind hit priority is:
+
+```text
+Vertex
+  ↓
+Edge
+  ↓
+Face
+```
+
+This is only a screen-space acquisition rule.
+
+Vertex and Edge use bounded DPI-aware logical-pixel apertures; Face uses the front-visible projected Face region. Cursor proximity may determine what visible item the user pointed at, but it never defines durable identity or automatic semantic repair.
+
+Normal PM-02 selection is front-visible:
+
+- occluded topology is not an ordinary candidate;
+- Shaded + Hidden Edges does not enable select-through;
+- dashed hidden-edge presentation remains non-selectable;
+- a later explicit Select Through/X-Ray mode would require a separate product decision.
+
+The active semantic context may narrow the Viewer kind filter without embedding Part rules in the Viewer. In particular, Create Sketch requests Face-only acquisition. A cylindrical/non-planar Face remains acquireable and is then rejected by Part semantic admission as Unsupported; the picker must not silently fall through to a neighboring Edge or another Face.
+
+When several visible candidates remain under the same pointer sample, the interaction maintains a runtime-only candidate stack. In ordinary 3D topology targeting with viewport CAD focus:
+
+- Tab -> next candidate;
+- Shift+Tab -> previous candidate.
+
+Topology cycling is lower priority than focused text input, Dynamic Input field traversal or another semantic request that already owns Tab. Pointer neighborhood, view, tool/filter, scene or evaluation/provider generation changes reset the stack.
+
+The currently preselected candidate is visibly highlighted before click. The user's click on that visible preselection is the acquisition authority; provider return order has no durable semantic meaning.
+
+A `KnownRepresentationArtifact` such as a periodic seam remains completely accounted and diagnosable but is excluded from ordinary material Edge preselection by default. Material topology whose durable referenceability is Unsupported remains visible/selectable for truthful inspection and diagnostics.
+
+Feature Contribution, hidden-edge graphics and semantic carrier/support ghost overlays do not create duplicate pick geometry. All normal Body picking uses the one current topology presentation/token mapping.
+
+The detailed accepted design input is `work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`.
+
 ### Current Feature Contribution
 
 Ordinary Feature hover/selection in Document Tree targets **Current Feature Contribution**, not historical Body replacement.
@@ -202,7 +244,7 @@ Operation Scope / Delta means the material volume added/removed by the Feature a
 
 Historical Stage Preview means displaying the entire Body at `BodyStageRef::AfterFeature(F)`. If later productized, it requires an explicit action; ordinary Feature selection does not rewind the Body.
 
-The detailed accepted design input is `work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`.
+The accepted visual/tree design input is `work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`; direct selection acquisition is specified separately in `work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`.
 
 <!-- section-id: internal.cad-workbench-viewer.sr02-latency -->
 ## SR-02 Sketch interaction and presentation latency
