@@ -3095,6 +3095,12 @@ public:
         selection_intent_handler_ = std::move(handler);
     }
 
+    void setBodyTopologySelectionIntentHandler(
+        viewer::BodyTopologySelectionIntentHandler handler) {
+        body_topology_selection_intent_handler_ =
+            std::move(handler);
+    }
+
     void setSpatialPointerHandler(
         viewer::SpatialPointerHandler handler) {
         spatial_pointer_handler_ =
@@ -3332,7 +3338,8 @@ public:
         ensureInitialized();
         if (context_.IsNull() ||
             view_.IsNull() ||
-            !selection_intent_handler_) {
+            (!selection_intent_handler_ &&
+             !body_topology_selection_intent_handler_)) {
             return;
         }
 
@@ -3382,7 +3389,8 @@ public:
         // may synchronously refresh or replace the presentation scene.
         context_->ClearDetected(false);
 
-        if (detected_token) {
+        if (detected_token &&
+            selection_intent_handler_) {
             selection_intent_handler_(
                 viewer::SelectionIntent{
                     *detected_token,
@@ -3392,10 +3400,33 @@ public:
             return;
         }
 
-        selection_intent_handler_(
-            viewer::SelectionIntent{
-                {},
-                viewer::SelectionIntentMode::clear});
+        if (body_topology_selection_intent_handler_) {
+            const auto body_query =
+                queryBodyTopology(
+                    viewer::ViewportPoint2{
+                        static_cast<double>(
+                            logical_x),
+                        static_cast<double>(
+                            logical_y)},
+                    {});
+            if (body_query.valid() &&
+                body_query.completed &&
+                !body_query.candidates.empty()) {
+                body_topology_selection_intent_handler_(
+                    body_query,
+                    toggle
+                        ? viewer::SelectionIntentMode::toggle
+                        : viewer::SelectionIntentMode::replace);
+                return;
+            }
+        }
+
+        if (selection_intent_handler_) {
+            selection_intent_handler_(
+                viewer::SelectionIntent{
+                    {},
+                    viewer::SelectionIntentMode::clear});
+        }
     }
 
     [[nodiscard]] std::optional<viewer::ViewportPoint2>
@@ -5098,6 +5129,8 @@ private:
         sketch_snap_inference_scene_;
     viewer::PresentationSelection selection_;
     viewer::SelectionIntentHandler selection_intent_handler_;
+    viewer::BodyTopologySelectionIntentHandler
+        body_topology_selection_intent_handler_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
     viewer::NavigationCubeActionHandler
         navigation_cube_action_handler_;
