@@ -1371,6 +1371,125 @@ inventoryFaceToken(
     return std::nullopt;
 }
 
+[[nodiscard]] std::optional<kernel::RuntimeEdgeToken>
+inventoryEdgeToken(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Edge& edge) {
+    for (const auto& [token, current] :
+         runtime.inventory_edges) {
+        if (current.IsSame(edge)) {
+            return kernel::RuntimeEdgeToken{token};
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<kernel::RuntimeVertexToken>
+inventoryVertexToken(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Vertex& vertex) {
+    for (const auto& [token, current] :
+         runtime.inventory_vertices) {
+        if (current.IsSame(vertex)) {
+            return kernel::RuntimeVertexToken{token};
+        }
+    }
+    return std::nullopt;
+}
+
+void appendUniqueSurfaceToken(
+    std::vector<kernel::RuntimeSurfaceToken>& tokens,
+    kernel::RuntimeSurfaceToken candidate) {
+    if (std::find(
+            tokens.begin(),
+            tokens.end(),
+            candidate) == tokens.end()) {
+        tokens.push_back(candidate);
+    }
+}
+
+[[nodiscard]] bool sameSurfaceTokenSet(
+    const std::vector<kernel::RuntimeSurfaceToken>& first,
+    const std::vector<kernel::RuntimeSurfaceToken>& second) {
+    if (first.size() != second.size()) {
+        return false;
+    }
+    return std::all_of(
+        first.begin(),
+        first.end(),
+        [&second](kernel::RuntimeSurfaceToken token) {
+            return std::find(
+                       second.begin(),
+                       second.end(),
+                       token) != second.end();
+        });
+}
+
+[[nodiscard]] std::vector<kernel::RuntimeSurfaceToken>
+adjacentSurfaceTokens(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Edge& edge) {
+    std::vector<kernel::RuntimeSurfaceToken> result;
+    for (const auto& [token, surface] :
+         runtime.tracked_surfaces) {
+        const bool contains =
+            std::any_of(
+                surface.faces.begin(),
+                surface.faces.end(),
+                [&edge](const TopoDS_Face& face) {
+                    return faceContainsEdge(
+                        face,
+                        edge);
+                });
+        if (contains) {
+            appendUniqueSurfaceToken(
+                result,
+                kernel::RuntimeSurfaceToken{
+                    token});
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] std::vector<kernel::RuntimeSurfaceToken>
+adjacentSurfaceTokens(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Vertex& vertex) {
+    std::vector<kernel::RuntimeSurfaceToken> result;
+    for (const auto& [token, surface] :
+         runtime.tracked_surfaces) {
+        const bool contains =
+            std::any_of(
+                surface.faces.begin(),
+                surface.faces.end(),
+                [&vertex](const TopoDS_Face& face) {
+                    return faceContainsVertex(
+                        face,
+                        vertex);
+                });
+        if (contains) {
+            appendUniqueSurfaceToken(
+                result,
+                kernel::RuntimeSurfaceToken{
+                    token});
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] const OcctRuntimeSolid::TrackedSurface*
+trackedSurface(
+    const OcctRuntimeSolid& runtime,
+    kernel::RuntimeSurfaceToken token) {
+    const auto found =
+        runtime.tracked_surfaces.find(
+            token.value);
+    return found ==
+               runtime.tracked_surfaces.end()
+        ? nullptr
+        : &found->second;
+}
+
 void appendUniqueFaceCandidate(
     std::vector<TopoDS_Face>& faces,
     const TopoDS_Face& candidate) {
