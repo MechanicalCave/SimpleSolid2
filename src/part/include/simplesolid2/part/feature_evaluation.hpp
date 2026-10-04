@@ -5,6 +5,7 @@
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/feature_id.hpp>
+#include <simplesolid2/part/semantic_topology_reference.hpp>
 #include <simplesolid2/sketch/entity_id.hpp>
 
 #include <compare>
@@ -47,22 +48,6 @@ enum class BodyEvaluationStatus {
     unavailable,
 };
 
-enum class BodyStageKind {
-    empty_body,
-    after_feature,
-};
-
-struct BodyStageRef final {
-    BodyStageKind kind{BodyStageKind::empty_body};
-    std::optional<FeatureId> feature_id;
-
-    [[nodiscard]] bool valid() const noexcept;
-
-    friend bool operator==(
-        const BodyStageRef&,
-        const BodyStageRef&) = default;
-};
-
 enum class TopologyAccountingClass {
     referenceable,
     known_representation_artifact,
@@ -71,14 +56,6 @@ enum class TopologyAccountingClass {
 };
 
 enum class FeatureFaceRoleKind {
-    profile_cap,
-    extent_cap,
-    negative_cap,
-    positive_cap,
-    side,
-};
-
-enum class FeatureSurfaceRoleKind {
     profile_cap,
     extent_cap,
     negative_cap,
@@ -115,26 +92,6 @@ struct FeatureFaceResolution final {
     friend bool operator==(
         const FeatureFaceResolution&,
         const FeatureFaceResolution&) = default;
-};
-
-struct FeatureSurfaceAddress final {
-    FeatureId producer_feature_id;
-    FeatureSurfaceRoleKind role{
-        FeatureSurfaceRoleKind::side};
-    std::optional<sketch::EntityId>
-        source_entity;
-    std::uint32_t loop_index{};
-    std::uint32_t use_index{};
-    bool hole{false};
-
-    [[nodiscard]] bool valid() const noexcept;
-
-    friend bool operator==(
-        const FeatureSurfaceAddress&,
-        const FeatureSurfaceAddress&) = default;
-    friend auto operator<=>(
-        const FeatureSurfaceAddress&,
-        const FeatureSurfaceAddress&) = default;
 };
 
 struct FeatureSurfaceResolution final {
