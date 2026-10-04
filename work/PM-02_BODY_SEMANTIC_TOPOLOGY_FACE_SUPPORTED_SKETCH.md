@@ -3,7 +3,7 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-04  
 **Decision class:** D2 production Work Contract — Owner accepted 2026-10-04  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.9  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.10  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Entry gate:** PM-02P Body Semantic Topology Evidence COMPLETED — PASS; Owner accepted PM-02P D2 synthesis/recommendation on 2026-10-04  
 **Evidence authority:** `work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md`, `work/PM-02P_REFERENCE_SURVIVAL_MATRIX.md`, `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`  
@@ -791,7 +791,10 @@ Gate:
 
 ### PM-02B — Surface/Face production semantics
 
-**Checkpoint state:** ACTIVE
+**Checkpoint state:** COMPLETED — PASS  
+**Final runtime candidate:** `05434516fea0892aac2babae09da772043987f29` — Windows FULL #1400 PASS  
+**Merged final runtime main:** `65d074577bc89e3507288118b17e99b12288a881`  
+**Completion evidence:** `work/PM-02B_SURFACE_FACE_SEMANTICS_COMPLETION.md`
 
 Deliver:
 
@@ -807,6 +810,8 @@ Gate:
 - zero false Resolved.
 
 ### PM-02C — Edge/Curve and Vertex/Point semantic catalog
+
+**Checkpoint state:** ACTIVE
 
 Deliver:
 
