@@ -413,7 +413,12 @@ struct ScreenRect final {
     }
 };
 
-[[nodiscard]] double pointSegmentDistanceSquared(
+struct ClosestSegmentPoint final {
+    double distance_squared{};
+    double parameter{};
+};
+
+[[nodiscard]] ClosestSegmentPoint closestSegmentPoint(
     ScreenPoint point,
     ScreenPoint start,
     ScreenPoint end) noexcept {
@@ -425,7 +430,9 @@ struct ScreenRect final {
     if (length_squared <= 0.0) {
         const double px = point.x - start.x;
         const double py = point.y - start.y;
-        return px * px + py * py;
+        return {
+            px * px + py * py,
+            0.0};
     }
 
     const double parameter =
@@ -442,7 +449,84 @@ struct ScreenRect final {
         start.y + parameter * dy;
     const double px = point.x - closest_x;
     const double py = point.y - closest_y;
-    return px * px + py * py;
+    return {
+        px * px + py * py,
+        parameter};
+}
+
+[[nodiscard]] double pointSegmentDistanceSquared(
+    ScreenPoint point,
+    ScreenPoint start,
+    ScreenPoint end) noexcept {
+    return closestSegmentPoint(
+               point,
+               start,
+               end)
+        .distance_squared;
+}
+
+[[nodiscard]] std::optional<double> rayTriangleDepth(
+    const viewer::Ray3& ray,
+    const viewer::SolidTrianglePresentation& triangle) noexcept {
+    if (!ray.valid() || !triangle.valid()) {
+        return std::nullopt;
+    }
+
+    const auto edge1 =
+        triangle.second - triangle.first;
+    const auto edge2 =
+        triangle.third - triangle.first;
+    const auto h =
+        viewer::cross(
+            ray.direction,
+            edge2);
+    const double determinant =
+        viewer::dot(
+            edge1,
+            h);
+    constexpr double epsilon = 1.0e-12;
+    if (std::abs(determinant) <= epsilon) {
+        return std::nullopt;
+    }
+
+    const double inverse =
+        1.0 / determinant;
+    const auto from_first =
+        ray.origin - triangle.first;
+    const double u =
+        inverse *
+        viewer::dot(
+            from_first,
+            h);
+    if (u < -epsilon ||
+        u > 1.0 + epsilon) {
+        return std::nullopt;
+    }
+
+    const auto q =
+        viewer::cross(
+            from_first,
+            edge1);
+    const double v =
+        inverse *
+        viewer::dot(
+            ray.direction,
+            q);
+    if (v < -epsilon ||
+        u + v > 1.0 + epsilon) {
+        return std::nullopt;
+    }
+
+    const double depth =
+        inverse *
+        viewer::dot(
+            edge2,
+            q);
+    return std::isfinite(depth) &&
+                   depth >= -epsilon
+        ? std::optional<double>{
+              std::max(0.0, depth)}
+        : std::nullopt;
 }
 
 [[nodiscard]] double cross2(
