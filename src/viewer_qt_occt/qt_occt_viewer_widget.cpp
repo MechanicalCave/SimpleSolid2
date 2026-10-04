@@ -5492,6 +5492,32 @@ void QtOcctViewerWidget::setNavigationCubeActionHandler(
         });
 }
 
+viewer::ViewStyle
+QtOcctViewerWidget::viewStyle() const noexcept {
+    return impl_
+        ? impl_->viewStyle()
+        : viewer::ViewStyle::shaded;
+}
+
+bool QtOcctViewerWidget::setViewStyle(
+    viewer::ViewStyle style) {
+    return guardedBool(
+        "setViewStyle",
+        [this, style] {
+            return impl_->setViewStyle(style);
+        });
+}
+
+void QtOcctViewerWidget::setViewStyleActionHandler(
+    viewer::ViewStyleActionHandler handler) {
+    guardedVoid(
+        "setViewStyleActionHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setViewStyleActionHandler(
+                std::move(handler));
+        });
+}
+
 bool QtOcctViewerWidget::animateCameraState(
     const viewer::CameraState& state,
     double duration_seconds,
@@ -5530,6 +5556,30 @@ bool QtOcctViewerWidget::setBodyScene(
         "setBodyScene",
         [this, &scene] {
             return impl_->setBodyScene(scene);
+        });
+}
+
+viewer::BodyTopologyPickQueryResult
+QtOcctViewerWidget::queryBodyTopology(
+    viewer::ViewportPoint2 point,
+    viewer::BodyTopologyPickFilter filter) {
+    return guardedResult<
+        viewer::BodyTopologyPickQueryResult>(
+        "queryBodyTopology",
+        [this, point, filter] {
+            return impl_->queryBodyTopology(
+                point,
+                filter);
+        });
+}
+
+void QtOcctViewerWidget::setBodyTopologySelectionIntentHandler(
+    viewer::BodyTopologySelectionIntentHandler handler) {
+    guardedVoid(
+        "setBodyTopologySelectionIntentHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setBodyTopologySelectionIntentHandler(
+                std::move(handler));
         });
 }
 
