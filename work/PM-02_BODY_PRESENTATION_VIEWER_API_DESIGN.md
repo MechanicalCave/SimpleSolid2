@@ -1,8 +1,8 @@
 # PM-02 — Body Presentation / Viewer API Design
 
 **Status:** ACCEPTED TECHNICAL DESIGN INPUT — 2026-10-04  
-**Production PM-02:** PROPOSED / NOT ACTIVE  
-**Applies to candidate:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
+**Production PM-02:** ACTIVE  
+**Applies to active contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Related UX:**  
 - `work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`  
 - `work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`  
@@ -21,7 +21,7 @@ Define the provider-neutral presentation boundary required by PM-02 so that:
 
 all project the **same current Body topology snapshot** rather than independently reconstructing topology from tessellation, Viewer state or provider traversal.
 
-This design does not activate production implementation.
+This accepted technical design is normative within the active PM-02 Work Contract.
 
 ## 2. Core rule: one topology, one presentation snapshot
 
