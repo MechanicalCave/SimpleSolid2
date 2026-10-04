@@ -400,6 +400,7 @@ private:
     QLabel* topology_presence_{};
     QLabel* topology_accounting_{};
     QLabel* topology_strict_reference_{};
+    QLabel* topology_carrier_reference_{};
     QLabel* topology_carrier_{};
     QLabel* topology_carrier_type_{};
     QLabel* topology_producer_{};
