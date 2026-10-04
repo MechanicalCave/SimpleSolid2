@@ -1,6 +1,6 @@
 # PM-02P — Reference Survival Matrix
 
-**Status:** SYNTHESIS COMPLETE — OWNER REVIEW CANDIDATE  
+**Status:** ACCEPTED PM-02P D2 SYNTHESIS INPUT — 2026-10-04  
 **Date:** 2026-10-04  
 **Authority:** ADR-0014 + ADR-0016 + `work/PM-02P_TOPOLOGY_EVIDENCE_MATRIX.md` v1.0  
 **Exact runtime evidence source:** `e259fef5849bc4707ddcbdda8e75795b8f3fa5b4` — Windows FULL #1387 PASS  
