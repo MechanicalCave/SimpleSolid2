@@ -79,6 +79,94 @@ bool SolidPresentationMesh::valid() const noexcept {
                });
 }
 
+bool BodyFacePresentationRange::valid(
+    std::size_t total_triangles) const noexcept {
+    return runtime_token.valid() &&
+           triangle_count > 0U &&
+           first_triangle < total_triangles &&
+           triangle_count <=
+               total_triangles - first_triangle;
+}
+
+bool BodyEdgePresentationPath::valid() const noexcept {
+    if (!runtime_token.valid() ||
+        points.size() < 2U) {
+        return false;
+    }
+    return std::all_of(
+        points.begin(),
+        points.end(),
+        [](const Point3& point) {
+            return std::isfinite(point.x) &&
+                   std::isfinite(point.y) &&
+                   std::isfinite(point.z);
+        });
+}
+
+bool BodyVertexPresentationPoint::valid() const noexcept {
+    return runtime_token.valid() &&
+           std::isfinite(point.x) &&
+           std::isfinite(point.y) &&
+           std::isfinite(point.z);
+}
+
+bool BodyPresentation::valid() const noexcept {
+    if (!mesh.valid()) {
+        return false;
+    }
+
+    for (std::size_t index = 0U;
+         index < faces.size();
+         ++index) {
+        if (!faces[index].valid(
+                mesh.triangles.size())) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < faces.size();
+             ++other) {
+            if (faces[index].runtime_token ==
+                faces[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < edges.size();
+         ++index) {
+        if (!edges[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < edges.size();
+             ++other) {
+            if (edges[index].runtime_token ==
+                edges[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < vertices.size();
+         ++index) {
+        if (!vertices[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < vertices.size();
+             ++other) {
+            if (vertices[index].runtime_token ==
+                vertices[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 bool ExtrudeFaceRole::valid() const noexcept {
     if (kind == ExtrudeGeneratedFaceRoleKind::cap) {
         return cap_role.has_value() &&
@@ -170,6 +258,30 @@ ISolidModelingKernel::presentationMesh(
             ? SolidPresentationStatus::unsupported
             : SolidPresentationStatus::invalid_input,
         {}};
+}
+
+BodyPresentationResult
+ISolidModelingKernel::bodyPresentation(
+    RuntimeSolidHandle solid) noexcept {
+    if (!solid) {
+        return {
+            SolidPresentationStatus::invalid_input,
+            {}};
+    }
+
+    const auto mesh =
+        presentationMesh(solid);
+    if (!mesh.ok()) {
+        return {
+            mesh.status,
+            {}};
+    }
+
+    BodyPresentation body;
+    body.mesh = mesh.mesh;
+    return {
+        SolidPresentationStatus::ok,
+        std::move(body)};
 }
 
 } // namespace simplesolid2::kernel
