@@ -281,6 +281,27 @@ set_tests_properties(pm02c.production_edge_curve_vertex_point PROPERTIES
     LABELS "tier-full-only;subsystem-kernel;subsystem-part;native"
 )
 
+add_executable(pm02d1_atomic_body_presentation_test
+    pm02d1_atomic_body_presentation_test.cpp
+)
+
+target_link_libraries(pm02d1_atomic_body_presentation_test
+    PRIVATE
+        simplesolid2_kernel
+        simplesolid2_kernel_occt
+)
+
+target_compile_features(pm02d1_atomic_body_presentation_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm02d1.atomic_body_presentation
+    COMMAND pm02d1_atomic_body_presentation_test
+)
+
+set_tests_properties(pm02d1.atomic_body_presentation PROPERTIES
+    LABELS "tier-full-only;subsystem-kernel;subsystem-part;subsystem-viewer;native"
+)
+
 add_executable(pm02p_a_topology_inventory_test
     pm02p_a_topology_inventory_test.cpp
 )
@@ -442,6 +463,7 @@ add_custom_target(ss2_tests_subsystem_kernel
         pm02a_production_topology_catalog_test
         pm02b_production_surface_lineage_test
         pm02c_production_edge_curve_vertex_point_test
+        pm02d1_atomic_body_presentation_test
         pm02p_a_topology_inventory_test
         pm02p_b1_surface_carriers_test
         pm02p_b2_boolean_surface_lineage_test
