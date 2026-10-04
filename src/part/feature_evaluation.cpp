@@ -1866,6 +1866,89 @@ bool FeatureSurfaceResolution::valid() const noexcept {
     return false;
 }
 
+bool FeatureCurveAddress::valid() const noexcept {
+    if (!producer_feature_id.valid() ||
+        adjacent_surfaces.size() != 2U ||
+        adjacent_surfaces[0] ==
+            adjacent_surfaces[1] ||
+        !std::is_sorted(
+            adjacent_surfaces.begin(),
+            adjacent_surfaces.end())) {
+        return false;
+    }
+    return adjacent_surfaces[0].valid() &&
+           adjacent_surfaces[1].valid();
+}
+
+bool FeatureCurveResolution::valid() const noexcept {
+    if (!address.valid() ||
+        curve_kind == kernel::CurveKind::other ||
+        candidate_edge_count !=
+            current_edges.size()) {
+        return false;
+    }
+    if (!uniqueValidTokens(current_edges)) {
+        return false;
+    }
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        return candidate_edge_count == 1U;
+    case kernel::ReferenceStatus::ambiguous:
+        return candidate_edge_count >= 1U;
+    case kernel::ReferenceStatus::missing:
+    case kernel::ReferenceStatus::unsupported:
+        return candidate_edge_count == 0U &&
+               current_edges.empty();
+    }
+    return false;
+}
+
+bool FeaturePointAddress::valid() const noexcept {
+    if (!producer_feature_id.valid() ||
+        adjacent_surfaces.size() != 3U ||
+        !std::is_sorted(
+            adjacent_surfaces.begin(),
+            adjacent_surfaces.end())) {
+        return false;
+    }
+    for (std::size_t index = 0U;
+         index < adjacent_surfaces.size();
+         ++index) {
+        if (!adjacent_surfaces[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < adjacent_surfaces.size();
+             ++other) {
+            if (adjacent_surfaces[index] ==
+                adjacent_surfaces[other]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool FeaturePointResolution::valid() const noexcept {
+    if (!address.valid() ||
+        candidate_vertex_count !=
+            current_vertices.size() ||
+        !uniqueValidTokens(current_vertices)) {
+        return false;
+    }
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        return candidate_vertex_count == 1U;
+    case kernel::ReferenceStatus::ambiguous:
+        return candidate_vertex_count >= 1U;
+    case kernel::ReferenceStatus::missing:
+    case kernel::ReferenceStatus::unsupported:
+        return candidate_vertex_count == 0U &&
+               current_vertices.empty();
+    }
+    return false;
+}
+
 bool BodyFaceTopologyRecord::valid() const noexcept {
     if (!runtime_token.valid()) {
         return false;
@@ -1908,17 +1991,106 @@ bool BodyFaceTopologyRecord::valid() const noexcept {
 }
 
 bool BodyEdgeTopologyRecord::valid() const noexcept {
-    return runtime_token.valid() &&
-           accounting_class !=
-               TopologyAccountingClass::
-                   integrity_failure;
+    if (!runtime_token.valid()) {
+        return false;
+    }
+    for (std::size_t index = 0U;
+         index < curve_candidates.size();
+         ++index) {
+        if (!curve_candidates[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < curve_candidates.size();
+             ++other) {
+            if (curve_candidates[index] ==
+                curve_candidates[other]) {
+                return false;
+            }
+        }
+    }
+
+    switch (accounting_class) {
+    case TopologyAccountingClass::referenceable:
+        return !periodic_seam &&
+               !curve_candidates.empty() &&
+               curve_kind !=
+                   kernel::CurveKind::other &&
+               (referenceability ==
+                    kernel::ReferenceStatus::resolved ||
+                referenceability ==
+                    kernel::ReferenceStatus::ambiguous);
+    case TopologyAccountingClass::
+        known_representation_artifact:
+        return periodic_seam &&
+               curve_candidates.empty() &&
+               referenceability ==
+                   kernel::ReferenceStatus::
+                       unsupported;
+    case TopologyAccountingClass::
+        semantically_unsupported:
+        return !periodic_seam &&
+               curve_candidates.empty() &&
+               referenceability ==
+                   kernel::ReferenceStatus::
+                       unsupported;
+    case TopologyAccountingClass::
+        integrity_failure:
+        return false;
+    }
+    return false;
 }
 
 bool BodyVertexTopologyRecord::valid() const noexcept {
-    return runtime_token.valid() &&
-           accounting_class !=
-               TopologyAccountingClass::
-                   integrity_failure;
+    if (!runtime_token.valid()) {
+        return false;
+    }
+    for (std::size_t index = 0U;
+         index < point_candidates.size();
+         ++index) {
+        if (!point_candidates[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < point_candidates.size();
+             ++other) {
+            if (point_candidates[index] ==
+                point_candidates[other]) {
+                return false;
+            }
+        }
+    }
+    if (provider_point &&
+        (!std::isfinite(provider_point->x) ||
+         !std::isfinite(provider_point->y) ||
+         !std::isfinite(provider_point->z))) {
+        return false;
+    }
+
+    switch (accounting_class) {
+    case TopologyAccountingClass::referenceable:
+        return !point_candidates.empty() &&
+               (referenceability ==
+                    kernel::ReferenceStatus::resolved ||
+                referenceability ==
+                    kernel::ReferenceStatus::ambiguous);
+    case TopologyAccountingClass::
+        semantically_unsupported:
+        return point_candidates.empty() &&
+               referenceability ==
+                   kernel::ReferenceStatus::
+                       unsupported;
+    case TopologyAccountingClass::
+        known_representation_artifact:
+        return point_candidates.empty() &&
+               referenceability ==
+                   kernel::ReferenceStatus::
+                       unsupported;
+    case TopologyAccountingClass::
+        integrity_failure:
+        return false;
+    }
+    return false;
 }
 
 bool BodyStageTopologyCatalog::valid() const noexcept {
@@ -1999,6 +2171,38 @@ bool BodyStageTopologyCatalog::valid() const noexcept {
                 surfaces[other].runtime_token &&
                 surfaces[index].runtime_token ==
                     surfaces[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < curves.size();
+         ++index) {
+        if (!curves[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < curves.size();
+             ++other) {
+            if (curves[index].address ==
+                curves[other].address) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < points.size();
+         ++index) {
+        if (!points[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < points.size();
+             ++other) {
+            if (points[index].address ==
+                points[other].address) {
                 return false;
             }
         }
