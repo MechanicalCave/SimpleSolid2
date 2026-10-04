@@ -129,6 +129,10 @@ extrudeEvaluationText(
                 return QStringLiteral(
                     "Kernel rejected the current Extrude.");
             case part::FeatureEvaluationDiagnosticCode::
+                topology_integrity_failure:
+                return QStringLiteral(
+                    "Body topology accounting failed; Extrude was not accepted.");
+            case part::FeatureEvaluationDiagnosticCode::
                 missing_profile:
                 return QStringLiteral(
                     "Source Profile is missing.");
@@ -233,6 +237,8 @@ QString featureEvaluationDiagnosticText(
         return QStringLiteral("Empty result");
     case part::FeatureEvaluationDiagnosticCode::multi_solid:
         return QStringLiteral("Multi-solid result");
+    case part::FeatureEvaluationDiagnosticCode::topology_integrity_failure:
+        return QStringLiteral("Topology integrity failure");
     }
     return QStringLiteral("Unknown");
 }
