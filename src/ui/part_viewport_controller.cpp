@@ -1426,7 +1426,7 @@ projectSketchSnapInferencePresentation(
 
     viewer::SketchSnapInferenceScene scene;
     const auto make_marker =
-        [hosted](
+        [this, hosted](
             const sketch::SnapCandidate& candidate)
             -> std::optional<
                 viewer::SketchSnapMarkerPresentation> {
@@ -1923,7 +1923,7 @@ bool PartViewportController::projectSketchInteraction(
         if (grips_visible) {
             grip_scene.grips.reserve(selected.size() * 5U);
             const auto push_grip =
-                [&grip_scene, hosted](
+                [this, &grip_scene, hosted](
                     viewer::PresentationToken token,
                     viewer::SketchGripRole role,
                     sketch::Point2 point) {
@@ -3172,7 +3172,7 @@ PartViewportController::buildProfileRegionPresentation(
     const part::PartSketch& source,
     const sketch::RegionCandidate2D& region) const {
     const auto sample_loop =
-        [&source](
+        [this, &source](
             const sketch::RegionLoop2D& loop)
             -> std::optional<
                 std::vector<viewer::Point3>> {
