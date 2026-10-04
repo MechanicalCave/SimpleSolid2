@@ -2837,6 +2837,26 @@ PartViewportController::buildReferenceScene() const {
 std::optional<viewer::BodyScene>
 PartViewportController::buildBodyScene() {
     viewer::BodyScene empty_scene;
+
+    const auto clear_stale_body_selection =
+        [this]() {
+            const auto* selection =
+                static_cast<
+                    const PartViewportController&>(
+                        *this)
+                    .activeSelection();
+            const bool had_body_selection =
+                selection != nullptr &&
+                (!selection->body_topology.empty() ||
+                 selection
+                     ->primary_body_topology
+                     .has_value());
+            clearBodyTopologySelection();
+            if (had_body_selection) {
+                applySelectionToSurfaces();
+                notifySelectionChanged();
+            }
+        };
     if (session_ == nullptr ||
         solid_modeling_kernel_ == nullptr) {
         body_scene_revision_.reset();
@@ -2860,7 +2880,7 @@ PartViewportController::buildBodyScene() {
             body_scene_cache_.reset();
             body_topology_catalog_cache_.reset();
             body_topology_bindings_.clear();
-            clearBodyTopologySelection();
+            clear_stale_body_selection();
             return std::nullopt;
         };
 
@@ -2903,7 +2923,7 @@ PartViewportController::buildBodyScene() {
         body_topology_catalog_cache_.reset();
         body_topology_bindings_.clear();
         clearBodyTopologyPreselection();
-        clearBodyTopologySelection();
+        clear_stale_body_selection();
         body_scene_revision_ = revision;
         body_scene_cache_ = empty_scene;
         return *body_scene_cache_;
@@ -3103,7 +3123,7 @@ PartViewportController::buildBodyScene() {
     }
 
     clearBodyTopologyPreselection();
-    clearBodyTopologySelection();
+    clear_stale_body_selection();
     body_scene_revision_ = revision;
     body_scene_cache_ = scene;
     body_topology_catalog_cache_ = *topology;
