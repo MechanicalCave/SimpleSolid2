@@ -1350,6 +1350,7 @@ template <typename Mapper>
                         inherited,
                     index,
                     std::move(candidates),
+                    tracked.role,
                     tracked.kind,
                     tracked.canonical_frame,
                     false,
@@ -1393,6 +1394,7 @@ template <typename Mapper>
                     created,
                 index,
                 std::move(candidates),
+                source.role,
                 source.surface_kind,
                 source.canonical_frame,
                 false,
@@ -1469,9 +1471,11 @@ template <typename Mapper>
                         published.token.value,
                         OcctRuntimeSolid::
                             TrackedSurface{
+                                claim.role,
                                 claim.surface_kind,
                                 claim.canonical_frame,
-                                claim.candidates})
+                                claim.candidates,
+                                false})
                          .second) {
                     return false;
                 }
@@ -1518,9 +1522,11 @@ template <typename Mapper>
         if (!runtime.tracked_surfaces.emplace(
                 token->value,
                 OcctRuntimeSolid::TrackedSurface{
+                    claim.role,
                     claim.surface_kind,
                     claim.canonical_frame,
-                    claim.candidates})
+                    claim.candidates,
+                    true})
                  .second) {
             return false;
         }
