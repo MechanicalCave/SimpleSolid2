@@ -4377,6 +4377,7 @@ public:
     }
 
     void clearSolidScene() noexcept {
+        clearBodySelectionObjects();
         clearBodyEdgeStyleObjects();
         if (!context_.IsNull() &&
             !solid_object_.IsNull()) {
@@ -4800,8 +4801,188 @@ public:
                    token) != selection_.selected.end();
     }
 
+    void clearBodySelectionObjects() noexcept {
+        if (!context_.IsNull()) {
+            for (const auto& object :
+                 body_selection_objects_) {
+                if (object.IsNull()) continue;
+                const auto retained = object;
+                guardedVoid(
+                    "removeBodySelectionOverlay",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+        body_selection_objects_.clear();
+    }
+
+    [[nodiscard]] bool appendBodySelectionOverlay(
+        viewer::PresentationToken token,
+        bool primary) {
+        if (context_.IsNull() ||
+            body_scene_.empty()) {
+            return true;
+        }
+
+        const Quantity_Color color =
+            primary
+                ? Quantity_Color{
+                      0.25, 0.90, 1.0,
+                      Quantity_TOC_RGB}
+                : Quantity_Color{
+                      0.18, 0.72, 0.96,
+                      Quantity_TOC_RGB};
+
+        const auto face =
+            std::find_if(
+                body_scene_.faces.begin(),
+                body_scene_.faces.end(),
+                [token](const auto& item) {
+                    return item.token == token;
+                });
+        if (face !=
+            body_scene_.faces.end()) {
+            viewer::SolidScene subset;
+            subset.triangles.reserve(
+                face->triangle_count);
+            for (std::size_t index = 0U;
+                 index < face->triangle_count;
+                 ++index) {
+                subset.triangles.push_back(
+                    body_scene_.triangles[
+                        face->first_triangle +
+                        index]);
+            }
+            auto object =
+                makeSolidObject(subset);
+            if (object.IsNull()) {
+                return false;
+            }
+            setOwnedSolidShadingStyle(
+                object,
+                color,
+                primary ? 0.18 : 0.30);
+            object->SetPolygonOffsets(
+                Aspect_POM_Fill,
+                -2.0F,
+                -2.0F);
+            context_->Display(
+                object,
+                false);
+            context_->Deactivate(
+                object);
+            body_selection_objects_.push_back(
+                object);
+            return true;
+        }
+
+        const auto edge =
+            std::find_if(
+                body_scene_.edges.begin(),
+                body_scene_.edges.end(),
+                [token](const auto& item) {
+                    return item.token == token;
+                });
+        if (edge !=
+            body_scene_.edges.end()) {
+            BRepBuilderAPI_MakePolygon polygon;
+            for (const auto& point :
+                 edge->points) {
+                polygon.Add(toPoint(point));
+            }
+            if (!polygon.IsDone()) {
+                return false;
+            }
+            Handle(AIS_Shape) object =
+                new AIS_Shape(polygon.Wire());
+            const auto aspect =
+                occ::handle<Prs3d_LineAspect>{
+                    new Prs3d_LineAspect(
+                        color,
+                        Aspect_TOL_SOLID,
+                        primary ? 4.0 : 3.0)};
+            object->Attributes()->SetLineAspect(
+                aspect);
+            object->Attributes()->SetWireAspect(
+                aspect);
+            object->Attributes()->SetFreeBoundaryAspect(
+                aspect);
+            object->Attributes()->SetUnFreeBoundaryAspect(
+                aspect);
+            context_->Display(
+                object,
+                false);
+            context_->Deactivate(
+                object);
+            body_selection_objects_.push_back(
+                object);
+            return true;
+        }
+
+        const auto vertex =
+            std::find_if(
+                body_scene_.vertices.begin(),
+                body_scene_.vertices.end(),
+                [token](const auto& item) {
+                    return item.token == token;
+                });
+        if (vertex !=
+            body_scene_.vertices.end()) {
+            double dpr =
+                owner_.devicePixelRatioF();
+            if (!std::isfinite(dpr) ||
+                dpr <= 0.0) {
+                dpr = 1.0;
+            }
+            const int size =
+                gripMarkerPixelSize(
+                    primary ? 11.0 : 9.0,
+                    dpr);
+            Handle(Geom_CartesianPoint) point =
+                new Geom_CartesianPoint(
+                    toPoint(vertex->point));
+            Handle(AIS_Point) object =
+                new AIS_Point(point);
+            object->Attributes()->SetPointAspect(
+                new Prs3d_PointAspect(
+                    color,
+                    size,
+                    size,
+                    squareMarkerBitmap(
+                        size,
+                        true)));
+            context_->Display(
+                object,
+                false);
+            context_->Deactivate(
+                object);
+            body_selection_objects_.push_back(
+                object);
+            return true;
+        }
+
+        return true;
+    }
+
     void applySelectionStyles() {
         if (context_.IsNull()) return;
+
+        clearBodySelectionObjects();
+        for (const auto token :
+             selection_.selected) {
+            const bool primary =
+                selection_.primary &&
+                *selection_.primary == token;
+            if (!appendBodySelectionOverlay(
+                    token,
+                    primary)) {
+                clearBodySelectionObjects();
+                break;
+            }
+        }
 
         for (const auto& entry : reference_objects_) {
             if (entry.object.IsNull()) continue;
@@ -5353,6 +5534,8 @@ private:
         body_visible_edge_objects_;
     std::vector<Handle(AIS_Shape)>
         body_hidden_edge_objects_;
+    std::vector<Handle(AIS_InteractiveObject)>
+        body_selection_objects_;
     viewer::SolidScene solid_scene_;
     viewer::SolidPreviewScene solid_preview_scene_;
     std::vector<ProfileObject> profile_objects_;
