@@ -733,6 +733,11 @@ add_executable(pm02e_sketch_support_schema_v9_test
     pm02e_sketch_support_schema_v9_test.cpp
 )
 
+target_include_directories(pm02e_sketch_support_schema_v9_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/nlohmann-json-3.12.0/include
+)
+
 target_link_libraries(pm02e_sketch_support_schema_v9_test
     PRIVATE
         simplesolid2_application
