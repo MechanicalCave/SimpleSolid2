@@ -1,8 +1,8 @@
 # PM-02 — View Style / Tree Feature Contribution UX Design
 
 **Status:** ACCEPTED UX DESIGN INPUT — 2026-10-04  
-**Production PM-02:** PROPOSED / NOT ACTIVE  
-**Applies to candidate:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
+**Production PM-02:** ACTIVE  
+**Applies to active contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Architecture basis:** ADR-0014 + ADR-0016 + PM-02P reference-survival evidence
 
 ## 1. Purpose
@@ -14,7 +14,7 @@ Define the presentation and interaction meaning of:
 - Feature hover/selection from Document Tree;
 - the relationship between visible topology and semantic Surface / Curve / Point meaning.
 
-This document is a UX/architecture input. It does not activate production implementation.
+This accepted UX/architecture input is normative within the active PM-02 Work Contract.
 
 ## 2. Three independent presentation layers
 
