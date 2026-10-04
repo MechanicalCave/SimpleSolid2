@@ -77,6 +77,14 @@ enum class FeatureFaceRoleKind {
     side,
 };
 
+enum class FeatureSurfaceRoleKind {
+    profile_cap,
+    extent_cap,
+    negative_cap,
+    positive_cap,
+    side,
+};
+
 struct FeatureFaceAddress final {
     FeatureId producer_feature_id;
     FeatureFaceRoleKind role{
@@ -108,12 +116,63 @@ struct FeatureFaceResolution final {
         const FeatureFaceResolution&) = default;
 };
 
+struct FeatureSurfaceAddress final {
+    FeatureId producer_feature_id;
+    FeatureSurfaceRoleKind role{
+        FeatureSurfaceRoleKind::side};
+    std::optional<sketch::EntityId>
+        source_entity;
+    std::uint32_t loop_index{};
+    std::uint32_t use_index{};
+    bool hole{false};
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeatureSurfaceAddress&,
+        const FeatureSurfaceAddress&) = default;
+};
+
+struct FeatureSurfaceResolution final {
+    FeatureSurfaceAddress address;
+    kernel::ReferenceStatus status{
+        kernel::ReferenceStatus::unsupported};
+    kernel::ReferenceStatus strict_face_status{
+        kernel::ReferenceStatus::unsupported};
+    std::size_t candidate_face_count{};
+    kernel::SurfaceKind surface_kind{
+        kernel::SurfaceKind::other};
+    std::optional<kernel::Frame3>
+        canonical_frame;
+    // Runtime-only semantic-carrier bridge. Present only while Surface is
+    // Resolved in the current provider generation; never serialized.
+    std::optional<kernel::RuntimeSurfaceToken>
+        runtime_token;
+    // Current bounded Face realizations of this carrier. May contain >1 token
+    // while Surface remains Resolved and strict Face becomes Ambiguous.
+    std::vector<kernel::RuntimeFaceToken>
+        current_faces;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeatureSurfaceResolution&,
+        const FeatureSurfaceResolution&) = default;
+};
+
 struct BodyFaceTopologyRecord final {
     kernel::RuntimeFaceToken runtime_token;
     TopologyAccountingClass accounting_class{
         TopologyAccountingClass::semantically_unsupported};
+    // Strict bounded Face meaning is present only when that semantic Face is
+    // singularly Resolved at this stage.
     std::optional<FeatureFaceAddress>
         semantic_address;
+    // Carrier candidates are distinct from strict Face identity. A single
+    // Face normally maps to one semantic Surface; >1 is an explicit
+    // Ambiguous carrier situation, never provider-order winner selection.
+    std::vector<FeatureSurfaceAddress>
+        surface_candidates;
 
     [[nodiscard]] bool valid() const noexcept;
 
@@ -151,6 +210,8 @@ struct BodyStageTopologyCatalog final {
     std::vector<BodyFaceTopologyRecord> faces;
     std::vector<BodyEdgeTopologyRecord> edges;
     std::vector<BodyVertexTopologyRecord> vertices;
+    std::vector<FeatureSurfaceResolution>
+        surfaces;
 
     [[nodiscard]] bool valid() const noexcept;
     [[nodiscard]] bool complete() const noexcept;
@@ -170,6 +231,8 @@ struct FeatureEvaluation final {
         kernel_status;
     std::vector<FeatureFaceResolution>
         produced_faces;
+    std::vector<FeatureSurfaceResolution>
+        produced_surfaces;
     // Same-revision runtime result for this exact successful Feature stage.
     // Retained only so stage-scoped topology tokens remain resolvable during
     // the current evaluation; never serialized or treated as final Body truth.
@@ -204,6 +267,10 @@ struct PartEvaluation final {
     // Empty when Body is unavailable.
     std::vector<FeatureFaceResolution>
         current_face_references;
+    // Semantic Surface carriers resolved at the current final Body stage.
+    // Empty when Body is unavailable.
+    std::vector<FeatureSurfaceResolution>
+        current_surface_references;
 
     [[nodiscard]] const FeatureEvaluation*
     findFeature(FeatureId id) const noexcept;

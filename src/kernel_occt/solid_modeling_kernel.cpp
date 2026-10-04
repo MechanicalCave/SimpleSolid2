@@ -3,6 +3,7 @@
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
@@ -34,6 +35,7 @@
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 #include <GProp_GProps.hxx>
+#include <GeomAbs_SurfaceType.hxx>
 #include <BRepSweep_Prism.hxx>
 
 #include <algorithm>
@@ -256,9 +258,122 @@ buildEdge(
         use.curve);
 }
 
+[[nodiscard]] kernel::SurfaceKind
+semanticSurfaceKind(
+    const kernel::BoundaryUse2D& use) noexcept {
+    return std::holds_alternative<kernel::Line2>(
+               use.curve)
+        ? kernel::SurfaceKind::plane
+        : kernel::SurfaceKind::cylinder;
+}
+
+[[nodiscard]] kernel::SurfaceKind
+providerSurfaceKind(
+    const TopoDS_Face& face) {
+    BRepAdaptor_Surface surface{face, true};
+    switch (surface.GetType()) {
+    case GeomAbs_Plane:
+        return kernel::SurfaceKind::plane;
+    case GeomAbs_Cylinder:
+        return kernel::SurfaceKind::cylinder;
+    case GeomAbs_Cone:
+        return kernel::SurfaceKind::cone;
+    case GeomAbs_Sphere:
+        return kernel::SurfaceKind::sphere;
+    case GeomAbs_Torus:
+        return kernel::SurfaceKind::torus;
+    default:
+        return kernel::SurfaceKind::other;
+    }
+}
+
+[[nodiscard]] std::optional<kernel::Frame3>
+shiftedCarrierFrame(
+    const kernel::Frame3& source,
+    double normal_offset) noexcept {
+    kernel::Frame3 result = source;
+    result.origin.x +=
+        result.normal.x * normal_offset;
+    result.origin.y +=
+        result.normal.y * normal_offset;
+    result.origin.z +=
+        result.normal.z * normal_offset;
+    return result.valid()
+        ? std::optional<kernel::Frame3>{result}
+        : std::nullopt;
+}
+
+[[nodiscard]] std::optional<kernel::Frame3>
+lineSideCarrierFrame(
+    const kernel::PlanarProfileInput& input,
+    const kernel::BoundaryUse2D& use) {
+    const auto* line =
+        std::get_if<kernel::Line2>(
+            &use.curve);
+    if (line == nullptr) {
+        return std::nullopt;
+    }
+
+    const double du =
+        line->end.u - line->start.u;
+    const double dv =
+        line->end.v - line->start.v;
+    const gp_Vec u_vector{
+        input.frame.u_axis.x * du +
+            input.frame.v_axis.x * dv,
+        input.frame.u_axis.y * du +
+            input.frame.v_axis.y * dv,
+        input.frame.u_axis.z * du +
+            input.frame.v_axis.z * dv};
+    if (!(u_vector.SquareMagnitude() > 0.0)) {
+        return std::nullopt;
+    }
+
+    const gp_Dir u{u_vector};
+    const gp_Dir v{
+        input.frame.normal.x,
+        input.frame.normal.y,
+        input.frame.normal.z};
+    const gp_Vec n_vector =
+        gp_Vec{u}.Crossed(gp_Vec{v});
+    if (!(n_vector.SquareMagnitude() > 0.0)) {
+        return std::nullopt;
+    }
+    const gp_Dir n{n_vector};
+    const auto origin =
+        point3(input.frame, line->start);
+
+    kernel::Frame3 result;
+    result.origin = {
+        origin.X(),
+        origin.Y(),
+        origin.Z()};
+    result.u_axis = {
+        u.X(),
+        u.Y(),
+        u.Z()};
+    // Canonical side V is source support N, independent of signed extent.
+    result.v_axis = {
+        v.X(),
+        v.Y(),
+        v.Z()};
+    result.normal = {
+        n.X(),
+        n.Y(),
+        n.Z()};
+
+    return result.valid()
+        ? std::optional<kernel::Frame3>{result}
+        : std::nullopt;
+}
+
 struct SourceEdge final {
     TopoDS_Edge edge;
     kernel::BoundaryUseProvenance provenance;
+    kernel::SurfaceKind surface_kind{
+        kernel::SurfaceKind::other};
+    std::optional<kernel::Frame3>
+        canonical_frame;
 };
 
 struct WireBuild final {
@@ -282,9 +397,26 @@ buildWire(
         if (!make_wire.IsDone()) {
             return std::nullopt;
         }
+        const auto surface_kind =
+            semanticSurfaceKind(use);
+        auto canonical_frame =
+            surface_kind ==
+                    kernel::SurfaceKind::plane
+                ? lineSideCarrierFrame(
+                      input,
+                      use)
+                : std::optional<
+                      kernel::Frame3>{};
+        if (surface_kind ==
+                kernel::SurfaceKind::plane &&
+            !canonical_frame) {
+            return std::nullopt;
+        }
         result.source_edges.push_back(
             {make_wire.Edge(),
-             use.provenance});
+             use.provenance,
+             surface_kind,
+             std::move(canonical_frame)});
     }
     result.wire = make_wire.Wire();
     return result;
@@ -533,6 +665,10 @@ matchingFaceEdges(
 struct NewSemanticSource final {
     kernel::ExtrudeFaceRole role;
     std::vector<TopoDS_Face> source_faces;
+    kernel::SurfaceKind surface_kind{
+        kernel::SurfaceKind::other};
+    std::optional<kernel::Frame3>
+        canonical_frame;
 };
 
 [[nodiscard]] kernel::ReferenceStatus
@@ -566,9 +702,21 @@ public:
     std::map<std::uint64_t, TopoDS_Vertex>
         inventory_vertices;
 
+    struct TrackedSurface final {
+        kernel::SurfaceKind kind{
+            kernel::SurfaceKind::other};
+        std::optional<kernel::Frame3>
+            canonical_frame;
+        std::vector<TopoDS_Face> faces;
+    };
+
+    std::map<std::uint64_t, TrackedSurface>
+        tracked_surfaces;
+
     std::uint64_t next_face_token{1U};
     std::uint64_t next_edge_token{1U};
     std::uint64_t next_vertex_token{1U};
+    std::uint64_t next_surface_token{1U};
 };
 
 struct CandidateClaim final {
@@ -795,6 +943,18 @@ buildExtrudeTool(
     const auto shape = sweep.Shape();
     if (shape.IsNull()) return std::nullopt;
 
+    const auto start_frame =
+        shiftedCarrierFrame(
+            input.profile.frame,
+            input.start_offset_mm);
+    const auto end_frame =
+        shiftedCarrierFrame(
+            input.profile.frame,
+            input.end_offset_mm);
+    if (!start_frame || !end_frame) {
+        return std::nullopt;
+    }
+
     std::vector<NewSemanticSource> sources;
     sources.push_back(
         {
@@ -804,6 +964,8 @@ buildExtrudeTool(
                 std::nullopt},
             facesFromShape(
                 sweep.FirstShape()),
+            kernel::SurfaceKind::plane,
+            start_frame,
         });
     sources.push_back(
         {
@@ -813,6 +975,8 @@ buildExtrudeTool(
                 std::nullopt},
             facesFromShape(
                 sweep.LastShape()),
+            kernel::SurfaceKind::plane,
+            end_frame,
         });
 
     for (const auto& source :
@@ -845,6 +1009,22 @@ buildExtrudeTool(
                 }
             }
         }
+        auto canonical_frame =
+            source.canonical_frame;
+        if (canonical_frame) {
+            // buildProfileFace() consumed the profile shifted to the sweep
+            // start. Canonical side O is authored on the source support plane
+            // and therefore must not move with Reverse/Midplane start offset.
+            canonical_frame->origin.x -=
+                input.profile.frame.normal.x *
+                input.start_offset_mm;
+            canonical_frame->origin.y -=
+                input.profile.frame.normal.y *
+                input.start_offset_mm;
+            canonical_frame->origin.z -=
+                input.profile.frame.normal.z *
+                input.start_offset_mm;
+        }
         sources.push_back(
             {
                 kernel::ExtrudeFaceRole{
@@ -852,6 +1032,8 @@ buildExtrudeTool(
                     std::nullopt,
                     source.provenance},
                 std::move(faces),
+                source.surface_kind,
+                std::move(canonical_frame),
             });
     }
 
@@ -997,6 +1179,329 @@ allocateRuntimeToken(
                result.edge_count &&
            result.current_vertices.size() ==
                result.vertex_count;
+}
+
+[[nodiscard]] std::optional<kernel::RuntimeFaceToken>
+inventoryFaceToken(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Face& face) {
+    for (const auto& [token, current] :
+         runtime.inventory_faces) {
+        if (current.IsSame(face)) {
+            return kernel::RuntimeFaceToken{token};
+        }
+    }
+    return std::nullopt;
+}
+
+void appendUniqueFaceCandidate(
+    std::vector<TopoDS_Face>& faces,
+    const TopoDS_Face& candidate) {
+    const bool duplicate =
+        std::any_of(
+            faces.begin(),
+            faces.end(),
+            [&candidate](const TopoDS_Face& existing) {
+                return existing.IsSame(candidate);
+            });
+    if (!duplicate) {
+        faces.push_back(candidate);
+    }
+}
+
+struct SurfaceCandidateClaim final {
+    enum class Kind {
+        inherited,
+        created,
+    };
+
+    Kind kind{Kind::created};
+    std::size_t index{};
+    std::vector<TopoDS_Face> candidates;
+    kernel::SurfaceKind surface_kind{
+        kernel::SurfaceKind::other};
+    std::optional<kernel::Frame3>
+        canonical_frame;
+    bool aliased{false};
+};
+
+void markAliasedSurfaceClaims(
+    std::vector<SurfaceCandidateClaim>& claims) {
+    for (std::size_t first = 0U;
+         first < claims.size();
+         ++first) {
+        for (std::size_t second = first + 1U;
+             second < claims.size();
+             ++second) {
+            bool shared = false;
+            for (const auto& first_face :
+                 claims[first].candidates) {
+                shared =
+                    std::any_of(
+                        claims[second].candidates.begin(),
+                        claims[second].candidates.end(),
+                        [&first_face](
+                            const TopoDS_Face& second_face) {
+                            return first_face.IsSame(
+                                second_face);
+                        });
+                if (shared) break;
+            }
+            if (shared) {
+                claims[first].aliased = true;
+                claims[second].aliased = true;
+            }
+        }
+    }
+}
+
+[[nodiscard]] kernel::ReferenceStatus
+surfaceReferenceStatus(
+    std::size_t count,
+    bool aliased) noexcept {
+    if (count == 0U) {
+        return kernel::ReferenceStatus::missing;
+    }
+    return aliased
+        ? kernel::ReferenceStatus::ambiguous
+        : kernel::ReferenceStatus::resolved;
+}
+
+[[nodiscard]] kernel::ReferenceStatus
+strictFaceReferenceStatus(
+    std::size_t count,
+    bool aliased) noexcept {
+    if (count == 0U) {
+        return kernel::ReferenceStatus::missing;
+    }
+    if (aliased) {
+        return kernel::ReferenceStatus::ambiguous;
+    }
+    return referenceStatus(count);
+}
+
+template <typename Mapper>
+[[nodiscard]] bool publishSurfaceLineage(
+    kernel::SolidModelingResult& result,
+    OcctRuntimeSolid& runtime,
+    const OcctRuntimeSolid* upstream,
+    const std::vector<NewSemanticSource>& created,
+    Mapper&& mapper) {
+    std::vector<SurfaceCandidateClaim> claims;
+
+    if (upstream != nullptr) {
+        runtime.next_surface_token =
+            upstream->next_surface_token;
+        result.inherited_surfaces.reserve(
+            upstream->tracked_surfaces.size());
+
+        for (const auto& [token, tracked] :
+             upstream->tracked_surfaces) {
+            std::vector<TopoDS_Face> candidates;
+            for (const auto& source_face :
+                 tracked.faces) {
+                const auto mapped =
+                    mapper(source_face);
+                for (const auto& candidate :
+                     mapped) {
+                    appendUniqueFaceCandidate(
+                        candidates,
+                        candidate);
+                }
+            }
+
+            const auto index =
+                result.inherited_surfaces.size();
+            result.inherited_surfaces.push_back(
+                {
+                    kernel::RuntimeSurfaceToken{
+                        token},
+                    kernel::ReferenceStatus::
+                        unsupported,
+                    kernel::ReferenceStatus::
+                        unsupported,
+                    0U,
+                    tracked.kind,
+                    tracked.canonical_frame,
+                    {},
+                });
+            claims.push_back(
+                {
+                    SurfaceCandidateClaim::Kind::
+                        inherited,
+                    index,
+                    std::move(candidates),
+                    tracked.kind,
+                    tracked.canonical_frame,
+                    false,
+                });
+        }
+    }
+
+    result.new_surfaces.reserve(created.size());
+    for (const auto& source : created) {
+        std::vector<TopoDS_Face> candidates;
+        for (const auto& source_face :
+             source.source_faces) {
+            const auto mapped =
+                mapper(source_face);
+            for (const auto& candidate :
+                 mapped) {
+                appendUniqueFaceCandidate(
+                    candidates,
+                    candidate);
+            }
+        }
+
+        const auto index =
+            result.new_surfaces.size();
+        result.new_surfaces.push_back(
+            {
+                source.role,
+                kernel::ReferenceStatus::
+                    unsupported,
+                kernel::ReferenceStatus::
+                    unsupported,
+                0U,
+                source.surface_kind,
+                source.canonical_frame,
+                std::nullopt,
+                {},
+            });
+        claims.push_back(
+            {
+                SurfaceCandidateClaim::Kind::
+                    created,
+                index,
+                std::move(candidates),
+                source.surface_kind,
+                source.canonical_frame,
+                false,
+            });
+    }
+
+    markAliasedSurfaceClaims(claims);
+
+    for (const auto& claim : claims) {
+        if (claim.surface_kind ==
+                kernel::SurfaceKind::plane) {
+            if (!claim.canonical_frame ||
+                !claim.canonical_frame->valid()) {
+                return false;
+            }
+        } else if (claim.canonical_frame) {
+            return false;
+        }
+
+        std::vector<kernel::RuntimeFaceToken>
+            current_faces;
+        current_faces.reserve(
+            claim.candidates.size());
+        for (const auto& candidate :
+             claim.candidates) {
+            if (providerSurfaceKind(candidate) !=
+                claim.surface_kind) {
+                return false;
+            }
+            const auto token =
+                inventoryFaceToken(
+                    runtime,
+                    candidate);
+            if (!token) {
+                return false;
+            }
+            current_faces.push_back(*token);
+        }
+
+        const auto surface_status =
+            surfaceReferenceStatus(
+                claim.candidates.size(),
+                claim.aliased);
+        const auto strict_face_status =
+            strictFaceReferenceStatus(
+                claim.candidates.size(),
+                claim.aliased);
+
+        if (claim.kind ==
+            SurfaceCandidateClaim::Kind::
+                inherited) {
+            auto& published =
+                result.inherited_surfaces[
+                    claim.index];
+            if (!published.token.valid()) {
+                return false;
+            }
+            published.surface_status =
+                surface_status;
+            published.strict_face_status =
+                strict_face_status;
+            published.candidate_face_count =
+                claim.candidates.size();
+            published.current_faces =
+                current_faces;
+
+            if (surface_status ==
+                kernel::ReferenceStatus::
+                    resolved) {
+                if (!runtime.tracked_surfaces.emplace(
+                        published.token.value,
+                        OcctRuntimeSolid::
+                            TrackedSurface{
+                                claim.surface_kind,
+                                claim.canonical_frame,
+                                claim.candidates})
+                         .second) {
+                    return false;
+                }
+            }
+            continue;
+        }
+
+        auto& published =
+            result.new_surfaces[
+                claim.index];
+        published.surface_status =
+            surface_status;
+        published.strict_face_status =
+            strict_face_status;
+        published.candidate_face_count =
+            claim.candidates.size();
+        published.current_faces =
+            std::move(current_faces);
+
+        if (surface_status !=
+            kernel::ReferenceStatus::resolved) {
+            continue;
+        }
+
+        const auto token =
+            allocateRuntimeToken<
+                kernel::RuntimeSurfaceToken>(
+                runtime.next_surface_token);
+        if (!token) {
+            published.surface_status =
+                kernel::ReferenceStatus::
+                    unsupported;
+            published.strict_face_status =
+                kernel::ReferenceStatus::
+                    unsupported;
+            published.current_faces.clear();
+            return false;
+        }
+
+        published.resolved_token = *token;
+        if (!runtime.tracked_surfaces.emplace(
+                token->value,
+                OcctRuntimeSolid::TrackedSurface{
+                    claim.surface_kind,
+                    claim.canonical_frame,
+                    claim.candidates})
+                 .second) {
+            return false;
+        }
+    }
+
+    return true;
 }
 
 void populateDiagnostics(
@@ -1209,6 +1714,24 @@ finishBoolean(
             result,
             *runtime,
             runtime->solid)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!publishSurfaceLineage(
+            result,
+            *runtime,
+            &upstream,
+            created,
+            [&operation, &shape](
+                const TopoDS_Face& source) {
+                return descendantFaces(
+                    operation,
+                    source,
+                    shape);
+            })) {
         result.status =
             kernel::SolidModelingStatus::
                 provider_failure;
@@ -1517,6 +2040,29 @@ OcctSolidModelingKernel::extrude(
                     result,
                     *runtime,
                     runtime->solid)) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
+
+            if (!publishSurfaceLineage(
+                    result,
+                    *runtime,
+                    nullptr,
+                    created,
+                    [&tool_shape](
+                        const TopoDS_Face& source) {
+                        std::vector<TopoDS_Face>
+                            candidates;
+                        if (containsSameFace(
+                                tool_shape,
+                                source)) {
+                            candidates.push_back(
+                                source);
+                        }
+                        return candidates;
+                    })) {
                 result.status =
                     kernel::SolidModelingStatus::
                         provider_failure;

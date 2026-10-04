@@ -4,6 +4,7 @@
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -31,7 +32,10 @@ class FakeSolid final
 public:
     std::vector<kernel::RuntimeFaceToken>
         tokens;
+    std::vector<kernel::RuntimeSurfaceToken>
+        surface_tokens;
     std::uint64_t next_token{1U};
+    std::uint64_t next_surface_token{1U};
 };
 
 class FakeKernel final
@@ -40,6 +44,7 @@ public:
     bool saw_reverse{false};
     bool saw_midplane{false};
     bool corrupt_topology_inventory{false};
+    bool split_first_inherited_surface{false};
 
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
@@ -93,6 +98,8 @@ public:
 
         auto runtime =
             std::make_shared<FakeSolid>();
+        std::vector<kernel::RuntimeFaceToken>
+            inventory_faces;
         if (upstream) {
             const auto* existing =
                 dynamic_cast<
@@ -104,35 +111,121 @@ public:
                         provider_mismatch;
                 return result;
             }
-            runtime->tokens =
-                existing->tokens;
             runtime->next_token =
                 existing->next_token;
-            for (const auto token :
-                 existing->tokens) {
+            runtime->next_surface_token =
+                existing->next_surface_token;
+            CHECK(
+                existing->tokens.size() ==
+                existing->surface_tokens.size());
+
+            for (std::size_t index = 0U;
+                 index < existing->tokens.size();
+                 ++index) {
+                const auto face_token =
+                    existing->tokens[index];
+                const auto surface_token =
+                    existing->surface_tokens[index];
+
+                if (split_first_inherited_surface &&
+                    index == 0U) {
+                    const kernel::RuntimeFaceToken
+                        first_fragment{
+                            runtime->next_token++};
+                    const kernel::RuntimeFaceToken
+                        second_fragment{
+                            runtime->next_token++};
+                    inventory_faces.push_back(
+                        first_fragment);
+                    inventory_faces.push_back(
+                        second_fragment);
+
+                    result.inherited_faces.push_back(
+                        {
+                            face_token,
+                            kernel::ReferenceStatus::
+                                ambiguous,
+                            2U,
+                        });
+                    result.inherited_surfaces.push_back(
+                        {
+                            surface_token,
+                            kernel::ReferenceStatus::
+                                resolved,
+                            kernel::ReferenceStatus::
+                                ambiguous,
+                            2U,
+                            kernel::SurfaceKind::plane,
+                            kernel::Frame3{},
+                            {
+                                first_fragment,
+                                second_fragment,
+                            },
+                        });
+                    continue;
+                }
+
+                runtime->tokens.push_back(
+                    face_token);
+                runtime->surface_tokens.push_back(
+                    surface_token);
+                inventory_faces.push_back(
+                    face_token);
                 result.inherited_faces.push_back(
                     {
-                        token,
+                        face_token,
                         kernel::ReferenceStatus::
                             resolved,
                         1U,
+                    });
+                result.inherited_surfaces.push_back(
+                    {
+                        surface_token,
+                        kernel::ReferenceStatus::
+                            resolved,
+                        kernel::ReferenceStatus::
+                            resolved,
+                        1U,
+                        kernel::SurfaceKind::plane,
+                        kernel::Frame3{},
+                        {face_token},
                     });
             }
         }
 
         auto publish =
-            [&result, &runtime](
+            [&result, &runtime, &inventory_faces](
                 kernel::ExtrudeFaceRole role) {
-                const kernel::RuntimeFaceToken token{
+                const kernel::RuntimeFaceToken face_token{
                     runtime->next_token++};
-                runtime->tokens.push_back(token);
+                const kernel::RuntimeSurfaceToken
+                    surface_token{
+                        runtime->next_surface_token++};
+                runtime->tokens.push_back(face_token);
+                runtime->surface_tokens.push_back(
+                    surface_token);
+                inventory_faces.push_back(
+                    face_token);
                 result.new_faces.push_back(
+                    {
+                        role,
+                        kernel::ReferenceStatus::
+                            resolved,
+                        1U,
+                        face_token,
+                    });
+                result.new_surfaces.push_back(
                     {
                         std::move(role),
                         kernel::ReferenceStatus::
                             resolved,
+                        kernel::ReferenceStatus::
+                            resolved,
                         1U,
-                        token,
+                        kernel::SurfaceKind::plane,
+                        kernel::Frame3{},
+                        surface_token,
+                        {face_token},
                     });
             };
 
@@ -164,7 +257,7 @@ public:
         result.brep_valid = true;
         result.solid_count = 1U;
         result.current_faces =
-            runtime->tokens;
+            std::move(inventory_faces);
         result.face_count =
             result.current_faces.size();
         result.edge_count = 0U;
@@ -371,6 +464,8 @@ int main() {
         valid_eval.current_topology->stage.feature_id ==
         std::optional<part::FeatureId>{id2});
     CHECK(valid_eval.current_topology->faces.size() == 12U);
+    CHECK(valid_eval.current_topology->surfaces.size() == 12U);
+    CHECK(valid_eval.current_surface_references.size() == 12U);
     CHECK(valid_eval.current_topology->edges.empty());
     CHECK(valid_eval.current_topology->vertices.empty());
     CHECK(valid_eval.features[0].result_solid != nullptr);
@@ -391,6 +486,22 @@ int main() {
                 referenceable);
         CHECK(face.semantic_address.has_value());
     }
+    for (const auto& surface :
+         valid_eval.current_surface_references) {
+        CHECK(surface.valid());
+        CHECK(
+            surface.status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(
+            surface.strict_face_status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(surface.runtime_token.has_value());
+        CHECK(surface.current_faces.size() == 1U);
+        CHECK(
+            surface.surface_kind ==
+            kernel::SurfaceKind::plane);
+        CHECK(surface.canonical_frame.has_value());
+    }
     for (const auto& reference :
          valid_eval.current_face_references) {
         CHECK(reference.address.valid());
@@ -399,6 +510,92 @@ int main() {
             kernel::ReferenceStatus::resolved);
         CHECK(reference.runtime_token);
     }
+
+    // PM-02B semantic split: one strict bounded Face becomes two current
+    // realizations while its semantic Surface remains singularly Resolved.
+    kernel.split_first_inherited_surface = true;
+    const auto split_eval =
+        part::evaluatePart(
+            valid,
+            kernel);
+    kernel.split_first_inherited_surface = false;
+
+    CHECK(
+        split_eval.body_status ==
+        part::BodyEvaluationStatus::
+            up_to_date);
+    CHECK(split_eval.current_topology.has_value());
+
+    const part::FeatureSurfaceAddress
+        split_surface_address{
+            id1,
+            part::FeatureSurfaceRoleKind::
+                profile_cap,
+            std::nullopt,
+            0U,
+            0U,
+            false};
+    const auto split_surface =
+        std::find_if(
+            split_eval.current_surface_references.begin(),
+            split_eval.current_surface_references.end(),
+            [&split_surface_address](const auto& surface) {
+                return surface.address ==
+                       split_surface_address;
+            });
+    CHECK(
+        split_surface !=
+        split_eval.current_surface_references.end());
+    CHECK(split_surface->valid());
+    CHECK(
+        split_surface->status ==
+        kernel::ReferenceStatus::resolved);
+    CHECK(
+        split_surface->strict_face_status ==
+        kernel::ReferenceStatus::ambiguous);
+    CHECK(split_surface->candidate_face_count == 2U);
+    CHECK(split_surface->current_faces.size() == 2U);
+
+    const part::FeatureFaceAddress
+        split_face_address{
+            id1,
+            part::FeatureFaceRoleKind::
+                profile_cap,
+            std::nullopt,
+            0U,
+            0U,
+            false};
+    const auto split_face =
+        std::find_if(
+            split_eval.current_face_references.begin(),
+            split_eval.current_face_references.end(),
+            [&split_face_address](const auto& face) {
+                return face.address ==
+                       split_face_address;
+            });
+    CHECK(
+        split_face !=
+        split_eval.current_face_references.end());
+    CHECK(
+        split_face->status ==
+        kernel::ReferenceStatus::ambiguous);
+    CHECK(split_face->candidate_count == 2U);
+    CHECK(!split_face->runtime_token.has_value());
+
+    const auto fragment_count =
+        static_cast<std::size_t>(
+            std::count_if(
+                split_eval.current_topology->faces.begin(),
+                split_eval.current_topology->faces.end(),
+                [&split_surface_address](const auto& face) {
+                    return !face.semantic_address &&
+                           std::find(
+                               face.surface_candidates.begin(),
+                               face.surface_candidates.end(),
+                               split_surface_address) !=
+                               face.surface_candidates.end();
+                }));
+    CHECK(fragment_count == 2U);
 
     // Part -> Kernel translation preserves Reverse OneSide semantics.
     kernel.saw_reverse = false;
@@ -683,6 +880,7 @@ int main() {
         << " stale_last_good=0"
         << " resolved_prefix_presentation=1"
         << " topology_catalog=1"
+        << " split_face_ambiguous_surface_resolved=1"
         << " topology_integrity_fail_closed=1"
         << " restart_after_failure=0\n";
     return EXIT_SUCCESS;
