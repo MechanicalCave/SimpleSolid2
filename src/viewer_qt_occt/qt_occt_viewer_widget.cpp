@@ -1489,6 +1489,184 @@ public:
             solid_object_);
     }
 
+    void clearBodyEdgeStyleObjects() noexcept {
+        if (!context_.IsNull()) {
+            for (const auto& object :
+                 body_visible_edge_objects_) {
+                if (object.IsNull()) continue;
+                const auto retained = object;
+                guardedVoid(
+                    "removeBodyVisibleEdge",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+            for (const auto& object :
+                 body_hidden_edge_objects_) {
+                if (object.IsNull()) continue;
+                const auto retained = object;
+                guardedVoid(
+                    "removeBodyHiddenEdge",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+        body_visible_edge_objects_.clear();
+        body_hidden_edge_objects_.clear();
+    }
+
+    [[nodiscard]] Handle(AIS_Shape)
+    makeBodyEdgeStyleObject(
+        const viewer::BodyEdgePresentation& edge,
+        bool hidden_pass) const {
+        if (!edge.valid() ||
+            !edge.material) {
+            return {};
+        }
+
+        BRepBuilderAPI_MakePolygon polygon;
+        for (const auto& point :
+             edge.points) {
+            polygon.Add(toPoint(point));
+        }
+        if (!polygon.IsDone()) {
+            return {};
+        }
+
+        Handle(AIS_Shape) object =
+            new AIS_Shape(polygon.Wire());
+        if (object.IsNull()) {
+            return {};
+        }
+
+        const Quantity_Color color{
+            0.16, 0.17, 0.19,
+            Quantity_TOC_RGB};
+        const auto aspect =
+            occ::handle<Prs3d_LineAspect>{
+                new Prs3d_LineAspect(
+                    color,
+                    hidden_pass
+                        ? Aspect_TOL_DASH
+                        : Aspect_TOL_SOLID,
+                    hidden_pass ? 1.0 : 1.35)};
+
+        object->Attributes()->SetLineAspect(
+            aspect);
+        object->Attributes()->SetWireAspect(
+            aspect);
+        object->Attributes()->SetFreeBoundaryAspect(
+            aspect);
+        object->Attributes()->SetUnFreeBoundaryAspect(
+            aspect);
+
+        if (hidden_pass) {
+            // Hidden pass is display-only and deliberately has no selection
+            // owner. Topmost dashed drawing lets occluded material edges
+            // remain visible while the ordinary depth-tested solid pass
+            // supplies continuous visible edges underneath.
+            object->SetZLayer(
+                Graphic3d_ZLayerId_Topmost);
+        }
+        return object;
+    }
+
+    [[nodiscard]] bool syncBodyViewStyle() {
+        clearBodyEdgeStyleObjects();
+
+        if (context_.IsNull() ||
+            body_scene_.empty() ||
+            view_style_ ==
+                viewer::ViewStyle::shaded) {
+            return true;
+        }
+
+        for (const auto& edge :
+             body_scene_.edges) {
+            if (!edge.material) {
+                continue;
+            }
+
+            auto visible =
+                makeBodyEdgeStyleObject(
+                    edge,
+                    false);
+            if (visible.IsNull()) {
+                clearBodyEdgeStyleObjects();
+                return false;
+            }
+            context_->Display(
+                visible,
+                false);
+            context_->Deactivate(
+                visible);
+            body_visible_edge_objects_.push_back(
+                visible);
+
+            if (view_style_ ==
+                viewer::ViewStyle::
+                    shaded_with_hidden_edges) {
+                auto hidden =
+                    makeBodyEdgeStyleObject(
+                        edge,
+                        true);
+                if (hidden.IsNull()) {
+                    clearBodyEdgeStyleObjects();
+                    return false;
+                }
+                context_->Display(
+                    hidden,
+                    false);
+                context_->Deactivate(
+                    hidden);
+                body_hidden_edge_objects_.push_back(
+                    hidden);
+            }
+        }
+        return true;
+    }
+
+    [[nodiscard]] viewer::ViewStyle
+    viewStyle() const noexcept {
+        return view_style_;
+    }
+
+    [[nodiscard]] bool setViewStyle(
+        viewer::ViewStyle style) {
+        if (view_style_ == style) {
+            return true;
+        }
+
+        const auto previous =
+            view_style_;
+        view_style_ = style;
+        if (!syncBodyViewStyle()) {
+            view_style_ = previous;
+            static_cast<void>(
+                syncBodyViewStyle());
+            return false;
+        }
+
+        if (!context_.IsNull()) {
+            updateCurrentViewer();
+        }
+        if (!view_.IsNull()) {
+            redraw();
+        }
+        return true;
+    }
+
+    void setViewStyleActionHandler(
+        viewer::ViewStyleActionHandler handler) {
+        view_style_action_handler_ =
+            std::move(handler);
+    }
+
     bool setBodyScene(
         const viewer::BodyScene& scene) {
         if (!scene.valid()) return false;
@@ -1533,6 +1711,10 @@ public:
                 solid_object_);
             body_scene_ = scene;
             solid_scene_ = {};
+            if (!syncBodyViewStyle()) {
+                clearSolidScene();
+                return false;
+            }
             syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
@@ -4195,6 +4377,7 @@ public:
     }
 
     void clearSolidScene() noexcept {
+        clearBodyEdgeStyleObjects();
         if (!context_.IsNull() &&
             !solid_object_.IsNull()) {
             const auto retained =
@@ -5162,6 +5345,14 @@ private:
     Handle(AIS_InteractiveObject) solid_object_;
     Handle(AIS_InteractiveObject) solid_preview_object_;
     viewer::BodyScene body_scene_;
+    viewer::ViewStyle view_style_{
+        viewer::ViewStyle::shaded};
+    viewer::ViewStyleActionHandler
+        view_style_action_handler_;
+    std::vector<Handle(AIS_Shape)>
+        body_visible_edge_objects_;
+    std::vector<Handle(AIS_Shape)>
+        body_hidden_edge_objects_;
     viewer::SolidScene solid_scene_;
     viewer::SolidPreviewScene solid_preview_scene_;
     std::vector<ProfileObject> profile_objects_;
