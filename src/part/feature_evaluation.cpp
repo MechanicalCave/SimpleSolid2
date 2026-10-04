@@ -946,6 +946,8 @@ buildCurveStage(
                 reference.status)) {
             reference.current_edges.clear();
             reference.candidate_edge_count = 0U;
+            reference.strict_edge_status =
+                reference.status;
             continue;
         }
         if (reference.current_edges.empty()) {
@@ -995,18 +997,33 @@ buildCurveStage(
         if (!relation_preserved) {
             reference.status =
                 kernel::ReferenceStatus::missing;
+            reference.strict_edge_status =
+                kernel::ReferenceStatus::missing;
             reference.candidate_edge_count = 0U;
             reference.current_edges.clear();
             continue;
         }
 
+        const auto previous_curve_status =
+            reference.status;
         reference.current_edges =
             std::move(descendants);
         reference.candidate_edge_count =
             reference.current_edges.size();
-        reference.status =
+        reference.strict_edge_status =
             strictReferenceStatus(
                 reference.candidate_edge_count);
+
+        // Explicit provider lineage preserves one semantic Curve family even
+        // when its bounded Edge realization splits. A previously ambiguous
+        // pair-only Curve may become singular again if only one branch
+        // survives in the current stage.
+        reference.status =
+            previous_curve_status ==
+                    kernel::ReferenceStatus::resolved
+                ? kernel::ReferenceStatus::resolved
+                : strictReferenceStatus(
+                      reference.candidate_edge_count);
     }
 
     // If independent previous meanings collapse onto one current provider
@@ -1044,7 +1061,15 @@ buildCurveStage(
                 result.references[first].status =
                     kernel::ReferenceStatus::
                         ambiguous;
+                result.references[first]
+                    .strict_edge_status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
                 result.references[second].status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+                result.references[second]
+                    .strict_edge_status =
                     kernel::ReferenceStatus::
                         ambiguous;
             }
@@ -1120,9 +1145,13 @@ buildCurveStage(
             std::move(group.edges);
         reference.candidate_edge_count =
             reference.current_edges.size();
-        reference.status =
+        reference.strict_edge_status =
             strictReferenceStatus(
                 reference.candidate_edge_count);
+        reference.status =
+            reference.candidate_edge_count == 1U
+                ? kernel::ReferenceStatus::resolved
+                : kernel::ReferenceStatus::ambiguous;
         if (!reference.valid()) {
             return std::nullopt;
         }
@@ -1186,7 +1215,7 @@ buildCurveStage(
                 record.curve_candidates.push_back(
                     reference.address);
                 statuses.push_back(
-                    reference.status);
+                    reference.strict_edge_status);
             }
         }
 
@@ -1891,15 +1920,31 @@ bool FeatureCurveResolution::valid() const noexcept {
     if (!uniqueValidTokens(current_edges)) {
         return false;
     }
+
     switch (status) {
     case kernel::ReferenceStatus::resolved:
-        return candidate_edge_count == 1U;
+        if (candidate_edge_count == 0U) {
+            return false;
+        }
+        return candidate_edge_count == 1U
+            ? strict_edge_status ==
+                  kernel::ReferenceStatus::resolved
+            : strict_edge_status ==
+                  kernel::ReferenceStatus::ambiguous;
     case kernel::ReferenceStatus::ambiguous:
-        return candidate_edge_count >= 1U;
+        return candidate_edge_count >= 1U &&
+               strict_edge_status ==
+                   kernel::ReferenceStatus::ambiguous;
     case kernel::ReferenceStatus::missing:
+        return candidate_edge_count == 0U &&
+               current_edges.empty() &&
+               strict_edge_status ==
+                   kernel::ReferenceStatus::missing;
     case kernel::ReferenceStatus::unsupported:
         return candidate_edge_count == 0U &&
-               current_edges.empty();
+               current_edges.empty() &&
+               strict_edge_status ==
+                   kernel::ReferenceStatus::unsupported;
     }
     return false;
 }
