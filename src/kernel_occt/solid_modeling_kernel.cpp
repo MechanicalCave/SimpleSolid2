@@ -3,6 +3,7 @@
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -11,6 +12,7 @@
 #include <BRepGProp.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRep_Tool.hxx>
+#include <BRepTools.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <Poly_Triangle.hxx>
 #include <Poly_Triangulation.hxx>
@@ -35,6 +37,7 @@
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 #include <GProp_GProps.hxx>
+#include <GeomAbs_CurveType.hxx>
 #include <GeomAbs_SurfaceType.hxx>
 #include <BRepSweep_Prism.hxx>
 
@@ -605,6 +608,186 @@ descendantFaces(
     if (descendants.empty() &&
         !operation.IsDeleted(source) &&
         containsSameFace(result, source)) {
+        descendants.push_back(source);
+    }
+    return descendants;
+}
+
+[[nodiscard]] bool containsSameEdge(
+    const TopoDS_Shape& shape,
+    const TopoDS_Edge& edge) {
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(edge)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool containsSameVertex(
+    const TopoDS_Shape& shape,
+    const TopoDS_Vertex& vertex) {
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_VERTEX};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(vertex)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void appendUniqueEdge(
+    std::vector<TopoDS_Edge>& edges,
+    const TopoDS_Shape& candidate,
+    const TopoDS_Shape& result) {
+    if (candidate.IsNull()) return;
+
+    auto add = [&edges, &result](
+                   const TopoDS_Edge& edge) {
+        if (!containsSameEdge(result, edge)) {
+            return;
+        }
+        const bool duplicate =
+            std::any_of(
+                edges.begin(),
+                edges.end(),
+                [&edge](
+                    const TopoDS_Edge& existing) {
+                    return existing.IsSame(edge);
+                });
+        if (!duplicate) {
+            edges.push_back(edge);
+        }
+    };
+
+    if (candidate.ShapeType() ==
+        TopAbs_EDGE) {
+        add(TopoDS::Edge(candidate));
+        return;
+    }
+
+    for (TopExp_Explorer explorer{
+             candidate,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        add(TopoDS::Edge(
+            explorer.Current()));
+    }
+}
+
+void appendUniqueVertex(
+    std::vector<TopoDS_Vertex>& vertices,
+    const TopoDS_Shape& candidate,
+    const TopoDS_Shape& result) {
+    if (candidate.IsNull()) return;
+
+    auto add = [&vertices, &result](
+                   const TopoDS_Vertex& vertex) {
+        if (!containsSameVertex(
+                result,
+                vertex)) {
+            return;
+        }
+        const bool duplicate =
+            std::any_of(
+                vertices.begin(),
+                vertices.end(),
+                [&vertex](
+                    const TopoDS_Vertex& existing) {
+                    return existing.IsSame(vertex);
+                });
+        if (!duplicate) {
+            vertices.push_back(vertex);
+        }
+    };
+
+    if (candidate.ShapeType() ==
+        TopAbs_VERTEX) {
+        add(TopoDS::Vertex(candidate));
+        return;
+    }
+
+    for (TopExp_Explorer explorer{
+             candidate,
+             TopAbs_VERTEX};
+         explorer.More();
+         explorer.Next()) {
+        add(TopoDS::Vertex(
+            explorer.Current()));
+    }
+}
+
+template <typename Operation>
+[[nodiscard]] std::vector<TopoDS_Edge>
+descendantEdges(
+    Operation& operation,
+    const TopoDS_Edge& source,
+    const TopoDS_Shape& result) {
+    std::vector<TopoDS_Edge> descendants;
+
+    const auto& modified =
+        operation.Modified(source);
+    for (const auto& item : modified) {
+        appendUniqueEdge(
+            descendants,
+            item,
+            result);
+    }
+
+    const auto& generated =
+        operation.Generated(source);
+    for (const auto& item : generated) {
+        appendUniqueEdge(
+            descendants,
+            item,
+            result);
+    }
+
+    if (descendants.empty() &&
+        !operation.IsDeleted(source) &&
+        containsSameEdge(result, source)) {
+        descendants.push_back(source);
+    }
+    return descendants;
+}
+
+template <typename Operation>
+[[nodiscard]] std::vector<TopoDS_Vertex>
+descendantVertices(
+    Operation& operation,
+    const TopoDS_Vertex& source,
+    const TopoDS_Shape& result) {
+    std::vector<TopoDS_Vertex> descendants;
+
+    const auto& modified =
+        operation.Modified(source);
+    for (const auto& item : modified) {
+        appendUniqueVertex(
+            descendants,
+            item,
+            result);
+    }
+
+    const auto& generated =
+        operation.Generated(source);
+    for (const auto& item : generated) {
+        appendUniqueVertex(
+            descendants,
+            item,
+            result);
+    }
+
+    if (descendants.empty() &&
+        !operation.IsDeleted(source) &&
+        containsSameVertex(result, source)) {
         descendants.push_back(source);
     }
     return descendants;
@@ -1181,6 +1364,32 @@ allocateRuntimeToken(
                result.vertex_count;
 }
 
+[[nodiscard]] std::optional<kernel::RuntimeEdgeToken>
+inventoryEdgeToken(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Edge& edge) {
+    for (const auto& [token, current] :
+         runtime.inventory_edges) {
+        if (current.IsSame(edge)) {
+            return kernel::RuntimeEdgeToken{token};
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<kernel::RuntimeVertexToken>
+inventoryVertexToken(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Vertex& vertex) {
+    for (const auto& [token, current] :
+         runtime.inventory_vertices) {
+        if (current.IsSame(vertex)) {
+            return kernel::RuntimeVertexToken{token};
+        }
+    }
+    return std::nullopt;
+}
+
 [[nodiscard]] std::optional<kernel::RuntimeFaceToken>
 inventoryFaceToken(
     const OcctRuntimeSolid& runtime,
@@ -1510,6 +1719,401 @@ template <typename Mapper>
     return true;
 }
 
+[[nodiscard]] kernel::CurveKind
+providerCurveKind(
+    const TopoDS_Edge& edge) {
+    BRepAdaptor_Curve curve{edge};
+    switch (curve.GetType()) {
+    case GeomAbs_Line:
+        return kernel::CurveKind::line;
+    case GeomAbs_Circle:
+        return kernel::CurveKind::circle;
+    default:
+        return kernel::CurveKind::other;
+    }
+}
+
+[[nodiscard]] bool faceContainsEdge(
+    const TopoDS_Face& face,
+    const TopoDS_Edge& edge) {
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(edge)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool faceContainsVertex(
+    const TopoDS_Face& face,
+    const TopoDS_Vertex& vertex) {
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_VERTEX};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(vertex)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool edgeContainsVertex(
+    const TopoDS_Edge& edge,
+    const TopoDS_Vertex& vertex) {
+    for (TopExp_Explorer explorer{
+             edge,
+             TopAbs_VERTEX};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(vertex)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+template <typename Token>
+void appendUniqueToken(
+    std::vector<Token>& values,
+    Token token) {
+    if (std::find(
+            values.begin(),
+            values.end(),
+            token) ==
+        values.end()) {
+        values.push_back(token);
+    }
+}
+
+template <typename Token>
+struct RuntimeRealizationClaim final {
+    Token source_token;
+    std::vector<Token> current_tokens;
+    bool aliased{false};
+};
+
+template <typename Token>
+void markAliasedRealizationClaims(
+    std::vector<RuntimeRealizationClaim<Token>>&
+        claims) {
+    for (std::size_t first = 0U;
+         first < claims.size();
+         ++first) {
+        for (std::size_t second = first + 1U;
+             second < claims.size();
+             ++second) {
+            bool shared = false;
+            for (const auto first_token :
+                 claims[first].current_tokens) {
+                if (std::find(
+                        claims[second]
+                            .current_tokens.begin(),
+                        claims[second]
+                            .current_tokens.end(),
+                        first_token) !=
+                    claims[second]
+                        .current_tokens.end()) {
+                    shared = true;
+                    break;
+                }
+            }
+            if (shared) {
+                claims[first].aliased = true;
+                claims[second].aliased = true;
+            }
+        }
+    }
+}
+
+[[nodiscard]] kernel::ReferenceStatus
+realizationLineageStatus(
+    std::size_t count,
+    bool aliased) noexcept {
+    if (count == 0U) {
+        return kernel::ReferenceStatus::missing;
+    }
+    if (aliased || count > 1U) {
+        return kernel::ReferenceStatus::ambiguous;
+    }
+    return kernel::ReferenceStatus::resolved;
+}
+
+template <typename Operation>
+[[nodiscard]] bool publishCurrentSubshapeLineage(
+    kernel::SolidModelingResult& result,
+    const OcctRuntimeSolid& upstream,
+    const OcctRuntimeSolid& runtime,
+    Operation& operation,
+    const TopoDS_Shape& shape) {
+    std::vector<
+        RuntimeRealizationClaim<
+            kernel::RuntimeEdgeToken>>
+        edge_claims;
+    edge_claims.reserve(
+        upstream.inventory_edges.size());
+
+    for (const auto& [source_value, edge] :
+         upstream.inventory_edges) {
+        RuntimeRealizationClaim<
+            kernel::RuntimeEdgeToken> claim;
+        claim.source_token =
+            kernel::RuntimeEdgeToken{
+                source_value};
+
+        const auto descendants =
+            descendantEdges(
+                operation,
+                edge,
+                shape);
+        for (const auto& descendant :
+             descendants) {
+            const auto token =
+                inventoryEdgeToken(
+                    runtime,
+                    descendant);
+            if (!token) return false;
+            appendUniqueToken(
+                claim.current_tokens,
+                *token);
+        }
+        edge_claims.push_back(
+            std::move(claim));
+    }
+
+    markAliasedRealizationClaims(
+        edge_claims);
+    result.inherited_edge_realizations.reserve(
+        edge_claims.size());
+    for (const auto& claim : edge_claims) {
+        result.inherited_edge_realizations
+            .push_back(
+                {
+                    claim.source_token,
+                    realizationLineageStatus(
+                        claim.current_tokens.size(),
+                        claim.aliased),
+                    claim.current_tokens.size(),
+                    claim.current_tokens,
+                });
+    }
+
+    std::vector<
+        RuntimeRealizationClaim<
+            kernel::RuntimeVertexToken>>
+        vertex_claims;
+    vertex_claims.reserve(
+        upstream.inventory_vertices.size());
+
+    for (const auto& [source_value, vertex] :
+         upstream.inventory_vertices) {
+        RuntimeRealizationClaim<
+            kernel::RuntimeVertexToken> claim;
+        claim.source_token =
+            kernel::RuntimeVertexToken{
+                source_value};
+
+        const auto descendants =
+            descendantVertices(
+                operation,
+                vertex,
+                shape);
+        for (const auto& descendant :
+             descendants) {
+            const auto token =
+                inventoryVertexToken(
+                    runtime,
+                    descendant);
+            if (!token) return false;
+            appendUniqueToken(
+                claim.current_tokens,
+                *token);
+        }
+        vertex_claims.push_back(
+            std::move(claim));
+    }
+
+    markAliasedRealizationClaims(
+        vertex_claims);
+    result.inherited_vertex_realizations.reserve(
+        vertex_claims.size());
+    for (const auto& claim : vertex_claims) {
+        result.inherited_vertex_realizations
+            .push_back(
+                {
+                    claim.source_token,
+                    realizationLineageStatus(
+                        claim.current_tokens.size(),
+                        claim.aliased),
+                    claim.current_tokens.size(),
+                    claim.current_tokens,
+                });
+    }
+
+    return true;
+}
+
+[[nodiscard]] bool populateCurrentTopologySemantics(
+    kernel::SolidModelingResult& result,
+    const OcctRuntimeSolid& runtime) {
+    result.current_edge_semantics.clear();
+    result.current_vertex_semantics.clear();
+
+    result.current_edge_semantics.reserve(
+        runtime.inventory_edges.size());
+    for (const auto& [token_value, edge] :
+         runtime.inventory_edges) {
+        kernel::CurrentEdgeSemanticObservation
+            observation;
+        observation.runtime_token =
+            kernel::RuntimeEdgeToken{
+                token_value};
+        observation.provider_curve_kind =
+            providerCurveKind(edge);
+
+        for (const auto& [surface_value, surface] :
+             runtime.tracked_surfaces) {
+            bool adjacent = false;
+            bool seam = false;
+            for (const auto& face :
+                 surface.faces) {
+                if (!faceContainsEdge(
+                        face,
+                        edge)) {
+                    continue;
+                }
+                adjacent = true;
+                if (BRepTools::IsReallyClosed(
+                        edge,
+                        face)) {
+                    seam = true;
+                }
+            }
+            if (adjacent) {
+                appendUniqueToken(
+                    observation.adjacent_surfaces,
+                    kernel::RuntimeSurfaceToken{
+                        surface_value});
+            }
+            observation.periodic_seam =
+                observation.periodic_seam ||
+                seam;
+        }
+
+        result.current_edge_semantics.push_back(
+            std::move(observation));
+    }
+
+    result.current_vertex_semantics.reserve(
+        runtime.inventory_vertices.size());
+    for (const auto& [token_value, vertex] :
+         runtime.inventory_vertices) {
+        kernel::CurrentVertexSemanticObservation
+            observation;
+        observation.runtime_token =
+            kernel::RuntimeVertexToken{
+                token_value};
+
+        for (const auto& [surface_value, surface] :
+             runtime.tracked_surfaces) {
+            const bool adjacent =
+                std::any_of(
+                    surface.faces.begin(),
+                    surface.faces.end(),
+                    [&vertex](
+                        const TopoDS_Face& face) {
+                        return faceContainsVertex(
+                            face,
+                            vertex);
+                    });
+            if (adjacent) {
+                appendUniqueToken(
+                    observation.adjacent_surfaces,
+                    kernel::RuntimeSurfaceToken{
+                        surface_value});
+            }
+        }
+
+        for (const auto& edge_observation :
+             result.current_edge_semantics) {
+            if (edge_observation.periodic_seam) {
+                continue;
+            }
+            const auto found =
+                runtime.inventory_edges.find(
+                    edge_observation
+                        .runtime_token.value);
+            if (found ==
+                runtime.inventory_edges.end()) {
+                return false;
+            }
+            if (edgeContainsVertex(
+                    found->second,
+                    vertex)) {
+                observation.incident_material_edges
+                    .push_back(
+                        edge_observation
+                            .runtime_token);
+            }
+        }
+
+        const auto point =
+            BRep_Tool::Pnt(vertex);
+        if (!std::isfinite(point.X()) ||
+            !std::isfinite(point.Y()) ||
+            !std::isfinite(point.Z())) {
+            return false;
+        }
+        observation.provider_point =
+            kernel::Point3{
+                point.X(),
+                point.Y(),
+                point.Z()};
+
+        result.current_vertex_semantics.push_back(
+            std::move(observation));
+    }
+
+    if (result.current_edge_semantics.size() !=
+            result.current_edges.size() ||
+        result.current_vertex_semantics.size() !=
+            result.current_vertices.size()) {
+        return false;
+    }
+
+    for (const auto token :
+         result.current_edges) {
+        if (std::count_if(
+                result.current_edge_semantics.begin(),
+                result.current_edge_semantics.end(),
+                [token](const auto& observation) {
+                    return observation.runtime_token ==
+                           token;
+                }) != 1) {
+            return false;
+        }
+    }
+    for (const auto token :
+         result.current_vertices) {
+        if (std::count_if(
+                result.current_vertex_semantics.begin(),
+                result.current_vertex_semantics.end(),
+                [token](const auto& observation) {
+                    return observation.runtime_token ==
+                           token;
+                }) != 1) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 void populateDiagnostics(
     kernel::SolidModelingResult& result,
     const TopoDS_Shape& shape) {
@@ -1738,6 +2342,27 @@ finishBoolean(
                     source,
                     shape);
             })) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!publishCurrentSubshapeLineage(
+            result,
+            upstream,
+            *runtime,
+            operation,
+            shape)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
+    if (!populateCurrentTopologySemantics(
+            result,
+            *runtime)) {
         result.status =
             kernel::SolidModelingStatus::
                 provider_failure;
@@ -2069,6 +2694,15 @@ OcctSolidModelingKernel::extrude(
                         }
                         return candidates;
                     })) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
+
+            if (!populateCurrentTopologySemantics(
+                    result,
+                    *runtime)) {
                 result.status =
                     kernel::SolidModelingStatus::
                         provider_failure;

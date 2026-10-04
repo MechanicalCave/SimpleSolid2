@@ -5,6 +5,7 @@
 #include <simplesolid2/part/profile_kernel_input.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <map>
 #include <utility>
 
@@ -467,6 +468,1107 @@ void propagateCurrentReferences(
     return true;
 }
 
+[[nodiscard]] bool isSideSurface(
+    const FeatureSurfaceAddress& address) noexcept {
+    return address.role ==
+           FeatureSurfaceRoleKind::side;
+}
+
+[[nodiscard]] bool isCapSurface(
+    const FeatureSurfaceAddress& address) noexcept {
+    return !isSideSurface(address);
+}
+
+struct SemanticSurfaceObservation final {
+    FeatureSurfaceAddress address;
+    kernel::SurfaceKind kind{
+        kernel::SurfaceKind::other};
+
+    friend bool operator==(
+        const SemanticSurfaceObservation&,
+        const SemanticSurfaceObservation&) = default;
+};
+
+struct CurveRelation final {
+    FeatureCurveRoleKind role{
+        FeatureCurveRoleKind::
+            boolean_intersection};
+    kernel::CurveKind curve_kind{
+        kernel::CurveKind::other};
+    std::vector<FeatureSurfaceAddress>
+        adjacent_surfaces;
+
+    friend bool operator==(
+        const CurveRelation&,
+        const CurveRelation&) = default;
+};
+
+struct PointRelation final {
+    std::vector<FeatureSurfaceAddress>
+        adjacent_surfaces;
+
+    friend bool operator==(
+        const PointRelation&,
+        const PointRelation&) = default;
+};
+
+[[nodiscard]] std::optional<
+    SemanticSurfaceObservation>
+semanticSurfaceForRuntimeToken(
+    kernel::RuntimeSurfaceToken token,
+    const std::vector<FeatureSurfaceResolution>&
+        surfaces) {
+    if (!token.valid()) return std::nullopt;
+
+    std::optional<SemanticSurfaceObservation>
+        result;
+    for (const auto& surface : surfaces) {
+        if (surface.status !=
+                kernel::ReferenceStatus::resolved ||
+            !surface.runtime_token ||
+            *surface.runtime_token != token) {
+            continue;
+        }
+        if (result) {
+            return std::nullopt;
+        }
+        result = SemanticSurfaceObservation{
+            surface.address,
+            surface.surface_kind};
+    }
+    return result;
+}
+
+[[nodiscard]] std::optional<CurveRelation>
+curveRelationForObservation(
+    const kernel::CurrentEdgeSemanticObservation&
+        observation,
+    const std::vector<FeatureSurfaceResolution>&
+        surfaces,
+    bool& provider_mismatch) {
+    provider_mismatch = false;
+    if (!observation.runtime_token.valid() ||
+        observation.periodic_seam) {
+        return std::nullopt;
+    }
+
+    std::vector<SemanticSurfaceObservation>
+        semantic_surfaces;
+    semantic_surfaces.reserve(
+        observation.adjacent_surfaces.size());
+
+    for (const auto token :
+         observation.adjacent_surfaces) {
+        const auto surface =
+            semanticSurfaceForRuntimeToken(
+                token,
+                surfaces);
+        if (!surface) {
+            return std::nullopt;
+        }
+        const auto duplicate =
+            std::find_if(
+                semantic_surfaces.begin(),
+                semantic_surfaces.end(),
+                [&surface](const auto& existing) {
+                    return existing.address ==
+                           surface->address;
+                });
+        if (duplicate !=
+            semantic_surfaces.end()) {
+            continue;
+        }
+        semantic_surfaces.push_back(
+            *surface);
+    }
+
+    if (semantic_surfaces.size() != 2U) {
+        return std::nullopt;
+    }
+
+    std::sort(
+        semantic_surfaces.begin(),
+        semantic_surfaces.end(),
+        [](const auto& first, const auto& second) {
+            return first.address <
+                   second.address;
+        });
+
+    CurveRelation result;
+    result.adjacent_surfaces = {
+        semantic_surfaces[0].address,
+        semantic_surfaces[1].address,
+    };
+
+    const bool same_producer =
+        semantic_surfaces[0]
+            .address.producer_feature_id ==
+        semantic_surfaces[1]
+            .address.producer_feature_id;
+    const bool first_cap =
+        isCapSurface(
+            semantic_surfaces[0].address);
+    const bool second_cap =
+        isCapSurface(
+            semantic_surfaces[1].address);
+    const bool first_side =
+        isSideSurface(
+            semantic_surfaces[0].address);
+    const bool second_side =
+        isSideSurface(
+            semantic_surfaces[1].address);
+
+    if (same_producer &&
+        ((first_cap && second_side) ||
+         (first_side && second_cap))) {
+        result.role =
+            FeatureCurveRoleKind::cap_side;
+        const auto& side =
+            first_side
+                ? semantic_surfaces[0]
+                : semantic_surfaces[1];
+        switch (side.kind) {
+        case kernel::SurfaceKind::plane:
+            result.curve_kind =
+                kernel::CurveKind::line;
+            break;
+        case kernel::SurfaceKind::cylinder:
+            result.curve_kind =
+                kernel::CurveKind::circle;
+            break;
+        default:
+            return std::nullopt;
+        }
+    } else if (same_producer &&
+               first_side &&
+               second_side) {
+        result.role =
+            FeatureCurveRoleKind::side_side;
+        result.curve_kind =
+            kernel::CurveKind::line;
+    } else if (!same_producer) {
+        result.role =
+            FeatureCurveRoleKind::
+                boolean_intersection;
+        if (semantic_surfaces[0].kind ==
+                kernel::SurfaceKind::plane &&
+            semantic_surfaces[1].kind ==
+                kernel::SurfaceKind::plane) {
+            result.curve_kind =
+                kernel::CurveKind::line;
+        } else {
+            return std::nullopt;
+        }
+    } else {
+        return std::nullopt;
+    }
+
+    if (observation.provider_curve_kind !=
+        result.curve_kind) {
+        provider_mismatch = true;
+        return std::nullopt;
+    }
+
+    return result;
+}
+
+[[nodiscard]] std::optional<PointRelation>
+pointRelationForObservation(
+    const kernel::CurrentVertexSemanticObservation&
+        observation,
+    const std::vector<FeatureSurfaceResolution>&
+        surfaces) {
+    if (!observation.runtime_token.valid()) {
+        return std::nullopt;
+    }
+
+    std::vector<FeatureSurfaceAddress>
+        addresses;
+    addresses.reserve(
+        observation.adjacent_surfaces.size());
+    for (const auto token :
+         observation.adjacent_surfaces) {
+        const auto surface =
+            semanticSurfaceForRuntimeToken(
+                token,
+                surfaces);
+        if (!surface) {
+            return std::nullopt;
+        }
+        if (std::find(
+                addresses.begin(),
+                addresses.end(),
+                surface->address) ==
+            addresses.end()) {
+            addresses.push_back(
+                surface->address);
+        }
+    }
+
+    if (addresses.size() != 3U) {
+        return std::nullopt;
+    }
+
+    std::sort(
+        addresses.begin(),
+        addresses.end());
+    return PointRelation{
+        std::move(addresses)};
+}
+
+[[nodiscard]] bool sameCurveRelation(
+    const FeatureCurveResolution& reference,
+    const CurveRelation& relation) noexcept {
+    return reference.address.role ==
+               relation.role &&
+           reference.curve_kind ==
+               relation.curve_kind &&
+           reference.address.adjacent_surfaces ==
+               relation.adjacent_surfaces;
+}
+
+[[nodiscard]] bool samePointRelation(
+    const FeaturePointResolution& reference,
+    const PointRelation& relation) noexcept {
+    return reference.address.adjacent_surfaces ==
+           relation.adjacent_surfaces;
+}
+
+[[nodiscard]] kernel::ReferenceStatus
+strictReferenceStatus(
+    std::size_t count) noexcept {
+    if (count == 0U) {
+        return kernel::ReferenceStatus::missing;
+    }
+    return count == 1U
+        ? kernel::ReferenceStatus::resolved
+        : kernel::ReferenceStatus::ambiguous;
+}
+
+template <typename Token>
+void appendUniqueRuntimeToken(
+    std::vector<Token>& tokens,
+    Token token) {
+    if (std::find(
+            tokens.begin(),
+            tokens.end(),
+            token) ==
+        tokens.end()) {
+        tokens.push_back(token);
+    }
+}
+
+[[nodiscard]] bool isActiveReferenceStatus(
+    kernel::ReferenceStatus status) noexcept {
+    return status ==
+               kernel::ReferenceStatus::resolved ||
+           status ==
+               kernel::ReferenceStatus::ambiguous;
+}
+
+struct CurrentEdgeMeaning final {
+    kernel::RuntimeEdgeToken token;
+    kernel::CurveKind provider_curve_kind{
+        kernel::CurveKind::other};
+    bool periodic_seam{false};
+    std::optional<CurveRelation> relation;
+};
+
+struct CurrentVertexMeaning final {
+    kernel::RuntimeVertexToken token;
+    std::optional<PointRelation> relation;
+    std::size_t incident_material_edge_count{};
+    std::optional<kernel::Point3>
+        provider_point;
+};
+
+struct CurveStageBuild final {
+    std::vector<FeatureCurveResolution>
+        references;
+    std::vector<FeatureCurveResolution>
+        produced;
+    std::vector<BodyEdgeTopologyRecord>
+        records;
+};
+
+struct PointStageBuild final {
+    std::vector<FeaturePointResolution>
+        references;
+    std::vector<FeaturePointResolution>
+        produced;
+    std::vector<BodyVertexTopologyRecord>
+        records;
+};
+
+[[nodiscard]] const kernel::
+    InheritedEdgeRealizationLineage*
+findInheritedEdgeLineage(
+    kernel::RuntimeEdgeToken source,
+    const kernel::SolidModelingResult& result) {
+    const kernel::InheritedEdgeRealizationLineage*
+        found = nullptr;
+    for (const auto& item :
+         result.inherited_edge_realizations) {
+        if (item.source_token != source) {
+            continue;
+        }
+        if (found != nullptr) {
+            return nullptr;
+        }
+        found = &item;
+    }
+    return found;
+}
+
+[[nodiscard]] const kernel::
+    InheritedVertexRealizationLineage*
+findInheritedVertexLineage(
+    kernel::RuntimeVertexToken source,
+    const kernel::SolidModelingResult& result) {
+    const kernel::InheritedVertexRealizationLineage*
+        found = nullptr;
+    for (const auto& item :
+         result.inherited_vertex_realizations) {
+        if (item.source_token != source) {
+            continue;
+        }
+        if (found != nullptr) {
+            return nullptr;
+        }
+        found = &item;
+    }
+    return found;
+}
+
+[[nodiscard]] const CurrentEdgeMeaning*
+findCurrentEdgeMeaning(
+    kernel::RuntimeEdgeToken token,
+    const std::vector<CurrentEdgeMeaning>&
+        meanings) {
+    const CurrentEdgeMeaning* found = nullptr;
+    for (const auto& item : meanings) {
+        if (item.token != token) continue;
+        if (found != nullptr) {
+            return nullptr;
+        }
+        found = &item;
+    }
+    return found;
+}
+
+[[nodiscard]] const CurrentVertexMeaning*
+findCurrentVertexMeaning(
+    kernel::RuntimeVertexToken token,
+    const std::vector<CurrentVertexMeaning>&
+        meanings) {
+    const CurrentVertexMeaning* found = nullptr;
+    for (const auto& item : meanings) {
+        if (item.token != token) continue;
+        if (found != nullptr) {
+            return nullptr;
+        }
+        found = &item;
+    }
+    return found;
+}
+
+[[nodiscard]] std::optional<CurveStageBuild>
+buildCurveStage(
+    FeatureId current_feature,
+    const kernel::SolidModelingResult& kernel_result,
+    const std::vector<FeatureSurfaceResolution>&
+        surfaces,
+    const std::vector<FeatureCurveResolution>&
+        previous) {
+    if (!current_feature.valid() ||
+        kernel_result.current_edge_semantics.size() !=
+            kernel_result.current_edges.size()) {
+        return std::nullopt;
+    }
+
+    std::vector<CurrentEdgeMeaning> meanings;
+    meanings.reserve(
+        kernel_result.current_edge_semantics.size());
+
+    for (const auto& observation :
+         kernel_result.current_edge_semantics) {
+        if (!observation.runtime_token.valid() ||
+            std::count(
+                kernel_result.current_edges.begin(),
+                kernel_result.current_edges.end(),
+                observation.runtime_token) != 1) {
+            return std::nullopt;
+        }
+
+        bool provider_mismatch = false;
+        auto relation =
+            curveRelationForObservation(
+                observation,
+                surfaces,
+                provider_mismatch);
+        if (provider_mismatch) {
+            return std::nullopt;
+        }
+
+        meanings.push_back(
+            {
+                observation.runtime_token,
+                observation.provider_curve_kind,
+                observation.periodic_seam,
+                std::move(relation),
+            });
+    }
+
+    for (const auto token :
+         kernel_result.current_edges) {
+        if (std::count_if(
+                meanings.begin(),
+                meanings.end(),
+                [token](const auto& item) {
+                    return item.token == token;
+                }) != 1) {
+            return std::nullopt;
+        }
+    }
+
+    CurveStageBuild result;
+    result.references = previous;
+
+    // Existing semantic Curve meanings survive only through explicit
+    // provider-history descendants that still satisfy the same semantic
+    // Surface relation. Missing meanings are terminal for this evaluation:
+    // later equal geometry creates new provenance instead of reviving them.
+    for (auto& reference : result.references) {
+        if (!reference.valid()) {
+            return std::nullopt;
+        }
+        if (!isActiveReferenceStatus(
+                reference.status)) {
+            reference.current_edges.clear();
+            reference.candidate_edge_count = 0U;
+            reference.strict_edge_status =
+                reference.status;
+            continue;
+        }
+        if (reference.current_edges.empty()) {
+            return std::nullopt;
+        }
+
+        std::vector<kernel::RuntimeEdgeToken>
+            descendants;
+        for (const auto source :
+             reference.current_edges) {
+            const auto* lineage =
+                findInheritedEdgeLineage(
+                    source,
+                    kernel_result);
+            if (lineage == nullptr ||
+                !lineage->source_token.valid() ||
+                lineage->candidate_count !=
+                    lineage->current_edges.size()) {
+                return std::nullopt;
+            }
+            for (const auto token :
+                 lineage->current_edges) {
+                appendUniqueRuntimeToken(
+                    descendants,
+                    token);
+            }
+        }
+
+        bool relation_preserved =
+            !descendants.empty();
+        for (const auto token : descendants) {
+            const auto* meaning =
+                findCurrentEdgeMeaning(
+                    token,
+                    meanings);
+            if (meaning == nullptr ||
+                meaning->periodic_seam ||
+                !meaning->relation ||
+                !sameCurveRelation(
+                    reference,
+                    *meaning->relation)) {
+                relation_preserved = false;
+                break;
+            }
+        }
+
+        if (!relation_preserved) {
+            reference.status =
+                kernel::ReferenceStatus::missing;
+            reference.strict_edge_status =
+                kernel::ReferenceStatus::missing;
+            reference.candidate_edge_count = 0U;
+            reference.current_edges.clear();
+            continue;
+        }
+
+        const auto previous_curve_status =
+            reference.status;
+        reference.current_edges =
+            std::move(descendants);
+        reference.candidate_edge_count =
+            reference.current_edges.size();
+        reference.strict_edge_status =
+            strictReferenceStatus(
+                reference.candidate_edge_count);
+
+        // Explicit provider lineage preserves one semantic Curve family even
+        // when its bounded Edge realization splits. A previously ambiguous
+        // pair-only Curve may become singular again if only one branch
+        // survives in the current stage.
+        reference.status =
+            previous_curve_status ==
+                    kernel::ReferenceStatus::resolved
+                ? kernel::ReferenceStatus::resolved
+                : strictReferenceStatus(
+                      reference.candidate_edge_count);
+    }
+
+    // If independent previous meanings collapse onto one current provider
+    // Edge, neither may win merely because provider history listed it first.
+    for (std::size_t first = 0U;
+         first < result.references.size();
+         ++first) {
+        if (!isActiveReferenceStatus(
+                result.references[first].status)) {
+            continue;
+        }
+        for (std::size_t second = first + 1U;
+             second < result.references.size();
+             ++second) {
+            if (!isActiveReferenceStatus(
+                    result.references[second].status)) {
+                continue;
+            }
+            bool shared = false;
+            for (const auto token :
+                 result.references[first].current_edges) {
+                if (std::find(
+                        result.references[second]
+                            .current_edges.begin(),
+                        result.references[second]
+                            .current_edges.end(),
+                        token) !=
+                    result.references[second]
+                        .current_edges.end()) {
+                    shared = true;
+                    break;
+                }
+            }
+            if (shared) {
+                result.references[first].status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+                result.references[first]
+                    .strict_edge_status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+                result.references[second].status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+                result.references[second]
+                    .strict_edge_status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+            }
+        }
+    }
+
+    std::vector<kernel::RuntimeEdgeToken>
+        inherited_claimed;
+    for (const auto& reference :
+         result.references) {
+        if (!isActiveReferenceStatus(
+                reference.status)) {
+            continue;
+        }
+        for (const auto token :
+             reference.current_edges) {
+            appendUniqueRuntimeToken(
+                inherited_claimed,
+                token);
+        }
+    }
+
+    struct NewCurveGroup final {
+        CurveRelation relation;
+        std::vector<kernel::RuntimeEdgeToken>
+            edges;
+    };
+    std::vector<NewCurveGroup> new_groups;
+
+    for (const auto& meaning : meanings) {
+        if (meaning.periodic_seam ||
+            !meaning.relation ||
+            std::find(
+                inherited_claimed.begin(),
+                inherited_claimed.end(),
+                meaning.token) !=
+                inherited_claimed.end()) {
+            continue;
+        }
+
+        auto group =
+            std::find_if(
+                new_groups.begin(),
+                new_groups.end(),
+                [&meaning](const auto& item) {
+                    return item.relation ==
+                           *meaning.relation;
+                });
+        if (group == new_groups.end()) {
+            new_groups.push_back(
+                {
+                    *meaning.relation,
+                    {meaning.token},
+                });
+        } else {
+            appendUniqueRuntimeToken(
+                group->edges,
+                meaning.token);
+        }
+    }
+
+    for (auto& group : new_groups) {
+        FeatureCurveResolution reference;
+        reference.address.producer_feature_id =
+            current_feature;
+        reference.address.role =
+            group.relation.role;
+        reference.address.adjacent_surfaces =
+            group.relation.adjacent_surfaces;
+        reference.curve_kind =
+            group.relation.curve_kind;
+        reference.current_edges =
+            std::move(group.edges);
+        reference.candidate_edge_count =
+            reference.current_edges.size();
+        reference.strict_edge_status =
+            strictReferenceStatus(
+                reference.candidate_edge_count);
+        reference.status =
+            reference.candidate_edge_count == 1U
+                ? kernel::ReferenceStatus::resolved
+                : kernel::ReferenceStatus::ambiguous;
+        if (!reference.valid()) {
+            return std::nullopt;
+        }
+        result.produced.push_back(reference);
+        result.references.push_back(
+            std::move(reference));
+    }
+
+    result.records.reserve(
+        meanings.size());
+    for (const auto& meaning : meanings) {
+        BodyEdgeTopologyRecord record;
+        record.runtime_token = meaning.token;
+        record.curve_kind =
+            meaning.provider_curve_kind;
+        record.periodic_seam =
+            meaning.periodic_seam;
+
+        if (meaning.periodic_seam) {
+            record.accounting_class =
+                TopologyAccountingClass::
+                    known_representation_artifact;
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.records.push_back(
+                std::move(record));
+            continue;
+        }
+
+        if (!meaning.relation) {
+            record.accounting_class =
+                TopologyAccountingClass::
+                    semantically_unsupported;
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.records.push_back(
+                std::move(record));
+            continue;
+        }
+
+        std::vector<kernel::ReferenceStatus>
+            statuses;
+        for (const auto& reference :
+             result.references) {
+            if (!isActiveReferenceStatus(
+                    reference.status) ||
+                std::find(
+                    reference.current_edges.begin(),
+                    reference.current_edges.end(),
+                    meaning.token) ==
+                    reference.current_edges.end()) {
+                continue;
+            }
+            if (std::find(
+                    record.curve_candidates.begin(),
+                    record.curve_candidates.end(),
+                    reference.address) ==
+                record.curve_candidates.end()) {
+                record.curve_candidates.push_back(
+                    reference.address);
+                statuses.push_back(
+                    reference.strict_edge_status);
+            }
+        }
+
+        if (record.curve_candidates.empty()) {
+            // A supported material relation must not disappear from the
+            // semantic catalog simply because lifecycle bookkeeping failed.
+            return std::nullopt;
+        }
+
+        record.accounting_class =
+            TopologyAccountingClass::
+                referenceable;
+        if (record.curve_candidates.size() > 1U ||
+            std::any_of(
+                statuses.begin(),
+                statuses.end(),
+                [](kernel::ReferenceStatus status) {
+                    return status ==
+                           kernel::ReferenceStatus::
+                               ambiguous;
+                })) {
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    ambiguous;
+        } else {
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    resolved;
+        }
+        result.records.push_back(
+            std::move(record));
+    }
+
+    return result;
+}
+
+[[nodiscard]] std::optional<PointStageBuild>
+buildPointStage(
+    FeatureId current_feature,
+    const kernel::SolidModelingResult& kernel_result,
+    const std::vector<FeatureSurfaceResolution>&
+        surfaces,
+    const std::vector<FeaturePointResolution>&
+        previous) {
+    if (!current_feature.valid() ||
+        kernel_result.current_vertex_semantics.size() !=
+            kernel_result.current_vertices.size()) {
+        return std::nullopt;
+    }
+
+    std::vector<CurrentVertexMeaning> meanings;
+    meanings.reserve(
+        kernel_result.current_vertex_semantics.size());
+    for (const auto& observation :
+         kernel_result.current_vertex_semantics) {
+        if (!observation.runtime_token.valid() ||
+            std::count(
+                kernel_result.current_vertices.begin(),
+                kernel_result.current_vertices.end(),
+                observation.runtime_token) != 1) {
+            return std::nullopt;
+        }
+        meanings.push_back(
+            {
+                observation.runtime_token,
+                pointRelationForObservation(
+                    observation,
+                    surfaces),
+                observation
+                    .incident_material_edges
+                    .size(),
+                observation.provider_point,
+            });
+    }
+
+    for (const auto token :
+         kernel_result.current_vertices) {
+        if (std::count_if(
+                meanings.begin(),
+                meanings.end(),
+                [token](const auto& item) {
+                    return item.token == token;
+                }) != 1) {
+            return std::nullopt;
+        }
+    }
+
+    PointStageBuild result;
+    result.references = previous;
+
+    for (auto& reference : result.references) {
+        if (!reference.valid()) {
+            return std::nullopt;
+        }
+        if (!isActiveReferenceStatus(
+                reference.status)) {
+            reference.current_vertices.clear();
+            reference.candidate_vertex_count = 0U;
+            continue;
+        }
+        if (reference.current_vertices.empty()) {
+            return std::nullopt;
+        }
+
+        std::vector<kernel::RuntimeVertexToken>
+            descendants;
+        for (const auto source :
+             reference.current_vertices) {
+            const auto* lineage =
+                findInheritedVertexLineage(
+                    source,
+                    kernel_result);
+            if (lineage == nullptr ||
+                !lineage->source_token.valid() ||
+                lineage->candidate_count !=
+                    lineage->current_vertices.size()) {
+                return std::nullopt;
+            }
+            for (const auto token :
+                 lineage->current_vertices) {
+                appendUniqueRuntimeToken(
+                    descendants,
+                    token);
+            }
+        }
+
+        bool relation_preserved =
+            !descendants.empty();
+        for (const auto token : descendants) {
+            const auto* meaning =
+                findCurrentVertexMeaning(
+                    token,
+                    meanings);
+            if (meaning == nullptr ||
+                !meaning->relation ||
+                !samePointRelation(
+                    reference,
+                    *meaning->relation)) {
+                relation_preserved = false;
+                break;
+            }
+        }
+
+        if (!relation_preserved) {
+            reference.status =
+                kernel::ReferenceStatus::missing;
+            reference.candidate_vertex_count = 0U;
+            reference.current_vertices.clear();
+            continue;
+        }
+
+        reference.current_vertices =
+            std::move(descendants);
+        reference.candidate_vertex_count =
+            reference.current_vertices.size();
+        reference.status =
+            strictReferenceStatus(
+                reference.candidate_vertex_count);
+    }
+
+    for (std::size_t first = 0U;
+         first < result.references.size();
+         ++first) {
+        if (!isActiveReferenceStatus(
+                result.references[first].status)) {
+            continue;
+        }
+        for (std::size_t second = first + 1U;
+             second < result.references.size();
+             ++second) {
+            if (!isActiveReferenceStatus(
+                    result.references[second].status)) {
+                continue;
+            }
+            bool shared = false;
+            for (const auto token :
+                 result.references[first].current_vertices) {
+                if (std::find(
+                        result.references[second]
+                            .current_vertices.begin(),
+                        result.references[second]
+                            .current_vertices.end(),
+                        token) !=
+                    result.references[second]
+                        .current_vertices.end()) {
+                    shared = true;
+                    break;
+                }
+            }
+            if (shared) {
+                result.references[first].status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+                result.references[second].status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+            }
+        }
+    }
+
+    std::vector<kernel::RuntimeVertexToken>
+        inherited_claimed;
+    for (const auto& reference :
+         result.references) {
+        if (!isActiveReferenceStatus(
+                reference.status)) {
+            continue;
+        }
+        for (const auto token :
+             reference.current_vertices) {
+            appendUniqueRuntimeToken(
+                inherited_claimed,
+                token);
+        }
+    }
+
+    struct NewPointGroup final {
+        PointRelation relation;
+        std::vector<kernel::RuntimeVertexToken>
+            vertices;
+    };
+    std::vector<NewPointGroup> new_groups;
+
+    for (const auto& meaning : meanings) {
+        if (!meaning.relation ||
+            std::find(
+                inherited_claimed.begin(),
+                inherited_claimed.end(),
+                meaning.token) !=
+                inherited_claimed.end()) {
+            continue;
+        }
+
+        auto group =
+            std::find_if(
+                new_groups.begin(),
+                new_groups.end(),
+                [&meaning](const auto& item) {
+                    return item.relation ==
+                           *meaning.relation;
+                });
+        if (group == new_groups.end()) {
+            new_groups.push_back(
+                {
+                    *meaning.relation,
+                    {meaning.token},
+                });
+        } else {
+            appendUniqueRuntimeToken(
+                group->vertices,
+                meaning.token);
+        }
+    }
+
+    for (auto& group : new_groups) {
+        FeaturePointResolution reference;
+        reference.address.producer_feature_id =
+            current_feature;
+        reference.address.adjacent_surfaces =
+            group.relation.adjacent_surfaces;
+        reference.current_vertices =
+            std::move(group.vertices);
+        reference.candidate_vertex_count =
+            reference.current_vertices.size();
+        reference.status =
+            strictReferenceStatus(
+                reference.candidate_vertex_count);
+        if (!reference.valid()) {
+            return std::nullopt;
+        }
+        result.produced.push_back(reference);
+        result.references.push_back(
+            std::move(reference));
+    }
+
+    result.records.reserve(
+        meanings.size());
+    for (const auto& meaning : meanings) {
+        BodyVertexTopologyRecord record;
+        record.runtime_token = meaning.token;
+        record.incident_material_edge_count =
+            meaning.incident_material_edge_count;
+        record.provider_point =
+            meaning.provider_point;
+
+        if (!meaning.relation) {
+            record.accounting_class =
+                TopologyAccountingClass::
+                    semantically_unsupported;
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.records.push_back(
+                std::move(record));
+            continue;
+        }
+
+        std::vector<kernel::ReferenceStatus>
+            statuses;
+        for (const auto& reference :
+             result.references) {
+            if (!isActiveReferenceStatus(
+                    reference.status) ||
+                std::find(
+                    reference.current_vertices.begin(),
+                    reference.current_vertices.end(),
+                    meaning.token) ==
+                    reference.current_vertices.end()) {
+                continue;
+            }
+            if (std::find(
+                    record.point_candidates.begin(),
+                    record.point_candidates.end(),
+                    reference.address) ==
+                record.point_candidates.end()) {
+                record.point_candidates.push_back(
+                    reference.address);
+                statuses.push_back(
+                    reference.status);
+            }
+        }
+
+        if (record.point_candidates.empty()) {
+            return std::nullopt;
+        }
+
+        record.accounting_class =
+            TopologyAccountingClass::
+                referenceable;
+        if (record.point_candidates.size() > 1U ||
+            std::any_of(
+                statuses.begin(),
+                statuses.end(),
+                [](kernel::ReferenceStatus status) {
+                    return status ==
+                           kernel::ReferenceStatus::
+                               ambiguous;
+                })) {
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    ambiguous;
+        } else {
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    resolved;
+        }
+        result.records.push_back(
+            std::move(record));
+    }
+
+    return result;
+}
+
 template <typename Token>
 [[nodiscard]] bool uniqueValidTokens(
     const std::vector<Token>& tokens) noexcept {
@@ -494,7 +1596,9 @@ makeBodyStageTopologyCatalog(
     const std::vector<FeatureFaceResolution>&
         semantic_faces,
     const std::vector<FeatureSurfaceResolution>&
-        semantic_surfaces) {
+        semantic_surfaces,
+    const CurveStageBuild& curve_stage,
+    const PointStageBuild& point_stage) {
     if (!feature_id.valid() ||
         !kernel_result.ok() ||
         kernel_result.face_count !=
@@ -639,26 +1743,41 @@ makeBodyStageTopologyCatalog(
         }
     }
 
-    result.edges.reserve(
-        kernel_result.current_edges.size());
-    for (const auto token :
-         kernel_result.current_edges) {
-        result.edges.push_back(
-            BodyEdgeTopologyRecord{
-                token,
-                TopologyAccountingClass::
-                    semantically_unsupported});
+    result.edges = curve_stage.records;
+    result.vertices = point_stage.records;
+    result.curves = curve_stage.references;
+    result.points = point_stage.references;
+
+    if (result.edges.size() !=
+            kernel_result.current_edges.size() ||
+        result.vertices.size() !=
+            kernel_result.current_vertices.size()) {
+        return std::nullopt;
     }
 
-    result.vertices.reserve(
-        kernel_result.current_vertices.size());
+    for (const auto token :
+         kernel_result.current_edges) {
+        if (std::count_if(
+                result.edges.begin(),
+                result.edges.end(),
+                [token](const auto& record) {
+                    return record.runtime_token ==
+                           token;
+                }) != 1) {
+            return std::nullopt;
+        }
+    }
     for (const auto token :
          kernel_result.current_vertices) {
-        result.vertices.push_back(
-            BodyVertexTopologyRecord{
-                token,
-                TopologyAccountingClass::
-                    semantically_unsupported});
+        if (std::count_if(
+                result.vertices.begin(),
+                result.vertices.end(),
+                [token](const auto& record) {
+                    return record.runtime_token ==
+                           token;
+                }) != 1) {
+            return std::nullopt;
+        }
     }
 
     return result.complete()
@@ -777,6 +1896,105 @@ bool FeatureSurfaceResolution::valid() const noexcept {
     return false;
 }
 
+bool FeatureCurveAddress::valid() const noexcept {
+    if (!producer_feature_id.valid() ||
+        adjacent_surfaces.size() != 2U ||
+        adjacent_surfaces[0] ==
+            adjacent_surfaces[1] ||
+        !std::is_sorted(
+            adjacent_surfaces.begin(),
+            adjacent_surfaces.end())) {
+        return false;
+    }
+    return adjacent_surfaces[0].valid() &&
+           adjacent_surfaces[1].valid();
+}
+
+bool FeatureCurveResolution::valid() const noexcept {
+    if (!address.valid() ||
+        curve_kind == kernel::CurveKind::other ||
+        candidate_edge_count !=
+            current_edges.size()) {
+        return false;
+    }
+    if (!uniqueValidTokens(current_edges)) {
+        return false;
+    }
+
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        if (candidate_edge_count == 0U) {
+            return false;
+        }
+        return candidate_edge_count == 1U
+            ? strict_edge_status ==
+                  kernel::ReferenceStatus::resolved
+            : strict_edge_status ==
+                  kernel::ReferenceStatus::ambiguous;
+    case kernel::ReferenceStatus::ambiguous:
+        return candidate_edge_count >= 1U &&
+               strict_edge_status ==
+                   kernel::ReferenceStatus::ambiguous;
+    case kernel::ReferenceStatus::missing:
+        return candidate_edge_count == 0U &&
+               current_edges.empty() &&
+               strict_edge_status ==
+                   kernel::ReferenceStatus::missing;
+    case kernel::ReferenceStatus::unsupported:
+        return candidate_edge_count == 0U &&
+               current_edges.empty() &&
+               strict_edge_status ==
+                   kernel::ReferenceStatus::unsupported;
+    }
+    return false;
+}
+
+bool FeaturePointAddress::valid() const noexcept {
+    if (!producer_feature_id.valid() ||
+        adjacent_surfaces.size() != 3U ||
+        !std::is_sorted(
+            adjacent_surfaces.begin(),
+            adjacent_surfaces.end())) {
+        return false;
+    }
+    for (std::size_t index = 0U;
+         index < adjacent_surfaces.size();
+         ++index) {
+        if (!adjacent_surfaces[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < adjacent_surfaces.size();
+             ++other) {
+            if (adjacent_surfaces[index] ==
+                adjacent_surfaces[other]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+bool FeaturePointResolution::valid() const noexcept {
+    if (!address.valid() ||
+        candidate_vertex_count !=
+            current_vertices.size() ||
+        !uniqueValidTokens(current_vertices)) {
+        return false;
+    }
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        return candidate_vertex_count == 1U;
+    case kernel::ReferenceStatus::ambiguous:
+        return candidate_vertex_count >= 1U;
+    case kernel::ReferenceStatus::missing:
+    case kernel::ReferenceStatus::unsupported:
+        return candidate_vertex_count == 0U &&
+               current_vertices.empty();
+    }
+    return false;
+}
+
 bool BodyFaceTopologyRecord::valid() const noexcept {
     if (!runtime_token.valid()) {
         return false;
@@ -819,17 +2037,106 @@ bool BodyFaceTopologyRecord::valid() const noexcept {
 }
 
 bool BodyEdgeTopologyRecord::valid() const noexcept {
-    return runtime_token.valid() &&
-           accounting_class !=
-               TopologyAccountingClass::
-                   integrity_failure;
+    if (!runtime_token.valid()) {
+        return false;
+    }
+    for (std::size_t index = 0U;
+         index < curve_candidates.size();
+         ++index) {
+        if (!curve_candidates[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < curve_candidates.size();
+             ++other) {
+            if (curve_candidates[index] ==
+                curve_candidates[other]) {
+                return false;
+            }
+        }
+    }
+
+    switch (accounting_class) {
+    case TopologyAccountingClass::referenceable:
+        return !periodic_seam &&
+               !curve_candidates.empty() &&
+               curve_kind !=
+                   kernel::CurveKind::other &&
+               (referenceability ==
+                    kernel::ReferenceStatus::resolved ||
+                referenceability ==
+                    kernel::ReferenceStatus::ambiguous);
+    case TopologyAccountingClass::
+        known_representation_artifact:
+        return periodic_seam &&
+               curve_candidates.empty() &&
+               referenceability ==
+                   kernel::ReferenceStatus::
+                       unsupported;
+    case TopologyAccountingClass::
+        semantically_unsupported:
+        return !periodic_seam &&
+               curve_candidates.empty() &&
+               referenceability ==
+                   kernel::ReferenceStatus::
+                       unsupported;
+    case TopologyAccountingClass::
+        integrity_failure:
+        return false;
+    }
+    return false;
 }
 
 bool BodyVertexTopologyRecord::valid() const noexcept {
-    return runtime_token.valid() &&
-           accounting_class !=
-               TopologyAccountingClass::
-                   integrity_failure;
+    if (!runtime_token.valid()) {
+        return false;
+    }
+    for (std::size_t index = 0U;
+         index < point_candidates.size();
+         ++index) {
+        if (!point_candidates[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < point_candidates.size();
+             ++other) {
+            if (point_candidates[index] ==
+                point_candidates[other]) {
+                return false;
+            }
+        }
+    }
+    if (provider_point &&
+        (!std::isfinite(provider_point->x) ||
+         !std::isfinite(provider_point->y) ||
+         !std::isfinite(provider_point->z))) {
+        return false;
+    }
+
+    switch (accounting_class) {
+    case TopologyAccountingClass::referenceable:
+        return !point_candidates.empty() &&
+               (referenceability ==
+                    kernel::ReferenceStatus::resolved ||
+                referenceability ==
+                    kernel::ReferenceStatus::ambiguous);
+    case TopologyAccountingClass::
+        semantically_unsupported:
+        return point_candidates.empty() &&
+               referenceability ==
+                   kernel::ReferenceStatus::
+                       unsupported;
+    case TopologyAccountingClass::
+        known_representation_artifact:
+        return point_candidates.empty() &&
+               referenceability ==
+                   kernel::ReferenceStatus::
+                       unsupported;
+    case TopologyAccountingClass::
+        integrity_failure:
+        return false;
+    }
+    return false;
 }
 
 bool BodyStageTopologyCatalog::valid() const noexcept {
@@ -842,7 +2149,9 @@ bool BodyStageTopologyCatalog::valid() const noexcept {
         return faces.empty() &&
                edges.empty() &&
                vertices.empty() &&
-               surfaces.empty();
+               surfaces.empty() &&
+               curves.empty() &&
+               points.empty();
     }
 
     for (std::size_t index = 0U;
@@ -913,6 +2222,38 @@ bool BodyStageTopologyCatalog::valid() const noexcept {
         }
     }
 
+    for (std::size_t index = 0U;
+         index < curves.size();
+         ++index) {
+        if (!curves[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < curves.size();
+             ++other) {
+            if (curves[index].address ==
+                curves[other].address) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < points.size();
+         ++index) {
+        if (!points[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < points.size();
+             ++other) {
+            if (points[index].address ==
+                points[other].address) {
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 
@@ -951,6 +2292,10 @@ PartEvaluation evaluatePart(
         current_references;
     std::vector<FeatureSurfaceResolution>
         current_surfaces;
+    std::vector<FeatureCurveResolution>
+        current_curves;
+    std::vector<FeaturePointResolution>
+        current_points;
     bool chain_broken = false;
 
     for (const auto& authored :
@@ -1134,6 +2479,8 @@ PartEvaluation evaluatePart(
             chain_broken = true;
             current_references.clear();
             current_surfaces.clear();
+            current_curves.clear();
+            current_points.clear();
             result.features.push_back(
                 std::move(evaluated));
             continue;
@@ -1153,12 +2500,65 @@ PartEvaluation evaluatePart(
                 std::move(converted));
         }
 
+        const auto curve_stage =
+            buildCurveStage(
+                authored.id,
+                kernel_result,
+                candidate_surfaces,
+                current_curves);
+        if (!curve_stage) {
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    failed;
+            evaluated.diagnostic =
+                FeatureEvaluationDiagnosticCode::
+                    topology_integrity_failure;
+            chain_broken = true;
+            current_references.clear();
+            current_surfaces.clear();
+            current_curves.clear();
+            current_points.clear();
+            result.features.push_back(
+                std::move(evaluated));
+            continue;
+        }
+
+        const auto point_stage =
+            buildPointStage(
+                authored.id,
+                kernel_result,
+                candidate_surfaces,
+                current_points);
+        if (!point_stage) {
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    failed;
+            evaluated.diagnostic =
+                FeatureEvaluationDiagnosticCode::
+                    topology_integrity_failure;
+            chain_broken = true;
+            current_references.clear();
+            current_surfaces.clear();
+            current_curves.clear();
+            current_points.clear();
+            result.features.push_back(
+                std::move(evaluated));
+            continue;
+        }
+
+        evaluated.produced_curves =
+            curve_stage->produced;
+        evaluated.produced_points =
+            point_stage->produced;
+
         auto candidate_topology =
             makeBodyStageTopologyCatalog(
                 authored.id,
                 kernel_result,
                 candidate_references,
-                candidate_surfaces);
+                candidate_surfaces,
+                *curve_stage,
+                *point_stage);
         if (!candidate_topology) {
             evaluated.status =
                 FeatureEvaluationStatus::
@@ -1188,6 +2588,10 @@ PartEvaluation evaluatePart(
             std::move(candidate_references);
         current_surfaces =
             std::move(candidate_surfaces);
+        current_curves =
+            curve_stage->references;
+        current_points =
+            point_stage->references;
         current_topology =
             std::move(candidate_topology);
         current_solid =
@@ -1222,6 +2626,10 @@ PartEvaluation evaluatePart(
             std::move(current_references);
         result.current_surface_references =
             std::move(current_surfaces);
+        result.current_curve_references =
+            std::move(current_curves);
+        result.current_point_references =
+            std::move(current_points);
         return result;
     }
 

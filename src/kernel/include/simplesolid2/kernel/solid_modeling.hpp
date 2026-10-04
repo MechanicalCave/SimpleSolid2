@@ -128,6 +128,69 @@ enum class SurfaceKind {
     other,
 };
 
+enum class CurveKind {
+    line,
+    circle,
+    other,
+};
+
+// Complete current-stage provider observations used by Part to construct
+// semantic Curve/Point meaning. Runtime Surface tokens are adjacency evidence
+// only; provider topology order and geometry diagnostics never become durable
+// identity.
+struct CurrentEdgeSemanticObservation final {
+    RuntimeEdgeToken runtime_token;
+    CurveKind provider_curve_kind{
+        CurveKind::other};
+    bool periodic_seam{false};
+    std::vector<RuntimeSurfaceToken>
+        adjacent_surfaces;
+
+    friend bool operator==(
+        const CurrentEdgeSemanticObservation&,
+        const CurrentEdgeSemanticObservation&) = default;
+};
+
+struct CurrentVertexSemanticObservation final {
+    RuntimeVertexToken runtime_token;
+    std::vector<RuntimeSurfaceToken>
+        adjacent_surfaces;
+    std::vector<RuntimeEdgeToken>
+        incident_material_edges;
+    // Diagnostic only. XYZ is never identity.
+    std::optional<Point3> provider_point;
+
+    friend bool operator==(
+        const CurrentVertexSemanticObservation&,
+        const CurrentVertexSemanticObservation&) = default;
+};
+
+struct InheritedEdgeRealizationLineage final {
+    RuntimeEdgeToken source_token;
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_count{};
+    std::vector<RuntimeEdgeToken>
+        current_edges;
+
+    friend bool operator==(
+        const InheritedEdgeRealizationLineage&,
+        const InheritedEdgeRealizationLineage&) = default;
+};
+
+struct InheritedVertexRealizationLineage final {
+    RuntimeVertexToken source_token;
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_count{};
+    std::vector<RuntimeVertexToken>
+        current_vertices;
+
+    friend bool operator==(
+        const InheritedVertexRealizationLineage&,
+        const InheritedVertexRealizationLineage&) = default;
+};
+
 enum class SolidBooleanOperation {
     add,
     cut,
@@ -264,6 +327,21 @@ struct SolidModelingResult final {
     std::vector<RuntimeFaceToken> current_faces;
     std::vector<RuntimeEdgeToken> current_edges;
     std::vector<RuntimeVertexToken> current_vertices;
+
+    // PM-02C complete current-stage Edge/Vertex semantic observations. There
+    // is exactly one observation per current runtime Edge/Vertex token.
+    std::vector<CurrentEdgeSemanticObservation>
+        current_edge_semantics;
+    std::vector<CurrentVertexSemanticObservation>
+        current_vertex_semantics;
+
+    // Transient provider-history evidence across one adjacent Body stage.
+    // Part may use this only to corroborate semantic lifecycle. It is never
+    // persisted and never chooses among semantic candidates by provider order.
+    std::vector<InheritedEdgeRealizationLineage>
+        inherited_edge_realizations;
+    std::vector<InheritedVertexRealizationLineage>
+        inherited_vertex_realizations;
 
     // PM-01 semantic Face lineage remains separate from complete inventory.
     std::vector<InheritedFaceLineage>
