@@ -1209,6 +1209,324 @@ int main() {
     CHECK(!removed->runtime_token.has_value());
     CHECK(!removed->canonical_frame.has_value());
 
+    // PM-02C production semantics in the provider-neutral evaluator:
+    // complete material Edge/Vertex promotion, Curve carrier continuity across
+    // strict Edge split, multi-branch ambiguity, and Point identity that never
+    // falls back to XYZ.
+    kernel.emit_semantic_subshapes = true;
+
+    auto semantic_base =
+        withFeatures(
+            fixture.document,
+            {
+                feature(
+                    id1,
+                    fixture.profile_id,
+                    part::ExtrudeOperation::add,
+                    10.0),
+            },
+            cursor);
+    const auto semantic_base_eval =
+        part::evaluatePart(
+            semantic_base,
+            kernel);
+    CHECK(
+        semantic_base_eval.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(semantic_base_eval.current_topology.has_value());
+    CHECK(
+        semantic_base_eval.current_topology->edges.size() ==
+        12U);
+    CHECK(
+        semantic_base_eval.current_topology->vertices.size() ==
+        8U);
+    CHECK(
+        semantic_base_eval.current_curve_references.size() ==
+        12U);
+    CHECK(
+        semantic_base_eval.current_point_references.size() ==
+        8U);
+    for (const auto& curve :
+         semantic_base_eval.current_curve_references) {
+        CHECK(curve.valid());
+        CHECK(
+            curve.status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(
+            curve.strict_edge_status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(curve.candidate_edge_count == 1U);
+        CHECK(
+            curve.curve_kind ==
+            kernel::CurveKind::line);
+    }
+    for (const auto& point :
+         semantic_base_eval.current_point_references) {
+        CHECK(point.valid());
+        CHECK(
+            point.status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(point.candidate_vertex_count == 1U);
+        CHECK(point.address.adjacent_surfaces.size() == 3U);
+    }
+    for (const auto& edge :
+         semantic_base_eval.current_topology->edges) {
+        CHECK(edge.valid());
+        CHECK(
+            edge.accounting_class ==
+            part::TopologyAccountingClass::referenceable);
+        CHECK(
+            edge.referenceability ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(!edge.periodic_seam);
+        CHECK(edge.curve_candidates.size() == 1U);
+    }
+    for (const auto& vertex :
+         semantic_base_eval.current_topology->vertices) {
+        CHECK(vertex.valid());
+        CHECK(
+            vertex.accounting_class ==
+            part::TopologyAccountingClass::referenceable);
+        CHECK(
+            vertex.referenceability ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(vertex.point_candidates.size() == 1U);
+        CHECK(vertex.incident_material_edge_count == 3U);
+        CHECK(vertex.provider_point.has_value());
+    }
+
+    // One previously singular bounded Edge splits into two provider
+    // descendants. Explicit lineage keeps one semantic Curve carrier
+    // Resolved while the strict Edge selector becomes Ambiguous.
+    kernel.split_first_inherited_edge = true;
+    const auto split_edge_eval =
+        part::evaluatePart(
+            valid,
+            kernel);
+    kernel.split_first_inherited_edge = false;
+    CHECK(
+        split_edge_eval.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    const auto split_curve_count =
+        static_cast<std::size_t>(
+            std::count_if(
+                split_edge_eval.current_curve_references.begin(),
+                split_edge_eval.current_curve_references.end(),
+                [id1](const auto& curve) {
+                    return curve.address
+                               .producer_feature_id == id1 &&
+                           curve.status ==
+                               kernel::ReferenceStatus::
+                                   resolved &&
+                           curve.strict_edge_status ==
+                               kernel::ReferenceStatus::
+                                   ambiguous &&
+                           curve.candidate_edge_count == 2U &&
+                           curve.current_edges.size() == 2U;
+                }));
+    CHECK(split_curve_count == 1U);
+
+    // A newly observed Surface-pair relation with two disconnected branches
+    // has no branch provenance discriminator. Neither branch may win: the
+    // Curve itself and the strict Edge selector are both Ambiguous.
+    kernel.duplicate_first_new_edge_branch = true;
+    const auto multi_branch_eval =
+        part::evaluatePart(
+            semantic_base,
+            kernel);
+    kernel.duplicate_first_new_edge_branch = false;
+    CHECK(
+        multi_branch_eval.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    const auto ambiguous_new_curve =
+        std::find_if(
+            multi_branch_eval.current_curve_references.begin(),
+            multi_branch_eval.current_curve_references.end(),
+            [id1](const auto& curve) {
+                return curve.address.producer_feature_id == id1 &&
+                       curve.status ==
+                           kernel::ReferenceStatus::ambiguous &&
+                       curve.strict_edge_status ==
+                           kernel::ReferenceStatus::ambiguous &&
+                       curve.candidate_edge_count == 2U;
+            });
+    CHECK(
+        ambiguous_new_curve !=
+        multi_branch_eval.current_curve_references.end());
+    CHECK(ambiguous_new_curve->valid());
+    CHECK(multi_branch_eval.current_topology.has_value());
+    const auto ambiguous_edge_records =
+        static_cast<std::size_t>(
+            std::count_if(
+                multi_branch_eval.current_topology->edges.begin(),
+                multi_branch_eval.current_topology->edges.end(),
+                [&ambiguous_new_curve](const auto& edge) {
+                    return edge.referenceability ==
+                               kernel::ReferenceStatus::
+                                   ambiguous &&
+                           std::find(
+                               edge.curve_candidates.begin(),
+                               edge.curve_candidates.end(),
+                               ambiguous_new_curve->address) !=
+                               edge.curve_candidates.end();
+                }));
+    CHECK(ambiguous_edge_records == 2U);
+
+    // Deleting an inherited Edge meaning and creating a replacement with the
+    // same semantic Surface relation does not revive the old Curve identity:
+    // provider lineage says the old bounded realization is gone, so a new
+    // Curve is produced by the current Feature.
+    kernel.replace_first_inherited_edge = true;
+    const auto replace_edge_eval =
+        part::evaluatePart(
+            valid,
+            kernel);
+    kernel.replace_first_inherited_edge = false;
+    CHECK(
+        replace_edge_eval.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    const auto old_missing_curve =
+        std::find_if(
+            replace_edge_eval.current_curve_references.begin(),
+            replace_edge_eval.current_curve_references.end(),
+            [id1](const auto& curve) {
+                return curve.address.producer_feature_id == id1 &&
+                       curve.status ==
+                           kernel::ReferenceStatus::missing;
+            });
+    CHECK(
+        old_missing_curve !=
+        replace_edge_eval.current_curve_references.end());
+    CHECK(
+        old_missing_curve->strict_edge_status ==
+        kernel::ReferenceStatus::missing);
+    CHECK(old_missing_curve->current_edges.empty());
+    const auto replacement_curve =
+        std::find_if(
+            replace_edge_eval.current_curve_references.begin(),
+            replace_edge_eval.current_curve_references.end(),
+            [id2, &old_missing_curve](const auto& curve) {
+                return curve.address.producer_feature_id == id2 &&
+                       curve.address.role ==
+                           old_missing_curve->address.role &&
+                       curve.address.adjacent_surfaces ==
+                           old_missing_curve->address
+                               .adjacent_surfaces &&
+                       curve.status ==
+                           kernel::ReferenceStatus::resolved;
+            });
+    CHECK(
+        replacement_curve !=
+        replace_edge_eval.current_curve_references.end());
+    CHECK(
+        replacement_curve->strict_edge_status ==
+        kernel::ReferenceStatus::resolved);
+
+    // Exact same XYZ is deliberately insufficient to preserve Point
+    // identity. Capture one old semantic Point and its diagnostic provider
+    // coordinate, then remove its lineage and emit a new current Vertex at
+    // exactly the same point.
+    CHECK(!semantic_base_eval.current_topology->vertices.empty());
+    const auto old_vertex_token =
+        semantic_base_eval.current_topology
+            ->vertices.front().runtime_token;
+    const auto old_point =
+        std::find_if(
+            semantic_base_eval.current_point_references.begin(),
+            semantic_base_eval.current_point_references.end(),
+            [old_vertex_token](const auto& point) {
+                return std::find(
+                           point.current_vertices.begin(),
+                           point.current_vertices.end(),
+                           old_vertex_token) !=
+                       point.current_vertices.end();
+            });
+    CHECK(
+        old_point !=
+        semantic_base_eval.current_point_references.end());
+    const auto old_vertex_record =
+        std::find_if(
+            semantic_base_eval.current_topology->vertices.begin(),
+            semantic_base_eval.current_topology->vertices.end(),
+            [old_vertex_token](const auto& vertex) {
+                return vertex.runtime_token ==
+                       old_vertex_token;
+            });
+    CHECK(
+        old_vertex_record !=
+        semantic_base_eval.current_topology->vertices.end());
+    CHECK(old_vertex_record->provider_point.has_value());
+
+    kernel.replace_first_inherited_vertex_same_point = true;
+    const auto replace_point_eval =
+        part::evaluatePart(
+            valid,
+            kernel);
+    kernel.replace_first_inherited_vertex_same_point = false;
+    CHECK(
+        replace_point_eval.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(replace_point_eval.current_topology.has_value());
+
+    const auto missing_old_point =
+        std::find_if(
+            replace_point_eval.current_point_references.begin(),
+            replace_point_eval.current_point_references.end(),
+            [&old_point](const auto& point) {
+                return point.address ==
+                           old_point->address &&
+                       point.status ==
+                           kernel::ReferenceStatus::missing;
+            });
+    CHECK(
+        missing_old_point !=
+        replace_point_eval.current_point_references.end());
+    CHECK(missing_old_point->current_vertices.empty());
+
+    const auto new_same_xyz_point =
+        std::find_if(
+            replace_point_eval.current_point_references.begin(),
+            replace_point_eval.current_point_references.end(),
+            [id2, &old_point](const auto& point) {
+                return point.address.producer_feature_id == id2 &&
+                       point.address.adjacent_surfaces ==
+                           old_point->address.adjacent_surfaces &&
+                       point.status ==
+                           kernel::ReferenceStatus::resolved &&
+                       point.current_vertices.size() == 1U;
+            });
+    CHECK(
+        new_same_xyz_point !=
+        replace_point_eval.current_point_references.end());
+    const auto replacement_vertex_token =
+        new_same_xyz_point->current_vertices.front();
+    const auto replacement_vertex_record =
+        std::find_if(
+            replace_point_eval.current_topology->vertices.begin(),
+            replace_point_eval.current_topology->vertices.end(),
+            [replacement_vertex_token](const auto& vertex) {
+                return vertex.runtime_token ==
+                       replacement_vertex_token;
+            });
+    CHECK(
+        replacement_vertex_record !=
+        replace_point_eval.current_topology->vertices.end());
+    CHECK(replacement_vertex_record->provider_point.has_value());
+    CHECK(
+        replacement_vertex_record->provider_point->x ==
+        old_vertex_record->provider_point->x);
+    CHECK(
+        replacement_vertex_record->provider_point->y ==
+        old_vertex_record->provider_point->y);
+    CHECK(
+        replacement_vertex_record->provider_point->z ==
+        old_vertex_record->provider_point->z);
+    CHECK(
+        new_same_xyz_point->address !=
+        old_point->address);
+
+    kernel.emit_semantic_subshapes = false;
+
     // Part -> Kernel translation preserves Reverse OneSide semantics.
     kernel.saw_reverse = false;
     auto reversed =
@@ -1496,6 +1814,10 @@ int main() {
         << " alias_no_winner=ambiguous"
         << " independent_winner=resolved_missing"
         << " unresolved_surface_frame=none"
+        << " curve_carrier_split=resolved_edge_ambiguous"
+        << " new_pair_multibranch=ambiguous"
+        << " edge_replacement=no_rebind"
+        << " same_xyz_point_replacement=distinct"
         << " topology_integrity_fail_closed=1"
         << " restart_after_failure=0\n";
     return EXIT_SUCCESS;
