@@ -507,6 +507,17 @@ PartViewportController::PartViewportController(
                 }
             });
 
+        viewport_->setViewStyleActionHandler(
+            [self](viewer::ViewStyle style) {
+                if (self) {
+                    static_cast<void>(
+                        self->setViewStyle(style));
+                }
+            });
+        static_cast<void>(
+            viewport_->setViewStyle(
+                view_style_));
+
         applySketchViewportMode();
     }
 }
@@ -717,6 +728,33 @@ void PartViewportController::refreshPresentation() {
         !sketch_ok);
 
     applySelectionToSurfaces();
+}
+
+bool PartViewportController::setViewStyle(
+    viewer::ViewStyle style) {
+    switch (style) {
+    case viewer::ViewStyle::shaded:
+    case viewer::ViewStyle::shaded_with_edges:
+    case viewer::ViewStyle::
+        shaded_with_hidden_edges:
+        break;
+    default:
+        return false;
+    }
+
+    if (view_style_ == style) {
+        return viewport_ == nullptr ||
+               viewport_->viewStyle() == style ||
+               viewport_->setViewStyle(style);
+    }
+
+    if (viewport_ != nullptr &&
+        !viewport_->setViewStyle(style)) {
+        return false;
+    }
+
+    view_style_ = style;
+    return true;
 }
 
 void PartViewportController::setPresentationDegraded(
