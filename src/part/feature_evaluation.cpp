@@ -1152,6 +1152,84 @@ bool FeatureSurfaceResolution::valid() const noexcept {
     return false;
 }
 
+bool FeatureEdgeAddress::valid() const noexcept {
+    return role != kernel::EdgeSemanticRoleKind::unsupported &&
+           role != kernel::EdgeSemanticRoleKind::periodic_seam &&
+           uniqueSurfaceAddressSet(adjacent_surfaces, 2U);
+}
+
+bool operator==(
+    const FeatureEdgeAddress& first,
+    const FeatureEdgeAddress& second) noexcept {
+    return first.role == second.role &&
+           sameSurfaceAddressSet(
+               first.adjacent_surfaces,
+               second.adjacent_surfaces);
+}
+
+bool FeatureEdgeResolution::valid() const noexcept {
+    if (!address.valid() ||
+        curve_kind == kernel::CurveKind::other ||
+        candidate_count != current_edges.size() ||
+        (producer_feature_id &&
+         !producer_feature_id->valid())) {
+        return false;
+    }
+    if (!uniqueValidTokens(current_edges)) {
+        return false;
+    }
+
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        return candidate_count == 1U;
+    case kernel::ReferenceStatus::ambiguous:
+        return candidate_count > 1U;
+    case kernel::ReferenceStatus::missing:
+        return candidate_count == 0U;
+    case kernel::ReferenceStatus::unsupported:
+        return candidate_count == 0U;
+    }
+    return false;
+}
+
+bool FeaturePointAddress::valid() const noexcept {
+    return uniqueSurfaceAddressSet(
+        adjacent_surfaces,
+        3U);
+}
+
+bool operator==(
+    const FeaturePointAddress& first,
+    const FeaturePointAddress& second) noexcept {
+    return sameSurfaceAddressSet(
+        first.adjacent_surfaces,
+        second.adjacent_surfaces);
+}
+
+bool FeaturePointResolution::valid() const noexcept {
+    if (!address.valid() ||
+        candidate_count != current_vertices.size() ||
+        (producer_feature_id &&
+         !producer_feature_id->valid()) ||
+        !uniqueValidTokens(current_vertices)) {
+        return false;
+    }
+
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        return candidate_count == 1U &&
+               current_point.has_value();
+    case kernel::ReferenceStatus::ambiguous:
+        return candidate_count > 1U &&
+               !current_point.has_value();
+    case kernel::ReferenceStatus::missing:
+    case kernel::ReferenceStatus::unsupported:
+        return candidate_count == 0U &&
+               !current_point.has_value();
+    }
+    return false;
+}
+
 bool BodyFaceTopologyRecord::valid() const noexcept {
     if (!runtime_token.valid()) {
         return false;
