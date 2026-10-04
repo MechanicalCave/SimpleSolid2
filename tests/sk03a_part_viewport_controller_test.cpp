@@ -1286,14 +1286,92 @@ int main(int argc, char* argv[]) {
             &solid_kernel);
         controller.setDocumentSession(
             &solid_session);
+        CHECK(viewport.solid_scene_calls_ == 0U);
+        CHECK(viewport.body_scene_.valid());
+        CHECK(!viewport.body_scene_.empty());
         CHECK(
-            viewport.solid_scene_
-                .triangles.size() == 1U);
+            viewport.body_scene_
+                .generation.valid());
+        CHECK(
+            viewport.body_scene_
+                .authoritative_for_modeling);
+        CHECK(
+            viewport.body_scene_.faces.size() ==
+            6U);
+        CHECK(
+            viewport.body_scene_.edges.size() ==
+            12U);
+        CHECK(
+            viewport.body_scene_.vertices.size() ==
+            8U);
+        CHECK(
+            viewport.body_scene_.triangles.size() ==
+            6U);
+        CHECK(
+            controller.viewStyle() ==
+            viewer::ViewStyle::shaded);
+        CHECK(
+            viewport.view_style_ ==
+            viewer::ViewStyle::shaded);
+
+        const auto authored_revision_before_style =
+            solid_session.document().revision();
+        const auto undo_before_style =
+            solid_session.undoDepth();
+        const bool dirty_before_style =
+            solid_session.needsSave();
+
+        viewport.requestViewStyle(
+            viewer::ViewStyle::
+                shaded_with_edges);
+        CHECK(
+            controller.viewStyle() ==
+            viewer::ViewStyle::
+                shaded_with_edges);
+        CHECK(
+            viewport.view_style_ ==
+            viewer::ViewStyle::
+                shaded_with_edges);
+        CHECK(
+            solid_session.document().revision() ==
+            authored_revision_before_style);
+        CHECK(
+            solid_session.undoDepth() ==
+            undo_before_style);
+        CHECK(
+            solid_session.needsSave() ==
+            dirty_before_style);
+
+        viewport.requestViewStyle(
+            viewer::ViewStyle::
+                shaded_with_hidden_edges);
+        CHECK(
+            controller.viewStyle() ==
+            viewer::ViewStyle::
+                shaded_with_hidden_edges);
+        CHECK(
+            viewport.view_style_ ==
+            viewer::ViewStyle::
+                shaded_with_hidden_edges);
+        CHECK(
+            solid_session.document().revision() ==
+            authored_revision_before_style);
+        CHECK(
+            solid_session.undoDepth() ==
+            undo_before_style);
+        CHECK(
+            solid_session.needsSave() ==
+            dirty_before_style);
+
+        const auto first_body_generation =
+            viewport.body_scene_.generation;
 
         const auto extrude_calls_after_publish =
             solid_kernel.extrude_calls;
         const auto mesh_calls_after_publish =
             solid_kernel.mesh_calls;
+        const auto body_presentation_calls_after_publish =
+            solid_kernel.body_presentation_calls;
         controller.refreshPresentation();
         CHECK(
             solid_kernel.extrude_calls ==
@@ -1301,6 +1379,12 @@ int main(int argc, char* argv[]) {
         CHECK(
             solid_kernel.mesh_calls ==
             mesh_calls_after_publish);
+        CHECK(
+            solid_kernel.body_presentation_calls ==
+            body_presentation_calls_after_publish);
+        CHECK(
+            viewport.body_scene_.generation ==
+            first_body_generation);
 
         auto preview_solid =
             std::make_shared<FakeSolid>();
@@ -1333,17 +1417,21 @@ int main(int argc, char* argv[]) {
 
         solid_kernel.fail_mesh = true;
         controller.refreshPresentation();
-        CHECK(
-            viewport.solid_scene_
-                .triangles.empty());
+        CHECK(viewport.body_scene_.empty());
         CHECK(
             controller.presentationDegraded());
 
         solid_kernel.fail_mesh = false;
         controller.refreshPresentation();
+        CHECK(!viewport.body_scene_.empty());
         CHECK(
-            viewport.solid_scene_
-                .triangles.size() == 1U);
+            viewport.body_scene_
+                .authoritative_for_modeling);
+        CHECK(
+            viewport.body_scene_.generation.value >
+            first_body_generation.value);
+        const auto recovered_generation =
+            viewport.body_scene_.generation;
         CHECK(
             !controller.presentationDegraded());
 
@@ -1355,23 +1443,20 @@ int main(int argc, char* argv[]) {
                         .revision()});
         CHECK(delete_profile.ok());
         controller.refreshPresentation();
-        CHECK(
-            viewport.solid_scene_
-                .triangles.empty());
+        CHECK(viewport.body_scene_.empty());
         CHECK(
             !controller.presentationDegraded());
 
         CHECK(solid_session.undo().changed);
         controller.refreshPresentation();
+        CHECK(!viewport.body_scene_.empty());
         CHECK(
-            viewport.solid_scene_
-                .triangles.size() == 1U);
+            viewport.body_scene_.generation.value >
+            recovered_generation.value);
 
         controller.setSolidModelingKernel(
             nullptr);
-        CHECK(
-            viewport.solid_scene_
-                .triangles.empty());
+        CHECK(viewport.body_scene_.empty());
         controller.clear();
     }
 
@@ -1483,9 +1568,21 @@ int main(int argc, char* argv[]) {
             &solid_kernel);
         controller.setDocumentSession(
             &solid_session);
+        CHECK(viewport.body_scene_.valid());
         CHECK(
-            viewport.solid_scene_
-                .triangles.size() == 1U);
+            viewport.body_scene_
+                .authoritative_for_modeling);
+        CHECK(
+            viewport.body_scene_.faces.size() ==
+            12U);
+        CHECK(
+            viewport.body_scene_.edges.size() ==
+            24U);
+        CHECK(
+            viewport.body_scene_.vertices.size() ==
+            16U);
+        const auto full_body_generation =
+            viewport.body_scene_.generation;
 
         const auto delete_higher =
             solid_session.execute(
@@ -1516,9 +1613,23 @@ int main(int argc, char* argv[]) {
             higher_failed.features[1].status ==
             part::FeatureEvaluationStatus::
                 blocked);
+        CHECK(viewport.body_scene_.valid());
+        CHECK(!viewport.body_scene_.empty());
         CHECK(
-            viewport.solid_scene_
-                .triangles.size() == 1U);
+            !viewport.body_scene_
+                 .authoritative_for_modeling);
+        CHECK(
+            viewport.body_scene_.faces.size() ==
+            6U);
+        CHECK(
+            viewport.body_scene_.edges.size() ==
+            12U);
+        CHECK(
+            viewport.body_scene_.vertices.size() ==
+            8U);
+        CHECK(
+            viewport.body_scene_.generation.value >
+            full_body_generation.value);
 
         const auto delete_lower =
             solid_session.execute(
@@ -1541,9 +1652,7 @@ int main(int argc, char* argv[]) {
         CHECK(
             first_failed.resolved_prefix_solid ==
             nullptr);
-        CHECK(
-            viewport.solid_scene_
-                .triangles.empty());
+        CHECK(viewport.body_scene_.empty());
 
         controller.setSolidModelingKernel(
             nullptr);
