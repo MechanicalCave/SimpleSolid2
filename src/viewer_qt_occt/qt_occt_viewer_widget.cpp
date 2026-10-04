@@ -980,10 +980,6 @@ public:
 
         view_style_hud_controls_.clear();
 
-        constexpr int offset_x = 300;
-        constexpr int half_width = 100;
-        constexpr int half_height = 11;
-
         auto add =
             [this](
                 const char* text,
@@ -1033,9 +1029,6 @@ public:
             88,
             false);
 
-        static_cast<void>(offset_x);
-        static_cast<void>(half_width);
-        static_cast<void>(half_height);
     }
 
     void syncViewStyleHud() {
@@ -5993,6 +5986,10 @@ private:
     bool navigation_cube_press_active_{};
     std::vector<NavigationControl>
         navigation_controls_;
+    std::vector<ViewStyleHudControl>
+        view_style_hud_controls_;
+    bool view_style_menu_open_{};
+    bool view_style_press_active_{};
     std::vector<ReferenceObject> reference_objects_;
     Handle(AIS_InteractiveObject) solid_object_;
     Handle(AIS_InteractiveObject) solid_preview_object_;
