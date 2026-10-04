@@ -10,6 +10,8 @@
 #include <optional>
 
 class QContextMenuEvent;
+class QEvent;
+class QKeyEvent;
 class QMouseEvent;
 class QPaintEngine;
 class QPaintEvent;
@@ -93,6 +95,15 @@ public:
 
     void setBodyTopologySelectionIntentHandler(
         viewer::BodyTopologySelectionIntentHandler handler) override;
+
+    void setBodyTopologyPreselectionIntentHandler(
+        viewer::BodyTopologyPreselectionIntentHandler handler) override;
+
+    void setBodyTopologyCycleIntentHandler(
+        viewer::BodyTopologyCycleIntentHandler handler) override;
+
+    [[nodiscard]] bool setBodyTopologyPreselection(
+        std::optional<viewer::PresentationToken> token) override;
 
     [[nodiscard]] bool setSolidScene(
         const viewer::SolidScene& scene) override;
@@ -191,6 +202,8 @@ protected:
     void mouseReleaseEvent(QMouseEvent* event) override;
     void mouseDoubleClickEvent(QMouseEvent* event) override;
     void wheelEvent(QWheelEvent* event) override;
+    void keyPressEvent(QKeyEvent* event) override;
+    void leaveEvent(QEvent* event) override;
     void contextMenuEvent(QContextMenuEvent* event) override;
 
 private:
