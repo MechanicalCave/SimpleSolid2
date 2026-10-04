@@ -139,14 +139,45 @@ makeKernelProfileInput(
         return std::nullopt;
     }
 
-    // PM-02E removes authored world placement authority. The legacy
-    // document-only profile conversion remains intentionally Origin-support
-    // only until PM-02F supplies the exact upstream stage topology needed to
-    // resolve Body Surface-backed Sketches.
-    const auto placement =
-        sketchPlacementForSupport(
+    // Without an explicit topology context this path intentionally resolves
+    // only intrinsic Origin support. Body-Surface support must be resolved by
+    // the stage-aware evaluator and passed through the explicit derived-frame
+    // boundary below.
+    const auto support =
+        resolveSketchSupport(
             source->support);
-    if (!placement || !placement->valid()) {
+    if (!support.valid() ||
+        support.status !=
+            SketchSupportResolutionStatus::resolved ||
+        !support.frame) {
+        return std::nullopt;
+    }
+
+    return makeKernelProfileInputAtResolvedFrame(
+        document,
+        profile_id,
+        *support.frame);
+}
+
+std::optional<kernel::PlanarProfileInput>
+makeKernelProfileInputAtResolvedFrame(
+    const PartDocument& document,
+    ProfileId profile_id,
+    const SketchPlacement& resolved_frame) {
+    if (!resolved_frame.valid()) {
+        return std::nullopt;
+    }
+
+    const auto* profile =
+        document.findProfile(profile_id);
+    if (!profile) {
+        return std::nullopt;
+    }
+
+    const auto* source =
+        document.findSketch(
+            profile->source_sketch_id);
+    if (!source) {
         return std::nullopt;
     }
 
@@ -156,16 +187,16 @@ makeKernelProfileInput(
         return std::nullopt;
     }
 
-    const auto n = normal(*placement);
+    const auto n = normal(resolved_frame);
     if (!n) {
         return std::nullopt;
     }
 
     kernel::PlanarProfileInput result;
     result.frame = {
-        point(placement->origin),
-        point(placement->u_axis),
-        point(placement->v_axis),
+        point(resolved_frame.origin),
+        point(resolved_frame.u_axis),
+        point(resolved_frame.v_axis),
         *n,
     };
 
