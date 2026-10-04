@@ -104,6 +104,103 @@ struct BodyTopologySelectionAddress final {
         const BodyTopologySelectionAddress&) = default;
 };
 
+enum class SketchSupportInspectionCapability {
+    not_applicable,
+    supported,
+    unsupported_non_planar,
+    missing,
+    ambiguous,
+    unsupported,
+};
+
+struct BodyTopologyInspection final {
+    viewer::BodyTopologyPresentationKind kind{
+        viewer::BodyTopologyPresentationKind::face};
+    part::BodyStageRef stage;
+    bool diagnostic_prefix{};
+    std::size_t selection_count{};
+    part::TopologyAccountingClass accounting_class{
+        part::TopologyAccountingClass::
+            semantically_unsupported};
+    kernel::ReferenceStatus strict_referenceability{
+        kernel::ReferenceStatus::unsupported};
+    kernel::ReferenceStatus carrier_referenceability{
+        kernel::ReferenceStatus::unsupported};
+    std::size_t semantic_candidate_count{};
+    std::optional<part::FeatureId>
+        producer_feature_id;
+    std::optional<part::FeatureSurfaceAddress>
+        surface_address;
+    std::optional<part::FeatureCurveAddress>
+        curve_address;
+    std::optional<part::FeaturePointAddress>
+        point_address;
+    std::optional<kernel::SurfaceKind>
+        surface_kind;
+    std::optional<kernel::CurveKind>
+        curve_kind;
+    bool periodic_seam{};
+    std::vector<part::FeatureSurfaceAddress>
+        adjacent_surfaces;
+    std::optional<kernel::Point3>
+        provider_point;
+    SketchSupportInspectionCapability
+        sketch_support{
+            SketchSupportInspectionCapability::
+                not_applicable};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return stage.valid() &&
+               selection_count > 0U;
+    }
+};
+
+struct TopologyKindSummary final {
+    std::size_t total{};
+    std::size_t referenceable{};
+    std::size_t representation_artifact{};
+    std::size_t semantically_unsupported{};
+    std::size_t integrity_failure{};
+
+    friend bool operator==(
+        const TopologyKindSummary&,
+        const TopologyKindSummary&) = default;
+};
+
+struct BodyTopologySummary final {
+    part::BodyStageRef stage;
+    TopologyKindSummary faces;
+    TopologyKindSummary edges;
+    TopologyKindSummary vertices;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return stage.valid();
+    }
+
+    friend bool operator==(
+        const BodyTopologySummary&,
+        const BodyTopologySummary&) = default;
+};
+
+struct FeatureContributionSummary final {
+    part::BodyStageRef current_stage;
+    std::size_t faces{};
+    std::size_t direct_edges{};
+    std::size_t direct_vertices{};
+    std::size_t boundary_edges{};
+    std::size_t boundary_vertices{};
+    std::size_t missing_outputs{};
+    std::size_t ambiguous_outputs{};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return current_stage.valid();
+    }
+
+    friend bool operator==(
+        const FeatureContributionSummary&,
+        const FeatureContributionSummary&) = default;
+};
+
 class PartViewportController final : public QObject {
 public:
     using SelectionChangedHandler = std::function<void(
@@ -114,6 +211,10 @@ public:
         std::function<void(
             const std::vector<part::ProfileId>&,
             std::optional<part::ProfileId>)>;
+
+    using BodyTopologySelectionChangedHandler =
+        std::function<void(
+            std::optional<BodyTopologyInspection>)>;
 
     using SketchPointerHandler =
         std::function<void(const SketchPointerInput&)>;
@@ -292,6 +393,12 @@ public:
             std::move(handler);
     }
 
+    void setBodyTopologySelectionChangedHandler(
+        BodyTopologySelectionChangedHandler handler) {
+        body_topology_selection_changed_handler_ =
+            std::move(handler);
+    }
+
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primarySelection() const;
 
@@ -300,6 +407,16 @@ public:
 
     [[nodiscard]] std::optional<BodyTopologySelectionAddress>
     primaryBodyTopologySelection() const;
+
+    [[nodiscard]] std::optional<BodyTopologyInspection>
+    primaryBodyTopologyInspection() const;
+
+    [[nodiscard]] std::optional<BodyTopologySummary>
+    bodyTopologySummary() const;
+
+    [[nodiscard]] std::optional<FeatureContributionSummary>
+    featureContributionSummary(
+        part::FeatureId feature_id) const;
 
     [[nodiscard]] viewer::ViewStyle
     viewStyle() const noexcept;
@@ -501,6 +618,8 @@ private:
     SelectionChangedHandler selection_changed_handler_;
     ProfileSelectionChangedHandler
         profile_selection_changed_handler_;
+    BodyTopologySelectionChangedHandler
+        body_topology_selection_changed_handler_;
     SketchPointerHandler sketch_pointer_handler_;
     PresentationStateChangedHandler
         presentation_state_changed_handler_;

@@ -41,6 +41,7 @@ class PartDocumentTreeController;
 class PartSketchInteractionController;
 class PartViewportController;
 class ViewCubeWidget;
+struct BodyTopologyInspection;
 
 struct CadDynamicInputUiState final {
     std::string buffer;
@@ -246,6 +247,8 @@ private:
         part::BodyId body_id);
     void refreshFeatureProperties(
         part::FeatureId feature_id);
+    void refreshTopologyProperties(
+        const BodyTopologyInspection& inspection);
     void refreshPartFeatureEvaluationSnapshot();
     void navigateToProfile(
         part::ProfileId profile_id);
@@ -330,6 +333,7 @@ private:
     QWidget* profile_properties_page_{};
     QWidget* body_properties_page_{};
     QWidget* feature_properties_page_{};
+    QWidget* topology_properties_page_{};
     QLabel* active_path_{};
     QLabel* active_id_{};
     QLabel* reference_name_{};
@@ -371,6 +375,8 @@ private:
     QLabel* body_identity_{};
     QLabel* body_status_{};
     QLabel* body_feature_count_{};
+    QLabel* body_topology_counts_{};
+    QLabel* body_topology_accounting_{};
 
     QLabel* feature_name_{};
     QLabel* feature_identity_{};
@@ -382,10 +388,26 @@ private:
     QLabel* feature_direction_{};
     QLabel* feature_source_profile_{};
     QLabel* feature_source_sketch_{};
+    QLabel* feature_contribution_{};
+    QLabel* feature_contribution_diagnostics_{};
     QPushButton* feature_go_to_profile_button_{};
     QPushButton* feature_edit_button_{};
     QPushButton* feature_suppress_button_{};
     QPushButton* feature_delete_button_{};
+
+    QLabel* topology_kind_{};
+    QLabel* topology_stage_{};
+    QLabel* topology_presence_{};
+    QLabel* topology_accounting_{};
+    QLabel* topology_strict_reference_{};
+    QLabel* topology_carrier_reference_{};
+    QLabel* topology_carrier_{};
+    QLabel* topology_carrier_type_{};
+    QLabel* topology_producer_{};
+    QLabel* topology_candidates_{};
+    QLabel* topology_adjacency_{};
+    QLabel* topology_sketch_support_{};
+    QLabel* topology_geometry_{};
 
     QLabel* operations_placeholder_{};
     QWidget* precision_operations_widget_{};

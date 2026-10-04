@@ -1258,6 +1258,45 @@ int main(int argc, char* argv[]) {
         topology_controller.setDocumentSession(
             &topology_session);
 
+        std::size_t topology_inspection_events = 0U;
+        std::optional<ui::BodyTopologyInspection>
+            last_topology_inspection;
+        topology_controller
+            .setBodyTopologySelectionChangedHandler(
+                [&topology_inspection_events,
+                 &last_topology_inspection](
+                    std::optional<
+                        ui::BodyTopologyInspection>
+                        inspection) {
+                    ++topology_inspection_events;
+                    last_topology_inspection =
+                        std::move(inspection);
+                });
+
+        const auto body_summary =
+            topology_controller.bodyTopologySummary();
+        CHECK(body_summary.has_value());
+        CHECK(body_summary->faces.total == 1U);
+        CHECK(body_summary->faces.referenceable == 1U);
+        CHECK(body_summary->edges.total == 1U);
+        CHECK(
+            body_summary->edges
+                .semantically_unsupported == 1U);
+        CHECK(body_summary->vertices.total == 1U);
+        CHECK(
+            body_summary->vertices
+                .semantically_unsupported == 1U);
+
+        const auto feature_summary =
+            topology_controller.featureContributionSummary(
+                *feature.feature_id);
+        CHECK(feature_summary.has_value());
+        CHECK(feature_summary->faces == 1U);
+        CHECK(
+            feature_summary->current_stage.feature_id ==
+            std::optional<part::FeatureId>{
+                *feature.feature_id});
+
         // PM-02D4: tree hover emits semantic FeatureId only and does not
         // mutate tree selection. Leave clears the transient hover.
         topology_tree.resize(420, 320);
@@ -1465,6 +1504,39 @@ int main(int argc, char* argv[]) {
                 ->kind ==
             viewer::BodyTopologyPresentationKind::
                 face);
+        CHECK(topology_inspection_events == 1U);
+        CHECK(last_topology_inspection.has_value());
+        CHECK(
+            last_topology_inspection->kind ==
+            viewer::BodyTopologyPresentationKind::
+                face);
+        CHECK(
+            last_topology_inspection
+                ->accounting_class ==
+            part::TopologyAccountingClass::
+                referenceable);
+        CHECK(
+            last_topology_inspection
+                ->strict_referenceability ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(
+            last_topology_inspection
+                ->carrier_referenceability ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(
+            last_topology_inspection->surface_kind ==
+            std::optional<kernel::SurfaceKind>{
+                kernel::SurfaceKind::plane});
+        CHECK(
+            last_topology_inspection
+                ->producer_feature_id ==
+            std::optional<part::FeatureId>{
+                *feature.feature_id});
+        CHECK(
+            last_topology_inspection
+                ->sketch_support ==
+            ui::SketchSupportInspectionCapability::
+                supported);
 
         // Leaving the hit neighborhood resets the runtime stack to the
         // ordinary Vertex -> Edge -> Face ranking.
@@ -1487,9 +1559,39 @@ int main(int argc, char* argv[]) {
             std::optional<viewer::PresentationToken>{
                 vertex_token});
 
+        // Hover/cycling alone never changes the primary Properties subject.
+        CHECK(topology_inspection_events == 1U);
+
         topology_viewport.emitBodyTopology(
             competing,
             viewer::SelectionIntentMode::replace);
+
+        CHECK(topology_inspection_events == 2U);
+        CHECK(last_topology_inspection.has_value());
+        CHECK(
+            last_topology_inspection->kind ==
+            viewer::BodyTopologyPresentationKind::
+                vertex);
+        CHECK(
+            last_topology_inspection
+                ->strict_referenceability ==
+            kernel::ReferenceStatus::unsupported);
+        CHECK(
+            last_topology_inspection
+                ->carrier_referenceability ==
+            kernel::ReferenceStatus::unsupported);
+        const std::optional<kernel::Point3>
+            expected_provider_point{
+                kernel::Point3{0.0, 0.0, 0.0}};
+        CHECK(
+            last_topology_inspection
+                ->provider_point ==
+            expected_provider_point);
+        CHECK(
+            last_topology_inspection
+                ->sketch_support ==
+            ui::SketchSupportInspectionCapability::
+                not_applicable);
 
         const auto primary =
             topology_controller
@@ -1529,6 +1631,7 @@ int main(int argc, char* argv[]) {
                 ->kind ==
             viewer::BodyTopologyPresentationKind::
                 vertex);
+        CHECK(topology_inspection_events == 2U);
 
         topology_viewport.emitBodyTopologyPreselection(
             stale,
@@ -1560,6 +1663,27 @@ int main(int argc, char* argv[]) {
                 ->kind ==
             viewer::BodyTopologyPresentationKind::
                 edge);
+        CHECK(topology_inspection_events == 3U);
+        CHECK(last_topology_inspection.has_value());
+        CHECK(
+            last_topology_inspection->kind ==
+            viewer::BodyTopologyPresentationKind::
+                edge);
+        CHECK(
+            last_topology_inspection
+                ->selection_count == 2U);
+        CHECK(
+            last_topology_inspection
+                ->strict_referenceability ==
+            kernel::ReferenceStatus::unsupported);
+        CHECK(
+            last_topology_inspection
+                ->carrier_referenceability ==
+            kernel::ReferenceStatus::unsupported);
+        CHECK(
+            last_topology_inspection->curve_kind ==
+            std::optional<kernel::CurveKind>{
+                kernel::CurveKind::line});
 
         const auto revision_before_style =
             topology_session.document()
@@ -1605,6 +1729,8 @@ int main(int argc, char* argv[]) {
                  .primaryBodyTopologySelection());
         CHECK(
             !topology_viewport.body_preselection_);
+        CHECK(topology_inspection_events == 4U);
+        CHECK(!last_topology_inspection.has_value());
 
         // A document revision rebuilds BodyScene with a new generation and
         // the semantic Feature contribution is reprojected onto the new
