@@ -428,7 +428,11 @@ void propagateCurrentReferences(
         auto& reference =
             references[found->second];
         if (reference.surface_kind !=
-                item.surface_kind ||
+            item.surface_kind) {
+            return false;
+        }
+        if (item.surface_status ==
+                kernel::ReferenceStatus::resolved &&
             reference.canonical_frame !=
                 item.canonical_frame) {
             return false;
@@ -440,6 +444,8 @@ void propagateCurrentReferences(
             item.strict_face_status;
         reference.candidate_face_count =
             item.candidate_face_count;
+        reference.canonical_frame =
+            item.canonical_frame;
         reference.current_faces =
             item.current_faces;
         seen[found->second] = true;
@@ -719,10 +725,15 @@ bool FeatureSurfaceResolution::valid() const noexcept {
         }
     }
 
-    if (surface_kind ==
-        kernel::SurfaceKind::plane) {
-        if (!canonical_frame ||
-            !canonical_frame->valid()) {
+    if (status ==
+        kernel::ReferenceStatus::resolved) {
+        if (surface_kind ==
+            kernel::SurfaceKind::plane) {
+            if (!canonical_frame ||
+                !canonical_frame->valid()) {
+                return false;
+            }
+        } else if (canonical_frame) {
             return false;
         }
     } else if (canonical_frame) {

@@ -1322,7 +1322,7 @@ template <typename Mapper>
                         unsupported,
                     0U,
                     tracked.kind,
-                    tracked.canonical_frame,
+                    std::nullopt,
                     {},
                 });
             claims.push_back(
@@ -1364,7 +1364,7 @@ template <typename Mapper>
                     unsupported,
                 0U,
                 source.surface_kind,
-                source.canonical_frame,
+                std::nullopt,
                 std::nullopt,
                 {},
             });
@@ -1439,10 +1439,13 @@ template <typename Mapper>
                 claim.candidates.size();
             published.current_faces =
                 current_faces;
+            published.canonical_frame.reset();
 
             if (surface_status ==
                 kernel::ReferenceStatus::
                     resolved) {
+                published.canonical_frame =
+                    claim.canonical_frame;
                 if (!runtime.tracked_surfaces.emplace(
                         published.token.value,
                         OcctRuntimeSolid::
@@ -1468,12 +1471,15 @@ template <typename Mapper>
             claim.candidates.size();
         published.current_faces =
             std::move(current_faces);
+        published.canonical_frame.reset();
 
         if (surface_status !=
             kernel::ReferenceStatus::resolved) {
             continue;
         }
 
+        published.canonical_frame =
+            claim.canonical_frame;
         const auto token =
             allocateRuntimeToken<
                 kernel::RuntimeSurfaceToken>(

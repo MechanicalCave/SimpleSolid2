@@ -45,6 +45,8 @@ public:
     bool saw_midplane{false};
     bool corrupt_topology_inventory{false};
     bool split_first_inherited_surface{false};
+    bool alias_first_two_inherited_surfaces{false};
+    bool first_survives_second_missing{false};
 
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
@@ -119,6 +121,17 @@ public:
                 existing->tokens.size() ==
                 existing->surface_tokens.size());
 
+            std::optional<kernel::RuntimeFaceToken>
+                alias_face;
+            if (alias_first_two_inherited_surfaces) {
+                CHECK(existing->tokens.size() >= 2U);
+                alias_face =
+                    kernel::RuntimeFaceToken{
+                        runtime->next_token++};
+                inventory_faces.push_back(
+                    *alias_face);
+            }
+
             for (std::size_t index = 0U;
                  index < existing->tokens.size();
                  ++index) {
@@ -126,6 +139,55 @@ public:
                     existing->tokens[index];
                 const auto surface_token =
                     existing->surface_tokens[index];
+
+                if (alias_first_two_inherited_surfaces &&
+                    index < 2U) {
+                    CHECK(alias_face.has_value());
+                    result.inherited_faces.push_back(
+                        {
+                            face_token,
+                            kernel::ReferenceStatus::
+                                ambiguous,
+                            1U,
+                        });
+                    result.inherited_surfaces.push_back(
+                        {
+                            surface_token,
+                            kernel::ReferenceStatus::
+                                ambiguous,
+                            kernel::ReferenceStatus::
+                                ambiguous,
+                            1U,
+                            kernel::SurfaceKind::plane,
+                            std::nullopt,
+                            {*alias_face},
+                        });
+                    continue;
+                }
+
+                if (first_survives_second_missing &&
+                    index == 1U) {
+                    result.inherited_faces.push_back(
+                        {
+                            face_token,
+                            kernel::ReferenceStatus::
+                                missing,
+                            0U,
+                        });
+                    result.inherited_surfaces.push_back(
+                        {
+                            surface_token,
+                            kernel::ReferenceStatus::
+                                missing,
+                            kernel::ReferenceStatus::
+                                missing,
+                            0U,
+                            kernel::SurfaceKind::plane,
+                            std::nullopt,
+                            {},
+                        });
+                    continue;
+                }
 
                 if (split_first_inherited_surface &&
                     index == 0U) {
@@ -597,6 +659,152 @@ int main() {
                 }));
     CHECK(fragment_count == 2U);
 
+    // Two prior semantic Surface claims collapse onto one current provider
+    // Face with no independent semantic winner. Both remain Ambiguous; Part
+    // exposes both carrier candidates on the one current Face and no frame.
+    kernel.alias_first_two_inherited_surfaces = true;
+    const auto alias_eval =
+        part::evaluatePart(
+            valid,
+            kernel);
+    kernel.alias_first_two_inherited_surfaces = false;
+    CHECK(
+        alias_eval.body_status ==
+        part::BodyEvaluationStatus::
+            up_to_date);
+    CHECK(alias_eval.current_topology.has_value());
+
+    const part::FeatureSurfaceAddress
+        first_alias_address{
+            id1,
+            part::FeatureSurfaceRoleKind::
+                profile_cap,
+            std::nullopt,
+            0U,
+            0U,
+            false};
+    const part::FeatureSurfaceAddress
+        second_alias_address{
+            id1,
+            part::FeatureSurfaceRoleKind::
+                extent_cap,
+            std::nullopt,
+            0U,
+            0U,
+            false};
+
+    const auto find_surface =
+        [](const part::PartEvaluation& evaluation,
+           const part::FeatureSurfaceAddress& address) {
+            return std::find_if(
+                evaluation
+                    .current_surface_references.begin(),
+                evaluation
+                    .current_surface_references.end(),
+                [&address](const auto& surface) {
+                    return surface.address == address;
+                });
+        };
+
+    const auto first_alias =
+        find_surface(
+            alias_eval,
+            first_alias_address);
+    const auto second_alias =
+        find_surface(
+            alias_eval,
+            second_alias_address);
+    CHECK(
+        first_alias !=
+        alias_eval.current_surface_references.end());
+    CHECK(
+        second_alias !=
+        alias_eval.current_surface_references.end());
+    CHECK(first_alias->valid());
+    CHECK(second_alias->valid());
+    CHECK(
+        first_alias->status ==
+        kernel::ReferenceStatus::ambiguous);
+    CHECK(
+        second_alias->status ==
+        kernel::ReferenceStatus::ambiguous);
+    CHECK(!first_alias->canonical_frame.has_value());
+    CHECK(!second_alias->canonical_frame.has_value());
+    CHECK(first_alias->current_faces.size() == 1U);
+    CHECK(second_alias->current_faces.size() == 1U);
+    CHECK(
+        first_alias->current_faces.front() ==
+        second_alias->current_faces.front());
+
+    const auto shared_alias_face =
+        std::find_if(
+            alias_eval.current_topology->faces.begin(),
+            alias_eval.current_topology->faces.end(),
+            [&first_alias_address,
+             &second_alias_address](const auto& face) {
+                return
+                    std::find(
+                        face.surface_candidates.begin(),
+                        face.surface_candidates.end(),
+                        first_alias_address) !=
+                        face.surface_candidates.end() &&
+                    std::find(
+                        face.surface_candidates.begin(),
+                        face.surface_candidates.end(),
+                        second_alias_address) !=
+                        face.surface_candidates.end();
+            });
+    CHECK(
+        shared_alias_face !=
+        alias_eval.current_topology->faces.end());
+    CHECK(!shared_alias_face->semantic_address.has_value());
+    CHECK(shared_alias_face->surface_candidates.size() == 2U);
+
+    // If independent provenance says one semantic claim survives and the
+    // other is deleted, no provider-history asymmetry invents a second
+    // winner: survivor stays Resolved, removed meaning is Missing/no frame.
+    kernel.first_survives_second_missing = true;
+    const auto winner_eval =
+        part::evaluatePart(
+            valid,
+            kernel);
+    kernel.first_survives_second_missing = false;
+    CHECK(
+        winner_eval.body_status ==
+        part::BodyEvaluationStatus::
+            up_to_date);
+
+    const auto survivor =
+        find_surface(
+            winner_eval,
+            first_alias_address);
+    const auto removed =
+        find_surface(
+            winner_eval,
+            second_alias_address);
+    CHECK(
+        survivor !=
+        winner_eval.current_surface_references.end());
+    CHECK(
+        removed !=
+        winner_eval.current_surface_references.end());
+    CHECK(survivor->valid());
+    CHECK(removed->valid());
+    CHECK(
+        survivor->status ==
+        kernel::ReferenceStatus::resolved);
+    CHECK(survivor->canonical_frame.has_value());
+    CHECK(
+        removed->status ==
+        kernel::ReferenceStatus::missing);
+    CHECK(
+        removed->strict_face_status ==
+        kernel::ReferenceStatus::missing);
+    CHECK(removed->candidate_face_count == 0U);
+    CHECK(removed->current_faces.empty());
+    CHECK(!removed->runtime_token.has_value());
+    CHECK(!removed->canonical_frame.has_value());
+
     // Part -> Kernel translation preserves Reverse OneSide semantics.
     kernel.saw_reverse = false;
     auto reversed =
@@ -881,6 +1089,9 @@ int main() {
         << " resolved_prefix_presentation=1"
         << " topology_catalog=1"
         << " split_face_ambiguous_surface_resolved=1"
+        << " alias_no_winner=ambiguous"
+        << " independent_winner=resolved_missing"
+        << " unresolved_surface_frame=none"
         << " topology_integrity_fail_closed=1"
         << " restart_after_failure=0\n";
     return EXIT_SUCCESS;
