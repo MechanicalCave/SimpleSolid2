@@ -119,6 +119,45 @@ struct RuntimeSurfaceToken final {
         const RuntimeSurfaceToken&) = default;
 };
 
+struct BodyFacePresentationRange final {
+    RuntimeFaceToken runtime_token;
+    std::size_t first_triangle{};
+    std::size_t triangle_count{};
+
+    friend bool operator==(
+        const BodyFacePresentationRange&,
+        const BodyFacePresentationRange&) = default;
+};
+
+struct BodyEdgePresentationPath final {
+    RuntimeEdgeToken runtime_token;
+    std::vector<Point3> points;
+
+    friend bool operator==(
+        const BodyEdgePresentationPath&,
+        const BodyEdgePresentationPath&) = default;
+};
+
+struct BodyVertexPresentationPoint final {
+    RuntimeVertexToken runtime_token;
+    Point3 position;
+
+    friend bool operator==(
+        const BodyVertexPresentationPoint&,
+        const BodyVertexPresentationPoint&) = default;
+};
+
+struct BodyPresentationResult final {
+    SolidPresentationStatus status{
+        SolidPresentationStatus::unsupported};
+    SolidPresentationMesh mesh;
+    std::vector<BodyFacePresentationRange> faces;
+    std::vector<BodyEdgePresentationPath> edges;
+    std::vector<BodyVertexPresentationPoint> vertices;
+
+    [[nodiscard]] bool ok() const noexcept;
+};
+
 enum class SurfaceKind {
     plane,
     cylinder,
@@ -392,6 +431,14 @@ public:
     // state, modeling semantics or reference resolution.
     [[nodiscard]] virtual SolidPresentationResult
     presentationMesh(
+        RuntimeSolidHandle solid) noexcept;
+
+    // Atomic topology-aware committed Body presentation. All mesh ranges,
+    // Edge paths and Vertex points must originate from the same runtime solid
+    // generation. Runtime topology tokens remain provider/Part-side only and
+    // never cross into the Viewer API.
+    [[nodiscard]] virtual BodyPresentationResult
+    bodyPresentation(
         RuntimeSolidHandle solid) noexcept;
 };
 
