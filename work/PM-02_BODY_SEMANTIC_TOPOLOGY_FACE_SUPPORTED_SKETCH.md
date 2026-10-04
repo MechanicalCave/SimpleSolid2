@@ -3,7 +3,7 @@
 **Status:** PROPOSED — AWAITING EXPLICIT OWNER ACCEPTANCE  
 **Decision class:** D2 production Work Contract candidate; no production mutation authorized until accepted  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.7 candidate  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.7  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Entry gate:** PM-02P Body Semantic Topology Evidence COMPLETED — PASS; Owner accepted PM-02P D2 synthesis/recommendation on 2026-10-04  
 **Evidence authority:** `work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md`, `work/PM-02P_REFERENCE_SURVIVAL_MATRIX.md`, `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`  
