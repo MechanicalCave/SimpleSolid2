@@ -2948,4 +2948,129 @@ OcctSolidModelingKernel::presentationMesh(
         runtime->solid);
 }
 
+kernel::BodyPresentationResult
+OcctSolidModelingKernel::bodyPresentation(
+    kernel::RuntimeSolidHandle solid) noexcept {
+    kernel::BodyPresentationResult result;
+    if (solid == nullptr) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+
+    const auto* runtime =
+        dynamic_cast<
+            const OcctRuntimeSolid*>(
+                solid.get());
+    if (runtime == nullptr) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_mismatch;
+        return result;
+    }
+
+    try {
+        constexpr double linear_deflection_mm = 0.25;
+        constexpr double angular_deflection_rad = 0.35;
+
+        BRepMesh_IncrementalMesh mesher{
+            runtime->solid,
+            linear_deflection_mm,
+            false,
+            angular_deflection_rad,
+            true};
+        mesher.Perform();
+        if (!mesher.IsDone()) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+
+        result.body.faces.reserve(
+            runtime->inventory_faces.size());
+        for (const auto& [token_value, face] :
+             runtime->inventory_faces) {
+            const auto first_triangle =
+                result.body.mesh.triangles.size();
+            if (!appendFaceTriangles(
+                    face,
+                    result.body.mesh)) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                result.body = {};
+                return result;
+            }
+            result.body.faces.push_back(
+                kernel::BodyFacePresentationRange{
+                    kernel::RuntimeFaceToken{
+                        token_value},
+                    first_triangle,
+                    result.body.mesh.triangles.size() -
+                        first_triangle});
+        }
+
+        result.body.edges.reserve(
+            runtime->inventory_edges.size());
+        for (const auto& [token_value, edge] :
+             runtime->inventory_edges) {
+            auto points =
+                edgePresentationPoints(edge);
+            if (!points) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                result.body = {};
+                return result;
+            }
+            result.body.edges.push_back(
+                kernel::BodyEdgePresentationPath{
+                    kernel::RuntimeEdgeToken{
+                        token_value},
+                    std::move(*points)});
+        }
+
+        result.body.vertices.reserve(
+            runtime->inventory_vertices.size());
+        for (const auto& [token_value, vertex] :
+             runtime->inventory_vertices) {
+            const auto point =
+                BRep_Tool::Pnt(vertex);
+            result.body.vertices.push_back(
+                kernel::BodyVertexPresentationPoint{
+                    kernel::RuntimeVertexToken{
+                        token_value},
+                    {point.X(),
+                     point.Y(),
+                     point.Z()}});
+        }
+
+        if (!result.body.valid()) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            result.body = {};
+            return result;
+        }
+
+        result.status =
+            kernel::SolidPresentationStatus::ok;
+        return result;
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        result.body = {};
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        result.body = {};
+        return result;
+    }
+}
+
 } // namespace simplesolid2::kernel_occt
