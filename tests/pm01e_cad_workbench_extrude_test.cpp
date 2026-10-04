@@ -169,6 +169,12 @@ public:
         const viewer::ReferenceScene& scene) override {
         return scene.valid();
     }
+    bool setBodyScene(
+        const viewer::BodyScene& scene) override {
+        if (!scene.valid()) return false;
+        body_scene = scene;
+        return true;
+    }
     bool setSolidScene(
         const viewer::SolidScene& scene) override {
         if (!scene.valid()) return false;
@@ -235,6 +241,7 @@ public:
         viewer::ViewportCursorMode) override {}
 
     viewer::CameraState camera_;
+    viewer::BodyScene body_scene;
     viewer::SolidScene solid_scene;
     viewer::SolidPreviewScene solid_preview;
     viewer::ProfileScene profile_scene;
@@ -456,7 +463,7 @@ int main(int argc, char* argv[]) {
         session.undoDepth() ==
         undo_before + 1U);
     CHECK(viewport->solid_preview.empty());
-    CHECK(!viewport->solid_scene.empty());
+    CHECK(!viewport->body_scene.empty());
     CHECK(viewport->profile_scene.profiles.empty());
 
     // Feature Tree + Properties expose the durable relationship without
@@ -599,7 +606,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         session.undoDepth() ==
         undo_before_suppress + 1U);
-    CHECK(viewport->solid_scene.empty());
+    CHECK(viewport->body_scene.empty());
     CHECK(!viewport->profile_scene.profiles.empty());
     CHECK(
         findFeatureItem(
@@ -622,21 +629,21 @@ int main(int argc, char* argv[]) {
         session.document().body()
             .features.front().id ==
         feature_id_before_edit);
-    CHECK(!viewport->solid_scene.empty());
+    CHECK(!viewport->body_scene.empty());
     CHECK(viewport->profile_scene.profiles.empty());
 
     workbench.requestRedo();
     CHECK(
         session.document().body()
             .features.front().suppressed);
-    CHECK(viewport->solid_scene.empty());
+    CHECK(viewport->body_scene.empty());
     CHECK(!viewport->profile_scene.profiles.empty());
 
     suppress_feature->click();
     CHECK(
         !session.document().body()
              .features.front().suppressed);
-    CHECK(!viewport->solid_scene.empty());
+    CHECK(!viewport->body_scene.empty());
     CHECK(viewport->profile_scene.profiles.empty());
     CHECK(
         findFeatureItem(*tree) != nullptr);
@@ -656,7 +663,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         session.undoDepth() ==
         undo_before_delete + 1U);
-    CHECK(viewport->solid_scene.empty());
+    CHECK(viewport->body_scene.empty());
     CHECK(!viewport->profile_scene.profiles.empty());
 
     workbench.requestUndo();
@@ -666,7 +673,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         !session.document().body()
              .features.front().suppressed);
-    CHECK(!viewport->solid_scene.empty());
+    CHECK(!viewport->body_scene.empty());
     CHECK(viewport->profile_scene.profiles.empty());
     CHECK(
         session.document().body()
@@ -677,7 +684,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         session.document().body()
             .features.empty());
-    CHECK(viewport->solid_scene.empty());
+    CHECK(viewport->body_scene.empty());
     CHECK(!viewport->profile_scene.profiles.empty());
 
     workbench.requestUndo();
@@ -688,7 +695,7 @@ int main(int argc, char* argv[]) {
         session.document().body()
             .features.front().id ==
         feature_id_before_edit);
-    CHECK(!viewport->solid_scene.empty());
+    CHECK(!viewport->body_scene.empty());
     CHECK(viewport->profile_scene.profiles.empty());
 
     // Command Line enters the same draft API and CANCEL remains non-authoring.

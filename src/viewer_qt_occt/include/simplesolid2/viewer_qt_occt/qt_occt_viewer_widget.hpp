@@ -74,6 +74,9 @@ public:
     [[nodiscard]] bool setReferenceScene(
         const viewer::ReferenceScene& scene) override;
 
+    [[nodiscard]] bool setBodyScene(
+        const viewer::BodyScene& scene) override;
+
     [[nodiscard]] bool setSolidScene(
         const viewer::SolidScene& scene) override;
 

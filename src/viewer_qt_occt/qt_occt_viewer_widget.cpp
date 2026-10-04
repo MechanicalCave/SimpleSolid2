@@ -1405,6 +1405,59 @@ public:
             solid_object_);
     }
 
+    bool setBodyScene(
+        const viewer::BodyScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        if (scene == body_scene_) {
+            return true;
+        }
+
+        clearSolidScene();
+
+        if (scene.empty()) {
+            body_scene_ = scene;
+            updateCurrentViewer();
+            return true;
+        }
+
+        try {
+            viewer::SolidScene mesh_scene;
+            mesh_scene.triangles =
+                scene.triangles;
+            const auto object =
+                makeSolidObject(mesh_scene);
+            if (object.IsNull()) {
+                clearSolidScene();
+                return false;
+            }
+
+            setOwnedSolidShadingStyle(
+                object,
+                committedSolidColor(),
+                kCommittedSolidTransparency);
+            solid_object_ = object;
+            context_->Display(
+                solid_object_,
+                false);
+            context_->Deactivate(
+                solid_object_);
+            body_scene_ = scene;
+            solid_scene_ = {};
+            syncCommittedSolidVisibilityForPreview();
+            updateCurrentViewer();
+            return true;
+        } catch (...) {
+            clearSolidScene();
+            throw;
+        }
+    }
+
     bool setSolidScene(
         const viewer::SolidScene& scene) {
         if (!scene.valid()) return false;
@@ -3667,7 +3720,8 @@ public:
         }
 
         solid_object_.Nullify();
-        solid_scene_.triangles.clear();
+        solid_scene_ = viewer::SolidScene{};
+        body_scene_ = viewer::BodyScene{};
     }
 
 
@@ -4616,6 +4670,7 @@ private:
     std::vector<ReferenceObject> reference_objects_;
     Handle(AIS_InteractiveObject) solid_object_;
     Handle(AIS_InteractiveObject) solid_preview_object_;
+    viewer::BodyScene body_scene_;
     viewer::SolidScene solid_scene_;
     viewer::SolidPreviewScene solid_preview_scene_;
     std::vector<ProfileObject> profile_objects_;
@@ -4784,6 +4839,15 @@ bool QtOcctViewerWidget::setSketchScene(
         "setSketchScene",
         [this, &scene] {
             return impl_->setSketchScene(scene);
+        });
+}
+
+bool QtOcctViewerWidget::setBodyScene(
+    const viewer::BodyScene& scene) {
+    return guardedBool(
+        "setBodyScene",
+        [this, &scene] {
+            return impl_->setBodyScene(scene);
         });
 }
 

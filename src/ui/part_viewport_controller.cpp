@@ -519,8 +519,10 @@ void PartViewportController::setSolidModelingKernel(
     }
     solid_modeling_kernel_ =
         modeling_kernel;
-    solid_scene_revision_.reset();
-    solid_scene_cache_.reset();
+    body_scene_revision_.reset();
+    body_scene_cache_.reset();
+    body_topology_catalog_cache_.reset();
+    body_topology_bindings_.clear();
     clearSolidPreview();
     refreshPresentation();
 }
@@ -539,8 +541,10 @@ void PartViewportController::setDocumentSession(
         profile_bindings_.clear();
         transient_profile_reveal_.reset();
         transient_profile_hide_.reset();
-        solid_scene_revision_.reset();
-        solid_scene_cache_.reset();
+        body_scene_revision_.reset();
+        body_scene_cache_.reset();
+        body_topology_catalog_cache_.reset();
+        body_topology_bindings_.clear();
         clearSolidPreview();
         clearSketchPreview();
         clearProfileDraftPreview();
@@ -569,8 +573,10 @@ void PartViewportController::clear() {
     profile_bindings_.clear();
     transient_profile_reveal_.reset();
     transient_profile_hide_.reset();
-    solid_scene_revision_.reset();
-    solid_scene_cache_.reset();
+    body_scene_revision_.reset();
+    body_scene_cache_.reset();
+    body_topology_catalog_cache_.reset();
+    body_topology_bindings_.clear();
     clearSketchSelectionBoxOverlay();
     tree_->clear();
 
@@ -579,8 +585,8 @@ void PartViewportController::clear() {
             viewport_->setSolidPreviewScene(
                 viewer::SolidPreviewScene{}));
         static_cast<void>(
-            viewport_->setSolidScene(
-                viewer::SolidScene{}));
+            viewport_->setBodyScene(
+                viewer::BodyScene{}));
         static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));
@@ -626,16 +632,18 @@ void PartViewportController::refreshPresentation() {
     if (session_ == nullptr) {
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
-        solid_scene_revision_.reset();
-        solid_scene_cache_.reset();
+        body_scene_revision_.reset();
+        body_scene_cache_.reset();
+        body_topology_catalog_cache_.reset();
+        body_topology_bindings_.clear();
         clearSolidPreview();
         clearSketchPreview();
         clearProfileDraftPreview();
         clearSketchSelectionBoxOverlay();
         applySketchViewportMode();
         static_cast<void>(
-            viewport_->setSolidScene(
-                viewer::SolidScene{}));
+            viewport_->setBodyScene(
+                viewer::BodyScene{}));
         static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));
@@ -668,19 +676,19 @@ void PartViewportController::refreshPresentation() {
     }
 
     const auto solid_scene =
-        buildSolidScene();
+        buildBodyScene();
     bool solid_ok = false;
     if (solid_scene) {
         solid_ok =
-            viewport_->setSolidScene(
+            viewport_->setBodyScene(
                 *solid_scene);
     } else {
         // Presentation generation failed. Clear any previously published
         // Body before reporting degradation; stale solid geometry is never
         // allowed to remain current truth.
         static_cast<void>(
-            viewport_->setSolidScene(
-                viewer::SolidScene{}));
+            viewport_->setBodyScene(
+                viewer::BodyScene{}));
     }
 
     const bool reference_ok =
@@ -2087,78 +2095,261 @@ PartViewportController::buildReferenceScene() const {
     return scene;
 }
 
-std::optional<viewer::SolidScene>
-PartViewportController::buildSolidScene() {
-    viewer::SolidScene empty_scene;
+std::optional<viewer::BodyScene>
+PartViewportController::buildBodyScene() {
+    viewer::BodyScene empty_scene;
     if (session_ == nullptr ||
         solid_modeling_kernel_ == nullptr) {
-        solid_scene_revision_.reset();
-        solid_scene_cache_.reset();
+        body_scene_revision_.reset();
+        body_scene_cache_.reset();
+        body_topology_catalog_cache_.reset();
+        body_topology_bindings_.clear();
         return empty_scene;
     }
 
     const auto revision =
         session_->document().revision();
-    if (solid_scene_revision_ &&
-        *solid_scene_revision_ == revision &&
-        solid_scene_cache_) {
-        return *solid_scene_cache_;
+    if (body_scene_revision_ &&
+        *body_scene_revision_ == revision &&
+        body_scene_cache_) {
+        return *body_scene_cache_;
     }
+
+    const auto fail =
+        [this]() -> std::optional<viewer::BodyScene> {
+            body_scene_revision_.reset();
+            body_scene_cache_.reset();
+            body_topology_catalog_cache_.reset();
+            body_topology_bindings_.clear();
+            return std::nullopt;
+        };
 
     const auto evaluation =
         part::evaluatePart(
             session_->document(),
             *solid_modeling_kernel_);
+
     kernel::RuntimeSolidHandle presentation_solid;
+    const part::BodyStageTopologyCatalog*
+        topology = nullptr;
+    viewer::BodyScenePurpose purpose =
+        viewer::BodyScenePurpose::current_body;
+
     if (evaluation.body_status ==
             part::BodyEvaluationStatus::
                 up_to_date &&
-        evaluation.body_solid != nullptr) {
+        evaluation.body_solid != nullptr &&
+        evaluation.current_topology) {
         presentation_solid =
             evaluation.body_solid;
+        topology =
+            &*evaluation.current_topology;
     } else if (
         evaluation.body_status ==
             part::BodyEvaluationStatus::
                 unavailable &&
-        evaluation.resolved_prefix_solid != nullptr) {
-        // H7: present only the current-revision prefix immediately before the
-        // first failing active Feature. Final Body truth remains unavailable;
-        // no downstream evaluation or semantic reference consumes this solid.
+        evaluation.resolved_prefix_solid != nullptr &&
+        evaluation.resolved_prefix_topology) {
         presentation_solid =
             evaluation.resolved_prefix_solid;
+        topology =
+            &*evaluation.resolved_prefix_topology;
+        purpose =
+            viewer::BodyScenePurpose::
+                diagnostic_prefix;
     }
 
     if (presentation_solid == nullptr) {
-        // Empty history or failure at the first active Feature has no valid
-        // current-revision prefix to present.
-        solid_scene_revision_ = revision;
-        solid_scene_cache_ = empty_scene;
-        return *solid_scene_cache_;
+        body_topology_catalog_cache_.reset();
+        body_topology_bindings_.clear();
+        body_scene_revision_ = revision;
+        body_scene_cache_ = empty_scene;
+        return *body_scene_cache_;
+    }
+    if (topology == nullptr ||
+        !topology->complete()) {
+        return fail();
     }
 
-    const auto mesh =
+    const auto presentation =
         solid_modeling_kernel_->
-            presentationMesh(
+            bodyPresentation(
                 presentation_solid);
-    if (!mesh.ok()) {
-        // Provider/presentation failure remains retryable at the same
-        // authored revision; never cache it as valid current truth.
-        solid_scene_revision_.reset();
-        solid_scene_cache_.reset();
-        return std::nullopt;
+    if (!presentation.ok()) {
+        return fail();
     }
 
-    const auto scene =
-        viewerSolidScene(mesh.mesh);
-    if (!scene) {
-        solid_scene_revision_.reset();
-        solid_scene_cache_.reset();
-        return std::nullopt;
+    if (presentation.body.faces.size() !=
+            topology->faces.size() ||
+        presentation.body.edges.size() !=
+            topology->edges.size() ||
+        presentation.body.vertices.size() !=
+            topology->vertices.size()) {
+        return fail();
     }
 
-    solid_scene_revision_ = revision;
-    solid_scene_cache_ = *scene;
-    return *solid_scene_cache_;
+    const auto mesh_scene =
+        viewerSolidScene(
+            presentation.body.mesh);
+    if (!mesh_scene) {
+        return fail();
+    }
+
+    if (next_body_scene_generation_ ==
+        std::numeric_limits<std::uint64_t>::max()) {
+        return fail();
+    }
+
+    viewer::BodyScene scene;
+    scene.generation =
+        viewer::BodyPresentationGeneration{
+            next_body_scene_generation_++};
+    scene.purpose = purpose;
+    scene.triangles =
+        mesh_scene->triangles;
+
+    std::unordered_map<
+        std::uint64_t,
+        BodyTopologyBinding>
+        bindings;
+
+    const auto bind =
+        [this, &bindings, &scene](
+            viewer::BodyTopologyPresentationKind kind,
+            std::uint64_t runtime_token)
+            -> std::optional<
+                viewer::PresentationToken> {
+            if (runtime_token == 0U) {
+                return std::nullopt;
+            }
+            const auto token =
+                allocatePresentationToken();
+            if (!token) {
+                return std::nullopt;
+            }
+            const BodyTopologyBinding binding{
+                kind,
+                runtime_token,
+                scene.generation};
+            if (!binding.valid() ||
+                !bindings.emplace(
+                    token->value,
+                    binding).second) {
+                return std::nullopt;
+            }
+            return token;
+        };
+
+    scene.faces.reserve(
+        presentation.body.faces.size());
+    for (const auto& face :
+         presentation.body.faces) {
+        const auto count =
+            std::count_if(
+                topology->faces.begin(),
+                topology->faces.end(),
+                [&face](const auto& record) {
+                    return record.runtime_token ==
+                           face.runtime_token;
+                });
+        if (count != 1) {
+            return fail();
+        }
+        const auto token =
+            bind(
+                viewer::BodyTopologyPresentationKind::
+                    face,
+                face.runtime_token.value);
+        if (!token) {
+            return fail();
+        }
+        scene.faces.push_back(
+            viewer::BodyFacePresentation{
+                *token,
+                face.first_triangle,
+                face.triangle_count});
+    }
+
+    scene.edges.reserve(
+        presentation.body.edges.size());
+    for (const auto& edge :
+         presentation.body.edges) {
+        const auto count =
+            std::count_if(
+                topology->edges.begin(),
+                topology->edges.end(),
+                [&edge](const auto& record) {
+                    return record.runtime_token ==
+                           edge.runtime_token;
+                });
+        if (count != 1) {
+            return fail();
+        }
+        const auto token =
+            bind(
+                viewer::BodyTopologyPresentationKind::
+                    edge,
+                edge.runtime_token.value);
+        if (!token) {
+            return fail();
+        }
+
+        viewer::BodyEdgePresentation item;
+        item.token = *token;
+        item.points.reserve(
+            edge.points.size());
+        for (const auto& point :
+             edge.points) {
+            item.points.push_back(
+                {point.x,
+                 point.y,
+                 point.z});
+        }
+        scene.edges.push_back(
+            std::move(item));
+    }
+
+    scene.vertices.reserve(
+        presentation.body.vertices.size());
+    for (const auto& vertex :
+         presentation.body.vertices) {
+        const auto count =
+            std::count_if(
+                topology->vertices.begin(),
+                topology->vertices.end(),
+                [&vertex](const auto& record) {
+                    return record.runtime_token ==
+                           vertex.runtime_token;
+                });
+        if (count != 1) {
+            return fail();
+        }
+        const auto token =
+            bind(
+                viewer::BodyTopologyPresentationKind::
+                    vertex,
+                vertex.runtime_token.value);
+        if (!token) {
+            return fail();
+        }
+        scene.vertices.push_back(
+            viewer::BodyVertexPresentation{
+                *token,
+                {vertex.point.x,
+                 vertex.point.y,
+                 vertex.point.z}});
+    }
+
+    if (!scene.valid()) {
+        return fail();
+    }
+
+    body_scene_revision_ = revision;
+    body_scene_cache_ = scene;
+    body_topology_catalog_cache_ = *topology;
+    body_topology_bindings_ =
+        std::move(bindings);
+    return *body_scene_cache_;
 }
 
 std::optional<viewer::ProfileRegionPresentation>

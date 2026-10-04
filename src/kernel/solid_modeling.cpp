@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
+#include <vector>
 
 namespace simplesolid2::kernel {
 namespace {
@@ -77,6 +79,117 @@ bool SolidPresentationMesh::valid() const noexcept {
                [](const SolidMeshTriangle& item) {
                    return item.valid();
                });
+}
+
+bool BodyFacePresentationRange::valid(
+    std::size_t total_triangles) const noexcept {
+    return runtime_token.valid() &&
+           triangle_count > 0U &&
+           first_triangle < total_triangles &&
+           triangle_count <=
+               total_triangles - first_triangle;
+}
+
+bool BodyEdgePresentationPath::valid() const noexcept {
+    if (!runtime_token.valid() ||
+        points.size() < 2U) {
+        return false;
+    }
+    return std::all_of(
+        points.begin(),
+        points.end(),
+        [](const Point3& point) {
+            return std::isfinite(point.x) &&
+                   std::isfinite(point.y) &&
+                   std::isfinite(point.z);
+        });
+}
+
+bool BodyVertexPresentationPoint::valid() const noexcept {
+    return runtime_token.valid() &&
+           std::isfinite(point.x) &&
+           std::isfinite(point.y) &&
+           std::isfinite(point.z);
+}
+
+bool BodyPresentation::valid() const noexcept {
+    if (!mesh.valid()) {
+        return false;
+    }
+
+    std::vector<bool> triangle_coverage(
+        mesh.triangles.size(),
+        false);
+    for (std::size_t index = 0U;
+         index < faces.size();
+         ++index) {
+        if (!faces[index].valid(
+                mesh.triangles.size())) {
+            return false;
+        }
+        for (std::size_t triangle =
+                 faces[index].first_triangle;
+             triangle <
+                 faces[index].first_triangle +
+                     faces[index].triangle_count;
+             ++triangle) {
+            if (triangle_coverage[triangle]) {
+                return false;
+            }
+            triangle_coverage[triangle] = true;
+        }
+        for (std::size_t other = index + 1U;
+             other < faces.size();
+             ++other) {
+            if (faces[index].runtime_token ==
+                faces[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+    if (!faces.empty() &&
+        !std::all_of(
+            triangle_coverage.begin(),
+            triangle_coverage.end(),
+            [](bool covered) {
+                return covered;
+            })) {
+        return false;
+    }
+
+    for (std::size_t index = 0U;
+         index < edges.size();
+         ++index) {
+        if (!edges[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < edges.size();
+             ++other) {
+            if (edges[index].runtime_token ==
+                edges[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < vertices.size();
+         ++index) {
+        if (!vertices[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < vertices.size();
+             ++other) {
+            if (vertices[index].runtime_token ==
+                vertices[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+
+    return true;
 }
 
 bool ExtrudeFaceRole::valid() const noexcept {
@@ -170,6 +283,30 @@ ISolidModelingKernel::presentationMesh(
             ? SolidPresentationStatus::unsupported
             : SolidPresentationStatus::invalid_input,
         {}};
+}
+
+BodyPresentationResult
+ISolidModelingKernel::bodyPresentation(
+    RuntimeSolidHandle solid) noexcept {
+    if (!solid) {
+        return {
+            SolidPresentationStatus::invalid_input,
+            {}};
+    }
+
+    const auto mesh =
+        presentationMesh(solid);
+    if (!mesh.ok()) {
+        return {
+            mesh.status,
+            {}};
+    }
+
+    BodyPresentation body;
+    body.mesh = mesh.mesh;
+    return {
+        SolidPresentationStatus::ok,
+        std::move(body)};
 }
 
 } // namespace simplesolid2::kernel
