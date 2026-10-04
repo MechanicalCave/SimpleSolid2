@@ -3,6 +3,7 @@
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
@@ -34,6 +35,7 @@
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 #include <GProp_GProps.hxx>
+#include <GeomAbs_SurfaceType.hxx>
 #include <BRepSweep_Prism.hxx>
 
 #include <algorithm>
@@ -256,9 +258,122 @@ buildEdge(
         use.curve);
 }
 
+[[nodiscard]] kernel::SurfaceKind
+semanticSurfaceKind(
+    const kernel::BoundaryUse2D& use) noexcept {
+    return std::holds_alternative<kernel::Line2>(
+               use.curve)
+        ? kernel::SurfaceKind::plane
+        : kernel::SurfaceKind::cylinder;
+}
+
+[[nodiscard]] kernel::SurfaceKind
+providerSurfaceKind(
+    const TopoDS_Face& face) {
+    BRepAdaptor_Surface surface{face, true};
+    switch (surface.GetType()) {
+    case GeomAbs_Plane:
+        return kernel::SurfaceKind::plane;
+    case GeomAbs_Cylinder:
+        return kernel::SurfaceKind::cylinder;
+    case GeomAbs_Cone:
+        return kernel::SurfaceKind::cone;
+    case GeomAbs_Sphere:
+        return kernel::SurfaceKind::sphere;
+    case GeomAbs_Torus:
+        return kernel::SurfaceKind::torus;
+    default:
+        return kernel::SurfaceKind::other;
+    }
+}
+
+[[nodiscard]] std::optional<kernel::Frame3>
+shiftedCarrierFrame(
+    const kernel::Frame3& source,
+    double normal_offset) noexcept {
+    kernel::Frame3 result = source;
+    result.origin.x +=
+        result.normal.x * normal_offset;
+    result.origin.y +=
+        result.normal.y * normal_offset;
+    result.origin.z +=
+        result.normal.z * normal_offset;
+    return result.valid()
+        ? std::optional<kernel::Frame3>{result}
+        : std::nullopt;
+}
+
+[[nodiscard]] std::optional<kernel::Frame3>
+lineSideCarrierFrame(
+    const kernel::PlanarProfileInput& input,
+    const kernel::BoundaryUse2D& use) {
+    const auto* line =
+        std::get_if<kernel::Line2>(
+            &use.curve);
+    if (line == nullptr) {
+        return std::nullopt;
+    }
+
+    const double du =
+        line->end.u - line->start.u;
+    const double dv =
+        line->end.v - line->start.v;
+    const gp_Vec u_vector{
+        input.frame.u_axis.x * du +
+            input.frame.v_axis.x * dv,
+        input.frame.u_axis.y * du +
+            input.frame.v_axis.y * dv,
+        input.frame.u_axis.z * du +
+            input.frame.v_axis.z * dv};
+    if (!(u_vector.SquareMagnitude() > 0.0)) {
+        return std::nullopt;
+    }
+
+    const gp_Dir u{u_vector};
+    const gp_Dir v{
+        input.frame.normal.x,
+        input.frame.normal.y,
+        input.frame.normal.z};
+    const gp_Vec n_vector =
+        gp_Vec{u}.Crossed(gp_Vec{v});
+    if (!(n_vector.SquareMagnitude() > 0.0)) {
+        return std::nullopt;
+    }
+    const gp_Dir n{n_vector};
+    const auto origin =
+        point3(input.frame, line->start);
+
+    kernel::Frame3 result;
+    result.origin = {
+        origin.X(),
+        origin.Y(),
+        origin.Z()};
+    result.u_axis = {
+        u.X(),
+        u.Y(),
+        u.Z()};
+    // Canonical side V is source support N, independent of signed extent.
+    result.v_axis = {
+        v.X(),
+        v.Y(),
+        v.Z()};
+    result.normal = {
+        n.X(),
+        n.Y(),
+        n.Z()};
+
+    return result.valid()
+        ? std::optional<kernel::Frame3>{result}
+        : std::nullopt;
+}
+
 struct SourceEdge final {
     TopoDS_Edge edge;
     kernel::BoundaryUseProvenance provenance;
+    kernel::SurfaceKind surface_kind{
+        kernel::SurfaceKind::other};
+    std::optional<kernel::Frame3>
+        canonical_frame;
 };
 
 struct WireBuild final {
@@ -282,9 +397,26 @@ buildWire(
         if (!make_wire.IsDone()) {
             return std::nullopt;
         }
+        const auto surface_kind =
+            semanticSurfaceKind(use);
+        auto canonical_frame =
+            surface_kind ==
+                    kernel::SurfaceKind::plane
+                ? lineSideCarrierFrame(
+                      input,
+                      use)
+                : std::optional<
+                      kernel::Frame3>{};
+        if (surface_kind ==
+                kernel::SurfaceKind::plane &&
+            !canonical_frame) {
+            return std::nullopt;
+        }
         result.source_edges.push_back(
             {make_wire.Edge(),
-             use.provenance});
+             use.provenance,
+             surface_kind,
+             std::move(canonical_frame)});
     }
     result.wire = make_wire.Wire();
     return result;
@@ -533,6 +665,10 @@ matchingFaceEdges(
 struct NewSemanticSource final {
     kernel::ExtrudeFaceRole role;
     std::vector<TopoDS_Face> source_faces;
+    kernel::SurfaceKind surface_kind{
+        kernel::SurfaceKind::other};
+    std::optional<kernel::Frame3>
+        canonical_frame;
 };
 
 [[nodiscard]] kernel::ReferenceStatus
@@ -566,9 +702,21 @@ public:
     std::map<std::uint64_t, TopoDS_Vertex>
         inventory_vertices;
 
+    struct TrackedSurface final {
+        kernel::SurfaceKind kind{
+            kernel::SurfaceKind::other};
+        std::optional<kernel::Frame3>
+            canonical_frame;
+        std::vector<TopoDS_Face> faces;
+    };
+
+    std::map<std::uint64_t, TrackedSurface>
+        tracked_surfaces;
+
     std::uint64_t next_face_token{1U};
     std::uint64_t next_edge_token{1U};
     std::uint64_t next_vertex_token{1U};
+    std::uint64_t next_surface_token{1U};
 };
 
 struct CandidateClaim final {
