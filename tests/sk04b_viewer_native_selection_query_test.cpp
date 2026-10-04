@@ -433,7 +433,15 @@ int main(int argc, char* argv[]) {
         body_preselection_current_intents ==
         current_before_hud_hover);
     CHECK(
-        !last_body_preselection_query.valid());
+        last_body_preselection_query.valid());
+    CHECK(
+        !last_body_preselection_query.completed);
+    CHECK(
+        !last_body_preselection_query.generation.valid());
+    CHECK(
+        last_body_preselection_query.candidates.empty());
+    CHECK(
+        !last_body_preselection_point.valid());
 
     const int cycles_before_cleared_tab =
         cycle_forward + cycle_reverse;
