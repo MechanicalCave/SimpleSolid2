@@ -92,6 +92,86 @@ enum class BodyTopologyPresentationKind : std::uint8_t {
     vertex,
 };
 
+enum class ViewStyle : std::uint8_t {
+    shaded,
+    shaded_with_edges,
+    shaded_with_hidden_edges,
+};
+
+struct BodyTopologyPickFilter final {
+    bool faces{true};
+    bool edges{true};
+    bool vertices{true};
+
+    [[nodiscard]] bool allows(
+        BodyTopologyPresentationKind kind) const noexcept {
+        switch (kind) {
+        case BodyTopologyPresentationKind::face:
+            return faces;
+        case BodyTopologyPresentationKind::edge:
+            return edges;
+        case BodyTopologyPresentationKind::vertex:
+            return vertices;
+        }
+        return false;
+    }
+
+    [[nodiscard]] bool any() const noexcept {
+        return faces || edges || vertices;
+    }
+
+    friend bool operator==(
+        const BodyTopologyPickFilter&,
+        const BodyTopologyPickFilter&) = default;
+};
+
+struct BodyTopologyPickCandidate final {
+    PresentationToken token;
+    BodyTopologyPresentationKind kind{
+        BodyTopologyPresentationKind::face};
+    double screen_distance{};
+    double depth{};
+
+    [[nodiscard]] bool valid() const noexcept {
+        return token.valid() &&
+               std::isfinite(screen_distance) &&
+               screen_distance >= 0.0 &&
+               std::isfinite(depth) &&
+               depth >= 0.0;
+    }
+
+    friend bool operator==(
+        const BodyTopologyPickCandidate&,
+        const BodyTopologyPickCandidate&) = default;
+};
+
+struct BodyTopologyPickQueryResult final {
+    bool completed{};
+    BodyPresentationGeneration generation;
+    std::vector<BodyTopologyPickCandidate>
+        candidates;
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (!completed) {
+            return !generation.valid() &&
+                   candidates.empty();
+        }
+        if (!generation.valid()) {
+            return candidates.empty();
+        }
+        return std::all_of(
+            candidates.begin(),
+            candidates.end(),
+            [](const BodyTopologyPickCandidate& item) {
+                return item.valid();
+            });
+    }
+
+    friend bool operator==(
+        const BodyTopologyPickQueryResult&,
+        const BodyTopologyPickQueryResult&) = default;
+};
+
 struct BodyFacePresentation final {
     PresentationToken token;
     std::size_t first_triangle{};
@@ -114,6 +194,8 @@ struct BodyFacePresentation final {
 struct BodyEdgePresentation final {
     PresentationToken token;
     std::vector<Point3> points;
+    bool material{true};
+    bool ordinary_pickable{true};
 
     [[nodiscard]] bool valid() const noexcept {
         return token.valid() &&
@@ -123,7 +205,8 @@ struct BodyEdgePresentation final {
                    points.end(),
                    [](const Point3& point) {
                        return finite(point);
-                   });
+                   }) &&
+               (!ordinary_pickable || material);
     }
 
     friend bool operator==(
@@ -134,6 +217,7 @@ struct BodyEdgePresentation final {
 struct BodyVertexPresentation final {
     PresentationToken token;
     Point3 point;
+    bool ordinary_pickable{true};
 
     [[nodiscard]] bool valid() const noexcept {
         return token.valid() &&
