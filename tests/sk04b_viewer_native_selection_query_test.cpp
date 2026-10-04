@@ -74,6 +74,230 @@ int main(int argc, char* argv[]) {
         100.0};
     CHECK(widget.setCameraState(camera));
 
+    // PM-02D2: Body topology query and View Style are projections of one
+    // installed generation-scoped BodyScene. Front topology is returned;
+    // occluded and non-material representation artifacts are not.
+    const viewer::PresentationToken
+        body_face_token{0x5001U};
+    const viewer::PresentationToken
+        body_edge_token{0x5002U};
+    const viewer::PresentationToken
+        hidden_edge_token{0x5003U};
+    const viewer::PresentationToken
+        body_vertex_token{0x5004U};
+    const viewer::PresentationToken
+        hidden_vertex_token{0x5005U};
+    const viewer::PresentationToken
+        seam_token{0x5006U};
+
+    viewer::BodyScene body_scene;
+    body_scene.generation = {77U};
+    body_scene.purpose =
+        viewer::BodyScenePurpose::current_body;
+    body_scene.triangles = {
+        {
+            {-20.0, -20.0, 0.0},
+            {20.0, -20.0, 0.0},
+            {20.0, 20.0, 0.0},
+            {0.0, 0.0, 1.0},
+            {0.0, 0.0, 1.0},
+            {0.0, 0.0, 1.0}},
+        {
+            {-20.0, -20.0, 0.0},
+            {20.0, 20.0, 0.0},
+            {-20.0, 20.0, 0.0},
+            {0.0, 0.0, 1.0},
+            {0.0, 0.0, 1.0},
+            {0.0, 0.0, 1.0}},
+    };
+    body_scene.faces = {
+        {
+            body_face_token,
+            0U,
+            2U},
+    };
+    body_scene.edges = {
+        {
+            body_edge_token,
+            {
+                {-20.0, 0.0, 0.0},
+                {20.0, 0.0, 0.0},
+            },
+            true,
+            true},
+        {
+            hidden_edge_token,
+            {
+                {-20.0, 0.0, -20.0},
+                {20.0, 0.0, -20.0},
+            },
+            true,
+            true},
+        {
+            seam_token,
+            {
+                {0.0, -20.0, 0.0},
+                {0.0, 20.0, 0.0},
+            },
+            false,
+            false},
+    };
+    body_scene.vertices = {
+        {
+            body_vertex_token,
+            {0.0, 0.0, 0.0},
+            true},
+        {
+            hidden_vertex_token,
+            {0.0, 0.0, -20.0},
+            true},
+    };
+    CHECK(body_scene.valid());
+    CHECK(widget.setBodyScene(body_scene));
+
+    CHECK(
+        widget.viewStyle() ==
+        viewer::ViewStyle::shaded);
+    CHECK(widget.setViewStyle(
+        viewer::ViewStyle::shaded_with_edges));
+    CHECK(
+        widget.viewStyle() ==
+        viewer::ViewStyle::shaded_with_edges);
+    CHECK(widget.setViewStyle(
+        viewer::ViewStyle::
+            shaded_with_hidden_edges));
+    CHECK(
+        widget.viewStyle() ==
+        viewer::ViewStyle::
+            shaded_with_hidden_edges);
+
+    const viewer::ViewportPoint2
+        body_center{
+            static_cast<double>(widget.width()) / 2.0,
+            static_cast<double>(widget.height()) / 2.0};
+
+    const auto body_all =
+        widget.queryBodyTopology(
+            body_center);
+    CHECK(body_all.valid());
+    CHECK(body_all.completed);
+    CHECK(
+        body_all.generation ==
+        body_scene.generation);
+    CHECK(
+        std::count_if(
+            body_all.candidates.begin(),
+            body_all.candidates.end(),
+            [body_face_token](const auto& item) {
+                return item.token ==
+                       body_face_token;
+            }) == 1);
+    CHECK(
+        std::count_if(
+            body_all.candidates.begin(),
+            body_all.candidates.end(),
+            [body_edge_token](const auto& item) {
+                return item.token ==
+                       body_edge_token;
+            }) == 1);
+    CHECK(
+        std::count_if(
+            body_all.candidates.begin(),
+            body_all.candidates.end(),
+            [body_vertex_token](const auto& item) {
+                return item.token ==
+                       body_vertex_token;
+            }) == 1);
+    CHECK(
+        std::none_of(
+            body_all.candidates.begin(),
+            body_all.candidates.end(),
+            [hidden_edge_token,
+             hidden_vertex_token,
+             seam_token](const auto& item) {
+                return item.token ==
+                           hidden_edge_token ||
+                       item.token ==
+                           hidden_vertex_token ||
+                       item.token ==
+                           seam_token;
+            }));
+
+    const auto face_only =
+        widget.queryBodyTopology(
+            body_center,
+            viewer::BodyTopologyPickFilter{
+                true,
+                false,
+                false});
+    CHECK(face_only.valid());
+    CHECK(face_only.completed);
+    CHECK(face_only.candidates.size() == 1U);
+    CHECK(
+        face_only.candidates.front().token ==
+        body_face_token);
+    CHECK(
+        face_only.candidates.front().kind ==
+        viewer::BodyTopologyPresentationKind::
+            face);
+
+    const auto edge_only =
+        widget.queryBodyTopology(
+            body_center,
+            viewer::BodyTopologyPickFilter{
+                false,
+                true,
+                false});
+    CHECK(edge_only.valid());
+    CHECK(edge_only.completed);
+    CHECK(edge_only.candidates.size() == 1U);
+    CHECK(
+        edge_only.candidates.front().token ==
+        body_edge_token);
+
+    const auto vertex_only =
+        widget.queryBodyTopology(
+            body_center,
+            viewer::BodyTopologyPickFilter{
+                false,
+                false,
+                true});
+    CHECK(vertex_only.valid());
+    CHECK(vertex_only.completed);
+    CHECK(vertex_only.candidates.size() == 1U);
+    CHECK(
+        vertex_only.candidates.front().token ==
+        body_vertex_token);
+
+    CHECK(widget.setPresentationSelection(
+        viewer::PresentationSelection{
+            {body_face_token,
+             body_edge_token,
+             body_vertex_token},
+            body_vertex_token}));
+
+    viewer::BodyScene diagnostic_body =
+        body_scene;
+    diagnostic_body.generation = {78U};
+    diagnostic_body.purpose =
+        viewer::BodyScenePurpose::
+            diagnostic_prefix;
+    CHECK(widget.setBodyScene(
+        diagnostic_body));
+    const auto diagnostic_query =
+        widget.queryBodyTopology(
+            body_center);
+    CHECK(diagnostic_query.valid());
+    CHECK(diagnostic_query.completed);
+    CHECK(
+        diagnostic_query.generation ==
+        diagnostic_body.generation);
+    CHECK(diagnostic_query.candidates.empty());
+
+    CHECK(widget.setBodyScene(body_scene));
+    CHECK(widget.setViewStyle(
+        viewer::ViewStyle::shaded));
+
     const viewer::PresentationToken short_token{
         0x4101U};
     const viewer::PresentationToken long_token{
