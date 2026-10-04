@@ -79,6 +79,114 @@ bool SolidPresentationMesh::valid() const noexcept {
                });
 }
 
+bool BodyPresentationResult::ok() const noexcept {
+    if (status != SolidPresentationStatus::ok ||
+        !mesh.valid() ||
+        faces.empty() ||
+        edges.empty() ||
+        vertices.empty()) {
+        return false;
+    }
+
+    const auto finite_point =
+        [](const Point3& point) noexcept {
+            return std::isfinite(point.x) &&
+                   std::isfinite(point.y) &&
+                   std::isfinite(point.z);
+        };
+
+    std::vector<bool> triangle_covered(
+        mesh.triangles.size(),
+        false);
+
+    for (std::size_t index = 0U;
+         index < faces.size();
+         ++index) {
+        const auto& face = faces[index];
+        if (!face.runtime_token.valid() ||
+            face.triangle_count == 0U ||
+            face.first_triangle >=
+                mesh.triangles.size() ||
+            face.triangle_count >
+                mesh.triangles.size() -
+                    face.first_triangle) {
+            return false;
+        }
+
+        for (std::size_t other = index + 1U;
+             other < faces.size();
+             ++other) {
+            if (faces[other].runtime_token ==
+                face.runtime_token) {
+                return false;
+            }
+        }
+
+        for (std::size_t triangle =
+                 face.first_triangle;
+             triangle <
+             face.first_triangle +
+                 face.triangle_count;
+             ++triangle) {
+            if (triangle_covered[triangle]) {
+                return false;
+            }
+            triangle_covered[triangle] = true;
+        }
+    }
+
+    if (std::any_of(
+            triangle_covered.begin(),
+            triangle_covered.end(),
+            [](bool covered) {
+                return !covered;
+            })) {
+        return false;
+    }
+
+    for (std::size_t index = 0U;
+         index < edges.size();
+         ++index) {
+        const auto& edge = edges[index];
+        if (!edge.runtime_token.valid() ||
+            edge.points.size() < 2U ||
+            !std::all_of(
+                edge.points.begin(),
+                edge.points.end(),
+                finite_point)) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < edges.size();
+             ++other) {
+            if (edges[other].runtime_token ==
+                edge.runtime_token) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < vertices.size();
+         ++index) {
+        const auto& vertex = vertices[index];
+        if (!vertex.runtime_token.valid() ||
+            !finite_point(vertex.position)) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < vertices.size();
+             ++other) {
+            if (vertices[other].runtime_token ==
+                vertex.runtime_token) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
 bool ExtrudeFaceRole::valid() const noexcept {
     if (kind == ExtrudeGeneratedFaceRoleKind::cap) {
         return cap_role.has_value() &&
@@ -170,6 +278,17 @@ ISolidModelingKernel::presentationMesh(
             ? SolidPresentationStatus::unsupported
             : SolidPresentationStatus::invalid_input,
         {}};
+}
+
+BodyPresentationResult
+ISolidModelingKernel::bodyPresentation(
+    RuntimeSolidHandle solid) noexcept {
+    BodyPresentationResult result;
+    result.status =
+        solid
+            ? SolidPresentationStatus::unsupported
+            : SolidPresentationStatus::invalid_input;
+    return result;
 }
 
 } // namespace simplesolid2::kernel
