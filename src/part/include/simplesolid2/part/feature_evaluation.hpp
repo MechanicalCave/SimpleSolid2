@@ -7,6 +7,7 @@
 #include <simplesolid2/part/feature_id.hpp>
 #include <simplesolid2/sketch/entity_id.hpp>
 
+#include <compare>
 #include <cstddef>
 #include <cstdint>
 #include <optional>
@@ -131,6 +132,9 @@ struct FeatureSurfaceAddress final {
     friend bool operator==(
         const FeatureSurfaceAddress&,
         const FeatureSurfaceAddress&) = default;
+    friend auto operator<=>(
+        const FeatureSurfaceAddress&,
+        const FeatureSurfaceAddress&) = default;
 };
 
 struct FeatureSurfaceResolution final {
@@ -160,6 +164,79 @@ struct FeatureSurfaceResolution final {
         const FeatureSurfaceResolution&) = default;
 };
 
+enum class FeatureCurveRoleKind {
+    cap_side,
+    side_side,
+    boolean_intersection,
+};
+
+struct FeatureCurveAddress final {
+    FeatureId producer_feature_id;
+    FeatureCurveRoleKind role{
+        FeatureCurveRoleKind::boolean_intersection};
+    // Exactly two distinct Surface addresses in canonical semantic order.
+    std::vector<FeatureSurfaceAddress>
+        adjacent_surfaces;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeatureCurveAddress&,
+        const FeatureCurveAddress&) = default;
+    friend auto operator<=>(
+        const FeatureCurveAddress&,
+        const FeatureCurveAddress&) = default;
+};
+
+struct FeatureCurveResolution final {
+    FeatureCurveAddress address;
+    kernel::ReferenceStatus status{
+        kernel::ReferenceStatus::unsupported};
+    std::size_t candidate_edge_count{};
+    kernel::CurveKind curve_kind{
+        kernel::CurveKind::other};
+    std::vector<kernel::RuntimeEdgeToken>
+        current_edges;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeatureCurveResolution&,
+        const FeatureCurveResolution&) = default;
+};
+
+struct FeaturePointAddress final {
+    FeatureId producer_feature_id;
+    // Current PM-02C supported Point meaning is an intersection of exactly
+    // three distinct semantic Surfaces, kept in canonical semantic order.
+    std::vector<FeatureSurfaceAddress>
+        adjacent_surfaces;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeaturePointAddress&,
+        const FeaturePointAddress&) = default;
+    friend auto operator<=>(
+        const FeaturePointAddress&,
+        const FeaturePointAddress&) = default;
+};
+
+struct FeaturePointResolution final {
+    FeaturePointAddress address;
+    kernel::ReferenceStatus status{
+        kernel::ReferenceStatus::unsupported};
+    std::size_t candidate_vertex_count{};
+    std::vector<kernel::RuntimeVertexToken>
+        current_vertices;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeaturePointResolution&,
+        const FeaturePointResolution&) = default;
+};
+
 struct BodyFaceTopologyRecord final {
     kernel::RuntimeFaceToken runtime_token;
     TopologyAccountingClass accounting_class{
@@ -185,6 +262,13 @@ struct BodyEdgeTopologyRecord final {
     kernel::RuntimeEdgeToken runtime_token;
     TopologyAccountingClass accounting_class{
         TopologyAccountingClass::semantically_unsupported};
+    kernel::ReferenceStatus referenceability{
+        kernel::ReferenceStatus::unsupported};
+    kernel::CurveKind curve_kind{
+        kernel::CurveKind::other};
+    bool periodic_seam{false};
+    std::vector<FeatureCurveAddress>
+        curve_candidates;
 
     [[nodiscard]] bool valid() const noexcept;
 
@@ -197,6 +281,14 @@ struct BodyVertexTopologyRecord final {
     kernel::RuntimeVertexToken runtime_token;
     TopologyAccountingClass accounting_class{
         TopologyAccountingClass::semantically_unsupported};
+    kernel::ReferenceStatus referenceability{
+        kernel::ReferenceStatus::unsupported};
+    std::vector<FeaturePointAddress>
+        point_candidates;
+    std::size_t incident_material_edge_count{};
+    // Current provider XYZ is diagnostic only, never identity.
+    std::optional<kernel::Point3>
+        provider_point;
 
     [[nodiscard]] bool valid() const noexcept;
 
@@ -212,6 +304,10 @@ struct BodyStageTopologyCatalog final {
     std::vector<BodyVertexTopologyRecord> vertices;
     std::vector<FeatureSurfaceResolution>
         surfaces;
+    std::vector<FeatureCurveResolution>
+        curves;
+    std::vector<FeaturePointResolution>
+        points;
 
     [[nodiscard]] bool valid() const noexcept;
     [[nodiscard]] bool complete() const noexcept;
@@ -233,6 +329,10 @@ struct FeatureEvaluation final {
         produced_faces;
     std::vector<FeatureSurfaceResolution>
         produced_surfaces;
+    std::vector<FeatureCurveResolution>
+        produced_curves;
+    std::vector<FeaturePointResolution>
+        produced_points;
     // Same-revision runtime result for this exact successful Feature stage.
     // Retained only so stage-scoped topology tokens remain resolvable during
     // the current evaluation; never serialized or treated as final Body truth.
@@ -271,6 +371,10 @@ struct PartEvaluation final {
     // Empty when Body is unavailable.
     std::vector<FeatureSurfaceResolution>
         current_surface_references;
+    std::vector<FeatureCurveResolution>
+        current_curve_references;
+    std::vector<FeaturePointResolution>
+        current_point_references;
 
     [[nodiscard]] const FeatureEvaluation*
     findFeature(FeatureId id) const noexcept;
