@@ -108,6 +108,97 @@ parseSupportRole(std::string_view value) noexcept {
     return std::nullopt;
 }
 
+const char* surfaceRoleName(
+    FeatureSurfaceRoleKind role) noexcept {
+    switch (role) {
+    case FeatureSurfaceRoleKind::profile_cap:
+        return "profile_cap";
+    case FeatureSurfaceRoleKind::extent_cap:
+        return "extent_cap";
+    case FeatureSurfaceRoleKind::negative_cap:
+        return "negative_cap";
+    case FeatureSurfaceRoleKind::positive_cap:
+        return "positive_cap";
+    case FeatureSurfaceRoleKind::side:
+        return "side";
+    }
+    return "";
+}
+
+std::optional<FeatureSurfaceRoleKind>
+parseSurfaceRole(std::string_view value) noexcept {
+    if (value == "profile_cap") {
+        return FeatureSurfaceRoleKind::profile_cap;
+    }
+    if (value == "extent_cap") {
+        return FeatureSurfaceRoleKind::extent_cap;
+    }
+    if (value == "negative_cap") {
+        return FeatureSurfaceRoleKind::negative_cap;
+    }
+    if (value == "positive_cap") {
+        return FeatureSurfaceRoleKind::positive_cap;
+    }
+    if (value == "side") {
+        return FeatureSurfaceRoleKind::side;
+    }
+    return std::nullopt;
+}
+
+nlohmann::json sketchSupportJson(
+    const PartSketchSupport& support) {
+    if (const auto role =
+            builtinOriginPlaneForSketchSupport(
+                support)) {
+        return nlohmann::json{
+            {"kind", "builtin_origin_plane"},
+            {"builtin_plane",
+             supportRoleName(*role)},
+        };
+    }
+
+    const auto* reference =
+        bodyPlanarSurfaceReference(support);
+    if (reference == nullptr ||
+        !reference->valid() ||
+        !reference->stage.feature_id) {
+        return nlohmann::json{};
+    }
+
+    nlohmann::json surface{
+        {"producer_feature_id",
+         reference->surface
+             .producer_feature_id.serialized()},
+        {"role",
+         surfaceRoleName(
+             reference->surface.role)},
+    };
+    if (reference->surface.role ==
+        FeatureSurfaceRoleKind::side) {
+        surface["source_entity"] =
+            reference->surface
+                .source_entity->serialized();
+        surface["loop_index"] =
+            reference->surface.loop_index;
+        surface["use_index"] =
+            reference->surface.use_index;
+        surface["hole"] =
+            reference->surface.hole;
+    }
+
+    return nlohmann::json{
+        {"kind", "body_planar_surface"},
+        {"stage",
+         {
+             {"kind", "after_feature"},
+             {"feature_id",
+              reference->stage
+                  .feature_id->serialized()},
+         }},
+        {"surface", std::move(surface)},
+    };
+}
+
 const char* profileVisibilityPolicyName(
     ProfileVisibilityPolicy policy) noexcept {
     switch (policy) {
@@ -296,25 +387,16 @@ std::string serializeAuthored(
                 });
         }
 
+        const auto support_json =
+            sketchSupportJson(hosted.support);
+        if (support_json.empty()) {
+            return {};
+        }
+
         sketches.push_back(
             {
                 {"id", std::string{hosted.id.value()}},
-                {"support",
-                 {
-                     {"kind", "builtin_origin_plane"},
-                     {"builtin_plane",
-                      supportRoleName(
-                          hosted.support.builtin_plane)},
-                 }},
-                {"placement",
-                 {
-                     {"origin",
-                      vectorJson(hosted.placement.origin)},
-                     {"u_axis",
-                      vectorJson(hosted.placement.u_axis)},
-                     {"v_axis",
-                      vectorJson(hosted.placement.v_axis)},
-                 }},
+                {"support", support_json},
                 {"visible", hosted.visible},
                 {"model",
                  {
