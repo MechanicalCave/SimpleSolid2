@@ -83,6 +83,30 @@ struct RuntimeFaceToken final {
         const RuntimeFaceToken&) = default;
 };
 
+struct RuntimeEdgeToken final {
+    std::uint64_t value{};
+
+    [[nodiscard]] constexpr bool valid() const noexcept {
+        return value != 0U;
+    }
+
+    friend bool operator==(
+        const RuntimeEdgeToken&,
+        const RuntimeEdgeToken&) = default;
+};
+
+struct RuntimeVertexToken final {
+    std::uint64_t value{};
+
+    [[nodiscard]] constexpr bool valid() const noexcept {
+        return value != 0U;
+    }
+
+    friend bool operator==(
+        const RuntimeVertexToken&,
+        const RuntimeVertexToken&) = default;
+};
+
 enum class SolidBooleanOperation {
     add,
     cut,
@@ -174,6 +198,17 @@ struct SolidModelingResult final {
     std::size_t solid_count{};
     std::size_t face_count{};
     std::size_t edge_count{};
+    std::size_t vertex_count{};
+
+    // PM-02 runtime-only complete current-stage topology inventory.
+    // These typed tokens identify provider realizations only within the
+    // current runtime/evaluation authority. They are never serialized and do
+    // not define durable semantic identity.
+    std::vector<RuntimeFaceToken> current_faces;
+    std::vector<RuntimeEdgeToken> current_edges;
+    std::vector<RuntimeVertexToken> current_vertices;
+
+    // PM-01 semantic Face lineage remains separate from complete inventory.
     std::vector<InheritedFaceLineage>
         inherited_faces;
     std::vector<NewFaceLineage> new_faces;
