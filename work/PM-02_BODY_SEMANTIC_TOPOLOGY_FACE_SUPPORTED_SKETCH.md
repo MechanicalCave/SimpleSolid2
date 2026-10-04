@@ -313,10 +313,11 @@ Picking is transient.
 
 Only semantic command inputs may cross into persistent mutation.
 
-The accepted detailed UX semantics are recorded in:
+The accepted detailed UX/Viewer design inputs are recorded in:
 
-`work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md` and
-`work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`.
+`work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`;  
+`work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`;  
+`work/PM-02_BODY_PRESENTATION_VIEWER_API_DESIGN.md`.
 
 #### Base View Style
 
@@ -416,6 +417,52 @@ Current Feature Contribution is the default tree hover/selection meaning.
 Operation Scope / Delta answers what volume the Feature added/removed at its own upstream stage. It may later be visualized as a translucent ghost and remains optional unless promoted by contract amendment.
 
 Historical Stage Preview answers what the entire Body looked like immediately after the Feature. It must be an explicit presentation action if later productized and is not implied by ordinary tree selection.
+
+#### One committed Body presentation authority
+
+PM-02 must evolve the current triangle-only committed `SolidScene` into one atomic topology-aware committed Body presentation equivalent in meaning to:
+
+```text
+BodyScene
+    generation
+    shaded triangles
+    Face presentation records
+    Edge presentation records
+    Vertex presentation records
+```
+
+The exact public type names are implementation detail.
+
+Requirements:
+
+- Body shading and Face/Edge/Vertex presentation come from the same current `RuntimeSolidHandle` / evaluation-provider generation;
+- topology is never reconstructed from triangle adjacency;
+- provider presentation records are keyed by current typed runtime Face/Edge/Vertex tokens;
+- `PartViewportController` is the only owner of runtime-topology-token <-> `PresentationToken` bindings;
+- Viewer receives only neutral presentation tokens and display geometry/flags;
+- committed Body scene replacement is atomic from controller authority perspective;
+- no independent public Face/Edge/Vertex scene setters may become separate committed Body authorities;
+- the existing command-owned `SolidPreviewScene` remains separate and cannot supply durable Body reference identity;
+- each installed Body scene carries a runtime-only generation stamp;
+- Body hit/query results carry that generation and stale generations are rejected;
+- direct selection may reuse existing `PresentationSelection`;
+- Feature Contribution is a separate overlay over the same current Body tokens and must not create duplicate pick geometry;
+- one current Edge presentation feeds visible-edge rendering, hidden-edge rendering and picking;
+- support/carrier ghost overlays are derived presentation and do not become duplicate Body topology targets;
+- a displayed `resolved_prefix_solid` after failure is diagnostic-only and cannot become successful-final-Body command authority.
+
+The neutral Viewer boundary may expose concepts equivalent in meaning to:
+
+```text
+ViewStyle
+BodyTopologyPresentationKind
+BodyTopologyPickFilter
+BodyTopologyPickCandidate
+BodyTopologyPickQueryResult
+BodyTopologyOverlay
+```
+
+but must not expose Part semantic IDs/references or OCCT handles.
 
 #### Direct Body topology acquisition
 
@@ -741,10 +788,13 @@ Gate:
 - multi-branch pair remains Ambiguous without defensible branch provenance;
 - exact same XYZ does not rebind Point identity.
 
-### PM-02D — Viewer pick, View Style and semantic topology inspection
+### PM-02D — topology-aware Body presentation, Viewer pick, View Style and semantic inspection
 
 Deliver:
 
+- atomic topology-aware committed Body scene from one current runtime/evaluation generation;
+- current Face/Edge/Vertex presentation records mapped to neutral PresentationTokens;
+- Body-scene generation stamp and stale-generation rejection;
 - fresh Face/Edge/Vertex hover/select mapping;
 - runtime token -> current stage catalog;
 - semantic Properties/inspection;
@@ -754,14 +804,20 @@ Deliver:
 - runtime multiple-hit candidate stack with Tab / Shift+Tab cycling when no higher-priority input context owns Tab;
 - viewport-HUD View Style selector;
 - Shaded / Shaded + Edges / Shaded + Hidden Edges;
+- visible/hidden edge rendering from the same current Edge presentation set;
 - temporary Feature Contribution on tree hover;
 - persistent Feature Contribution on tree selection;
+- bounded topology overlay roles over the same current tokens;
 - independent overlay roles for direct topology selection versus Feature/tree contribution.
 
 Gate:
 
+- committed Body mesh and topology presentation come from the same current RuntimeSolid/evaluation-provider generation;
+- triangle adjacency is never used to reconstruct Face/Edge semantic identity;
+- one atomic committed Body scene is the only Body presentation authority after migration;
 - Viewer token never serialized/authored;
-- revision/session/evaluation/provider replacement rejects stale pick;
+- revision/session/evaluation/provider/body-scene generation replacement rejects stale pick;
+- numeric PresentationToken reuse across generations does not preserve authority;
 - View Style changes do not mutate/dirty/Undo the Part;
 - hidden-edge display does not silently enable select-through;
 - ordinary pick prioritizes visible Vertex then visible Edge then front-visible Face;
@@ -769,7 +825,11 @@ Gate:
 - provider order cannot silently choose among equivalent multiple hits;
 - candidate cycling is runtime-only and resets on stale scene/context;
 - representation-artifact seam is excluded from ordinary material Edge pick but remains accounted/inspectable;
+- one Edge presentation feeds visible-edge, hidden-edge and pick behavior;
 - Feature/support overlays do not duplicate pick identity;
+- Feature Contribution reuses current Body topology tokens rather than creating a second pick surface;
+- command preview remains separate from committed Body topology identity;
+- diagnostic resolved-prefix presentation cannot be consumed as successful final Body target authority;
 - split Surface contribution highlights all surviving current Face realizations as a set-valued query;
 - deleted outputs are not shown as current contribution;
 - selecting a Feature does not implicitly switch to historical Body stage.
@@ -878,6 +938,15 @@ PM-02 cannot complete without automated and manual evidence covering at least:
 - all current material Faces selectable/inspectable;
 - all current material Edges selectable/inspectable; KnownRepresentationArtifact edges remain fully accounted/inspectable but are excluded from ordinary material pick by default;
 - all current material Vertices selectable/inspectable;
+- committed Body shading and Face/Edge/Vertex presentation are produced from one current RuntimeSolid/evaluation-provider generation;
+- no Body Face/Edge identity is reconstructed from triangle adjacency;
+- Body presentation installs atomically with one runtime-only scene generation;
+- stale Body-scene generation cannot commit even if a PresentationToken numeric value is reused;
+- one current Edge presentation backs visible-edge rendering, hidden-edge rendering and Edge picking;
+- Feature Contribution overlays reuse current Body topology tokens and do not create duplicate selectable geometry;
+- support/carrier ghost overlays remain non-selectable unless an explicit future tool declares them as target classes;
+- command-owned solid preview remains separate from committed Body reference identity;
+- diagnostic resolved-prefix Body presentation cannot be consumed as successful final Body reference authority;
 - viewport View Style selector provides Shaded / Shaded + Edges / Shaded + Hidden Edges;
 - View Style remains non-authored and independent of semantic selection;
 - hidden-edge rendering does not silently enable occluded select-through;
@@ -972,6 +1041,10 @@ STOP and return to Owner review if implementation would require:
 - Datum as a prerequisite;
 - non-planar Sketch mapping;
 - a new public dependency direction contrary to Architecture baseline;
+- deriving production Face/Edge topology or semantic identity from committed triangle adjacency;
+- maintaining independent committed Body mesh/topology scenes whose generations can diverge;
+- exposing RuntimeFaceToken/RuntimeEdgeToken/RuntimeVertexToken or Part semantic references directly through the Viewer public API;
+- allowing a diagnostic resolved-prefix scene to become normal successful-Body command target authority;
 - a product case that cannot satisfy the accepted survival matrix without weakening fail-closed semantics.
 
 ## 12. Completion boundary
