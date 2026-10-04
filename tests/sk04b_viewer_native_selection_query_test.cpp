@@ -226,6 +226,46 @@ int main(int argc, char* argv[]) {
                            seam_token;
             }));
 
+    // PM-02D4: Feature Contribution is a deactivated presentation
+    // overlay over the already-installed BodyScene token. It must not create
+    // another hit target or perturb the neutral topology query.
+    viewer::BodyTopologyOverlayScene
+        feature_contribution_overlay;
+    feature_contribution_overlay.generation =
+        body_scene.generation;
+    feature_contribution_overlay.groups.push_back(
+        {
+            viewer::BodyTopologyOverlayRole::
+                feature_contribution_selected,
+            {
+                body_face_token,
+                body_edge_token,
+                body_vertex_token,
+            }});
+    CHECK(feature_contribution_overlay.valid());
+    CHECK(widget.setBodyTopologyOverlayScene(
+        feature_contribution_overlay));
+
+    const auto body_with_overlay =
+        widget.queryBodyTopology(
+            body_center);
+    CHECK(body_with_overlay.valid());
+    CHECK(body_with_overlay.completed);
+    CHECK(
+        body_with_overlay.generation ==
+        body_all.generation);
+    CHECK(
+        body_with_overlay.candidates ==
+        body_all.candidates);
+
+    auto stale_feature_overlay =
+        feature_contribution_overlay;
+    stale_feature_overlay.generation = {76U};
+    CHECK(!widget.setBodyTopologyOverlayScene(
+        stale_feature_overlay));
+    CHECK(widget.setBodyTopologyOverlayScene(
+        viewer::BodyTopologyOverlayScene{}));
+
     const auto face_only =
         widget.queryBodyTopology(
             body_center,

@@ -2261,6 +2261,131 @@ bool BodyStageTopologyCatalog::complete() const noexcept {
     return valid();
 }
 
+bool FeatureContribution::valid() const noexcept {
+    if (!uniqueValidTokens(faces) ||
+        !uniqueValidTokens(direct_edges) ||
+        !uniqueValidTokens(direct_vertices) ||
+        !uniqueValidTokens(boundary_edges) ||
+        !uniqueValidTokens(boundary_vertices)) {
+        return false;
+    }
+
+    for (const auto token : direct_edges) {
+        if (std::find(
+                boundary_edges.begin(),
+                boundary_edges.end(),
+                token) != boundary_edges.end()) {
+            return false;
+        }
+    }
+    for (const auto token : direct_vertices) {
+        if (std::find(
+                boundary_vertices.begin(),
+                boundary_vertices.end(),
+                token) != boundary_vertices.end()) {
+            return false;
+        }
+    }
+    return true;
+}
+
+FeatureContribution currentFeatureContribution(
+    const BodyStageTopologyCatalog& catalog,
+    FeatureId feature_id) {
+    FeatureContribution result;
+    if (!catalog.complete() ||
+        !feature_id.valid()) {
+        return result;
+    }
+
+    for (const auto& face : catalog.faces) {
+        const bool contributes =
+            std::any_of(
+                face.surface_candidates.begin(),
+                face.surface_candidates.end(),
+                [feature_id](const auto& surface) {
+                    return surface.producer_feature_id ==
+                           feature_id;
+                });
+        if (contributes) {
+            result.faces.push_back(
+                face.runtime_token);
+        }
+    }
+
+    for (const auto& edge : catalog.edges) {
+        const bool direct =
+            std::any_of(
+                edge.curve_candidates.begin(),
+                edge.curve_candidates.end(),
+                [feature_id](const auto& curve) {
+                    return curve.producer_feature_id ==
+                           feature_id;
+                });
+        if (direct) {
+            result.direct_edges.push_back(
+                edge.runtime_token);
+            continue;
+        }
+
+        const bool boundary =
+            std::any_of(
+                edge.curve_candidates.begin(),
+                edge.curve_candidates.end(),
+                [feature_id](const auto& curve) {
+                    return std::any_of(
+                        curve.adjacent_surfaces.begin(),
+                        curve.adjacent_surfaces.end(),
+                        [feature_id](const auto& surface) {
+                            return surface.producer_feature_id ==
+                                   feature_id;
+                        });
+                });
+        if (boundary) {
+            result.boundary_edges.push_back(
+                edge.runtime_token);
+        }
+    }
+
+    for (const auto& vertex : catalog.vertices) {
+        const bool direct =
+            std::any_of(
+                vertex.point_candidates.begin(),
+                vertex.point_candidates.end(),
+                [feature_id](const auto& point) {
+                    return point.producer_feature_id ==
+                           feature_id;
+                });
+        if (direct) {
+            result.direct_vertices.push_back(
+                vertex.runtime_token);
+            continue;
+        }
+
+        const bool boundary =
+            std::any_of(
+                vertex.point_candidates.begin(),
+                vertex.point_candidates.end(),
+                [feature_id](const auto& point) {
+                    return std::any_of(
+                        point.adjacent_surfaces.begin(),
+                        point.adjacent_surfaces.end(),
+                        [feature_id](const auto& surface) {
+                            return surface.producer_feature_id ==
+                                   feature_id;
+                        });
+                });
+        if (boundary) {
+            result.boundary_vertices.push_back(
+                vertex.runtime_token);
+        }
+    }
+
+    return result.valid()
+        ? result
+        : FeatureContribution{};
+}
+
 const FeatureEvaluation*
 PartEvaluation::findFeature(
     FeatureId id) const noexcept {

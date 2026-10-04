@@ -142,6 +142,7 @@ PartDocumentTreeController::PartDocumentTreeController(
         QAbstractItemView::ExtendedSelection);
     tree_->setContextMenuPolicy(
         Qt::CustomContextMenu);
+    tree_->viewport()->setMouseTracking(true);
     tree_->viewport()->installEventFilter(this);
 
     show_action_ =
@@ -308,6 +309,38 @@ PartDocumentTreeController::PartDocumentTreeController(
 bool PartDocumentTreeController::eventFilter(
     QObject* watched,
     QEvent* event) {
+    const auto publish_feature_hover =
+        [this](std::optional<part::FeatureId> feature_id) {
+            if (hovered_feature_id_ == feature_id) {
+                return;
+            }
+            hovered_feature_id_ =
+                std::move(feature_id);
+            if (feature_hover_handler_) {
+                feature_hover_handler_(
+                    hovered_feature_id_);
+            }
+        };
+
+    if (watched == tree_->viewport() &&
+        event != nullptr &&
+        event->type() == QEvent::MouseMove) {
+        auto* mouse_event =
+            static_cast<QMouseEvent*>(event);
+        auto* item =
+            tree_->itemAt(
+                mouse_event->position().toPoint());
+        publish_feature_hover(
+            item != nullptr
+                ? featureIdForItem(*item)
+                : std::nullopt);
+    }
+
+    if (watched == tree_->viewport() &&
+        event != nullptr &&
+        event->type() == QEvent::Leave) {
+        publish_feature_hover(std::nullopt);
+    }
     if (watched == tree_->viewport() &&
         event != nullptr &&
         event->type() ==
@@ -372,6 +405,12 @@ void PartDocumentTreeController::setDocumentSession(
 }
 
 void PartDocumentTreeController::clear() {
+    if (hovered_feature_id_) {
+        hovered_feature_id_.reset();
+        if (feature_hover_handler_) {
+            feature_hover_handler_(std::nullopt);
+        }
+    }
     session_ = nullptr;
     feature_evaluations_.clear();
     body_status_ =
@@ -673,6 +712,13 @@ selectionContainsOnlyBuiltinReferences() const {
 
 void PartDocumentTreeController::rebuild(
     bool preserve_reference_selection) {
+    if (hovered_feature_id_) {
+        hovered_feature_id_.reset();
+        if (feature_hover_handler_) {
+            feature_hover_handler_(std::nullopt);
+        }
+    }
+
     const QSignalBlocker blocked{tree_};
 
     std::vector<core::BuiltinReferenceRole>

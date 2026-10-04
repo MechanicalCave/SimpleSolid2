@@ -4824,6 +4824,11 @@ public:
     void clearSolidScene() noexcept {
         clearBodySelectionObjects();
         clearBodyPreselectionObjects();
+        clearBodyOverlayObjects(
+            body_topology_overlay_objects_,
+            "removeBodyFeatureOverlay");
+        body_topology_overlay_scene_ =
+            viewer::BodyTopologyOverlayScene{};
         body_preselection_token_.reset();
         clearBodyEdgeStyleObjects();
         if (!context_.IsNull() &&
@@ -5277,6 +5282,95 @@ public:
         clearBodyOverlayObjects(
             body_preselection_objects_,
             "removeBodyPreselectionOverlay");
+    }
+
+    [[nodiscard]] bool syncBodyTopologyOverlayScene() {
+        clearBodyOverlayObjects(
+            body_topology_overlay_objects_,
+            "removeBodyFeatureOverlay");
+
+        if (body_topology_overlay_scene_.empty()) {
+            return true;
+        }
+        if (body_scene_.empty() ||
+            body_topology_overlay_scene_.generation !=
+                body_scene_.generation) {
+            return false;
+        }
+
+        for (const auto& group :
+             body_topology_overlay_scene_.groups) {
+            const bool selected =
+                group.role ==
+                viewer::BodyTopologyOverlayRole::
+                    feature_contribution_selected;
+            const Quantity_Color color =
+                selected
+                    ? Quantity_Color{
+                          0.24, 0.88, 0.38,
+                          Quantity_TOC_RGB}
+                    : Quantity_Color{
+                          0.42, 0.96, 0.54,
+                          Quantity_TOC_RGB};
+            const double transparency =
+                selected ? 0.34 : 0.52;
+            const double edge_width =
+                selected ? 3.4 : 2.4;
+            const double point_size =
+                selected ? 10.0 : 8.0;
+
+            for (const auto token :
+                 group.tokens) {
+                if (!appendBodyTopologyOverlay(
+                        token,
+                        color,
+                        transparency,
+                        edge_width,
+                        point_size,
+                        body_topology_overlay_objects_)) {
+                    clearBodyOverlayObjects(
+                        body_topology_overlay_objects_,
+                        "removeBodyFeatureOverlay");
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    [[nodiscard]] bool setBodyTopologyOverlayScene(
+        const viewer::BodyTopologyOverlayScene& scene) {
+        if (!scene.valid()) {
+            return false;
+        }
+        if (!scene.empty() &&
+            (body_scene_.empty() ||
+             scene.generation !=
+                 body_scene_.generation)) {
+            return false;
+        }
+        if (scene == body_topology_overlay_scene_) {
+            return true;
+        }
+
+        const auto previous =
+            body_topology_overlay_scene_;
+        body_topology_overlay_scene_ = scene;
+        if (!syncBodyTopologyOverlayScene()) {
+            body_topology_overlay_scene_ =
+                previous;
+            static_cast<void>(
+                syncBodyTopologyOverlayScene());
+            return false;
+        }
+
+        if (!context_.IsNull()) {
+            updateCurrentViewer();
+        }
+        if (!view_.IsNull()) {
+            redraw();
+        }
+        return true;
     }
 
     [[nodiscard]] bool appendBodyTopologyOverlay(
@@ -6065,6 +6159,10 @@ private:
         body_preselection_token_;
     std::vector<Handle(AIS_InteractiveObject)>
         body_preselection_objects_;
+    viewer::BodyTopologyOverlayScene
+        body_topology_overlay_scene_;
+    std::vector<Handle(AIS_InteractiveObject)>
+        body_topology_overlay_objects_;
     bool body_preselection_clear_active_{};
     viewer::SolidScene solid_scene_;
     viewer::SolidPreviewScene solid_preview_scene_;
@@ -6323,6 +6421,16 @@ bool QtOcctViewerWidget::setBodyTopologyPreselection(
         [this, token] {
             return impl_->setBodyTopologyPreselection(
                 token);
+        });
+}
+
+bool QtOcctViewerWidget::setBodyTopologyOverlayScene(
+    const viewer::BodyTopologyOverlayScene& scene) {
+    return guardedBool(
+        "setBodyTopologyOverlayScene",
+        [this, &scene] {
+            return impl_->setBodyTopologyOverlayScene(
+                scene);
         });
 }
 

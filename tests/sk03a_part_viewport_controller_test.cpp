@@ -6,7 +6,10 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <QApplication>
+#include <QEvent>
+#include <QMouseEvent>
 #include <QTreeWidget>
+#include <QTreeWidgetItemIterator>
 #include <QWidget>
 
 #include <cstddef>
@@ -150,6 +153,16 @@ public:
         return true;
     }
 
+    bool setBodyTopologyOverlayScene(
+        const viewer::BodyTopologyOverlayScene& scene) override {
+        ++body_topology_overlay_scene_calls_;
+        if (!scene.valid()) {
+            return false;
+        }
+        body_topology_overlay_scene_ = scene;
+        return true;
+    }
+
     bool setSolidScene(
         const viewer::SolidScene& scene) override {
         ++solid_scene_calls_;
@@ -281,6 +294,9 @@ public:
         presentation_selection_;
     viewer::BodyTopologyPickQueryResult
         body_query_;
+    viewer::BodyTopologyOverlayScene
+        body_topology_overlay_scene_;
+    std::size_t body_topology_overlay_scene_calls_{};
     viewer::ViewStyle view_style_{
         viewer::ViewStyle::shaded};
     std::size_t body_scene_calls_{};
@@ -1228,8 +1244,71 @@ int main(int argc, char* argv[]) {
 
         topology_controller.setSolidModelingKernel(
             &topology_kernel);
+        std::optional<part::FeatureId>
+            hovered_tree_feature;
+        std::size_t feature_hover_events = 0U;
+        topology_tree_controller.setFeatureHoverHandler(
+            [&hovered_tree_feature,
+             &feature_hover_events](
+                std::optional<part::FeatureId> id) {
+                hovered_tree_feature = id;
+                ++feature_hover_events;
+            });
+
         topology_controller.setDocumentSession(
             &topology_session);
+
+        // PM-02D4: tree hover emits semantic FeatureId only and does not
+        // mutate tree selection. Leave clears the transient hover.
+        topology_tree.resize(420, 320);
+        topology_tree.expandAll();
+        topology_tree.show();
+        QApplication::processEvents();
+
+        QTreeWidgetItem* feature_item = nullptr;
+        for (QTreeWidgetItemIterator it{&topology_tree};
+             *it != nullptr;
+             ++it) {
+            if ((*it)->text(0).contains(
+                    QStringLiteral("Extrude"))) {
+                feature_item = *it;
+                break;
+            }
+        }
+        CHECK(feature_item != nullptr);
+        const auto selected_before_hover =
+            topology_tree_controller.selectedFeatureIds();
+        const auto feature_rect =
+            topology_tree.visualItemRect(
+                feature_item);
+        CHECK(feature_rect.isValid());
+
+        QMouseEvent hover_event{
+            QEvent::MouseMove,
+            QPointF{feature_rect.center()},
+            Qt::NoButton,
+            Qt::NoButton,
+            Qt::NoModifier};
+        CHECK(QApplication::sendEvent(
+            topology_tree.viewport(),
+            &hover_event));
+        CHECK(feature_hover_events >= 1U);
+        CHECK(
+            hovered_tree_feature ==
+            std::optional<part::FeatureId>{
+                *feature.feature_id});
+        CHECK(
+            topology_tree_controller.selectedFeatureIds() ==
+            selected_before_hover);
+
+        QEvent leave_event{QEvent::Leave};
+        CHECK(QApplication::sendEvent(
+            topology_tree.viewport(),
+            &leave_event));
+        CHECK(!hovered_tree_feature.has_value());
+        CHECK(
+            topology_tree_controller.selectedFeatureIds() ==
+            selected_before_hover);
 
         CHECK(
             topology_viewport.body_scene_
@@ -1254,6 +1333,67 @@ int main(int argc, char* argv[]) {
         const auto vertex_token =
             topology_viewport.body_scene_
                 .vertices.front().token;
+
+        // PM-02D4: selected Feature contribution is a presentation overlay
+        // over the same current BodyScene token. It must not create a second
+        // topology identity or alter ordinary Body selection.
+        topology_controller.setFeatureContributionSelection(
+            *feature.feature_id);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .generation == generation);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.size() == 1U);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.front().role ==
+            viewer::BodyTopologyOverlayRole::
+                feature_contribution_selected);
+        CHECK(
+            std::find(
+                topology_viewport
+                    .body_topology_overlay_scene_
+                    .groups.front().tokens.begin(),
+                topology_viewport
+                    .body_topology_overlay_scene_
+                    .groups.front().tokens.end(),
+                face_token) !=
+            topology_viewport
+                .body_topology_overlay_scene_
+                .groups.front().tokens.end());
+
+        // Hovering the already-selected Feature must not duplicate the same
+        // green contribution as a second overlay group.
+        topology_controller.setFeatureContributionHover(
+            *feature.feature_id);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.size() == 1U);
+
+        // With persistent selection cleared, the same semantic contribution
+        // becomes a transient hover role without touching authored state.
+        topology_controller.setFeatureContributionSelection(
+            std::nullopt);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.size() == 1U);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.front().role ==
+            viewer::BodyTopologyOverlayRole::
+                feature_contribution_hover);
+        topology_controller.setFeatureContributionHover(
+            std::nullopt);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .empty());
+
+        topology_controller.setFeatureContributionSelection(
+            *feature.feature_id);
+        const auto contribution_generation =
+            topology_viewport.body_topology_overlay_scene_
+                .generation;
 
         viewer::BodyTopologyPickQueryResult
             competing;
@@ -1465,6 +1605,39 @@ int main(int argc, char* argv[]) {
                  .primaryBodyTopologySelection());
         CHECK(
             !topology_viewport.body_preselection_);
+
+        // A document revision rebuilds BodyScene with a new generation and
+        // the semantic Feature contribution is reprojected onto the new
+        // PresentationTokens for that generation.
+        auto topology_properties =
+            topology_session.document().properties();
+        topology_properties.title =
+            "PM-02D4 contribution generation refresh";
+        const auto topology_property_change =
+            topology_session.execute(
+                application::SetDocumentPropertiesCommand{
+                    std::move(topology_properties)});
+        CHECK(
+            topology_property_change.ok() &&
+            topology_property_change.changed);
+        topology_controller.refreshPresentation();
+        CHECK(
+            topology_viewport.body_scene_.generation.valid());
+        CHECK(
+            topology_viewport.body_scene_.generation !=
+            contribution_generation);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .generation ==
+            topology_viewport.body_scene_.generation);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.size() == 1U);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.front().role ==
+            viewer::BodyTopologyOverlayRole::
+                feature_contribution_selected);
 
         topology_controller.setSolidModelingKernel(
             nullptr);

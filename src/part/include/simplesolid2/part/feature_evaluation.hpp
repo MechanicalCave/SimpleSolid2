@@ -322,6 +322,24 @@ struct BodyStageTopologyCatalog final {
         const BodyStageTopologyCatalog&) = default;
 };
 
+struct FeatureContribution final {
+    // Set-valued current contribution query. These runtime tokens identify
+    // current Body realizations only; no member is persisted.
+    std::vector<kernel::RuntimeFaceToken> faces;
+    std::vector<kernel::RuntimeEdgeToken> direct_edges;
+    std::vector<kernel::RuntimeVertexToken> direct_vertices;
+    // Presentation envelope around carrier contribution. Boundary members are
+    // not re-owned by the Feature merely because they bound its Faces.
+    std::vector<kernel::RuntimeEdgeToken> boundary_edges;
+    std::vector<kernel::RuntimeVertexToken> boundary_vertices;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeatureContribution&,
+        const FeatureContribution&) = default;
+};
+
 struct FeatureEvaluation final {
     FeatureId feature_id;
     FeatureEvaluationStatus status{
@@ -393,6 +411,10 @@ struct PartEvaluation final {
 makeKernelExtrudeInput(
     const PartDocument& document,
     const ExtrudeFeature& feature);
+
+[[nodiscard]] FeatureContribution currentFeatureContribution(
+    const BodyStageTopologyCatalog& catalog,
+    FeatureId feature_id);
 
 [[nodiscard]] PartEvaluation evaluatePart(
     const PartDocument& document,

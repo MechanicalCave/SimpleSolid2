@@ -307,6 +307,11 @@ public:
     [[nodiscard]] bool setViewStyle(
         viewer::ViewStyle style);
 
+    void setFeatureContributionSelection(
+        std::optional<part::FeatureId> feature_id);
+    void setFeatureContributionHover(
+        std::optional<part::FeatureId> feature_id);
+
 private:
     struct SemanticSelection final {
         std::vector<core::BuiltinReferenceRole> selected;
@@ -420,6 +425,17 @@ private:
     void onSpatialPointer(
         const viewer::SpatialPointerEvent& event);
 
+    [[nodiscard]] std::optional<viewer::PresentationToken>
+    bodyPresentationTokenFor(
+        viewer::BodyTopologyPresentationKind kind,
+        std::uint64_t runtime_token_value) const;
+
+    [[nodiscard]] std::vector<viewer::PresentationToken>
+    featureContributionTokens(
+        part::FeatureId feature_id) const;
+
+    [[nodiscard]] bool applyFeatureContributionOverlay();
+
     void applySelectionToSurfaces();
     void applySketchViewportMode();
     void notifySelectionChanged();
@@ -445,6 +461,10 @@ private:
     std::uint64_t next_body_scene_generation_{1U};
     viewer::ViewStyle view_style_{
         viewer::ViewStyle::shaded};
+    std::optional<part::FeatureId>
+        selected_feature_contribution_;
+    std::optional<part::FeatureId>
+        hovered_feature_contribution_;
     std::optional<sketch::SketchId>
         sketch_edit_id_;
     viewer::PrimaryPointerRouting

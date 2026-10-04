@@ -127,6 +127,12 @@ public:
         return !token.has_value();
     }
 
+    virtual bool setBodyTopologyOverlayScene(
+        const BodyTopologyOverlayScene& scene) {
+        return scene.valid() &&
+               scene.empty();
+    }
+
     // Transitional PM-01 compatibility only. Production PM-02 committed Body
     // presentation uses setBodyScene().
     virtual bool setSolidScene(
