@@ -269,6 +269,156 @@ int main(int argc, char* argv[]) {
         vertex_only.candidates.front().token ==
         body_vertex_token);
 
+    // PM-02D3: hover emits the neutral Body query; provider does not rank
+    // semantic priority. A controller-like callback may project the chosen
+    // PresentationToken back as preselection.
+    int body_preselection_intents = 0;
+    viewer::BodyTopologyPickQueryResult
+        last_body_preselection_query;
+    viewer::ViewportPoint2
+        last_body_preselection_point;
+    widget.setBodyTopologyPreselectionIntentHandler(
+        [&widget,
+         &body_preselection_intents,
+         &last_body_preselection_query,
+         &last_body_preselection_point,
+         body_vertex_token](
+            const viewer::BodyTopologyPickQueryResult& query,
+            viewer::ViewportPoint2 point) {
+            ++body_preselection_intents;
+            last_body_preselection_query = query;
+            last_body_preselection_point = point;
+            if (query.valid() &&
+                query.completed &&
+                std::any_of(
+                    query.candidates.begin(),
+                    query.candidates.end(),
+                    [body_vertex_token](const auto& candidate) {
+                        return candidate.token ==
+                               body_vertex_token;
+                    })) {
+                CHECK(
+                    widget.setBodyTopologyPreselection(
+                        body_vertex_token));
+            } else {
+                CHECK(
+                    widget.setBodyTopologyPreselection(
+                        std::nullopt));
+            }
+        });
+
+    int cycle_forward = 0;
+    int cycle_reverse = 0;
+    widget.setBodyTopologyCycleIntentHandler(
+        [&cycle_forward, &cycle_reverse](bool reverse) {
+            if (reverse) {
+                ++cycle_reverse;
+            } else {
+                ++cycle_forward;
+            }
+        });
+
+    sendMouseMove(widget, body_center);
+    CHECK(body_preselection_intents >= 1);
+    CHECK(last_body_preselection_query.valid());
+    CHECK(last_body_preselection_query.completed);
+    CHECK(
+        last_body_preselection_query.generation ==
+        body_scene.generation);
+    CHECK(
+        last_body_preselection_point.x ==
+        body_center.x);
+    CHECK(
+        last_body_preselection_point.y ==
+        body_center.y);
+
+    widget.setFocus(Qt::MouseFocusReason);
+    QApplication::processEvents();
+    QTest::keyClick(
+        &widget,
+        Qt::Key_Tab,
+        Qt::NoModifier);
+    QApplication::processEvents();
+    CHECK(cycle_forward == 1);
+    CHECK(cycle_reverse == 0);
+
+    QTest::keyClick(
+        &widget,
+        Qt::Key_Tab,
+        Qt::ShiftModifier);
+    QApplication::processEvents();
+    CHECK(cycle_forward == 1);
+    CHECK(cycle_reverse == 1);
+
+    // View Style lives in the same provider-surface HUD family as the
+    // navigation controls. Its click emits an action; the callback/controller
+    // remains runtime state authority.
+    std::optional<viewer::ViewStyle>
+        requested_view_style;
+    widget.setViewStyleActionHandler(
+        [&widget, &requested_view_style](
+            viewer::ViewStyle style) {
+            requested_view_style = style;
+            CHECK(widget.setViewStyle(style));
+        });
+    CHECK(widget.setViewStyle(
+        viewer::ViewStyle::shaded));
+
+    const QPoint style_trigger{
+        widget.width() - 300,
+        18};
+    QTest::mouseClick(
+        &widget,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        style_trigger);
+    QApplication::processEvents();
+
+    const QPoint style_edges{
+        widget.width() - 300,
+        66};
+    QTest::mouseClick(
+        &widget,
+        Qt::LeftButton,
+        Qt::NoModifier,
+        style_edges);
+    QApplication::processEvents();
+    CHECK(
+        requested_view_style ==
+        std::optional<viewer::ViewStyle>{
+            viewer::ViewStyle::
+                shaded_with_edges});
+    CHECK(
+        widget.viewStyle() ==
+        viewer::ViewStyle::
+            shaded_with_edges);
+
+    // Hovering the HUD clears Body preselection instead of letting geometry
+    // highlight through the control.
+    const int intents_before_hud_hover =
+        body_preselection_intents;
+    sendMouseMove(
+        widget,
+        {
+            static_cast<double>(style_trigger.x()),
+            static_cast<double>(style_trigger.y())});
+    CHECK(
+        body_preselection_intents >
+        intents_before_hud_hover);
+    CHECK(
+        !last_body_preselection_query.valid());
+
+    const int cycles_before_cleared_tab =
+        cycle_forward + cycle_reverse;
+    QTest::keyClick(
+        &widget,
+        Qt::Key_Tab,
+        Qt::NoModifier);
+    QApplication::processEvents();
+    CHECK(
+        cycle_forward + cycle_reverse ==
+        cycles_before_cleared_tab);
+
     CHECK(widget.setPresentationSelection(
         viewer::PresentationSelection{
             {body_face_token,
