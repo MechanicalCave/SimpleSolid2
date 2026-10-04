@@ -467,6 +467,272 @@ void propagateCurrentReferences(
     return true;
 }
 
+[[nodiscard]] bool isSideSurface(
+    const FeatureSurfaceAddress& address) noexcept {
+    return address.role ==
+           FeatureSurfaceRoleKind::side;
+}
+
+[[nodiscard]] bool isCapSurface(
+    const FeatureSurfaceAddress& address) noexcept {
+    return !isSideSurface(address);
+}
+
+struct SemanticSurfaceObservation final {
+    FeatureSurfaceAddress address;
+    kernel::SurfaceKind kind{
+        kernel::SurfaceKind::other};
+
+    friend bool operator==(
+        const SemanticSurfaceObservation&,
+        const SemanticSurfaceObservation&) = default;
+};
+
+struct CurveRelation final {
+    FeatureCurveRoleKind role{
+        FeatureCurveRoleKind::
+            boolean_intersection};
+    kernel::CurveKind curve_kind{
+        kernel::CurveKind::other};
+    std::vector<FeatureSurfaceAddress>
+        adjacent_surfaces;
+
+    friend bool operator==(
+        const CurveRelation&,
+        const CurveRelation&) = default;
+};
+
+struct PointRelation final {
+    std::vector<FeatureSurfaceAddress>
+        adjacent_surfaces;
+
+    friend bool operator==(
+        const PointRelation&,
+        const PointRelation&) = default;
+};
+
+[[nodiscard]] std::optional<
+    SemanticSurfaceObservation>
+semanticSurfaceForRuntimeToken(
+    kernel::RuntimeSurfaceToken token,
+    const std::vector<FeatureSurfaceResolution>&
+        surfaces) {
+    if (!token.valid()) return std::nullopt;
+
+    std::optional<SemanticSurfaceObservation>
+        result;
+    for (const auto& surface : surfaces) {
+        if (surface.status !=
+                kernel::ReferenceStatus::resolved ||
+            !surface.runtime_token ||
+            *surface.runtime_token != token) {
+            continue;
+        }
+        if (result) {
+            return std::nullopt;
+        }
+        result = SemanticSurfaceObservation{
+            surface.address,
+            surface.surface_kind};
+    }
+    return result;
+}
+
+[[nodiscard]] std::optional<CurveRelation>
+curveRelationForObservation(
+    const kernel::CurrentEdgeSemanticObservation&
+        observation,
+    const std::vector<FeatureSurfaceResolution>&
+        surfaces,
+    bool& provider_mismatch) {
+    provider_mismatch = false;
+    if (!observation.runtime_token.valid() ||
+        observation.periodic_seam) {
+        return std::nullopt;
+    }
+
+    std::vector<SemanticSurfaceObservation>
+        semantic_surfaces;
+    semantic_surfaces.reserve(
+        observation.adjacent_surfaces.size());
+
+    for (const auto token :
+         observation.adjacent_surfaces) {
+        const auto surface =
+            semanticSurfaceForRuntimeToken(
+                token,
+                surfaces);
+        if (!surface) {
+            return std::nullopt;
+        }
+        const auto duplicate =
+            std::find_if(
+                semantic_surfaces.begin(),
+                semantic_surfaces.end(),
+                [&surface](const auto& existing) {
+                    return existing.address ==
+                           surface->address;
+                });
+        if (duplicate !=
+            semantic_surfaces.end()) {
+            continue;
+        }
+        semantic_surfaces.push_back(
+            *surface);
+    }
+
+    if (semantic_surfaces.size() != 2U) {
+        return std::nullopt;
+    }
+
+    std::sort(
+        semantic_surfaces.begin(),
+        semantic_surfaces.end(),
+        [](const auto& first, const auto& second) {
+            return first.address <
+                   second.address;
+        });
+
+    CurveRelation result;
+    result.adjacent_surfaces = {
+        semantic_surfaces[0].address,
+        semantic_surfaces[1].address,
+    };
+
+    const bool same_producer =
+        semantic_surfaces[0]
+            .address.producer_feature_id ==
+        semantic_surfaces[1]
+            .address.producer_feature_id;
+    const bool first_cap =
+        isCapSurface(
+            semantic_surfaces[0].address);
+    const bool second_cap =
+        isCapSurface(
+            semantic_surfaces[1].address);
+    const bool first_side =
+        isSideSurface(
+            semantic_surfaces[0].address);
+    const bool second_side =
+        isSideSurface(
+            semantic_surfaces[1].address);
+
+    if (same_producer &&
+        ((first_cap && second_side) ||
+         (first_side && second_cap))) {
+        result.role =
+            FeatureCurveRoleKind::cap_side;
+        const auto& side =
+            first_side
+                ? semantic_surfaces[0]
+                : semantic_surfaces[1];
+        switch (side.kind) {
+        case kernel::SurfaceKind::plane:
+            result.curve_kind =
+                kernel::CurveKind::line;
+            break;
+        case kernel::SurfaceKind::cylinder:
+            result.curve_kind =
+                kernel::CurveKind::circle;
+            break;
+        default:
+            return std::nullopt;
+        }
+    } else if (same_producer &&
+               first_side &&
+               second_side) {
+        result.role =
+            FeatureCurveRoleKind::side_side;
+        result.curve_kind =
+            kernel::CurveKind::line;
+    } else if (!same_producer) {
+        result.role =
+            FeatureCurveRoleKind::
+                boolean_intersection;
+        if (semantic_surfaces[0].kind ==
+                kernel::SurfaceKind::plane &&
+            semantic_surfaces[1].kind ==
+                kernel::SurfaceKind::plane) {
+            result.curve_kind =
+                kernel::CurveKind::line;
+        } else {
+            return std::nullopt;
+        }
+    } else {
+        return std::nullopt;
+    }
+
+    if (observation.provider_curve_kind !=
+        result.curve_kind) {
+        provider_mismatch = true;
+        return std::nullopt;
+    }
+
+    return result;
+}
+
+[[nodiscard]] std::optional<PointRelation>
+pointRelationForObservation(
+    const kernel::CurrentVertexSemanticObservation&
+        observation,
+    const std::vector<FeatureSurfaceResolution>&
+        surfaces) {
+    if (!observation.runtime_token.valid()) {
+        return std::nullopt;
+    }
+
+    std::vector<FeatureSurfaceAddress>
+        addresses;
+    addresses.reserve(
+        observation.adjacent_surfaces.size());
+    for (const auto token :
+         observation.adjacent_surfaces) {
+        const auto surface =
+            semanticSurfaceForRuntimeToken(
+                token,
+                surfaces);
+        if (!surface) {
+            return std::nullopt;
+        }
+        if (std::find(
+                addresses.begin(),
+                addresses.end(),
+                surface->address) ==
+            addresses.end()) {
+            addresses.push_back(
+                surface->address);
+        }
+    }
+
+    if (addresses.size() != 3U) {
+        return std::nullopt;
+    }
+
+    std::sort(
+        addresses.begin(),
+        addresses.end());
+    return PointRelation{
+        std::move(addresses)};
+}
+
+[[nodiscard]] bool sameCurveRelation(
+    const FeatureCurveResolution& reference,
+    const CurveRelation& relation) noexcept {
+    return reference.address.role ==
+               relation.role &&
+           reference.curve_kind ==
+               relation.curve_kind &&
+           reference.address.adjacent_surfaces ==
+               relation.adjacent_surfaces;
+}
+
+[[nodiscard]] bool samePointRelation(
+    const FeaturePointResolution& reference,
+    const PointRelation& relation) noexcept {
+    return reference.address.adjacent_surfaces ==
+           relation.adjacent_surfaces;
+}
+
 template <typename Token>
 [[nodiscard]] bool uniqueValidTokens(
     const std::vector<Token>& tokens) noexcept {
