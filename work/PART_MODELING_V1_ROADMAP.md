@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 ACTIVE  
-**Version:** 1.10  
-**Owner acceptance:** 2026-10-04 — PM-02 Work Contract authority unchanged; v1.10 is checkpoint-state synchronization only  
-**Previous accepted version:** 1.9 — 2026-10-04  
+**Version:** 1.11  
+**Owner acceptance:** 2026-10-04 — PM-02 Work Contract authority unchanged; v1.11 is checkpoint-state synchronization only  
+**Previous accepted version:** 1.10 — 2026-10-04  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-02C — Edge/Curve and Vertex/Point semantic catalog under the active PM-02 Work Contract  
+**Current active checkpoint:** PM-02D — topology-aware Body presentation, Viewer picking, View Styles and semantic inspection under the active PM-02 Work Contract  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -441,7 +441,8 @@ Checkpoint state:
 
 - `PM-02A — production evaluated Body-stage topology catalog + typed runtime Face/Edge/Vertex tokens` — **COMPLETED — PASS**; runtime candidate `58368a6ada5f6c30e03cb845682dbf5408ecb763`, Windows FULL #1397 PASS, merged runtime main `b95f72105b8242eedce9cd79dd8bf910f3ccb715`;
 - `PM-02B — Surface/Face production semantics` — **COMPLETED — PASS**; final runtime candidate `05434516fea0892aac2babae09da772043987f29`, Windows FULL #1400 PASS, merged final runtime main `65d074577bc89e3507288118b17e99b12288a881`;
-- `PM-02C — Edge/Curve and Vertex/Point semantic catalog` — **ACTIVE**.
+- `PM-02C — Edge/Curve and Vertex/Point semantic catalog` — **COMPLETED — PASS**; runtime candidate `9135baf1d749f01eeb5dcae4f6ea7cffc856d8a0`, Windows FULL #1402 PASS, merged runtime main `b128f7445b2705ec9577afddcdbf7f9c81594aa0`;
+- `PM-02D — topology-aware Body presentation, Viewer picking, View Styles and semantic inspection` — **ACTIVE**.
 
 Primary vertical scenario:
 
@@ -645,7 +646,7 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.10 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02A and PM-02B are COMPLETED — PASS. PM-02 remains ACTIVE at PM-02C.**
+Program v1.11 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02A, PM-02B and PM-02C are COMPLETED — PASS. PM-02 remains ACTIVE at PM-02D.**
 
 Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
@@ -657,7 +658,9 @@ PM-02A production accounting is closed: runtime candidate `58368a6ada5f6c30e03cb
 
 PM-02B Surface/Face semantics are closed: final runtime candidate `05434516fea0892aac2babae09da772043987f29` passed Windows FULL #1400 and was squash-merged to main as `65d074577bc89e3507288118b17e99b12288a881`. Completion evidence is `work/PM-02B_SURFACE_FACE_SEMANTICS_COMPLETION.md`.
 
-The active implementation checkpoint is **PM-02C — Edge/Curve and Vertex/Point semantic catalog**.
+PM-02C Edge/Curve and Vertex/Point semantics are closed: runtime candidate `9135baf1d749f01eeb5dcae4f6ea7cffc856d8a0` passed Windows FULL #1402 and was squash-merged to main as `b128f7445b2705ec9577afddcdbf7f9c81594aa0`. Completion evidence is `work/PM-02C_EDGE_CURVE_VERTEX_POINT_SEMANTICS_COMPLETION.md`.
+
+The active implementation checkpoint is **PM-02D — topology-aware Body presentation, Viewer picking, View Styles and semantic inspection**.
 
 Mutation must follow PM-02A through PM-02J in order and remain inside the accepted Work Contract. Later checkpoint scope is not permission to skip earlier evidence/gates.
 
