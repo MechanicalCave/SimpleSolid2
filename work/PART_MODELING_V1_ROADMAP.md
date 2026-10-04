@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 ACTIVE  
-**Version:** 1.12  
-**Owner acceptance:** 2026-10-04 — PM-02 Work Contract authority unchanged; v1.12 is checkpoint-state synchronization only  
-**Previous accepted version:** 1.11 — 2026-10-04  
+**Version:** 1.13  
+**Owner acceptance:** 2026-10-04 — PM-02 Work Contract authority unchanged; v1.13 is checkpoint-state synchronization only  
+**Previous accepted version:** 1.12 — 2026-10-04  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-02E — Sketch support schema v9 + deterministic frame resolver under the active PM-02 Work Contract  
+**Current active checkpoint:** PM-02F — stage-aware Sketch/Profile evaluation under the active PM-02 Work Contract  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -443,7 +443,8 @@ Checkpoint state:
 - `PM-02B — Surface/Face production semantics` — **COMPLETED — PASS**; final runtime candidate `05434516fea0892aac2babae09da772043987f29`, Windows FULL #1400 PASS, merged final runtime main `65d074577bc89e3507288118b17e99b12288a881`;
 - `PM-02C — Edge/Curve and Vertex/Point semantic catalog` — **COMPLETED — PASS**; runtime candidate `9135baf1d749f01eeb5dcae4f6ea7cffc856d8a0`, Windows FULL #1402 PASS, merged runtime main `b128f7445b2705ec9577afddcdbf7f9c81594aa0`;
 - `PM-02D — topology-aware Body presentation, Viewer picking, View Styles and semantic inspection` — **COMPLETED — PASS**; final runtime candidate `c325fcf681afff44ca61abb02fd239495db5d67f`, Windows FULL #1421 PASS, merged final runtime main `9dd893ffa0e9cd1e5287b9590c02b317d543cbd3`;
-- `PM-02E — Sketch support schema v9 + deterministic frame resolver` — **ACTIVE**.
+- `PM-02E — Sketch support schema v9 + deterministic frame resolver` — **COMPLETED — PASS**; final runtime candidate `8b5e2c6844c93648e1884464d138d9a98e2a7a9a`, Windows FULL #1431 PASS, merged runtime main `e3452d4d0051564f332319a7945344655e91aa3a`;
+- `PM-02F — stage-aware Sketch/Profile evaluation` — **ACTIVE**.
 
 Primary vertical scenario:
 
@@ -647,7 +648,7 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.12 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02A, PM-02B, PM-02C and PM-02D are COMPLETED — PASS. PM-02 remains ACTIVE at PM-02E.**
+Program v1.13 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02A, PM-02B, PM-02C, PM-02D and PM-02E are COMPLETED — PASS. PM-02 remains ACTIVE at PM-02F.**
 
 Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
@@ -663,7 +664,9 @@ PM-02C Edge/Curve and Vertex/Point semantics are closed: runtime candidate `9135
 
 PM-02D topology-aware Body presentation, Viewer picking, View Styles and semantic inspection are closed: final runtime candidate `c325fcf681afff44ca61abb02fd239495db5d67f` passed Windows FULL #1421 and was squash-merged to main as `9dd893ffa0e9cd1e5287b9590c02b317d543cbd3`. Completion evidence is `work/PM-02D_BODY_PRESENTATION_VIEWER_PICKING_INSPECTION_COMPLETION.md`.
 
-The active implementation checkpoint is **PM-02E — Sketch support schema v9 + deterministic frame resolver**.
+PM-02E Sketch support schema v9 + deterministic frame resolver is closed: final runtime candidate `8b5e2c6844c93648e1884464d138d9a98e2a7a9a` passed Windows FULL #1431 and was squash-merged to main as `e3452d4d0051564f332319a7945344655e91aa3a`. Completion evidence is `work/PM-02E_SKETCH_SUPPORT_SCHEMA_V9_COMPLETION.md`.
+
+The active implementation checkpoint is **PM-02F — stage-aware Sketch/Profile evaluation**.
 
 Mutation must follow PM-02A through PM-02J in order and remain inside the accepted Work Contract. Later checkpoint scope is not permission to skip earlier evidence/gates.
 
