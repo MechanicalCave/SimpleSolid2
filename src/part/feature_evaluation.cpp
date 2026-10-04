@@ -733,6 +733,812 @@ pointRelationForObservation(
            relation.adjacent_surfaces;
 }
 
+[[nodiscard]] kernel::ReferenceStatus
+strictReferenceStatus(
+    std::size_t count) noexcept {
+    if (count == 0U) {
+        return kernel::ReferenceStatus::missing;
+    }
+    return count == 1U
+        ? kernel::ReferenceStatus::resolved
+        : kernel::ReferenceStatus::ambiguous;
+}
+
+template <typename Token>
+void appendUniqueRuntimeToken(
+    std::vector<Token>& tokens,
+    Token token) {
+    if (std::find(
+            tokens.begin(),
+            tokens.end(),
+            token) ==
+        tokens.end()) {
+        tokens.push_back(token);
+    }
+}
+
+[[nodiscard]] bool isActiveReferenceStatus(
+    kernel::ReferenceStatus status) noexcept {
+    return status ==
+               kernel::ReferenceStatus::resolved ||
+           status ==
+               kernel::ReferenceStatus::ambiguous;
+}
+
+struct CurrentEdgeMeaning final {
+    kernel::RuntimeEdgeToken token;
+    kernel::CurveKind provider_curve_kind{
+        kernel::CurveKind::other};
+    bool periodic_seam{false};
+    std::optional<CurveRelation> relation;
+};
+
+struct CurrentVertexMeaning final {
+    kernel::RuntimeVertexToken token;
+    std::optional<PointRelation> relation;
+    std::size_t incident_material_edge_count{};
+    std::optional<kernel::Point3>
+        provider_point;
+};
+
+struct CurveStageBuild final {
+    std::vector<FeatureCurveResolution>
+        references;
+    std::vector<FeatureCurveResolution>
+        produced;
+    std::vector<BodyEdgeTopologyRecord>
+        records;
+};
+
+struct PointStageBuild final {
+    std::vector<FeaturePointResolution>
+        references;
+    std::vector<FeaturePointResolution>
+        produced;
+    std::vector<BodyVertexTopologyRecord>
+        records;
+};
+
+[[nodiscard]] const kernel::
+    InheritedEdgeRealizationLineage*
+findInheritedEdgeLineage(
+    kernel::RuntimeEdgeToken source,
+    const kernel::SolidModelingResult& result) {
+    const kernel::InheritedEdgeRealizationLineage*
+        found = nullptr;
+    for (const auto& item :
+         result.inherited_edge_realizations) {
+        if (item.source_token != source) {
+            continue;
+        }
+        if (found != nullptr) {
+            return nullptr;
+        }
+        found = &item;
+    }
+    return found;
+}
+
+[[nodiscard]] const kernel::
+    InheritedVertexRealizationLineage*
+findInheritedVertexLineage(
+    kernel::RuntimeVertexToken source,
+    const kernel::SolidModelingResult& result) {
+    const kernel::InheritedVertexRealizationLineage*
+        found = nullptr;
+    for (const auto& item :
+         result.inherited_vertex_realizations) {
+        if (item.source_token != source) {
+            continue;
+        }
+        if (found != nullptr) {
+            return nullptr;
+        }
+        found = &item;
+    }
+    return found;
+}
+
+[[nodiscard]] const CurrentEdgeMeaning*
+findCurrentEdgeMeaning(
+    kernel::RuntimeEdgeToken token,
+    const std::vector<CurrentEdgeMeaning>&
+        meanings) {
+    const CurrentEdgeMeaning* found = nullptr;
+    for (const auto& item : meanings) {
+        if (item.token != token) continue;
+        if (found != nullptr) {
+            return nullptr;
+        }
+        found = &item;
+    }
+    return found;
+}
+
+[[nodiscard]] const CurrentVertexMeaning*
+findCurrentVertexMeaning(
+    kernel::RuntimeVertexToken token,
+    const std::vector<CurrentVertexMeaning>&
+        meanings) {
+    const CurrentVertexMeaning* found = nullptr;
+    for (const auto& item : meanings) {
+        if (item.token != token) continue;
+        if (found != nullptr) {
+            return nullptr;
+        }
+        found = &item;
+    }
+    return found;
+}
+
+[[nodiscard]] std::optional<CurveStageBuild>
+buildCurveStage(
+    FeatureId current_feature,
+    const kernel::SolidModelingResult& kernel_result,
+    const std::vector<FeatureSurfaceResolution>&
+        surfaces,
+    const std::vector<FeatureCurveResolution>&
+        previous) {
+    if (!current_feature.valid() ||
+        kernel_result.current_edge_semantics.size() !=
+            kernel_result.current_edges.size()) {
+        return std::nullopt;
+    }
+
+    std::vector<CurrentEdgeMeaning> meanings;
+    meanings.reserve(
+        kernel_result.current_edge_semantics.size());
+
+    for (const auto& observation :
+         kernel_result.current_edge_semantics) {
+        if (!observation.runtime_token.valid() ||
+            std::count(
+                kernel_result.current_edges.begin(),
+                kernel_result.current_edges.end(),
+                observation.runtime_token) != 1) {
+            return std::nullopt;
+        }
+
+        bool provider_mismatch = false;
+        auto relation =
+            curveRelationForObservation(
+                observation,
+                surfaces,
+                provider_mismatch);
+        if (provider_mismatch) {
+            return std::nullopt;
+        }
+
+        meanings.push_back(
+            {
+                observation.runtime_token,
+                observation.provider_curve_kind,
+                observation.periodic_seam,
+                std::move(relation),
+            });
+    }
+
+    for (const auto token :
+         kernel_result.current_edges) {
+        if (std::count_if(
+                meanings.begin(),
+                meanings.end(),
+                [token](const auto& item) {
+                    return item.token == token;
+                }) != 1) {
+            return std::nullopt;
+        }
+    }
+
+    CurveStageBuild result;
+    result.references = previous;
+
+    // Existing semantic Curve meanings survive only through explicit
+    // provider-history descendants that still satisfy the same semantic
+    // Surface relation. Missing meanings are terminal for this evaluation:
+    // later equal geometry creates new provenance instead of reviving them.
+    for (auto& reference : result.references) {
+        if (!reference.valid()) {
+            return std::nullopt;
+        }
+        if (!isActiveReferenceStatus(
+                reference.status)) {
+            reference.current_edges.clear();
+            reference.candidate_edge_count = 0U;
+            continue;
+        }
+        if (reference.current_edges.empty()) {
+            return std::nullopt;
+        }
+
+        std::vector<kernel::RuntimeEdgeToken>
+            descendants;
+        for (const auto source :
+             reference.current_edges) {
+            const auto* lineage =
+                findInheritedEdgeLineage(
+                    source,
+                    kernel_result);
+            if (lineage == nullptr ||
+                !lineage->source_token.valid() ||
+                lineage->candidate_count !=
+                    lineage->current_edges.size()) {
+                return std::nullopt;
+            }
+            for (const auto token :
+                 lineage->current_edges) {
+                appendUniqueRuntimeToken(
+                    descendants,
+                    token);
+            }
+        }
+
+        bool relation_preserved =
+            !descendants.empty();
+        for (const auto token : descendants) {
+            const auto* meaning =
+                findCurrentEdgeMeaning(
+                    token,
+                    meanings);
+            if (meaning == nullptr ||
+                meaning->periodic_seam ||
+                !meaning->relation ||
+                !sameCurveRelation(
+                    reference,
+                    *meaning->relation)) {
+                relation_preserved = false;
+                break;
+            }
+        }
+
+        if (!relation_preserved) {
+            reference.status =
+                kernel::ReferenceStatus::missing;
+            reference.candidate_edge_count = 0U;
+            reference.current_edges.clear();
+            continue;
+        }
+
+        reference.current_edges =
+            std::move(descendants);
+        reference.candidate_edge_count =
+            reference.current_edges.size();
+        reference.status =
+            strictReferenceStatus(
+                reference.candidate_edge_count);
+    }
+
+    // If independent previous meanings collapse onto one current provider
+    // Edge, neither may win merely because provider history listed it first.
+    for (std::size_t first = 0U;
+         first < result.references.size();
+         ++first) {
+        if (!isActiveReferenceStatus(
+                result.references[first].status)) {
+            continue;
+        }
+        for (std::size_t second = first + 1U;
+             second < result.references.size();
+             ++second) {
+            if (!isActiveReferenceStatus(
+                    result.references[second].status)) {
+                continue;
+            }
+            bool shared = false;
+            for (const auto token :
+                 result.references[first].current_edges) {
+                if (std::find(
+                        result.references[second]
+                            .current_edges.begin(),
+                        result.references[second]
+                            .current_edges.end(),
+                        token) !=
+                    result.references[second]
+                        .current_edges.end()) {
+                    shared = true;
+                    break;
+                }
+            }
+            if (shared) {
+                result.references[first].status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+                result.references[second].status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+            }
+        }
+    }
+
+    std::vector<kernel::RuntimeEdgeToken>
+        inherited_claimed;
+    for (const auto& reference :
+         result.references) {
+        if (!isActiveReferenceStatus(
+                reference.status)) {
+            continue;
+        }
+        for (const auto token :
+             reference.current_edges) {
+            appendUniqueRuntimeToken(
+                inherited_claimed,
+                token);
+        }
+    }
+
+    struct NewCurveGroup final {
+        CurveRelation relation;
+        std::vector<kernel::RuntimeEdgeToken>
+            edges;
+    };
+    std::vector<NewCurveGroup> new_groups;
+
+    for (const auto& meaning : meanings) {
+        if (meaning.periodic_seam ||
+            !meaning.relation ||
+            std::find(
+                inherited_claimed.begin(),
+                inherited_claimed.end(),
+                meaning.token) !=
+                inherited_claimed.end()) {
+            continue;
+        }
+
+        auto group =
+            std::find_if(
+                new_groups.begin(),
+                new_groups.end(),
+                [&meaning](const auto& item) {
+                    return item.relation ==
+                           *meaning.relation;
+                });
+        if (group == new_groups.end()) {
+            new_groups.push_back(
+                {
+                    *meaning.relation,
+                    {meaning.token},
+                });
+        } else {
+            appendUniqueRuntimeToken(
+                group->edges,
+                meaning.token);
+        }
+    }
+
+    for (auto& group : new_groups) {
+        FeatureCurveResolution reference;
+        reference.address.producer_feature_id =
+            current_feature;
+        reference.address.role =
+            group.relation.role;
+        reference.address.adjacent_surfaces =
+            group.relation.adjacent_surfaces;
+        reference.curve_kind =
+            group.relation.curve_kind;
+        reference.current_edges =
+            std::move(group.edges);
+        reference.candidate_edge_count =
+            reference.current_edges.size();
+        reference.status =
+            strictReferenceStatus(
+                reference.candidate_edge_count);
+        if (!reference.valid()) {
+            return std::nullopt;
+        }
+        result.produced.push_back(reference);
+        result.references.push_back(
+            std::move(reference));
+    }
+
+    result.records.reserve(
+        meanings.size());
+    for (const auto& meaning : meanings) {
+        BodyEdgeTopologyRecord record;
+        record.runtime_token = meaning.token;
+        record.curve_kind =
+            meaning.provider_curve_kind;
+        record.periodic_seam =
+            meaning.periodic_seam;
+
+        if (meaning.periodic_seam) {
+            record.accounting_class =
+                TopologyAccountingClass::
+                    known_representation_artifact;
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.records.push_back(
+                std::move(record));
+            continue;
+        }
+
+        if (!meaning.relation) {
+            record.accounting_class =
+                TopologyAccountingClass::
+                    semantically_unsupported;
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.records.push_back(
+                std::move(record));
+            continue;
+        }
+
+        std::vector<kernel::ReferenceStatus>
+            statuses;
+        for (const auto& reference :
+             result.references) {
+            if (!isActiveReferenceStatus(
+                    reference.status) ||
+                std::find(
+                    reference.current_edges.begin(),
+                    reference.current_edges.end(),
+                    meaning.token) ==
+                    reference.current_edges.end()) {
+                continue;
+            }
+            if (std::find(
+                    record.curve_candidates.begin(),
+                    record.curve_candidates.end(),
+                    reference.address) ==
+                record.curve_candidates.end()) {
+                record.curve_candidates.push_back(
+                    reference.address);
+                statuses.push_back(
+                    reference.status);
+            }
+        }
+
+        if (record.curve_candidates.empty()) {
+            // A supported material relation must not disappear from the
+            // semantic catalog simply because lifecycle bookkeeping failed.
+            return std::nullopt;
+        }
+
+        record.accounting_class =
+            TopologyAccountingClass::
+                referenceable;
+        if (record.curve_candidates.size() > 1U ||
+            std::any_of(
+                statuses.begin(),
+                statuses.end(),
+                [](kernel::ReferenceStatus status) {
+                    return status ==
+                           kernel::ReferenceStatus::
+                               ambiguous;
+                })) {
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    ambiguous;
+        } else {
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    resolved;
+        }
+        result.records.push_back(
+            std::move(record));
+    }
+
+    return result;
+}
+
+[[nodiscard]] std::optional<PointStageBuild>
+buildPointStage(
+    FeatureId current_feature,
+    const kernel::SolidModelingResult& kernel_result,
+    const std::vector<FeatureSurfaceResolution>&
+        surfaces,
+    const std::vector<FeaturePointResolution>&
+        previous) {
+    if (!current_feature.valid() ||
+        kernel_result.current_vertex_semantics.size() !=
+            kernel_result.current_vertices.size()) {
+        return std::nullopt;
+    }
+
+    std::vector<CurrentVertexMeaning> meanings;
+    meanings.reserve(
+        kernel_result.current_vertex_semantics.size());
+    for (const auto& observation :
+         kernel_result.current_vertex_semantics) {
+        if (!observation.runtime_token.valid() ||
+            std::count(
+                kernel_result.current_vertices.begin(),
+                kernel_result.current_vertices.end(),
+                observation.runtime_token) != 1) {
+            return std::nullopt;
+        }
+        meanings.push_back(
+            {
+                observation.runtime_token,
+                pointRelationForObservation(
+                    observation,
+                    surfaces),
+                observation
+                    .incident_material_edges
+                    .size(),
+                observation.provider_point,
+            });
+    }
+
+    for (const auto token :
+         kernel_result.current_vertices) {
+        if (std::count_if(
+                meanings.begin(),
+                meanings.end(),
+                [token](const auto& item) {
+                    return item.token == token;
+                }) != 1) {
+            return std::nullopt;
+        }
+    }
+
+    PointStageBuild result;
+    result.references = previous;
+
+    for (auto& reference : result.references) {
+        if (!reference.valid()) {
+            return std::nullopt;
+        }
+        if (!isActiveReferenceStatus(
+                reference.status)) {
+            reference.current_vertices.clear();
+            reference.candidate_vertex_count = 0U;
+            continue;
+        }
+        if (reference.current_vertices.empty()) {
+            return std::nullopt;
+        }
+
+        std::vector<kernel::RuntimeVertexToken>
+            descendants;
+        for (const auto source :
+             reference.current_vertices) {
+            const auto* lineage =
+                findInheritedVertexLineage(
+                    source,
+                    kernel_result);
+            if (lineage == nullptr ||
+                !lineage->source_token.valid() ||
+                lineage->candidate_count !=
+                    lineage->current_vertices.size()) {
+                return std::nullopt;
+            }
+            for (const auto token :
+                 lineage->current_vertices) {
+                appendUniqueRuntimeToken(
+                    descendants,
+                    token);
+            }
+        }
+
+        bool relation_preserved =
+            !descendants.empty();
+        for (const auto token : descendants) {
+            const auto* meaning =
+                findCurrentVertexMeaning(
+                    token,
+                    meanings);
+            if (meaning == nullptr ||
+                !meaning->relation ||
+                !samePointRelation(
+                    reference,
+                    *meaning->relation)) {
+                relation_preserved = false;
+                break;
+            }
+        }
+
+        if (!relation_preserved) {
+            reference.status =
+                kernel::ReferenceStatus::missing;
+            reference.candidate_vertex_count = 0U;
+            reference.current_vertices.clear();
+            continue;
+        }
+
+        reference.current_vertices =
+            std::move(descendants);
+        reference.candidate_vertex_count =
+            reference.current_vertices.size();
+        reference.status =
+            strictReferenceStatus(
+                reference.candidate_vertex_count);
+    }
+
+    for (std::size_t first = 0U;
+         first < result.references.size();
+         ++first) {
+        if (!isActiveReferenceStatus(
+                result.references[first].status)) {
+            continue;
+        }
+        for (std::size_t second = first + 1U;
+             second < result.references.size();
+             ++second) {
+            if (!isActiveReferenceStatus(
+                    result.references[second].status)) {
+                continue;
+            }
+            bool shared = false;
+            for (const auto token :
+                 result.references[first].current_vertices) {
+                if (std::find(
+                        result.references[second]
+                            .current_vertices.begin(),
+                        result.references[second]
+                            .current_vertices.end(),
+                        token) !=
+                    result.references[second]
+                        .current_vertices.end()) {
+                    shared = true;
+                    break;
+                }
+            }
+            if (shared) {
+                result.references[first].status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+                result.references[second].status =
+                    kernel::ReferenceStatus::
+                        ambiguous;
+            }
+        }
+    }
+
+    std::vector<kernel::RuntimeVertexToken>
+        inherited_claimed;
+    for (const auto& reference :
+         result.references) {
+        if (!isActiveReferenceStatus(
+                reference.status)) {
+            continue;
+        }
+        for (const auto token :
+             reference.current_vertices) {
+            appendUniqueRuntimeToken(
+                inherited_claimed,
+                token);
+        }
+    }
+
+    struct NewPointGroup final {
+        PointRelation relation;
+        std::vector<kernel::RuntimeVertexToken>
+            vertices;
+    };
+    std::vector<NewPointGroup> new_groups;
+
+    for (const auto& meaning : meanings) {
+        if (!meaning.relation ||
+            std::find(
+                inherited_claimed.begin(),
+                inherited_claimed.end(),
+                meaning.token) !=
+                inherited_claimed.end()) {
+            continue;
+        }
+
+        auto group =
+            std::find_if(
+                new_groups.begin(),
+                new_groups.end(),
+                [&meaning](const auto& item) {
+                    return item.relation ==
+                           *meaning.relation;
+                });
+        if (group == new_groups.end()) {
+            new_groups.push_back(
+                {
+                    *meaning.relation,
+                    {meaning.token},
+                });
+        } else {
+            appendUniqueRuntimeToken(
+                group->vertices,
+                meaning.token);
+        }
+    }
+
+    for (auto& group : new_groups) {
+        FeaturePointResolution reference;
+        reference.address.producer_feature_id =
+            current_feature;
+        reference.address.adjacent_surfaces =
+            group.relation.adjacent_surfaces;
+        reference.current_vertices =
+            std::move(group.vertices);
+        reference.candidate_vertex_count =
+            reference.current_vertices.size();
+        reference.status =
+            strictReferenceStatus(
+                reference.candidate_vertex_count);
+        if (!reference.valid()) {
+            return std::nullopt;
+        }
+        result.produced.push_back(reference);
+        result.references.push_back(
+            std::move(reference));
+    }
+
+    result.records.reserve(
+        meanings.size());
+    for (const auto& meaning : meanings) {
+        BodyVertexTopologyRecord record;
+        record.runtime_token = meaning.token;
+        record.incident_material_edge_count =
+            meaning.incident_material_edge_count;
+        record.provider_point =
+            meaning.provider_point;
+
+        if (!meaning.relation) {
+            record.accounting_class =
+                TopologyAccountingClass::
+                    semantically_unsupported;
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.records.push_back(
+                std::move(record));
+            continue;
+        }
+
+        std::vector<kernel::ReferenceStatus>
+            statuses;
+        for (const auto& reference :
+             result.references) {
+            if (!isActiveReferenceStatus(
+                    reference.status) ||
+                std::find(
+                    reference.current_vertices.begin(),
+                    reference.current_vertices.end(),
+                    meaning.token) ==
+                    reference.current_vertices.end()) {
+                continue;
+            }
+            if (std::find(
+                    record.point_candidates.begin(),
+                    record.point_candidates.end(),
+                    reference.address) ==
+                record.point_candidates.end()) {
+                record.point_candidates.push_back(
+                    reference.address);
+                statuses.push_back(
+                    reference.status);
+            }
+        }
+
+        if (record.point_candidates.empty()) {
+            return std::nullopt;
+        }
+
+        record.accounting_class =
+            TopologyAccountingClass::
+                referenceable;
+        if (record.point_candidates.size() > 1U ||
+            std::any_of(
+                statuses.begin(),
+                statuses.end(),
+                [](kernel::ReferenceStatus status) {
+                    return status ==
+                           kernel::ReferenceStatus::
+                               ambiguous;
+                })) {
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    ambiguous;
+        } else {
+            record.referenceability =
+                kernel::ReferenceStatus::
+                    resolved;
+        }
+        result.records.push_back(
+            std::move(record));
+    }
+
+    return result;
+}
+
 template <typename Token>
 [[nodiscard]] bool uniqueValidTokens(
     const std::vector<Token>& tokens) noexcept {
