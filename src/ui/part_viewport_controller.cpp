@@ -2110,6 +2110,429 @@ PartViewportController::primaryBodyTopologySelection() const {
         *selection->primary_body_topology);
 }
 
+std::optional<BodyTopologyInspection>
+PartViewportController::primaryBodyTopologyInspection() const {
+    const auto address =
+        primaryBodyTopologySelection();
+    if (!address ||
+        !address->valid() ||
+        !body_scene_cache_ ||
+        !body_scene_cache_->generation.valid() ||
+        address->generation !=
+            body_scene_cache_->generation ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return std::nullopt;
+    }
+
+    const auto& catalog =
+        *body_topology_catalog_cache_;
+
+    BodyTopologyInspection result;
+    result.kind = address->kind;
+    result.stage = catalog.stage;
+    result.diagnostic_prefix =
+        body_scene_cache_->purpose ==
+        viewer::BodyScenePurpose::
+            diagnostic_prefix;
+    result.selection_count =
+        bodyTopologySelection().size();
+
+    const auto surface_resolution =
+        [&catalog](
+            const part::FeatureSurfaceAddress& key)
+            -> const part::FeatureSurfaceResolution* {
+            const auto found =
+                std::find_if(
+                    catalog.surfaces.begin(),
+                    catalog.surfaces.end(),
+                    [&key](const auto& item) {
+                        return item.address == key;
+                    });
+            return found == catalog.surfaces.end()
+                ? nullptr
+                : &*found;
+        };
+
+    const auto curve_resolution =
+        [&catalog](
+            const part::FeatureCurveAddress& key)
+            -> const part::FeatureCurveResolution* {
+            const auto found =
+                std::find_if(
+                    catalog.curves.begin(),
+                    catalog.curves.end(),
+                    [&key](const auto& item) {
+                        return item.address == key;
+                    });
+            return found == catalog.curves.end()
+                ? nullptr
+                : &*found;
+        };
+
+    const auto point_resolution =
+        [&catalog](
+            const part::FeaturePointAddress& key)
+            -> const part::FeaturePointResolution* {
+            const auto found =
+                std::find_if(
+                    catalog.points.begin(),
+                    catalog.points.end(),
+                    [&key](const auto& item) {
+                        return item.address == key;
+                    });
+            return found == catalog.points.end()
+                ? nullptr
+                : &*found;
+        };
+
+    switch (address->kind) {
+    case viewer::BodyTopologyPresentationKind::face: {
+        const auto found =
+            std::find_if(
+                catalog.faces.begin(),
+                catalog.faces.end(),
+                [address](const auto& item) {
+                    return item.runtime_token.value ==
+                           address->runtime_token_value;
+                });
+        if (found == catalog.faces.end()) {
+            return std::nullopt;
+        }
+
+        result.accounting_class =
+            found->accounting_class;
+        result.semantic_candidate_count =
+            found->surface_candidates.size();
+
+        if (found->semantic_address) {
+            result.strict_referenceability =
+                kernel::ReferenceStatus::resolved;
+            result.producer_feature_id =
+                found->semantic_address
+                    ->producer_feature_id;
+        }
+
+        if (found->surface_candidates.empty()) {
+            if (!found->semantic_address) {
+                result.strict_referenceability =
+                    kernel::ReferenceStatus::
+                        unsupported;
+            }
+            result.carrier_referenceability =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.sketch_support =
+                SketchSupportInspectionCapability::
+                    unsupported;
+            break;
+        }
+
+        if (found->surface_candidates.size() > 1U) {
+            result.strict_referenceability =
+                kernel::ReferenceStatus::ambiguous;
+            result.carrier_referenceability =
+                kernel::ReferenceStatus::ambiguous;
+            result.sketch_support =
+                SketchSupportInspectionCapability::
+                    ambiguous;
+            break;
+        }
+
+        const auto& key =
+            found->surface_candidates.front();
+        const auto* surface =
+            surface_resolution(key);
+        if (surface == nullptr) {
+            return std::nullopt;
+        }
+
+        result.surface_address = key;
+        result.surface_kind =
+            surface->surface_kind;
+        result.producer_feature_id =
+            key.producer_feature_id;
+        result.carrier_referenceability =
+            surface->status;
+        if (!found->semantic_address) {
+            result.strict_referenceability =
+                surface->strict_face_status;
+        }
+
+        if (result.diagnostic_prefix) {
+            result.sketch_support =
+                SketchSupportInspectionCapability::
+                    unsupported;
+        } else {
+            switch (surface->status) {
+            case kernel::ReferenceStatus::resolved:
+                result.sketch_support =
+                    surface->surface_kind ==
+                            kernel::SurfaceKind::plane
+                        ? SketchSupportInspectionCapability::
+                              supported
+                        : SketchSupportInspectionCapability::
+                              unsupported_non_planar;
+                break;
+            case kernel::ReferenceStatus::missing:
+                result.sketch_support =
+                    SketchSupportInspectionCapability::
+                        missing;
+                break;
+            case kernel::ReferenceStatus::ambiguous:
+                result.sketch_support =
+                    SketchSupportInspectionCapability::
+                        ambiguous;
+                break;
+            case kernel::ReferenceStatus::unsupported:
+                result.sketch_support =
+                    SketchSupportInspectionCapability::
+                        unsupported;
+                break;
+            }
+        }
+        break;
+    }
+
+    case viewer::BodyTopologyPresentationKind::edge: {
+        const auto found =
+            std::find_if(
+                catalog.edges.begin(),
+                catalog.edges.end(),
+                [address](const auto& item) {
+                    return item.runtime_token.value ==
+                           address->runtime_token_value;
+                });
+        if (found == catalog.edges.end()) {
+            return std::nullopt;
+        }
+
+        result.accounting_class =
+            found->accounting_class;
+        result.strict_referenceability =
+            found->referenceability;
+        result.curve_kind =
+            found->curve_kind;
+        result.periodic_seam =
+            found->periodic_seam;
+        result.semantic_candidate_count =
+            found->curve_candidates.size();
+
+        if (found->curve_candidates.empty()) {
+            result.carrier_referenceability =
+                kernel::ReferenceStatus::
+                    unsupported;
+            break;
+        }
+        if (found->curve_candidates.size() > 1U) {
+            result.carrier_referenceability =
+                kernel::ReferenceStatus::ambiguous;
+            break;
+        }
+
+        const auto& key =
+            found->curve_candidates.front();
+        const auto* curve =
+            curve_resolution(key);
+        if (curve == nullptr) {
+            return std::nullopt;
+        }
+
+        result.curve_address = key;
+        result.producer_feature_id =
+            key.producer_feature_id;
+        result.adjacent_surfaces =
+            key.adjacent_surfaces;
+        result.carrier_referenceability =
+            curve->status;
+        result.curve_kind =
+            curve->curve_kind;
+        break;
+    }
+
+    case viewer::BodyTopologyPresentationKind::vertex: {
+        const auto found =
+            std::find_if(
+                catalog.vertices.begin(),
+                catalog.vertices.end(),
+                [address](const auto& item) {
+                    return item.runtime_token.value ==
+                           address->runtime_token_value;
+                });
+        if (found == catalog.vertices.end()) {
+            return std::nullopt;
+        }
+
+        result.accounting_class =
+            found->accounting_class;
+        result.strict_referenceability =
+            found->referenceability;
+        result.provider_point =
+            found->provider_point;
+        result.semantic_candidate_count =
+            found->point_candidates.size();
+
+        if (found->point_candidates.empty()) {
+            result.carrier_referenceability =
+                kernel::ReferenceStatus::
+                    unsupported;
+            break;
+        }
+        if (found->point_candidates.size() > 1U) {
+            result.carrier_referenceability =
+                kernel::ReferenceStatus::ambiguous;
+            break;
+        }
+
+        const auto& key =
+            found->point_candidates.front();
+        const auto* point =
+            point_resolution(key);
+        if (point == nullptr) {
+            return std::nullopt;
+        }
+
+        result.point_address = key;
+        result.producer_feature_id =
+            key.producer_feature_id;
+        result.adjacent_surfaces =
+            key.adjacent_surfaces;
+        result.carrier_referenceability =
+            point->status;
+        break;
+    }
+    }
+
+    return result.valid()
+        ? std::optional<BodyTopologyInspection>{
+              std::move(result)}
+        : std::nullopt;
+}
+
+std::optional<BodyTopologySummary>
+PartViewportController::bodyTopologySummary() const {
+    if (!body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return std::nullopt;
+    }
+
+    const auto& catalog =
+        *body_topology_catalog_cache_;
+    BodyTopologySummary result;
+    result.stage = catalog.stage;
+
+    const auto increment =
+        [](TopologyKindSummary& summary,
+           part::TopologyAccountingClass value) {
+            ++summary.total;
+            switch (value) {
+            case part::TopologyAccountingClass::
+                referenceable:
+                ++summary.referenceable;
+                break;
+            case part::TopologyAccountingClass::
+                known_representation_artifact:
+                ++summary.representation_artifact;
+                break;
+            case part::TopologyAccountingClass::
+                semantically_unsupported:
+                ++summary.semantically_unsupported;
+                break;
+            case part::TopologyAccountingClass::
+                integrity_failure:
+                ++summary.integrity_failure;
+                break;
+            }
+        };
+
+    for (const auto& item : catalog.faces) {
+        increment(
+            result.faces,
+            item.accounting_class);
+    }
+    for (const auto& item : catalog.edges) {
+        increment(
+            result.edges,
+            item.accounting_class);
+    }
+    for (const auto& item : catalog.vertices) {
+        increment(
+            result.vertices,
+            item.accounting_class);
+    }
+
+    return result.valid()
+        ? std::optional<BodyTopologySummary>{
+              std::move(result)}
+        : std::nullopt;
+}
+
+std::optional<FeatureContributionSummary>
+PartViewportController::featureContributionSummary(
+    part::FeatureId feature_id) const {
+    if (!feature_id.valid() ||
+        !body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !body_topology_catalog_cache_ ||
+        !body_topology_catalog_cache_->complete()) {
+        return std::nullopt;
+    }
+
+    const auto& catalog =
+        *body_topology_catalog_cache_;
+    const auto contribution =
+        part::currentFeatureContribution(
+            catalog,
+            feature_id);
+    if (!contribution.valid()) {
+        return std::nullopt;
+    }
+
+    FeatureContributionSummary result;
+    result.current_stage = catalog.stage;
+    result.faces = contribution.faces.size();
+    result.direct_edges =
+        contribution.direct_edges.size();
+    result.direct_vertices =
+        contribution.direct_vertices.size();
+    result.boundary_edges =
+        contribution.boundary_edges.size();
+    result.boundary_vertices =
+        contribution.boundary_vertices.size();
+
+    const auto count_status =
+        [&result, feature_id](
+            const auto& references) {
+            for (const auto& reference :
+                 references) {
+                if (reference.address
+                        .producer_feature_id !=
+                    feature_id) {
+                    continue;
+                }
+                if (reference.status ==
+                    kernel::ReferenceStatus::missing) {
+                    ++result.missing_outputs;
+                } else if (
+                    reference.status ==
+                    kernel::ReferenceStatus::
+                        ambiguous) {
+                    ++result.ambiguous_outputs;
+                }
+            }
+        };
+
+    count_status(catalog.surfaces);
+    count_status(catalog.curves);
+    count_status(catalog.points);
+
+    return result.valid()
+        ? std::optional<FeatureContributionSummary>{
+              std::move(result)}
+        : std::nullopt;
+}
+
 viewer::ViewStyle
 PartViewportController::viewStyle() const noexcept {
     return view_style_;
@@ -3697,6 +4120,11 @@ void PartViewportController::notifySelectionChanged() {
                 selection->profiles,
                 selection->primary_profile);
         }
+    }
+
+    if (body_topology_selection_changed_handler_) {
+        body_topology_selection_changed_handler_(
+            primaryBodyTopologyInspection());
     }
 }
 
