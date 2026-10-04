@@ -53,6 +53,7 @@
 #include <QContextMenuEvent>
 #include <QCursor>
 #include <QDebug>
+#include <QEvent>
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
@@ -6524,6 +6525,39 @@ void QtOcctViewerWidget::orbitByRadians(
         [this, horizontal, vertical] {
             impl_->orbitByRadians(horizontal, vertical);
         });
+}
+
+bool QtOcctViewerWidget::event(QEvent* event) {
+    if (event != nullptr &&
+        event->type() == QEvent::KeyPress &&
+        impl_ != nullptr &&
+        impl_->primaryPointerRouting() ==
+            viewer::PrimaryPointerRouting::
+                presentation_selection &&
+        impl_->hasBodyTopologyPreselection()) {
+        auto* key_event =
+            static_cast<QKeyEvent*>(event);
+        const bool forward =
+            key_event->key() == Qt::Key_Tab &&
+            (key_event->modifiers() &
+             Qt::ShiftModifier) == 0;
+        const bool reverse =
+            key_event->key() == Qt::Key_Backtab ||
+            (key_event->key() == Qt::Key_Tab &&
+             (key_event->modifiers() &
+              Qt::ShiftModifier) != 0);
+        if (forward || reverse) {
+            guardedVoid(
+                "bodyTopologyCycle",
+                [this, reverse] {
+                    impl_->emitBodyTopologyCycleIntent(
+                        reverse);
+                });
+            event->accept();
+            return true;
+        }
+    }
+    return QWidget::event(event);
 }
 
 QPaintEngine* QtOcctViewerWidget::paintEngine() const {
