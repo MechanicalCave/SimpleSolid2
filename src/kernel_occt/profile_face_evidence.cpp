@@ -1126,6 +1126,229 @@ sharedEdges(
         });
 }
 
+void appendUniqueVertex(
+    std::vector<TopoDS_Vertex>& vertices,
+    const TopoDS_Vertex& candidate) {
+    const bool duplicate =
+        std::any_of(
+            vertices.begin(),
+            vertices.end(),
+            [&candidate](const TopoDS_Vertex& existing) {
+                return existing.IsSame(candidate);
+            });
+    if (!duplicate) {
+        vertices.push_back(candidate);
+    }
+}
+
+[[nodiscard]] std::vector<TopoDS_Vertex>
+uniqueVerticesFromShape(
+    const TopoDS_Shape& shape) {
+    std::vector<TopoDS_Vertex> result;
+    if (shape.IsNull()) {
+        return result;
+    }
+
+    TopTools_IndexedMapOfShape unique;
+    TopExp::MapShapes(
+        shape,
+        TopAbs_VERTEX,
+        unique);
+    result.reserve(
+        static_cast<std::size_t>(
+            unique.Extent()));
+    for (Standard_Integer index = 1;
+         index <= unique.Extent();
+         ++index) {
+        result.push_back(
+            TopoDS::Vertex(
+                unique.FindKey(index)));
+    }
+    return result;
+}
+
+[[nodiscard]] bool faceContainsVertex(
+    const TopoDS_Face& face,
+    const TopoDS_Vertex& vertex) {
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_VERTEX};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(vertex)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool edgeContainsVertex(
+    const TopoDS_Edge& edge,
+    const TopoDS_Vertex& vertex) {
+    TopoDS_Vertex first;
+    TopoDS_Vertex second;
+    TopExp::Vertices(
+        edge,
+        first,
+        second);
+    return (!first.IsNull() &&
+            first.IsSame(vertex)) ||
+           (!second.IsNull() &&
+            second.IsSame(vertex));
+}
+
+[[nodiscard]] kernel::Point3
+providerPoint(
+    const TopoDS_Vertex& vertex) {
+    const auto point =
+        BRep_Tool::Pnt(vertex);
+    return {
+        point.X(),
+        point.Y(),
+        point.Z()};
+}
+
+[[nodiscard]] bool sameSurfaceKeySet(
+    const std::vector<kernel::EvidenceSurfaceCarrierKey>& first,
+    const std::vector<kernel::EvidenceSurfaceCarrierKey>& second) {
+    if (first.size() != second.size()) {
+        return false;
+    }
+    return std::all_of(
+        first.begin(),
+        first.end(),
+        [&second](const kernel::EvidenceSurfaceCarrierKey& key) {
+            return std::find(
+                       second.begin(),
+                       second.end(),
+                       key) != second.end();
+        });
+}
+
+[[nodiscard]] kernel::EvidenceVertexSemanticKey
+vertexSemanticKey(
+    const EvidencePrismBuild& prism,
+    const TopoDS_Vertex& vertex) {
+    kernel::EvidenceVertexSemanticKey result;
+    for (const auto& surface :
+         prismSurfaceClaims(prism)) {
+        if (faceContainsVertex(
+                surface.face,
+                vertex)) {
+            appendUniqueSurfaceKey(
+                result.adjacent_surfaces,
+                surface.key);
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] std::vector<TopoDS_Vertex>
+resolveVerticesBySemanticKey(
+    const EvidencePrismBuild& prism,
+    const kernel::EvidenceVertexSemanticKey& key) {
+    std::vector<TopoDS_Vertex> result;
+    for (const auto& vertex :
+         uniqueVerticesFromShape(
+             prism.shape)) {
+        const auto candidate =
+            vertexSemanticKey(
+                prism,
+                vertex);
+        if (sameSurfaceKeySet(
+                candidate.adjacent_surfaces,
+                key.adjacent_surfaces)) {
+            appendUniqueVertex(
+                result,
+                vertex);
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] std::size_t
+incidentEdgeCount(
+    const TopoDS_Shape& shape,
+    const TopoDS_Vertex& vertex) {
+    std::size_t count = 0U;
+    for (const auto& edge :
+         uniqueEdgesFromShape(shape)) {
+        if (edgeContainsVertex(
+                edge,
+                vertex)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+[[nodiscard]] kernel::EvidenceSurfaceCarrierKey
+capKey(
+    kernel::EvidenceSurfaceCarrierRoleKind role) {
+    return {
+        role,
+        std::nullopt};
+}
+
+[[nodiscard]] kernel::EvidenceSurfaceCarrierKey
+sideKey(
+    std::string source_entity,
+    std::uint32_t use_index) {
+    return {
+        kernel::EvidenceSurfaceCarrierRoleKind::side,
+        kernel::BoundaryUseProvenance{
+            std::move(source_entity),
+            0U,
+            use_index,
+            false}};
+}
+
+[[nodiscard]] kernel::EvidenceVertexSemanticKey
+vertexKey(
+    kernel::EvidenceSurfaceCarrierRoleKind cap_role,
+    kernel::EvidenceSurfaceCarrierKey first_side,
+    kernel::EvidenceSurfaceCarrierKey second_side) {
+    kernel::EvidenceVertexSemanticKey result;
+    result.adjacent_surfaces = {
+        capKey(cap_role),
+        std::move(first_side),
+        std::move(second_side)};
+    return result;
+}
+
+[[nodiscard]] kernel::PlanarProfileInput
+evidenceChamferedRectangleProfile() {
+    kernel::PlanarProfileInput input;
+    input.outer.boundary = {
+        evidenceLineUse(
+            {5.0, 0.0},
+            {40.0, 0.0},
+            "base-bottom",
+            0U),
+        evidenceLineUse(
+            {40.0, 0.0},
+            {40.0, 20.0},
+            "base-right",
+            1U),
+        evidenceLineUse(
+            {40.0, 20.0},
+            {0.0, 20.0},
+            "base-top",
+            2U),
+        evidenceLineUse(
+            {0.0, 20.0},
+            {0.0, 5.0},
+            "base-left",
+            3U),
+        evidenceLineUse(
+            {0.0, 5.0},
+            {5.0, 0.0},
+            "base-chamfer",
+            4U),
+    };
+    return input;
+}
+
 [[nodiscard]] kernel::ReferenceStatus
 surfaceStatusFromSingleCarrierLineage(
     std::size_t descendant_face_count) noexcept {
@@ -3356,6 +3579,513 @@ buildSurfacePairBranchEvidence() noexcept {
         return evidence;
     } catch (...) {
         evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::ExtrudeVertexOntologyEvidence
+buildExtrudeVertexOntologyEvidence(
+    const kernel::PlanarProfileInput& input,
+    double distance) noexcept {
+    kernel::ExtrudeVertexOntologyEvidence evidence;
+
+    if (!input.valid() ||
+        !std::isfinite(distance) ||
+        distance == 0.0) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::invalid_input;
+        evidence.topology.status =
+            kernel::EvidenceStatus::invalid_input;
+        return evidence;
+    }
+
+    try {
+        const auto prism =
+            buildEvidencePrism(
+                input,
+                distance);
+        if (!prism) {
+            evidence.shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            evidence.topology.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.shape,
+            prism->shape);
+        if (!evidence.shape.ok()) {
+            return evidence;
+        }
+        populateBodyTopologyEvidence(
+            evidence.topology,
+            evidence.shape,
+            prism->shape);
+
+        const auto provider_vertices =
+            uniqueVerticesFromShape(
+                prism->shape);
+        evidence.vertices.reserve(
+            provider_vertices.size());
+
+        std::vector<kernel::EvidenceVertexSemanticKey>
+            keys;
+        keys.reserve(
+            provider_vertices.size());
+        for (const auto& vertex :
+             provider_vertices) {
+            keys.push_back(
+                vertexSemanticKey(
+                    *prism,
+                    vertex));
+        }
+
+        for (std::size_t index = 0U;
+             index < provider_vertices.size();
+             ++index) {
+            kernel::EvidenceVertexOntologyRecord record;
+            record.semantic_key =
+                keys[index];
+            record.incident_material_edge_count =
+                incidentEdgeCount(
+                    prism->shape,
+                    provider_vertices[index]);
+            record.provider_point =
+                providerPoint(
+                    provider_vertices[index]);
+
+            const std::size_t semantic_matches =
+                static_cast<std::size_t>(
+                    std::count_if(
+                        keys.begin(),
+                        keys.end(),
+                        [&record](
+                            const kernel::
+                                EvidenceVertexSemanticKey&
+                                    candidate) {
+                            return sameSurfaceKeySet(
+                                candidate.adjacent_surfaces,
+                                record.semantic_key
+                                    .adjacent_surfaces);
+                        }));
+
+            if (record.semantic_key
+                        .adjacent_surfaces.size() != 3U ||
+                record.incident_material_edge_count != 3U) {
+                record.accounting_class =
+                    kernel::
+                        EvidenceTopologyAccountingClass::
+                            semantically_unsupported;
+                record.status =
+                    kernel::ReferenceStatus::unsupported;
+                ++evidence.unsupported_vertex_count;
+            } else if (semantic_matches == 1U) {
+                record.accounting_class =
+                    kernel::
+                        EvidenceTopologyAccountingClass::
+                            referenceable;
+                record.status =
+                    kernel::ReferenceStatus::resolved;
+                ++evidence.referenceable_vertex_count;
+            } else {
+                record.accounting_class =
+                    kernel::
+                        EvidenceTopologyAccountingClass::
+                            integrity_failure;
+                record.status =
+                    referenceStatus(
+                        semantic_matches);
+                ++evidence.integrity_failure_count;
+            }
+
+            evidence.topology.vertices.catalog[index]
+                .accounting_class =
+                record.accounting_class;
+            evidence.vertices.push_back(
+                std::move(record));
+        }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        evidence.topology.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        evidence.topology.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::VertexDimensionEditEvidence
+buildVertexDimensionEditEvidence() noexcept {
+    kernel::VertexDimensionEditEvidence evidence;
+
+    try {
+        const auto before =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    40.0,
+                    20.0,
+                    0.0,
+                    "base"),
+                10.0);
+        const auto after =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    55.0,
+                    25.0,
+                    0.0,
+                    "base"),
+                10.0);
+        if (!before || !after) {
+            evidence.before_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            evidence.after_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.before_shape,
+            before->shape);
+        populateShapeEvidence(
+            evidence.after_shape,
+            after->shape);
+        if (!evidence.before_shape.ok() ||
+            !evidence.after_shape.ok()) {
+            return evidence;
+        }
+
+        populateBodyTopologyEvidence(
+            evidence.before_topology,
+            evidence.before_shape,
+            before->shape);
+        populateBodyTopologyEvidence(
+            evidence.after_topology,
+            evidence.after_shape,
+            after->shape);
+
+        evidence.semantic_key =
+            vertexKey(
+                kernel::
+                    EvidenceSurfaceCarrierRoleKind::
+                        start_cap,
+                sideKey(
+                    "base-bottom",
+                    0U),
+                sideKey(
+                    "base-right",
+                    1U));
+
+        const auto before_candidates =
+            resolveVerticesBySemanticKey(
+                *before,
+                evidence.semantic_key);
+        const auto after_candidates =
+            resolveVerticesBySemanticKey(
+                *after,
+                evidence.semantic_key);
+
+        evidence.before_status =
+            referenceStatus(
+                before_candidates.size());
+        evidence.after_status =
+            referenceStatus(
+                after_candidates.size());
+
+        if (before_candidates.size() == 1U) {
+            evidence.before_point =
+                providerPoint(
+                    before_candidates.front());
+        }
+        if (after_candidates.size() == 1U) {
+            evidence.after_point =
+                providerPoint(
+                    after_candidates.front());
+        }
+
+        if (evidence.before_point &&
+            evidence.after_point) {
+            evidence.point_moved =
+                !nearEvidencePoint(
+                    *evidence.before_point,
+                    *evidence.after_point);
+        }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.after_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.after_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::VertexDeletionGenerationEvidence
+buildVertexDeletionGenerationEvidence() noexcept {
+    kernel::VertexDeletionGenerationEvidence evidence;
+
+    try {
+        const auto before =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    40.0,
+                    20.0,
+                    0.0,
+                    "base"),
+                10.0);
+        const auto after =
+            buildEvidencePrism(
+                evidenceChamferedRectangleProfile(),
+                10.0);
+        if (!before || !after) {
+            evidence.before_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            evidence.after_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.before_shape,
+            before->shape);
+        populateShapeEvidence(
+            evidence.after_shape,
+            after->shape);
+        if (!evidence.before_shape.ok() ||
+            !evidence.after_shape.ok()) {
+            return evidence;
+        }
+
+        populateBodyTopologyEvidence(
+            evidence.before_topology,
+            evidence.before_shape,
+            before->shape);
+        populateBodyTopologyEvidence(
+            evidence.after_topology,
+            evidence.after_shape,
+            after->shape);
+
+        evidence.deleted_key =
+            vertexKey(
+                kernel::
+                    EvidenceSurfaceCarrierRoleKind::
+                        start_cap,
+                sideKey(
+                    "base-bottom",
+                    0U),
+                sideKey(
+                    "base-left",
+                    3U));
+
+        const auto before_deleted =
+            resolveVerticesBySemanticKey(
+                *before,
+                evidence.deleted_key);
+        const auto after_deleted =
+            resolveVerticesBySemanticKey(
+                *after,
+                evidence.deleted_key);
+
+        evidence.before_deleted_status =
+            referenceStatus(
+                before_deleted.size());
+        evidence.after_deleted_status =
+            referenceStatus(
+                after_deleted.size());
+
+        evidence.generated_keys = {
+            vertexKey(
+                kernel::
+                    EvidenceSurfaceCarrierRoleKind::
+                        start_cap,
+                sideKey(
+                    "base-left",
+                    3U),
+                sideKey(
+                    "base-chamfer",
+                    4U)),
+            vertexKey(
+                kernel::
+                    EvidenceSurfaceCarrierRoleKind::
+                        start_cap,
+                sideKey(
+                    "base-chamfer",
+                    4U),
+                sideKey(
+                    "base-bottom",
+                    0U)),
+        };
+
+        evidence.generated_statuses.reserve(
+            evidence.generated_keys.size());
+        for (const auto& key :
+             evidence.generated_keys) {
+            const auto candidates =
+                resolveVerticesBySemanticKey(
+                    *after,
+                    key);
+            evidence.generated_statuses.push_back(
+                referenceStatus(
+                    candidates.size()));
+            if (candidates.size() == 1U) {
+                ++evidence.generated_vertex_count;
+            }
+        }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.after_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.after_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    }
+}
+
+kernel::VertexSamePointReplacementEvidence
+buildVertexSamePointReplacementEvidence() noexcept {
+    kernel::VertexSamePointReplacementEvidence evidence;
+
+    try {
+        const auto old_prism =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    40.0,
+                    20.0,
+                    0.0,
+                    "base"),
+                10.0);
+        const auto replacement =
+            buildEvidencePrism(
+                evidenceRectangleProfile(
+                    0.0,
+                    0.0,
+                    40.0,
+                    20.0,
+                    0.0,
+                    "replacement"),
+                10.0);
+        if (!old_prism || !replacement) {
+            evidence.old_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            evidence.replacement_shape.status =
+                kernel::EvidenceStatus::provider_failure;
+            return evidence;
+        }
+
+        populateShapeEvidence(
+            evidence.old_shape,
+            old_prism->shape);
+        populateShapeEvidence(
+            evidence.replacement_shape,
+            replacement->shape);
+        if (!evidence.old_shape.ok() ||
+            !evidence.replacement_shape.ok()) {
+            return evidence;
+        }
+
+        populateBodyTopologyEvidence(
+            evidence.old_topology,
+            evidence.old_shape,
+            old_prism->shape);
+        populateBodyTopologyEvidence(
+            evidence.replacement_topology,
+            evidence.replacement_shape,
+            replacement->shape);
+
+        evidence.old_key =
+            vertexKey(
+                kernel::
+                    EvidenceSurfaceCarrierRoleKind::
+                        start_cap,
+                sideKey(
+                    "base-bottom",
+                    0U),
+                sideKey(
+                    "base-left",
+                    3U));
+        evidence.replacement_key =
+            vertexKey(
+                kernel::
+                    EvidenceSurfaceCarrierRoleKind::
+                        start_cap,
+                sideKey(
+                    "replacement-bottom",
+                    0U),
+                sideKey(
+                    "replacement-left",
+                    3U));
+
+        const auto old_candidates =
+            resolveVerticesBySemanticKey(
+                *old_prism,
+                evidence.old_key);
+        const auto old_in_replacement =
+            resolveVerticesBySemanticKey(
+                *replacement,
+                evidence.old_key);
+        const auto replacement_candidates =
+            resolveVerticesBySemanticKey(
+                *replacement,
+                evidence.replacement_key);
+
+        evidence.old_key_in_old_shape =
+            referenceStatus(
+                old_candidates.size());
+        evidence.old_key_in_replacement_shape =
+            referenceStatus(
+                old_in_replacement.size());
+        evidence.replacement_key_status =
+            referenceStatus(
+                replacement_candidates.size());
+
+        if (old_candidates.size() == 1U) {
+            evidence.old_point =
+                providerPoint(
+                    old_candidates.front());
+        }
+        if (replacement_candidates.size() == 1U) {
+            evidence.replacement_point =
+                providerPoint(
+                    replacement_candidates.front());
+        }
+
+        if (evidence.old_point &&
+            evidence.replacement_point) {
+            evidence.provider_points_equal =
+                nearEvidencePoint(
+                    *evidence.old_point,
+                    *evidence.replacement_point);
+        }
+
+        return evidence;
+    } catch (const Standard_Failure&) {
+        evidence.replacement_shape.status =
+            kernel::EvidenceStatus::provider_failure;
+        return evidence;
+    } catch (...) {
+        evidence.replacement_shape.status =
             kernel::EvidenceStatus::provider_failure;
         return evidence;
     }

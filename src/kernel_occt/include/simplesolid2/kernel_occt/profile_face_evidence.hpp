@@ -51,6 +51,20 @@ buildBooleanIntersectionEdgeEvidence() noexcept;
 [[nodiscard]] kernel::SurfacePairBranchEvidence
 buildSurfacePairBranchEvidence() noexcept;
 
+[[nodiscard]] kernel::ExtrudeVertexOntologyEvidence
+buildExtrudeVertexOntologyEvidence(
+    const kernel::PlanarProfileInput& input,
+    double distance) noexcept;
+
+[[nodiscard]] kernel::VertexDimensionEditEvidence
+buildVertexDimensionEditEvidence() noexcept;
+
+[[nodiscard]] kernel::VertexDeletionGenerationEvidence
+buildVertexDeletionGenerationEvidence() noexcept;
+
+[[nodiscard]] kernel::VertexSamePointReplacementEvidence
+buildVertexSamePointReplacementEvidence() noexcept;
+
 [[nodiscard]] kernel::FullRevolveEvidence
 buildProfileFullRevolveEvidence(
     const kernel::PlanarProfileInput& input,
