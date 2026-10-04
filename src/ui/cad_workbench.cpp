@@ -2049,6 +2049,8 @@ void CadWorkbench::buildUi() {
         make_topology_label("topologyPropertyAccounting");
     topology_strict_reference_ =
         make_topology_label("topologyPropertyStrictReference");
+    topology_carrier_reference_ =
+        make_topology_label("topologyPropertyCarrierReference");
     topology_carrier_ =
         make_topology_label("topologyPropertyCarrier");
     topology_carrier_type_ =
@@ -2079,6 +2081,9 @@ void CadWorkbench::buildUi() {
     topology_root->addRow(
         QStringLiteral("Strict Reference"),
         topology_strict_reference_);
+    topology_root->addRow(
+        QStringLiteral("Carrier Reference"),
+        topology_carrier_reference_);
     topology_root->addRow(
         QStringLiteral("Carrier"),
         topology_carrier_);
