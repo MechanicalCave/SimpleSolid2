@@ -871,13 +871,9 @@ bool PartViewportController::setSketchPreview(
         }
 
         const auto start =
-            detail::sketchPointToWorld(
-                hosted->placement,
-                line.start);
+            sketchPointToWorld(*hosted, line.start);
         const auto end =
-            detail::sketchPointToWorld(
-                hosted->placement,
-                line.end);
+            sketchPointToWorld(*hosted, line.end);
         if (!start || !end) {
             return false;
         }
@@ -1130,9 +1126,7 @@ PartViewportController::projectSketchPointToViewport(
     }
 
     const auto world =
-        detail::sketchPointToWorld(
-            hosted->placement,
-            point);
+        sketchPointToWorld(*hosted, point);
     if (!world) {
         return std::nullopt;
     }
@@ -1285,9 +1279,7 @@ bool PartViewportController::projectSketchMeasurePresentation(
             sketchPresentationFor(
                 point.ref.entity_id);
         const auto world =
-            detail::sketchPointToWorld(
-                hosted->placement,
-                point.point);
+            sketchPointToWorld(*hosted, point.point);
         if (!token || !world) {
             return false;
         }
@@ -1341,13 +1333,9 @@ bool PartViewportController::projectSketchMeasurePresentation(
         for (const auto& segment :
              cue->segments) {
             const auto start =
-                detail::sketchPointToWorld(
-                    hosted->placement,
-                    segment.start);
+                sketchPointToWorld(*hosted, segment.start);
             const auto end =
-                detail::sketchPointToWorld(
-                    hosted->placement,
-                    segment.end);
+                sketchPointToWorld(*hosted, segment.end);
             if (!start || !end) {
                 return false;
             }
@@ -1366,9 +1354,7 @@ bool PartViewportController::projectSketchMeasurePresentation(
 
         if (cue->cue_point) {
             const auto world =
-                detail::sketchPointToWorld(
-                    hosted->placement,
-                    *cue->cue_point);
+                sketchPointToWorld(*hosted, *cue->cue_point);
             if (!world) {
                 return false;
             }
@@ -1440,7 +1426,7 @@ projectSketchSnapInferencePresentation(
 
     viewer::SketchSnapInferenceScene scene;
     const auto make_marker =
-        [hosted](
+        [this, hosted](
             const sketch::SnapCandidate& candidate)
             -> std::optional<
                 viewer::SketchSnapMarkerPresentation> {
@@ -1448,9 +1434,7 @@ projectSketchSnapInferencePresentation(
                 return std::nullopt;
             }
             const auto world =
-                detail::sketchPointToWorld(
-                    hosted->placement,
-                    candidate.point);
+                sketchPointToWorld(*hosted, candidate.point);
             const auto label =
                 snapMarkerLabel(candidate.kind);
             if (!world || label.empty()) {
@@ -1477,9 +1461,7 @@ projectSketchSnapInferencePresentation(
         }
     } else if (inference_point) {
         const auto world =
-            detail::sketchPointToWorld(
-                hosted->placement,
-                *inference_point);
+            sketchPointToWorld(*hosted, *inference_point);
         if (!world) {
             return false;
         }
@@ -1498,18 +1480,14 @@ projectSketchSnapInferencePresentation(
 
     if (extension_ray) {
         const auto origin_world =
-            detail::sketchPointToWorld(
-                hosted->placement,
-                extension_ray->origin);
+            sketchPointToWorld(*hosted, extension_ray->origin);
         const sketch::Point2 direction_point{
             extension_ray->origin.u +
                 extension_ray->direction.u,
             extension_ray->origin.v +
                 extension_ray->direction.v};
         const auto direction_world_point =
-            detail::sketchPointToWorld(
-                hosted->placement,
-                direction_point);
+            sketchPointToWorld(*hosted, direction_point);
         if (!origin_world ||
             !direction_world_point) {
             return false;
@@ -1519,9 +1497,7 @@ projectSketchSnapInferencePresentation(
             resolved_world;
         if (extension_point) {
             resolved_world =
-                detail::sketchPointToWorld(
-                    hosted->placement,
-                    *extension_point);
+                sketchPointToWorld(*hosted, *extension_point);
             if (!resolved_world) {
                 return false;
             }
@@ -1577,16 +1553,12 @@ projectSketchSnapInferencePresentation(
         }
 
         const auto anchor_world =
-            detail::sketchPointToWorld(
-                hosted->placement,
-                guide.anchor);
+            sketchPointToWorld(*hosted, guide.anchor);
         const sketch::Point2 direction_point{
             guide.anchor.u + guide.direction.u,
             guide.anchor.v + guide.direction.v};
         const auto direction_world_point =
-            detail::sketchPointToWorld(
-                hosted->placement,
-                direction_point);
+            sketchPointToWorld(*hosted, direction_point);
         if (!anchor_world ||
             !direction_world_point) {
             return false;
@@ -1951,12 +1923,11 @@ bool PartViewportController::projectSketchInteraction(
         if (grips_visible) {
             grip_scene.grips.reserve(selected.size() * 5U);
             const auto push_grip =
-                [&grip_scene, hosted](
+                [this, &grip_scene, hosted](
                     viewer::PresentationToken token,
                     viewer::SketchGripRole role,
                     sketch::Point2 point) {
-                    const auto world = detail::sketchPointToWorld(
-                        hosted->placement, point);
+                    const auto world = sketchPointToWorld(*hosted, point);
                     if (!world) return false;
                     grip_scene.grips.push_back(
                         viewer::SketchGripPresentation{
@@ -2799,29 +2770,77 @@ PartViewportController::activeSketch() const noexcept {
         *sketch_edit_id_);
 }
 
+std::optional<part::SketchPlacement>
+PartViewportController::resolvedPlacementForSketch(
+    const part::PartSketch& sketch) const noexcept {
+    const part::BodyStageTopologyCatalog* topology =
+        nullptr;
+
+    if (const auto* reference =
+            part::bodyPlanarSurfaceReference(
+                sketch.support);
+        reference != nullptr &&
+        body_topology_catalog_cache_ &&
+        body_topology_catalog_cache_->stage ==
+            reference->stage) {
+        topology =
+            &*body_topology_catalog_cache_;
+    }
+
+    const auto resolved =
+        part::resolveSketchSupport(
+            sketch.support,
+            topology);
+    if (!resolved.valid() ||
+        resolved.status !=
+            part::SketchSupportResolutionStatus::
+                resolved ||
+        !resolved.frame) {
+        return std::nullopt;
+    }
+    return resolved.frame;
+}
+
+std::optional<viewer::Point3>
+PartViewportController::sketchPointToWorld(
+    const part::PartSketch& sketch,
+    sketch::Point2 point) const noexcept {
+    const auto placement =
+        resolvedPlacementForSketch(sketch);
+    if (!placement) {
+        return std::nullopt;
+    }
+    return detail::sketchPointToWorld(
+        *placement,
+        point);
+}
+
 viewer::ReferenceScene
 PartViewportController::buildReferenceScene() const {
     viewer::ReferenceScene scene;
     if (session_ == nullptr) return scene;
 
     if (const auto* hosted = activeSketch()) {
-        const auto& placement =
-            hosted->placement;
+        const auto placement =
+            resolvedPlacementForSketch(*hosted);
+        if (!placement) {
+            return scene;
+        }
         scene.grid = viewer::GridPresentation{
             {
-                placement.origin[0],
-                placement.origin[1],
-                placement.origin[2],
+                placement->origin[0],
+                placement->origin[1],
+                placement->origin[2],
             },
             {
-                placement.u_axis[0],
-                placement.u_axis[1],
-                placement.u_axis[2],
+                placement->u_axis[0],
+                placement->u_axis[1],
+                placement->u_axis[2],
             },
             {
-                placement.v_axis[0],
-                placement.v_axis[1],
-                placement.v_axis[2],
+                placement->v_axis[0],
+                placement->v_axis[1],
+                placement->v_axis[2],
             },
             100.0,
             10.0,
@@ -3153,7 +3172,7 @@ PartViewportController::buildProfileRegionPresentation(
     const part::PartSketch& source,
     const sketch::RegionCandidate2D& region) const {
     const auto sample_loop =
-        [&source](
+        [this, &source](
             const sketch::RegionLoop2D& loop)
             -> std::optional<
                 std::vector<viewer::Point3>> {
@@ -3173,9 +3192,7 @@ PartViewportController::buildProfileRegionPresentation(
                      i < points->size();
                      ++i) {
                     const auto world =
-                        detail::sketchPointToWorld(
-                            source.placement,
-                            (*points)[i]);
+                        sketchPointToWorld(source, (*points)[i]);
                     if (!world) return std::nullopt;
                     result.push_back(*world);
                 }
@@ -3284,9 +3301,7 @@ PartViewportController::buildSketchScene() {
     }
 
     const auto origin =
-        detail::sketchPointToWorld(
-            hosted->placement,
-            sketch::Point2{0.0, 0.0});
+        sketchPointToWorld(*hosted, sketch::Point2{0.0, 0.0});
     if (!origin) {
         return std::nullopt;
     }
@@ -3308,8 +3323,8 @@ PartViewportController::buildSketchScene() {
     };
 
     for (const auto& line : model_state.lines) {
-        const auto start = detail::sketchPointToWorld(hosted->placement, line.start);
-        const auto end = detail::sketchPointToWorld(hosted->placement, line.end);
+        const auto start = sketchPointToWorld(*hosted, line.start);
+        const auto end = sketchPointToWorld(*hosted, line.end);
         const auto token = allocatePresentationToken();
         if (!start || !end || !token || !bind(*token, line.id)) {
             sketch_entity_bindings_.clear();
@@ -3342,15 +3357,12 @@ PartViewportController::buildSketchScene() {
             role == sketch::EntityRole::construction;
         curve.points.reserve(segments.size() + 1U);
 
-        const auto first = detail::sketchPointToWorld(
-            hosted->placement,
-            segments.front().start);
+        const auto first = sketchPointToWorld(*hosted, segments.front().start);
         if (!first) return false;
         curve.points.push_back(*first);
 
         for (const auto& segment : segments) {
-            const auto end = detail::sketchPointToWorld(
-                hosted->placement, segment.end);
+            const auto end = sketchPointToWorld(*hosted, segment.end);
             if (!end) return false;
             curve.points.push_back(*end);
         }
@@ -4009,9 +4021,15 @@ void PartViewportController::onSpatialPointer(
         return;
     }
 
+    const auto placement =
+        resolvedPlacementForSketch(*hosted);
+    if (!placement) {
+        return;
+    }
+
     const auto local =
         detail::sketchPointFromRay(
-            hosted->placement,
+            *placement,
             event.ray);
     if (!local) {
         return;

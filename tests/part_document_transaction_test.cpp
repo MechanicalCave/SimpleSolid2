@@ -23,14 +23,13 @@ part::PartSketch validHostedSketch(
         part::partSketchSupportForBuiltinPlane(
             core::BuiltinReferenceRole::xy_plane);
     CHECK(support.has_value());
-    const auto placement =
-        part::sketchPlacementForSupport(*support);
-    CHECK(placement.has_value());
+    CHECK(
+        part::resolveSketchSupport(*support)
+            .valid());
 
     return part::PartSketch{
         std::move(id),
         *support,
-        *placement,
         true,
         sketch::SketchModel{}};
 }

@@ -236,11 +236,15 @@ void verifyFixtureFrame(
             *fixture.sketch_id);
     CHECK(hosted != nullptr);
     CHECK(hosted->support.valid());
-    CHECK(hosted->placement.valid());
+    const auto resolved_support =
+        part::resolveSketchSupport(
+            hosted->support);
+    CHECK(resolved_support.valid());
     CHECK(
-        part::sketchPlacementMatchesSupport(
-            hosted->placement,
-            hosted->support));
+        resolved_support.status ==
+        part::SketchSupportResolutionStatus::
+            resolved);
+    CHECK(resolved_support.frame.has_value());
 }
 
 [[nodiscard]] FrameMap captureFrames(

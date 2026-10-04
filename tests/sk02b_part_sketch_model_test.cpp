@@ -30,15 +30,15 @@ part::PartSketch makeSketch() {
             core::BuiltinReferenceRole::xy_plane);
     CHECK(support.has_value());
 
-    const auto placement =
-        part::sketchPlacementForSupport(*support);
-    CHECK(placement.has_value());
+    CHECK(
+        part::resolveSketchSupport(*support)
+            .valid());
 
     return part::PartSketch{
         sketch::SketchId::generate(),
         *support,
-        *placement,
-        true};
+        true,
+        sketch::SketchModel{}};
 }
 
 } // namespace

@@ -479,6 +479,15 @@ private:
     [[nodiscard]] const part::PartSketch*
     activeSketch() const noexcept;
 
+    [[nodiscard]] std::optional<part::SketchPlacement>
+    resolvedPlacementForSketch(
+        const part::PartSketch& sketch) const noexcept;
+
+    [[nodiscard]] std::optional<viewer::Point3>
+    sketchPointToWorld(
+        const part::PartSketch& sketch,
+        sketch::Point2 point) const noexcept;
+
     [[nodiscard]] viewer::ReferenceScene
     buildReferenceScene() const;
 

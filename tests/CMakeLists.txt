@@ -729,6 +729,32 @@ add_test(
 )
 
 
+add_executable(pm02e_sketch_support_schema_v9_test
+    pm02e_sketch_support_schema_v9_test.cpp
+)
+
+target_include_directories(pm02e_sketch_support_schema_v9_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/nlohmann-json-3.12.0/include
+)
+
+target_link_libraries(pm02e_sketch_support_schema_v9_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_persistence
+)
+
+target_compile_features(pm02e_sketch_support_schema_v9_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm02e.sketch_support_schema_v9
+    COMMAND pm02e_sketch_support_schema_v9_test
+)
+
+set_tests_properties(pm02e.sketch_support_schema_v9 PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-persistence"
+)
+
 add_executable(sk03a_viewer_sketch_contracts_test
     sk03a_viewer_sketch_contracts_test.cpp
 )

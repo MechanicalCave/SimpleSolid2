@@ -5128,13 +5128,17 @@ void CadWorkbench::enterSketchEdit(
     }
 
     if (viewport_ != nullptr) {
-        const auto standard_view =
-            standardViewForSketchSupport(
-                sketch->support.builtin_plane);
-        if (standard_view) {
-            static_cast<void>(
-                viewport_->setStandardView(
-                    *standard_view));
+        if (const auto origin_plane =
+                part::builtinOriginPlaneForSketchSupport(
+                    sketch->support)) {
+            const auto standard_view =
+                standardViewForSketchSupport(
+                    *origin_plane);
+            if (standard_view) {
+                static_cast<void>(
+                    viewport_->setStandardView(
+                        *standard_view));
+            }
         }
         viewport_->fitAll();
     }

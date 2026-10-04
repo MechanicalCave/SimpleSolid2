@@ -980,19 +980,35 @@ void PartDocumentTreeController::rebuild(
                                 sketch_index))});
 
             QString support;
-            switch (sketch.support.builtin_plane) {
-            case core::BuiltinReferenceRole::xy_plane:
-                support = QStringLiteral("XY Plane");
-                break;
-            case core::BuiltinReferenceRole::xz_plane:
-                support = QStringLiteral("XZ Plane");
-                break;
-            case core::BuiltinReferenceRole::yz_plane:
-                support = QStringLiteral("YZ Plane");
-                break;
-            default:
+            if (const auto origin_plane =
+                    part::builtinOriginPlaneForSketchSupport(
+                        sketch.support)) {
+                switch (*origin_plane) {
+                case core::BuiltinReferenceRole::xy_plane:
+                    support = QStringLiteral("XY Plane");
+                    break;
+                case core::BuiltinReferenceRole::xz_plane:
+                    support = QStringLiteral("XZ Plane");
+                    break;
+                case core::BuiltinReferenceRole::yz_plane:
+                    support = QStringLiteral("YZ Plane");
+                    break;
+                default:
+                    support = QStringLiteral("<invalid>");
+                    break;
+                }
+            } else if (const auto* surface =
+                           part::bodyPlanarSurfaceReference(
+                               sketch.support)) {
+                support =
+                    QStringLiteral("Body Surface @ Feature %1")
+                        .arg(
+                            QString::fromStdString(
+                                surface->stage
+                                    .feature_id
+                                    ->serialized()));
+            } else {
                 support = QStringLiteral("<invalid>");
-                break;
             }
 
             item->setData(

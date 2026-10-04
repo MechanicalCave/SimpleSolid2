@@ -73,9 +73,14 @@ int main() {
             part::sketchPlacementForSupport(*support);
         CHECK(placement.has_value());
         CHECK(placement->valid());
-        CHECK(part::sketchPlacementMatchesSupport(
-            *placement,
-            *support));
+        const auto resolved =
+            part::resolveSketchSupport(*support);
+        CHECK(resolved.valid());
+        CHECK(
+            resolved.status ==
+            part::SketchSupportResolutionStatus::
+                resolved);
+        CHECK(resolved.frame == placement);
     }
 
     TempDirectory temp;
@@ -133,16 +138,15 @@ int main() {
         session.document().findSketch(created_id);
     CHECK(sketch != nullptr);
     CHECK(
-        sketch->support.builtin_plane ==
-        core::BuiltinReferenceRole::xz_plane);
-    CHECK(
-        part::sketchPlacementMatchesSupport(
-            sketch->placement,
-            sketch->support));
-    CHECK(sketch->visible);
-
+        part::builtinOriginPlaneForSketchSupport(
+            sketch->support) ==
+        std::optional<core::BuiltinReferenceRole>{
+            core::BuiltinReferenceRole::xz_plane});
     const auto expected_placement =
-        sketch->placement;
+        part::sketchPlacementForSupport(
+            sketch->support);
+    CHECK(expected_placement.has_value());
+    CHECK(sketch->visible);
 
     CHECK(session.undo().changed);
     CHECK(session.document().sketches().empty());
@@ -155,9 +159,15 @@ int main() {
     const auto* redone =
         session.document().findSketch(created_id);
     CHECK(redone != nullptr);
-    CHECK(redone->placement == expected_placement);
-    CHECK(redone->support.builtin_plane ==
-          core::BuiltinReferenceRole::xz_plane);
+    CHECK(
+        part::sketchPlacementForSupport(
+            redone->support) ==
+        expected_placement);
+    CHECK(
+        part::builtinOriginPlaneForSketchSupport(
+            redone->support) ==
+        std::optional<core::BuiltinReferenceRole>{
+            core::BuiltinReferenceRole::xz_plane});
 
     const auto second =
         session.execute(
@@ -179,9 +189,14 @@ int main() {
         loaded.document->findSketch(created_id);
     CHECK(loaded_first != nullptr);
     CHECK(
-        loaded_first->support.builtin_plane ==
-        core::BuiltinReferenceRole::xz_plane);
-    CHECK(loaded_first->placement == expected_placement);
+        part::builtinOriginPlaneForSketchSupport(
+            loaded_first->support) ==
+        std::optional<core::BuiltinReferenceRole>{
+            core::BuiltinReferenceRole::xz_plane});
+    CHECK(
+        part::sketchPlacementForSupport(
+            loaded_first->support) ==
+        expected_placement);
     CHECK(loaded_first->visible);
 
     return EXIT_SUCCESS;

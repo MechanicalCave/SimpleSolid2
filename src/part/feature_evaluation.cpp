@@ -1788,33 +1788,11 @@ makeBodyStageTopologyCatalog(
 
 } // namespace
 
-bool BodyStageRef::valid() const noexcept {
-    switch (kind) {
-    case BodyStageKind::empty_body:
-        return !feature_id.has_value();
-    case BodyStageKind::after_feature:
-        return feature_id.has_value() &&
-               feature_id->valid();
-    }
-    return false;
-}
-
 bool FeatureFaceAddress::valid() const noexcept {
     if (!producer_feature_id.valid()) {
         return false;
     }
     if (role == FeatureFaceRoleKind::side) {
-        return source_entity.has_value() &&
-               source_entity->valid();
-    }
-    return !source_entity.has_value();
-}
-
-bool FeatureSurfaceAddress::valid() const noexcept {
-    if (!producer_feature_id.valid()) {
-        return false;
-    }
-    if (role == FeatureSurfaceRoleKind::side) {
         return source_entity.has_value() &&
                source_entity->valid();
     }
