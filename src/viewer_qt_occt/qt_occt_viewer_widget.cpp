@@ -1122,7 +1122,25 @@ public:
     [[nodiscard]] bool viewStyleHudCapturesPointerAt(
         int logical_x,
         int logical_y) const {
-        return view_style_menu_open_ ||
+        // The trigger is an always-visible HUD control. Its pointer-capture
+        // contract must not depend on transient AIS label visibility bookkeeping
+        // used for the dropdown rows.
+        constexpr int trigger_offset_x = 300;
+        constexpr int trigger_offset_y = 18;
+        constexpr int trigger_half_width = 100;
+        constexpr int trigger_half_height = 11;
+        const int trigger_center_x =
+            owner_.width() - trigger_offset_x;
+        const bool over_trigger =
+            std::abs(
+                logical_x - trigger_center_x) <=
+                trigger_half_width &&
+            std::abs(
+                logical_y - trigger_offset_y) <=
+                trigger_half_height;
+
+        return over_trigger ||
+               view_style_menu_open_ ||
                viewStyleHudControlAt(
                    logical_x,
                    logical_y)
