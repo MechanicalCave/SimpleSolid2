@@ -1,8 +1,8 @@
 # PM-02 — Direct Body Topology Selection UX
 
 **Status:** ACCEPTED UX DESIGN INPUT — 2026-10-04  
-**Production PM-02:** PROPOSED / NOT ACTIVE  
-**Applies to candidate:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
+**Production PM-02:** ACTIVE  
+**Applies to active contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Related UX:** `work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`  
 **Architecture basis:** ADR-0014 + ADR-0016 + PM-02P reference-survival evidence
 
@@ -25,7 +25,7 @@ including:
 - interaction with View Style and Feature overlays;
 - semantic revalidation after a presentation hit.
 
-This is an interaction/presentation design input. It does not activate production PM-02.
+This accepted interaction/presentation design input is normative within the active PM-02 Work Contract.
 
 ## 2. Fundamental boundary
 
