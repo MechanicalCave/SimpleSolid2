@@ -3,7 +3,7 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-04  
 **Decision class:** D2 production Work Contract — Owner accepted 2026-10-04  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.8  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.9  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Entry gate:** PM-02P Body Semantic Topology Evidence COMPLETED — PASS; Owner accepted PM-02P D2 synthesis/recommendation on 2026-10-04  
 **Evidence authority:** `work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md`, `work/PM-02P_REFERENCE_SURVIVAL_MATRIX.md`, `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`  
@@ -770,6 +770,11 @@ Any new dependency direction outside the current architecture baseline is STOP.
 
 ### PM-02A — production evaluated topology catalog
 
+**Checkpoint state:** COMPLETED — PASS  
+**Runtime candidate:** `58368a6ada5f6c30e03cb845682dbf5408ecb763` — Windows FULL #1397 PASS  
+**Merged runtime main:** `b95f72105b8242eedce9cd79dd8bf910f3ccb715`  
+**Completion evidence:** `work/PM-02A_PRODUCTION_TOPOLOGY_CATALOG_COMPLETION.md`
+
 Deliver:
 
 - per-stage complete Face/Edge/Vertex catalog;
@@ -785,6 +790,8 @@ Gate:
 - semantic/core + kernel-native tests.
 
 ### PM-02B — Surface/Face production semantics
+
+**Checkpoint state:** ACTIVE
 
 Deliver:
 

@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 ACTIVE  
-**Version:** 1.8  
-**Owner acceptance:** 2026-10-04  
-**Previous accepted version:** 1.7 — 2026-10-04  
+**Version:** 1.9  
+**Owner acceptance:** 2026-10-04 — PM-02 Work Contract authority unchanged; v1.9 is checkpoint-state synchronization only  
+**Previous accepted version:** 1.8 — 2026-10-04  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-02A — production evaluated Body-stage topology catalog + typed runtime Face/Edge/Vertex tokens under the active PM-02 Work Contract  
+**Current active checkpoint:** PM-02B — Surface/Face production semantics under the active PM-02 Work Contract  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -437,9 +437,10 @@ Active authority:
 
 `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`.
 
-Current checkpoint:
+Checkpoint state:
 
-`PM-02A — production evaluated Body-stage topology catalog + typed runtime Face/Edge/Vertex tokens`.
+- `PM-02A — production evaluated Body-stage topology catalog + typed runtime Face/Edge/Vertex tokens` — **COMPLETED — PASS**; runtime candidate `58368a6ada5f6c30e03cb845682dbf5408ecb763`, Windows FULL #1397 PASS, merged runtime main `b95f72105b8242eedce9cd79dd8bf910f3ccb715`;
+- `PM-02B — Surface/Face production semantics` — **ACTIVE**.
 
 Primary vertical scenario:
 
@@ -643,7 +644,7 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.8 is accepted and frozen. **G0, PM-00A, PM-00B, PM-01 and PM-02P are COMPLETED — PASS. PM-02 is ACTIVE.**
+Program v1.9 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P and PM-02A are COMPLETED — PASS. PM-02 remains ACTIVE at PM-02B.**
 
 Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
@@ -651,7 +652,9 @@ Current legal production authority is:
 
 **`work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`.**
 
-The active implementation checkpoint is **PM-02A — production evaluated Body-stage topology catalog + typed runtime Face/Edge/Vertex tokens**.
+PM-02A production accounting is closed: runtime candidate `58368a6ada5f6c30e03cb845682dbf5408ecb763` passed Windows FULL #1397 and was squash-merged to main as `b95f72105b8242eedce9cd79dd8bf910f3ccb715`.
+
+The active implementation checkpoint is **PM-02B — Surface/Face production semantics**.
 
 Mutation must follow PM-02A through PM-02J in order and remain inside the accepted Work Contract. Later checkpoint scope is not permission to skip earlier evidence/gates.
 
