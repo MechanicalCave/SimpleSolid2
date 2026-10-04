@@ -883,11 +883,11 @@ int main(int argc, char* argv[]) {
     const auto sketch_id =
         session->document().sketches().front().id;
     CHECK(
-        session->document()
-            .sketches()
-            .front()
-            .support
-            .builtin_plane ==
+        part::builtinOriginPlaneForSketchSupport(
+            session->document()
+                .sketches()
+                .front()
+                .support) ==
         core::BuiltinReferenceRole::xz_plane);
 
     CHECK(viewport->scene().grid.has_value());
@@ -3349,11 +3349,11 @@ int main(int argc, char* argv[]) {
             .id ==
         sketch_id);
     CHECK(
-        reopened.session->document()
-            .sketches()
-            .front()
-            .support
-            .builtin_plane ==
+        part::builtinOriginPlaneForSketchSupport(
+            reopened.session->document()
+                .sketches()
+                .front()
+                .support) ==
         core::BuiltinReferenceRole::xz_plane);
 
     return EXIT_SUCCESS;
