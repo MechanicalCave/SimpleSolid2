@@ -104,6 +104,18 @@ extrudeEvaluationText(
                 return QStringLiteral(
                     "Source Profile is unresolved.");
             case part::FeatureEvaluationDiagnosticCode::
+                sketch_support_missing:
+                return QStringLiteral(
+                    "Sketch support is missing.");
+            case part::FeatureEvaluationDiagnosticCode::
+                sketch_support_ambiguous:
+                return QStringLiteral(
+                    "Sketch support is ambiguous.");
+            case part::FeatureEvaluationDiagnosticCode::
+                sketch_support_unsupported:
+                return QStringLiteral(
+                    "Sketch support is unsupported.");
+            case part::FeatureEvaluationDiagnosticCode::
                 detached_add:
                 return QStringLiteral(
                     "Add is detached from the current Body.");
@@ -218,6 +230,12 @@ QString featureEvaluationDiagnosticText(
         return QStringLiteral("Missing Profile");
     case part::FeatureEvaluationDiagnosticCode::unresolved_profile:
         return QStringLiteral("Unresolved Profile");
+    case part::FeatureEvaluationDiagnosticCode::sketch_support_missing:
+        return QStringLiteral("Sketch support Missing");
+    case part::FeatureEvaluationDiagnosticCode::sketch_support_ambiguous:
+        return QStringLiteral("Sketch support Ambiguous");
+    case part::FeatureEvaluationDiagnosticCode::sketch_support_unsupported:
+        return QStringLiteral("Sketch support Unsupported");
     case part::FeatureEvaluationDiagnosticCode::missing_upstream_body:
         return QStringLiteral("Missing upstream Body");
     case part::FeatureEvaluationDiagnosticCode::upstream_unavailable:
