@@ -1209,6 +1209,385 @@ inventoryFaceToken(
     return std::nullopt;
 }
 
+[[nodiscard]] bool containsSameEdge(
+    const TopoDS_Shape& shape,
+    const TopoDS_Edge& edge) {
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(edge)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void appendUniqueEdgeCandidate(
+    std::vector<TopoDS_Edge>& edges,
+    const TopoDS_Shape& candidate,
+    const TopoDS_Shape& result) {
+    if (candidate.IsNull()) return;
+
+    auto add =
+        [&edges, &result](const TopoDS_Edge& edge) {
+            if (!containsSameEdge(result, edge)) {
+                return;
+            }
+            const bool duplicate =
+                std::any_of(
+                    edges.begin(),
+                    edges.end(),
+                    [&edge](const TopoDS_Edge& existing) {
+                        return existing.IsSame(edge);
+                    });
+            if (!duplicate) {
+                edges.push_back(edge);
+            }
+        };
+
+    if (candidate.ShapeType() == TopAbs_EDGE) {
+        add(TopoDS::Edge(candidate));
+        return;
+    }
+
+    for (TopExp_Explorer explorer{
+             candidate,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        add(
+            TopoDS::Edge(
+                explorer.Current()));
+    }
+}
+
+template <typename Operation>
+[[nodiscard]] std::vector<TopoDS_Edge>
+descendantEdges(
+    Operation& operation,
+    const TopoDS_Edge& source,
+    const TopoDS_Shape& result) {
+    std::vector<TopoDS_Edge> descendants;
+
+    const auto& modified =
+        operation.Modified(source);
+    for (const auto& item : modified) {
+        appendUniqueEdgeCandidate(
+            descendants,
+            item,
+            result);
+    }
+
+    const auto& generated =
+        operation.Generated(source);
+    for (const auto& item : generated) {
+        appendUniqueEdgeCandidate(
+            descendants,
+            item,
+            result);
+    }
+
+    if (descendants.empty() &&
+        !operation.IsDeleted(source) &&
+        containsSameEdge(result, source)) {
+        descendants.push_back(source);
+    }
+
+    return descendants;
+}
+
+[[nodiscard]] bool faceContainsEdge(
+    const TopoDS_Face& face,
+    const TopoDS_Edge& edge) {
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(edge)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool faceContainsVertex(
+    const TopoDS_Face& face,
+    const TopoDS_Vertex& vertex) {
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_VERTEX};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(vertex)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool edgeContainsVertex(
+    const TopoDS_Edge& edge,
+    const TopoDS_Vertex& vertex) {
+    TopoDS_Vertex first;
+    TopoDS_Vertex second;
+    TopExp::Vertices(
+        edge,
+        first,
+        second);
+    return (!first.IsNull() &&
+            first.IsSame(vertex)) ||
+           (!second.IsNull() &&
+            second.IsSame(vertex));
+}
+
+[[nodiscard]] kernel::CurveKind
+providerCurveKind(
+    const TopoDS_Edge& edge) {
+    BRepAdaptor_Curve curve{edge};
+    switch (curve.GetType()) {
+    case GeomAbs_Line:
+        return kernel::CurveKind::line;
+    case GeomAbs_Circle:
+        return kernel::CurveKind::circle;
+    default:
+        return kernel::CurveKind::other;
+    }
+}
+
+[[nodiscard]] kernel::Point3
+providerPoint(
+    const TopoDS_Vertex& vertex) {
+    const auto point =
+        BRep_Tool::Pnt(vertex);
+    return {
+        point.X(),
+        point.Y(),
+        point.Z()};
+}
+
+[[nodiscard]] std::optional<kernel::RuntimeEdgeToken>
+inventoryEdgeToken(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Edge& edge) {
+    for (const auto& [token, current] :
+         runtime.inventory_edges) {
+        if (current.IsSame(edge)) {
+            return kernel::RuntimeEdgeToken{token};
+        }
+    }
+    return std::nullopt;
+}
+
+[[nodiscard]] std::optional<kernel::RuntimeVertexToken>
+inventoryVertexToken(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Vertex& vertex) {
+    for (const auto& [token, current] :
+         runtime.inventory_vertices) {
+        if (current.IsSame(vertex)) {
+            return kernel::RuntimeVertexToken{token};
+        }
+    }
+    return std::nullopt;
+}
+
+void canonicalizeSurfaceTokens(
+    std::vector<kernel::RuntimeSurfaceToken>& tokens) {
+    std::sort(
+        tokens.begin(),
+        tokens.end(),
+        [](const auto lhs, const auto rhs) {
+            return lhs.value < rhs.value;
+        });
+    tokens.erase(
+        std::unique(
+            tokens.begin(),
+            tokens.end()),
+        tokens.end());
+}
+
+[[nodiscard]] std::vector<kernel::RuntimeSurfaceToken>
+surfaceTokensForEdge(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Edge& edge) {
+    std::vector<kernel::RuntimeSurfaceToken> result;
+    for (const auto& [token, surface] :
+         runtime.tracked_surfaces) {
+        const bool present =
+            std::any_of(
+                surface.faces.begin(),
+                surface.faces.end(),
+                [&edge](const TopoDS_Face& face) {
+                    return faceContainsEdge(
+                        face,
+                        edge);
+                });
+        if (present) {
+            result.push_back(
+                kernel::RuntimeSurfaceToken{
+                    token});
+        }
+    }
+    canonicalizeSurfaceTokens(result);
+    return result;
+}
+
+[[nodiscard]] std::vector<kernel::RuntimeSurfaceToken>
+surfaceTokensForVertex(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Vertex& vertex) {
+    std::vector<kernel::RuntimeSurfaceToken> result;
+    for (const auto& [token, surface] :
+         runtime.tracked_surfaces) {
+        const bool present =
+            std::any_of(
+                surface.faces.begin(),
+                surface.faces.end(),
+                [&vertex](const TopoDS_Face& face) {
+                    return faceContainsVertex(
+                        face,
+                        vertex);
+                });
+        if (present) {
+            result.push_back(
+                kernel::RuntimeSurfaceToken{
+                    token});
+        }
+    }
+    canonicalizeSurfaceTokens(result);
+    return result;
+}
+
+[[nodiscard]] bool periodicSeamEdge(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Edge& edge) {
+    for (const auto& [token, surface] :
+         runtime.tracked_surfaces) {
+        static_cast<void>(token);
+        for (const auto& face : surface.faces) {
+            if (faceContainsEdge(face, edge) &&
+                BRepTools::IsReallyClosed(
+                    edge,
+                    face)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool sameSurfaceTokens(
+    const std::vector<kernel::RuntimeSurfaceToken>& first,
+    const std::vector<kernel::RuntimeSurfaceToken>& second) {
+    return first == second;
+}
+
+[[nodiscard]] bool populateEdgeVertexSemantics(
+    kernel::SolidModelingResult& result,
+    const OcctRuntimeSolid& runtime) {
+    result.edge_semantics.clear();
+    result.vertex_semantics.clear();
+    result.edge_semantics.reserve(
+        runtime.inventory_edges.size());
+    result.vertex_semantics.reserve(
+        runtime.inventory_vertices.size());
+
+    for (const auto& [token_value, edge] :
+         runtime.inventory_edges) {
+        const kernel::RuntimeEdgeToken token{
+            token_value};
+        if (!token.valid()) return false;
+
+        result.edge_semantics.push_back(
+            kernel::CurrentEdgeSemantics{
+                token,
+                providerCurveKind(edge),
+                surfaceTokensForEdge(
+                    runtime,
+                    edge),
+                periodicSeamEdge(
+                    runtime,
+                    edge)});
+    }
+
+    for (const auto& [token_value, vertex] :
+         runtime.inventory_vertices) {
+        const kernel::RuntimeVertexToken token{
+            token_value};
+        if (!token.valid()) return false;
+
+        std::vector<kernel::RuntimeEdgeToken>
+            incident_edges;
+        bool periodic_representation = false;
+        for (const auto& [edge_token_value, edge] :
+             runtime.inventory_edges) {
+            if (!edgeContainsVertex(
+                    edge,
+                    vertex)) {
+                continue;
+            }
+            const kernel::RuntimeEdgeToken edge_token{
+                edge_token_value};
+            if (!edge_token.valid()) return false;
+            incident_edges.push_back(edge_token);
+
+            const auto semantic =
+                std::find_if(
+                    result.edge_semantics.begin(),
+                    result.edge_semantics.end(),
+                    [edge_token](const auto& item) {
+                        return item.token ==
+                               edge_token;
+                    });
+            if (semantic ==
+                result.edge_semantics.end()) {
+                return false;
+            }
+            periodic_representation =
+                periodic_representation ||
+                semantic->periodic_seam;
+        }
+
+        std::sort(
+            incident_edges.begin(),
+            incident_edges.end(),
+            [](const auto lhs, const auto rhs) {
+                return lhs.value < rhs.value;
+            });
+        incident_edges.erase(
+            std::unique(
+                incident_edges.begin(),
+                incident_edges.end()),
+            incident_edges.end());
+
+        const auto point =
+            providerPoint(vertex);
+        if (!std::isfinite(point.x) ||
+            !std::isfinite(point.y) ||
+            !std::isfinite(point.z)) {
+            return false;
+        }
+
+        result.vertex_semantics.push_back(
+            kernel::CurrentVertexSemantics{
+                token,
+                surfaceTokensForVertex(
+                    runtime,
+                    vertex),
+                std::move(incident_edges),
+                point,
+                periodic_representation});
+    }
+
+    return result.edge_semantics.size() ==
+               result.current_edges.size() &&
+           result.vertex_semantics.size() ==
+               result.current_vertices.size();
+}
+
 void appendUniqueFaceCandidate(
     std::vector<TopoDS_Face>& faces,
     const TopoDS_Face& candidate) {
