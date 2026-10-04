@@ -1280,6 +1280,73 @@ int main(int argc, char* argv[]) {
                 1.0},
         };
         CHECK(competing.valid());
+
+        // PM-02D3 hover/candidate stack is controller-owned. Provider order
+        // deliberately starts with Face; ordinary priority must still make
+        // Vertex the visible first preselection.
+        topology_viewport.emitBodyTopologyPreselection(
+            competing,
+            {100.0, 100.0});
+        CHECK(
+            topology_viewport.body_preselection_ ==
+            std::optional<viewer::PresentationToken>{
+                vertex_token});
+
+        topology_viewport.emitBodyTopologyCycle(false);
+        CHECK(
+            topology_viewport.body_preselection_ ==
+            std::optional<viewer::PresentationToken>{
+                edge_token});
+
+        // Moving inside the same 4 px hit neighborhood with the same
+        // candidate stack preserves the current cycle index.
+        topology_viewport.emitBodyTopologyPreselection(
+            competing,
+            {102.0, 101.0});
+        CHECK(
+            topology_viewport.body_preselection_ ==
+            std::optional<viewer::PresentationToken>{
+                edge_token});
+
+        topology_viewport.emitBodyTopologyCycle(false);
+        CHECK(
+            topology_viewport.body_preselection_ ==
+            std::optional<viewer::PresentationToken>{
+                face_token});
+
+        // Click commits the visible cycled preselection, not the first
+        // provider candidate nor an independently re-ranked candidate.
+        topology_viewport.emitBodyTopology(
+            competing,
+            viewer::SelectionIntentMode::replace);
+        CHECK(
+            topology_controller
+                .primaryBodyTopologySelection()
+                ->kind ==
+            viewer::BodyTopologyPresentationKind::
+                face);
+
+        // Leaving the hit neighborhood resets the runtime stack to the
+        // ordinary Vertex -> Edge -> Face ranking.
+        topology_viewport.emitBodyTopologyPreselection(
+            competing,
+            {110.0, 110.0});
+        CHECK(
+            topology_viewport.body_preselection_ ==
+            std::optional<viewer::PresentationToken>{
+                vertex_token});
+
+        topology_viewport.emitBodyTopologyCycle(true);
+        CHECK(
+            topology_viewport.body_preselection_ ==
+            std::optional<viewer::PresentationToken>{
+                face_token});
+        topology_viewport.emitBodyTopologyCycle(false);
+        CHECK(
+            topology_viewport.body_preselection_ ==
+            std::optional<viewer::PresentationToken>{
+                vertex_token});
+
         topology_viewport.emitBodyTopology(
             competing,
             viewer::SelectionIntentMode::replace);
@@ -1322,6 +1389,12 @@ int main(int argc, char* argv[]) {
                 ->kind ==
             viewer::BodyTopologyPresentationKind::
                 vertex);
+
+        topology_viewport.emitBodyTopologyPreselection(
+            stale,
+            {100.0, 100.0});
+        CHECK(
+            !topology_viewport.body_preselection_);
 
         viewer::BodyTopologyPickQueryResult edge_toggle;
         edge_toggle.completed = true;
@@ -1390,6 +1463,8 @@ int main(int argc, char* argv[]) {
         CHECK(
             !topology_controller
                  .primaryBodyTopologySelection());
+        CHECK(
+            !topology_viewport.body_preselection_);
 
         topology_controller.setSolidModelingKernel(
             nullptr);
