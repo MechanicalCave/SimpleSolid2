@@ -1053,7 +1053,7 @@ The final Owner workflow must exercise at minimum:
 
 Exact UI labels may evolve D0/D1 inside the contract; semantic behavior may not.
 
-## 10. Documentation impact
+## Documentation impact
 
 Internal docs: required  
 User/Product docs: required  
