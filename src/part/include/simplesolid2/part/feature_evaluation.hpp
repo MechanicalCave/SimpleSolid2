@@ -190,7 +190,12 @@ struct FeatureCurveAddress final {
 
 struct FeatureCurveResolution final {
     FeatureCurveAddress address;
+    // Semantic carrier status. An inherited Curve may remain Resolved while
+    // its bounded Edge realization splits into several current Edges.
     kernel::ReferenceStatus status{
+        kernel::ReferenceStatus::unsupported};
+    // Strict bounded Edge selector status for the current stage.
+    kernel::ReferenceStatus strict_edge_status{
         kernel::ReferenceStatus::unsupported};
     std::size_t candidate_edge_count{};
     kernel::CurveKind curve_kind{
