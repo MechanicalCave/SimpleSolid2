@@ -1272,17 +1272,67 @@ bool BodyFaceTopologyRecord::valid() const noexcept {
 }
 
 bool BodyEdgeTopologyRecord::valid() const noexcept {
-    return runtime_token.valid() &&
-           accounting_class !=
-               TopologyAccountingClass::
-                   integrity_failure;
+    if (!runtime_token.valid() ||
+        (producer_feature_id &&
+         !producer_feature_id->valid())) {
+        return false;
+    }
+
+    switch (accounting_class) {
+    case TopologyAccountingClass::referenceable:
+        return !representation_artifact &&
+               semantic_address.has_value() &&
+               semantic_address->valid() &&
+               curve_kind != kernel::CurveKind::other &&
+               (referenceability ==
+                    kernel::ReferenceStatus::resolved ||
+                referenceability ==
+                    kernel::ReferenceStatus::ambiguous);
+    case TopologyAccountingClass::
+        known_representation_artifact:
+        return representation_artifact &&
+               !semantic_address.has_value() &&
+               referenceability ==
+                   kernel::ReferenceStatus::unsupported;
+    case TopologyAccountingClass::
+        semantically_unsupported:
+        return !representation_artifact &&
+               !semantic_address.has_value() &&
+               referenceability ==
+                   kernel::ReferenceStatus::unsupported;
+    case TopologyAccountingClass::integrity_failure:
+        return false;
+    }
+    return false;
 }
 
 bool BodyVertexTopologyRecord::valid() const noexcept {
-    return runtime_token.valid() &&
-           accounting_class !=
-               TopologyAccountingClass::
-                   integrity_failure;
+    if (!runtime_token.valid() ||
+        (producer_feature_id &&
+         !producer_feature_id->valid())) {
+        return false;
+    }
+
+    switch (accounting_class) {
+    case TopologyAccountingClass::referenceable:
+        return semantic_address.has_value() &&
+               semantic_address->valid() &&
+               diagnostic_point.has_value() &&
+               (referenceability ==
+                    kernel::ReferenceStatus::resolved ||
+                referenceability ==
+                    kernel::ReferenceStatus::ambiguous);
+    case TopologyAccountingClass::
+        semantically_unsupported:
+        return !semantic_address.has_value() &&
+               referenceability ==
+                   kernel::ReferenceStatus::unsupported;
+    case TopologyAccountingClass::
+        known_representation_artifact:
+    case TopologyAccountingClass::integrity_failure:
+        return false;
+    }
+    return false;
 }
 
 bool BodyStageTopologyCatalog::valid() const noexcept {
@@ -1295,7 +1345,9 @@ bool BodyStageTopologyCatalog::valid() const noexcept {
         return faces.empty() &&
                edges.empty() &&
                vertices.empty() &&
-               surfaces.empty();
+               surfaces.empty() &&
+               curves.empty() &&
+               points.empty();
     }
 
     for (std::size_t index = 0U;
@@ -1361,6 +1413,38 @@ bool BodyStageTopologyCatalog::valid() const noexcept {
                 surfaces[other].runtime_token &&
                 surfaces[index].runtime_token ==
                     surfaces[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < curves.size();
+         ++index) {
+        if (!curves[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < curves.size();
+             ++other) {
+            if (curves[index].address ==
+                curves[other].address) {
+                return false;
+            }
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < points.size();
+         ++index) {
+        if (!points[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < points.size();
+             ++other) {
+            if (points[index].address ==
+                points[other].address) {
                 return false;
             }
         }
