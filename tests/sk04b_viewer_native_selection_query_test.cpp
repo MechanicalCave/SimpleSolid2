@@ -285,6 +285,8 @@ int main(int argc, char* argv[]) {
     widget.setBodyTopologyPreselectionIntentHandler(
         [&widget,
          &body_preselection_intents,
+         &body_preselection_valid_intents,
+         &body_preselection_invalid_intents,
          &last_body_preselection_query,
          &last_body_preselection_point,
          body_vertex_token](
