@@ -1704,6 +1704,24 @@ finishBoolean(
         return result;
     }
 
+    if (!publishSurfaceLineage(
+            result,
+            *runtime,
+            &upstream,
+            created,
+            [&operation, &shape](
+                const TopoDS_Face& source) {
+                return descendantFaces(
+                    operation,
+                    source,
+                    shape);
+            })) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
     result.status =
         kernel::SolidModelingStatus::ok;
     result.solid = std::move(runtime);
@@ -2006,6 +2024,29 @@ OcctSolidModelingKernel::extrude(
                     result,
                     *runtime,
                     runtime->solid)) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
+
+            if (!publishSurfaceLineage(
+                    result,
+                    *runtime,
+                    nullptr,
+                    created,
+                    [&tool_shape](
+                        const TopoDS_Face& source) {
+                        std::vector<TopoDS_Face>
+                            candidates;
+                        if (containsSameFace(
+                                tool_shape,
+                                source)) {
+                            candidates.push_back(
+                                source);
+                        }
+                        return candidates;
+                    })) {
                 result.status =
                     kernel::SolidModelingStatus::
                         provider_failure;
