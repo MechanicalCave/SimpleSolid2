@@ -856,20 +856,228 @@ parseSketchModelV4OrV5(
     return model;
 }
 
+std::optional<std::uint32_t> parseUint32(
+    const nlohmann::json& value);
+
+std::optional<PartSketchSupport>
+parseSketchSupportV9(
+    const nlohmann::json& value,
+    std::string& error) {
+    if (!value.is_object() ||
+        !value.contains("kind") ||
+        !value["kind"].is_string()) {
+        error =
+            "Native Part contains malformed schema-v9 Sketch support";
+        return std::nullopt;
+    }
+
+    const auto kind =
+        value["kind"].get<std::string>();
+
+    if (kind == "builtin_origin_plane") {
+        if (value.size() != 2U ||
+            !value.contains("builtin_plane") ||
+            !value["builtin_plane"].is_string()) {
+            error =
+                "Native Part contains malformed schema-v9 Origin Sketch support";
+            return std::nullopt;
+        }
+
+        const auto role =
+            parseSupportRole(
+                value["builtin_plane"]
+                    .get<std::string>());
+        if (!role) {
+            error =
+                "Native Part contains unsupported schema-v9 Origin Sketch support";
+            return std::nullopt;
+        }
+
+        auto support =
+            partSketchSupportForBuiltinPlane(
+                *role);
+        if (!support) {
+            error =
+                "Native Part contains invalid schema-v9 Origin Sketch support";
+        }
+        return support;
+    }
+
+    if (kind != "body_planar_surface" ||
+        value.size() != 3U ||
+        !value.contains("stage") ||
+        !value.contains("surface")) {
+        error =
+            "Native Part contains unsupported schema-v9 Sketch support";
+        return std::nullopt;
+    }
+
+    const auto& stage_json = value["stage"];
+    if (!stage_json.is_object() ||
+        stage_json.size() != 2U ||
+        !stage_json.contains("kind") ||
+        !stage_json.contains("feature_id") ||
+        !stage_json["kind"].is_string() ||
+        !stage_json["feature_id"].is_string() ||
+        stage_json["kind"].get<std::string>() !=
+            "after_feature") {
+        error =
+            "Native Part contains malformed schema-v9 Sketch support stage";
+        return std::nullopt;
+    }
+
+    const auto stage_feature =
+        FeatureId::parse(
+            stage_json["feature_id"]
+                .get<std::string>());
+    if (!stage_feature) {
+        error =
+            "Native Part contains invalid schema-v9 Sketch support stage FeatureId";
+        return std::nullopt;
+    }
+
+    const auto& surface_json = value["surface"];
+    if (!surface_json.is_object() ||
+        !surface_json.contains(
+            "producer_feature_id") ||
+        !surface_json.contains("role") ||
+        !surface_json["producer_feature_id"]
+             .is_string() ||
+        !surface_json["role"].is_string()) {
+        error =
+            "Native Part contains malformed schema-v9 Surface reference";
+        return std::nullopt;
+    }
+
+    const auto producer =
+        FeatureId::parse(
+            surface_json["producer_feature_id"]
+                .get<std::string>());
+    const auto role =
+        parseSurfaceRole(
+            surface_json["role"]
+                .get<std::string>());
+    if (!producer || !role) {
+        error =
+            "Native Part contains invalid schema-v9 Surface reference identity";
+        return std::nullopt;
+    }
+
+    FeatureSurfaceAddress surface;
+    surface.producer_feature_id = *producer;
+    surface.role = *role;
+
+    if (*role == FeatureSurfaceRoleKind::side) {
+        if (surface_json.size() != 6U ||
+            !surface_json.contains("source_entity") ||
+            !surface_json.contains("loop_index") ||
+            !surface_json.contains("use_index") ||
+            !surface_json.contains("hole") ||
+            !surface_json["source_entity"]
+                 .is_string() ||
+            !surface_json["hole"].is_boolean()) {
+            error =
+                "Native Part contains malformed schema-v9 side Surface reference";
+            return std::nullopt;
+        }
+
+        const auto entity =
+            sketch::EntityId::parse(
+                surface_json["source_entity"]
+                    .get<std::string>());
+        const auto loop =
+            parseUint32(
+                surface_json["loop_index"]);
+        const auto use =
+            parseUint32(
+                surface_json["use_index"]);
+        if (!entity || !loop || !use) {
+            error =
+                "Native Part contains invalid schema-v9 side Surface provenance";
+            return std::nullopt;
+        }
+
+        surface.source_entity = *entity;
+        surface.loop_index = *loop;
+        surface.use_index = *use;
+        surface.hole =
+            surface_json["hole"].get<bool>();
+    } else if (surface_json.size() != 2U) {
+        error =
+            "Native Part cap Surface reference contains unexpected provenance fields";
+        return std::nullopt;
+    }
+
+    SurfaceReference reference{
+        BodyStageRef{
+            BodyStageKind::after_feature,
+            *stage_feature},
+        std::move(surface)};
+    auto support =
+        partSketchSupportForBodyPlanarSurface(
+            std::move(reference));
+    if (!support) {
+        error =
+            "Native Part contains invalid schema-v9 Body Surface Sketch support";
+    }
+    return support;
+}
+
+std::optional<PartSketchSupport>
+parseLegacyOriginSketchSupport(
+    const nlohmann::json& value,
+    std::string& error) {
+    if (!value.is_object() ||
+        value.size() != 2U ||
+        !value.contains("kind") ||
+        !value.contains("builtin_plane") ||
+        !value["kind"].is_string() ||
+        !value["builtin_plane"].is_string() ||
+        value["kind"].get<std::string>() !=
+            "builtin_origin_plane") {
+        error =
+            "Native Part contains malformed legacy Sketch support";
+        return std::nullopt;
+    }
+
+    const auto role =
+        parseSupportRole(
+            value["builtin_plane"]
+                .get<std::string>());
+    if (!role) {
+        error =
+            "Native Part contains unsupported legacy Sketch support";
+        return std::nullopt;
+    }
+
+    auto support =
+        partSketchSupportForBuiltinPlane(*role);
+    if (!support) {
+        error =
+            "Native Part contains invalid legacy Sketch support";
+    }
+    return support;
+}
+
 bool parseSketches(
     const nlohmann::json& sketches_json,
     int schema_version,
     std::vector<PartSketch>& sketches,
     std::string& error) {
     if (!sketches_json.is_array()) {
-        error = "Native Part sketches payload must be an array";
+        error =
+            "Native Part sketches payload must be an array";
         return false;
     }
 
     const bool schema_has_model =
         schema_version >= 3;
+    const bool schema_v9 =
+        schema_version >= 9;
     const std::size_t expected_fields =
-        schema_has_model ? 5U : 4U;
+        schema_v9
+            ? 4U
+            : (schema_has_model ? 5U : 4U);
 
     std::set<std::string> ids;
 
@@ -878,12 +1086,16 @@ bool parseSketches(
             item.size() != expected_fields ||
             !item.contains("id") ||
             !item.contains("support") ||
-            !item.contains("placement") ||
             !item.contains("visible") ||
-            (schema_has_model && !item.contains("model")) ||
+            (schema_v9
+                 ? item.contains("placement")
+                 : !item.contains("placement")) ||
+            (schema_has_model &&
+             !item.contains("model")) ||
             !item["id"].is_string() ||
             !item["visible"].is_boolean()) {
-            error = "Native Part contains malformed Sketch record";
+            error =
+                "Native Part contains malformed Sketch record";
             return false;
         }
 
@@ -893,76 +1105,70 @@ bool parseSketches(
             sketch::SketchId::parse(
                 serialized_id);
         if (!id) {
-            error = "Native Part contains invalid SketchId";
+            error =
+                "Native Part contains invalid SketchId";
             return false;
         }
         if (!ids.insert(serialized_id).second) {
-            error = "Native Part contains duplicate SketchId";
-            return false;
-        }
-
-        const auto& support_json =
-            item["support"];
-        if (!support_json.is_object() ||
-            support_json.size() != 2U ||
-            !support_json.contains("kind") ||
-            !support_json.contains("builtin_plane") ||
-            !support_json["kind"].is_string() ||
-            !support_json["builtin_plane"].is_string() ||
-            support_json["kind"].get<std::string>() !=
-                "builtin_origin_plane") {
-            error = "Native Part contains malformed Sketch support";
-            return false;
-        }
-
-        const auto role =
-            parseSupportRole(
-                support_json[
-                    "builtin_plane"].get<std::string>());
-        if (!role) {
-            error = "Native Part contains unsupported Sketch support";
-            return false;
-        }
-
-        const auto support =
-            partSketchSupportForBuiltinPlane(*role);
-        if (!support) {
-            error = "Native Part contains invalid Sketch support";
-            return false;
-        }
-
-        const auto& placement_json =
-            item["placement"];
-        if (!placement_json.is_object() ||
-            placement_json.size() != 3U ||
-            !placement_json.contains("origin") ||
-            !placement_json.contains("u_axis") ||
-            !placement_json.contains("v_axis")) {
-            error = "Native Part contains malformed Sketch placement";
-            return false;
-        }
-
-        const auto origin =
-            parseVector3(placement_json["origin"]);
-        const auto u_axis =
-            parseVector3(placement_json["u_axis"]);
-        const auto v_axis =
-            parseVector3(placement_json["v_axis"]);
-        if (!origin || !u_axis || !v_axis) {
-            error = "Native Part contains invalid Sketch placement vectors";
-            return false;
-        }
-
-        SketchPlacement placement{
-            *origin,
-            *u_axis,
-            *v_axis};
-        if (!sketchPlacementMatchesSupport(
-                placement,
-                *support)) {
             error =
-                "Native Part Sketch placement does not match its Origin-plane support";
+                "Native Part contains duplicate SketchId";
             return false;
+        }
+
+        auto support =
+            schema_v9
+                ? parseSketchSupportV9(
+                      item["support"],
+                      error)
+                : parseLegacyOriginSketchSupport(
+                      item["support"],
+                      error);
+        if (!support) {
+            return false;
+        }
+
+        if (!schema_v9) {
+            const auto& placement_json =
+                item["placement"];
+            if (!placement_json.is_object() ||
+                placement_json.size() != 3U ||
+                !placement_json.contains("origin") ||
+                !placement_json.contains("u_axis") ||
+                !placement_json.contains("v_axis")) {
+                error =
+                    "Native Part contains malformed legacy Sketch placement";
+                return false;
+            }
+
+            const auto origin =
+                parseVector3(
+                    placement_json["origin"]);
+            const auto u_axis =
+                parseVector3(
+                    placement_json["u_axis"]);
+            const auto v_axis =
+                parseVector3(
+                    placement_json["v_axis"]);
+            if (!origin || !u_axis || !v_axis) {
+                error =
+                    "Native Part contains invalid legacy Sketch placement vectors";
+                return false;
+            }
+
+            const SketchPlacement placement{
+                *origin,
+                *u_axis,
+                *v_axis};
+            const auto expected =
+                sketchPlacementForSupport(
+                    *support);
+            if (!placement.valid() ||
+                !expected ||
+                placement != *expected) {
+                error =
+                    "Native Part legacy Sketch placement does not match its Origin-plane support";
+                return false;
+            }
         }
 
         sketch::SketchModel model;
@@ -985,8 +1191,7 @@ bool parseSketches(
         sketches.push_back(
             PartSketch{
                 std::move(*id),
-                *support,
-                placement,
+                std::move(*support),
                 item["visible"].get<bool>(),
                 std::move(model)});
     }
