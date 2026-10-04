@@ -869,7 +869,11 @@ makeBodyStageTopologyCatalog(
     const std::vector<FeatureFaceResolution>&
         semantic_faces,
     const std::vector<FeatureSurfaceResolution>&
-        semantic_surfaces) {
+        semantic_surfaces,
+    const std::vector<FeatureEdgeResolution>&
+        semantic_edges,
+    const std::vector<FeaturePointResolution>&
+        semantic_points) {
     if (!feature_id.valid() ||
         !kernel_result.ok() ||
         kernel_result.face_count !=
@@ -892,6 +896,8 @@ makeBodyStageTopologyCatalog(
         BodyStageKind::after_feature;
     result.stage.feature_id = feature_id;
     result.surfaces = semantic_surfaces;
+    result.curves = semantic_edges;
+    result.points = semantic_points;
 
     for (const auto& surface :
          result.surfaces) {
@@ -1018,22 +1024,171 @@ makeBodyStageTopologyCatalog(
         kernel_result.current_edges.size());
     for (const auto token :
          kernel_result.current_edges) {
-        result.edges.push_back(
-            BodyEdgeTopologyRecord{
-                token,
+        const kernel::CurrentEdgeSemanticRecord*
+            semantic = nullptr;
+        for (const auto& candidate :
+             kernel_result.current_edge_semantics) {
+            if (candidate.token != token) continue;
+            if (semantic != nullptr) {
+                return std::nullopt;
+            }
+            semantic = &candidate;
+        }
+        if (semantic == nullptr ||
+            semantic->integrity_failure) {
+            return std::nullopt;
+        }
+
+        BodyEdgeTopologyRecord record;
+        record.runtime_token = token;
+        record.curve_kind = semantic->curve_kind;
+        record.representation_artifact =
+            semantic->representation_artifact;
+
+        if (semantic->representation_artifact) {
+            if (semantic->role !=
+                    kernel::EdgeSemanticRoleKind::
+                        periodic_seam ||
+                semantic->status !=
+                    kernel::ReferenceStatus::
+                        unsupported) {
+                return std::nullopt;
+            }
+            record.accounting_class =
                 TopologyAccountingClass::
-                    semantically_unsupported});
+                    known_representation_artifact;
+            record.referenceability =
+                kernel::ReferenceStatus::unsupported;
+            result.edges.push_back(std::move(record));
+            continue;
+        }
+
+        if (semantic->role ==
+                kernel::EdgeSemanticRoleKind::
+                    unsupported ||
+            semantic->status ==
+                kernel::ReferenceStatus::
+                    unsupported) {
+            record.accounting_class =
+                TopologyAccountingClass::
+                    semantically_unsupported;
+            record.referenceability =
+                kernel::ReferenceStatus::unsupported;
+            result.edges.push_back(std::move(record));
+            continue;
+        }
+
+        const auto mapped =
+            surfaceAddressesForTokens(
+                semantic->adjacent_surfaces,
+                semantic_surfaces);
+        if (!mapped ||
+            !uniqueSurfaceAddressSet(*mapped, 2U)) {
+            return std::nullopt;
+        }
+
+        FeatureEdgeAddress address;
+        address.role = semantic->role;
+        address.adjacent_surfaces = *mapped;
+        const auto* resolved =
+            findEdgeResolution(
+                semantic_edges,
+                address);
+        if (resolved == nullptr ||
+            resolved->curve_kind !=
+                semantic->curve_kind ||
+            resolved->status !=
+                semantic->status ||
+            resolved->candidate_count !=
+                semantic->candidate_count ||
+            std::find(
+                resolved->current_edges.begin(),
+                resolved->current_edges.end(),
+                token) ==
+                resolved->current_edges.end()) {
+            return std::nullopt;
+        }
+
+        record.accounting_class =
+            TopologyAccountingClass::referenceable;
+        record.referenceability =
+            resolved->status;
+        record.semantic_address = address;
+        record.producer_feature_id =
+            resolved->producer_feature_id;
+        result.edges.push_back(std::move(record));
     }
 
     result.vertices.reserve(
         kernel_result.current_vertices.size());
     for (const auto token :
          kernel_result.current_vertices) {
-        result.vertices.push_back(
-            BodyVertexTopologyRecord{
-                token,
+        const kernel::CurrentVertexSemanticRecord*
+            semantic = nullptr;
+        for (const auto& candidate :
+             kernel_result.current_vertex_semantics) {
+            if (candidate.token != token) continue;
+            if (semantic != nullptr) {
+                return std::nullopt;
+            }
+            semantic = &candidate;
+        }
+        if (semantic == nullptr ||
+            semantic->integrity_failure) {
+            return std::nullopt;
+        }
+
+        BodyVertexTopologyRecord record;
+        record.runtime_token = token;
+        record.diagnostic_point =
+            semantic->provider_point;
+
+        if (semantic->status ==
+            kernel::ReferenceStatus::unsupported) {
+            record.accounting_class =
                 TopologyAccountingClass::
-                    semantically_unsupported});
+                    semantically_unsupported;
+            record.referenceability =
+                kernel::ReferenceStatus::unsupported;
+            result.vertices.push_back(std::move(record));
+            continue;
+        }
+
+        const auto mapped =
+            surfaceAddressesForTokens(
+                semantic->adjacent_surfaces,
+                semantic_surfaces);
+        if (!mapped ||
+            !uniqueSurfaceAddressSet(*mapped, 3U)) {
+            return std::nullopt;
+        }
+
+        FeaturePointAddress address;
+        address.adjacent_surfaces = *mapped;
+        const auto* resolved =
+            findPointResolution(
+                semantic_points,
+                address);
+        if (resolved == nullptr ||
+            resolved->status != semantic->status ||
+            resolved->candidate_count !=
+                semantic->candidate_count ||
+            std::find(
+                resolved->current_vertices.begin(),
+                resolved->current_vertices.end(),
+                token) ==
+                resolved->current_vertices.end()) {
+            return std::nullopt;
+        }
+
+        record.accounting_class =
+            TopologyAccountingClass::referenceable;
+        record.referenceability =
+            resolved->status;
+        record.semantic_address = address;
+        record.producer_feature_id =
+            resolved->producer_feature_id;
+        result.vertices.push_back(std::move(record));
     }
 
     return result.complete()
