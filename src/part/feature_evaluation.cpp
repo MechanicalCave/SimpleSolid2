@@ -157,6 +157,26 @@ partCapRole(
     return FeatureFaceRoleKind::side;
 }
 
+[[nodiscard]] FeatureSurfaceRoleKind
+partSurfaceCapRole(
+    kernel::ExtrudeCapRole role) noexcept {
+    switch (role) {
+    case kernel::ExtrudeCapRole::profile_cap:
+        return FeatureSurfaceRoleKind::
+            profile_cap;
+    case kernel::ExtrudeCapRole::extent_cap:
+        return FeatureSurfaceRoleKind::
+            extent_cap;
+    case kernel::ExtrudeCapRole::negative_cap:
+        return FeatureSurfaceRoleKind::
+            negative_cap;
+    case kernel::ExtrudeCapRole::positive_cap:
+        return FeatureSurfaceRoleKind::
+            positive_cap;
+    }
+    return FeatureSurfaceRoleKind::side;
+}
+
 [[nodiscard]] FeatureFaceResolution
 convertNewFace(
     FeatureId producer,
@@ -205,6 +225,92 @@ convertNewFace(
             kernel::ReferenceStatus::
                 unsupported;
         result.runtime_token.reset();
+        return result;
+    }
+
+    result.address.source_entity =
+        *entity;
+    result.address.loop_index =
+        provenance.loop_index;
+    result.address.use_index =
+        provenance.use_index;
+    result.address.hole =
+        provenance.hole;
+    return result;
+}
+
+[[nodiscard]] FeatureSurfaceResolution
+convertNewSurface(
+    FeatureId producer,
+    const kernel::NewSurfaceLineage& source) {
+    FeatureSurfaceResolution result;
+    result.address.producer_feature_id =
+        producer;
+    result.status =
+        source.surface_status;
+    result.strict_face_status =
+        source.strict_face_status;
+    result.candidate_face_count =
+        source.candidate_face_count;
+    result.surface_kind =
+        source.surface_kind;
+    result.canonical_frame =
+        source.canonical_frame;
+    result.runtime_token =
+        source.resolved_token;
+    result.current_faces =
+        source.current_faces;
+
+    if (source.role.kind ==
+        kernel::ExtrudeGeneratedFaceRoleKind::cap) {
+        if (!source.role.cap_role) {
+            result.status =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.strict_face_status =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.runtime_token.reset();
+            result.current_faces.clear();
+            result.candidate_face_count = 0U;
+            return result;
+        }
+        result.address.role =
+            partSurfaceCapRole(
+                *source.role.cap_role);
+        return result;
+    }
+
+    result.address.role =
+        FeatureSurfaceRoleKind::side;
+    if (!source.role.side_provenance) {
+        result.status =
+            kernel::ReferenceStatus::
+                unsupported;
+        result.strict_face_status =
+            kernel::ReferenceStatus::
+                unsupported;
+        result.runtime_token.reset();
+        result.current_faces.clear();
+        result.candidate_face_count = 0U;
+        return result;
+    }
+
+    const auto& provenance =
+        *source.role.side_provenance;
+    const auto entity =
+        sketch::EntityId::parse(
+            provenance.source_entity);
+    if (!entity) {
+        result.status =
+            kernel::ReferenceStatus::
+                unsupported;
+        result.strict_face_status =
+            kernel::ReferenceStatus::
+                unsupported;
+        result.runtime_token.reset();
+        result.current_faces.clear();
+        result.candidate_face_count = 0U;
         return result;
     }
 
@@ -281,6 +387,80 @@ void propagateCurrentReferences(
     }
 }
 
+[[nodiscard]] bool propagateCurrentSurfaces(
+    std::vector<FeatureSurfaceResolution>& references,
+    const std::vector<
+        kernel::InheritedSurfaceLineage>& inherited) {
+    std::map<std::uint64_t, std::size_t>
+        by_token;
+    for (std::size_t index = 0U;
+         index < references.size();
+         ++index) {
+        if (references[index].status !=
+                kernel::ReferenceStatus::resolved ||
+            !references[index].runtime_token) {
+            continue;
+        }
+        const auto [it, inserted] =
+            by_token.emplace(
+                references[index]
+                    .runtime_token->value,
+                index);
+        static_cast<void>(it);
+        if (!inserted) {
+            return false;
+        }
+    }
+
+    std::vector<bool> seen(
+        references.size(),
+        false);
+    for (const auto& item : inherited) {
+        if (!item.token.valid()) {
+            return false;
+        }
+        const auto found =
+            by_token.find(item.token.value);
+        if (found == by_token.end()) {
+            return false;
+        }
+
+        auto& reference =
+            references[found->second];
+        if (reference.surface_kind !=
+                item.surface_kind ||
+            reference.canonical_frame !=
+                item.canonical_frame) {
+            return false;
+        }
+
+        reference.status =
+            item.surface_status;
+        reference.strict_face_status =
+            item.strict_face_status;
+        reference.candidate_face_count =
+            item.candidate_face_count;
+        reference.current_faces =
+            item.current_faces;
+        seen[found->second] = true;
+
+        if (item.surface_status !=
+            kernel::ReferenceStatus::resolved) {
+            reference.runtime_token.reset();
+        }
+    }
+
+    for (const auto& [token, index] :
+         by_token) {
+        static_cast<void>(token);
+        if (!seen[index]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
 template <typename Token>
 [[nodiscard]] bool uniqueValidTokens(
     const std::vector<Token>& tokens) noexcept {
@@ -306,7 +486,9 @@ makeBodyStageTopologyCatalog(
     FeatureId feature_id,
     const kernel::SolidModelingResult& kernel_result,
     const std::vector<FeatureFaceResolution>&
-        semantic_faces) {
+        semantic_faces,
+    const std::vector<FeatureSurfaceResolution>&
+        semantic_surfaces) {
     if (!feature_id.valid() ||
         !kernel_result.ok() ||
         kernel_result.face_count !=
@@ -328,14 +510,31 @@ makeBodyStageTopologyCatalog(
     result.stage.kind =
         BodyStageKind::after_feature;
     result.stage.feature_id = feature_id;
+    result.surfaces = semantic_surfaces;
+
+    for (const auto& surface :
+         result.surfaces) {
+        if (!surface.valid()) {
+            return std::nullopt;
+        }
+        for (const auto token :
+             surface.current_faces) {
+            if (std::count(
+                    kernel_result.current_faces.begin(),
+                    kernel_result.current_faces.end(),
+                    token) != 1) {
+                return std::nullopt;
+            }
+        }
+    }
 
     result.faces.reserve(
         kernel_result.current_faces.size());
     for (const auto token :
          kernel_result.current_faces) {
-        std::size_t claim_count = 0U;
+        std::size_t strict_claim_count = 0U;
         std::optional<FeatureFaceAddress>
-            semantic_address;
+            strict_address;
 
         for (const auto& reference :
              semantic_faces) {
@@ -346,34 +545,75 @@ makeBodyStageTopologyCatalog(
                 *reference.runtime_token != token) {
                 continue;
             }
-            ++claim_count;
-            semantic_address =
+            ++strict_claim_count;
+            strict_address =
                 reference.address;
         }
 
-        if (claim_count > 1U) {
+        if (strict_claim_count > 1U) {
             return std::nullopt;
         }
 
         BodyFaceTopologyRecord record;
         record.runtime_token = token;
-        if (claim_count == 1U) {
-            if (!semantic_address ||
-                !semantic_address->valid()) {
-                return std::nullopt;
+        record.semantic_address =
+            std::move(strict_address);
+
+        for (const auto& surface :
+             semantic_surfaces) {
+            if (surface.status ==
+                    kernel::ReferenceStatus::
+                        missing ||
+                surface.status ==
+                    kernel::ReferenceStatus::
+                        unsupported) {
+                continue;
             }
+            if (std::find(
+                    surface.current_faces.begin(),
+                    surface.current_faces.end(),
+                    token) ==
+                surface.current_faces.end()) {
+                continue;
+            }
+            if (std::find(
+                    record.surface_candidates.begin(),
+                    record.surface_candidates.end(),
+                    surface.address) ==
+                record.surface_candidates.end()) {
+                record.surface_candidates.push_back(
+                    surface.address);
+            }
+        }
+
+        if (!record.surface_candidates.empty()) {
             record.accounting_class =
                 TopologyAccountingClass::
                     referenceable;
-            record.semantic_address =
-                std::move(semantic_address);
+        } else if (record.semantic_address) {
+            // A strict semantic Face without a carrier is an incomplete
+            // PM-02B semantic claim, not a valid fallback.
+            return std::nullopt;
         } else {
             record.accounting_class =
                 TopologyAccountingClass::
                     semantically_unsupported;
         }
+
         result.faces.push_back(
             std::move(record));
+    }
+
+    // Every current supported Extrude Add/Cut Face must map to at least one
+    // semantic Surface carrier. Multiple candidates are explicit ambiguity.
+    if (!result.faces.empty() &&
+        std::any_of(
+            result.faces.begin(),
+            result.faces.end(),
+            [](const BodyFaceTopologyRecord& face) {
+                return face.surface_candidates.empty();
+            })) {
+        return std::nullopt;
     }
 
     // Every semantic Face still reported Resolved must belong to exactly one
