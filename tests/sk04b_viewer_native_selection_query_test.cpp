@@ -276,6 +276,8 @@ int main(int argc, char* argv[]) {
     // semantic priority. A controller-like callback may project the chosen
     // PresentationToken back as preselection.
     int body_preselection_intents = 0;
+    int body_preselection_valid_intents = 0;
+    int body_preselection_invalid_intents = 0;
     viewer::BodyTopologyPickQueryResult
         last_body_preselection_query;
     viewer::ViewportPoint2
@@ -289,6 +291,11 @@ int main(int argc, char* argv[]) {
             const viewer::BodyTopologyPickQueryResult& query,
             viewer::ViewportPoint2 point) {
             ++body_preselection_intents;
+            if (query.valid()) {
+                ++body_preselection_valid_intents;
+            } else {
+                ++body_preselection_invalid_intents;
+            }
             last_body_preselection_query = query;
             last_body_preselection_point = point;
             if (query.valid() &&
@@ -400,6 +407,10 @@ int main(int argc, char* argv[]) {
     // highlight through the control.
     const int intents_before_hud_hover =
         body_preselection_intents;
+    const int valid_before_hud_hover =
+        body_preselection_valid_intents;
+    const int invalid_before_hud_hover =
+        body_preselection_invalid_intents;
     sendMouseMove(
         widget,
         {
@@ -408,6 +419,12 @@ int main(int argc, char* argv[]) {
     CHECK(
         body_preselection_intents >
         intents_before_hud_hover);
+    CHECK(
+        body_preselection_invalid_intents >
+        invalid_before_hud_hover);
+    CHECK(
+        body_preselection_valid_intents ==
+        valid_before_hud_hover);
     CHECK(
         !last_body_preselection_query.valid());
 
