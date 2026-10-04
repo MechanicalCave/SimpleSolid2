@@ -61,6 +61,14 @@ public:
     virtual bool setReferenceScene(
         const ReferenceScene& scene) = 0;
 
+    virtual bool setBodyScene(
+        const BodyScene& scene) {
+        return scene.valid() &&
+               scene.empty();
+    }
+
+    // Transitional PM-01 compatibility only. Production PM-02 committed Body
+    // presentation uses setBodyScene().
     virtual bool setSolidScene(
         const SolidScene& scene) {
         return scene.valid() &&
