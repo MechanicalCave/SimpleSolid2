@@ -6716,13 +6716,33 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
 
     const auto point = event->position();
     const auto point_int = point.toPoint();
+
+    if (guardedBool(
+            "viewStyleHudHover",
+            [this, point_int] {
+                if (!impl_->viewStyleHudCapturesPointerAt(
+                        point_int.x(),
+                        point_int.y())) {
+                    return false;
+                }
+                impl_->clearBodyTopologyPreselectionIntent();
+                return true;
+            })) {
+        event->accept();
+        return;
+    }
+
     if (guardedBool(
             "navigationCubeHover",
             [this, point_int] {
-                return impl_->
-                    updateNavigationCubeHover(
+                const bool hovered =
+                    impl_->updateNavigationCubeHover(
                         point_int.x(),
                         point_int.y());
+                if (hovered) {
+                    impl_->clearBodyTopologyPreselectionIntent();
+                }
+                return hovered;
             })) {
         event->accept();
         return;
@@ -6747,6 +6767,15 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
                     viewer::SpatialPointerPhase::move,
                     (event->modifiers() &
                      Qt::ControlModifier) != 0));
+        });
+
+    guardedVoid(
+        "bodyTopologyHover",
+        [this, point] {
+            static_cast<void>(
+                impl_->emitBodyTopologyPreselectionAt(
+                    point.x(),
+                    point.y()));
         });
 
     QWidget::mouseMoveEvent(event);
