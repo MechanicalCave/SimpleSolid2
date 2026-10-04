@@ -3,7 +3,7 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-04  
 **Decision class:** D2 production Work Contract — Owner accepted 2026-10-04  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.10  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.11  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Entry gate:** PM-02P Body Semantic Topology Evidence COMPLETED — PASS; Owner accepted PM-02P D2 synthesis/recommendation on 2026-10-04  
 **Evidence authority:** `work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md`, `work/PM-02P_REFERENCE_SURVIVAL_MATRIX.md`, `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`  
@@ -811,7 +811,10 @@ Gate:
 
 ### PM-02C — Edge/Curve and Vertex/Point semantic catalog
 
-**Checkpoint state:** ACTIVE
+**Checkpoint state:** COMPLETED — PASS  
+**Runtime candidate:** `9135baf1d749f01eeb5dcae4f6ea7cffc856d8a0` — Windows FULL #1402 PASS  
+**Merged runtime main:** `b128f7445b2705ec9577afddcdbf7f9c81594aa0`  
+**Completion evidence:** `work/PM-02C_EDGE_CURVE_VERTEX_POINT_SEMANTICS_COMPLETION.md`
 
 Deliver:
 
@@ -828,6 +831,8 @@ Gate:
 - exact same XYZ does not rebind Point identity.
 
 ### PM-02D — topology-aware Body presentation, Viewer pick, View Style and semantic inspection
+
+**Checkpoint state:** ACTIVE
 
 Deliver:
 
