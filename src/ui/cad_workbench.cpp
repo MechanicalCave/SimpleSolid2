@@ -24,6 +24,7 @@
 #include <QPushButton>
 #include <QSignalBlocker>
 #include <QStackedWidget>
+#include <QStringList>
 #include <QTreeWidget>
 #include <QTreeWidgetItem>
 #include <QTimer>
@@ -1382,6 +1383,23 @@ void CadWorkbench::buildUi() {
             tryCreateSketchFromSupport(primary);
         });
 
+    viewport_controller_->setBodyTopologySelectionChangedHandler(
+        [this](std::optional<BodyTopologyInspection> inspection) {
+            if (!inspection) {
+                return;
+            }
+            selected_profile_id_.reset();
+            selected_feature_id_.reset();
+            selected_body_id_.reset();
+            if (viewport_controller_) {
+                viewport_controller_->
+                    setFeatureContributionSelection(
+                        std::nullopt);
+            }
+            refreshTopologyProperties(*inspection);
+            syncActionState();
+        });
+
     viewport_controller_->setPresentationStateChangedHandler(
         [this](bool) {
             // Empty normal status means: show only the degradation
@@ -1840,6 +1858,16 @@ void CadWorkbench::buildUi() {
         new QLabel(body_properties_page_);
     body_feature_count_->setObjectName(
         QStringLiteral("bodyPropertyFeatureCount"));
+    body_topology_counts_ =
+        new QLabel(body_properties_page_);
+    body_topology_counts_->setObjectName(
+        QStringLiteral("bodyPropertyTopologyCounts"));
+    body_topology_counts_->setWordWrap(true);
+    body_topology_accounting_ =
+        new QLabel(body_properties_page_);
+    body_topology_accounting_->setObjectName(
+        QStringLiteral("bodyPropertyTopologyAccounting"));
+    body_topology_accounting_->setWordWrap(true);
 
     body_root->addRow(
         QStringLiteral("BodyId"),
@@ -1850,6 +1878,12 @@ void CadWorkbench::buildUi() {
     body_root->addRow(
         QStringLiteral("Ordered Features"),
         body_feature_count_);
+    body_root->addRow(
+        QStringLiteral("Topology"),
+        body_topology_counts_);
+    body_root->addRow(
+        QStringLiteral("Accounting"),
+        body_topology_accounting_);
     properties_stack_->addWidget(
         body_properties_page_);
 
@@ -1903,6 +1937,16 @@ void CadWorkbench::buildUi() {
         new QLabel(feature_properties_page_);
     feature_source_sketch_->setObjectName(
         QStringLiteral("featurePropertySourceSketch"));
+    feature_contribution_ =
+        new QLabel(feature_properties_page_);
+    feature_contribution_->setObjectName(
+        QStringLiteral("featurePropertyContribution"));
+    feature_contribution_->setWordWrap(true);
+    feature_contribution_diagnostics_ =
+        new QLabel(feature_properties_page_);
+    feature_contribution_diagnostics_->setObjectName(
+        QStringLiteral("featurePropertyContributionDiagnostics"));
+    feature_contribution_diagnostics_->setWordWrap(true);
 
     feature_go_to_profile_button_ =
         new QPushButton(
@@ -1961,6 +2005,12 @@ void CadWorkbench::buildUi() {
         QStringLiteral("Source Sketch"),
         feature_source_sketch_);
     feature_root->addRow(
+        QStringLiteral("Current Contribution"),
+        feature_contribution_);
+    feature_root->addRow(
+        QStringLiteral("Semantic Outputs"),
+        feature_contribution_diagnostics_);
+    feature_root->addRow(
         feature_go_to_profile_button_);
     feature_root->addRow(
         feature_edit_button_);
@@ -1970,6 +2020,89 @@ void CadWorkbench::buildUi() {
         feature_delete_button_);
     properties_stack_->addWidget(
         feature_properties_page_);
+
+    topology_properties_page_ =
+        new QWidget(properties_stack_);
+    topology_properties_page_->setObjectName(
+        QStringLiteral("topologyPropertiesPage"));
+    auto* topology_root =
+        new QFormLayout(topology_properties_page_);
+    topology_root->setContentsMargins(0, 0, 0, 0);
+
+    const auto make_topology_label =
+        [this](const char* object_name) {
+            auto* label =
+                new QLabel(topology_properties_page_);
+            label->setObjectName(
+                QString::fromLatin1(object_name));
+            label->setWordWrap(true);
+            return label;
+        };
+
+    topology_kind_ =
+        make_topology_label("topologyPropertyKind");
+    topology_stage_ =
+        make_topology_label("topologyPropertyStage");
+    topology_presence_ =
+        make_topology_label("topologyPropertyPresence");
+    topology_accounting_ =
+        make_topology_label("topologyPropertyAccounting");
+    topology_strict_reference_ =
+        make_topology_label("topologyPropertyStrictReference");
+    topology_carrier_ =
+        make_topology_label("topologyPropertyCarrier");
+    topology_carrier_type_ =
+        make_topology_label("topologyPropertyCarrierType");
+    topology_producer_ =
+        make_topology_label("topologyPropertyProducer");
+    topology_candidates_ =
+        make_topology_label("topologyPropertyCandidates");
+    topology_adjacency_ =
+        make_topology_label("topologyPropertyAdjacency");
+    topology_sketch_support_ =
+        make_topology_label("topologyPropertySketchSupport");
+    topology_geometry_ =
+        make_topology_label("topologyPropertyGeometry");
+
+    topology_root->addRow(
+        QStringLiteral("Topology"),
+        topology_kind_);
+    topology_root->addRow(
+        QStringLiteral("Stage"),
+        topology_stage_);
+    topology_root->addRow(
+        QStringLiteral("Current State"),
+        topology_presence_);
+    topology_root->addRow(
+        QStringLiteral("Accounting"),
+        topology_accounting_);
+    topology_root->addRow(
+        QStringLiteral("Strict Reference"),
+        topology_strict_reference_);
+    topology_root->addRow(
+        QStringLiteral("Carrier"),
+        topology_carrier_);
+    topology_root->addRow(
+        QStringLiteral("Carrier Type"),
+        topology_carrier_type_);
+    topology_root->addRow(
+        QStringLiteral("Producer"),
+        topology_producer_);
+    topology_root->addRow(
+        QStringLiteral("Semantic Candidates"),
+        topology_candidates_);
+    topology_root->addRow(
+        QStringLiteral("Adjacency"),
+        topology_adjacency_);
+    topology_root->addRow(
+        QStringLiteral("Sketch Support"),
+        topology_sketch_support_);
+    topology_root->addRow(
+        QStringLiteral("Geometry (diagnostic)"),
+        topology_geometry_);
+
+    properties_stack_->addWidget(
+        topology_properties_page_);
 
     properties_stack_->setCurrentWidget(
         document_properties_page_);
