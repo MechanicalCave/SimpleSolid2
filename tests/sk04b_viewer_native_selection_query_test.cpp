@@ -49,10 +49,13 @@ void sendMouseMove(
         Qt::NoButton,
         Qt::NoButton,
         Qt::NoModifier};
+    // sendEvent() is synchronous and drives the actual QWidget
+    // mouseMoveEvent directly. Do not process the global event queue here:
+    // that can immediately deliver a real OS-cursor move at an unrelated
+    // screen position and overwrite the deterministic synthetic hover state.
     CHECK(QApplication::sendEvent(
         &widget,
         &event));
-    QApplication::processEvents();
 }
 
 } // namespace
