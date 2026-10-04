@@ -611,6 +611,10 @@ lineSideCarrierFrame(
 referenceStatus(
     std::size_t count) noexcept;
 
+void populateShapeEvidence(
+    kernel::ShapeEvidence& evidence,
+    const TopoDS_Shape& shape);
+
 [[nodiscard]] kernel::FaceGeometryDiagnostics
 faceGeometryDiagnostics(
     const TopoDS_Face& face);
