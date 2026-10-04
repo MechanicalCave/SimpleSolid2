@@ -685,19 +685,121 @@ bool FeatureFaceAddress::valid() const noexcept {
     return !source_entity.has_value();
 }
 
+bool FeatureSurfaceAddress::valid() const noexcept {
+    if (!producer_feature_id.valid()) {
+        return false;
+    }
+    if (role == FeatureSurfaceRoleKind::side) {
+        return source_entity.has_value() &&
+               source_entity->valid();
+    }
+    return !source_entity.has_value();
+}
+
+bool FeatureSurfaceResolution::valid() const noexcept {
+    if (!address.valid() ||
+        candidate_face_count !=
+            current_faces.size()) {
+        return false;
+    }
+
+    for (std::size_t index = 0U;
+         index < current_faces.size();
+         ++index) {
+        if (!current_faces[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < current_faces.size();
+             ++other) {
+            if (current_faces[index] ==
+                current_faces[other]) {
+                return false;
+            }
+        }
+    }
+
+    if (surface_kind ==
+        kernel::SurfaceKind::plane) {
+        if (!canonical_frame ||
+            !canonical_frame->valid()) {
+            return false;
+        }
+    } else if (canonical_frame) {
+        return false;
+    }
+
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        if (!runtime_token ||
+            !runtime_token->valid() ||
+            candidate_face_count == 0U) {
+            return false;
+        }
+        return candidate_face_count == 1U
+            ? strict_face_status ==
+                  kernel::ReferenceStatus::
+                      resolved
+            : strict_face_status ==
+                  kernel::ReferenceStatus::
+                      ambiguous;
+    case kernel::ReferenceStatus::missing:
+        return !runtime_token &&
+               candidate_face_count == 0U &&
+               strict_face_status ==
+                   kernel::ReferenceStatus::
+                       missing;
+    case kernel::ReferenceStatus::ambiguous:
+        return !runtime_token &&
+               candidate_face_count > 0U &&
+               strict_face_status ==
+                   kernel::ReferenceStatus::
+                       ambiguous;
+    case kernel::ReferenceStatus::unsupported:
+        return !runtime_token &&
+               candidate_face_count == 0U &&
+               current_faces.empty() &&
+               strict_face_status ==
+                   kernel::ReferenceStatus::
+                       unsupported;
+    }
+    return false;
+}
+
 bool BodyFaceTopologyRecord::valid() const noexcept {
     if (!runtime_token.valid()) {
         return false;
     }
+
+    if (semantic_address &&
+        !semantic_address->valid()) {
+        return false;
+    }
+    for (std::size_t index = 0U;
+         index < surface_candidates.size();
+         ++index) {
+        if (!surface_candidates[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < surface_candidates.size();
+             ++other) {
+            if (surface_candidates[index] ==
+                surface_candidates[other]) {
+                return false;
+            }
+        }
+    }
+
     switch (accounting_class) {
     case TopologyAccountingClass::referenceable:
-        return semantic_address.has_value() &&
-               semantic_address->valid();
+        return !surface_candidates.empty();
     case TopologyAccountingClass::
         known_representation_artifact:
     case TopologyAccountingClass::
         semantically_unsupported:
-        return !semantic_address.has_value();
+        return !semantic_address.has_value() &&
+               surface_candidates.empty();
     case TopologyAccountingClass::
         integrity_failure:
         return false;
@@ -728,7 +830,8 @@ bool BodyStageTopologyCatalog::valid() const noexcept {
         BodyStageKind::empty_body) {
         return faces.empty() &&
                edges.empty() &&
-               vertices.empty();
+               vertices.empty() &&
+               surfaces.empty();
     }
 
     for (std::size_t index = 0U;
@@ -777,6 +880,28 @@ bool BodyStageTopologyCatalog::valid() const noexcept {
         }
     }
 
+    for (std::size_t index = 0U;
+         index < surfaces.size();
+         ++index) {
+        if (!surfaces[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < surfaces.size();
+             ++other) {
+            if (surfaces[index].address ==
+                surfaces[other].address) {
+                return false;
+            }
+            if (surfaces[index].runtime_token &&
+                surfaces[other].runtime_token &&
+                surfaces[index].runtime_token ==
+                    surfaces[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+
     return true;
 }
 
@@ -813,6 +938,8 @@ PartEvaluation evaluatePart(
         current_topology;
     std::vector<FeatureFaceResolution>
         current_references;
+    std::vector<FeatureSurfaceResolution>
+        current_surfaces;
     bool chain_broken = false;
 
     for (const auto& authored :
@@ -982,11 +1109,45 @@ PartEvaluation evaluatePart(
                 std::move(converted));
         }
 
+        auto candidate_surfaces =
+            current_surfaces;
+        if (!propagateCurrentSurfaces(
+                candidate_surfaces,
+                kernel_result.inherited_surfaces)) {
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    failed;
+            evaluated.diagnostic =
+                FeatureEvaluationDiagnosticCode::
+                    topology_integrity_failure;
+            chain_broken = true;
+            current_references.clear();
+            current_surfaces.clear();
+            result.features.push_back(
+                std::move(evaluated));
+            continue;
+        }
+
+        evaluated.produced_surfaces.reserve(
+            kernel_result.new_surfaces.size());
+        for (const auto& surface :
+             kernel_result.new_surfaces) {
+            auto converted =
+                convertNewSurface(
+                    authored.id,
+                    surface);
+            evaluated.produced_surfaces.push_back(
+                converted);
+            candidate_surfaces.push_back(
+                std::move(converted));
+        }
+
         auto candidate_topology =
             makeBodyStageTopologyCatalog(
                 authored.id,
                 kernel_result,
-                candidate_references);
+                candidate_references,
+                candidate_surfaces);
         if (!candidate_topology) {
             evaluated.status =
                 FeatureEvaluationStatus::
@@ -996,6 +1157,7 @@ PartEvaluation evaluatePart(
                     topology_integrity_failure;
             chain_broken = true;
             current_references.clear();
+            current_surfaces.clear();
             result.features.push_back(
                 std::move(evaluated));
             continue;
@@ -1013,6 +1175,8 @@ PartEvaluation evaluatePart(
             *candidate_topology;
         current_references =
             std::move(candidate_references);
+        current_surfaces =
+            std::move(candidate_surfaces);
         current_topology =
             std::move(candidate_topology);
         current_solid =
@@ -1045,6 +1209,8 @@ PartEvaluation evaluatePart(
             std::move(current_topology);
         result.current_face_references =
             std::move(current_references);
+        result.current_surface_references =
+            std::move(current_surfaces);
         return result;
     }
 
