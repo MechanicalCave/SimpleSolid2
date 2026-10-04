@@ -1566,7 +1566,9 @@ makeBodyStageTopologyCatalog(
     const std::vector<FeatureFaceResolution>&
         semantic_faces,
     const std::vector<FeatureSurfaceResolution>&
-        semantic_surfaces) {
+        semantic_surfaces,
+    const CurveStageBuild& curve_stage,
+    const PointStageBuild& point_stage) {
     if (!feature_id.valid() ||
         !kernel_result.ok() ||
         kernel_result.face_count !=
@@ -1711,26 +1713,41 @@ makeBodyStageTopologyCatalog(
         }
     }
 
-    result.edges.reserve(
-        kernel_result.current_edges.size());
-    for (const auto token :
-         kernel_result.current_edges) {
-        result.edges.push_back(
-            BodyEdgeTopologyRecord{
-                token,
-                TopologyAccountingClass::
-                    semantically_unsupported});
+    result.edges = curve_stage.records;
+    result.vertices = point_stage.records;
+    result.curves = curve_stage.references;
+    result.points = point_stage.references;
+
+    if (result.edges.size() !=
+            kernel_result.current_edges.size() ||
+        result.vertices.size() !=
+            kernel_result.current_vertices.size()) {
+        return std::nullopt;
     }
 
-    result.vertices.reserve(
-        kernel_result.current_vertices.size());
+    for (const auto token :
+         kernel_result.current_edges) {
+        if (std::count_if(
+                result.edges.begin(),
+                result.edges.end(),
+                [token](const auto& record) {
+                    return record.runtime_token ==
+                           token;
+                }) != 1) {
+            return std::nullopt;
+        }
+    }
     for (const auto token :
          kernel_result.current_vertices) {
-        result.vertices.push_back(
-            BodyVertexTopologyRecord{
-                token,
-                TopologyAccountingClass::
-                    semantically_unsupported});
+        if (std::count_if(
+                result.vertices.begin(),
+                result.vertices.end(),
+                [token](const auto& record) {
+                    return record.runtime_token ==
+                           token;
+                }) != 1) {
+            return std::nullopt;
+        }
     }
 
     return result.complete()
@@ -1914,7 +1931,9 @@ bool BodyStageTopologyCatalog::valid() const noexcept {
         return faces.empty() &&
                edges.empty() &&
                vertices.empty() &&
-               surfaces.empty();
+               surfaces.empty() &&
+               curves.empty() &&
+               points.empty();
     }
 
     for (std::size_t index = 0U;
