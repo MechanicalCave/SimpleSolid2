@@ -133,8 +133,7 @@ bool PartDocument::validAuthoredState(
          index < state.sketches.size();
          ++index) {
         const auto& hosted = state.sketches[index];
-        if (!hosted.id.valid() ||
-            !hosted.support.valid()) {
+        if (!hosted.support.valid()) {
             return false;
         }
 
