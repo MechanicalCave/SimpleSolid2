@@ -6604,6 +6604,11 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::MiddleButton) {
         const auto point = event->position().toPoint();
         guardedVoid(
+            "clearBodyPreselectionForNavigation",
+            [this] {
+                impl_->clearBodyTopologyPreselectionIntent();
+            });
+        guardedVoid(
             "middlePress",
             [this, point, event] {
                 impl_->beginMiddleDrag(
@@ -6618,13 +6623,29 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         const auto point =
             event->position().toPoint();
+
+        if (guardedBool(
+                "viewStyleHudPress",
+                [this, point] {
+                    return impl_->activateViewStyleHudAt(
+                        point.x(),
+                        point.y());
+                })) {
+            event->accept();
+            return;
+        }
+
         if (guardedBool(
                 "navigationCubePress",
                 [this, point] {
-                    return impl_->
-                        activateNavigationCubeAt(
+                    const bool activated =
+                        impl_->activateNavigationCubeAt(
                             point.x(),
                             point.y());
+                    if (activated) {
+                        impl_->clearBodyTopologyPreselectionIntent();
+                    }
+                    return activated;
                 })) {
             event->accept();
             return;
