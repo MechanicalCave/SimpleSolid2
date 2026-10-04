@@ -2348,6 +2348,18 @@ finishBoolean(
         return result;
     }
 
+    if (!publishCurrentSubshapeLineage(
+            result,
+            upstream,
+            *runtime,
+            operation,
+            shape)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
     if (!populateCurrentTopologySemantics(
             result,
             *runtime)) {
