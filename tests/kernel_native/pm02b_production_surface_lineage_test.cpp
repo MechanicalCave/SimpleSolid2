@@ -883,6 +883,7 @@ void verifyTrimSplitDeleteRecreate(
             kernel::ReferenceStatus::missing);
         CHECK(missing->candidate_face_count == 0U);
         CHECK(missing->current_faces.empty());
+        CHECK(!missing->canonical_frame.has_value());
 
         const auto recreated =
             provider.extrude(
@@ -980,7 +981,7 @@ int main() {
         << " false_resolved=0"
         << " split_face=ambiguous"
         << " split_surface=resolved"
-        << " deleted_surface=missing"
+        << " deleted_surface=missing_no_frame"
         << " cut_exposed_surface=resolved"
         << " edit_survival=pass"
         << " traversal_reversal=pass"
