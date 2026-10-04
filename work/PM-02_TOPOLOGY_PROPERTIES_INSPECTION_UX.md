@@ -1,8 +1,8 @@
 # PM-02 — Topology Properties / Inspection UX
 
-**Status:** PROPOSED UX DESIGN INPUT — INCLUDED IN PM-02 CONTRACT CANDIDATE; AWAITING OWNER ACCEPTANCE  
-**Production PM-02:** PROPOSED / NOT ACTIVE  
-**Applies to candidate:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
+**Status:** ACCEPTED UX DESIGN INPUT — OWNER ACCEPTED WITH PM-02 CONTRACT 2026-10-04  
+**Production PM-02:** ACTIVE  
+**Applies to active contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Related design inputs:**  
 - `work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`  
 - `work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`  
@@ -27,7 +27,7 @@ The goal is to make semantic topology understandable without:
 - conflating current selectable topology with durable referenceability;
 - turning Properties into a second modeling authority.
 
-This is a UX/architecture input. It does not activate production PM-02.
+This UX/architecture input is normative within the active PM-02 Work Contract.
 
 ## 2. One Properties panel, one primary inspection subject
 

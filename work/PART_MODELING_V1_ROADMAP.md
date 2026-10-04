@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
-**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 PROPOSED / NOT ACTIVE  
-**Version:** 1.7  
+**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 ACTIVE  
+**Version:** 1.8  
 **Owner acceptance:** 2026-10-04  
-**Previous accepted version:** 1.6 — 2026-10-03  
+**Previous accepted version:** 1.7 — 2026-10-04  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** none — PM-02P is completed; proposed PM-02 production Work Contract awaits separate Owner acceptance  
+**Current active checkpoint:** PM-02A — production evaluated Body-stage topology catalog + typed runtime Face/Edge/Vertex tokens under the active PM-02 Work Contract  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -431,13 +431,15 @@ PM-02P PASS authorizes only preparation of the production PM-02 Work Contract.
 
 ## 13. PM-02 — Body Semantic Topology / Face-Supported Sketch
 
-**Status:** PROPOSED / NOT ACTIVE.
+**Status:** ACTIVE — Owner accepted the exact production Work Contract and all four UX/Viewer design inputs on 2026-10-04.
 
-Production PM-02 begins only after separate Owner acceptance of the exact bounded production Work Contract candidate:
+Active authority:
 
 `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`.
 
-PM-02P completion and D2 recommendation acceptance do not themselves authorize production mutation.
+Current checkpoint:
+
+`PM-02A — production evaluated Body-stage topology catalog + typed runtime Face/Edge/Vertex tokens`.
 
 Primary vertical scenario:
 
@@ -445,7 +447,7 @@ Primary vertical scenario:
 
 PM-02 must not special-case only top/bottom caps. All Body Faces are accounted; arbitrary resolved planar cap/lateral/Cut-exposed Faces are eligible Sketch supports. Non-planar Faces remain fully catalogued/selectable but are explicitly unsupported as standard planar Sketch support.
 
-The proposed production contract owns the evaluated stage topology catalog/picking, deterministic planar carrier frames, schema-v9 Sketch-support migration, face-supported Sketch/re-support, stage-aware evaluation, lifecycle/persistence and repair semantics.
+The active production contract owns the evaluated stage topology catalog/picking, deterministic planar carrier frames, topology-aware Body presentation/View Styles, direct topology selection, topology Properties/inspection, schema-v9 Sketch-support migration, face-supported Sketch/re-support, stage-aware evaluation, lifecycle/persistence and repair semantics.
 
 General durable Edge/Vertex persistence is not introduced speculatively; evaluated semantic Edge/Curve and Vertex/Point catalogs are required, while durable serialized selectors remain consumer-driven.
 
@@ -641,27 +643,16 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.7 is accepted and frozen. **G0, PM-00A, PM-00B, PM-01 and PM-02P are COMPLETED — PASS. PM-02 is PROPOSED / NOT ACTIVE.**
+Program v1.8 is accepted and frozen. **G0, PM-00A, PM-00B, PM-01 and PM-02P are COMPLETED — PASS. PM-02 is ACTIVE.**
 
-Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, then accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04.
+Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
-The accepted evidence foundation now includes:
-
-- complete stage-scoped topology accounting;
-- topology/carrier separation;
-- deterministic planar Surface frames;
-- fail-closed split/delete/alias semantics;
-- stale runtime isolation;
-- dynamic Surface-backed Sketch semantics;
-- bounded dependency-cycle rejection;
-- bounded semantic branch/provenance discrimination for singular Edge/Curve references when producer semantics can defend it, otherwise Ambiguous.
-
-No production Work Contract is active after PM-02P closure.
-
-The next proposed contract is:
+Current legal production authority is:
 
 **`work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`.**
 
-It is not implementation authority until separately and explicitly accepted by the Owner and activated through `work/ACTIVE.yaml`.
+The active implementation checkpoint is **PM-02A — production evaluated Body-stage topology catalog + typed runtime Face/Edge/Vertex tokens**.
+
+Mutation must follow PM-02A through PM-02J in order and remain inside the accepted Work Contract. Later checkpoint scope is not permission to skip earlier evidence/gates.
 
 PM-03 Datum and all later product packages remain NOT ACTIVE. Projection remains separately gated and outside the PM-02/PM-03 critical path.
