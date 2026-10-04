@@ -1975,6 +1975,15 @@ finishBoolean(
         return result;
     }
 
+    if (!populateCurrentTopologySemantics(
+            result,
+            *runtime)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
     result.status =
         kernel::SolidModelingStatus::ok;
     result.solid = std::move(runtime);
@@ -2300,6 +2309,15 @@ OcctSolidModelingKernel::extrude(
                         }
                         return candidates;
                     })) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
+
+            if (!populateCurrentTopologySemantics(
+                    result,
+                    *runtime)) {
                 result.status =
                     kernel::SolidModelingStatus::
                         provider_failure;
