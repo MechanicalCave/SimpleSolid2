@@ -2411,7 +2411,10 @@ PartViewportController::primaryBodyTopologyInspection() const {
 
 std::optional<BodyTopologySummary>
 PartViewportController::bodyTopologySummary() const {
-    if (!body_topology_catalog_cache_ ||
+    if (!body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !body_topology_catalog_cache_ ||
         !body_topology_catalog_cache_->complete()) {
         return std::nullopt;
     }
