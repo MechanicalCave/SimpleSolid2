@@ -2246,6 +2246,10 @@ PartEvaluation evaluatePart(
         current_references;
     std::vector<FeatureSurfaceResolution>
         current_surfaces;
+    std::vector<FeatureCurveResolution>
+        current_curves;
+    std::vector<FeaturePointResolution>
+        current_points;
     bool chain_broken = false;
 
     for (const auto& authored :
@@ -2429,6 +2433,8 @@ PartEvaluation evaluatePart(
             chain_broken = true;
             current_references.clear();
             current_surfaces.clear();
+            current_curves.clear();
+            current_points.clear();
             result.features.push_back(
                 std::move(evaluated));
             continue;
@@ -2448,12 +2454,65 @@ PartEvaluation evaluatePart(
                 std::move(converted));
         }
 
+        const auto curve_stage =
+            buildCurveStage(
+                authored.id,
+                kernel_result,
+                candidate_surfaces,
+                current_curves);
+        if (!curve_stage) {
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    failed;
+            evaluated.diagnostic =
+                FeatureEvaluationDiagnosticCode::
+                    topology_integrity_failure;
+            chain_broken = true;
+            current_references.clear();
+            current_surfaces.clear();
+            current_curves.clear();
+            current_points.clear();
+            result.features.push_back(
+                std::move(evaluated));
+            continue;
+        }
+
+        const auto point_stage =
+            buildPointStage(
+                authored.id,
+                kernel_result,
+                candidate_surfaces,
+                current_points);
+        if (!point_stage) {
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    failed;
+            evaluated.diagnostic =
+                FeatureEvaluationDiagnosticCode::
+                    topology_integrity_failure;
+            chain_broken = true;
+            current_references.clear();
+            current_surfaces.clear();
+            current_curves.clear();
+            current_points.clear();
+            result.features.push_back(
+                std::move(evaluated));
+            continue;
+        }
+
+        evaluated.produced_curves =
+            curve_stage->produced;
+        evaluated.produced_points =
+            point_stage->produced;
+
         auto candidate_topology =
             makeBodyStageTopologyCatalog(
                 authored.id,
                 kernel_result,
                 candidate_references,
-                candidate_surfaces);
+                candidate_surfaces,
+                *curve_stage,
+                *point_stage);
         if (!candidate_topology) {
             evaluated.status =
                 FeatureEvaluationStatus::
@@ -2483,6 +2542,10 @@ PartEvaluation evaluatePart(
             std::move(candidate_references);
         current_surfaces =
             std::move(candidate_surfaces);
+        current_curves =
+            curve_stage->references;
+        current_points =
+            point_stage->references;
         current_topology =
             std::move(candidate_topology);
         current_solid =
@@ -2517,6 +2580,10 @@ PartEvaluation evaluatePart(
             std::move(current_references);
         result.current_surface_references =
             std::move(current_surfaces);
+        result.current_curve_references =
+            std::move(current_curves);
+        result.current_point_references =
+            std::move(current_points);
         return result;
     }
 
