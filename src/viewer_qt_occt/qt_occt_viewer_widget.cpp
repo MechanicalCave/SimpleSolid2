@@ -860,6 +860,8 @@ public:
     bool setCameraState(const viewer::CameraState& state) {
         if (!viewer::validateCameraState(state).valid) return false;
 
+        clearBodyTopologyPreselectionIntent();
+
         if (view_.IsNull()) {
             ensureInitialized();
             if (view_.IsNull()) return false;
@@ -902,6 +904,7 @@ public:
     void fitAll() {
         ensureInitialized();
         if (view_.IsNull()) return;
+        clearBodyTopologyPreselectionIntent();
         view_->FitAll(0.05, false);
         redraw();
     }
@@ -4031,6 +4034,7 @@ public:
     void zoomByFactor(double factor) {
         ensureInitialized();
         if (view_.IsNull() || !std::isfinite(factor) || factor <= 0.0) return;
+        clearBodyTopologyPreselectionIntent();
         view_->SetZoom(factor, true);
         redraw();
     }
@@ -4039,6 +4043,7 @@ public:
         ensureInitialized();
         if (view_.IsNull()) return;
 
+        clearBodyTopologyPreselectionIntent();
         const auto dpr = owner_.devicePixelRatioF();
         const auto dx = view_->Convert(
             static_cast<int>(std::lround(delta_x * dpr)));
@@ -4057,6 +4062,7 @@ public:
             return;
         }
 
+        clearBodyTopologyPreselectionIntent();
         view_->Rotate(angles.x, angles.y, angles.z, true);
         redraw();
         syncNavigationControlVisibility();
@@ -5913,6 +5919,7 @@ public:
         ensureInitialized();
         if (view_.IsNull() || angle_delta_y == 0) return;
 
+        clearBodyTopologyPreselectionIntent();
         const auto dpr = owner_.devicePixelRatioF();
         const auto x = static_cast<int>(
             std::lround(static_cast<double>(logical_x) * dpr));
