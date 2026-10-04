@@ -398,6 +398,162 @@ struct CutExposedSurfaceEvidence final {
         const CutExposedSurfaceEvidence&) = default;
 };
 
+enum class EvidenceCurveKind {
+    line,
+    circle,
+    other,
+};
+
+enum class EvidenceEdgeSemanticRoleKind {
+    cap_side,
+    side_side,
+    boolean_intersection,
+    periodic_seam,
+    unsupported,
+};
+
+struct EvidenceSurfaceCarrierKey final {
+    EvidenceSurfaceCarrierRoleKind role{
+        EvidenceSurfaceCarrierRoleKind::side};
+    std::optional<BoundaryUseProvenance> provenance;
+
+    friend bool operator==(
+        const EvidenceSurfaceCarrierKey&,
+        const EvidenceSurfaceCarrierKey&) = default;
+};
+
+// PM-02P.C evidence-only semantic Edge/Curve record. Adjacency to semantic
+// Surface carriers is the semantic claim. Provider curve type corroborates
+// the claim but does not define durable identity.
+struct EvidenceEdgeOntologyRecord final {
+    EvidenceTopologyAccountingClass accounting_class{
+        EvidenceTopologyAccountingClass::semantically_unsupported};
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    EvidenceEdgeSemanticRoleKind role{
+        EvidenceEdgeSemanticRoleKind::unsupported};
+    EvidenceCurveKind semantic_curve_kind{
+        EvidenceCurveKind::other};
+    std::optional<EvidenceCurveKind>
+        provider_curve_kind;
+    std::vector<EvidenceSurfaceCarrierKey>
+        adjacent_surfaces;
+    bool periodic_seam{false};
+
+    friend bool operator==(
+        const EvidenceEdgeOntologyRecord&,
+        const EvidenceEdgeOntologyRecord&) = default;
+};
+
+struct ExtrudeEdgeOntologyEvidence final {
+    ShapeEvidence shape;
+    BodyTopologyInventoryEvidence topology;
+    std::vector<EvidenceEdgeOntologyRecord> edges;
+    std::size_t referenceable_edge_count{};
+    std::size_t representation_artifact_count{};
+    std::size_t unsupported_edge_count{};
+    std::size_t integrity_failure_count{};
+
+    [[nodiscard]] bool completeEdgeAccounting() const noexcept {
+        return shape.ok() &&
+               shape.solid_count == 1U &&
+               topology.complete() &&
+               topology.edges.provider_unique_count ==
+                   edges.size() &&
+               integrity_failure_count == 0U &&
+               referenceable_edge_count +
+                       representation_artifact_count +
+                       unsupported_edge_count ==
+                   edges.size();
+    }
+
+    friend bool operator==(
+        const ExtrudeEdgeOntologyEvidence&,
+        const ExtrudeEdgeOntologyEvidence&) = default;
+};
+
+enum class EdgeBooleanProbeScenario {
+    unchanged,
+    trim,
+    split,
+    remove,
+};
+
+// Evidence for one semantic material Edge carried through a Boolean operation.
+// The source Edge is obtained from semantic Surface adjacency, never from
+// provider order or geometric ranking.
+struct EdgeBooleanLineageEvidence final {
+    ShapeEvidence before_shape;
+    ShapeEvidence after_shape;
+    BodyTopologyInventoryEvidence after_topology;
+    BooleanSubshapeHistoryEvidence source_history;
+    ReferenceStatus edge_status{
+        ReferenceStatus::unsupported};
+    std::size_t current_edge_realization_count{};
+    EvidenceCurveKind semantic_curve_kind{
+        EvidenceCurveKind::line};
+    bool all_provider_curves_match_kind{false};
+
+    [[nodiscard]] bool ok() const noexcept {
+        return before_shape.ok() &&
+               before_shape.solid_count == 1U &&
+               after_shape.ok() &&
+               after_shape.solid_count == 1U &&
+               after_topology.complete();
+    }
+
+    friend bool operator==(
+        const EdgeBooleanLineageEvidence&,
+        const EdgeBooleanLineageEvidence&) = default;
+};
+
+struct BooleanIntersectionEdgeEvidence final {
+    ShapeEvidence shape;
+    BodyTopologyInventoryEvidence topology;
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    std::size_t current_edge_realization_count{};
+    EvidenceCurveKind semantic_curve_kind{
+        EvidenceCurveKind::line};
+    bool all_provider_curves_match_kind{false};
+    EvidenceSurfaceCarrierKey first_surface;
+    EvidenceSurfaceCarrierKey second_surface;
+    bool absent_from_both_source_shapes{false};
+
+    [[nodiscard]] bool ok() const noexcept {
+        return shape.ok() &&
+               shape.solid_count == 1U &&
+               topology.complete();
+    }
+
+    friend bool operator==(
+        const BooleanIntersectionEdgeEvidence&,
+        const BooleanIntersectionEdgeEvidence&) = default;
+};
+
+struct SurfacePairBranchEvidence final {
+    ShapeEvidence shape;
+    BodyTopologyInventoryEvidence topology;
+    ReferenceStatus pair_only_status{
+        ReferenceStatus::unsupported};
+    std::size_t branch_count{};
+    EvidenceCurveKind semantic_curve_kind{
+        EvidenceCurveKind::line};
+    bool all_provider_curves_match_kind{false};
+    EvidenceSurfaceCarrierKey first_surface;
+    EvidenceSurfaceCarrierKey second_surface;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return shape.ok() &&
+               shape.solid_count == 1U &&
+               topology.complete();
+    }
+
+    friend bool operator==(
+        const SurfacePairBranchEvidence&,
+        const SurfacePairBranchEvidence&) = default;
+};
+
 struct EdgeSplitHistoryEvidence final {
     ShapeEvidence shape;
     BooleanSubshapeHistoryEvidence target;

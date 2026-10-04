@@ -36,6 +36,21 @@ buildSurfaceDeleteRecreateEvidence() noexcept;
 [[nodiscard]] kernel::CutExposedSurfaceEvidence
 buildCutExposedSurfaceEvidence() noexcept;
 
+[[nodiscard]] kernel::ExtrudeEdgeOntologyEvidence
+buildExtrudeEdgeOntologyEvidence(
+    const kernel::PlanarProfileInput& input,
+    double distance) noexcept;
+
+[[nodiscard]] kernel::EdgeBooleanLineageEvidence
+buildEdgeBooleanLineageEvidence(
+    kernel::EdgeBooleanProbeScenario scenario) noexcept;
+
+[[nodiscard]] kernel::BooleanIntersectionEdgeEvidence
+buildBooleanIntersectionEdgeEvidence() noexcept;
+
+[[nodiscard]] kernel::SurfacePairBranchEvidence
+buildSurfacePairBranchEvidence() noexcept;
+
 [[nodiscard]] kernel::FullRevolveEvidence
 buildProfileFullRevolveEvidence(
     const kernel::PlanarProfileInput& input,
