@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <cmath>
+#include <utility>
+#include <vector>
 
 namespace simplesolid2::kernel {
 namespace {
@@ -115,12 +117,26 @@ bool BodyPresentation::valid() const noexcept {
         return false;
     }
 
+    std::vector<bool> triangle_coverage(
+        mesh.triangles.size(),
+        false);
     for (std::size_t index = 0U;
          index < faces.size();
          ++index) {
         if (!faces[index].valid(
                 mesh.triangles.size())) {
             return false;
+        }
+        for (std::size_t triangle =
+                 faces[index].first_triangle;
+             triangle <
+                 faces[index].first_triangle +
+                     faces[index].triangle_count;
+             ++triangle) {
+            if (triangle_coverage[triangle]) {
+                return false;
+            }
+            triangle_coverage[triangle] = true;
         }
         for (std::size_t other = index + 1U;
              other < faces.size();
@@ -130,6 +146,15 @@ bool BodyPresentation::valid() const noexcept {
                 return false;
             }
         }
+    }
+    if (!faces.empty() &&
+        !std::all_of(
+            triangle_coverage.begin(),
+            triangle_coverage.end(),
+            [](bool covered) {
+                return covered;
+            })) {
+        return false;
     }
 
     for (std::size_t index = 0U;
