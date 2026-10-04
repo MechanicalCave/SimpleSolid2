@@ -297,7 +297,7 @@ The following are forbidden as frame authority:
 - camera;
 - tessellation.
 
-### 4.12 Topology picking and inspection
+### 4.12 Topology picking, visual styles and Feature inspection
 
 PM-02 may add bounded provider-neutral Viewer/Part support required to:
 
@@ -305,11 +305,116 @@ PM-02 may add bounded provider-neutral Viewer/Part support required to:
 - hover/select Body Edge;
 - hover/select Body Vertex;
 - map current runtime pick token to current stage catalog record;
-- expose semantic type/status/classification/provenance in inspection/Properties.
+- expose semantic type/status/classification/provenance in inspection/Properties;
+- present the accepted viewport View Style selector;
+- visualize Current Feature Contribution from Document Tree hover/selection.
 
 Picking is transient.
 
 Only semantic command inputs may cross into persistent mutation.
+
+The accepted detailed UX semantics are recorded in:
+
+`work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`.
+
+#### Base View Style
+
+PM-02 must expose one single-select View Style control in the viewport navigation/presentation HUD, grouped with HOME / ORTHO-PERSP / Navigation Cube presentation controls.
+
+Required styles:
+
+- Shaded;
+- Shaded + Edges;
+- Shaded + Hidden Edges.
+
+View Style is presentation state:
+
+- it does not increment DocumentRevision;
+- it does not dirty the Part;
+- it does not create CAD Undo/Redo history;
+- it is not persisted in the Part file.
+
+A UI/workspace preference may remember it outside the Part document.
+
+Hidden-edge display is visual only. Enabling Shaded + Hidden Edges must not silently enable select-through of occluded topology.
+
+#### Overlay independence
+
+Base View Style, direct topology selection, tree Feature highlighting, command preview and diagnostic overlays are independent presentation layers.
+
+Changing View Style must not change:
+
+- semantic selection;
+- topology/reference status;
+- command targets;
+- current Feature Contribution;
+- authored CAD state.
+
+Direct viewport Face/Edge/Vertex interaction uses the direct-topology selection overlay. Tree Feature interaction uses a distinct Feature-contribution overlay.
+
+#### Current Feature Contribution
+
+For Feature `F`, Current Feature Contribution is a **set-valued query** against the currently authoritative displayed Body stage.
+
+It means the current semantic topology that still carries meaning produced directly by `F`.
+
+Face contribution:
+
+- current Face realizations whose semantic Surface carrier producer is `F`;
+- if one prior Face realization split into several current Faces while retaining one Surface produced by `F`, all surviving current Faces are highlighted;
+- this set-valued display is not a singular FaceReference resolution and therefore is not Ambiguous merely because there are several fragments;
+- deleted semantic output is not ghosted as current contribution.
+
+Edge/Vertex contribution:
+
+- direct semantic Edge/Curve or Vertex/Point records whose producer provenance identifies `F`;
+- boundary Edges/Vertices around highlighted contribution Faces may be drawn as a presentation envelope for readability without being reclassified as direct Feature-owned semantic topology.
+
+A current topology item involving carriers from several Features must not be arbitrarily assigned to one Feature merely for coloring.
+
+#### Tree hover and selection
+
+Feature tree hover:
+
+- shows temporary Current Feature Contribution;
+- does not change primary selection/Properties authority;
+- disappears on hover exit;
+- creates no authored mutation.
+
+Feature tree selection:
+
+- shows persistent Current Feature Contribution;
+- makes the Feature the tree/Properties selection;
+- keeps the current Body in its current base View Style;
+- does not automatically replace the current Body with a historical stage.
+
+An active modeling command may suppress lower-priority tree hover so command target/preview cues remain unambiguous.
+
+#### Cut contribution
+
+For Cut, direct Current Feature Contribution includes current semantic topology introduced by the Cut, such as:
+
+- Cut-exposed tool Surfaces;
+- Boolean-created material intersection Edges with direct operation provenance;
+- directly generated semantic Points/Vertices when defensible.
+
+Upstream Surfaces merely trimmed by the Cut retain their original semantic producer and are not stolen by the Cut highlight.
+
+#### Distinct presentation concepts
+
+The following must remain distinct:
+
+```text
+Current Feature Contribution
+!= Operation Scope / Delta
+!= Historical Stage Preview
+```
+
+Current Feature Contribution is the default tree hover/selection meaning.
+
+Operation Scope / Delta answers what volume the Feature added/removed at its own upstream stage. It may later be visualized as a translucent ghost and remains optional unless promoted by contract amendment.
+
+Historical Stage Preview answers what the entire Body looked like immediately after the Feature. It must be an explicit presentation action if later productized and is not implied by ordinary tree selection.
 
 ### 4.13 Sketch support types
 
@@ -593,19 +698,29 @@ Gate:
 - multi-branch pair remains Ambiguous without defensible branch provenance;
 - exact same XYZ does not rebind Point identity.
 
-### PM-02D — Viewer pick -> semantic topology inspection
+### PM-02D — Viewer pick, View Style and semantic topology inspection
 
 Deliver:
 
 - fresh Face/Edge/Vertex hover/select mapping;
 - runtime token -> current stage catalog;
 - semantic Properties/inspection;
-- stale selection rejection.
+- stale selection rejection;
+- viewport-HUD View Style selector;
+- Shaded / Shaded + Edges / Shaded + Hidden Edges;
+- temporary Feature Contribution on tree hover;
+- persistent Feature Contribution on tree selection;
+- independent overlay roles for direct topology selection versus Feature/tree contribution.
 
 Gate:
 
 - Viewer token never serialized/authored;
-- revision/session/evaluation/provider replacement rejects stale pick.
+- revision/session/evaluation/provider replacement rejects stale pick;
+- View Style changes do not mutate/dirty/Undo the Part;
+- hidden-edge display does not silently enable select-through;
+- split Surface contribution highlights all surviving current Face realizations as a set-valued query;
+- deleted outputs are not shown as current contribution;
+- selecting a Feature does not implicitly switch to historical Body stage.
 
 ### PM-02E — Sketch support schema v9 + deterministic frame resolver
 
@@ -711,6 +826,13 @@ PM-02 cannot complete without automated and manual evidence covering at least:
 - all current Faces selectable/inspectable;
 - all current Edges selectable/inspectable;
 - all current Vertices selectable/inspectable;
+- viewport View Style selector provides Shaded / Shaded + Edges / Shaded + Hidden Edges;
+- View Style remains non-authored and independent of semantic selection;
+- hidden-edge rendering does not silently enable occluded select-through;
+- tree hover shows temporary Current Feature Contribution;
+- tree selection shows persistent Current Feature Contribution without historical-stage substitution;
+- split Feature Surface contribution highlights all surviving current Face realizations without misclassifying the set-valued display as Ambiguous;
+- Cut contribution highlights direct Cut-created current topology without stealing upstream Surface ownership;
 - planar cap Sketch support;
 - planar lateral Sketch support;
 - Cut-exposed planar Sketch support;
@@ -741,16 +863,19 @@ The final Owner workflow must exercise at minimum:
 
 1. create Body from Origin Sketch + Extrude Add;
 2. inspect/pick all topology kinds on the Body;
-3. create Sketch on a planar cap;
-4. create Sketch on a planar lateral Face;
-5. create Sketch on a Cut-exposed planar Face when available in the scenario;
-6. attempt standard Sketch on a cylindrical Face and observe structured Unsupported;
-7. author Profile + Extrude Add/Cut from face-supported Sketch;
-8. edit an upstream dimension so the support moves but survives;
-9. exercise a support deletion/ambiguity and verify no stale geometry is modeled;
-10. repair/re-support the Sketch;
-11. Undo/Redo;
-12. Save, close, reopen and verify cold reconstruction.
+3. switch Shaded / Shaded + Edges / Shaded + Hidden Edges from the viewport HUD and verify no Part dirty/Undo change;
+4. hover/select multiple Extrude Features in the tree and verify Current Feature Contribution overlays;
+5. verify a later trim/split shows all surviving current contribution fragments while deleted outputs are not ghosted as current truth;
+6. create Sketch on a planar cap;
+7. create Sketch on a planar lateral Face;
+8. create Sketch on a Cut-exposed planar Face when available in the scenario;
+9. attempt standard Sketch on a cylindrical Face and observe structured Unsupported;
+10. author Profile + Extrude Add/Cut from face-supported Sketch;
+11. edit an upstream dimension so the support moves but survives;
+12. exercise a support deletion/ambiguity and verify no stale geometry is modeled;
+13. repair/re-support the Sketch;
+14. Undo/Redo;
+15. Save, close, reopen and verify cold reconstruction.
 
 Exact UI labels may evolve D0/D1 inside the contract; semantic behavior may not.
 
