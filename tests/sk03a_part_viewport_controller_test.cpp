@@ -150,6 +150,16 @@ public:
         return true;
     }
 
+    bool setBodyTopologyOverlayScene(
+        const viewer::BodyTopologyOverlayScene& scene) override {
+        ++body_topology_overlay_scene_calls_;
+        if (!scene.valid()) {
+            return false;
+        }
+        body_topology_overlay_scene_ = scene;
+        return true;
+    }
+
     bool setSolidScene(
         const viewer::SolidScene& scene) override {
         ++solid_scene_calls_;
@@ -281,6 +291,9 @@ public:
         presentation_selection_;
     viewer::BodyTopologyPickQueryResult
         body_query_;
+    viewer::BodyTopologyOverlayScene
+        body_topology_overlay_scene_;
+    std::size_t body_topology_overlay_scene_calls_{};
     viewer::ViewStyle view_style_{
         viewer::ViewStyle::shaded};
     std::size_t body_scene_calls_{};
@@ -1255,6 +1268,67 @@ int main(int argc, char* argv[]) {
             topology_viewport.body_scene_
                 .vertices.front().token;
 
+        // PM-02D4: selected Feature contribution is a presentation overlay
+        // over the same current BodyScene token. It must not create a second
+        // topology identity or alter ordinary Body selection.
+        topology_controller.setFeatureContributionSelection(
+            *feature.feature_id);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .generation == generation);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.size() == 1U);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.front().role ==
+            viewer::BodyTopologyOverlayRole::
+                feature_contribution_selected);
+        CHECK(
+            std::find(
+                topology_viewport
+                    .body_topology_overlay_scene_
+                    .groups.front().tokens.begin(),
+                topology_viewport
+                    .body_topology_overlay_scene_
+                    .groups.front().tokens.end(),
+                face_token) !=
+            topology_viewport
+                .body_topology_overlay_scene_
+                .groups.front().tokens.end());
+
+        // Hovering the already-selected Feature must not duplicate the same
+        // green contribution as a second overlay group.
+        topology_controller.setFeatureContributionHover(
+            *feature.feature_id);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.size() == 1U);
+
+        // With persistent selection cleared, the same semantic contribution
+        // becomes a transient hover role without touching authored state.
+        topology_controller.setFeatureContributionSelection(
+            std::nullopt);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.size() == 1U);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.front().role ==
+            viewer::BodyTopologyOverlayRole::
+                feature_contribution_hover);
+        topology_controller.setFeatureContributionHover(
+            std::nullopt);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .empty());
+
+        topology_controller.setFeatureContributionSelection(
+            *feature.feature_id);
+        const auto contribution_generation =
+            topology_viewport.body_topology_overlay_scene_
+                .generation;
+
         viewer::BodyTopologyPickQueryResult
             competing;
         competing.completed = true;
@@ -1465,6 +1539,39 @@ int main(int argc, char* argv[]) {
                  .primaryBodyTopologySelection());
         CHECK(
             !topology_viewport.body_preselection_);
+
+        // A document revision rebuilds BodyScene with a new generation and
+        // the semantic Feature contribution is reprojected onto the new
+        // PresentationTokens for that generation.
+        auto topology_properties =
+            topology_session.document().properties();
+        topology_properties.title =
+            "PM-02D4 contribution generation refresh";
+        const auto topology_property_change =
+            topology_session.execute(
+                application::SetDocumentPropertiesCommand{
+                    std::move(topology_properties)});
+        CHECK(
+            topology_property_change.ok() &&
+            topology_property_change.changed);
+        topology_controller.refreshPresentation();
+        CHECK(
+            topology_viewport.body_scene_.generation.valid());
+        CHECK(
+            topology_viewport.body_scene_.generation !=
+            contribution_generation);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .generation ==
+            topology_viewport.body_scene_.generation);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.size() == 1U);
+        CHECK(
+            topology_viewport.body_topology_overlay_scene_
+                .groups.front().role ==
+            viewer::BodyTopologyOverlayRole::
+                feature_contribution_selected);
 
         topology_controller.setSolidModelingKernel(
             nullptr);
