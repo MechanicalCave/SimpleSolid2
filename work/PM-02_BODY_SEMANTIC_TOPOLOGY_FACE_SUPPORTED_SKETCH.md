@@ -1,13 +1,13 @@
 # PM-02 — Body Semantic Topology / Face-Supported Sketch
 
-**Status:** PROPOSED — AWAITING EXPLICIT OWNER ACCEPTANCE  
-**Decision class:** D2 production Work Contract candidate; no production mutation authorized until accepted  
+**Status:** ACTIVE — OWNER ACCEPTED 2026-10-04  
+**Decision class:** D2 production Work Contract — Owner accepted 2026-10-04  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.7  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.8  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Entry gate:** PM-02P Body Semantic Topology Evidence COMPLETED — PASS; Owner accepted PM-02P D2 synthesis/recommendation on 2026-10-04  
 **Evidence authority:** `work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md`, `work/PM-02P_REFERENCE_SURVIVAL_MATRIX.md`, `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`  
-**Production mutation:** NOT AUTHORIZED UNTIL THIS CONTRACT IS EXPLICITLY ACCEPTED
+**Production mutation:** AUTHORIZED ONLY WITHIN THIS ACTIVE CONTRACT
 
 ## 1. Goal
 
@@ -36,16 +36,13 @@ Projection is explicitly independent and remains outside PM-02.
 
 ## 2. Activation rule
 
-This document is only a Work Contract candidate.
+Owner explicitly accepted this exact Work Contract revision on 2026-10-04, including all four referenced UX/Viewer design inputs.
 
-Production PM-02 becomes ACTIVE only when all of the following are true:
+Activation is completed when `work/ACTIVE.yaml` points to this contract and the activation change passes the repository gate.
 
-1. the Owner explicitly accepts this exact contract or an amended revision;
-2. `work/ACTIVE.yaml` is changed to point to this contract;
-3. the repository closure/docs gate for that activation change passes;
-4. no unresolved D2 contradiction exists against ADR-0014, ADR-0016 or the accepted PM-02P evidence.
+Once activated, production mutation is authorized only within this contract and its ordered checkpoints PM-02A through PM-02J.
 
-Until then, no production schema, topology catalog, Viewer topology picking or face-supported Sketch mutation is authorized.
+Any scope expansion or D2 contradiction against ADR-0014, ADR-0016, PM-02P evidence or this contract is STOP and returns to Owner review.
 
 ## 3. Governing invariants
 
@@ -313,14 +310,12 @@ Picking is transient.
 
 Only semantic command inputs may cross into persistent mutation.
 
-The current detailed UX/Viewer design inputs for this contract candidate are:
+The following UX/Viewer design inputs are normative for this active contract and were accepted by the Owner on or before 2026-10-04:
 
 `work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`;  
 `work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`;  
 `work/PM-02_BODY_PRESENTATION_VIEWER_API_DESIGN.md`;  
 `work/PM-02_TOPOLOGY_PROPERTIES_INSPECTION_UX.md`.
-
-The first three inputs were already Owner-accepted before this revision. The topology Properties/inspection input remains proposed until the Owner accepts this exact PM-02 Work Contract revision.
 
 #### Base View Style
 
