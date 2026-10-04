@@ -804,6 +804,12 @@ int main(int argc, char* argv[]) {
         CHECK(
             viewport.body_scene_
                 .triangles.size() == 1U);
+        CHECK(viewport.body_scene_.generation.valid());
+        CHECK(
+            viewport.body_scene_.purpose ==
+            viewer::BodyScenePurpose::current_body);
+        const auto first_body_generation =
+            viewport.body_scene_.generation;
 
         const auto extrude_calls_after_publish =
             solid_kernel.extrude_calls;
@@ -816,6 +822,9 @@ int main(int argc, char* argv[]) {
         CHECK(
             solid_kernel.mesh_calls ==
             mesh_calls_after_publish);
+        CHECK(
+            viewport.body_scene_.generation ==
+            first_body_generation);
 
         auto preview_solid =
             std::make_shared<FakeSolid>();
@@ -859,6 +868,13 @@ int main(int argc, char* argv[]) {
         CHECK(
             viewport.body_scene_
                 .triangles.size() == 1U);
+        CHECK(viewport.body_scene_.generation.valid());
+        CHECK(
+            viewport.body_scene_.generation !=
+            first_body_generation);
+        CHECK(
+            viewport.body_scene_.purpose ==
+            viewer::BodyScenePurpose::current_body);
         CHECK(
             !controller.presentationDegraded());
 
@@ -1034,6 +1050,11 @@ int main(int argc, char* argv[]) {
         CHECK(
             viewport.body_scene_
                 .triangles.size() == 1U);
+        CHECK(viewport.body_scene_.generation.valid());
+        CHECK(
+            viewport.body_scene_.purpose ==
+            viewer::BodyScenePurpose::
+                diagnostic_prefix);
 
         const auto delete_lower =
             solid_session.execute(
@@ -1059,6 +1080,8 @@ int main(int argc, char* argv[]) {
         CHECK(
             viewport.body_scene_
                 .triangles.empty());
+        CHECK(
+            !viewport.body_scene_.generation.valid());
 
         controller.setSolidModelingKernel(
             nullptr);
