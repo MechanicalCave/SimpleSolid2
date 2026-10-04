@@ -3573,14 +3573,16 @@ public:
     }
 
     void clearBodyTopologyPreselectionIntent() {
-        // HUD/navigation capture must clear the provider overlay without
-        // forcing a second V3d_View::Redraw() before the semantic clear
-        // intent is delivered. A redraw here can synchronously/reentrantly
-        // generate another mouse-move on the native window and republish a
-        // Body query from an unrelated OS cursor position. Clear the runtime
-        // token/objects first and use the already-synchronous viewer update;
-        // the controller callback then observes nullopt and its mirrored
-        // setBodyTopologyPreselection(nullopt) is an exact no-op.
+        if (body_preselection_clear_active_) {
+            return;
+        }
+
+        body_preselection_clear_active_ = true;
+
+        // HUD/navigation capture must clear the provider overlay before the
+        // semantic invalid intent is delivered. OCCT Remove/Update calls may
+        // synchronously re-enter mouse processing, so the guard above keeps
+        // nested hover from republishing a valid Body query.
         const bool changed =
             body_preselection_token_.has_value() ||
             !body_preselection_objects_.empty();
@@ -3597,11 +3599,21 @@ public:
                 viewer::BodyTopologyPickQueryResult{},
                 viewer::ViewportPoint2{});
         }
+
+        body_preselection_clear_active_ = false;
     }
 
     bool emitBodyTopologyPreselectionAt(
         double logical_x,
         double logical_y) {
+        // OCCT context updates performed while clearing a hover overlay can
+        // synchronously pump native mouse/detection work. Such nested hover
+        // must not republish Body topology before the authoritative clear
+        // intent completes.
+        if (body_preselection_clear_active_) {
+            return false;
+        }
+
         if (primary_pointer_routing_ !=
                 viewer::PrimaryPointerRouting::
                     presentation_selection ||
@@ -6035,6 +6047,7 @@ private:
         body_preselection_token_;
     std::vector<Handle(AIS_InteractiveObject)>
         body_preselection_objects_;
+    bool body_preselection_clear_active_{};
     viewer::SolidScene solid_scene_;
     viewer::SolidPreviewScene solid_preview_scene_;
     std::vector<ProfileObject> profile_objects_;
