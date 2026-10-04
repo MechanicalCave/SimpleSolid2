@@ -165,6 +165,32 @@ struct CurrentVertexSemanticObservation final {
         const CurrentVertexSemanticObservation&) = default;
 };
 
+struct InheritedEdgeRealizationLineage final {
+    RuntimeEdgeToken source_token;
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_count{};
+    std::vector<RuntimeEdgeToken>
+        current_edges;
+
+    friend bool operator==(
+        const InheritedEdgeRealizationLineage&,
+        const InheritedEdgeRealizationLineage&) = default;
+};
+
+struct InheritedVertexRealizationLineage final {
+    RuntimeVertexToken source_token;
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_count{};
+    std::vector<RuntimeVertexToken>
+        current_vertices;
+
+    friend bool operator==(
+        const InheritedVertexRealizationLineage&,
+        const InheritedVertexRealizationLineage&) = default;
+};
+
 enum class SolidBooleanOperation {
     add,
     cut,
@@ -308,6 +334,14 @@ struct SolidModelingResult final {
         current_edge_semantics;
     std::vector<CurrentVertexSemanticObservation>
         current_vertex_semantics;
+
+    // Transient provider-history evidence across one adjacent Body stage.
+    // Part may use this only to corroborate semantic lifecycle. It is never
+    // persisted and never chooses among semantic candidates by provider order.
+    std::vector<InheritedEdgeRealizationLineage>
+        inherited_edge_realizations;
+    std::vector<InheritedVertexRealizationLineage>
+        inherited_vertex_realizations;
 
     // PM-01 semantic Face lineage remains separate from complete inventory.
     std::vector<InheritedFaceLineage>
