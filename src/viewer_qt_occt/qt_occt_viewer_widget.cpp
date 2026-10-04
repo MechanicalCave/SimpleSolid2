@@ -5088,6 +5088,42 @@ bool QtOcctViewerWidget::setSolidScene(
 }
 
 
+bool QtOcctViewerWidget::setBodyScene(
+    const viewer::BodyScene& scene) {
+    return guardedBool(
+        "setBodyScene",
+        [this, &scene] {
+            return impl_->setBodyScene(scene);
+        });
+}
+
+viewer::ViewStyle
+QtOcctViewerWidget::viewStyle() const noexcept {
+    return impl_
+        ? impl_->viewStyle()
+        : viewer::ViewStyle::shaded;
+}
+
+bool QtOcctViewerWidget::setViewStyle(
+    viewer::ViewStyle style) {
+    return guardedBool(
+        "setViewStyle",
+        [this, style] {
+            return impl_->setViewStyle(style);
+        });
+}
+
+void QtOcctViewerWidget::setViewStyleActionHandler(
+    viewer::ViewStyleActionHandler handler) {
+    guardedVoid(
+        "setViewStyleActionHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setViewStyleActionHandler(
+                std::move(handler));
+        });
+}
+
+
 bool QtOcctViewerWidget::setSolidPreviewScene(
     const viewer::SolidPreviewScene& scene) {
     return guardedBool(
