@@ -48,6 +48,9 @@ public:
         std::function<void(
             const std::vector<part::FeatureId>&,
             std::optional<part::FeatureId>)>;
+    using FeatureHoverHandler =
+        std::function<void(
+            std::optional<part::FeatureId>)>;
     using FeatureEditHandler =
         std::function<void(part::FeatureId)>;
     using FeatureSuppressionHandler =
@@ -109,6 +112,11 @@ public:
     void setFeatureSelectionHandler(
         FeatureSelectionHandler handler) {
         feature_selection_handler_ =
+            std::move(handler);
+    }
+    void setFeatureHoverHandler(
+        FeatureHoverHandler handler) {
+        feature_hover_handler_ =
             std::move(handler);
     }
     void setFeatureEditHandler(
@@ -193,6 +201,7 @@ private:
     ProfileSelectionHandler profile_selection_handler_;
     ProfileEditHandler profile_edit_handler_;
     FeatureSelectionHandler feature_selection_handler_;
+    FeatureHoverHandler feature_hover_handler_;
     FeatureEditHandler feature_edit_handler_;
     FeatureSuppressionHandler
         feature_suppression_handler_;
@@ -203,6 +212,8 @@ private:
         part::BodyEvaluationStatus::empty};
     std::vector<FeatureTreeEvaluationEntry>
         feature_evaluations_;
+    std::optional<part::FeatureId>
+        hovered_feature_id_;
 };
 
 } // namespace simplesolid2::ui
