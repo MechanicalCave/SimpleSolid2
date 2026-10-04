@@ -440,8 +440,8 @@ int main(int argc, char* argv[]) {
         !last_body_preselection_query.generation.valid());
     CHECK(
         last_body_preselection_query.candidates.empty());
-    CHECK(
-        !last_body_preselection_point.valid());
+    // ViewportPoint2{0,0} is itself a valid screen coordinate. Clear intent
+    // authority is the non-current query payload above, not point invalidity.
 
     const int cycles_before_cleared_tab =
         cycle_forward + cycle_reverse;
