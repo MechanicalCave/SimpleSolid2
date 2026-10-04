@@ -6,6 +6,8 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <QApplication>
+#include <QEvent>
+#include <QMouseEvent>
 #include <QTreeWidget>
 #include <QWidget>
 
@@ -1241,8 +1243,71 @@ int main(int argc, char* argv[]) {
 
         topology_controller.setSolidModelingKernel(
             &topology_kernel);
+        std::optional<part::FeatureId>
+            hovered_tree_feature;
+        std::size_t feature_hover_events = 0U;
+        topology_tree_controller.setFeatureHoverHandler(
+            [&hovered_tree_feature,
+             &feature_hover_events](
+                std::optional<part::FeatureId> id) {
+                hovered_tree_feature = id;
+                ++feature_hover_events;
+            });
+
         topology_controller.setDocumentSession(
             &topology_session);
+
+        // PM-02D4: tree hover emits semantic FeatureId only and does not
+        // mutate tree selection. Leave clears the transient hover.
+        topology_tree.resize(420, 320);
+        topology_tree.expandAll();
+        topology_tree.show();
+        QApplication::processEvents();
+
+        QTreeWidgetItem* feature_item = nullptr;
+        for (QTreeWidgetItemIterator it{&topology_tree};
+             *it != nullptr;
+             ++it) {
+            if ((*it)->text(0).contains(
+                    QStringLiteral("Extrude"))) {
+                feature_item = *it;
+                break;
+            }
+        }
+        CHECK(feature_item != nullptr);
+        const auto selected_before_hover =
+            topology_tree_controller.selectedFeatureIds();
+        const auto feature_rect =
+            topology_tree.visualItemRect(
+                feature_item);
+        CHECK(feature_rect.isValid());
+
+        QMouseEvent hover_event{
+            QEvent::MouseMove,
+            QPointF{feature_rect.center()},
+            Qt::NoButton,
+            Qt::NoButton,
+            Qt::NoModifier};
+        CHECK(QApplication::sendEvent(
+            topology_tree.viewport(),
+            &hover_event));
+        CHECK(feature_hover_events >= 1U);
+        CHECK(
+            hovered_tree_feature ==
+            std::optional<part::FeatureId>{
+                *feature.feature_id});
+        CHECK(
+            topology_tree_controller.selectedFeatureIds() ==
+            selected_before_hover);
+
+        QEvent leave_event{QEvent::Leave};
+        CHECK(QApplication::sendEvent(
+            topology_tree.viewport(),
+            &leave_event));
+        CHECK(!hovered_tree_feature.has_value());
+        CHECK(
+            topology_tree_controller.selectedFeatureIds() ==
+            selected_before_hover);
 
         CHECK(
             topology_viewport.body_scene_
