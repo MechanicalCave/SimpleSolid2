@@ -1290,10 +1290,23 @@ void CadWorkbench::buildUi() {
                     ? primary
                     : std::nullopt;
             selected_feature_id_ = semantic;
+            if (viewport_controller_) {
+                viewport_controller_->
+                    setFeatureContributionSelection(
+                        semantic);
+            }
             if (semantic) {
                 refreshFeatureProperties(*semantic);
             }
             syncActionState();
+        });
+    tree_controller_->setFeatureHoverHandler(
+        [this](std::optional<part::FeatureId> feature_id) {
+            if (viewport_controller_) {
+                viewport_controller_->
+                    setFeatureContributionHover(
+                        std::move(feature_id));
+            }
         });
     tree_controller_->setFeatureEditHandler(
         [this](part::FeatureId feature_id) {
