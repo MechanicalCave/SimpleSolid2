@@ -308,6 +308,87 @@ struct BodyScene final {
         const BodyScene&) = default;
 };
 
+enum class BodyTopologyOverlayRole : std::uint8_t {
+    feature_contribution_selected,
+    feature_contribution_hover,
+};
+
+struct BodyTopologyOverlayGroup final {
+    BodyTopologyOverlayRole role{
+        BodyTopologyOverlayRole::
+            feature_contribution_selected};
+    std::vector<PresentationToken> tokens;
+
+    [[nodiscard]] bool empty() const noexcept {
+        return tokens.empty();
+    }
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (tokens.empty()) {
+            return false;
+        }
+        for (std::size_t index = 0U;
+             index < tokens.size();
+             ++index) {
+            if (!tokens[index].valid()) {
+                return false;
+            }
+            for (std::size_t other = index + 1U;
+                 other < tokens.size();
+                 ++other) {
+                if (tokens[index] ==
+                    tokens[other]) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    friend bool operator==(
+        const BodyTopologyOverlayGroup&,
+        const BodyTopologyOverlayGroup&) = default;
+};
+
+struct BodyTopologyOverlayScene final {
+    BodyPresentationGeneration generation;
+    std::vector<BodyTopologyOverlayGroup>
+        groups;
+
+    [[nodiscard]] bool empty() const noexcept {
+        return groups.empty();
+    }
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (groups.empty()) {
+            return !generation.valid();
+        }
+        if (!generation.valid()) {
+            return false;
+        }
+        for (std::size_t index = 0U;
+             index < groups.size();
+             ++index) {
+            if (!groups[index].valid()) {
+                return false;
+            }
+            for (std::size_t other = index + 1U;
+                 other < groups.size();
+                 ++other) {
+                if (groups[index].role ==
+                    groups[other].role) {
+                    return false;
+                }
+            }
+        }
+        return true;
+    }
+
+    friend bool operator==(
+        const BodyTopologyOverlayScene&,
+        const BodyTopologyOverlayScene&) = default;
+};
+
 enum class SolidPreviewTone {
     additive,
     subtractive,
