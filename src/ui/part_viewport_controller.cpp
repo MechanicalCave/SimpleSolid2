@@ -2984,35 +2984,28 @@ bool PartViewportController::bodyTopologyOrdinaryPickable(
     return false;
 }
 
-void PartViewportController::clearBodyTopologySelection() {
-    if (session_ == nullptr) {
-        return;
-    }
-    auto& selection = activeSelection();
-    selection.body_topology.clear();
-    selection.primary_body_topology.reset();
-    selection.body_topology_generation = {};
+bool PartViewportController::bodyTopologyQueryCurrent(
+    const viewer::BodyTopologyPickQueryResult& query) const noexcept {
+    return query.valid() &&
+           query.completed &&
+           query.generation.valid() &&
+           body_scene_cache_.has_value() &&
+           body_scene_cache_->purpose ==
+               viewer::BodyScenePurpose::current_body &&
+           query.generation ==
+               body_scene_cache_->generation;
 }
 
-void PartViewportController::onBodyTopologyIntent(
-    const viewer::BodyTopologyPickQueryResult& query,
-    viewer::SelectionIntentMode mode) {
-    if (session_ == nullptr ||
-        !query.valid() ||
-        !query.completed ||
-        !query.generation.valid() ||
-        !body_scene_cache_ ||
-        body_scene_cache_->purpose !=
-            viewer::BodyScenePurpose::current_body ||
-        query.generation !=
-            body_scene_cache_->generation) {
-        return;
-    }
-
+std::vector<viewer::BodyTopologyPickCandidate>
+PartViewportController::rankedBodyTopologyCandidates(
+    const viewer::BodyTopologyPickQueryResult& query) const {
     std::vector<viewer::BodyTopologyPickCandidate>
         candidates;
-    candidates.reserve(query.candidates.size());
+    if (!bodyTopologyQueryCurrent(query)) {
+        return candidates;
+    }
 
+    candidates.reserve(query.candidates.size());
     for (const auto& candidate :
          query.candidates) {
         const auto found =
@@ -3029,10 +3022,6 @@ void PartViewportController::onBodyTopologyIntent(
             continue;
         }
         candidates.push_back(candidate);
-    }
-
-    if (candidates.empty()) {
-        return;
     }
 
     const auto priority =
@@ -3072,8 +3061,203 @@ void PartViewportController::onBodyTopologyIntent(
                    right.token.value;
         });
 
-    const auto chosen =
+    return candidates;
+}
+
+void PartViewportController::clearBodyTopologyPreselection() {
+    body_topology_candidate_stack_.reset();
+    if (viewport_ != nullptr) {
+        static_cast<void>(
+            viewport_->setBodyTopologyPreselection(
+                std::nullopt));
+    }
+}
+
+void PartViewportController::applyBodyTopologyPreselection() {
+    if (viewport_ == nullptr ||
+        !body_topology_candidate_stack_ ||
+        !body_topology_candidate_stack_->valid()) {
+        clearBodyTopologyPreselection();
+        return;
+    }
+
+    const auto token =
+        body_topology_candidate_stack_
+            ->candidates[
+                body_topology_candidate_stack_
+                    ->active_index]
+            .token;
+    if (!viewport_->setBodyTopologyPreselection(
+            token)) {
+        clearBodyTopologyPreselection();
+    }
+}
+
+void PartViewportController::onBodyTopologyPreselectionIntent(
+    const viewer::BodyTopologyPickQueryResult& query,
+    viewer::ViewportPoint2 point) {
+    if (session_ == nullptr ||
+        !point.valid() ||
+        !bodyTopologyQueryCurrent(query)) {
+        clearBodyTopologyPreselection();
+        return;
+    }
+
+    auto candidates =
+        rankedBodyTopologyCandidates(query);
+    if (candidates.empty()) {
+        clearBodyTopologyPreselection();
+        return;
+    }
+
+    constexpr double neighborhood_radius = 4.0;
+    constexpr double neighborhood_radius_squared =
+        neighborhood_radius * neighborhood_radius;
+
+    bool preserve_cycle = false;
+    if (body_topology_candidate_stack_ &&
+        body_topology_candidate_stack_->valid() &&
+        body_topology_candidate_stack_->generation ==
+            query.generation &&
+        body_topology_candidate_stack_->candidates.size() ==
+            candidates.size()) {
+        const double dx =
+            point.x -
+            body_topology_candidate_stack_->anchor.x;
+        const double dy =
+            point.y -
+            body_topology_candidate_stack_->anchor.y;
+        preserve_cycle =
+            dx * dx + dy * dy <=
+            neighborhood_radius_squared;
+
+        if (preserve_cycle) {
+            for (std::size_t index = 0U;
+                 index < candidates.size();
+                 ++index) {
+                const auto& previous =
+                    body_topology_candidate_stack_
+                        ->candidates[index];
+                if (previous.token !=
+                        candidates[index].token ||
+                    previous.kind !=
+                        candidates[index].kind) {
+                    preserve_cycle = false;
+                    break;
+                }
+            }
+        }
+    }
+
+    if (preserve_cycle) {
+        const auto active_index =
+            body_topology_candidate_stack_
+                ->active_index;
+        body_topology_candidate_stack_
+            ->candidates =
+            std::move(candidates);
+        body_topology_candidate_stack_
+            ->active_index =
+            std::min(
+                active_index,
+                body_topology_candidate_stack_
+                    ->candidates.size() - 1U);
+    } else {
+        body_topology_candidate_stack_ =
+            BodyTopologyCandidateStack{
+                query.generation,
+                point,
+                std::move(candidates),
+                0U};
+    }
+
+    applyBodyTopologyPreselection();
+}
+
+void PartViewportController::onBodyTopologyCycleIntent(
+    bool reverse) {
+    if (!body_topology_candidate_stack_ ||
+        !body_topology_candidate_stack_->valid() ||
+        !body_scene_cache_ ||
+        body_scene_cache_->purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        body_topology_candidate_stack_->generation !=
+            body_scene_cache_->generation) {
+        clearBodyTopologyPreselection();
+        return;
+    }
+
+    auto& stack =
+        *body_topology_candidate_stack_;
+    if (stack.candidates.size() <= 1U) {
+        applyBodyTopologyPreselection();
+        return;
+    }
+
+    if (reverse) {
+        stack.active_index =
+            stack.active_index == 0U
+                ? stack.candidates.size() - 1U
+                : stack.active_index - 1U;
+    } else {
+        stack.active_index =
+            (stack.active_index + 1U) %
+            stack.candidates.size();
+    }
+    applyBodyTopologyPreselection();
+}
+
+void PartViewportController::clearBodyTopologySelection() {
+    if (session_ == nullptr) {
+        return;
+    }
+    auto& selection = activeSelection();
+    selection.body_topology.clear();
+    selection.primary_body_topology.reset();
+    selection.body_topology_generation = {};
+}
+
+void PartViewportController::onBodyTopologyIntent(
+    const viewer::BodyTopologyPickQueryResult& query,
+    viewer::SelectionIntentMode mode) {
+    if (session_ == nullptr ||
+        !bodyTopologyQueryCurrent(query)) {
+        return;
+    }
+
+    const auto candidates =
+        rankedBodyTopologyCandidates(query);
+    if (candidates.empty()) {
+        return;
+    }
+
+    auto chosen =
         candidates.front().token;
+    if (body_topology_candidate_stack_ &&
+        body_topology_candidate_stack_->valid() &&
+        body_topology_candidate_stack_->generation ==
+            query.generation) {
+        const auto& preselected =
+            body_topology_candidate_stack_
+                ->candidates[
+                    body_topology_candidate_stack_
+                        ->active_index];
+        const auto still_available =
+            std::find_if(
+                candidates.begin(),
+                candidates.end(),
+                [&preselected](const auto& candidate) {
+                    return candidate.token ==
+                               preselected.token &&
+                           candidate.kind ==
+                               preselected.kind;
+                });
+        if (still_available !=
+            candidates.end()) {
+            chosen =
+                still_available->token;
+        }
+    }
     auto& selection = activeSelection();
 
     selection.selected.clear();
