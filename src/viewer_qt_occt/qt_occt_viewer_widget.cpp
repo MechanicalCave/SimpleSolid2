@@ -3284,6 +3284,123 @@ public:
             std::move(handler);
     }
 
+    void setBodyTopologyPreselectionIntentHandler(
+        viewer::BodyTopologyPreselectionIntentHandler handler) {
+        body_topology_preselection_intent_handler_ =
+            std::move(handler);
+    }
+
+    void setBodyTopologyCycleIntentHandler(
+        viewer::BodyTopologyCycleIntentHandler handler) {
+        body_topology_cycle_intent_handler_ =
+            std::move(handler);
+    }
+
+    [[nodiscard]] bool hasBodyTopologyPreselection() const noexcept {
+        return body_preselection_token_.has_value();
+    }
+
+    void clearBodyTopologyPreselectionIntent() {
+        static_cast<void>(
+            setBodyTopologyPreselection(
+                std::nullopt));
+        if (body_topology_preselection_intent_handler_) {
+            body_topology_preselection_intent_handler_(
+                viewer::BodyTopologyPickQueryResult{},
+                viewer::ViewportPoint2{});
+        }
+    }
+
+    bool emitBodyTopologyPreselectionAt(
+        double logical_x,
+        double logical_y) {
+        if (primary_pointer_routing_ !=
+                viewer::PrimaryPointerRouting::
+                    presentation_selection ||
+            !body_topology_preselection_intent_handler_) {
+            clearBodyTopologyPreselectionIntent();
+            return false;
+        }
+
+        const viewer::ViewportPoint2 point{
+            logical_x,
+            logical_y};
+        if (!point.valid()) {
+            clearBodyTopologyPreselectionIntent();
+            return false;
+        }
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            clearBodyTopologyPreselectionIntent();
+            return false;
+        }
+
+        const auto dpr = owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) || dpr <= 0.0) {
+            clearBodyTopologyPreselectionIntent();
+            return false;
+        }
+
+        const int x = static_cast<int>(
+            std::lround(logical_x * dpr));
+        const int y = static_cast<int>(
+            std::lround(logical_y * dpr));
+        context_->MoveTo(x, y, view_, true);
+
+        bool authored_presentation_detected = false;
+        if (context_->HasDetected()) {
+            const auto detected =
+                context_->DetectedInteractive();
+            if (!detected.IsNull()) {
+                const auto matches =
+                    [&detected](const auto& entry) {
+                        return entry.object == detected;
+                    };
+                authored_presentation_detected =
+                    std::any_of(
+                        reference_objects_.begin(),
+                        reference_objects_.end(),
+                        matches) ||
+                    std::any_of(
+                        profile_objects_.begin(),
+                        profile_objects_.end(),
+                        matches) ||
+                    std::any_of(
+                        sketch_objects_.begin(),
+                        sketch_objects_.end(),
+                        matches);
+            }
+        }
+
+        // Native OCCT detection is not hover authority for Body topology.
+        context_->ClearDetected(false);
+        updateCurrentViewer();
+
+        if (authored_presentation_detected) {
+            body_topology_preselection_intent_handler_(
+                viewer::BodyTopologyPickQueryResult{},
+                point);
+            return false;
+        }
+
+        const auto query =
+            queryBodyTopology(point, {});
+        body_topology_preselection_intent_handler_(
+            query,
+            point);
+        return query.valid() &&
+               query.completed &&
+               !query.candidates.empty();
+    }
+
+    void emitBodyTopologyCycleIntent(bool reverse) {
+        if (body_topology_cycle_intent_handler_) {
+            body_topology_cycle_intent_handler_(
+                reverse);
+        }
+    }
+
     void setSpatialPointerHandler(
         viewer::SpatialPointerHandler handler) {
         spatial_pointer_handler_ =
@@ -3297,6 +3414,12 @@ public:
         }
 
         primary_pointer_routing_ = routing;
+
+        if (routing !=
+            viewer::PrimaryPointerRouting::
+                presentation_selection) {
+            clearBodyTopologyPreselectionIntent();
+        }
 
         if (routing ==
                 viewer::PrimaryPointerRouting::
@@ -4379,6 +4502,8 @@ public:
 
     void clearSolidScene() noexcept {
         clearBodySelectionObjects();
+        clearBodyPreselectionObjects();
+        body_preselection_token_.reset();
         clearBodyEdgeStyleObjects();
         if (!context_.IsNull() &&
             !solid_object_.IsNull()) {
