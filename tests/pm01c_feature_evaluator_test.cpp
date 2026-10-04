@@ -4,6 +4,7 @@
 #include <simplesolid2/part/profile.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
+#include <algorithm>
 #include <cstdlib>
 #include <iostream>
 #include <map>
@@ -43,6 +44,7 @@ public:
     bool saw_reverse{false};
     bool saw_midplane{false};
     bool corrupt_topology_inventory{false};
+    bool split_first_inherited_surface{false};
 
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
@@ -96,6 +98,8 @@ public:
 
         auto runtime =
             std::make_shared<FakeSolid>();
+        std::vector<kernel::RuntimeFaceToken>
+            inventory_faces;
         if (upstream) {
             const auto* existing =
                 dynamic_cast<
@@ -107,19 +111,66 @@ public:
                         provider_mismatch;
                 return result;
             }
-            runtime->tokens =
-                existing->tokens;
-            runtime->surface_tokens =
-                existing->surface_tokens;
             runtime->next_token =
                 existing->next_token;
             runtime->next_surface_token =
                 existing->next_surface_token;
+            CHECK(
+                existing->tokens.size() ==
+                existing->surface_tokens.size());
+
             for (std::size_t index = 0U;
                  index < existing->tokens.size();
                  ++index) {
                 const auto face_token =
                     existing->tokens[index];
+                const auto surface_token =
+                    existing->surface_tokens[index];
+
+                if (split_first_inherited_surface &&
+                    index == 0U) {
+                    const kernel::RuntimeFaceToken
+                        first_fragment{
+                            runtime->next_token++};
+                    const kernel::RuntimeFaceToken
+                        second_fragment{
+                            runtime->next_token++};
+                    inventory_faces.push_back(
+                        first_fragment);
+                    inventory_faces.push_back(
+                        second_fragment);
+
+                    result.inherited_faces.push_back(
+                        {
+                            face_token,
+                            kernel::ReferenceStatus::
+                                ambiguous,
+                            2U,
+                        });
+                    result.inherited_surfaces.push_back(
+                        {
+                            surface_token,
+                            kernel::ReferenceStatus::
+                                resolved,
+                            kernel::ReferenceStatus::
+                                ambiguous,
+                            2U,
+                            kernel::SurfaceKind::plane,
+                            kernel::Frame3{},
+                            {
+                                first_fragment,
+                                second_fragment,
+                            },
+                        });
+                    continue;
+                }
+
+                runtime->tokens.push_back(
+                    face_token);
+                runtime->surface_tokens.push_back(
+                    surface_token);
+                inventory_faces.push_back(
+                    face_token);
                 result.inherited_faces.push_back(
                     {
                         face_token,
@@ -127,12 +178,9 @@ public:
                             resolved,
                         1U,
                     });
-                CHECK(
-                    index <
-                    existing->surface_tokens.size());
                 result.inherited_surfaces.push_back(
                     {
-                        existing->surface_tokens[index],
+                        surface_token,
                         kernel::ReferenceStatus::
                             resolved,
                         kernel::ReferenceStatus::
@@ -146,7 +194,7 @@ public:
         }
 
         auto publish =
-            [&result, &runtime](
+            [&result, &runtime, &inventory_faces](
                 kernel::ExtrudeFaceRole role) {
                 const kernel::RuntimeFaceToken face_token{
                     runtime->next_token++};
@@ -156,6 +204,8 @@ public:
                 runtime->tokens.push_back(face_token);
                 runtime->surface_tokens.push_back(
                     surface_token);
+                inventory_faces.push_back(
+                    face_token);
                 result.new_faces.push_back(
                     {
                         role,
@@ -207,7 +257,7 @@ public:
         result.brep_valid = true;
         result.solid_count = 1U;
         result.current_faces =
-            runtime->tokens;
+            std::move(inventory_faces);
         result.face_count =
             result.current_faces.size();
         result.edge_count = 0U;
