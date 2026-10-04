@@ -77,6 +77,18 @@ public:
     [[nodiscard]] bool setSolidScene(
         const viewer::SolidScene& scene) override;
 
+    [[nodiscard]] bool setBodyScene(
+        const viewer::BodyScene& scene) override;
+
+    [[nodiscard]] viewer::ViewStyle
+    viewStyle() const noexcept override;
+
+    [[nodiscard]] bool setViewStyle(
+        viewer::ViewStyle style) override;
+
+    void setViewStyleActionHandler(
+        viewer::ViewStyleActionHandler handler) override;
+
     [[nodiscard]] bool setSolidPreviewScene(
         const viewer::SolidPreviewScene& scene) override;
 
