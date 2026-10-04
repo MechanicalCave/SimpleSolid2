@@ -107,6 +107,27 @@ struct RuntimeVertexToken final {
         const RuntimeVertexToken&) = default;
 };
 
+struct RuntimeSurfaceToken final {
+    std::uint64_t value{};
+
+    [[nodiscard]] constexpr bool valid() const noexcept {
+        return value != 0U;
+    }
+
+    friend bool operator==(
+        const RuntimeSurfaceToken&,
+        const RuntimeSurfaceToken&) = default;
+};
+
+enum class SurfaceKind {
+    plane,
+    cylinder,
+    cone,
+    sphere,
+    torus,
+    other,
+};
+
 enum class SolidBooleanOperation {
     add,
     cut,
@@ -190,6 +211,42 @@ struct InheritedFaceLineage final {
         const InheritedFaceLineage&) = default;
 };
 
+struct NewSurfaceLineage final {
+    ExtrudeFaceRole role;
+    ReferenceStatus surface_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus strict_face_status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_face_count{};
+    SurfaceKind surface_kind{SurfaceKind::other};
+    std::optional<Frame3> canonical_frame;
+    std::optional<RuntimeSurfaceToken>
+        resolved_token;
+    std::vector<RuntimeFaceToken>
+        current_faces;
+
+    friend bool operator==(
+        const NewSurfaceLineage&,
+        const NewSurfaceLineage&) = default;
+};
+
+struct InheritedSurfaceLineage final {
+    RuntimeSurfaceToken token;
+    ReferenceStatus surface_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus strict_face_status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_face_count{};
+    SurfaceKind surface_kind{SurfaceKind::other};
+    std::optional<Frame3> canonical_frame;
+    std::vector<RuntimeFaceToken>
+        current_faces;
+
+    friend bool operator==(
+        const InheritedSurfaceLineage&,
+        const InheritedSurfaceLineage&) = default;
+};
+
 struct SolidModelingResult final {
     SolidModelingStatus status{
         SolidModelingStatus::provider_failure};
@@ -212,6 +269,14 @@ struct SolidModelingResult final {
     std::vector<InheritedFaceLineage>
         inherited_faces;
     std::vector<NewFaceLineage> new_faces;
+
+    // PM-02B semantic Surface lineage is distinct from strict bounded Face
+    // lineage. One Surface may have multiple current Face realizations after
+    // trimming/splitting while remaining one semantic carrier.
+    std::vector<InheritedSurfaceLineage>
+        inherited_surfaces;
+    std::vector<NewSurfaceLineage>
+        new_surfaces;
 
     [[nodiscard]] bool ok() const noexcept {
         return status == SolidModelingStatus::ok &&
