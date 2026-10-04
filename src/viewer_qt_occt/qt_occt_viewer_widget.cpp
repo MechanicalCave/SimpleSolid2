@@ -6791,6 +6791,12 @@ void QtOcctViewerWidget::mouseReleaseEvent(QMouseEvent* event) {
     }
 
     if (event->button() == Qt::LeftButton &&
+        impl_->consumeViewStyleHudRelease()) {
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton &&
         impl_->consumeNavigationCubeRelease()) {
         event->accept();
         return;
@@ -6849,6 +6855,11 @@ void QtOcctViewerWidget::wheelEvent(QWheelEvent* event) {
     const auto point = event->position().toPoint();
     const auto delta = event->angleDelta().y();
     guardedVoid(
+        "clearBodyPreselectionForZoom",
+        [this] {
+            impl_->clearBodyTopologyPreselectionIntent();
+        });
+    guardedVoid(
         "wheelZoom",
         [this, point, delta] {
             impl_->zoomAtLogicalPoint(
@@ -6857,6 +6868,15 @@ void QtOcctViewerWidget::wheelEvent(QWheelEvent* event) {
                 delta);
         });
     event->accept();
+}
+
+void QtOcctViewerWidget::leaveEvent(QEvent* event) {
+    guardedVoid(
+        "bodyTopologyLeave",
+        [this] {
+            impl_->clearBodyTopologyPreselectionIntent();
+        });
+    QWidget::leaveEvent(event);
 }
 
 void QtOcctViewerWidget::contextMenuEvent(
