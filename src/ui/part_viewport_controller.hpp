@@ -108,6 +108,7 @@ enum class SketchSupportInspectionCapability {
     not_applicable,
     supported,
     unsupported_non_planar,
+    missing,
     ambiguous,
     unsupported,
 };
