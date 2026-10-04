@@ -31,6 +31,7 @@
 #include <Graphic3d_ZLayerId.hxx>
 #include <NCollection_HArray1.hxx>
 #include <OpenGl_GraphicDriver.hxx>
+#include <Prs3d_Drawer.hxx>
 #include <Prs3d_LineAspect.hxx>
 #include <Poly_Triangle.hxx>
 #include <Poly_Triangulation.hxx>
@@ -1418,7 +1419,7 @@ public:
             return true;
         }
 
-        clearSolidScene();
+        clearBodyScene();
 
         if (scene.empty()) {
             solid_scene_ = scene;
@@ -1454,6 +1455,127 @@ public:
         }
     }
 
+
+    bool setBodyScene(
+        const viewer::BodyScene& scene) {
+        if (!scene.valid()) return false;
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            return false;
+        }
+
+        if (scene == body_scene_) {
+            return true;
+        }
+
+        clearBodyScene();
+
+        if (scene.empty()) {
+            body_scene_ = scene;
+            updateCurrentViewer();
+            return true;
+        }
+
+        try {
+            viewer::SolidScene mesh_scene;
+            mesh_scene.triangles =
+                scene.triangles;
+            const auto object =
+                makeSolidObject(mesh_scene);
+            if (object.IsNull()) {
+                clearBodyScene();
+                return false;
+            }
+
+            setOwnedSolidShadingStyle(
+                object,
+                committedSolidColor(),
+                kCommittedSolidTransparency);
+            solid_object_ = object;
+            context_->Display(
+                solid_object_,
+                false);
+            context_->Deactivate(
+                solid_object_);
+
+            body_edge_objects_.reserve(
+                scene.edges.size());
+            for (const auto& edge :
+                 scene.edges) {
+                BodyEdgeObject entry;
+                entry.token = edge.token;
+                entry.ordinary_visible =
+                    edge.ordinary_visible;
+
+                if (edge.ordinary_visible) {
+                    entry.visible =
+                        makeBodyEdgeObject(edge);
+                    entry.hidden =
+                        makeBodyEdgeObject(edge);
+                    if (entry.visible.IsNull() ||
+                        entry.hidden.IsNull()) {
+                        clearBodyScene();
+                        return false;
+                    }
+
+                    setBodyEdgeStyle(
+                        entry.visible,
+                        false);
+                    setBodyEdgeStyle(
+                        entry.hidden,
+                        true);
+                    context_->SetZLayer(
+                        entry.hidden,
+                        Graphic3d_ZLayerId_Topmost);
+                }
+
+                body_edge_objects_.push_back(
+                    std::move(entry));
+            }
+
+            body_scene_ = scene;
+            applyBodyViewStyle();
+            syncCommittedSolidVisibilityForPreview();
+            updateCurrentViewer();
+            return true;
+        } catch (...) {
+            clearBodyScene();
+            throw;
+        }
+    }
+
+    [[nodiscard]] viewer::ViewStyle
+    viewStyle() const noexcept {
+        return view_style_;
+    }
+
+    bool setViewStyle(
+        viewer::ViewStyle style) {
+        switch (style) {
+        case viewer::ViewStyle::shaded:
+        case viewer::ViewStyle::shaded_with_edges:
+        case viewer::ViewStyle::
+            shaded_with_hidden_edges:
+            break;
+        default:
+            return false;
+        }
+
+        if (view_style_ == style) {
+            return true;
+        }
+        view_style_ = style;
+        applyBodyViewStyle();
+        updateCurrentViewer();
+        return true;
+    }
+
+    void setViewStyleActionHandler(
+        viewer::ViewStyleActionHandler handler) {
+        view_style_action_handler_ =
+            std::move(handler);
+    }
 
     bool setSolidPreviewScene(
         const viewer::SolidPreviewScene& scene) {
@@ -3652,6 +3774,168 @@ public:
         return object;
     }
 
+    [[nodiscard]] Handle(AIS_Shape)
+    makeBodyEdgeObject(
+        const viewer::BodyEdgePresentation& edge) {
+        if (!edge.valid()) return {};
+
+        BRepBuilderAPI_MakePolygon polygon;
+        const auto distance_squared =
+            [](const viewer::Point3& left,
+               const viewer::Point3& right) {
+                const double dx =
+                    left.x - right.x;
+                const double dy =
+                    left.y - right.y;
+                const double dz =
+                    left.z - right.z;
+                return dx * dx +
+                       dy * dy +
+                       dz * dz;
+            };
+
+        const bool closed =
+            edge.points.size() > 2U &&
+            distance_squared(
+                edge.points.front(),
+                edge.points.back()) <=
+                1.0e-20;
+        const std::size_t point_count =
+            closed
+                ? edge.points.size() - 1U
+                : edge.points.size();
+
+        for (std::size_t index = 0U;
+             index < point_count;
+             ++index) {
+            polygon.Add(
+                toPoint(edge.points[index]));
+        }
+        if (closed) {
+            polygon.Close();
+        }
+        if (!polygon.IsDone()) {
+            return {};
+        }
+
+        Handle(AIS_Shape) object =
+            new AIS_Shape(polygon.Wire());
+        return object;
+    }
+
+    void setBodyEdgeStyle(
+        const Handle(AIS_Shape)& object,
+        bool hidden_pass) {
+        if (object.IsNull()) return;
+
+        const Quantity_Color color =
+            hidden_pass
+                ? Quantity_Color{
+                      0.48, 0.50, 0.54,
+                      Quantity_TOC_RGB}
+                : Quantity_Color{
+                      0.12, 0.13, 0.15,
+                      Quantity_TOC_RGB};
+        const Handle(Prs3d_LineAspect) aspect =
+            new Prs3d_LineAspect(
+                color,
+                hidden_pass
+                    ? Aspect_TOL_DASH
+                    : Aspect_TOL_SOLID,
+                hidden_pass
+                    ? 1.0
+                    : 1.35);
+        object->Attributes()->SetLineAspect(
+            aspect);
+        object->Attributes()->SetWireAspect(
+            aspect);
+    }
+
+    struct BodyEdgeObject final {
+        viewer::PresentationToken token;
+        Handle(AIS_Shape) visible;
+        Handle(AIS_Shape) hidden;
+        bool ordinary_visible{true};
+    };
+
+    void applyBodyViewStyle() {
+        if (context_.IsNull()) return;
+
+        for (auto& edge :
+             body_edge_objects_) {
+            const bool show_visible =
+                edge.ordinary_visible &&
+                view_style_ !=
+                    viewer::ViewStyle::shaded;
+            const bool show_hidden =
+                edge.ordinary_visible &&
+                view_style_ ==
+                    viewer::ViewStyle::
+                        shaded_with_hidden_edges;
+
+            if (!edge.visible.IsNull()) {
+                if (show_visible) {
+                    context_->Display(
+                        edge.visible,
+                        false);
+                    context_->Deactivate(
+                        edge.visible);
+                } else {
+                    context_->Erase(
+                        edge.visible,
+                        false);
+                }
+            }
+
+            if (!edge.hidden.IsNull()) {
+                if (show_hidden) {
+                    context_->Display(
+                        edge.hidden,
+                        false);
+                    context_->Deactivate(
+                        edge.hidden);
+                } else {
+                    context_->Erase(
+                        edge.hidden,
+                        false);
+                }
+            }
+        }
+    }
+
+    void clearBodyScene() noexcept {
+        if (!context_.IsNull()) {
+            for (const auto& edge :
+                 body_edge_objects_) {
+                if (!edge.visible.IsNull()) {
+                    const auto retained =
+                        edge.visible;
+                    guardedVoid(
+                        "removeBodyVisibleEdge",
+                        [this, retained] {
+                            context_->Remove(
+                                retained,
+                                false);
+                        });
+                }
+                if (!edge.hidden.IsNull()) {
+                    const auto retained =
+                        edge.hidden;
+                    guardedVoid(
+                        "removeBodyHiddenEdge",
+                        [this, retained] {
+                            context_->Remove(
+                                retained,
+                                false);
+                        });
+                }
+            }
+        }
+        body_edge_objects_.clear();
+        body_scene_ = viewer::BodyScene{};
+        clearSolidScene();
+    }
+
     void clearSolidScene() noexcept {
         if (!context_.IsNull() &&
             !solid_object_.IsNull()) {
@@ -4617,6 +4901,13 @@ private:
     Handle(AIS_InteractiveObject) solid_object_;
     Handle(AIS_InteractiveObject) solid_preview_object_;
     viewer::SolidScene solid_scene_;
+    viewer::BodyScene body_scene_;
+    std::vector<BodyEdgeObject>
+        body_edge_objects_;
+    viewer::ViewStyle view_style_{
+        viewer::ViewStyle::shaded};
+    viewer::ViewStyleActionHandler
+        view_style_action_handler_;
     viewer::SolidPreviewScene solid_preview_scene_;
     std::vector<ProfileObject> profile_objects_;
     Handle(AIS_Shape) profile_preview_object_;
