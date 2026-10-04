@@ -2195,6 +2195,7 @@ PartViewportController::buildBodyScene() {
             body_scene_cache_.reset();
             body_topology_catalog_cache_.reset();
             body_topology_bindings_.clear();
+            clearBodyTopologySelection();
             return std::nullopt;
         };
 
@@ -2236,6 +2237,7 @@ PartViewportController::buildBodyScene() {
     if (presentation_solid == nullptr) {
         body_topology_catalog_cache_.reset();
         body_topology_bindings_.clear();
+        clearBodyTopologySelection();
         body_scene_revision_ = revision;
         body_scene_cache_ = empty_scene;
         return *body_scene_cache_;
