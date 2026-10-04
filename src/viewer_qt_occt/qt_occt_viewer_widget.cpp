@@ -5969,6 +5969,36 @@ void QtOcctViewerWidget::setBodyTopologySelectionIntentHandler(
         });
 }
 
+void QtOcctViewerWidget::setBodyTopologyPreselectionIntentHandler(
+    viewer::BodyTopologyPreselectionIntentHandler handler) {
+    guardedVoid(
+        "setBodyTopologyPreselectionIntentHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setBodyTopologyPreselectionIntentHandler(
+                std::move(handler));
+        });
+}
+
+void QtOcctViewerWidget::setBodyTopologyCycleIntentHandler(
+    viewer::BodyTopologyCycleIntentHandler handler) {
+    guardedVoid(
+        "setBodyTopologyCycleIntentHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setBodyTopologyCycleIntentHandler(
+                std::move(handler));
+        });
+}
+
+bool QtOcctViewerWidget::setBodyTopologyPreselection(
+    std::optional<viewer::PresentationToken> token) {
+    return guardedBool(
+        "setBodyTopologyPreselection",
+        [this, token] {
+            return impl_->setBodyTopologyPreselection(
+                token);
+        });
+}
+
 bool QtOcctViewerWidget::setSolidScene(
     const viewer::SolidScene& scene) {
     return guardedBool(
