@@ -160,6 +160,72 @@ struct FeatureSurfaceResolution final {
         const FeatureSurfaceResolution&) = default;
 };
 
+struct FeatureEdgeAddress final {
+    kernel::EdgeSemanticRoleKind role{
+        kernel::EdgeSemanticRoleKind::unsupported};
+    // Semantic Surface pair. Order is not identity.
+    std::vector<FeatureSurfaceAddress>
+        adjacent_surfaces;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeatureEdgeAddress& first,
+        const FeatureEdgeAddress& second) noexcept;
+};
+
+struct FeatureEdgeResolution final {
+    FeatureEdgeAddress address;
+    kernel::ReferenceStatus status{
+        kernel::ReferenceStatus::unsupported};
+    kernel::CurveKind curve_kind{
+        kernel::CurveKind::other};
+    std::size_t candidate_count{};
+    std::vector<kernel::RuntimeEdgeToken>
+        current_edges;
+    // Contribution/inspection metadata only. Not part of Edge identity.
+    std::optional<FeatureId> producer_feature_id;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeatureEdgeResolution&,
+        const FeatureEdgeResolution&) = default;
+};
+
+struct FeaturePointAddress final {
+    // Current supported Point meaning is an unordered semantic intersection
+    // of exactly three Surface carriers. XYZ is deliberately absent.
+    std::vector<FeatureSurfaceAddress>
+        adjacent_surfaces;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeaturePointAddress& first,
+        const FeaturePointAddress& second) noexcept;
+};
+
+struct FeaturePointResolution final {
+    FeaturePointAddress address;
+    kernel::ReferenceStatus status{
+        kernel::ReferenceStatus::unsupported};
+    std::size_t candidate_count{};
+    std::vector<kernel::RuntimeVertexToken>
+        current_vertices;
+    // Contribution/inspection metadata only. Not part of Point identity.
+    std::optional<FeatureId> producer_feature_id;
+    // Current provider coordinate is diagnostic only and is present only for
+    // one singular current realization.
+    std::optional<kernel::Point3> current_point;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const FeaturePointResolution&,
+        const FeaturePointResolution&) = default;
+};
+
 struct BodyFaceTopologyRecord final {
     kernel::RuntimeFaceToken runtime_token;
     TopologyAccountingClass accounting_class{
@@ -185,6 +251,15 @@ struct BodyEdgeTopologyRecord final {
     kernel::RuntimeEdgeToken runtime_token;
     TopologyAccountingClass accounting_class{
         TopologyAccountingClass::semantically_unsupported};
+    kernel::ReferenceStatus referenceability{
+        kernel::ReferenceStatus::unsupported};
+    std::optional<FeatureEdgeAddress>
+        semantic_address;
+    kernel::CurveKind curve_kind{
+        kernel::CurveKind::other};
+    std::optional<FeatureId>
+        producer_feature_id;
+    bool representation_artifact{false};
 
     [[nodiscard]] bool valid() const noexcept;
 
@@ -197,6 +272,14 @@ struct BodyVertexTopologyRecord final {
     kernel::RuntimeVertexToken runtime_token;
     TopologyAccountingClass accounting_class{
         TopologyAccountingClass::semantically_unsupported};
+    kernel::ReferenceStatus referenceability{
+        kernel::ReferenceStatus::unsupported};
+    std::optional<FeaturePointAddress>
+        semantic_address;
+    std::optional<FeatureId>
+        producer_feature_id;
+    std::optional<kernel::Point3>
+        diagnostic_point;
 
     [[nodiscard]] bool valid() const noexcept;
 
@@ -212,6 +295,10 @@ struct BodyStageTopologyCatalog final {
     std::vector<BodyVertexTopologyRecord> vertices;
     std::vector<FeatureSurfaceResolution>
         surfaces;
+    std::vector<FeatureEdgeResolution>
+        curves;
+    std::vector<FeaturePointResolution>
+        points;
 
     [[nodiscard]] bool valid() const noexcept;
     [[nodiscard]] bool complete() const noexcept;
@@ -271,6 +358,14 @@ struct PartEvaluation final {
     // Empty when Body is unavailable.
     std::vector<FeatureSurfaceResolution>
         current_surface_references;
+    // Evaluated semantic material Edge/Curve meaning at the current final
+    // Body stage. Never serialized by PM-02C.
+    std::vector<FeatureEdgeResolution>
+        current_edge_references;
+    // Evaluated semantic Vertex/Point meaning at the current final Body stage.
+    // Never serialized by PM-02C.
+    std::vector<FeaturePointResolution>
+        current_point_references;
 
     [[nodiscard]] const FeatureEvaluation*
     findFeature(FeatureId id) const noexcept;
