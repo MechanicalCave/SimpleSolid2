@@ -808,6 +808,8 @@ int main(int argc, char* argv[]) {
         CHECK(
             viewport.body_scene_.purpose ==
             viewer::BodyScenePurpose::current_body);
+        CHECK(viewport.solid_scene_calls_ == 0U);
+        CHECK(viewport.body_scene_calls_ > 0U);
         const auto first_body_generation =
             viewport.body_scene_.generation;
 
