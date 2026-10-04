@@ -576,6 +576,110 @@ struct CurrentPointCandidate final {
     return found == references.end() ? nullptr : &*found;
 }
 
+[[nodiscard]] std::optional<std::vector<CurrentEdgeCandidate>>
+convertCurrentEdgeCandidates(
+    const kernel::SolidModelingResult& kernel_result,
+    const std::vector<FeatureSurfaceResolution>& surfaces) {
+    if (kernel_result.current_edge_semantics.size() !=
+        kernel_result.current_edges.size()) {
+        return std::nullopt;
+    }
+
+    std::vector<CurrentEdgeCandidate> result;
+    result.reserve(kernel_result.current_edge_semantics.size());
+    for (const auto& semantic : kernel_result.current_edge_semantics) {
+        if (!semantic.token.valid() ||
+            std::count(
+                kernel_result.current_edges.begin(),
+                kernel_result.current_edges.end(),
+                semantic.token) != 1) {
+            return std::nullopt;
+        }
+        if (semantic.integrity_failure) return std::nullopt;
+
+        if (semantic.representation_artifact ||
+            semantic.role == kernel::EdgeSemanticRoleKind::periodic_seam ||
+            semantic.role == kernel::EdgeSemanticRoleKind::unsupported ||
+            semantic.status == kernel::ReferenceStatus::unsupported) {
+            continue;
+        }
+        if (semantic.curve_kind == kernel::CurveKind::other) {
+            return std::nullopt;
+        }
+
+        const auto mapped =
+            surfaceAddressesForTokens(
+                semantic.adjacent_surfaces,
+                surfaces);
+        if (!mapped || !uniqueSurfaceAddressSet(*mapped, 2U)) {
+            return std::nullopt;
+        }
+
+        FeatureEdgeAddress address;
+        address.role = semantic.role;
+        address.adjacent_surfaces = *mapped;
+        if (!address.valid()) return std::nullopt;
+
+        result.push_back(
+            {
+                semantic.token,
+                std::move(address),
+                semantic.curve_kind,
+                semantic.produced_by_current_operation,
+            });
+    }
+    return result;
+}
+
+[[nodiscard]] std::optional<std::vector<CurrentPointCandidate>>
+convertCurrentPointCandidates(
+    const kernel::SolidModelingResult& kernel_result,
+    const std::vector<FeatureSurfaceResolution>& surfaces) {
+    if (kernel_result.current_vertex_semantics.size() !=
+        kernel_result.current_vertices.size()) {
+        return std::nullopt;
+    }
+
+    std::vector<CurrentPointCandidate> result;
+    result.reserve(kernel_result.current_vertex_semantics.size());
+    for (const auto& semantic : kernel_result.current_vertex_semantics) {
+        if (!semantic.token.valid() ||
+            std::count(
+                kernel_result.current_vertices.begin(),
+                kernel_result.current_vertices.end(),
+                semantic.token) != 1) {
+            return std::nullopt;
+        }
+        if (semantic.integrity_failure) return std::nullopt;
+        if (semantic.status == kernel::ReferenceStatus::unsupported) {
+            continue;
+        }
+
+        const auto mapped =
+            surfaceAddressesForTokens(
+                semantic.adjacent_surfaces,
+                surfaces);
+        if (!mapped ||
+            !uniqueSurfaceAddressSet(*mapped, 3U) ||
+            semantic.incident_material_edge_count != 3U) {
+            return std::nullopt;
+        }
+
+        FeaturePointAddress address;
+        address.adjacent_surfaces = *mapped;
+        if (!address.valid()) return std::nullopt;
+
+        result.push_back(
+            {
+                semantic.token,
+                std::move(address),
+                semantic.provider_point,
+                semantic.produced_by_current_operation,
+            });
+    }
+    return result;
+}
+
 template <typename Token>
 [[nodiscard]] bool uniqueValidTokens(
     const std::vector<Token>& tokens) noexcept {
