@@ -58,22 +58,12 @@ kernelOperation(
         : kernel::SolidBooleanOperation::add;
 }
 
-} // namespace
-
-std::optional<kernel::LinearExtrudeInput>
-makeKernelExtrudeInput(
-    const PartDocument& document,
-    const ExtrudeFeature& feature) {
-    auto profile =
-        makeKernelProfileInput(
-            document,
-            feature.profile_id);
-    if (!profile) {
-        return std::nullopt;
-    }
-
+[[nodiscard]] std::optional<kernel::LinearExtrudeInput>
+buildKernelExtrudeInput(
+    const ExtrudeFeature& feature,
+    kernel::PlanarProfileInput profile) {
     kernel::LinearExtrudeInput result;
-    result.profile = std::move(*profile);
+    result.profile = std::move(profile);
     result.operation =
         kernelOperation(feature.operation);
 
@@ -134,6 +124,73 @@ makeKernelExtrudeInput(
               kernel::LinearExtrudeInput>{
               std::move(result)}
         : std::nullopt;
+}
+
+[[nodiscard]] const BodyStageTopologyCatalog*
+topologyForStage(
+    const std::vector<FeatureEvaluation>& evaluations,
+    const BodyStageRef& stage) noexcept {
+    if (!stage.valid() ||
+        stage.kind != BodyStageKind::after_feature ||
+        !stage.feature_id) {
+        return nullptr;
+    }
+
+    const auto found =
+        std::find_if(
+            evaluations.begin(),
+            evaluations.end(),
+            [&stage](const FeatureEvaluation& item) {
+                return item.feature_id ==
+                       *stage.feature_id;
+            });
+    if (found == evaluations.end() ||
+        found->status !=
+            FeatureEvaluationStatus::up_to_date ||
+        !found->result_topology ||
+        found->result_topology->stage != stage) {
+        return nullptr;
+    }
+    return &*found->result_topology;
+}
+
+[[nodiscard]] FeatureEvaluationDiagnosticCode
+diagnosticForSketchSupport(
+    SketchSupportResolutionStatus status) noexcept {
+    switch (status) {
+    case SketchSupportResolutionStatus::resolved:
+        return FeatureEvaluationDiagnosticCode::none;
+    case SketchSupportResolutionStatus::missing:
+        return FeatureEvaluationDiagnosticCode::
+            sketch_support_missing;
+    case SketchSupportResolutionStatus::ambiguous:
+        return FeatureEvaluationDiagnosticCode::
+            sketch_support_ambiguous;
+    case SketchSupportResolutionStatus::unsupported:
+        return FeatureEvaluationDiagnosticCode::
+            sketch_support_unsupported;
+    }
+    return FeatureEvaluationDiagnosticCode::
+        sketch_support_unsupported;
+}
+
+} // namespace
+
+std::optional<kernel::LinearExtrudeInput>
+makeKernelExtrudeInput(
+    const PartDocument& document,
+    const ExtrudeFeature& feature) {
+    auto profile =
+        makeKernelProfileInput(
+            document,
+            feature.profile_id);
+    if (!profile) {
+        return std::nullopt;
+    }
+
+    return buildKernelExtrudeInput(
+        feature,
+        std::move(*profile));
 }
 
 namespace {
