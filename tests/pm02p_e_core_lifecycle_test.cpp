@@ -178,6 +178,8 @@ private:
 
 void verifyTopologyFreshness(
     const std::filesystem::path& project_path) {
+    std::filesystem::create_directories(project_path);
+
     application::ProjectWorkspaceMetadataService
         metadata_service;
     const auto initialized =
