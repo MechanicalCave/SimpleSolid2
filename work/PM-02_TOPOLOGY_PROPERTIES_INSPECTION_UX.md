@@ -1,6 +1,6 @@
 # PM-02 — Topology Properties / Inspection UX
 
-**Status:** ACCEPTED UX DESIGN INPUT — 2026-10-04  
+**Status:** PROPOSED UX DESIGN INPUT — INCLUDED IN PM-02 CONTRACT CANDIDATE; AWAITING OWNER ACCEPTANCE  
 **Production PM-02:** PROPOSED / NOT ACTIVE  
 **Applies to candidate:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Related design inputs:**  
