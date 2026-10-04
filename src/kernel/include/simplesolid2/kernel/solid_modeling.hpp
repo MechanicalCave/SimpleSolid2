@@ -134,6 +134,67 @@ enum class CurveKind {
     other,
 };
 
+
+// PM-02D presentation-only topology payload extracted from the same
+// RuntimeSolid generation as the committed Body. Runtime tokens remain
+// provider realization identifiers only and are never persisted.
+struct BodyFacePresentationRange final {
+    RuntimeFaceToken runtime_token;
+    std::size_t first_triangle{};
+    std::size_t triangle_count{};
+
+    [[nodiscard]] bool valid(
+        std::size_t total_triangles) const noexcept;
+
+    friend bool operator==(
+        const BodyFacePresentationRange&,
+        const BodyFacePresentationRange&) = default;
+};
+
+struct BodyEdgePresentationPath final {
+    RuntimeEdgeToken runtime_token;
+    std::vector<Point3> points;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const BodyEdgePresentationPath&,
+        const BodyEdgePresentationPath&) = default;
+};
+
+struct BodyVertexPresentationPoint final {
+    RuntimeVertexToken runtime_token;
+    Point3 point;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const BodyVertexPresentationPoint&,
+        const BodyVertexPresentationPoint&) = default;
+};
+
+struct BodyPresentation final {
+    SolidPresentationMesh mesh;
+    std::vector<BodyFacePresentationRange> faces;
+    std::vector<BodyEdgePresentationPath> edges;
+    std::vector<BodyVertexPresentationPoint> vertices;
+
+    [[nodiscard]] bool valid() const noexcept;
+};
+
+struct BodyPresentationResult final {
+    SolidPresentationStatus status{
+        SolidPresentationStatus::unsupported};
+    BodyPresentation body;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return status ==
+                   SolidPresentationStatus::ok &&
+               body.valid();
+    }
+};
+
+
 // Complete current-stage provider observations used by Part to construct
 // semantic Curve/Point meaning. Runtime Surface tokens are adjacency evidence
 // only; provider topology order and geometry diagnostics never become durable
@@ -392,6 +453,14 @@ public:
     // state, modeling semantics or reference resolution.
     [[nodiscard]] virtual SolidPresentationResult
     presentationMesh(
+        RuntimeSolidHandle solid) noexcept;
+
+    // Atomic committed-Body presentation. Production providers must derive
+    // mesh and topology presentation from the same RuntimeSolid generation.
+    // Default compatibility falls back to mesh-only presentation so bounded
+    // test providers remain valid while PM-02D migrates the production path.
+    [[nodiscard]] virtual BodyPresentationResult
+    bodyPresentation(
         RuntimeSolidHandle solid) noexcept;
 };
 
