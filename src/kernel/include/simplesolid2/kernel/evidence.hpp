@@ -691,6 +691,144 @@ struct VertexSamePointReplacementEvidence final {
         const VertexSamePointReplacementEvidence&) = default;
 };
 
+enum class EvidenceStageOperation {
+    add,
+    cut,
+};
+
+struct StageTopologyAccountingEvidence final {
+    EvidenceStageOperation operation{
+        EvidenceStageOperation::add};
+    ShapeEvidence shape;
+    BodyTopologyInventoryEvidence topology;
+    std::size_t plane_face_count{};
+    std::size_t cylinder_face_count{};
+    std::size_t other_face_count{};
+    std::size_t line_edge_count{};
+    std::size_t circle_edge_count{};
+    std::size_t other_edge_count{};
+    std::size_t finite_vertex_count{};
+
+    [[nodiscard]] bool completeClassification() const noexcept {
+        return shape.ok() &&
+               shape.solid_count == 1U &&
+               topology.complete() &&
+               plane_face_count +
+                       cylinder_face_count +
+                       other_face_count ==
+                   topology.faces.provider_unique_count &&
+               line_edge_count +
+                       circle_edge_count +
+                       other_edge_count ==
+                   topology.edges.provider_unique_count &&
+               finite_vertex_count ==
+                   topology.vertices.provider_unique_count;
+    }
+
+    friend bool operator==(
+        const StageTopologyAccountingEvidence&,
+        const StageTopologyAccountingEvidence&) = default;
+};
+
+struct MultiStageTopologyAccountingEvidence final {
+    std::vector<StageTopologyAccountingEvidence>
+        stages;
+
+    [[nodiscard]] bool complete() const noexcept {
+        if (stages.size() != 4U) {
+            return false;
+        }
+        for (const auto& stage : stages) {
+            if (!stage.completeClassification()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    friend bool operator==(
+        const MultiStageTopologyAccountingEvidence&,
+        const MultiStageTopologyAccountingEvidence&) = default;
+};
+
+struct GeometrySimilarityDecoyEvidence final {
+    ReferenceStatus old_edge_in_old_shape{
+        ReferenceStatus::unsupported};
+    ReferenceStatus old_edge_in_replacement_shape{
+        ReferenceStatus::unsupported};
+    ReferenceStatus replacement_edge_status{
+        ReferenceStatus::unsupported};
+    double old_edge_length{};
+    double replacement_edge_length{};
+    EvidenceCurveKind old_edge_curve_kind{
+        EvidenceCurveKind::other};
+    EvidenceCurveKind replacement_edge_curve_kind{
+        EvidenceCurveKind::other};
+    bool edge_geometry_matches{false};
+
+    ReferenceStatus old_cylinder_in_old_shape{
+        ReferenceStatus::unsupported};
+    ReferenceStatus old_cylinder_in_replacement_shape{
+        ReferenceStatus::unsupported};
+    ReferenceStatus replacement_cylinder_status{
+        ReferenceStatus::unsupported};
+    double old_cylinder_radius{};
+    double replacement_cylinder_radius{};
+    FaceSurfaceKind old_cylinder_surface_kind{
+        FaceSurfaceKind::other};
+    FaceSurfaceKind replacement_cylinder_surface_kind{
+        FaceSurfaceKind::other};
+    bool cylinder_geometry_matches{false};
+
+    friend bool operator==(
+        const GeometrySimilarityDecoyEvidence&,
+        const GeometrySimilarityDecoyEvidence&) = default;
+};
+
+struct ProspectiveSketchSupportEvidence final {
+    EvidenceSurfaceCarrierKey support_key;
+    ReferenceStatus before_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus after_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus missing_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus ambiguous_status{
+        ReferenceStatus::unsupported};
+    std::optional<Frame3> before_frame;
+    std::optional<Frame3> after_frame;
+    std::vector<Point2> local_geometry;
+    std::vector<Point3> before_world_geometry;
+    std::vector<Point3> after_world_geometry;
+    bool authored_intent_unchanged{false};
+    bool world_geometry_moved{false};
+    bool missing_has_no_current_frame{false};
+    bool ambiguous_has_no_current_frame{false};
+
+    [[nodiscard]] bool ok() const noexcept {
+        return before_status == ReferenceStatus::resolved &&
+               after_status == ReferenceStatus::resolved &&
+               before_frame.has_value() &&
+               after_frame.has_value() &&
+               !local_geometry.empty() &&
+               before_world_geometry.size() ==
+                   local_geometry.size() &&
+               after_world_geometry.size() ==
+                   local_geometry.size() &&
+               authored_intent_unchanged &&
+               world_geometry_moved &&
+               missing_status == ReferenceStatus::missing &&
+               ambiguous_status ==
+                   ReferenceStatus::ambiguous &&
+               missing_has_no_current_frame &&
+               ambiguous_has_no_current_frame;
+    }
+
+    friend bool operator==(
+        const ProspectiveSketchSupportEvidence&,
+        const ProspectiveSketchSupportEvidence&) = default;
+};
+
 struct EdgeSplitHistoryEvidence final {
     ShapeEvidence shape;
     BooleanSubshapeHistoryEvidence target;
