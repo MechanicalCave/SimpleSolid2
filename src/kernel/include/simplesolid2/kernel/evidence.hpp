@@ -554,6 +554,143 @@ struct SurfacePairBranchEvidence final {
         const SurfacePairBranchEvidence&) = default;
 };
 
+struct EvidenceVertexSemanticKey final {
+    std::vector<EvidenceSurfaceCarrierKey>
+        adjacent_surfaces;
+
+    friend bool operator==(
+        const EvidenceVertexSemanticKey&,
+        const EvidenceVertexSemanticKey&) = default;
+};
+
+struct EvidenceVertexOntologyRecord final {
+    EvidenceTopologyAccountingClass accounting_class{
+        EvidenceTopologyAccountingClass::semantically_unsupported};
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    EvidenceVertexSemanticKey semantic_key;
+    std::size_t incident_material_edge_count{};
+    std::optional<Point3> provider_point;
+
+    friend bool operator==(
+        const EvidenceVertexOntologyRecord&,
+        const EvidenceVertexOntologyRecord&) = default;
+};
+
+struct ExtrudeVertexOntologyEvidence final {
+    ShapeEvidence shape;
+    BodyTopologyInventoryEvidence topology;
+    std::vector<EvidenceVertexOntologyRecord> vertices;
+    std::size_t referenceable_vertex_count{};
+    std::size_t unsupported_vertex_count{};
+    std::size_t integrity_failure_count{};
+
+    [[nodiscard]] bool completeVertexAccounting() const noexcept {
+        return shape.ok() &&
+               shape.solid_count == 1U &&
+               topology.complete() &&
+               topology.vertices.provider_unique_count ==
+                   vertices.size() &&
+               integrity_failure_count == 0U &&
+               referenceable_vertex_count +
+                       unsupported_vertex_count ==
+                   vertices.size();
+    }
+
+    friend bool operator==(
+        const ExtrudeVertexOntologyEvidence&,
+        const ExtrudeVertexOntologyEvidence&) = default;
+};
+
+struct VertexDimensionEditEvidence final {
+    ShapeEvidence before_shape;
+    BodyTopologyInventoryEvidence before_topology;
+    ShapeEvidence after_shape;
+    BodyTopologyInventoryEvidence after_topology;
+    EvidenceVertexSemanticKey semantic_key;
+    ReferenceStatus before_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus after_status{
+        ReferenceStatus::unsupported};
+    std::optional<Point3> before_point;
+    std::optional<Point3> after_point;
+    bool point_moved{false};
+
+    [[nodiscard]] bool ok() const noexcept {
+        return before_shape.ok() &&
+               before_shape.solid_count == 1U &&
+               before_topology.complete() &&
+               after_shape.ok() &&
+               after_shape.solid_count == 1U &&
+               after_topology.complete();
+    }
+
+    friend bool operator==(
+        const VertexDimensionEditEvidence&,
+        const VertexDimensionEditEvidence&) = default;
+};
+
+struct VertexDeletionGenerationEvidence final {
+    ShapeEvidence before_shape;
+    BodyTopologyInventoryEvidence before_topology;
+    ShapeEvidence after_shape;
+    BodyTopologyInventoryEvidence after_topology;
+    EvidenceVertexSemanticKey deleted_key;
+    ReferenceStatus before_deleted_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus after_deleted_status{
+        ReferenceStatus::unsupported};
+    std::vector<EvidenceVertexSemanticKey>
+        generated_keys;
+    std::vector<ReferenceStatus>
+        generated_statuses;
+    std::size_t generated_vertex_count{};
+
+    [[nodiscard]] bool ok() const noexcept {
+        return before_shape.ok() &&
+               before_shape.solid_count == 1U &&
+               before_topology.complete() &&
+               after_shape.ok() &&
+               after_shape.solid_count == 1U &&
+               after_topology.complete();
+    }
+
+    friend bool operator==(
+        const VertexDeletionGenerationEvidence&,
+        const VertexDeletionGenerationEvidence&) = default;
+};
+
+struct VertexSamePointReplacementEvidence final {
+    ShapeEvidence old_shape;
+    BodyTopologyInventoryEvidence old_topology;
+    ShapeEvidence replacement_shape;
+    BodyTopologyInventoryEvidence replacement_topology;
+    EvidenceVertexSemanticKey old_key;
+    EvidenceVertexSemanticKey replacement_key;
+    ReferenceStatus old_key_in_old_shape{
+        ReferenceStatus::unsupported};
+    ReferenceStatus old_key_in_replacement_shape{
+        ReferenceStatus::unsupported};
+    ReferenceStatus replacement_key_status{
+        ReferenceStatus::unsupported};
+    std::optional<Point3> old_point;
+    std::optional<Point3> replacement_point;
+    bool provider_points_equal{false};
+
+    [[nodiscard]] bool ok() const noexcept {
+        return old_shape.ok() &&
+               old_shape.solid_count == 1U &&
+               old_topology.complete() &&
+               replacement_shape.ok() &&
+               replacement_shape.solid_count == 1U &&
+               replacement_topology.complete();
+    }
+
+    friend bool operator==(
+        const VertexSamePointReplacementEvidence&,
+        const VertexSamePointReplacementEvidence&) = default;
+};
+
 struct EdgeSplitHistoryEvidence final {
     ShapeEvidence shape;
     BooleanSubshapeHistoryEvidence target;
