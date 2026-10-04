@@ -943,6 +943,18 @@ buildExtrudeTool(
     const auto shape = sweep.Shape();
     if (shape.IsNull()) return std::nullopt;
 
+    const auto start_frame =
+        shiftedCarrierFrame(
+            input.profile.frame,
+            input.start_offset_mm);
+    const auto end_frame =
+        shiftedCarrierFrame(
+            input.profile.frame,
+            input.end_offset_mm);
+    if (!start_frame || !end_frame) {
+        return std::nullopt;
+    }
+
     std::vector<NewSemanticSource> sources;
     sources.push_back(
         {
@@ -952,6 +964,8 @@ buildExtrudeTool(
                 std::nullopt},
             facesFromShape(
                 sweep.FirstShape()),
+            kernel::SurfaceKind::plane,
+            start_frame,
         });
     sources.push_back(
         {
@@ -961,6 +975,8 @@ buildExtrudeTool(
                 std::nullopt},
             facesFromShape(
                 sweep.LastShape()),
+            kernel::SurfaceKind::plane,
+            end_frame,
         });
 
     for (const auto& source :
@@ -1000,6 +1016,8 @@ buildExtrudeTool(
                     std::nullopt,
                     source.provenance},
                 std::move(faces),
+                source.surface_kind,
+                source.canonical_frame,
             });
     }
 
