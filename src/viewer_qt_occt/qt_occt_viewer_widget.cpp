@@ -5690,6 +5690,10 @@ private:
     viewer::SelectionIntentHandler selection_intent_handler_;
     viewer::BodyTopologySelectionIntentHandler
         body_topology_selection_intent_handler_;
+    viewer::BodyTopologyPreselectionIntentHandler
+        body_topology_preselection_intent_handler_;
+    viewer::BodyTopologyCycleIntentHandler
+        body_topology_cycle_intent_handler_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
     viewer::NavigationCubeActionHandler
         navigation_cube_action_handler_;
@@ -5731,6 +5735,10 @@ private:
         body_hidden_edge_objects_;
     std::vector<Handle(AIS_InteractiveObject)>
         body_selection_objects_;
+    std::optional<viewer::PresentationToken>
+        body_preselection_token_;
+    std::vector<Handle(AIS_InteractiveObject)>
+        body_preselection_objects_;
     viewer::SolidScene solid_scene_;
     viewer::SolidPreviewScene solid_preview_scene_;
     std::vector<ProfileObject> profile_objects_;
