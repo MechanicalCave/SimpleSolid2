@@ -129,6 +129,27 @@ public:
             std::move(handler);
     }
 
+    void setBodyTopologyPreselectionIntentHandler(
+        viewer::BodyTopologyPreselectionIntentHandler handler) override {
+        body_topology_preselection_handler_ =
+            std::move(handler);
+    }
+
+    void setBodyTopologyCycleIntentHandler(
+        viewer::BodyTopologyCycleIntentHandler handler) override {
+        body_topology_cycle_handler_ =
+            std::move(handler);
+    }
+
+    bool setBodyTopologyPreselection(
+        std::optional<viewer::PresentationToken> token) override {
+        if (token && !token->valid()) {
+            return false;
+        }
+        body_preselection_ = token;
+        return true;
+    }
+
     bool setSolidScene(
         const viewer::SolidScene& scene) override {
         ++solid_scene_calls_;
@@ -232,6 +253,22 @@ public:
             mode);
     }
 
+    void emitBodyTopologyPreselection(
+        const viewer::BodyTopologyPickQueryResult& query,
+        viewer::ViewportPoint2 point) {
+        CHECK(static_cast<bool>(
+            body_topology_preselection_handler_));
+        body_topology_preselection_handler_(
+            query,
+            point);
+    }
+
+    void emitBodyTopologyCycle(bool reverse) {
+        CHECK(static_cast<bool>(
+            body_topology_cycle_handler_));
+        body_topology_cycle_handler_(reverse);
+    }
+
     viewer::CameraState camera_;
     viewer::ReferenceScene reference_scene_;
     viewer::BodyScene body_scene_;
@@ -256,6 +293,12 @@ public:
     viewer::SelectionIntentHandler selection_handler_;
     viewer::BodyTopologySelectionIntentHandler
         body_topology_handler_;
+    viewer::BodyTopologyPreselectionIntentHandler
+        body_topology_preselection_handler_;
+    viewer::BodyTopologyCycleIntentHandler
+        body_topology_cycle_handler_;
+    std::optional<viewer::PresentationToken>
+        body_preselection_;
     viewer::ViewStyleActionHandler
         view_style_handler_;
     viewer::SpatialPointerHandler spatial_handler_;
