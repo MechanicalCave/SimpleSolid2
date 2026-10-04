@@ -557,6 +557,17 @@ void PartViewportController::setSolidModelingKernel(
         modeling_kernel) {
         return;
     }
+    const auto* prior_selection =
+        static_cast<
+            const PartViewportController&>(*this)
+            .activeSelection();
+    const bool had_body_selection =
+        prior_selection != nullptr &&
+        (!prior_selection->body_topology.empty() ||
+         prior_selection
+             ->primary_body_topology
+             .has_value());
+
     solid_modeling_kernel_ =
         modeling_kernel;
     body_scene_revision_.reset();
@@ -565,6 +576,10 @@ void PartViewportController::setSolidModelingKernel(
     body_topology_bindings_.clear();
     clearBodyTopologyPreselection();
     clearBodyTopologySelection();
+    if (had_body_selection) {
+        applySelectionToSurfaces();
+        notifySelectionChanged();
+    }
     clearSolidPreview();
     refreshPresentation();
 }
