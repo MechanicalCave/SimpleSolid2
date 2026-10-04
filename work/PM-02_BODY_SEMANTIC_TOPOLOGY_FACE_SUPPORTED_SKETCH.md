@@ -3,7 +3,7 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-04  
 **Decision class:** D2 production Work Contract — Owner accepted 2026-10-04  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.12  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.13  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Entry gate:** PM-02P Body Semantic Topology Evidence COMPLETED — PASS; Owner accepted PM-02P D2 synthesis/recommendation on 2026-10-04  
 **Evidence authority:** `work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md`, `work/PM-02P_REFERENCE_SURVIVAL_MATRIX.md`, `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`  
@@ -890,7 +890,10 @@ Gate:
 
 ### PM-02E — Sketch support schema v9 + deterministic frame resolver
 
-**Checkpoint state:** ACTIVE
+**Checkpoint state:** COMPLETED — PASS  
+**Final runtime candidate:** `8b5e2c6844c93648e1884464d138d9a98e2a7a9a` — Windows FULL #1431 PASS  
+**Merged runtime main:** `e3452d4d0051564f332319a7945344655e91aa3a`  
+**Completion evidence:** `work/PM-02E_SKETCH_SUPPORT_SCHEMA_V9_COMPLETION.md`
 
 Deliver:
 
@@ -907,6 +910,8 @@ Gate:
 - Save/Reopen produces identical support meaning.
 
 ### PM-02F — stage-aware Sketch/Profile evaluation
+
+**Checkpoint state:** ACTIVE
 
 Deliver:
 
