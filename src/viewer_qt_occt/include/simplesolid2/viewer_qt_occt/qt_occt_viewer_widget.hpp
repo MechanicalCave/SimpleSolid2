@@ -66,6 +66,15 @@ public:
     void setNavigationCubeActionHandler(
         viewer::NavigationCubeActionHandler handler) override;
 
+    [[nodiscard]] viewer::ViewStyle
+    viewStyle() const noexcept override;
+
+    [[nodiscard]] bool setViewStyle(
+        viewer::ViewStyle style) override;
+
+    void setViewStyleActionHandler(
+        viewer::ViewStyleActionHandler handler) override;
+
     [[nodiscard]] bool animateCameraState(
         const viewer::CameraState& state,
         double duration_seconds,
@@ -76,6 +85,14 @@ public:
 
     [[nodiscard]] bool setBodyScene(
         const viewer::BodyScene& scene) override;
+
+    [[nodiscard]] viewer::BodyTopologyPickQueryResult
+    queryBodyTopology(
+        viewer::ViewportPoint2 point,
+        viewer::BodyTopologyPickFilter filter = {}) override;
+
+    void setBodyTopologySelectionIntentHandler(
+        viewer::BodyTopologySelectionIntentHandler handler) override;
 
     [[nodiscard]] bool setSolidScene(
         const viewer::SolidScene& scene) override;
