@@ -25,6 +25,10 @@ public:
     [[nodiscard]] kernel::SolidPresentationResult
     presentationMesh(
         kernel::RuntimeSolidHandle solid) noexcept override;
+
+    [[nodiscard]] kernel::BodyPresentationResult
+    bodyPresentation(
+        kernel::RuntimeSolidHandle solid) noexcept override;
 };
 
 } // namespace simplesolid2::kernel_occt
