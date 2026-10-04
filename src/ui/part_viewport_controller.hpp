@@ -333,6 +333,21 @@ private:
         }
     };
 
+    struct BodyTopologyCandidateStack final {
+        viewer::BodyPresentationGeneration generation;
+        viewer::ViewportPoint2 anchor;
+        std::vector<viewer::BodyTopologyPickCandidate>
+            candidates;
+        std::size_t active_index{};
+
+        [[nodiscard]] bool valid() const noexcept {
+            return generation.valid() &&
+                   anchor.valid() &&
+                   !candidates.empty() &&
+                   active_index < candidates.size();
+        }
+    };
+
     [[nodiscard]] static viewer::PresentationToken tokenFor(
         core::BuiltinReferenceRole role) noexcept;
 
@@ -376,6 +391,23 @@ private:
         const viewer::BodyTopologyPickQueryResult& query,
         viewer::SelectionIntentMode mode);
 
+    void onBodyTopologyPreselectionIntent(
+        const viewer::BodyTopologyPickQueryResult& query,
+        viewer::ViewportPoint2 point);
+
+    void onBodyTopologyCycleIntent(bool reverse);
+
+    [[nodiscard]] std::vector<
+        viewer::BodyTopologyPickCandidate>
+    rankedBodyTopologyCandidates(
+        const viewer::BodyTopologyPickQueryResult& query) const;
+
+    [[nodiscard]] bool bodyTopologyQueryCurrent(
+        const viewer::BodyTopologyPickQueryResult& query) const noexcept;
+
+    void applyBodyTopologyPreselection();
+    void clearBodyTopologyPreselection();
+
     [[nodiscard]] std::optional<BodyTopologySelectionAddress>
     bodyTopologyAddressFor(
         viewer::PresentationToken token) const;
@@ -408,6 +440,8 @@ private:
         std::uint64_t,
         BodyTopologyBinding>
         body_topology_bindings_;
+    std::optional<BodyTopologyCandidateStack>
+        body_topology_candidate_stack_;
     std::uint64_t next_body_scene_generation_{1U};
     viewer::ViewStyle view_style_{
         viewer::ViewStyle::shaded};

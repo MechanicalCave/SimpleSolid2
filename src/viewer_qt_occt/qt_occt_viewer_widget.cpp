@@ -53,6 +53,8 @@
 #include <QContextMenuEvent>
 #include <QCursor>
 #include <QDebug>
+#include <QEvent>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
@@ -67,6 +69,7 @@
 #include <cmath>
 #include <cstdint>
 #include <exception>
+#include <string>
 #include <unordered_map>
 #include <utility>
 #include <vector>
@@ -824,6 +827,8 @@ public:
 
         createNavigationControlLabels();
         syncNavigationControlVisibility();
+        createViewStyleHudLabels();
+        syncViewStyleHud();
 
         updateCurrentViewer();
         redraw();
@@ -855,6 +860,8 @@ public:
 
     bool setCameraState(const viewer::CameraState& state) {
         if (!viewer::validateCameraState(state).valid) return false;
+
+        clearBodyTopologyPreselectionIntent();
 
         if (view_.IsNull()) {
             ensureInitialized();
@@ -898,6 +905,7 @@ public:
     void fitAll() {
         ensureInitialized();
         if (view_.IsNull()) return;
+        clearBodyTopologyPreselectionIntent();
         view_->FitAll(0.05, false);
         redraw();
     }
@@ -912,6 +920,287 @@ public:
         bool face_only{};
         bool visible{};
     };
+
+    struct ViewStyleHudControl final {
+        Handle(AIS_TextLabel) label;
+        std::optional<viewer::ViewStyle> style;
+        int offset_x{};
+        int offset_y{};
+        int half_width{};
+        int half_height{};
+        bool trigger{};
+        bool visible{};
+    };
+
+    [[nodiscard]] static const char* viewStyleText(
+        viewer::ViewStyle style) noexcept {
+        switch (style) {
+        case viewer::ViewStyle::shaded:
+            return "SHADED";
+        case viewer::ViewStyle::shaded_with_edges:
+            return "SHADED + EDGES";
+        case viewer::ViewStyle::shaded_with_hidden_edges:
+            return "SHADED + HIDDEN EDGES";
+        }
+        return "SHADED";
+    }
+
+    [[nodiscard]] Handle(AIS_TextLabel)
+    makeHudTextLabel(
+        const char* text,
+        int offset_x,
+        int offset_y) {
+        Handle(AIS_TextLabel) label =
+            new AIS_TextLabel();
+        label->SetText(
+            TCollection_ExtendedString{text});
+        label->SetPosition(
+            gp_Pnt{0.0, 0.0, 0.0});
+        label->SetColor(
+            Quantity_Color{
+                0.94,
+                0.94,
+                0.96,
+                Quantity_TOC_RGB});
+        label->SetHeight(12.0);
+        label->SetHJustification(
+            Graphic3d_HTA_CENTER);
+        label->SetVJustification(
+            Graphic3d_VTA_CENTER);
+        label->SetZoomable(false);
+        label->SetZLayer(
+            Graphic3d_ZLayerId_Topmost);
+        label->SetTransformPersistence(
+            new Graphic3d_TransformPers(
+                Graphic3d_TMF_2d,
+                Aspect_TOTP_RIGHT_UPPER,
+                Graphic3d_Vec2i{
+                    offset_x,
+                    offset_y}));
+        return label;
+    }
+
+    void createViewStyleHudLabels() {
+        if (context_.IsNull()) return;
+
+        view_style_hud_controls_.clear();
+
+        auto add =
+            [this](
+                const char* text,
+                std::optional<viewer::ViewStyle> style,
+                int offset_y,
+                bool trigger) {
+                auto label =
+                    makeHudTextLabel(
+                        text,
+                        300,
+                        offset_y);
+                context_->Display(
+                    label,
+                    false);
+                context_->Deactivate(label);
+                view_style_hud_controls_.push_back(
+                    ViewStyleHudControl{
+                        label,
+                        style,
+                        300,
+                        offset_y,
+                        100,
+                        11,
+                        trigger,
+                        true});
+            };
+
+        add(
+            "SHADED v",
+            std::nullopt,
+            18,
+            true);
+        add(
+            "SHADED",
+            viewer::ViewStyle::shaded,
+            44,
+            false);
+        add(
+            "SHADED + EDGES",
+            viewer::ViewStyle::shaded_with_edges,
+            66,
+            false);
+        add(
+            "SHADED + HIDDEN EDGES",
+            viewer::ViewStyle::
+                shaded_with_hidden_edges,
+            88,
+            false);
+
+    }
+
+    void syncViewStyleHud() {
+        if (context_.IsNull()) return;
+
+        for (auto& control :
+             view_style_hud_controls_) {
+            if (control.label.IsNull()) {
+                continue;
+            }
+
+            const bool next_visible =
+                control.trigger ||
+                view_style_menu_open_;
+
+            if (control.trigger) {
+                std::string text{
+                    viewStyleText(view_style_)};
+                text += " v";
+                control.label->SetText(
+                    TCollection_ExtendedString{
+                        text.c_str()});
+            } else if (control.style) {
+                std::string text =
+                    *control.style == view_style_
+                        ? "* "
+                        : "  ";
+                text += viewStyleText(
+                    *control.style);
+                control.label->SetText(
+                    TCollection_ExtendedString{
+                        text.c_str()});
+            }
+
+            if (next_visible &&
+                !control.visible) {
+                context_->Display(
+                    control.label,
+                    false);
+                context_->Deactivate(
+                    control.label);
+            } else if (!next_visible &&
+                       control.visible) {
+                context_->Erase(
+                    control.label,
+                    false);
+            } else if (next_visible) {
+                context_->Redisplay(
+                    control.label,
+                    false);
+                context_->Deactivate(
+                    control.label);
+            }
+            control.visible = next_visible;
+        }
+    }
+
+    [[nodiscard]] std::optional<std::size_t>
+    viewStyleHudControlAt(
+        int logical_x,
+        int logical_y) const {
+        for (std::size_t index = 0U;
+             index < view_style_hud_controls_.size();
+             ++index) {
+            const auto& control =
+                view_style_hud_controls_[index];
+            if (!control.visible) {
+                continue;
+            }
+
+            const int center_x =
+                owner_.width() -
+                control.offset_x;
+            const int center_y =
+                control.offset_y;
+            if (std::abs(logical_x - center_x) <=
+                    control.half_width &&
+                std::abs(logical_y - center_y) <=
+                    control.half_height) {
+                return index;
+            }
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] bool viewStyleHudCapturesPointerAt(
+        int logical_x,
+        int logical_y) const {
+        // The trigger is an always-visible HUD control. Its pointer-capture
+        // contract must not depend on transient AIS label visibility bookkeeping
+        // used for the dropdown rows.
+        constexpr int trigger_offset_x = 300;
+        constexpr int trigger_offset_y = 18;
+        constexpr int trigger_half_width = 100;
+        constexpr int trigger_half_height = 11;
+        const int trigger_center_x =
+            owner_.width() - trigger_offset_x;
+        const bool over_trigger =
+            std::abs(
+                logical_x - trigger_center_x) <=
+                trigger_half_width &&
+            std::abs(
+                logical_y - trigger_offset_y) <=
+                trigger_half_height;
+
+        return over_trigger ||
+               view_style_menu_open_ ||
+               viewStyleHudControlAt(
+                   logical_x,
+                   logical_y)
+                   .has_value();
+    }
+
+    [[nodiscard]] bool activateViewStyleHudAt(
+        int logical_x,
+        int logical_y) {
+        const auto hit =
+            viewStyleHudControlAt(
+                logical_x,
+                logical_y);
+        if (!hit) {
+            if (!view_style_menu_open_) {
+                return false;
+            }
+            view_style_menu_open_ = false;
+            view_style_press_active_ = true;
+            syncViewStyleHud();
+            updateCurrentViewer();
+            redraw();
+            return true;
+        }
+
+        auto& control =
+            view_style_hud_controls_[*hit];
+        view_style_press_active_ = true;
+        clearBodyTopologyPreselectionIntent();
+
+        if (control.trigger) {
+            view_style_menu_open_ =
+                !view_style_menu_open_;
+            syncViewStyleHud();
+            updateCurrentViewer();
+            redraw();
+            return true;
+        }
+
+        const auto requested =
+            control.style;
+        view_style_menu_open_ = false;
+        syncViewStyleHud();
+        updateCurrentViewer();
+        redraw();
+
+        if (requested &&
+            view_style_action_handler_) {
+            view_style_action_handler_(
+                *requested);
+        }
+        return true;
+    }
+
+    [[nodiscard]] bool consumeViewStyleHudRelease() noexcept {
+        const bool active =
+            view_style_press_active_;
+        view_style_press_active_ = false;
+        return active;
+    }
 
     void createNavigationControlLabels() {
         if (context_.IsNull()) return;
@@ -1649,9 +1938,11 @@ public:
             view_style_ = previous;
             static_cast<void>(
                 syncBodyViewStyle());
+            syncViewStyleHud();
             return false;
         }
 
+        syncViewStyleHud();
         if (!context_.IsNull()) {
             updateCurrentViewer();
         }
@@ -3283,6 +3574,151 @@ public:
             std::move(handler);
     }
 
+    void setBodyTopologyPreselectionIntentHandler(
+        viewer::BodyTopologyPreselectionIntentHandler handler) {
+        body_topology_preselection_intent_handler_ =
+            std::move(handler);
+    }
+
+    void setBodyTopologyCycleIntentHandler(
+        viewer::BodyTopologyCycleIntentHandler handler) {
+        body_topology_cycle_intent_handler_ =
+            std::move(handler);
+    }
+
+    [[nodiscard]] bool hasBodyTopologyPreselection() const noexcept {
+        return body_preselection_token_.has_value();
+    }
+
+    void clearBodyTopologyPreselectionIntent() {
+        if (body_preselection_clear_active_) {
+            return;
+        }
+
+        body_preselection_clear_active_ = true;
+
+        // HUD/navigation capture must clear the provider overlay before the
+        // semantic invalid intent is delivered. OCCT Remove/Update calls may
+        // synchronously re-enter mouse processing, so the guard above keeps
+        // nested hover from republishing a valid Body query.
+        const bool changed =
+            body_preselection_token_.has_value() ||
+            !body_preselection_objects_.empty();
+        body_preselection_token_.reset();
+        if (changed) {
+            clearBodyPreselectionObjects();
+            if (!context_.IsNull()) {
+                updateCurrentViewer();
+            }
+        }
+
+        if (body_topology_preselection_intent_handler_) {
+            body_topology_preselection_intent_handler_(
+                viewer::BodyTopologyPickQueryResult{},
+                viewer::ViewportPoint2{});
+        }
+
+        body_preselection_clear_active_ = false;
+    }
+
+    bool emitBodyTopologyPreselectionAt(
+        double logical_x,
+        double logical_y) {
+        // OCCT context updates performed while clearing a hover overlay can
+        // synchronously pump native mouse/detection work. Such nested hover
+        // must not republish Body topology before the authoritative clear
+        // intent completes.
+        if (body_preselection_clear_active_) {
+            return false;
+        }
+
+        if (primary_pointer_routing_ !=
+                viewer::PrimaryPointerRouting::
+                    presentation_selection ||
+            !body_topology_preselection_intent_handler_) {
+            clearBodyTopologyPreselectionIntent();
+            return false;
+        }
+
+        const viewer::ViewportPoint2 point{
+            logical_x,
+            logical_y};
+        if (!point.valid()) {
+            clearBodyTopologyPreselectionIntent();
+            return false;
+        }
+
+        ensureInitialized();
+        if (context_.IsNull() || view_.IsNull()) {
+            clearBodyTopologyPreselectionIntent();
+            return false;
+        }
+
+        const auto dpr = owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) || dpr <= 0.0) {
+            clearBodyTopologyPreselectionIntent();
+            return false;
+        }
+
+        const int x = static_cast<int>(
+            std::lround(logical_x * dpr));
+        const int y = static_cast<int>(
+            std::lround(logical_y * dpr));
+        context_->MoveTo(x, y, view_, true);
+
+        bool authored_presentation_detected = false;
+        if (context_->HasDetected()) {
+            const auto detected =
+                context_->DetectedInteractive();
+            if (!detected.IsNull()) {
+                const auto matches =
+                    [&detected](const auto& entry) {
+                        return entry.object == detected;
+                    };
+                authored_presentation_detected =
+                    std::any_of(
+                        reference_objects_.begin(),
+                        reference_objects_.end(),
+                        matches) ||
+                    std::any_of(
+                        profile_objects_.begin(),
+                        profile_objects_.end(),
+                        matches) ||
+                    std::any_of(
+                        sketch_objects_.begin(),
+                        sketch_objects_.end(),
+                        matches);
+            }
+        }
+
+        // Native OCCT detection is not hover authority for Body topology.
+        context_->ClearDetected(false);
+        updateCurrentViewer();
+
+        if (authored_presentation_detected) {
+            body_topology_preselection_intent_handler_(
+                viewer::BodyTopologyPickQueryResult{},
+                point);
+            return false;
+        }
+
+        const auto query =
+            queryBodyTopology(point, {});
+        body_topology_preselection_intent_handler_(
+            query,
+            point);
+        return query.valid() &&
+               query.completed &&
+               !query.candidates.empty();
+    }
+
+    void emitBodyTopologyCycleIntent(bool reverse) {
+        if (body_topology_cycle_intent_handler_) {
+            body_topology_cycle_intent_handler_(
+                reverse);
+        }
+    }
+
     void setSpatialPointerHandler(
         viewer::SpatialPointerHandler handler) {
         spatial_pointer_handler_ =
@@ -3296,6 +3732,12 @@ public:
         }
 
         primary_pointer_routing_ = routing;
+
+        if (routing !=
+            viewer::PrimaryPointerRouting::
+                presentation_selection) {
+            clearBodyTopologyPreselectionIntent();
+        }
 
         if (routing ==
                 viewer::PrimaryPointerRouting::
@@ -3639,6 +4081,7 @@ public:
     void zoomByFactor(double factor) {
         ensureInitialized();
         if (view_.IsNull() || !std::isfinite(factor) || factor <= 0.0) return;
+        clearBodyTopologyPreselectionIntent();
         view_->SetZoom(factor, true);
         redraw();
     }
@@ -3647,6 +4090,7 @@ public:
         ensureInitialized();
         if (view_.IsNull()) return;
 
+        clearBodyTopologyPreselectionIntent();
         const auto dpr = owner_.devicePixelRatioF();
         const auto dx = view_->Convert(
             static_cast<int>(std::lround(delta_x * dpr)));
@@ -3665,6 +4109,7 @@ public:
             return;
         }
 
+        clearBodyTopologyPreselectionIntent();
         view_->Rotate(angles.x, angles.y, angles.z, true);
         redraw();
         syncNavigationControlVisibility();
@@ -4378,6 +4823,8 @@ public:
 
     void clearSolidScene() noexcept {
         clearBodySelectionObjects();
+        clearBodyPreselectionObjects();
+        body_preselection_token_.reset();
         clearBodyEdgeStyleObjects();
         if (!context_.IsNull() &&
             !solid_object_.IsNull()) {
@@ -4801,14 +5248,15 @@ public:
                    token) != selection_.selected.end();
     }
 
-    void clearBodySelectionObjects() noexcept {
+    void clearBodyOverlayObjects(
+        std::vector<Handle(AIS_InteractiveObject)>& objects,
+        const char* operation) noexcept {
         if (!context_.IsNull()) {
-            for (const auto& object :
-                 body_selection_objects_) {
+            for (const auto& object : objects) {
                 if (object.IsNull()) continue;
                 const auto retained = object;
                 guardedVoid(
-                    "removeBodySelectionOverlay",
+                    operation,
                     [this, retained] {
                         context_->Remove(
                             retained,
@@ -4816,25 +5264,32 @@ public:
                     });
             }
         }
-        body_selection_objects_.clear();
+        objects.clear();
     }
 
-    [[nodiscard]] bool appendBodySelectionOverlay(
+    void clearBodySelectionObjects() noexcept {
+        clearBodyOverlayObjects(
+            body_selection_objects_,
+            "removeBodySelectionOverlay");
+    }
+
+    void clearBodyPreselectionObjects() noexcept {
+        clearBodyOverlayObjects(
+            body_preselection_objects_,
+            "removeBodyPreselectionOverlay");
+    }
+
+    [[nodiscard]] bool appendBodyTopologyOverlay(
         viewer::PresentationToken token,
-        bool primary) {
+        const Quantity_Color& color,
+        double face_transparency,
+        double edge_width,
+        double vertex_size,
+        std::vector<Handle(AIS_InteractiveObject)>& sink) {
         if (context_.IsNull() ||
             body_scene_.empty()) {
             return true;
         }
-
-        const Quantity_Color color =
-            primary
-                ? Quantity_Color{
-                      0.25, 0.90, 1.0,
-                      Quantity_TOC_RGB}
-                : Quantity_Color{
-                      0.18, 0.72, 0.96,
-                      Quantity_TOC_RGB};
 
         const auto face =
             std::find_if(
@@ -4864,7 +5319,7 @@ public:
             setOwnedSolidShadingStyle(
                 object,
                 color,
-                primary ? 0.18 : 0.30);
+                face_transparency);
             object->SetPolygonOffsets(
                 Aspect_POM_Fill,
                 -2.0F,
@@ -4874,8 +5329,7 @@ public:
                 false);
             context_->Deactivate(
                 object);
-            body_selection_objects_.push_back(
-                object);
+            sink.push_back(object);
             return true;
         }
 
@@ -4903,7 +5357,7 @@ public:
                     new Prs3d_LineAspect(
                         color,
                         Aspect_TOL_SOLID,
-                        primary ? 4.0 : 3.0)};
+                        edge_width)};
             object->Attributes()->SetLineAspect(
                 aspect);
             object->Attributes()->SetWireAspect(
@@ -4917,8 +5371,7 @@ public:
                 false);
             context_->Deactivate(
                 object);
-            body_selection_objects_.push_back(
-                object);
+            sink.push_back(object);
             return true;
         }
 
@@ -4939,7 +5392,7 @@ public:
             }
             const int size =
                 gripMarkerPixelSize(
-                    primary ? 11.0 : 9.0,
+                    vertex_size,
                     dpr);
             Handle(Geom_CartesianPoint) point =
                 new Geom_CartesianPoint(
@@ -4959,12 +5412,74 @@ public:
                 false);
             context_->Deactivate(
                 object);
-            body_selection_objects_.push_back(
-                object);
+            sink.push_back(object);
             return true;
         }
 
-        return true;
+        return false;
+    }
+
+    [[nodiscard]] bool appendBodySelectionOverlay(
+        viewer::PresentationToken token,
+        bool primary) {
+        const Quantity_Color color =
+            primary
+                ? Quantity_Color{
+                      0.25, 0.90, 1.0,
+                      Quantity_TOC_RGB}
+                : Quantity_Color{
+                      0.18, 0.72, 0.96,
+                      Quantity_TOC_RGB};
+        return appendBodyTopologyOverlay(
+            token,
+            color,
+            primary ? 0.18 : 0.30,
+            primary ? 4.0 : 3.0,
+            primary ? 11.0 : 9.0,
+            body_selection_objects_);
+    }
+
+    void syncBodyPreselectionOverlay() {
+        clearBodyPreselectionObjects();
+        if (!body_preselection_token_ ||
+            isSelected(*body_preselection_token_)) {
+            return;
+        }
+
+        const Quantity_Color color{
+            0.38, 0.78, 1.0,
+            Quantity_TOC_RGB};
+        if (!appendBodyTopologyOverlay(
+                *body_preselection_token_,
+                color,
+                0.48,
+                2.4,
+                9.0,
+                body_preselection_objects_)) {
+            body_preselection_token_.reset();
+            clearBodyPreselectionObjects();
+        }
+    }
+
+    [[nodiscard]] bool setBodyTopologyPreselection(
+        std::optional<viewer::PresentationToken> token) {
+        if (token && !token->valid()) {
+            return false;
+        }
+        if (body_preselection_token_ == token) {
+            return true;
+        }
+
+        body_preselection_token_ = token;
+        if (!context_.IsNull()) {
+            syncBodyPreselectionOverlay();
+            updateCurrentViewer();
+        }
+        if (!view_.IsNull()) {
+            redraw();
+        }
+        return !token ||
+               body_preselection_token_ == token;
     }
 
     void applySelectionStyles() {
@@ -4983,6 +5498,7 @@ public:
                 break;
             }
         }
+        syncBodyPreselectionOverlay();
 
         for (const auto& entry : reference_objects_) {
             if (entry.object.IsNull()) continue;
@@ -5450,6 +5966,7 @@ public:
         ensureInitialized();
         if (view_.IsNull() || angle_delta_y == 0) return;
 
+        clearBodyTopologyPreselectionIntent();
         const auto dpr = owner_.devicePixelRatioF();
         const auto x = static_cast<int>(
             std::lround(static_cast<double>(logical_x) * dpr));
@@ -5495,6 +6012,10 @@ private:
     viewer::SelectionIntentHandler selection_intent_handler_;
     viewer::BodyTopologySelectionIntentHandler
         body_topology_selection_intent_handler_;
+    viewer::BodyTopologyPreselectionIntentHandler
+        body_topology_preselection_intent_handler_;
+    viewer::BodyTopologyCycleIntentHandler
+        body_topology_cycle_intent_handler_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
     viewer::NavigationCubeActionHandler
         navigation_cube_action_handler_;
@@ -5522,6 +6043,10 @@ private:
     bool navigation_cube_press_active_{};
     std::vector<NavigationControl>
         navigation_controls_;
+    std::vector<ViewStyleHudControl>
+        view_style_hud_controls_;
+    bool view_style_menu_open_{};
+    bool view_style_press_active_{};
     std::vector<ReferenceObject> reference_objects_;
     Handle(AIS_InteractiveObject) solid_object_;
     Handle(AIS_InteractiveObject) solid_preview_object_;
@@ -5536,6 +6061,11 @@ private:
         body_hidden_edge_objects_;
     std::vector<Handle(AIS_InteractiveObject)>
         body_selection_objects_;
+    std::optional<viewer::PresentationToken>
+        body_preselection_token_;
+    std::vector<Handle(AIS_InteractiveObject)>
+        body_preselection_objects_;
+    bool body_preselection_clear_active_{};
     viewer::SolidScene solid_scene_;
     viewer::SolidPreviewScene solid_preview_scene_;
     std::vector<ProfileObject> profile_objects_;
@@ -5763,6 +6293,36 @@ void QtOcctViewerWidget::setBodyTopologySelectionIntentHandler(
         [this, handler = std::move(handler)]() mutable {
             impl_->setBodyTopologySelectionIntentHandler(
                 std::move(handler));
+        });
+}
+
+void QtOcctViewerWidget::setBodyTopologyPreselectionIntentHandler(
+    viewer::BodyTopologyPreselectionIntentHandler handler) {
+    guardedVoid(
+        "setBodyTopologyPreselectionIntentHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setBodyTopologyPreselectionIntentHandler(
+                std::move(handler));
+        });
+}
+
+void QtOcctViewerWidget::setBodyTopologyCycleIntentHandler(
+    viewer::BodyTopologyCycleIntentHandler handler) {
+    guardedVoid(
+        "setBodyTopologyCycleIntentHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setBodyTopologyCycleIntentHandler(
+                std::move(handler));
+        });
+}
+
+bool QtOcctViewerWidget::setBodyTopologyPreselection(
+    std::optional<viewer::PresentationToken> token) {
+    return guardedBool(
+        "setBodyTopologyPreselection",
+        [this, token] {
+            return impl_->setBodyTopologyPreselection(
+                token);
         });
 }
 
@@ -6022,6 +6582,39 @@ void QtOcctViewerWidget::orbitByRadians(
         });
 }
 
+bool QtOcctViewerWidget::event(QEvent* event) {
+    if (event != nullptr &&
+        event->type() == QEvent::KeyPress &&
+        impl_ != nullptr &&
+        impl_->primaryPointerRouting() ==
+            viewer::PrimaryPointerRouting::
+                presentation_selection &&
+        impl_->hasBodyTopologyPreselection()) {
+        auto* key_event =
+            static_cast<QKeyEvent*>(event);
+        const bool forward =
+            key_event->key() == Qt::Key_Tab &&
+            (key_event->modifiers() &
+             Qt::ShiftModifier) == 0;
+        const bool reverse =
+            key_event->key() == Qt::Key_Backtab ||
+            (key_event->key() == Qt::Key_Tab &&
+             (key_event->modifiers() &
+              Qt::ShiftModifier) != 0);
+        if (forward || reverse) {
+            guardedVoid(
+                "bodyTopologyCycle",
+                [this, reverse] {
+                    impl_->emitBodyTopologyCycleIntent(
+                        reverse);
+                });
+            event->accept();
+            return true;
+        }
+    }
+    return QWidget::event(event);
+}
+
 QPaintEngine* QtOcctViewerWidget::paintEngine() const {
     return nullptr;
 }
@@ -6066,6 +6659,11 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::MiddleButton) {
         const auto point = event->position().toPoint();
         guardedVoid(
+            "clearBodyPreselectionForNavigation",
+            [this] {
+                impl_->clearBodyTopologyPreselectionIntent();
+            });
+        guardedVoid(
             "middlePress",
             [this, point, event] {
                 impl_->beginMiddleDrag(
@@ -6080,13 +6678,29 @@ void QtOcctViewerWidget::mousePressEvent(QMouseEvent* event) {
     if (event->button() == Qt::LeftButton) {
         const auto point =
             event->position().toPoint();
+
+        if (guardedBool(
+                "viewStyleHudPress",
+                [this, point] {
+                    return impl_->activateViewStyleHudAt(
+                        point.x(),
+                        point.y());
+                })) {
+            event->accept();
+            return;
+        }
+
         if (guardedBool(
                 "navigationCubePress",
                 [this, point] {
-                    return impl_->
-                        activateNavigationCubeAt(
+                    const bool activated =
+                        impl_->activateNavigationCubeAt(
                             point.x(),
                             point.y());
+                    if (activated) {
+                        impl_->clearBodyTopologyPreselectionIntent();
+                    }
+                    return activated;
                 })) {
             event->accept();
             return;
@@ -6157,13 +6771,33 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
 
     const auto point = event->position();
     const auto point_int = point.toPoint();
+
+    if (guardedBool(
+            "viewStyleHudHover",
+            [this, point_int] {
+                if (!impl_->viewStyleHudCapturesPointerAt(
+                        point_int.x(),
+                        point_int.y())) {
+                    return false;
+                }
+                impl_->clearBodyTopologyPreselectionIntent();
+                return true;
+            })) {
+        event->accept();
+        return;
+    }
+
     if (guardedBool(
             "navigationCubeHover",
             [this, point_int] {
-                return impl_->
-                    updateNavigationCubeHover(
+                const bool hovered =
+                    impl_->updateNavigationCubeHover(
                         point_int.x(),
                         point_int.y());
+                if (hovered) {
+                    impl_->clearBodyTopologyPreselectionIntent();
+                }
+                return hovered;
             })) {
         event->accept();
         return;
@@ -6190,6 +6824,15 @@ void QtOcctViewerWidget::mouseMoveEvent(QMouseEvent* event) {
                      Qt::ControlModifier) != 0));
         });
 
+    guardedVoid(
+        "bodyTopologyHover",
+        [this, point] {
+            static_cast<void>(
+                impl_->emitBodyTopologyPreselectionAt(
+                    point.x(),
+                    point.y()));
+        });
+
     QWidget::mouseMoveEvent(event);
 }
 
@@ -6198,6 +6841,12 @@ void QtOcctViewerWidget::mouseReleaseEvent(QMouseEvent* event) {
         guardedVoid(
             "middleRelease",
             [this] { impl_->endMiddleDrag(); });
+        event->accept();
+        return;
+    }
+
+    if (event->button() == Qt::LeftButton &&
+        impl_->consumeViewStyleHudRelease()) {
         event->accept();
         return;
     }
@@ -6261,6 +6910,11 @@ void QtOcctViewerWidget::wheelEvent(QWheelEvent* event) {
     const auto point = event->position().toPoint();
     const auto delta = event->angleDelta().y();
     guardedVoid(
+        "clearBodyPreselectionForZoom",
+        [this] {
+            impl_->clearBodyTopologyPreselectionIntent();
+        });
+    guardedVoid(
         "wheelZoom",
         [this, point, delta] {
             impl_->zoomAtLogicalPoint(
@@ -6269,6 +6923,15 @@ void QtOcctViewerWidget::wheelEvent(QWheelEvent* event) {
                 delta);
         });
     event->accept();
+}
+
+void QtOcctViewerWidget::leaveEvent(QEvent* event) {
+    guardedVoid(
+        "bodyTopologyLeave",
+        [this] {
+            impl_->clearBodyTopologyPreselectionIntent();
+        });
+    QWidget::leaveEvent(event);
 }
 
 void QtOcctViewerWidget::contextMenuEvent(
