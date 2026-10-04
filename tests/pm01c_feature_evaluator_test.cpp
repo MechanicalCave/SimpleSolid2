@@ -1063,6 +1063,33 @@ int main() {
                 }));
     CHECK(fragment_count == 2U);
 
+    // PM-02D4 Feature Contribution is a set-valued current-Body query, not a
+    // singular strict FaceReference. The same split therefore contributes
+    // both current Face fragments without becoming Ambiguous itself.
+    const auto split_contribution =
+        part::currentFeatureContribution(
+            *split_eval.current_topology,
+            id1);
+    CHECK(split_contribution.valid());
+    CHECK(
+        split_contribution.faces.size() >=
+        2U);
+    for (const auto token :
+         split_surface->current_faces) {
+        CHECK(
+            std::count(
+                split_contribution.faces.begin(),
+                split_contribution.faces.end(),
+                token) == 1);
+    }
+
+    const auto second_contribution =
+        part::currentFeatureContribution(
+            *split_eval.current_topology,
+            id2);
+    CHECK(second_contribution.valid());
+    CHECK(!second_contribution.faces.empty());
+
     // Two prior semantic Surface claims collapse onto one current provider
     // Face with no independent semantic winner. Both remain Ambiguous; Part
     // exposes both carrier candidates on the one current Face and no frame.
@@ -1811,6 +1838,7 @@ int main() {
         << " resolved_prefix_presentation=1"
         << " topology_catalog=1"
         << " split_face_ambiguous_surface_resolved=1"
+        << " feature_contribution_split=set_valued"
         << " alias_no_winner=ambiguous"
         << " independent_winner=resolved_missing"
         << " unresolved_surface_frame=none"
