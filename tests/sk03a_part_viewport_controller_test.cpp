@@ -9,13 +9,16 @@
 #include <QTreeWidget>
 #include <QWidget>
 
+#include <algorithm>
 #include <cstddef>
+#include <map>
 #include <cstdlib>
 #include <filesystem>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <utility>
+#include <vector>
 
 using namespace simplesolid2;
 
@@ -97,6 +100,42 @@ public:
         if (!scene.valid()) return false;
         solid_scene_ = scene;
         return true;
+    }
+
+    bool setBodyScene(
+        const viewer::BodyScene& scene) override {
+        ++body_scene_calls_;
+        if (fail_body_scene_ ||
+            !scene.valid()) {
+            return false;
+        }
+        body_scene_ = scene;
+        return true;
+    }
+
+    viewer::ViewStyle
+    viewStyle() const noexcept override {
+        return view_style_;
+    }
+
+    bool setViewStyle(
+        viewer::ViewStyle style) override {
+        ++view_style_calls_;
+        view_style_ = style;
+        return true;
+    }
+
+    void setViewStyleActionHandler(
+        viewer::ViewStyleActionHandler handler) override {
+        view_style_handler_ =
+            std::move(handler);
+    }
+
+    void requestViewStyle(
+        viewer::ViewStyle style) {
+        CHECK(static_cast<bool>(
+            view_style_handler_));
+        view_style_handler_(style);
     }
 
     bool setSolidPreviewScene(
@@ -185,16 +224,24 @@ public:
     viewer::CameraState camera_;
     viewer::ReferenceScene reference_scene_;
     viewer::SolidScene solid_scene_;
+    viewer::BodyScene body_scene_;
+    viewer::ViewStyle view_style_{
+        viewer::ViewStyle::shaded};
+    viewer::ViewStyleActionHandler
+        view_style_handler_;
     viewer::SolidPreviewScene
         solid_preview_scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene preview_scene_;
     std::size_t solid_scene_calls_{};
+    std::size_t body_scene_calls_{};
+    std::size_t view_style_calls_{};
     std::size_t solid_preview_scene_calls_{};
     std::size_t sketch_scene_calls_{};
     std::size_t preview_scene_calls_{};
     bool fail_preview_{};
     bool fail_sketch_scene_{};
+    bool fail_body_scene_{};
     viewer::SelectionIntentHandler selection_handler_;
     viewer::SpatialPointerHandler spatial_handler_;
     viewer::PrimaryPointerRouting routing_{
