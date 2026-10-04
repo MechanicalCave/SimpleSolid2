@@ -2375,6 +2375,289 @@ finishBoolean(
     return result;
 }
 
+[[nodiscard]] bool appendFacePresentationTriangles(
+    const TopoDS_Face& face,
+    kernel::SolidPresentationMesh& mesh) {
+    TopLoc_Location location;
+    const Handle(Poly_Triangulation) triangulation =
+        BRep_Tool::Triangulation(
+            face,
+            location);
+    if (triangulation.IsNull()) {
+        return false;
+    }
+    if (!triangulation->HasNormals()) {
+        BRepLib_ToolTriangulatedShape::ComputeNormals(
+            face,
+            triangulation);
+    }
+    if (!triangulation->HasNormals()) {
+        return false;
+    }
+
+    const auto transform =
+        location.Transformation();
+    const auto before = mesh.triangles.size();
+
+    for (Standard_Integer index = 1;
+         index <= triangulation->NbTriangles();
+         ++index) {
+        Standard_Integer first_index{};
+        Standard_Integer second_index{};
+        Standard_Integer third_index{};
+        triangulation->Triangle(index).Get(
+            first_index,
+            second_index,
+            third_index);
+
+        gp_Pnt first =
+            triangulation->Node(first_index)
+                .Transformed(transform);
+        gp_Pnt second =
+            triangulation->Node(second_index)
+                .Transformed(transform);
+        gp_Pnt third =
+            triangulation->Node(third_index)
+                .Transformed(transform);
+
+        gp_Dir first_normal =
+            triangulation->Normal(first_index);
+        gp_Dir second_normal =
+            triangulation->Normal(second_index);
+        gp_Dir third_normal =
+            triangulation->Normal(third_index);
+        first_normal.Transform(transform);
+        second_normal.Transform(transform);
+        third_normal.Transform(transform);
+
+        if (face.Orientation() ==
+            TopAbs_REVERSED) {
+            std::swap(second, third);
+            std::swap(
+                second_normal,
+                third_normal);
+            first_normal.Reverse();
+            second_normal.Reverse();
+            third_normal.Reverse();
+        }
+
+        const gp_Vec first_edge{
+            first,
+            second};
+        const gp_Vec second_edge{
+            first,
+            third};
+        const gp_Vec cross =
+            first_edge.Crossed(second_edge);
+        const double magnitude =
+            cross.Magnitude();
+        if (!std::isfinite(magnitude) ||
+            !(magnitude > 0.0)) {
+            continue;
+        }
+
+        mesh.triangles.push_back(
+            kernel::SolidMeshTriangle{
+                {first.X(), first.Y(), first.Z()},
+                {second.X(), second.Y(), second.Z()},
+                {third.X(), third.Y(), third.Z()},
+                {first_normal.X(),
+                 first_normal.Y(),
+                 first_normal.Z()},
+                {second_normal.X(),
+                 second_normal.Y(),
+                 second_normal.Z()},
+                {third_normal.X(),
+                 third_normal.Y(),
+                 third_normal.Z()}});
+    }
+
+    return mesh.triangles.size() > before;
+}
+
+[[nodiscard]] std::optional<std::vector<kernel::Point3>>
+edgePresentationPath(
+    const TopoDS_Edge& edge) {
+    BRepAdaptor_Curve curve{edge};
+    const double first = curve.FirstParameter();
+    const double last = curve.LastParameter();
+    if (!std::isfinite(first) ||
+        !std::isfinite(last) ||
+        !(first < last)) {
+        return std::nullopt;
+    }
+
+    std::size_t segments = 32U;
+    switch (curve.GetType()) {
+    case GeomAbs_Line:
+        segments = 1U;
+        break;
+    case GeomAbs_Circle:
+        segments = 64U;
+        break;
+    default:
+        break;
+    }
+
+    std::vector<kernel::Point3> points;
+    points.reserve(segments + 1U);
+    for (std::size_t index = 0U;
+         index <= segments;
+         ++index) {
+        const double fraction =
+            static_cast<double>(index) /
+            static_cast<double>(segments);
+        const double parameter =
+            first +
+            (last - first) * fraction;
+        const gp_Pnt point =
+            curve.Value(parameter);
+        const kernel::Point3 converted{
+            point.X(),
+            point.Y(),
+            point.Z()};
+        if (!std::isfinite(converted.x) ||
+            !std::isfinite(converted.y) ||
+            !std::isfinite(converted.z)) {
+            return std::nullopt;
+        }
+
+        if (!points.empty()) {
+            const double dx =
+                converted.x -
+                points.back().x;
+            const double dy =
+                converted.y -
+                points.back().y;
+            const double dz =
+                converted.z -
+                points.back().z;
+            const double distance2 =
+                dx * dx + dy * dy + dz * dz;
+            if (distance2 <= 1.0e-24) {
+                continue;
+            }
+        }
+        points.push_back(converted);
+    }
+
+    return points.size() >= 2U
+        ? std::optional<
+              std::vector<kernel::Point3>>{
+              std::move(points)}
+        : std::nullopt;
+}
+
+[[nodiscard]] kernel::BodyPresentationResult
+bodyPresentationForRuntime(
+    const OcctRuntimeSolid& runtime) noexcept {
+    kernel::BodyPresentationResult result;
+    if (runtime.solid.IsNull() ||
+        runtime.inventory_faces.empty() ||
+        runtime.inventory_edges.empty() ||
+        runtime.inventory_vertices.empty()) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                invalid_input;
+        return result;
+    }
+
+    try {
+        constexpr double linear_deflection_mm = 0.25;
+        constexpr double angular_deflection_rad = 0.35;
+
+        BRepMesh_IncrementalMesh mesher{
+            runtime.solid,
+            linear_deflection_mm,
+            false,
+            angular_deflection_rad,
+            true};
+        mesher.Perform();
+        if (!mesher.IsDone()) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+
+        result.faces.reserve(
+            runtime.inventory_faces.size());
+        for (const auto& [token_value, face] :
+             runtime.inventory_faces) {
+            const auto first_triangle =
+                result.mesh.triangles.size();
+            if (!appendFacePresentationTriangles(
+                    face,
+                    result.mesh)) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                return result;
+            }
+            result.faces.push_back(
+                kernel::BodyFacePresentationRange{
+                    kernel::RuntimeFaceToken{
+                        token_value},
+                    first_triangle,
+                    result.mesh.triangles.size() -
+                        first_triangle});
+        }
+
+        result.edges.reserve(
+            runtime.inventory_edges.size());
+        for (const auto& [token_value, edge] :
+             runtime.inventory_edges) {
+            auto points =
+                edgePresentationPath(edge);
+            if (!points) {
+                result.status =
+                    kernel::SolidPresentationStatus::
+                        provider_failure;
+                return result;
+            }
+            result.edges.push_back(
+                kernel::BodyEdgePresentationPath{
+                    kernel::RuntimeEdgeToken{
+                        token_value},
+                    std::move(*points)});
+        }
+
+        result.vertices.reserve(
+            runtime.inventory_vertices.size());
+        for (const auto& [token_value, vertex] :
+             runtime.inventory_vertices) {
+            const gp_Pnt point =
+                BRep_Tool::Pnt(vertex);
+            result.vertices.push_back(
+                kernel::BodyVertexPresentationPoint{
+                    kernel::RuntimeVertexToken{
+                        token_value},
+                    {point.X(),
+                     point.Y(),
+                     point.Z()}});
+        }
+
+        result.status =
+            kernel::SolidPresentationStatus::ok;
+        if (!result.ok()) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+        }
+        return result;
+    } catch (const Standard_Failure&) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        return result;
+    } catch (...) {
+        result.status =
+            kernel::SolidPresentationStatus::
+                provider_failure;
+        return result;
+    }
+}
+
 [[nodiscard]] kernel::SolidPresentationResult
 presentationMeshForShape(
     const TopoDS_Shape& shape) noexcept {
@@ -2888,7 +3171,20 @@ OcctSolidModelingKernel::extrudePreviewMesh(
 kernel::SolidPresentationResult
 OcctSolidModelingKernel::presentationMesh(
     kernel::RuntimeSolidHandle solid) noexcept {
+    const auto body =
+        bodyPresentation(std::move(solid));
     kernel::SolidPresentationResult result;
+    result.status = body.status;
+    if (body.ok()) {
+        result.mesh = body.mesh;
+    }
+    return result;
+}
+
+kernel::BodyPresentationResult
+OcctSolidModelingKernel::bodyPresentation(
+    kernel::RuntimeSolidHandle solid) noexcept {
+    kernel::BodyPresentationResult result;
     if (solid == nullptr) {
         result.status =
             kernel::SolidPresentationStatus::
@@ -2907,8 +3203,7 @@ OcctSolidModelingKernel::presentationMesh(
         return result;
     }
 
-    return presentationMeshForShape(
-        runtime->solid);
+    return bodyPresentationForRuntime(*runtime);
 }
 
 } // namespace simplesolid2::kernel_occt
