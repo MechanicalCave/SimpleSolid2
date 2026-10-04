@@ -37,6 +37,7 @@
 #include <gp_Pnt.hxx>
 #include <gp_Vec.hxx>
 #include <GProp_GProps.hxx>
+#include <GCPnts_QuasiUniformDeflection.hxx>
 #include <GeomAbs_CurveType.hxx>
 #include <GeomAbs_SurfaceType.hxx>
 #include <BRepSweep_Prism.hxx>
@@ -2375,6 +2376,148 @@ finishBoolean(
     return result;
 }
 
+[[nodiscard]] bool appendFaceTriangles(
+    const TopoDS_Face& face,
+    kernel::SolidPresentationMesh& mesh) {
+    TopLoc_Location location;
+    const Handle(Poly_Triangulation)
+        triangulation =
+            BRep_Tool::Triangulation(
+                face,
+                location);
+    if (triangulation.IsNull()) {
+        return false;
+    }
+    if (!triangulation->HasNormals()) {
+        BRepLib_ToolTriangulatedShape::
+            ComputeNormals(
+                face,
+                triangulation);
+    }
+    if (!triangulation->HasNormals()) {
+        return false;
+    }
+
+    const auto transform =
+        location.Transformation();
+    const auto first_triangle =
+        mesh.triangles.size();
+
+    for (Standard_Integer index = 1;
+         index <= triangulation->NbTriangles();
+         ++index) {
+        Standard_Integer first_index{};
+        Standard_Integer second_index{};
+        Standard_Integer third_index{};
+        triangulation->Triangle(index).Get(
+            first_index,
+            second_index,
+            third_index);
+
+        gp_Pnt first =
+            triangulation
+                ->Node(first_index)
+                .Transformed(transform);
+        gp_Pnt second =
+            triangulation
+                ->Node(second_index)
+                .Transformed(transform);
+        gp_Pnt third =
+            triangulation
+                ->Node(third_index)
+                .Transformed(transform);
+
+        gp_Dir first_normal =
+            triangulation->Normal(first_index);
+        gp_Dir second_normal =
+            triangulation->Normal(second_index);
+        gp_Dir third_normal =
+            triangulation->Normal(third_index);
+        first_normal.Transform(transform);
+        second_normal.Transform(transform);
+        third_normal.Transform(transform);
+
+        if (face.Orientation() ==
+            TopAbs_REVERSED) {
+            std::swap(second, third);
+            std::swap(
+                second_normal,
+                third_normal);
+            first_normal.Reverse();
+            second_normal.Reverse();
+            third_normal.Reverse();
+        }
+
+        const gp_Vec first_edge{
+            first,
+            second};
+        const gp_Vec second_edge{
+            first,
+            third};
+        const gp_Vec cross =
+            first_edge.Crossed(second_edge);
+        const double magnitude =
+            cross.Magnitude();
+        if (!std::isfinite(magnitude) ||
+            !(magnitude > 0.0)) {
+            continue;
+        }
+
+        mesh.triangles.push_back(
+            kernel::SolidMeshTriangle{
+                {first.X(),
+                 first.Y(),
+                 first.Z()},
+                {second.X(),
+                 second.Y(),
+                 second.Z()},
+                {third.X(),
+                 third.Y(),
+                 third.Z()},
+                {first_normal.X(),
+                 first_normal.Y(),
+                 first_normal.Z()},
+                {second_normal.X(),
+                 second_normal.Y(),
+                 second_normal.Z()},
+                {third_normal.X(),
+                 third_normal.Y(),
+                 third_normal.Z()}});
+    }
+
+    return mesh.triangles.size() >
+           first_triangle;
+}
+
+[[nodiscard]] std::optional<std::vector<kernel::Point3>>
+edgePresentationPoints(
+    const TopoDS_Edge& edge) {
+    BRepAdaptor_Curve curve{edge};
+    GCPnts_QuasiUniformDeflection sampler{
+        curve,
+        0.25};
+    if (!sampler.IsDone() ||
+        sampler.NbPoints() < 2) {
+        return std::nullopt;
+    }
+
+    std::vector<kernel::Point3> result;
+    result.reserve(
+        static_cast<std::size_t>(
+            sampler.NbPoints()));
+    for (Standard_Integer index = 1;
+         index <= sampler.NbPoints();
+         ++index) {
+        const auto point =
+            sampler.Value(index);
+        result.push_back(
+            {point.X(),
+             point.Y(),
+             point.Z()});
+    }
+    return result;
+}
+
 [[nodiscard]] kernel::SolidPresentationResult
 presentationMeshForShape(
     const TopoDS_Shape& shape) noexcept {
@@ -2417,122 +2560,16 @@ presentationMeshForShape(
                      TopAbs_FACE};
                  explorer.More();
                  explorer.Next()) {
-                const auto face =
-                    TopoDS::Face(
-                        explorer.Current());
-                TopLoc_Location location;
-                const Handle(Poly_Triangulation)
-                    triangulation =
-                        BRep_Tool::Triangulation(
-                            face,
-                            location);
-                if (triangulation.IsNull()) {
-                    continue;
-                }
-                if (!triangulation->HasNormals()) {
-                    BRepLib_ToolTriangulatedShape::
-                        ComputeNormals(
-                            face,
-                            triangulation);
-                }
-                if (!triangulation->HasNormals()) {
+                if (!appendFaceTriangles(
+                        TopoDS::Face(
+                            explorer.Current()),
+                        result.mesh)) {
                     result.status =
                         kernel::SolidPresentationStatus::
                             provider_failure;
                     result.mesh.triangles.clear();
                     return result;
                 }
-
-                const auto transform =
-                    location.Transformation();
-                for (Standard_Integer index = 1;
-                     index <=
-                         triangulation->NbTriangles();
-                     ++index) {
-                Standard_Integer first_index{};
-                Standard_Integer second_index{};
-                Standard_Integer third_index{};
-                triangulation->Triangle(index).Get(
-                    first_index,
-                    second_index,
-                    third_index);
-
-                gp_Pnt first =
-                    triangulation
-                        ->Node(first_index)
-                        .Transformed(transform);
-                gp_Pnt second =
-                    triangulation
-                        ->Node(second_index)
-                        .Transformed(transform);
-                gp_Pnt third =
-                    triangulation
-                        ->Node(third_index)
-                        .Transformed(transform);
-
-                gp_Dir first_normal =
-                    triangulation->Normal(
-                        first_index);
-                gp_Dir second_normal =
-                    triangulation->Normal(
-                        second_index);
-                gp_Dir third_normal =
-                    triangulation->Normal(
-                        third_index);
-                first_normal.Transform(transform);
-                second_normal.Transform(transform);
-                third_normal.Transform(transform);
-
-                if (face.Orientation() ==
-                    TopAbs_REVERSED) {
-                    std::swap(
-                        second,
-                        third);
-                    std::swap(
-                        second_normal,
-                        third_normal);
-                    first_normal.Reverse();
-                    second_normal.Reverse();
-                    third_normal.Reverse();
-                }
-
-                const gp_Vec first_edge{
-                    first,
-                    second};
-                const gp_Vec second_edge{
-                    first,
-                    third};
-                const gp_Vec cross =
-                    first_edge.Crossed(
-                        second_edge);
-                const double magnitude =
-                    cross.Magnitude();
-                if (!std::isfinite(magnitude) ||
-                    !(magnitude > 0.0)) {
-                    continue;
-                }
-
-                    result.mesh.triangles.push_back(
-                        kernel::SolidMeshTriangle{
-                        {first.X(),
-                         first.Y(),
-                         first.Z()},
-                        {second.X(),
-                         second.Y(),
-                         second.Z()},
-                        {third.X(),
-                         third.Y(),
-                         third.Z()},
-                        {first_normal.X(),
-                         first_normal.Y(),
-                         first_normal.Z()},
-                        {second_normal.X(),
-                         second_normal.Y(),
-                         second_normal.Z()},
-                        {third_normal.X(),
-                         third_normal.Y(),
-                         third_normal.Z()}});
-            }
             }
         }
 
