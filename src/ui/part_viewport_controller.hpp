@@ -434,7 +434,7 @@ private:
     featureContributionTokens(
         part::FeatureId feature_id) const;
 
-    void applyFeatureContributionOverlay();
+    [[nodiscard]] bool applyFeatureContributionOverlay();
 
     void applySelectionToSurfaces();
     void applySketchViewportMode();
