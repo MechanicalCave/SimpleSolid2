@@ -688,6 +688,78 @@ Examples:
 
 The carrier cue is never Viewer-owned CAD identity.
 
+### Accepted PM-02 committed Body presentation boundary
+
+PM-02 should replace the current triangle-only committed `SolidScene` with one atomic topology-aware committed Body presentation snapshot.
+
+The target meaning is:
+
+```text
+one current RuntimeSolid/evaluation-provider generation
+    -> shaded triangle payload
+    -> current Face presentation records
+    -> current Edge presentation records
+    -> current Vertex presentation records
+    -> one BodyScene generation
+```
+
+The Viewer must not reconstruct CAD topology from triangle adjacency.
+
+Provider presentation extraction may preserve:
+
+- per-Face triangle ranges keyed by current RuntimeFaceToken;
+- per-Edge display polylines keyed by current RuntimeEdgeToken;
+- per-Vertex display points keyed by current RuntimeVertexToken.
+
+Those provider runtime tokens stop at the Part/controller boundary. `IDocumentViewport` receives only neutral `PresentationToken` values plus display geometry/flags.
+
+`PartViewportController` owns current generation-scoped mappings:
+
+```text
+RuntimeFaceToken   <-> PresentationToken
+RuntimeEdgeToken   <-> PresentationToken
+RuntimeVertexToken <-> PresentationToken
+```
+
+The committed Body scene must be installed atomically. Publicly independent committed mesh/Face/Edge/Vertex setters must not become separate scene authorities whose generations can diverge.
+
+The existing command-owned `SolidPreviewScene` remains separate. Preview geometry never supplies committed Body reference identity.
+
+Each installed committed Body presentation carries a runtime-only generation. Direct Body query results carry that generation. Scene/evaluation/provider replacement invalidates old hover/candidate stacks and old presentation-token authority, even if a numeric token value is later reused.
+
+The same current Edge presentation records should back:
+
+- visible-edge drawing;
+- hidden-edge drawing;
+- direct Edge hit testing;
+- direct Edge selection;
+- Feature Contribution/boundary overlay where applicable.
+
+This keeps View Style as a visual projection of one current topology presentation rather than a second topology interpretation.
+
+Tree Feature Contribution remains an overlay over the same current Body PresentationTokens. It is not `PresentationSelection` and does not create duplicate selectable geometry.
+
+Semantic support-plane / Curve-extension / Point cues are separate derived overlays. For PM-02 they are not duplicate Body topology targets.
+
+If evaluation fails and exposes a `resolved_prefix_solid`, a prefix Body may be shown diagnostically, but it must be marked non-authoritative for successful final-Body command targeting.
+
+The neutral Viewer API may grow bounded concepts equivalent to:
+
+```text
+ViewStyle
+BodyScene
+BodyPresentationGeneration
+BodyTopologyPresentationKind
+BodyTopologyPickFilter
+BodyTopologyPickCandidate
+BodyTopologyPickQueryResult
+BodyTopologyOverlay
+```
+
+Exact type names are implementation detail. The public Viewer boundary must not expose Part semantic references, FeatureId ownership, or OCCT TopoDS handles.
+
+The accepted detailed technical design is `work/PM-02_BODY_PRESENTATION_VIEWER_API_DESIGN.md`.
+
 ### Direct topology acquisition
 
 Ordinary Body topology acquisition targets current bounded Face / Edge / Vertex presentation and then immediately maps the fresh PresentationToken back to the current semantic topology catalog.
