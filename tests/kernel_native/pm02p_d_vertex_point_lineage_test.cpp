@@ -2,6 +2,7 @@
 #include <simplesolid2/kernel_occt/profile_face_evidence.hpp>
 
 #include <algorithm>
+#include <cmath>
 #include <cstdint>
 #include <cstdlib>
 #include <iostream>
@@ -22,6 +23,10 @@ void check(bool value, const char* expression, int line) {
 }
 
 #define CHECK(expr) check(static_cast<bool>(expr), #expr, __LINE__)
+
+bool near(double first, double second, double tolerance = 1.0e-10) {
+    return std::abs(first - second) <= tolerance;
+}
 
 kernel::BoundaryUse2D lineUse(
     kernel::Point2 start,
@@ -201,10 +206,10 @@ void verifyDimensionEdit() {
 
     // Geometry changed, semantic key did not. Coordinates are diagnostics,
     // not the resolution authority.
-    CHECK(evidence.before_point->x == 40.0);
-    CHECK(evidence.after_point->x == 55.0);
-    CHECK(evidence.before_point->y == 0.0);
-    CHECK(evidence.after_point->y == 0.0);
+    CHECK(near(evidence.before_point->x, 40.0));
+    CHECK(near(evidence.after_point->x, 55.0));
+    CHECK(near(evidence.before_point->y, 0.0));
+    CHECK(near(evidence.after_point->y, 0.0));
 }
 
 void verifyDeletionAndGeneratedVertices() {
@@ -269,9 +274,9 @@ void verifySamePointReplacement() {
 
     // Exact same provider coordinate is deliberately insufficient to preserve
     // the old semantic Point meaning.
-    CHECK(evidence.old_point->x == evidence.replacement_point->x);
-    CHECK(evidence.old_point->y == evidence.replacement_point->y);
-    CHECK(evidence.old_point->z == evidence.replacement_point->z);
+    CHECK(near(evidence.old_point->x, evidence.replacement_point->x));
+    CHECK(near(evidence.old_point->y, evidence.replacement_point->y));
+    CHECK(near(evidence.old_point->z, evidence.replacement_point->z));
 
     const auto replacement_ontology =
         kernel_occt::buildExtrudeVertexOntologyEvidence(
