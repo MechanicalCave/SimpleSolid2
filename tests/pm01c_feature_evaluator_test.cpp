@@ -724,8 +724,10 @@ public:
             std::move(inventory_faces);
         result.face_count =
             result.current_faces.size();
-        result.edge_count = 0U;
-        result.vertex_count = 0U;
+        result.edge_count =
+            result.current_edges.size();
+        result.vertex_count =
+            result.current_vertices.size();
         if (corrupt_topology_inventory &&
             !result.current_faces.empty()) {
             result.current_faces.pop_back();
