@@ -126,6 +126,14 @@ public:
         return presentation_degraded_;
     }
 
+    [[nodiscard]] viewer::ViewStyle
+    viewStyle() const noexcept {
+        return view_style_;
+    }
+
+    [[nodiscard]] bool setViewStyle(
+        viewer::ViewStyle style);
+
     void setPresentationStateChangedHandler(
         PresentationStateChangedHandler handler) {
         presentation_state_changed_handler_ =
@@ -425,6 +433,8 @@ private:
     std::vector<sketch::EntityId>
         projected_grip_selection_;
     bool presentation_degraded_{};
+    viewer::ViewStyle view_style_{
+        viewer::ViewStyle::shaded};
 
     SelectionChangedHandler selection_changed_handler_;
     ProfileSelectionChangedHandler
