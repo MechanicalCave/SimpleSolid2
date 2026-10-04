@@ -500,6 +500,27 @@ PartViewportController::PartViewportController(
                 }
             });
 
+        viewport_->setBodyTopologySelectionIntentHandler(
+            [self](
+                const viewer::BodyTopologyPickQueryResult& query,
+                viewer::SelectionIntentMode mode) {
+                if (self) {
+                    self->onBodyTopologyIntent(
+                        query,
+                        mode);
+                }
+            });
+
+        viewport_->setViewStyleActionHandler(
+            [self](viewer::ViewStyle style) {
+                if (self) {
+                    static_cast<void>(
+                        self->setViewStyle(style));
+                }
+            });
+        static_cast<void>(
+            viewport_->setViewStyle(view_style_));
+
         viewport_->setSpatialPointerHandler(
             [self](const viewer::SpatialPointerEvent& event) {
                 if (self) {
@@ -523,6 +544,7 @@ void PartViewportController::setSolidModelingKernel(
     body_scene_cache_.reset();
     body_topology_catalog_cache_.reset();
     body_topology_bindings_.clear();
+    clearBodyTopologySelection();
     clearSolidPreview();
     refreshPresentation();
 }
@@ -545,6 +567,7 @@ void PartViewportController::setDocumentSession(
         body_scene_cache_.reset();
         body_topology_catalog_cache_.reset();
         body_topology_bindings_.clear();
+        clearBodyTopologySelection();
         clearSolidPreview();
         clearSketchPreview();
         clearProfileDraftPreview();
@@ -577,6 +600,7 @@ void PartViewportController::clear() {
     body_scene_cache_.reset();
     body_topology_catalog_cache_.reset();
     body_topology_bindings_.clear();
+    clearBodyTopologySelection();
     clearSketchSelectionBoxOverlay();
     tree_->clear();
 
@@ -636,6 +660,7 @@ void PartViewportController::refreshPresentation() {
         body_scene_cache_.reset();
         body_topology_catalog_cache_.reset();
         body_topology_bindings_.clear();
+        clearBodyTopologySelection();
         clearSolidPreview();
         clearSketchPreview();
         clearProfileDraftPreview();
@@ -2274,15 +2299,15 @@ PartViewportController::buildBodyScene() {
         presentation.body.edges.size());
     for (const auto& edge :
          presentation.body.edges) {
-        const auto count =
-            std::count_if(
+        const auto record =
+            std::find_if(
                 topology->edges.begin(),
                 topology->edges.end(),
-                [&edge](const auto& record) {
-                    return record.runtime_token ==
+                [&edge](const auto& candidate) {
+                    return candidate.runtime_token ==
                            edge.runtime_token;
                 });
-        if (count != 1) {
+        if (record == topology->edges.end()) {
             return fail();
         }
         const auto token =
@@ -2296,6 +2321,16 @@ PartViewportController::buildBodyScene() {
 
         viewer::BodyEdgePresentation item;
         item.token = *token;
+        item.material =
+            record->accounting_class !=
+                part::TopologyAccountingClass::
+                    known_representation_artifact &&
+            !record->periodic_seam;
+        item.ordinary_pickable =
+            item.material &&
+            record->accounting_class !=
+                part::TopologyAccountingClass::
+                    integrity_failure;
         item.points.reserve(
             edge.points.size());
         for (const auto& point :
@@ -2313,15 +2348,15 @@ PartViewportController::buildBodyScene() {
         presentation.body.vertices.size());
     for (const auto& vertex :
          presentation.body.vertices) {
-        const auto count =
-            std::count_if(
+        const auto record =
+            std::find_if(
                 topology->vertices.begin(),
                 topology->vertices.end(),
-                [&vertex](const auto& record) {
-                    return record.runtime_token ==
+                [&vertex](const auto& candidate) {
+                    return candidate.runtime_token ==
                            vertex.runtime_token;
                 });
-        if (count != 1) {
+        if (record == topology->vertices.end()) {
             return fail();
         }
         const auto token =
@@ -2337,13 +2372,20 @@ PartViewportController::buildBodyScene() {
                 *token,
                 {vertex.point.x,
                  vertex.point.y,
-                 vertex.point.z}});
+                 vertex.point.z},
+                record->accounting_class !=
+                    part::TopologyAccountingClass::
+                        known_representation_artifact &&
+                record->accounting_class !=
+                    part::TopologyAccountingClass::
+                        integrity_failure});
     }
 
     if (!scene.valid()) {
         return fail();
     }
 
+    clearBodyTopologySelection();
     body_scene_revision_ = revision;
     body_scene_cache_ = scene;
     body_topology_catalog_cache_ = *topology;
@@ -2628,6 +2670,9 @@ void PartViewportController::onTreeSelection(
     if (session_ == nullptr) return;
 
     auto& selection = activeSelection();
+    selection.body_topology.clear();
+    selection.primary_body_topology.reset();
+    selection.body_topology_generation = {};
     selection.selected = selected;
     selection.profiles =
         tree_->selectedProfileIds();
@@ -2682,6 +2727,9 @@ void PartViewportController::onViewportIntent(
         selection.primary.reset();
         selection.profiles.clear();
         selection.primary_profile.reset();
+        selection.body_topology.clear();
+        selection.primary_body_topology.reset();
+        selection.body_topology_generation = {};
         applySelectionToSurfaces();
         notifySelectionChanged();
         return;
@@ -2693,6 +2741,9 @@ void PartViewportController::onViewportIntent(
             viewer::SelectionIntentMode::replace) {
             selection.selected.clear();
             selection.primary.reset();
+            selection.body_topology.clear();
+            selection.primary_body_topology.reset();
+            selection.body_topology_generation = {};
             selection.profiles = {*profile};
             selection.primary_profile = *profile;
         } else {
@@ -2729,6 +2780,9 @@ void PartViewportController::onViewportIntent(
         viewer::SelectionIntentMode::replace) {
         selection.profiles.clear();
         selection.primary_profile.reset();
+        selection.body_topology.clear();
+        selection.primary_body_topology.reset();
+        selection.body_topology_generation = {};
         selection.selected = {*role};
         selection.primary = *role;
     } else {
@@ -2817,7 +2871,8 @@ void PartViewportController::applySelectionToSurfaces() {
     viewer::PresentationSelection presentation;
     presentation.selected.reserve(
         selection.selected.size() +
-        selection.profiles.size());
+        selection.profiles.size() +
+        selection.body_topology.size());
 
     for (const auto role : selection.selected) {
         presentation.selected.push_back(
@@ -2833,7 +2888,31 @@ void PartViewportController::applySelectionToSurfaces() {
         }
     }
 
-    if (selection.primary_profile) {
+    if (body_scene_cache_ &&
+        body_scene_cache_->generation ==
+            selection.body_topology_generation) {
+        for (const auto token :
+             selection.body_topology) {
+            const auto binding =
+                body_topology_bindings_.find(
+                    token.value);
+            if (binding !=
+                    body_topology_bindings_.end() &&
+                binding->second.generation ==
+                    selection.body_topology_generation) {
+                presentation.selected.push_back(
+                    token);
+            }
+        }
+    }
+
+    if (selection.primary_body_topology &&
+        body_scene_cache_ &&
+        body_scene_cache_->generation ==
+            selection.body_topology_generation) {
+        presentation.primary =
+            selection.primary_body_topology;
+    } else if (selection.primary_profile) {
         presentation.primary =
             profilePresentationFor(
                 *selection.primary_profile);
