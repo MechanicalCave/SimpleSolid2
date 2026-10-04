@@ -467,6 +467,115 @@ void propagateCurrentReferences(
     return true;
 }
 
+[[nodiscard]] bool sameSurfaceAddressSet(
+    const std::vector<FeatureSurfaceAddress>& first,
+    const std::vector<FeatureSurfaceAddress>& second) {
+    if (first.size() != second.size()) return false;
+    return std::all_of(
+        first.begin(),
+        first.end(),
+        [&second](const FeatureSurfaceAddress& address) {
+            return std::find(
+                       second.begin(),
+                       second.end(),
+                       address) != second.end();
+        });
+}
+
+[[nodiscard]] bool uniqueSurfaceAddressSet(
+    const std::vector<FeatureSurfaceAddress>& addresses,
+    std::size_t expected_size) {
+    if (addresses.size() != expected_size) return false;
+    for (std::size_t i = 0U; i < addresses.size(); ++i) {
+        if (!addresses[i].valid()) return false;
+        for (std::size_t j = i + 1U; j < addresses.size(); ++j) {
+            if (addresses[i] == addresses[j]) return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] std::optional<std::vector<FeatureSurfaceAddress>>
+surfaceAddressesForTokens(
+    const std::vector<kernel::RuntimeSurfaceToken>& tokens,
+    const std::vector<FeatureSurfaceResolution>& surfaces) {
+    std::vector<FeatureSurfaceAddress> result;
+    result.reserve(tokens.size());
+    for (const auto token : tokens) {
+        if (!token.valid()) return std::nullopt;
+        const FeatureSurfaceResolution* matched = nullptr;
+        for (const auto& surface : surfaces) {
+            if (surface.status != kernel::ReferenceStatus::resolved ||
+                !surface.runtime_token ||
+                *surface.runtime_token != token) {
+                continue;
+            }
+            if (matched != nullptr) return std::nullopt;
+            matched = &surface;
+        }
+        if (matched == nullptr || !matched->address.valid()) {
+            return std::nullopt;
+        }
+        if (std::find(result.begin(), result.end(), matched->address) !=
+            result.end()) {
+            return std::nullopt;
+        }
+        result.push_back(matched->address);
+    }
+    return result;
+}
+
+[[nodiscard]] std::optional<FeatureId> commonSurfaceProducer(
+    const std::vector<FeatureSurfaceAddress>& surfaces) {
+    if (surfaces.empty()) return std::nullopt;
+    const auto producer = surfaces.front().producer_feature_id;
+    if (!producer.valid()) return std::nullopt;
+    for (const auto& surface : surfaces) {
+        if (surface.producer_feature_id != producer) {
+            return std::nullopt;
+        }
+    }
+    return producer;
+}
+
+struct CurrentEdgeCandidate final {
+    kernel::RuntimeEdgeToken token;
+    FeatureEdgeAddress address;
+    kernel::CurveKind curve_kind{kernel::CurveKind::other};
+    bool produced_by_current_operation{false};
+};
+
+struct CurrentPointCandidate final {
+    kernel::RuntimeVertexToken token;
+    FeaturePointAddress address;
+    std::optional<kernel::Point3> point;
+    bool produced_by_current_operation{false};
+};
+
+[[nodiscard]] const FeatureEdgeResolution* findEdgeResolution(
+    const std::vector<FeatureEdgeResolution>& references,
+    const FeatureEdgeAddress& address) {
+    const auto found = std::find_if(
+        references.begin(),
+        references.end(),
+        [&address](const FeatureEdgeResolution& item) {
+            return item.address == address;
+        });
+    return found == references.end() ? nullptr : &*found;
+}
+
+[[nodiscard]] const FeaturePointResolution* findPointResolution(
+    const std::vector<FeaturePointResolution>& references,
+    const FeaturePointAddress& address) {
+    const auto found = std::find_if(
+        references.begin(),
+        references.end(),
+        [&address](const FeaturePointResolution& item) {
+            return item.address == address;
+        });
+    return found == references.end() ? nullptr : &*found;
+}
+
 template <typename Token>
 [[nodiscard]] bool uniqueValidTokens(
     const std::vector<Token>& tokens) noexcept {
