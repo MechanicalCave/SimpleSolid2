@@ -2,7 +2,6 @@
 
 #include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
-#include <simplesolid2/part/feature_commands.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
