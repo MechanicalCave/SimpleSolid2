@@ -2189,14 +2189,19 @@ template <typename EdgeMapper>
             referenceStatus(candidates);
     }
 
-    // Only singular current Edge meanings are eligible for history tracking
-    // into the next stage.
+    // Preserve semantic meaning through both singular and split current
+    // realizations. Ambiguous candidates keep one shared semantic key so a
+    // later Feature cannot silently reclassify their producer provenance.
     for (const auto& record :
          result.current_edge_semantics) {
-        if (record.status !=
-                kernel::ReferenceStatus::resolved ||
+        if ((record.status !=
+                 kernel::ReferenceStatus::resolved &&
+             record.status !=
+                 kernel::ReferenceStatus::ambiguous) ||
             record.representation_artifact ||
-            record.integrity_failure) {
+            record.integrity_failure ||
+            record.role ==
+                kernel::EdgeSemanticRoleKind::unsupported) {
             continue;
         }
         const auto found =
