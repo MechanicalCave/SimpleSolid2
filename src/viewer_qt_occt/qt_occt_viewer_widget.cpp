@@ -830,6 +830,270 @@ public:
         bool visible{};
     };
 
+    struct ViewStyleControl final {
+        Handle(AIS_TextLabel) label;
+        viewer::ViewStyle style{
+            viewer::ViewStyle::shaded};
+        int offset_x{};
+        int offset_y{};
+        int half_width{};
+        int half_height{};
+    };
+
+    [[nodiscard]] static const char*
+    viewStyleTitle(
+        viewer::ViewStyle style) noexcept {
+        switch (style) {
+        case viewer::ViewStyle::shaded:
+            return "SHADED v";
+        case viewer::ViewStyle::shaded_with_edges:
+            return "SHADED + EDGES v";
+        case viewer::ViewStyle::
+            shaded_with_hidden_edges:
+            return "SHADED + HIDDEN v";
+        }
+        return "SHADED v";
+    }
+
+    [[nodiscard]] Handle(AIS_TextLabel)
+    makeHudLabel(
+        const char* text,
+        int offset_x,
+        int offset_y) {
+        Handle(AIS_TextLabel) label =
+            new AIS_TextLabel();
+        label->SetText(
+            TCollection_ExtendedString{text});
+        label->SetPosition(
+            gp_Pnt{0.0, 0.0, 0.0});
+        label->SetColor(
+            Quantity_Color{
+                0.94,
+                0.94,
+                0.96,
+                Quantity_TOC_RGB});
+        label->SetHeight(12.0);
+        label->SetHJustification(
+            Graphic3d_HTA_CENTER);
+        label->SetVJustification(
+            Graphic3d_VTA_CENTER);
+        label->SetZoomable(false);
+        label->SetZLayer(
+            Graphic3d_ZLayerId_Topmost);
+        label->SetTransformPersistence(
+            new Graphic3d_TransformPers(
+                Graphic3d_TMF_2d,
+                Aspect_TOTP_RIGHT_UPPER,
+                Graphic3d_Vec2i{
+                    offset_x,
+                    offset_y}));
+        return label;
+    }
+
+    void syncViewStyleControlText() {
+        if (!view_style_label_.IsNull()) {
+            view_style_label_->SetText(
+                TCollection_ExtendedString{
+                    viewStyleTitle(view_style_)});
+        }
+
+        for (auto& option :
+             view_style_controls_) {
+            const char* name = "Shaded";
+            switch (option.style) {
+            case viewer::ViewStyle::shaded:
+                name = "Shaded";
+                break;
+            case viewer::ViewStyle::shaded_with_edges:
+                name = "Shaded + Edges";
+                break;
+            case viewer::ViewStyle::
+                shaded_with_hidden_edges:
+                name = "Shaded + Hidden Edges";
+                break;
+            }
+
+            std::string text =
+                option.style == view_style_
+                    ? "[x] "
+                    : "[ ] ";
+            text += name;
+            option.label->SetText(
+                TCollection_ExtendedString{
+                    text.c_str()});
+        }
+    }
+
+    void syncViewStyleMenuVisibility() {
+        if (context_.IsNull()) return;
+
+        for (auto& option :
+             view_style_controls_) {
+            if (option.label.IsNull()) continue;
+            if (view_style_menu_open_) {
+                context_->Display(
+                    option.label,
+                    false);
+                context_->Deactivate(
+                    option.label);
+            } else {
+                context_->Erase(
+                    option.label,
+                    false);
+            }
+        }
+    }
+
+    void createViewStyleControls() {
+        if (context_.IsNull()) return;
+
+        constexpr int main_offset_x = 245;
+        constexpr int main_offset_y = 178;
+
+        view_style_label_ =
+            makeHudLabel(
+                viewStyleTitle(view_style_),
+                main_offset_x,
+                main_offset_y);
+        context_->Display(
+            view_style_label_,
+            false);
+        context_->Deactivate(
+            view_style_label_);
+
+        view_style_controls_.clear();
+        const auto add_option =
+            [this, main_offset_x](
+                viewer::ViewStyle style,
+                int offset_y) {
+                auto label =
+                    makeHudLabel(
+                        "",
+                        main_offset_x,
+                        offset_y);
+                view_style_controls_.push_back(
+                    ViewStyleControl{
+                        label,
+                        style,
+                        main_offset_x,
+                        offset_y,
+                        82,
+                        10});
+            };
+
+        add_option(
+            viewer::ViewStyle::shaded,
+            202);
+        add_option(
+            viewer::ViewStyle::
+                shaded_with_edges,
+            224);
+        add_option(
+            viewer::ViewStyle::
+                shaded_with_hidden_edges,
+            246);
+
+        syncViewStyleControlText();
+        syncViewStyleMenuVisibility();
+    }
+
+    [[nodiscard]] bool pointInHudControl(
+        int logical_x,
+        int logical_y,
+        int offset_x,
+        int offset_y,
+        int half_width,
+        int half_height) const noexcept {
+        const int center_x =
+            owner_.width() - offset_x;
+        return std::abs(
+                   logical_x - center_x) <=
+                   half_width &&
+               std::abs(
+                   logical_y - offset_y) <=
+                   half_height;
+    }
+
+    [[nodiscard]] bool viewStyleControlAt(
+        int logical_x,
+        int logical_y) const noexcept {
+        if (pointInHudControl(
+                logical_x,
+                logical_y,
+                245,
+                178,
+                82,
+                11)) {
+            return true;
+        }
+        if (!view_style_menu_open_) {
+            return false;
+        }
+        return std::any_of(
+            view_style_controls_.begin(),
+            view_style_controls_.end(),
+            [this, logical_x, logical_y](
+                const ViewStyleControl& option) {
+                return pointInHudControl(
+                    logical_x,
+                    logical_y,
+                    option.offset_x,
+                    option.offset_y,
+                    option.half_width,
+                    option.half_height);
+            });
+    }
+
+    [[nodiscard]] bool activateViewStyleAt(
+        int logical_x,
+        int logical_y) {
+        if (pointInHudControl(
+                logical_x,
+                logical_y,
+                245,
+                178,
+                82,
+                11)) {
+            view_style_menu_open_ =
+                !view_style_menu_open_;
+            syncViewStyleMenuVisibility();
+            updateCurrentViewer();
+            return true;
+        }
+
+        if (!view_style_menu_open_) {
+            return false;
+        }
+
+        for (const auto& option :
+             view_style_controls_) {
+            if (!pointInHudControl(
+                    logical_x,
+                    logical_y,
+                    option.offset_x,
+                    option.offset_y,
+                    option.half_width,
+                    option.half_height)) {
+                continue;
+            }
+
+            view_style_menu_open_ = false;
+            syncViewStyleMenuVisibility();
+            if (view_style_action_handler_) {
+                view_style_action_handler_(
+                    option.style);
+            } else {
+                static_cast<void>(
+                    setViewStyle(option.style));
+            }
+            return true;
+        }
+
+        view_style_menu_open_ = false;
+        syncViewStyleMenuVisibility();
+        return false;
+    }
+
     void createNavigationControlLabels() {
         if (context_.IsNull()) return;
 
@@ -969,6 +1233,8 @@ public:
             24,
             10,
             true);
+
+        createViewStyleControls();
     }
 
     void syncNavigationControlVisibility() {
@@ -1566,6 +1832,9 @@ public:
             return true;
         }
         view_style_ = style;
+        syncViewStyleControlText();
+        view_style_menu_open_ = false;
+        syncViewStyleMenuVisibility();
         applyBodyViewStyle();
         updateCurrentViewer();
         return true;
@@ -3206,6 +3475,15 @@ public:
         int logical_x,
         int logical_y) {
         ensureInitialized();
+
+        if (viewStyleControlAt(
+                logical_x,
+                logical_y)) {
+            if (!context_.IsNull()) {
+                context_->ClearDetected(false);
+            }
+            return true;
+        }
         if (context_.IsNull() ||
             view_.IsNull() ||
             navigation_cube_.IsNull()) {
@@ -3261,6 +3539,16 @@ public:
         int logical_x,
         int logical_y) {
         ensureInitialized();
+
+        if (activateViewStyleAt(
+                logical_x,
+                logical_y)) {
+            navigation_cube_press_active_ = true;
+            if (!context_.IsNull()) {
+                context_->ClearDetected(false);
+            }
+            return true;
+        }
 
         if (const auto control =
                 navigationControlAt(
@@ -4897,6 +5185,11 @@ private:
     bool navigation_cube_press_active_{};
     std::vector<NavigationControl>
         navigation_controls_;
+    Handle(AIS_TextLabel)
+        view_style_label_;
+    std::vector<ViewStyleControl>
+        view_style_controls_;
+    bool view_style_menu_open_{};
     std::vector<ReferenceObject> reference_objects_;
     Handle(AIS_InteractiveObject) solid_object_;
     Handle(AIS_InteractiveObject) solid_preview_object_;
