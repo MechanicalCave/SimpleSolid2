@@ -133,12 +133,41 @@ bool PartDocument::validAuthoredState(
          index < state.sketches.size();
          ++index) {
         const auto& hosted = state.sketches[index];
-        if (!hosted.support.valid() ||
-            !hosted.placement.valid() ||
-            !sketchPlacementMatchesSupport(
-                hosted.placement,
-                hosted.support)) {
+        if (!hosted.id.valid() ||
+            !hosted.support.valid()) {
             return false;
+        }
+
+        if (const auto* surface =
+                bodyPlanarSurfaceReference(
+                    hosted.support)) {
+            const auto producer =
+                std::find_if(
+                    state.body.features.begin(),
+                    state.body.features.end(),
+                    [surface](const PartFeature& feature) {
+                        return feature.id ==
+                               surface->surface
+                                   .producer_feature_id;
+                    });
+            const auto stage =
+                std::find_if(
+                    state.body.features.begin(),
+                    state.body.features.end(),
+                    [surface](const PartFeature& feature) {
+                        return surface->stage
+                                   .feature_id &&
+                               feature.id ==
+                                   *surface->stage
+                                        .feature_id;
+                    });
+            if (producer ==
+                    state.body.features.end() ||
+                stage ==
+                    state.body.features.end() ||
+                producer > stage) {
+                return false;
+            }
         }
 
         for (std::size_t previous = 0;
