@@ -256,6 +256,78 @@ Feature Contribution, hidden-edge graphics and semantic carrier/support ghost ov
 
 The detailed accepted design input is `work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`.
 
+### Proposed PM-02 topology Properties / inspection boundary
+
+This subsection is part of the current **PM-02 contract candidate** and is not yet Owner-accepted production behavior.
+
+The existing stacked Properties panel remains the single product inspection surface. PM-02 should add one adaptive topology inspection context rather than adding Face/Edge/Vertex nodes to Document Tree.
+
+The panel should display one primary inspection subject at a time.
+
+Explicit committed selection changes Properties; hover/preselection does not. Tab/Shift+Tab candidate cycling remains viewport/status feedback until the user clicks the visible candidate.
+
+The key distinction is:
+
+```text
+current topology is Present
+!=
+durable semantic reference is Resolved
+```
+
+A current material Edge may be directly selectable while a durable singular semantic reference is Ambiguous or Unsupported. Properties must report that truth rather than hide the Edge or silently claim stable identity.
+
+For a selected Face, the proposed Properties context should expose:
+
+- Face as current topology kind;
+- Surface carrier;
+- Surface classification such as Plane/Cylinder/Cone/Sphere/Torus/Other;
+- producer Feature and Body stage;
+- semantic role/provenance;
+- accounting/referenceability state;
+- standard Sketch-support capability;
+- optional derived geometry diagnostics such as area;
+- optional advanced canonical support-frame details for a planar carrier.
+
+For a selected Edge:
+
+- Edge / Curve;
+- material versus representation-artifact classification;
+- Curve classification;
+- producer/provenance where defensible;
+- adjacent Surface summary;
+- current stage;
+- accounting/referenceability state;
+- geometry diagnostics such as length/radius.
+
+A selected Edge can therefore legitimately show:
+
+```text
+Current topology: Present
+Referenceability: Ambiguous
+Candidates: 2
+```
+
+For a selected Vertex:
+
+- Vertex / Point;
+- producer/provenance;
+- adjacent semantic Curve/Surface summary;
+- current stage;
+- accounting/referenceability;
+- current XYZ as geometry diagnostics only.
+
+Provider/runtime tokens, PresentationToken, TopoDS/OCAF identity and provider traversal indices are not product Properties.
+
+Body Properties should gain current complete topology/accounting counts. Feature Properties should gain Current Feature Contribution counts from the same Part semantic query used by tree highlighting. Sketch Properties should show authored support intent together with current Resolved/Missing/Ambiguous/Unsupported support state; derived world frame is not an independent authored property.
+
+If a directly selected topology item disappears after recompute, the stale viewport selection clears rather than geometry-rebinding. A durable Sketch still remains selectable as its authored owner while its support may report Missing.
+
+If a diagnostic `resolved_prefix_solid` is displayed after a failure, its topology Properties must be visibly marked diagnostic/non-authoritative and must not enable normal mutating topology-reference actions.
+
+Document Tree remains design history. PM-02 does not add a default Face/Edge/Vertex catalog subtree.
+
+The proposed detailed design is `work/PM-02_TOPOLOGY_PROPERTIES_INSPECTION_UX.md`. It becomes normative only if the Owner accepts the PM-02 Work Contract revision containing it.
+
 ### Current Feature Contribution
 
 Ordinary Feature hover/selection in Document Tree targets **Current Feature Contribution**, not historical Body replacement.
