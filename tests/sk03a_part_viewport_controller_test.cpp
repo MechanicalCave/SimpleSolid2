@@ -99,6 +99,36 @@ public:
         return true;
     }
 
+    viewer::ViewStyle
+    viewStyle() const noexcept override {
+        return view_style_;
+    }
+
+    bool setViewStyle(
+        viewer::ViewStyle style) override {
+        view_style_ = style;
+        return true;
+    }
+
+    void setViewStyleActionHandler(
+        viewer::ViewStyleActionHandler handler) override {
+        view_style_handler_ =
+            std::move(handler);
+    }
+
+    viewer::BodyTopologyPickQueryResult
+    queryBodyTopology(
+        viewer::ViewportPoint2,
+        viewer::BodyTopologyPickFilter = {}) override {
+        return body_query_;
+    }
+
+    void setBodyTopologySelectionIntentHandler(
+        viewer::BodyTopologySelectionIntentHandler handler) override {
+        body_topology_handler_ =
+            std::move(handler);
+    }
+
     bool setSolidScene(
         const viewer::SolidScene& scene) override {
         ++solid_scene_calls_;
@@ -135,7 +165,9 @@ public:
 
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override {
-        return selection.valid();
+        if (!selection.valid()) return false;
+        presentation_selection_ = selection;
+        return true;
     }
 
     viewer::SketchPointQueryResult
@@ -190,6 +222,16 @@ public:
         spatial_handler_(event);
     }
 
+    void emitBodyTopology(
+        const viewer::BodyTopologyPickQueryResult& query,
+        viewer::SelectionIntentMode mode) {
+        CHECK(static_cast<bool>(
+            body_topology_handler_));
+        body_topology_handler_(
+            query,
+            mode);
+    }
+
     viewer::CameraState camera_;
     viewer::ReferenceScene reference_scene_;
     viewer::BodyScene body_scene_;
@@ -198,6 +240,12 @@ public:
         solid_preview_scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene preview_scene_;
+    viewer::PresentationSelection
+        presentation_selection_;
+    viewer::BodyTopologyPickQueryResult
+        body_query_;
+    viewer::ViewStyle view_style_{
+        viewer::ViewStyle::shaded};
     std::size_t body_scene_calls_{};
     std::size_t solid_scene_calls_{};
     std::size_t solid_preview_scene_calls_{};
@@ -206,6 +254,10 @@ public:
     bool fail_preview_{};
     bool fail_sketch_scene_{};
     viewer::SelectionIntentHandler selection_handler_;
+    viewer::BodyTopologySelectionIntentHandler
+        body_topology_handler_;
+    viewer::ViewStyleActionHandler
+        view_style_handler_;
     viewer::SpatialPointerHandler spatial_handler_;
     viewer::PrimaryPointerRouting routing_{
         viewer::PrimaryPointerRouting::
