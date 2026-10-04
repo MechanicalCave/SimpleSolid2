@@ -761,6 +761,87 @@ resolveCurrentEdges(
     return result;
 }
 
+[[nodiscard]] std::optional<std::vector<FeaturePointResolution>>
+resolveCurrentPoints(
+    FeatureId current_feature,
+    const kernel::SolidModelingResult& kernel_result,
+    const std::vector<FeatureSurfaceResolution>& surfaces,
+    const std::vector<FeaturePointResolution>& previous) {
+    const auto candidates =
+        convertCurrentPointCandidates(
+            kernel_result,
+            surfaces);
+    if (!candidates) return std::nullopt;
+
+    std::vector<FeaturePointAddress> addresses;
+    addresses.reserve(previous.size() + candidates->size());
+    for (const auto& old : previous) {
+        if (!old.address.valid()) return std::nullopt;
+        if (std::find(addresses.begin(), addresses.end(), old.address) ==
+            addresses.end()) {
+            addresses.push_back(old.address);
+        }
+    }
+    for (const auto& candidate : *candidates) {
+        if (std::find(
+                addresses.begin(),
+                addresses.end(),
+                candidate.address) == addresses.end()) {
+            addresses.push_back(candidate.address);
+        }
+    }
+
+    std::vector<FeaturePointResolution> result;
+    result.reserve(addresses.size());
+    for (const auto& address : addresses) {
+        FeaturePointResolution resolved;
+        resolved.address = address;
+
+        if (const auto* old = findPointResolution(previous, address)) {
+            resolved.producer_feature_id = old->producer_feature_id;
+        }
+
+        bool produced_now = false;
+        std::optional<kernel::Point3> singular_point;
+        for (const auto& candidate : *candidates) {
+            if (!(candidate.address == address)) continue;
+            resolved.current_vertices.push_back(candidate.token);
+            produced_now =
+                produced_now ||
+                candidate.produced_by_current_operation;
+            if (!singular_point) {
+                singular_point = candidate.point;
+            }
+        }
+
+        resolved.candidate_count =
+            resolved.current_vertices.size();
+        resolved.status =
+            resolved.candidate_count == 0U
+                ? kernel::ReferenceStatus::missing
+                : resolved.candidate_count == 1U
+                    ? kernel::ReferenceStatus::resolved
+                    : kernel::ReferenceStatus::ambiguous;
+
+        if (resolved.status == kernel::ReferenceStatus::resolved) {
+            if (!singular_point) return std::nullopt;
+            resolved.current_point = singular_point;
+        }
+
+        if (!resolved.producer_feature_id) {
+            resolved.producer_feature_id =
+                commonSurfaceProducer(address.adjacent_surfaces);
+            if (!resolved.producer_feature_id && produced_now) {
+                resolved.producer_feature_id = current_feature;
+            }
+        }
+
+        if (!resolved.valid()) return std::nullopt;
+        result.push_back(std::move(resolved));
+    }
+    return result;
+}
+
 template <typename Token>
 [[nodiscard]] bool uniqueValidTokens(
     const std::vector<Token>& tokens) noexcept {
