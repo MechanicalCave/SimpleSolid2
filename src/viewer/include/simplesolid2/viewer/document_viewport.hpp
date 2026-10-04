@@ -15,6 +15,14 @@
 
 namespace simplesolid2::viewer {
 
+using ViewStyleActionHandler =
+    std::function<void(ViewStyle)>;
+
+using BodyTopologySelectionIntentHandler =
+    std::function<void(
+        const BodyTopologyPickQueryResult&,
+        SelectionIntentMode)>;
+
 class IDocumentViewport {
 public:
     virtual ~IDocumentViewport() = default;
@@ -44,6 +52,21 @@ public:
         (void)handler;
     }
 
+    [[nodiscard]] virtual ViewStyle
+    viewStyle() const noexcept {
+        return ViewStyle::shaded;
+    }
+
+    virtual bool setViewStyle(
+        ViewStyle style) {
+        return style == ViewStyle::shaded;
+    }
+
+    virtual void setViewStyleActionHandler(
+        ViewStyleActionHandler handler) {
+        (void)handler;
+    }
+
     virtual bool animateCameraState(
         const CameraState& state,
         double duration_seconds,
@@ -65,6 +88,20 @@ public:
         const BodyScene& scene) {
         return scene.valid() &&
                scene.empty();
+    }
+
+    [[nodiscard]] virtual BodyTopologyPickQueryResult
+    queryBodyTopology(
+        ViewportPoint2 point,
+        BodyTopologyPickFilter filter = {}) {
+        (void)point;
+        (void)filter;
+        return {};
+    }
+
+    virtual void setBodyTopologySelectionIntentHandler(
+        BodyTopologySelectionIntentHandler handler) {
+        (void)handler;
     }
 
     // Transitional PM-01 compatibility only. Production PM-02 committed Body
