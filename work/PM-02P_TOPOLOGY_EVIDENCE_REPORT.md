@@ -1,11 +1,13 @@
 # PM-02P — Body Semantic Topology Evidence Report
 
-**Status:** COMPLETION CANDIDATE — final exact-head FULL pending  
+**Status:** SYNTHESIS COMPLETE — OWNER D2 REVIEW REQUIRED; runtime exact-head FULL PASS  
 **Date:** 2026-10-04  
 **Program:** Part Modeling v1 roadmap v1.6  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Evidence oracle:** `work/PM-02P_TOPOLOGY_EVIDENCE_MATRIX.md` v1.0  
 **Active contract:** `work/PM-02P_BODY_SEMANTIC_TOPOLOGY_EVIDENCE.md`  
+**Final runtime evidence source:** `e259fef5849bc4707ddcbdda8e75795b8f3fa5b4` — Windows FULL #1387 PASS  
+**Evidence merged main:** `a0dad01dd584eb1b1c39a4cb282b0bbc009000aa`  
 **Production PM-02:** NOT ACTIVE
 
 ## 1. Executive conclusion
@@ -342,11 +344,16 @@ The recommendation deliberately freezes semantic responsibilities and invariants
 
 ## 8. PM-02P completion boundary
 
-This synthesis candidate must receive Windows FULL on its own exact head before PM-02P may be marked COMPLETED — PASS.
+The final runtime evidence candidate `e259fef5849bc4707ddcbdda8e75795b8f3fa5b4` passed Windows FULL #1387 before synthesis closure and was squash-merged as main `a0dad01dd584eb1b1c39a4cb282b0bbc009000aa`.
 
-After that gate:
+PM-02P.F changes after that runtime candidate are restricted to `work/**` evidence/synthesis/status synchronization. They do not modify runtime, schema, tests, Viewer behavior or product behavior. This follows the repository's established source-candidate + work-only closure discipline.
 
-- PM-02P may close;
-- production PM-02 remains inactive;
-- only preparation of a separately Owner-accepted production PM-02 Work Contract is authorized;
-- no Datum / Projection / Revolve / Fillet / Chamfer implementation is activated by PM-02P closure.
+Technical evidence is therefore complete and PASS. PM-02P remains ACTIVE only for the Owner D2 review recorded in `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`.
+
+Before production PM-02 can be activated, the Owner must explicitly accept or amend:
+
+- the semantic Edge/Curve branch/provenance rule;
+- the recommended topology/carrier ownership boundaries;
+- authorization to prepare a separate bounded PM-02 production Work Contract.
+
+Production PM-02 remains inactive during this review. No Datum / Projection / Revolve / Fillet / Chamfer implementation is activated by PM-02P synthesis.
