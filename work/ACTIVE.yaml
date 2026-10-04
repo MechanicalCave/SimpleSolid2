@@ -1,9 +1,9 @@
 version: 1
-status: completed
-active_work: "work/PM-02P_BODY_SEMANTIC_TOPOLOGY_EVIDENCE.md"
+status: active
+active_work: "work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.7"
+program_roadmap_version: "1.8"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -22,15 +22,14 @@ accepted_adrs:
   - "adr/ADR-0015-extrude-feature-scope-preview-and-presentation.md"
   - "adr/ADR-0016-body-semantic-topology-carrier-geometry-and-face-supported-sketch.md"
 next:
-  - PM-02P Body Semantic Topology Evidence is COMPLETED — PASS; Owner accepted final D2 synthesis/recommendation on 2026-10-04
-  - PM-02P runtime evidence exact source e259fef5849bc4707ddcbdda8e75795b8f3fa5b4 passed Windows FULL #1387; merged runtime main a0dad01dd584eb1b1c39a4cb282b0bbc009000aa
-  - PM-02P synthesis exact source d96da217d11004555761134b7adabc799f489e88 passed Windows closure #1388; merged main 72cbf070b4e3a64a737fce25137621b82d6dbee5
-  - accepted D2 rule: singular Edge/Curve may use bounded semantic branch/provenance only when producer semantics defend it; otherwise Ambiguous; provider ordinal/geometry heuristics are forbidden
-  - proposed production contract work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md exists but is NOT ACTIVE and awaits separate explicit Owner acceptance
-  - no production CAD schema, topology picking, persistent face-supported Sketch or Datum mutation is currently authorized
+  - PM-02 Body Semantic Topology / Face-Supported Sketch is ACTIVE — Owner accepted the exact Work Contract and all four UX/Viewer design inputs on 2026-10-04
+  - current implementation checkpoint is PM-02A — production evaluated Body-stage topology catalog + typed runtime Face/Edge/Vertex tokens; no schema v9 or Viewer topology picking before their ordered checkpoints
+  - PM-02A must preserve complete accounting at every successful Body stage: provider Faces/Edges/Vertices == catalog records, with zero silent omission and no persistence of runtime topology state
+  - production mutation is authorized only within work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md and its PM-02A..PM-02J sequence
   - PM-03 Datum Reference Geometry and all later Part Modeling packages remain inactive
   - Projection remains outside the PM-02/PM-03 critical path and requires separate later activation
 notes:
+  - Owner explicitly accepted the exact PM-02 production Work Contract on 2026-10-04, including work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md, work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md, work/PM-02_BODY_PRESENTATION_VIEWER_API_DESIGN.md and work/PM-02_TOPOLOGY_PROPERTIES_INSPECTION_UX.md. Activation authorizes bounded production mutation starting at PM-02A only.
   - Owner accepted the PM-02P final D2 synthesis/recommendation on 2026-10-04. PM-02P is closed COMPLETED — PASS. The PM-02 production Work Contract candidate is deliberately separate and remains unaccepted/inactive.
   - PM-02P.F synthesis is complete for Owner D2 review. Required deliverables exist: work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md, work/PM-02P_REFERENCE_SURVIVAL_MATRIX.md and work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md. The key review item is bounded semantic branch/provenance discrimination for singular Edge/Curve references when one Surface pair yields multiple disconnected branches; no provider ordinal/geometry heuristic is proposed.
   - PM-02P.E lifecycle/freshness is COMPLETED — PASS. Windows FULL #1387 passed on exact source e259fef5849bc4707ddcbdda8e75795b8f3fa5b4; every Add/Add/Cut/Cut stage had complete topology accounting, cold replay matched, stale runtime evidence was rejected, geometry-similarity decoys did not rebind, dynamic Surface support moved only derived world geometry and cycle-causing support was rejected before mutation. Squash merge main is a0dad01dd584eb1b1c39a4cb282b0bbc009000aa.
