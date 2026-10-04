@@ -315,7 +315,8 @@ Only semantic command inputs may cross into persistent mutation.
 
 The accepted detailed UX semantics are recorded in:
 
-`work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`.
+`work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md` and
+`work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`.
 
 #### Base View Style
 
@@ -415,6 +416,48 @@ Current Feature Contribution is the default tree hover/selection meaning.
 Operation Scope / Delta answers what volume the Feature added/removed at its own upstream stage. It may later be visualized as a translucent ghost and remains optional unless promoted by contract amendment.
 
 Historical Stage Preview answers what the entire Body looked like immediately after the Feature. It must be an explicit presentation action if later productized and is not implied by ordinary tree selection.
+
+#### Direct Body topology acquisition
+
+Ordinary Body selection uses presentation hit priority:
+
+```text
+Vertex
+  ↓
+Edge
+  ↓
+Face
+```
+
+This priority is only a screen-space acquisition rule.
+
+Required selection semantics:
+
+- Vertex and Edge use bounded DPI-aware screen-space pick apertures;
+- Face uses the front-visible projected Face region;
+- cursor proximity may choose what visible item the user pointed at but never defines durable identity;
+- hidden/occluded topology is not an ordinary pick candidate in any of the three View Styles;
+- Shaded + Hidden Edges is visual only and does not enable select-through;
+- all accepted hits are immediately mapped from PresentationToken to the current semantic topology catalog and revalidated there.
+
+Active tools may narrow the Viewer kind filter without embedding Part semantics in the Viewer.
+
+Create Sketch support uses Face-only acquisition. A non-planar Face must still be acquireable and then fail semantic admission as Unsupported; the picker must not silently fall through to a neighboring Edge/Face.
+
+When several visible candidates remain under one pointer sample, PM-02 uses a runtime candidate stack rather than provider-first implicit choice.
+
+In ordinary 3D topology targeting with viewport CAD focus:
+
+- Tab selects the next preselection candidate;
+- Shift+Tab selects the previous candidate;
+- text input / Dynamic Input / semantic input contexts that already own Tab take precedence;
+- pointer neighborhood, view, tool/filter or evaluation/provider generation changes reset the stack.
+
+The currently visible preselected candidate is the user's acquisition target on click. Candidate stack order has no durable CAD meaning.
+
+Representation artifacts such as a periodic seam remain completely catalogued and diagnosable but are excluded from ordinary material Edge preselection by default. Material topology whose durable referenceability is Unsupported remains visible/selectable for truthful inspection and diagnostics.
+
+Feature Contribution, hidden-edge graphics and semantic support/carrier ghost overlays do not create duplicate selectable geometry. Normal picking always maps through the single current Body topology presentation.
 
 ### 4.13 Sketch support types
 
@@ -706,6 +749,9 @@ Deliver:
 - runtime token -> current stage catalog;
 - semantic Properties/inspection;
 - stale selection rejection;
+- ordinary Vertex -> Edge -> Face screen-space acquisition priority;
+- active-tool Face/Edge/Vertex pick filters;
+- runtime multiple-hit candidate stack with Tab / Shift+Tab cycling when no higher-priority input context owns Tab;
 - viewport-HUD View Style selector;
 - Shaded / Shaded + Edges / Shaded + Hidden Edges;
 - temporary Feature Contribution on tree hover;
@@ -718,6 +764,12 @@ Gate:
 - revision/session/evaluation/provider replacement rejects stale pick;
 - View Style changes do not mutate/dirty/Undo the Part;
 - hidden-edge display does not silently enable select-through;
+- ordinary pick prioritizes visible Vertex then visible Edge then front-visible Face;
+- Sketch-support acquisition filters to Face while non-planar Face remains acquireable and returns structured Unsupported;
+- provider order cannot silently choose among equivalent multiple hits;
+- candidate cycling is runtime-only and resets on stale scene/context;
+- representation-artifact seam is excluded from ordinary material Edge pick but remains accounted/inspectable;
+- Feature/support overlays do not duplicate pick identity;
 - split Surface contribution highlights all surviving current Face realizations as a set-valued query;
 - deleted outputs are not shown as current contribution;
 - selecting a Feature does not implicitly switch to historical Body stage.
@@ -823,12 +875,19 @@ PM-02 cannot complete without automated and manual evidence covering at least:
 - v8 -> v9 migration preserving DocumentId/BodyId/FeatureId/SketchId/EntityId/ProfileId;
 - canonical rectangular Add stage catalog: 6 Faces / 12 Edges / 8 Vertices accounted;
 - complete accounting at every chained Add/Cut stage;
-- all current Faces selectable/inspectable;
-- all current Edges selectable/inspectable;
-- all current Vertices selectable/inspectable;
+- all current material Faces selectable/inspectable;
+- all current material Edges selectable/inspectable; KnownRepresentationArtifact edges remain fully accounted/inspectable but are excluded from ordinary material pick by default;
+- all current material Vertices selectable/inspectable;
 - viewport View Style selector provides Shaded / Shaded + Edges / Shaded + Hidden Edges;
 - View Style remains non-authored and independent of semantic selection;
 - hidden-edge rendering does not silently enable occluded select-through;
+- ordinary all-kind acquisition uses visible Vertex -> Edge -> Face priority;
+- bounded DPI-aware Vertex/Edge apertures affect only presentation acquisition, never semantic identity;
+- active-tool kind filters are honored without embedding Part semantic admissibility in Viewer;
+- Sketch Face-only acquisition can select a non-planar Face and report Unsupported rather than silently falling through;
+- multiple-hit candidate stack can be cycled explicitly without provider-order semantic authority;
+- stale preselection/candidate stack cannot commit after scene/evaluation/provider replacement;
+- Feature Contribution and support/carrier overlays are non-duplicating presentation layers, not second pick authorities;
 - tree hover shows temporary Current Feature Contribution;
 - tree selection shows persistent Current Feature Contribution without historical-stage substitution;
 - split Feature Surface contribution highlights all surviving current Face realizations without misclassifying the set-valued display as Ambiguous;
@@ -862,20 +921,22 @@ PM-02 cannot complete without automated and manual evidence covering at least:
 The final Owner workflow must exercise at minimum:
 
 1. create Body from Origin Sketch + Extrude Add;
-2. inspect/pick all topology kinds on the Body;
-3. switch Shaded / Shaded + Edges / Shaded + Hidden Edges from the viewport HUD and verify no Part dirty/Undo change;
-4. hover/select multiple Extrude Features in the tree and verify Current Feature Contribution overlays;
-5. verify a later trim/split shows all surviving current contribution fragments while deleted outputs are not ghosted as current truth;
-6. create Sketch on a planar cap;
-7. create Sketch on a planar lateral Face;
-8. create Sketch on a Cut-exposed planar Face when available in the scenario;
-9. attempt standard Sketch on a cylindrical Face and observe structured Unsupported;
-10. author Profile + Extrude Add/Cut from face-supported Sketch;
-11. edit an upstream dimension so the support moves but survives;
-12. exercise a support deletion/ambiguity and verify no stale geometry is modeled;
-13. repair/re-support the Sketch;
-14. Undo/Redo;
-15. Save, close, reopen and verify cold reconstruction.
+2. inspect/pick Body topology and verify ordinary near-corner -> Vertex, near-boundary -> Edge, Face-interior -> Face acquisition;
+3. create an overlapping/multiple-hit view and verify Tab / Shift+Tab cycles visible candidates without changing authored state;
+4. switch Shaded / Shaded + Edges / Shaded + Hidden Edges from the viewport HUD and verify no Part dirty/Undo change;
+5. verify hidden dashed edges remain non-selectable through the opaque Body;
+6. hover/select multiple Extrude Features in the tree and verify Current Feature Contribution overlays;
+7. verify a later trim/split shows all surviving current contribution fragments while deleted outputs are not ghosted as current truth;
+8. create Sketch on a planar cap;
+9. create Sketch on a planar lateral Face;
+10. create Sketch on a Cut-exposed planar Face when available in the scenario;
+11. attempt standard Sketch on a cylindrical Face and observe structured Unsupported without fallback to a nearby Edge/Face;
+12. author Profile + Extrude Add/Cut from face-supported Sketch;
+13. edit an upstream dimension so the support moves but survives;
+14. exercise a support deletion/ambiguity and verify no stale geometry is modeled;
+15. repair/re-support the Sketch;
+16. Undo/Redo;
+17. Save, close, reopen and verify cold reconstruction.
 
 Exact UI labels may evolve D0/D1 inside the contract; semantic behavior may not.
 
