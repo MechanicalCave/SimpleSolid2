@@ -9,6 +9,7 @@
 #include <QEvent>
 #include <QMouseEvent>
 #include <QTreeWidget>
+#include <QTreeWidgetItemIterator>
 #include <QWidget>
 
 #include <cstddef>
