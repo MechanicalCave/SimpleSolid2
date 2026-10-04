@@ -163,8 +163,7 @@ int main() {
             forward(
                 rectangle(
                     15.0, 8.0,
-                    25.0, 22.0,
-                    {0.0, 0.0, 10.0}),
+                    25.0, 22.0),
                 10.0,
                 kernel::SolidBooleanOperation::cut),
             base.solid);
