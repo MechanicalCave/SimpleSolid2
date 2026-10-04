@@ -53,12 +53,13 @@ kernel::BoundaryUse2D lineUse(
     kernel::Point2 start,
     kernel::Point2 end,
     std::string source,
-    std::uint32_t use_index) {
+    std::uint32_t use_index,
+    bool reversed = false) {
     return {
         kernel::Line2{start, end},
-        0.0,
-        1.0,
-        true,
+        reversed ? 1.0 : 0.0,
+        reversed ? 0.0 : 1.0,
+        !reversed,
         false,
         false,
         kernel::BoundaryUseProvenance{
@@ -125,6 +126,50 @@ kernel::PlanarProfileInput rectangle(
             {x0, y0},
             std::string{prefix} + "-left",
             3U),
+    };
+    CHECK(profile.valid());
+    return profile;
+}
+
+kernel::PlanarProfileInput reversedRectangle(
+    double x0,
+    double y0,
+    double x1,
+    double y1,
+    double z,
+    std::string_view prefix,
+    std::optional<kernel::Frame3> frame =
+        std::nullopt) {
+    kernel::PlanarProfileInput profile;
+    if (frame) {
+        profile.frame = *frame;
+    }
+    profile.frame.origin.z += z;
+    profile.outer.boundary = {
+        lineUse(
+            {x0, y1},
+            {x0, y0},
+            std::string{prefix} + "-left",
+            3U,
+            true),
+        lineUse(
+            {x1, y1},
+            {x0, y1},
+            std::string{prefix} + "-top",
+            2U,
+            true),
+        lineUse(
+            {x1, y0},
+            {x1, y1},
+            std::string{prefix} + "-right",
+            1U,
+            true),
+        lineUse(
+            {x0, y0},
+            {x1, y0},
+            std::string{prefix} + "-bottom",
+            0U,
+            true),
     };
     CHECK(profile.valid());
     return profile;
@@ -449,6 +494,225 @@ void verifyPristineAndFrames(
     CHECK(near(*yz_bottom->canonical_frame, yz_expected));
 }
 
+void verifySemanticEditSurvival(
+    kernel_occt::OcctSolidModelingKernel& provider) {
+    const auto baseline =
+        provider.extrude(
+            oneSide(
+                rectangle(
+                    0.0, 0.0,
+                    40.0, 20.0,
+                    0.0,
+                    "stable"),
+                10.0));
+    CHECK(baseline.ok());
+
+    const auto* baseline_profile =
+        newCap(
+            baseline,
+            kernel::ExtrudeCapRole::profile_cap);
+    const auto* baseline_extent =
+        newCap(
+            baseline,
+            kernel::ExtrudeCapRole::extent_cap);
+    const auto* baseline_bottom =
+        newSide(
+            baseline,
+            "stable-bottom");
+    CHECK(baseline_profile != nullptr);
+    CHECK(baseline_extent != nullptr);
+    CHECK(baseline_bottom != nullptr);
+    CHECK(baseline_profile->canonical_frame.has_value());
+    CHECK(baseline_extent->canonical_frame.has_value());
+    CHECK(baseline_bottom->canonical_frame.has_value());
+
+    // Extent-distance edit: semantic roles stay resolved; only the extent-cap
+    // origin follows the semantic offset.
+    const auto taller =
+        provider.extrude(
+            oneSide(
+                rectangle(
+                    0.0, 0.0,
+                    40.0, 20.0,
+                    0.0,
+                    "stable"),
+                18.0));
+    CHECK(taller.ok());
+    const auto* taller_profile =
+        newCap(
+            taller,
+            kernel::ExtrudeCapRole::profile_cap);
+    const auto* taller_extent =
+        newCap(
+            taller,
+            kernel::ExtrudeCapRole::extent_cap);
+    const auto* taller_bottom =
+        newSide(
+            taller,
+            "stable-bottom");
+    CHECK(taller_profile != nullptr);
+    CHECK(taller_extent != nullptr);
+    CHECK(taller_bottom != nullptr);
+    verifyResolvedSingle(*taller_profile);
+    verifyResolvedSingle(*taller_extent);
+    verifyResolvedSingle(*taller_bottom);
+    CHECK(
+        near(
+            *taller_profile->canonical_frame,
+            *baseline_profile->canonical_frame));
+    CHECK(
+        near(
+            *taller_bottom->canonical_frame,
+            *baseline_bottom->canonical_frame));
+    kernel::Frame3 taller_extent_expected;
+    taller_extent_expected.origin =
+        {0.0, 0.0, 18.0};
+    CHECK(
+        near(
+            *taller_extent->canonical_frame,
+            taller_extent_expected));
+
+    // Authored line-length edit: same source provenance and authored direction
+    // remain the same semantic planar side carrier.
+    const auto longer =
+        provider.extrude(
+            oneSide(
+                rectangle(
+                    0.0, 0.0,
+                    60.0, 20.0,
+                    0.0,
+                    "stable"),
+                10.0));
+    CHECK(longer.ok());
+    const auto* longer_bottom =
+        newSide(
+            longer,
+            "stable-bottom");
+    CHECK(longer_bottom != nullptr);
+    verifyResolvedSingle(*longer_bottom);
+    CHECK(
+        near(
+            *longer_bottom->canonical_frame,
+            *baseline_bottom->canonical_frame));
+
+    // Profile/support translation moves the semantic frame origin but not its
+    // canonical orientation.
+    kernel::Frame3 translated_frame;
+    translated_frame.origin =
+        {7.0, -3.0, 4.0};
+    const auto translated =
+        provider.extrude(
+            oneSide(
+                rectangle(
+                    0.0, 0.0,
+                    40.0, 20.0,
+                    0.0,
+                    "stable",
+                    translated_frame),
+                10.0));
+    CHECK(translated.ok());
+    const auto* translated_bottom =
+        newSide(
+            translated,
+            "stable-bottom");
+    CHECK(translated_bottom != nullptr);
+    verifyResolvedSingle(*translated_bottom);
+    CHECK(translated_bottom->canonical_frame.has_value());
+    kernel::Frame3 translated_expected =
+        *baseline_bottom->canonical_frame;
+    translated_expected.origin =
+        {7.0, -3.0, 4.0};
+    CHECK(
+        near(
+            *translated_bottom->canonical_frame,
+            translated_expected));
+
+    // Legal loop traversal reversal changes B-Rep traversal only. Authored
+    // Line direction/provenance remains frame authority.
+    const auto reversed =
+        provider.extrude(
+            oneSide(
+                reversedRectangle(
+                    0.0, 0.0,
+                    40.0, 20.0,
+                    0.0,
+                    "stable"),
+                10.0));
+    CHECK(reversed.ok());
+    for (const auto* source :
+         {
+             "stable-bottom",
+             "stable-right",
+             "stable-top",
+             "stable-left",
+         }) {
+        const auto* before =
+            newSide(baseline, source);
+        const auto* after =
+            newSide(reversed, source);
+        CHECK(before != nullptr);
+        CHECK(after != nullptr);
+        verifyResolvedSingle(*after);
+        CHECK(before->surface_kind == after->surface_kind);
+        CHECK(before->canonical_frame.has_value());
+        CHECK(after->canonical_frame.has_value());
+        CHECK(
+            near(
+                *before->canonical_frame,
+                *after->canonical_frame));
+    }
+
+    // Cold provider reconstruction: runtime token numbers are irrelevant;
+    // semantic roles, classification and canonical frames repeat.
+    kernel_occt::OcctSolidModelingKernel cold_provider;
+    const auto cold =
+        cold_provider.extrude(
+            oneSide(
+                rectangle(
+                    0.0, 0.0,
+                    40.0, 20.0,
+                    0.0,
+                    "stable"),
+                10.0));
+    CHECK(cold.ok());
+    for (const auto& before :
+         baseline.new_surfaces) {
+        const kernel::NewSurfaceLineage* after =
+            nullptr;
+        if (before.role.kind ==
+            kernel::ExtrudeGeneratedFaceRoleKind::cap) {
+            CHECK(before.role.cap_role.has_value());
+            after =
+                newCap(
+                    cold,
+                    *before.role.cap_role);
+        } else {
+            CHECK(before.role.side_provenance.has_value());
+            after =
+                newSide(
+                    cold,
+                    before.role.side_provenance
+                        ->source_entity);
+        }
+        CHECK(after != nullptr);
+        CHECK(
+            after->surface_status ==
+            before.surface_status);
+        CHECK(
+            after->strict_face_status ==
+            before.strict_face_status);
+        CHECK(
+            after->candidate_face_count ==
+            before.candidate_face_count);
+        CHECK(
+            after->surface_kind ==
+            before.surface_kind);
+        CHECK(
+            after->canonical_frame ==
+            before.canonical_frame);
+    }
+}
+
 void verifyTrimSplitDeleteRecreate(
     kernel_occt::OcctSolidModelingKernel& provider) {
     const auto make_base = [&provider]() {
@@ -707,6 +971,7 @@ int main() {
     kernel_occt::OcctSolidModelingKernel provider;
 
     verifyPristineAndFrames(provider);
+    verifySemanticEditSurvival(provider);
     verifyTrimSplitDeleteRecreate(provider);
     verifyCutExposed(provider);
 
@@ -717,6 +982,9 @@ int main() {
         << " split_surface=resolved"
         << " deleted_surface=missing"
         << " cut_exposed_surface=resolved"
+        << " edit_survival=pass"
+        << " traversal_reversal=pass"
+        << " cold_rebuild=pass"
         << '\n';
     return EXIT_SUCCESS;
 }
