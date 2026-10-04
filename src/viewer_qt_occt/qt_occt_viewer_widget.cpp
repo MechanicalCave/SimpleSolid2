@@ -4802,14 +4802,15 @@ public:
                    token) != selection_.selected.end();
     }
 
-    void clearBodySelectionObjects() noexcept {
+    void clearBodyOverlayObjects(
+        std::vector<Handle(AIS_InteractiveObject)>& objects,
+        const char* operation) noexcept {
         if (!context_.IsNull()) {
-            for (const auto& object :
-                 body_selection_objects_) {
+            for (const auto& object : objects) {
                 if (object.IsNull()) continue;
                 const auto retained = object;
                 guardedVoid(
-                    "removeBodySelectionOverlay",
+                    operation,
                     [this, retained] {
                         context_->Remove(
                             retained,
@@ -4817,25 +4818,32 @@ public:
                     });
             }
         }
-        body_selection_objects_.clear();
+        objects.clear();
     }
 
-    [[nodiscard]] bool appendBodySelectionOverlay(
+    void clearBodySelectionObjects() noexcept {
+        clearBodyOverlayObjects(
+            body_selection_objects_,
+            "removeBodySelectionOverlay");
+    }
+
+    void clearBodyPreselectionObjects() noexcept {
+        clearBodyOverlayObjects(
+            body_preselection_objects_,
+            "removeBodyPreselectionOverlay");
+    }
+
+    [[nodiscard]] bool appendBodyTopologyOverlay(
         viewer::PresentationToken token,
-        bool primary) {
+        const Quantity_Color& color,
+        double face_transparency,
+        double edge_width,
+        double vertex_size,
+        std::vector<Handle(AIS_InteractiveObject)>& sink) {
         if (context_.IsNull() ||
             body_scene_.empty()) {
             return true;
         }
-
-        const Quantity_Color color =
-            primary
-                ? Quantity_Color{
-                      0.25, 0.90, 1.0,
-                      Quantity_TOC_RGB}
-                : Quantity_Color{
-                      0.18, 0.72, 0.96,
-                      Quantity_TOC_RGB};
 
         const auto face =
             std::find_if(
@@ -4865,7 +4873,7 @@ public:
             setOwnedSolidShadingStyle(
                 object,
                 color,
-                primary ? 0.18 : 0.30);
+                face_transparency);
             object->SetPolygonOffsets(
                 Aspect_POM_Fill,
                 -2.0F,
@@ -4875,8 +4883,7 @@ public:
                 false);
             context_->Deactivate(
                 object);
-            body_selection_objects_.push_back(
-                object);
+            sink.push_back(object);
             return true;
         }
 
@@ -4904,7 +4911,7 @@ public:
                     new Prs3d_LineAspect(
                         color,
                         Aspect_TOL_SOLID,
-                        primary ? 4.0 : 3.0)};
+                        edge_width)};
             object->Attributes()->SetLineAspect(
                 aspect);
             object->Attributes()->SetWireAspect(
@@ -4918,8 +4925,7 @@ public:
                 false);
             context_->Deactivate(
                 object);
-            body_selection_objects_.push_back(
-                object);
+            sink.push_back(object);
             return true;
         }
 
@@ -4940,7 +4946,7 @@ public:
             }
             const int size =
                 gripMarkerPixelSize(
-                    primary ? 11.0 : 9.0,
+                    vertex_size,
                     dpr);
             Handle(Geom_CartesianPoint) point =
                 new Geom_CartesianPoint(
@@ -4960,12 +4966,74 @@ public:
                 false);
             context_->Deactivate(
                 object);
-            body_selection_objects_.push_back(
-                object);
+            sink.push_back(object);
             return true;
         }
 
-        return true;
+        return false;
+    }
+
+    [[nodiscard]] bool appendBodySelectionOverlay(
+        viewer::PresentationToken token,
+        bool primary) {
+        const Quantity_Color color =
+            primary
+                ? Quantity_Color{
+                      0.25, 0.90, 1.0,
+                      Quantity_TOC_RGB}
+                : Quantity_Color{
+                      0.18, 0.72, 0.96,
+                      Quantity_TOC_RGB};
+        return appendBodyTopologyOverlay(
+            token,
+            color,
+            primary ? 0.18 : 0.30,
+            primary ? 4.0 : 3.0,
+            primary ? 11.0 : 9.0,
+            body_selection_objects_);
+    }
+
+    void syncBodyPreselectionOverlay() {
+        clearBodyPreselectionObjects();
+        if (!body_preselection_token_ ||
+            isSelected(*body_preselection_token_)) {
+            return;
+        }
+
+        const Quantity_Color color{
+            0.38, 0.78, 1.0,
+            Quantity_TOC_RGB};
+        if (!appendBodyTopologyOverlay(
+                *body_preselection_token_,
+                color,
+                0.48,
+                2.4,
+                9.0,
+                body_preselection_objects_)) {
+            body_preselection_token_.reset();
+            clearBodyPreselectionObjects();
+        }
+    }
+
+    [[nodiscard]] bool setBodyTopologyPreselection(
+        std::optional<viewer::PresentationToken> token) {
+        if (token && !token->valid()) {
+            return false;
+        }
+        if (body_preselection_token_ == token) {
+            return true;
+        }
+
+        body_preselection_token_ = token;
+        if (!context_.IsNull()) {
+            syncBodyPreselectionOverlay();
+            updateCurrentViewer();
+        }
+        if (!view_.IsNull()) {
+            redraw();
+        }
+        return !token ||
+               body_preselection_token_ == token;
     }
 
     void applySelectionStyles() {
@@ -4984,6 +5052,7 @@ public:
                 break;
             }
         }
+        syncBodyPreselectionOverlay();
 
         for (const auto& entry : reference_objects_) {
             if (entry.object.IsNull()) continue;
