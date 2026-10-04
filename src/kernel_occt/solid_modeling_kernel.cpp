@@ -1009,6 +1009,22 @@ buildExtrudeTool(
                 }
             }
         }
+        auto canonical_frame =
+            source.canonical_frame;
+        if (canonical_frame) {
+            // buildProfileFace() consumed the profile shifted to the sweep
+            // start. Canonical side O is authored on the source support plane
+            // and therefore must not move with Reverse/Midplane start offset.
+            canonical_frame->origin.x -=
+                input.profile.frame.normal.x *
+                input.start_offset_mm;
+            canonical_frame->origin.y -=
+                input.profile.frame.normal.y *
+                input.start_offset_mm;
+            canonical_frame->origin.z -=
+                input.profile.frame.normal.z *
+                input.start_offset_mm;
+        }
         sources.push_back(
             {
                 kernel::ExtrudeFaceRole{
@@ -1017,7 +1033,7 @@ buildExtrudeTool(
                     source.provenance},
                 std::move(faces),
                 source.surface_kind,
-                source.canonical_frame,
+                std::move(canonical_frame),
             });
     }
 
