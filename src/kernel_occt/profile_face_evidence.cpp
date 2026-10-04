@@ -1349,6 +1349,136 @@ evidenceChamferedRectangleProfile() {
     return input;
 }
 
+[[nodiscard]] kernel::PlanarProfileInput
+evidenceCircleProfile(
+    std::string source_entity,
+    double radius) {
+    kernel::PlanarProfileInput input;
+    input.outer.boundary = {
+        kernel::BoundaryUse2D{
+            kernel::Circle2{
+                {0.0, 0.0},
+                radius},
+            0.0,
+            0.0,
+            true,
+            false,
+            true,
+            kernel::BoundaryUseProvenance{
+                std::move(source_entity),
+                0U,
+                0U,
+                false},
+        },
+    };
+    return input;
+}
+
+[[nodiscard]] double edgeLength(
+    const TopoDS_Edge& edge) {
+    GProp_GProps properties;
+    BRepGProp::LinearProperties(
+        edge,
+        properties);
+    return properties.Mass();
+}
+
+[[nodiscard]] std::optional<double>
+cylinderRadius(
+    const TopoDS_Face& face) {
+    BRepAdaptor_Surface surface{
+        face};
+    if (surface.GetType() !=
+        GeomAbs_Cylinder) {
+        return std::nullopt;
+    }
+    return surface.Cylinder().Radius();
+}
+
+[[nodiscard]] kernel::Point3
+worldPoint(
+    const kernel::Frame3& frame,
+    const kernel::Point2& local) noexcept {
+    return {
+        frame.origin.x +
+            frame.u_axis.x * local.u +
+            frame.v_axis.x * local.v,
+        frame.origin.y +
+            frame.u_axis.y * local.u +
+            frame.v_axis.y * local.v,
+        frame.origin.z +
+            frame.u_axis.z * local.u +
+            frame.v_axis.z * local.v,
+    };
+}
+
+[[nodiscard]] kernel::StageTopologyAccountingEvidence
+stageTopologyAccounting(
+    kernel::EvidenceStageOperation operation,
+    const TopoDS_Shape& shape) {
+    kernel::StageTopologyAccountingEvidence evidence;
+    evidence.operation = operation;
+
+    populateShapeEvidence(
+        evidence.shape,
+        shape);
+    if (!evidence.shape.ok()) {
+        evidence.topology.status =
+            evidence.shape.status;
+        return evidence;
+    }
+
+    populateBodyTopologyEvidence(
+        evidence.topology,
+        evidence.shape,
+        shape);
+
+    for (const auto& face :
+         uniqueFacesFromShape(shape)) {
+        switch (
+            faceGeometryDiagnostics(face)
+                .surface_kind) {
+        case kernel::FaceSurfaceKind::plane:
+            ++evidence.plane_face_count;
+            break;
+        case kernel::FaceSurfaceKind::cylinder:
+            ++evidence.cylinder_face_count;
+            break;
+        default:
+            ++evidence.other_face_count;
+            break;
+        }
+    }
+
+    for (const auto& edge :
+         uniqueEdgesFromShape(shape)) {
+        switch (providerCurveKind(edge)) {
+        case kernel::EvidenceCurveKind::line:
+            ++evidence.line_edge_count;
+            break;
+        case kernel::EvidenceCurveKind::circle:
+            ++evidence.circle_edge_count;
+            break;
+        case kernel::EvidenceCurveKind::other:
+            ++evidence.other_edge_count;
+            break;
+        }
+    }
+
+    for (const auto& vertex :
+         uniqueVerticesFromShape(shape)) {
+        const auto point =
+            providerPoint(vertex);
+        if (std::isfinite(point.x) &&
+            std::isfinite(point.y) &&
+            std::isfinite(point.z)) {
+            ++evidence.finite_vertex_count;
+        }
+    }
+
+    return evidence;
+}
+
 [[nodiscard]] kernel::ReferenceStatus
 surfaceStatusFromSingleCarrierLineage(
     std::size_t descendant_face_count) noexcept {
