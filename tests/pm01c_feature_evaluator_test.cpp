@@ -39,6 +39,7 @@ class FakeKernel final
 public:
     bool saw_reverse{false};
     bool saw_midplane{false};
+    bool corrupt_topology_inventory{false};
 
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
@@ -160,12 +161,20 @@ public:
 
         result.status =
             kernel::SolidModelingStatus::ok;
-        result.solid =
-            std::move(runtime);
         result.brep_valid = true;
         result.solid_count = 1U;
+        result.current_faces =
+            runtime->tokens;
         result.face_count =
-            result.new_faces.size();
+            result.current_faces.size();
+        result.edge_count = 0U;
+        result.vertex_count = 0U;
+        if (corrupt_topology_inventory &&
+            !result.current_faces.empty()) {
+            result.current_faces.pop_back();
+        }
+        result.solid =
+            std::move(runtime);
         return result;
     }
 };
@@ -354,6 +363,34 @@ int main() {
     CHECK(
         valid_eval.current_face_references.size() ==
         12U);
+    CHECK(valid_eval.current_topology.has_value());
+    CHECK(
+        valid_eval.current_topology->stage.kind ==
+        part::BodyStageKind::after_feature);
+    CHECK(
+        valid_eval.current_topology->stage.feature_id ==
+        std::optional<part::FeatureId>{id2});
+    CHECK(valid_eval.current_topology->faces.size() == 12U);
+    CHECK(valid_eval.current_topology->edges.empty());
+    CHECK(valid_eval.current_topology->vertices.empty());
+    CHECK(valid_eval.features[0].result_solid != nullptr);
+    CHECK(valid_eval.features[0].result_topology.has_value());
+    CHECK(
+        valid_eval.features[0].result_topology
+            ->stage.feature_id ==
+        std::optional<part::FeatureId>{id1});
+    CHECK(valid_eval.features[0].result_topology->faces.size() == 6U);
+    CHECK(valid_eval.features[1].result_solid != nullptr);
+    CHECK(valid_eval.features[1].result_topology.has_value());
+    for (const auto& face :
+         valid_eval.current_topology->faces) {
+        CHECK(face.valid());
+        CHECK(
+            face.accounting_class ==
+            part::TopologyAccountingClass::
+                referenceable);
+        CHECK(face.semantic_address.has_value());
+    }
     for (const auto& reference :
          valid_eval.current_face_references) {
         CHECK(reference.address.valid());
@@ -562,8 +599,54 @@ int main() {
             unavailable);
     CHECK(failed_eval.body_solid == nullptr);
     CHECK(failed_eval.resolved_prefix_solid != nullptr);
+    CHECK(failed_eval.resolved_prefix_topology.has_value());
+    CHECK(
+        failed_eval.resolved_prefix_topology->stage.feature_id ==
+        std::optional<part::FeatureId>{id1});
+    CHECK(!failed_eval.current_topology.has_value());
     CHECK(
         failed_eval.current_face_references.empty());
+
+    // PM-02A fail-closed admission: a provider result whose declared
+    // unique Face count does not match its current Face inventory cannot
+    // become Body truth even when the modeling operation itself returned ok.
+    kernel.corrupt_topology_inventory = true;
+    auto corrupt_topology =
+        withFeatures(
+            fixture.document,
+            {
+                feature(
+                    id1,
+                    fixture.profile_id,
+                    part::ExtrudeOperation::add,
+                    10.0),
+            },
+            cursor);
+    const auto corrupt_eval =
+        part::evaluatePart(
+            corrupt_topology,
+            kernel);
+    CHECK(
+        corrupt_eval.body_status ==
+        part::BodyEvaluationStatus::
+            unavailable);
+    CHECK(corrupt_eval.body_solid == nullptr);
+    CHECK(!corrupt_eval.current_topology.has_value());
+    CHECK(corrupt_eval.resolved_prefix_solid == nullptr);
+    CHECK(!corrupt_eval.resolved_prefix_topology.has_value());
+    CHECK(
+        corrupt_eval.features.size() == 1U);
+    CHECK(
+        corrupt_eval.features[0].status ==
+        part::FeatureEvaluationStatus::
+            failed);
+    CHECK(
+        corrupt_eval.features[0].diagnostic ==
+        part::FeatureEvaluationDiagnosticCode::
+            topology_integrity_failure);
+    CHECK(corrupt_eval.features[0].result_solid == nullptr);
+    CHECK(!corrupt_eval.features[0].result_topology.has_value());
+    kernel.corrupt_topology_inventory = false;
 
     // A deleted Profile leaves repairable authored Feature intent but blocks
     // evaluation rather than corrupting the Part.
@@ -599,6 +682,8 @@ int main() {
         << "PM01C_EVALUATOR_PASS"
         << " stale_last_good=0"
         << " resolved_prefix_presentation=1"
+        << " topology_catalog=1"
+        << " topology_integrity_fail_closed=1"
         << " restart_after_failure=0\n";
     return EXIT_SUCCESS;
 }

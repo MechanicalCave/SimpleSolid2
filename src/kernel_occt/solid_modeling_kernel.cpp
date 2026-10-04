@@ -16,6 +16,7 @@
 #include <Standard_Failure.hxx>
 #include <TopAbs_Orientation.hxx>
 #include <TopAbs_ShapeEnum.hxx>
+#include <TopExp.hxx>
 #include <TopExp_Explorer.hxx>
 #include <TopoDS.hxx>
 #include <TopoDS_Edge.hxx>
@@ -23,7 +24,9 @@
 #include <TopoDS_Shape.hxx>
 #include <TopoDS_Solid.hxx>
 #include <TopoDS_Wire.hxx>
+#include <TopoDS_Vertex.hxx>
 #include <TopLoc_Location.hxx>
+#include <TopTools_IndexedMapOfShape.hxx>
 #include <TopTools_ListOfShape.hxx>
 #include <gp_Ax2.hxx>
 #include <gp_Circ.hxx>
@@ -347,6 +350,23 @@ buildProfileFace(
     return count;
 }
 
+[[nodiscard]] std::size_t countUniqueSubshapes(
+    const TopoDS_Shape& shape,
+    TopAbs_ShapeEnum kind) {
+    if (shape.IsNull()) return 0U;
+    if (shape.ShapeType() == kind) {
+        return 1U;
+    }
+
+    TopTools_IndexedMapOfShape unique;
+    TopExp::MapShapes(
+        shape,
+        kind,
+        unique);
+    return static_cast<std::size_t>(
+        unique.Extent());
+}
+
 [[nodiscard]] std::optional<TopoDS_Solid>
 singleSolid(
     const TopoDS_Shape& shape) {
@@ -531,9 +551,24 @@ class OcctRuntimeSolid final
     : public kernel::RuntimeSolid {
 public:
     TopoDS_Solid solid;
+
+    // Existing PM-01 semantic Face lineage subset. Only Faces with defended
+    // semantic producer/provenance live here.
     std::map<std::uint64_t, TopoDS_Face>
         tracked_faces;
-    std::uint64_t next_token{1U};
+
+    // PM-02A complete current-stage provider inventory. These maps are
+    // runtime-only realization tables and do not imply durable semantics.
+    std::map<std::uint64_t, TopoDS_Face>
+        inventory_faces;
+    std::map<std::uint64_t, TopoDS_Edge>
+        inventory_edges;
+    std::map<std::uint64_t, TopoDS_Vertex>
+        inventory_vertices;
+
+    std::uint64_t next_face_token{1U};
+    std::uint64_t next_edge_token{1U};
+    std::uint64_t next_vertex_token{1U};
 };
 
 struct CandidateClaim final {
@@ -603,8 +638,12 @@ void publishLineage(
                     false,
                 });
         }
-        runtime.next_token =
-            upstream->next_token;
+        runtime.next_face_token =
+            upstream->next_face_token;
+        runtime.next_edge_token =
+            upstream->next_edge_token;
+        runtime.next_vertex_token =
+            upstream->next_vertex_token;
     }
 
     result.new_faces.reserve(created.size());
@@ -697,15 +736,15 @@ void publishLineage(
             continue;
         }
 
-        if (runtime.next_token == 0U) {
+        if (runtime.next_face_token == 0U) {
             published.status =
                 kernel::ReferenceStatus::
                     unsupported;
             continue;
         }
         const kernel::RuntimeFaceToken token{
-            runtime.next_token};
-        ++runtime.next_token;
+            runtime.next_face_token};
+        ++runtime.next_face_token;
         published.resolved_token = token;
         runtime.tracked_faces.emplace(
             token.value,
@@ -821,21 +860,164 @@ buildExtrudeTool(
         std::move(sources));
 }
 
+[[nodiscard]] std::optional<std::uint64_t>
+semanticFaceToken(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Face& face) {
+    for (const auto& [token, semantic_face] :
+         runtime.tracked_faces) {
+        if (semantic_face.IsSame(face)) {
+            return token;
+        }
+    }
+    return std::nullopt;
+}
+
+template <typename Token>
+[[nodiscard]] std::optional<Token>
+allocateRuntimeToken(
+    std::uint64_t& next_value) noexcept {
+    if (next_value == 0U) {
+        return std::nullopt;
+    }
+    const Token token{next_value};
+    ++next_value;
+    return token.valid()
+        ? std::optional<Token>{token}
+        : std::nullopt;
+}
+
+[[nodiscard]] bool populateRuntimeTopologyInventory(
+    kernel::SolidModelingResult& result,
+    OcctRuntimeSolid& runtime,
+    const TopoDS_Solid& solid) {
+    runtime.inventory_faces.clear();
+    runtime.inventory_edges.clear();
+    runtime.inventory_vertices.clear();
+    result.current_faces.clear();
+    result.current_edges.clear();
+    result.current_vertices.clear();
+
+    TopTools_IndexedMapOfShape faces;
+    TopTools_IndexedMapOfShape edges;
+    TopTools_IndexedMapOfShape vertices;
+    TopExp::MapShapes(
+        solid,
+        TopAbs_FACE,
+        faces);
+    TopExp::MapShapes(
+        solid,
+        TopAbs_EDGE,
+        edges);
+    TopExp::MapShapes(
+        solid,
+        TopAbs_VERTEX,
+        vertices);
+
+    result.face_count =
+        static_cast<std::size_t>(faces.Extent());
+    result.edge_count =
+        static_cast<std::size_t>(edges.Extent());
+    result.vertex_count =
+        static_cast<std::size_t>(vertices.Extent());
+
+    result.current_faces.reserve(result.face_count);
+    result.current_edges.reserve(result.edge_count);
+    result.current_vertices.reserve(result.vertex_count);
+
+    for (Standard_Integer index = 1;
+         index <= faces.Extent();
+         ++index) {
+        const auto face =
+            TopoDS::Face(faces.FindKey(index));
+        auto token_value =
+            semanticFaceToken(runtime, face);
+        if (!token_value) {
+            const auto token =
+                allocateRuntimeToken<
+                    kernel::RuntimeFaceToken>(
+                    runtime.next_face_token);
+            if (!token) return false;
+            token_value = token->value;
+        }
+
+        const kernel::RuntimeFaceToken token{
+            *token_value};
+        if (!token.valid() ||
+            !runtime.inventory_faces.emplace(
+                token.value,
+                face).second) {
+            return false;
+        }
+        result.current_faces.push_back(token);
+    }
+
+    for (Standard_Integer index = 1;
+         index <= edges.Extent();
+         ++index) {
+        const auto token =
+            allocateRuntimeToken<
+                kernel::RuntimeEdgeToken>(
+                runtime.next_edge_token);
+        if (!token) return false;
+
+        const auto edge =
+            TopoDS::Edge(edges.FindKey(index));
+        if (!runtime.inventory_edges.emplace(
+                token->value,
+                edge).second) {
+            return false;
+        }
+        result.current_edges.push_back(*token);
+    }
+
+    for (Standard_Integer index = 1;
+         index <= vertices.Extent();
+         ++index) {
+        const auto token =
+            allocateRuntimeToken<
+                kernel::RuntimeVertexToken>(
+                runtime.next_vertex_token);
+        if (!token) return false;
+
+        const auto vertex =
+            TopoDS::Vertex(
+                vertices.FindKey(index));
+        if (!runtime.inventory_vertices.emplace(
+                token->value,
+                vertex).second) {
+            return false;
+        }
+        result.current_vertices.push_back(*token);
+    }
+
+    return result.current_faces.size() ==
+               result.face_count &&
+           result.current_edges.size() ==
+               result.edge_count &&
+           result.current_vertices.size() ==
+               result.vertex_count;
+}
+
 void populateDiagnostics(
     kernel::SolidModelingResult& result,
     const TopoDS_Shape& shape) {
     result.solid_count =
-        countSubshapes(
+        countUniqueSubshapes(
             shape,
             TopAbs_SOLID);
     result.face_count =
-        countSubshapes(
+        countUniqueSubshapes(
             shape,
             TopAbs_FACE);
     result.edge_count =
-        countSubshapes(
+        countUniqueSubshapes(
             shape,
             TopAbs_EDGE);
+    result.vertex_count =
+        countUniqueSubshapes(
+            shape,
+            TopAbs_VERTEX);
     result.brep_valid =
         !shape.IsNull() &&
         BRepCheck_Analyzer{shape}.IsValid();
@@ -1022,6 +1204,16 @@ finishBoolean(
                 source,
                 shape);
         });
+
+    if (!populateRuntimeTopologyInventory(
+            result,
+            *runtime,
+            runtime->solid)) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
 
     result.status =
         kernel::SolidModelingStatus::ok;
@@ -1320,6 +1512,16 @@ OcctSolidModelingKernel::extrude(
                     }
                     return candidates;
                 });
+
+            if (!populateRuntimeTopologyInventory(
+                    result,
+                    *runtime,
+                    runtime->solid)) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
 
             result.status =
                 kernel::SolidModelingStatus::ok;
