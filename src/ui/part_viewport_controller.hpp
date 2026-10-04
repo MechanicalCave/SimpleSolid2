@@ -6,6 +6,7 @@
 #include <simplesolid2/sketch/interaction_state.hpp>
 #include <simplesolid2/sketch/measurement.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
+#include <simplesolid2/part/feature_evaluation.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
 #include <QObject>
@@ -280,6 +281,34 @@ public:
     primarySelection() const;
 
 private:
+    struct BodyTopologyBinding final {
+        viewer::BodyTopologyPresentationKind kind{
+            viewer::BodyTopologyPresentationKind::face};
+        std::uint64_t runtime_token_value{};
+    };
+
+    struct BodySceneCandidate final {
+        viewer::BodyScene scene;
+        std::optional<part::BodyStageTopologyCatalog>
+            topology;
+        std::unordered_map<
+            std::uint64_t,
+            BodyTopologyBinding>
+            bindings;
+        std::unordered_map<
+            std::uint64_t,
+            viewer::PresentationToken>
+            face_presentations;
+        std::unordered_map<
+            std::uint64_t,
+            viewer::PresentationToken>
+            edge_presentations;
+        std::unordered_map<
+            std::uint64_t,
+            viewer::PresentationToken>
+            vertex_presentations;
+    };
+
     struct SemanticSelection final {
         std::vector<core::BuiltinReferenceRole> selected;
         std::optional<core::BuiltinReferenceRole> primary;
@@ -299,8 +328,10 @@ private:
     [[nodiscard]] viewer::ReferenceScene
     buildReferenceScene() const;
 
-    [[nodiscard]] std::optional<viewer::SolidScene>
-    buildSolidScene();
+    [[nodiscard]] std::optional<BodySceneCandidate>
+    buildBodyScene();
+
+    void clearBodySceneAuthority() noexcept;
 
     [[nodiscard]] std::optional<viewer::SketchScene>
     buildSketchScene();
@@ -340,9 +371,28 @@ private:
     kernel::ISolidModelingKernel*
         solid_modeling_kernel_{};
     std::optional<core::DocumentRevision>
-        solid_scene_revision_;
-    std::optional<viewer::SolidScene>
-        solid_scene_cache_;
+        body_scene_revision_;
+    std::optional<viewer::BodyScene>
+        body_scene_cache_;
+    std::optional<part::BodyStageTopologyCatalog>
+        body_topology_catalog_;
+    std::unordered_map<
+        std::uint64_t,
+        BodyTopologyBinding>
+        body_topology_bindings_;
+    std::unordered_map<
+        std::uint64_t,
+        viewer::PresentationToken>
+        body_face_presentations_;
+    std::unordered_map<
+        std::uint64_t,
+        viewer::PresentationToken>
+        body_edge_presentations_;
+    std::unordered_map<
+        std::uint64_t,
+        viewer::PresentationToken>
+        body_vertex_presentations_;
+    std::uint64_t next_body_scene_generation_{1U};
     std::optional<sketch::SketchId>
         sketch_edit_id_;
     viewer::PrimaryPointerRouting
