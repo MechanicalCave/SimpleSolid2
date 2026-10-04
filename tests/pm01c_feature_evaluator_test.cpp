@@ -511,6 +511,92 @@ int main() {
         CHECK(reference.runtime_token);
     }
 
+    // PM-02B semantic split: one strict bounded Face becomes two current
+    // realizations while its semantic Surface remains singularly Resolved.
+    kernel.split_first_inherited_surface = true;
+    const auto split_eval =
+        part::evaluatePart(
+            valid,
+            kernel);
+    kernel.split_first_inherited_surface = false;
+
+    CHECK(
+        split_eval.body_status ==
+        part::BodyEvaluationStatus::
+            up_to_date);
+    CHECK(split_eval.current_topology.has_value());
+
+    const part::FeatureSurfaceAddress
+        split_surface_address{
+            id1,
+            part::FeatureSurfaceRoleKind::
+                profile_cap,
+            std::nullopt,
+            0U,
+            0U,
+            false};
+    const auto split_surface =
+        std::find_if(
+            split_eval.current_surface_references.begin(),
+            split_eval.current_surface_references.end(),
+            [&split_surface_address](const auto& surface) {
+                return surface.address ==
+                       split_surface_address;
+            });
+    CHECK(
+        split_surface !=
+        split_eval.current_surface_references.end());
+    CHECK(split_surface->valid());
+    CHECK(
+        split_surface->status ==
+        kernel::ReferenceStatus::resolved);
+    CHECK(
+        split_surface->strict_face_status ==
+        kernel::ReferenceStatus::ambiguous);
+    CHECK(split_surface->candidate_face_count == 2U);
+    CHECK(split_surface->current_faces.size() == 2U);
+
+    const part::FeatureFaceAddress
+        split_face_address{
+            id1,
+            part::FeatureFaceRoleKind::
+                profile_cap,
+            std::nullopt,
+            0U,
+            0U,
+            false};
+    const auto split_face =
+        std::find_if(
+            split_eval.current_face_references.begin(),
+            split_eval.current_face_references.end(),
+            [&split_face_address](const auto& face) {
+                return face.address ==
+                       split_face_address;
+            });
+    CHECK(
+        split_face !=
+        split_eval.current_face_references.end());
+    CHECK(
+        split_face->status ==
+        kernel::ReferenceStatus::ambiguous);
+    CHECK(split_face->candidate_count == 2U);
+    CHECK(!split_face->runtime_token.has_value());
+
+    const auto fragment_count =
+        static_cast<std::size_t>(
+            std::count_if(
+                split_eval.current_topology->faces.begin(),
+                split_eval.current_topology->faces.end(),
+                [&split_surface_address](const auto& face) {
+                    return !face.semantic_address &&
+                           std::find(
+                               face.surface_candidates.begin(),
+                               face.surface_candidates.end(),
+                               split_surface_address) !=
+                               face.surface_candidates.end();
+                }));
+    CHECK(fragment_count == 2U);
+
     // Part -> Kernel translation preserves Reverse OneSide semantics.
     kernel.saw_reverse = false;
     auto reversed =
@@ -794,6 +880,7 @@ int main() {
         << " stale_last_good=0"
         << " resolved_prefix_presentation=1"
         << " topology_catalog=1"
+        << " split_face_ambiguous_surface_resolved=1"
         << " topology_integrity_fail_closed=1"
         << " restart_after_failure=0\n";
     return EXIT_SUCCESS;
