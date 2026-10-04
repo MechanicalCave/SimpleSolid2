@@ -94,9 +94,16 @@ kernel::PlanarProfileInput rectangle(
     double x1,
     double y1,
     double z,
-    std::string_view prefix) {
+    std::string_view prefix,
+    std::optional<kernel::Frame3> frame =
+        std::nullopt) {
     kernel::PlanarProfileInput profile;
-    profile.frame.origin = {0.0, 0.0, z};
+    if (frame) {
+        profile.frame = *frame;
+    }
+    profile.frame.origin.x += 0.0;
+    profile.frame.origin.y += 0.0;
+    profile.frame.origin.z += z;
     profile.outer.boundary = {
         lineUse(
             {x0, y0},
@@ -388,6 +395,58 @@ void verifyPristineAndFrames(
         curved->surface_kind ==
         kernel::SurfaceKind::cylinder);
     CHECK(!curved->canonical_frame.has_value());
+
+    kernel::Frame3 xz;
+    xz.u_axis = {1.0, 0.0, 0.0};
+    xz.v_axis = {0.0, 0.0, 1.0};
+    xz.normal = {0.0, -1.0, 0.0};
+    CHECK(xz.valid());
+    const auto xz_result =
+        provider.extrude(
+            oneSide(
+                rectangle(
+                    0.0, 0.0,
+                    40.0, 20.0,
+                    0.0,
+                    "xz",
+                    xz),
+                12.0));
+    CHECK(xz_result.ok());
+    const auto* xz_bottom =
+        newSide(xz_result, "xz-bottom");
+    CHECK(xz_bottom != nullptr);
+    CHECK(xz_bottom->canonical_frame.has_value());
+    kernel::Frame3 xz_expected;
+    xz_expected.u_axis = {1.0, 0.0, 0.0};
+    xz_expected.v_axis = {0.0, -1.0, 0.0};
+    xz_expected.normal = {0.0, 0.0, -1.0};
+    CHECK(near(*xz_bottom->canonical_frame, xz_expected));
+
+    kernel::Frame3 yz;
+    yz.u_axis = {0.0, 1.0, 0.0};
+    yz.v_axis = {0.0, 0.0, 1.0};
+    yz.normal = {1.0, 0.0, 0.0};
+    CHECK(yz.valid());
+    const auto yz_result =
+        provider.extrude(
+            oneSide(
+                rectangle(
+                    0.0, 0.0,
+                    40.0, 20.0,
+                    0.0,
+                    "yz",
+                    yz),
+                8.0));
+    CHECK(yz_result.ok());
+    const auto* yz_bottom =
+        newSide(yz_result, "yz-bottom");
+    CHECK(yz_bottom != nullptr);
+    CHECK(yz_bottom->canonical_frame.has_value());
+    kernel::Frame3 yz_expected;
+    yz_expected.u_axis = {0.0, 1.0, 0.0};
+    yz_expected.v_axis = {1.0, 0.0, 0.0};
+    yz_expected.normal = {0.0, 0.0, -1.0};
+    CHECK(near(*yz_bottom->canonical_frame, yz_expected));
 }
 
 void verifyTrimSplitDeleteRecreate(
@@ -402,6 +461,44 @@ void verifyTrimSplitDeleteRecreate(
                     "base"),
                 10.0));
     };
+
+    {
+        const auto base = make_base();
+        CHECK(base.ok());
+        const auto* cap =
+            newCap(
+                base,
+                kernel::ExtrudeCapRole::extent_cap);
+        CHECK(cap != nullptr);
+        CHECK(cap->resolved_token.has_value());
+        const auto token = *cap->resolved_token;
+        const auto frame = cap->canonical_frame;
+
+        const auto attached =
+            provider.extrude(
+                oneSide(
+                    rectangle(
+                        10.0, 5.0,
+                        30.0, 15.0,
+                        10.0,
+                        "add-trim"),
+                    10.0),
+                base.solid);
+        CHECK(attached.ok());
+
+        const auto* inherited =
+            inheritedSurface(attached, token);
+        CHECK(inherited != nullptr);
+        CHECK(
+            inherited->surface_status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(
+            inherited->strict_face_status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(inherited->candidate_face_count == 1U);
+        CHECK(inherited->current_faces.size() == 1U);
+        CHECK(inherited->canonical_frame == frame);
+    }
 
     {
         const auto base = make_base();
