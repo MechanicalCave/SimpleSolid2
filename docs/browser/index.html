@@ -1414,6 +1414,42 @@ Extrude Create/Edit uses one runtime draft shared by GUI and Command Line. Valid
 
 The Viewer receives provider-neutral derived solid/preview presentation only. PM-01 does not add face/edge topology picking or durable provider identity.
 
+<!-- section-id: internal.part-documents.accepted-next-topology-boundary -->
+## Accepted next semantic-topology production boundary
+
+PM-02P architecture evidence is complete and Owner-accepted, but its product implementation is **not yet active**.
+
+The current as-built Part remains schema v8 with Origin-plane Sketch support and persisted `SketchPlacement`. No Body topology picking or face-supported Sketch exists in the current product yet.
+
+The accepted next production boundary for a separately activated PM-02 contract is:
+
+```text
+Body Feature stage
+-> complete evaluated Face / Edge / Vertex catalog
+-> semantic Surface / Curve / Point carrier meaning
+-> fresh runtime topology picking
+-> planar semantic Surface Sketch support
+-> derived current Sketch O/U/V/N frame
+-> existing Profile / Extrude Add-Cut pipeline
+```
+
+The accepted architecture requires:
+
+- complete topology accounting at every successful Body stage;
+- Face/Surface, Edge/Curve and Vertex/Point to remain distinct semantic levels;
+- explicit producer-stage meaning rather than final-Body global search;
+- runtime Face/Edge/Vertex tokens to remain transient and generation-scoped;
+- no persistent OCCT/OCAF handles or topology ordinals;
+- no automatic identity from geometry proximity/similarity;
+- deterministic planar carrier frames from authored/producer provenance;
+- a Surface-backed Sketch to preserve authored local U/V geometry while its derived world frame moves with the support;
+- Missing/Ambiguous support to publish no stale current frame;
+- bounded cycle rejection using ordered Feature history rather than a universal dependency graph.
+
+For singular Edge/Curve meaning, Owner accepted the PM-02P finding that a Surface pair alone may be insufficient when several disconnected branches exist. A bounded semantic branch/provenance discriminator is permitted only when producer semantics can defend it; otherwise the singular meaning remains Ambiguous. Provider branch order, nearest/longest geometry and XYZ sorting are not valid identity.
+
+The proposed production contract is `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`. It remains inactive until explicitly accepted and activated through `work/ACTIVE.yaml`.
+
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 

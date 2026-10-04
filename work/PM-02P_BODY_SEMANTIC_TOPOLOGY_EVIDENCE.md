@@ -1,12 +1,14 @@
 # PM-02P — Body Semantic Topology Evidence Work Contract
 
-**Status:** ACTIVE — OWNER ACCEPTED 2026-10-03  
+**Status:** COMPLETED — PASS; OWNER D2 SYNTHESIS ACCEPTED 2026-10-04  
 **Decision class:** D2 bounded architecture-evidence Work Contract; D0/D1 implementation permitted only inside this contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.6  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Entry gate:** PM-01 COMPLETED — PASS  
 **Owner acceptance:** 2026-10-03  
+**Final runtime evidence:** `e259fef5849bc4707ddcbdda8e75795b8f3fa5b4` — Windows FULL #1387 PASS  
+**Final synthesis/closure:** `d96da217d11004555761134b7adabc799f489e88` — Windows closure #1388 PASS; merged main `72cbf070b4e3a64a737fce25137621b82d6dbee5`  
 **Production CAD mutation:** NOT AUTHORIZED  
 **Persistence schema mutation:** NOT AUTHORIZED  
 **User-facing topology/Sketch feature:** NOT AUTHORIZED
@@ -41,9 +43,11 @@ Projection is unrelated and remains outside this Work Contract.
 
 Owner explicitly accepted this Work Contract on 2026-10-03.
 
-Activation authorizes bounded evidence/probe implementation only. It does not activate production PM-02.
+Activation authorized bounded evidence/probe implementation only. It did not activate production PM-02.
 
-Completion of PM-02P likewise does not automatically authorize production mutation. After PM-02P PASS, a separate production Work Contract must be proposed and explicitly accepted.
+PM-02P is now COMPLETED — PASS. The Owner explicitly accepted the final D2 synthesis/recommendation on 2026-10-04, including the bounded semantic Edge/Curve branch/provenance rule.
+
+Completion authorizes only preparation of a separate production PM-02 Work Contract. Production mutation remains inactive until that later contract is explicitly accepted and activated through `work/ACTIVE.yaml`.
 
 ## 3. Governing architecture
 
@@ -577,10 +581,28 @@ PM-02P may be marked COMPLETED — PASS only when:
 
 ## 20. Completion consequence
 
+PM-02P is COMPLETED — PASS.
+
+The final accepted evidence records:
+
+```text
+false Resolved                    = 0
+unaccounted Faces                 = 0
+unaccounted Edges                 = 0
+unaccounted Vertices              = 0
+frame instability                 = 0
+cold-rebuild semantic mismatches  = 0
+stale publications/acceptances    = 0
+```
+
+The Owner accepted the final D2 production recommendation on 2026-10-04, including this rule:
+
+> A singular Edge/Curve selector may use a bounded semantic branch/provenance discriminator only when the producing operation supplies defensible semantic meaning. If no such meaning exists, the selector remains Ambiguous.
+
 PM-02P PASS authorizes only preparation of the production PM-02 Work Contract:
 
-`PM-02 — Body Semantic Topology and Face-Supported Sketch`.
+`work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`.
 
-That later contract may propose production topology catalog, provider-neutral semantic selectors, runtime topology picking, deterministic planar Surface frames, schema migration, face-supported Sketch, re-support, stage-aware Profile evaluation, GUI/CLI semantics, lifecycle/persistence/docs and Windows manual acceptance.
+That candidate may propose production topology catalog, provider-neutral semantic selectors, runtime topology picking, deterministic planar Surface frames, schema migration, face-supported Sketch, re-support, stage-aware Profile evaluation, GUI/CLI semantics, lifecycle/persistence/docs and Windows manual acceptance.
 
-No such product item becomes authorized merely because PM-02P passes.
+No such product item is authorized until the Owner explicitly accepts that production Work Contract and `work/ACTIVE.yaml` activates it.

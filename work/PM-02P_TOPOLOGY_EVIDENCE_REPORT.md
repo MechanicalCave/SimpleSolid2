@@ -1,6 +1,6 @@
 # PM-02P — Body Semantic Topology Evidence Report
 
-**Status:** SYNTHESIS COMPLETE — OWNER D2 REVIEW REQUIRED; runtime exact-head FULL PASS  
+**Status:** COMPLETED — PASS; OWNER D2 SYNTHESIS ACCEPTED 2026-10-04  
 **Date:** 2026-10-04  
 **Program:** Part Modeling v1 roadmap v1.6  
 **Architecture authority:** ADR-0014 + ADR-0016  
@@ -348,12 +348,12 @@ The final runtime evidence candidate `e259fef5849bc4707ddcbdda8e75795b8f3fa5b4` 
 
 PM-02P.F changes after that runtime candidate are restricted to `work/**` evidence/synthesis/status synchronization. They do not modify runtime, schema, tests, Viewer behavior or product behavior. This follows the repository's established source-candidate + work-only closure discipline.
 
-Technical evidence is therefore complete and PASS. PM-02P remains ACTIVE only for the Owner D2 review recorded in `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`.
+Technical evidence is complete and PASS. The Owner accepted the D2 synthesis/recommendation on 2026-10-04. PM-02P is closed; production PM-02 remains inactive pending separate acceptance of its Work Contract.
 
-Before production PM-02 can be activated, the Owner must explicitly accept or amend:
+Before production PM-02 can be activated, the Owner must separately accept the exact production Work Contract. The following D2 inputs are already accepted:
 
 - the semantic Edge/Curve branch/provenance rule;
 - the recommended topology/carrier ownership boundaries;
-- authorization to prepare a separate bounded PM-02 production Work Contract.
+- authorization to prepare a separate bounded PM-02 production Work Contract candidate.
 
 Production PM-02 remains inactive during this review. No Datum / Projection / Revolve / Fillet / Chamfer implementation is activated by PM-02P synthesis.
