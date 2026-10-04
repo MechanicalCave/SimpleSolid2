@@ -287,6 +287,18 @@ private:
         std::optional<part::ProfileId> primary_profile;
     };
 
+    struct BodyTopologyBinding final {
+        viewer::BodyTopologyPresentationKind kind{
+            viewer::BodyTopologyPresentationKind::face};
+        std::uint64_t runtime_token_value{};
+        viewer::BodyPresentationGeneration generation;
+
+        [[nodiscard]] bool valid() const noexcept {
+            return runtime_token_value != 0U &&
+                   generation.valid();
+        }
+    };
+
     [[nodiscard]] static viewer::PresentationToken tokenFor(
         core::BuiltinReferenceRole role) noexcept;
 
@@ -299,8 +311,8 @@ private:
     [[nodiscard]] viewer::ReferenceScene
     buildReferenceScene() const;
 
-    [[nodiscard]] std::optional<viewer::SolidScene>
-    buildSolidScene();
+    [[nodiscard]] std::optional<viewer::BodyScene>
+    buildBodyScene();
 
     [[nodiscard]] std::optional<viewer::SketchScene>
     buildSketchScene();
@@ -340,9 +352,16 @@ private:
     kernel::ISolidModelingKernel*
         solid_modeling_kernel_{};
     std::optional<core::DocumentRevision>
-        solid_scene_revision_;
-    std::optional<viewer::SolidScene>
-        solid_scene_cache_;
+        body_scene_revision_;
+    std::optional<viewer::BodyScene>
+        body_scene_cache_;
+    std::optional<part::BodyStageTopologyCatalog>
+        body_topology_catalog_cache_;
+    std::unordered_map<
+        std::uint64_t,
+        BodyTopologyBinding>
+        body_topology_bindings_;
+    std::uint64_t next_body_scene_generation_{1U};
     std::optional<sketch::SketchId>
         sketch_edit_id_;
     viewer::PrimaryPointerRouting
