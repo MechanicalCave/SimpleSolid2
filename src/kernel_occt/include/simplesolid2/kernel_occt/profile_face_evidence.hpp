@@ -65,6 +65,16 @@ buildVertexDeletionGenerationEvidence() noexcept;
 [[nodiscard]] kernel::VertexSamePointReplacementEvidence
 buildVertexSamePointReplacementEvidence() noexcept;
 
+[[nodiscard]] kernel::MultiStageTopologyAccountingEvidence
+buildMultiStageTopologyAccountingEvidence() noexcept;
+
+[[nodiscard]] kernel::GeometrySimilarityDecoyEvidence
+buildGeometrySimilarityDecoyEvidence() noexcept;
+
+[[nodiscard]] kernel::ProspectiveSketchSupportEvidence
+buildProspectiveSketchSupportEvidence() noexcept;
+
+
 [[nodiscard]] kernel::FullRevolveEvidence
 buildProfileFullRevolveEvidence(
     const kernel::PlanarProfileInput& input,
