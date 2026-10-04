@@ -119,12 +119,30 @@ struct RuntimeSurfaceToken final {
         const RuntimeSurfaceToken&) = default;
 };
 
+struct RuntimeCurveToken final {
+    std::uint64_t value{};
+
+    [[nodiscard]] constexpr bool valid() const noexcept {
+        return value != 0U;
+    }
+
+    friend bool operator==(
+        const RuntimeCurveToken&,
+        const RuntimeCurveToken&) = default;
+};
+
 enum class SurfaceKind {
     plane,
     cylinder,
     cone,
     sphere,
     torus,
+    other,
+};
+
+enum class CurveKind {
+    line,
+    circle,
     other,
 };
 
@@ -247,6 +265,70 @@ struct InheritedSurfaceLineage final {
         const InheritedSurfaceLineage&) = default;
 };
 
+struct CurrentEdgeSemantics final {
+    RuntimeEdgeToken token;
+    CurveKind provider_curve_kind{
+        CurveKind::other};
+    std::vector<RuntimeSurfaceToken>
+        adjacent_surfaces;
+    bool periodic_seam{false};
+
+    friend bool operator==(
+        const CurrentEdgeSemantics&,
+        const CurrentEdgeSemantics&) = default;
+};
+
+struct InheritedCurveLineage final {
+    RuntimeCurveToken token;
+    ReferenceStatus curve_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus strict_edge_status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_edge_count{};
+    CurveKind curve_kind{CurveKind::other};
+    std::vector<RuntimeSurfaceToken>
+        adjacent_surfaces;
+    std::vector<RuntimeEdgeToken>
+        current_edges;
+
+    friend bool operator==(
+        const InheritedCurveLineage&,
+        const InheritedCurveLineage&) = default;
+};
+
+struct NewCurveLineage final {
+    ReferenceStatus curve_status{
+        ReferenceStatus::unsupported};
+    ReferenceStatus strict_edge_status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_edge_count{};
+    CurveKind curve_kind{CurveKind::other};
+    std::vector<RuntimeSurfaceToken>
+        adjacent_surfaces;
+    std::optional<RuntimeCurveToken>
+        resolved_token;
+    std::vector<RuntimeEdgeToken>
+        current_edges;
+
+    friend bool operator==(
+        const NewCurveLineage&,
+        const NewCurveLineage&) = default;
+};
+
+struct CurrentVertexSemantics final {
+    RuntimeVertexToken token;
+    std::vector<RuntimeSurfaceToken>
+        adjacent_surfaces;
+    std::vector<RuntimeEdgeToken>
+        incident_edges;
+    Point3 provider_point;
+    bool periodic_representation{false};
+
+    friend bool operator==(
+        const CurrentVertexSemantics&,
+        const CurrentVertexSemantics&) = default;
+};
+
 struct SolidModelingResult final {
     SolidModelingStatus status{
         SolidModelingStatus::provider_failure};
@@ -277,6 +359,22 @@ struct SolidModelingResult final {
         inherited_surfaces;
     std::vector<NewSurfaceLineage>
         new_surfaces;
+
+    // PM-02C semantic Curve lineage is distinct from strict bounded Edge
+    // realization. An inherited Curve may remain Resolved while one prior
+    // Edge splits into several current Edge fragments.
+    std::vector<InheritedCurveLineage>
+        inherited_curves;
+    std::vector<NewCurveLineage>
+        new_curves;
+
+    // Current-stage semantic diagnostics for every provider Edge/Vertex.
+    // These are runtime-only evidence used by Part to build provider-neutral
+    // Curve/Point catalog records. They are never serialized.
+    std::vector<CurrentEdgeSemantics>
+        edge_semantics;
+    std::vector<CurrentVertexSemantics>
+        vertex_semantics;
 
     [[nodiscard]] bool ok() const noexcept {
         return status == SolidModelingStatus::ok &&
