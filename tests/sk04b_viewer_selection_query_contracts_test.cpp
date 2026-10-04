@@ -191,5 +191,40 @@ int main() {
         ViewStyle::shaded_with_edges !=
         ViewStyle::shaded_with_hidden_edges);
 
+    BodyTopologyOverlayScene empty_overlay;
+    CHECK(empty_overlay.valid());
+    CHECK(empty_overlay.empty());
+
+    BodyTopologyOverlayScene contribution_overlay;
+    contribution_overlay.generation =
+        BodyPresentationGeneration{19U};
+    contribution_overlay.groups.push_back(
+        BodyTopologyOverlayGroup{
+            BodyTopologyOverlayRole::
+                feature_contribution_selected,
+            {
+                PresentationToken{200U},
+                PresentationToken{201U},
+            }});
+    CHECK(contribution_overlay.valid());
+    CHECK(!contribution_overlay.empty());
+
+    auto no_generation = contribution_overlay;
+    no_generation.generation = {};
+    CHECK(!no_generation.valid());
+
+    auto duplicate_role = contribution_overlay;
+    duplicate_role.groups.push_back(
+        BodyTopologyOverlayGroup{
+            BodyTopologyOverlayRole::
+                feature_contribution_selected,
+            {PresentationToken{202U}}});
+    CHECK(!duplicate_role.valid());
+
+    auto duplicate_token = contribution_overlay;
+    duplicate_token.groups.front().tokens.push_back(
+        PresentationToken{200U});
+    CHECK(!duplicate_token.valid());
+
     return EXIT_SUCCESS;
 }
