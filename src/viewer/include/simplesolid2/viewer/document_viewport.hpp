@@ -23,6 +23,14 @@ using BodyTopologySelectionIntentHandler =
         const BodyTopologyPickQueryResult&,
         SelectionIntentMode)>;
 
+using BodyTopologyPreselectionIntentHandler =
+    std::function<void(
+        const BodyTopologyPickQueryResult&,
+        ViewportPoint2)>;
+
+using BodyTopologyCycleIntentHandler =
+    std::function<void(bool reverse)>;
+
 class IDocumentViewport {
 public:
     virtual ~IDocumentViewport() = default;
@@ -102,6 +110,21 @@ public:
     virtual void setBodyTopologySelectionIntentHandler(
         BodyTopologySelectionIntentHandler handler) {
         (void)handler;
+    }
+
+    virtual void setBodyTopologyPreselectionIntentHandler(
+        BodyTopologyPreselectionIntentHandler handler) {
+        (void)handler;
+    }
+
+    virtual void setBodyTopologyCycleIntentHandler(
+        BodyTopologyCycleIntentHandler handler) {
+        (void)handler;
+    }
+
+    virtual bool setBodyTopologyPreselection(
+        std::optional<PresentationToken> token) {
+        return !token.has_value();
     }
 
     // Transitional PM-01 compatibility only. Production PM-02 committed Body
