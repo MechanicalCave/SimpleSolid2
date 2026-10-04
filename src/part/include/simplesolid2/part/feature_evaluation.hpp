@@ -170,6 +170,10 @@ struct FeatureEvaluation final {
         kernel_status;
     std::vector<FeatureFaceResolution>
         produced_faces;
+    // Same-revision runtime result for this exact successful Feature stage.
+    // Retained only so stage-scoped topology tokens remain resolvable during
+    // the current evaluation; never serialized or treated as final Body truth.
+    kernel::RuntimeSolidHandle result_solid;
     // Complete runtime-only topology for this successful Feature stage.
     // Empty for Failed/Blocked/Suppressed Features. Never serialized.
     std::optional<BodyStageTopologyCatalog>
