@@ -1412,6 +1412,10 @@ worldPoint(
     };
 }
 
+void populateShapeEvidence(
+    kernel::ShapeEvidence& evidence,
+    const TopoDS_Shape& shape);
+
 [[nodiscard]] kernel::StageTopologyAccountingEvidence
 stageTopologyAccounting(
     kernel::EvidenceStageOperation operation,
