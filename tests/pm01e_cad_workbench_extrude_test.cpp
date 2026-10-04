@@ -169,6 +169,12 @@ public:
         const viewer::ReferenceScene& scene) override {
         return scene.valid();
     }
+    bool setBodyScene(
+        const viewer::BodyScene& scene) override {
+        if (!scene.valid()) return false;
+        body_scene = scene;
+        return true;
+    }
     bool setSolidScene(
         const viewer::SolidScene& scene) override {
         if (!scene.valid()) return false;
@@ -235,6 +241,7 @@ public:
         viewer::ViewportCursorMode) override {}
 
     viewer::CameraState camera_;
+    viewer::BodyScene body_scene;
     viewer::SolidScene solid_scene;
     viewer::SolidPreviewScene solid_preview;
     viewer::ProfileScene profile_scene;
