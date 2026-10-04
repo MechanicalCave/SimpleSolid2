@@ -15,4 +15,14 @@ makeKernelProfileInput(
     const PartDocument& document,
     ProfileId profile_id);
 
+// Materializes the same authored local Profile through an already-resolved
+// current Sketch support frame. The caller owns stage/reference resolution;
+// this function never searches topology, uses stale frame state, or persists
+// the derived world placement.
+[[nodiscard]] std::optional<kernel::PlanarProfileInput>
+makeKernelProfileInputAtResolvedFrame(
+    const PartDocument& document,
+    ProfileId profile_id,
+    const SketchPlacement& resolved_frame);
+
 } // namespace simplesolid2::part
