@@ -91,6 +91,14 @@ public:
         return true;
     }
 
+    bool setBodyScene(
+        const viewer::BodyScene& scene) override {
+        ++body_scene_calls_;
+        if (!scene.valid()) return false;
+        body_scene_ = scene;
+        return true;
+    }
+
     bool setSolidScene(
         const viewer::SolidScene& scene) override {
         ++solid_scene_calls_;
@@ -184,11 +192,13 @@ public:
 
     viewer::CameraState camera_;
     viewer::ReferenceScene reference_scene_;
+    viewer::BodyScene body_scene_;
     viewer::SolidScene solid_scene_;
     viewer::SolidPreviewScene
         solid_preview_scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene preview_scene_;
+    std::size_t body_scene_calls_{};
     std::size_t solid_scene_calls_{};
     std::size_t solid_preview_scene_calls_{};
     std::size_t sketch_scene_calls_{};
@@ -792,7 +802,7 @@ int main(int argc, char* argv[]) {
         controller.setDocumentSession(
             &solid_session);
         CHECK(
-            viewport.solid_scene_
+            viewport.body_scene_
                 .triangles.size() == 1U);
 
         const auto extrude_calls_after_publish =
@@ -839,7 +849,7 @@ int main(int argc, char* argv[]) {
         solid_kernel.fail_mesh = true;
         controller.refreshPresentation();
         CHECK(
-            viewport.solid_scene_
+            viewport.body_scene_
                 .triangles.empty());
         CHECK(
             controller.presentationDegraded());
@@ -847,7 +857,7 @@ int main(int argc, char* argv[]) {
         solid_kernel.fail_mesh = false;
         controller.refreshPresentation();
         CHECK(
-            viewport.solid_scene_
+            viewport.body_scene_
                 .triangles.size() == 1U);
         CHECK(
             !controller.presentationDegraded());
@@ -861,7 +871,7 @@ int main(int argc, char* argv[]) {
         CHECK(delete_profile.ok());
         controller.refreshPresentation();
         CHECK(
-            viewport.solid_scene_
+            viewport.body_scene_
                 .triangles.empty());
         CHECK(
             !controller.presentationDegraded());
@@ -869,13 +879,13 @@ int main(int argc, char* argv[]) {
         CHECK(solid_session.undo().changed);
         controller.refreshPresentation();
         CHECK(
-            viewport.solid_scene_
+            viewport.body_scene_
                 .triangles.size() == 1U);
 
         controller.setSolidModelingKernel(
             nullptr);
         CHECK(
-            viewport.solid_scene_
+            viewport.body_scene_
                 .triangles.empty());
         controller.clear();
     }
@@ -989,7 +999,7 @@ int main(int argc, char* argv[]) {
         controller.setDocumentSession(
             &solid_session);
         CHECK(
-            viewport.solid_scene_
+            viewport.body_scene_
                 .triangles.size() == 1U);
 
         const auto delete_higher =
@@ -1022,7 +1032,7 @@ int main(int argc, char* argv[]) {
             part::FeatureEvaluationStatus::
                 blocked);
         CHECK(
-            viewport.solid_scene_
+            viewport.body_scene_
                 .triangles.size() == 1U);
 
         const auto delete_lower =
@@ -1047,7 +1057,7 @@ int main(int argc, char* argv[]) {
             first_failed.resolved_prefix_solid ==
             nullptr);
         CHECK(
-            viewport.solid_scene_
+            viewport.body_scene_
                 .triangles.empty());
 
         controller.setSolidModelingKernel(
