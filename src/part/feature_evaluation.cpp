@@ -680,6 +680,87 @@ convertCurrentPointCandidates(
     return result;
 }
 
+[[nodiscard]] std::optional<std::vector<FeatureEdgeResolution>>
+resolveCurrentEdges(
+    FeatureId current_feature,
+    const kernel::SolidModelingResult& kernel_result,
+    const std::vector<FeatureSurfaceResolution>& surfaces,
+    const std::vector<FeatureEdgeResolution>& previous) {
+    const auto candidates =
+        convertCurrentEdgeCandidates(
+            kernel_result,
+            surfaces);
+    if (!candidates) return std::nullopt;
+
+    std::vector<FeatureEdgeAddress> addresses;
+    addresses.reserve(previous.size() + candidates->size());
+    for (const auto& old : previous) {
+        if (!old.address.valid()) return std::nullopt;
+        if (std::find(addresses.begin(), addresses.end(), old.address) ==
+            addresses.end()) {
+            addresses.push_back(old.address);
+        }
+    }
+    for (const auto& candidate : *candidates) {
+        if (std::find(
+                addresses.begin(),
+                addresses.end(),
+                candidate.address) == addresses.end()) {
+            addresses.push_back(candidate.address);
+        }
+    }
+
+    std::vector<FeatureEdgeResolution> result;
+    result.reserve(addresses.size());
+    for (const auto& address : addresses) {
+        FeatureEdgeResolution resolved;
+        resolved.address = address;
+
+        if (const auto* old = findEdgeResolution(previous, address)) {
+            resolved.producer_feature_id = old->producer_feature_id;
+            resolved.curve_kind = old->curve_kind;
+        }
+
+        bool produced_now = false;
+        for (const auto& candidate : *candidates) {
+            if (!(candidate.address == address)) continue;
+            resolved.current_edges.push_back(candidate.token);
+            produced_now =
+                produced_now ||
+                candidate.produced_by_current_operation;
+            if (resolved.curve_kind == kernel::CurveKind::other) {
+                resolved.curve_kind = candidate.curve_kind;
+            } else if (resolved.curve_kind != candidate.curve_kind) {
+                return std::nullopt;
+            }
+        }
+
+        resolved.candidate_count = resolved.current_edges.size();
+        resolved.status =
+            resolved.candidate_count == 0U
+                ? kernel::ReferenceStatus::missing
+                : resolved.candidate_count == 1U
+                    ? kernel::ReferenceStatus::resolved
+                    : kernel::ReferenceStatus::ambiguous;
+
+        if (resolved.curve_kind == kernel::CurveKind::other) {
+            return std::nullopt;
+        }
+
+        if (!resolved.producer_feature_id) {
+            resolved.producer_feature_id =
+                commonSurfaceProducer(address.adjacent_surfaces);
+            if (!resolved.producer_feature_id && produced_now) {
+                resolved.producer_feature_id = current_feature;
+            }
+        }
+
+        if (!resolved.valid()) return std::nullopt;
+        result.push_back(std::move(resolved));
+    }
+    return result;
+}
+
 template <typename Token>
 [[nodiscard]] bool uniqueValidTokens(
     const std::vector<Token>& tokens) noexcept {
