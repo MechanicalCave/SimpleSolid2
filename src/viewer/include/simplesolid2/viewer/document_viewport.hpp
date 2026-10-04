@@ -67,6 +67,27 @@ public:
                scene.empty();
     }
 
+    virtual bool setBodyScene(
+        const BodyScene& scene) {
+        return scene.valid() &&
+               scene.empty();
+    }
+
+    [[nodiscard]] virtual ViewStyle
+    viewStyle() const noexcept {
+        return ViewStyle::shaded;
+    }
+
+    virtual bool setViewStyle(
+        ViewStyle style) {
+        return style == ViewStyle::shaded;
+    }
+
+    virtual void setViewStyleActionHandler(
+        ViewStyleActionHandler handler) {
+        (void)handler;
+    }
+
     virtual bool setSolidPreviewScene(
         const SolidPreviewScene& scene) {
         return scene.valid() &&
