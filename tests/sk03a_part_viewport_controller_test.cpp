@@ -253,7 +253,35 @@ public:
 };
 
 class FakeSolid final
-    : public kernel::RuntimeSolid {};
+    : public kernel::RuntimeSolid {
+public:
+    struct Edge final {
+        kernel::RuntimeEdgeToken token;
+        std::vector<kernel::RuntimeSurfaceToken>
+            surfaces;
+        kernel::Point3 start;
+        kernel::Point3 end;
+    };
+
+    struct Vertex final {
+        kernel::RuntimeVertexToken token;
+        std::vector<kernel::RuntimeSurfaceToken>
+            surfaces;
+        std::vector<kernel::RuntimeEdgeToken>
+            incident_edges;
+        kernel::Point3 point;
+    };
+
+    std::vector<kernel::RuntimeFaceToken> faces;
+    std::vector<kernel::RuntimeSurfaceToken>
+        surfaces;
+    std::vector<Edge> edges;
+    std::vector<Vertex> vertices;
+    std::uint64_t next_face{1U};
+    std::uint64_t next_surface{1U};
+    std::uint64_t next_edge{1U};
+    std::uint64_t next_vertex{1U};
+};
 
 class FakeSolidKernel final
     : public kernel::ISolidModelingKernel {
@@ -261,6 +289,7 @@ public:
     bool fail_mesh{};
     std::size_t extrude_calls{};
     std::size_t mesh_calls{};
+    std::size_t body_presentation_calls{};
 
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
@@ -282,12 +311,347 @@ public:
             return result;
         }
 
+        auto runtime =
+            std::make_shared<FakeSolid>();
+        std::map<std::uint64_t,
+                 kernel::RuntimeEdgeToken>
+            edge_descendants;
+
+        if (upstream) {
+            const auto* previous =
+                dynamic_cast<const FakeSolid*>(
+                    upstream.get());
+            if (previous == nullptr ||
+                previous->faces.size() !=
+                    previous->surfaces.size()) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_mismatch;
+                return result;
+            }
+
+            runtime->next_face =
+                previous->next_face;
+            runtime->next_surface =
+                previous->next_surface;
+            runtime->next_edge =
+                previous->next_edge;
+            runtime->next_vertex =
+                previous->next_vertex;
+
+            for (std::size_t index = 0U;
+                 index < previous->faces.size();
+                 ++index) {
+                const auto face =
+                    previous->faces[index];
+                const auto surface =
+                    previous->surfaces[index];
+                runtime->faces.push_back(face);
+                runtime->surfaces.push_back(surface);
+                result.inherited_faces.push_back(
+                    {
+                        face,
+                        kernel::ReferenceStatus::
+                            resolved,
+                        1U,
+                    });
+                result.inherited_surfaces.push_back(
+                    {
+                        surface,
+                        kernel::ReferenceStatus::
+                            resolved,
+                        kernel::ReferenceStatus::
+                            resolved,
+                        1U,
+                        kernel::SurfaceKind::plane,
+                        kernel::Frame3{},
+                        {face},
+                    });
+            }
+
+            for (const auto& old_edge :
+                 previous->edges) {
+                const kernel::RuntimeEdgeToken
+                    edge{
+                        runtime->next_edge++};
+                edge_descendants.emplace(
+                    old_edge.token.value,
+                    edge);
+                runtime->edges.push_back(
+                    {
+                        edge,
+                        old_edge.surfaces,
+                        old_edge.start,
+                        old_edge.end,
+                    });
+                result.inherited_edge_realizations
+                    .push_back(
+                        {
+                            old_edge.token,
+                            kernel::ReferenceStatus::
+                                resolved,
+                            1U,
+                            {edge},
+                        });
+            }
+
+            for (const auto& old_vertex :
+                 previous->vertices) {
+                const kernel::RuntimeVertexToken
+                    vertex{
+                        runtime->next_vertex++};
+                std::vector<kernel::RuntimeEdgeToken>
+                    incident;
+                for (const auto old_edge :
+                     old_vertex.incident_edges) {
+                    const auto found =
+                        edge_descendants.find(
+                            old_edge.value);
+                    if (found !=
+                        edge_descendants.end()) {
+                        incident.push_back(
+                            found->second);
+                    }
+                }
+                runtime->vertices.push_back(
+                    {
+                        vertex,
+                        old_vertex.surfaces,
+                        std::move(incident),
+                        old_vertex.point,
+                    });
+                result.inherited_vertex_realizations
+                    .push_back(
+                        {
+                            old_vertex.token,
+                            kernel::ReferenceStatus::
+                                resolved,
+                            1U,
+                            {vertex},
+                        });
+            }
+        }
+
+        const auto publish_surface =
+            [&result, &runtime](
+                kernel::ExtrudeFaceRole role) {
+                const kernel::RuntimeFaceToken
+                    face{runtime->next_face++};
+                const kernel::RuntimeSurfaceToken
+                    surface{
+                        runtime->next_surface++};
+                runtime->faces.push_back(face);
+                runtime->surfaces.push_back(surface);
+                result.new_faces.push_back(
+                    {
+                        role,
+                        kernel::ReferenceStatus::
+                            resolved,
+                        1U,
+                        face,
+                    });
+                result.new_surfaces.push_back(
+                    {
+                        std::move(role),
+                        kernel::ReferenceStatus::
+                            resolved,
+                        kernel::ReferenceStatus::
+                            resolved,
+                        1U,
+                        kernel::SurfaceKind::plane,
+                        kernel::Frame3{},
+                        surface,
+                        {face},
+                    });
+                return surface;
+            };
+
+        std::vector<kernel::RuntimeSurfaceToken>
+            created_surfaces;
+        created_surfaces.reserve(6U);
+        created_surfaces.push_back(
+            publish_surface(
+                {
+                    kernel::ExtrudeGeneratedFaceRoleKind::cap,
+                    input.start_cap_role,
+                    std::nullopt,
+                }));
+        created_surfaces.push_back(
+            publish_surface(
+                {
+                    kernel::ExtrudeGeneratedFaceRoleKind::cap,
+                    input.end_cap_role,
+                    std::nullopt,
+                }));
+
+        for (const auto& use :
+             input.profile.outer.boundary) {
+            created_surfaces.push_back(
+                publish_surface(
+                    {
+                        kernel::ExtrudeGeneratedFaceRoleKind::side,
+                        std::nullopt,
+                        use.provenance,
+                    }));
+        }
+        if (created_surfaces.size() != 6U) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    provider_failure;
+            return result;
+        }
+
+        const auto s0 = created_surfaces[0];
+        const auto s1 = created_surfaces[1];
+        const auto s2 = created_surfaces[2];
+        const auto s3 = created_surfaces[3];
+        const auto s4 = created_surfaces[4];
+        const auto s5 = created_surfaces[5];
+
+        const auto add_edge =
+            [&runtime](
+                kernel::RuntimeSurfaceToken first,
+                kernel::RuntimeSurfaceToken second,
+                kernel::Point3 start,
+                kernel::Point3 end) {
+                const kernel::RuntimeEdgeToken
+                    token{runtime->next_edge++};
+                runtime->edges.push_back(
+                    {
+                        token,
+                        {first, second},
+                        start,
+                        end,
+                    });
+                return token;
+            };
+
+        const double z0 =
+            input.start_offset_mm;
+        const double z1 =
+            input.end_offset_mm;
+        const kernel::Point3 p000{0.0, 0.0, z0};
+        const kernel::Point3 p100{1.0, 0.0, z0};
+        const kernel::Point3 p110{1.0, 1.0, z0};
+        const kernel::Point3 p010{0.0, 1.0, z0};
+        const kernel::Point3 p001{0.0, 0.0, z1};
+        const kernel::Point3 p101{1.0, 0.0, z1};
+        const kernel::Point3 p111{1.0, 1.0, z1};
+        const kernel::Point3 p011{0.0, 1.0, z1};
+
+        const std::vector<kernel::RuntimeEdgeToken>
+            new_edges{
+                add_edge(s0, s2, p000, p100),
+                add_edge(s0, s3, p100, p110),
+                add_edge(s0, s4, p110, p010),
+                add_edge(s0, s5, p010, p000),
+                add_edge(s1, s2, p001, p101),
+                add_edge(s1, s3, p101, p111),
+                add_edge(s1, s4, p111, p011),
+                add_edge(s1, s5, p011, p001),
+                add_edge(s2, s3, p100, p101),
+                add_edge(s3, s4, p110, p111),
+                add_edge(s4, s5, p010, p011),
+                add_edge(s5, s2, p000, p001),
+            };
+
+        const auto add_vertex =
+            [&runtime](
+                std::vector<kernel::RuntimeSurfaceToken>
+                    surfaces,
+                std::vector<kernel::RuntimeEdgeToken>
+                    edges,
+                kernel::Point3 point) {
+                const kernel::RuntimeVertexToken
+                    token{runtime->next_vertex++};
+                runtime->vertices.push_back(
+                    {
+                        token,
+                        std::move(surfaces),
+                        std::move(edges),
+                        point,
+                    });
+            };
+
+        add_vertex(
+            {s0, s2, s5},
+            {new_edges[0], new_edges[3], new_edges[11]},
+            p000);
+        add_vertex(
+            {s0, s2, s3},
+            {new_edges[0], new_edges[1], new_edges[8]},
+            p100);
+        add_vertex(
+            {s0, s3, s4},
+            {new_edges[1], new_edges[2], new_edges[9]},
+            p110);
+        add_vertex(
+            {s0, s4, s5},
+            {new_edges[2], new_edges[3], new_edges[10]},
+            p010);
+        add_vertex(
+            {s1, s2, s5},
+            {new_edges[4], new_edges[7], new_edges[11]},
+            p001);
+        add_vertex(
+            {s1, s2, s3},
+            {new_edges[4], new_edges[5], new_edges[8]},
+            p101);
+        add_vertex(
+            {s1, s3, s4},
+            {new_edges[5], new_edges[6], new_edges[9]},
+            p111);
+        add_vertex(
+            {s1, s4, s5},
+            {new_edges[6], new_edges[7], new_edges[10]},
+            p011);
+
+        result.current_faces = runtime->faces;
+        result.current_edges.reserve(
+            runtime->edges.size());
+        result.current_edge_semantics.reserve(
+            runtime->edges.size());
+        for (const auto& edge :
+             runtime->edges) {
+            result.current_edges.push_back(
+                edge.token);
+            result.current_edge_semantics.push_back(
+                {
+                    edge.token,
+                    kernel::CurveKind::line,
+                    false,
+                    edge.surfaces,
+                });
+        }
+
+        result.current_vertices.reserve(
+            runtime->vertices.size());
+        result.current_vertex_semantics.reserve(
+            runtime->vertices.size());
+        for (const auto& vertex :
+             runtime->vertices) {
+            result.current_vertices.push_back(
+                vertex.token);
+            result.current_vertex_semantics.push_back(
+                {
+                    vertex.token,
+                    vertex.surfaces,
+                    vertex.incident_edges,
+                    vertex.point,
+                });
+        }
+
         result.status =
             kernel::SolidModelingStatus::ok;
-        result.solid =
-            std::make_shared<FakeSolid>();
+        result.solid = runtime;
         result.brep_valid = true;
         result.solid_count = 1U;
+        result.face_count =
+            result.current_faces.size();
+        result.edge_count =
+            result.current_edges.size();
+        result.vertex_count =
+            result.current_vertices.size();
         return result;
     }
 
@@ -301,17 +665,15 @@ public:
                     provider_failure,
                 {}};
         }
-        if (!solid) {
-            return {
-                kernel::SolidPresentationStatus::
-                    invalid_input,
-                {}};
-        }
-        if (dynamic_cast<const FakeSolid*>(
+        if (!solid ||
+            dynamic_cast<const FakeSolid*>(
                 solid.get()) == nullptr) {
             return {
-                kernel::SolidPresentationStatus::
-                    provider_mismatch,
+                solid
+                    ? kernel::SolidPresentationStatus::
+                          provider_mismatch
+                    : kernel::SolidPresentationStatus::
+                          invalid_input,
                 {}};
         }
 
@@ -327,6 +689,92 @@ public:
         return {
             kernel::SolidPresentationStatus::ok,
             std::move(mesh)};
+    }
+
+    kernel::BodyPresentationResult
+    bodyPresentation(
+        kernel::RuntimeSolidHandle solid) noexcept override {
+        ++mesh_calls;
+        ++body_presentation_calls;
+
+        kernel::BodyPresentationResult result;
+        if (fail_mesh) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+            return result;
+        }
+
+        const auto* runtime =
+            solid
+                ? dynamic_cast<
+                      const FakeSolid*>(solid.get())
+                : nullptr;
+        if (runtime == nullptr) {
+            result.status =
+                solid
+                    ? kernel::SolidPresentationStatus::
+                          provider_mismatch
+                    : kernel::SolidPresentationStatus::
+                          invalid_input;
+            return result;
+        }
+
+        result.faces.reserve(
+            runtime->faces.size());
+        for (std::size_t index = 0U;
+             index < runtime->faces.size();
+             ++index) {
+            const double x =
+                static_cast<double>(index) * 2.0;
+            const auto first =
+                result.mesh.triangles.size();
+            result.mesh.triangles.push_back(
+                {
+                    {x, 0.0, 0.0},
+                    {x + 1.0, 0.0, 0.0},
+                    {x, 1.0, 0.0},
+                    {0.0, 0.0, 1.0},
+                    {0.0, 0.0, 1.0},
+                    {0.0, 0.0, 1.0}});
+            result.faces.push_back(
+                {
+                    runtime->faces[index],
+                    first,
+                    1U,
+                });
+        }
+
+        result.edges.reserve(
+            runtime->edges.size());
+        for (const auto& edge :
+             runtime->edges) {
+            result.edges.push_back(
+                {
+                    edge.token,
+                    {edge.start, edge.end},
+                });
+        }
+
+        result.vertices.reserve(
+            runtime->vertices.size());
+        for (const auto& vertex :
+             runtime->vertices) {
+            result.vertices.push_back(
+                {
+                    vertex.token,
+                    vertex.point,
+                });
+        }
+
+        result.status =
+            kernel::SolidPresentationStatus::ok;
+        if (!result.ok()) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_failure;
+        }
+        return result;
     }
 };
 
