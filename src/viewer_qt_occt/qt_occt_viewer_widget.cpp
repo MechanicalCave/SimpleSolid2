@@ -3573,9 +3573,25 @@ public:
     }
 
     void clearBodyTopologyPreselectionIntent() {
-        static_cast<void>(
-            setBodyTopologyPreselection(
-                std::nullopt));
+        // HUD/navigation capture must clear the provider overlay without
+        // forcing a second V3d_View::Redraw() before the semantic clear
+        // intent is delivered. A redraw here can synchronously/reentrantly
+        // generate another mouse-move on the native window and republish a
+        // Body query from an unrelated OS cursor position. Clear the runtime
+        // token/objects first and use the already-synchronous viewer update;
+        // the controller callback then observes nullopt and its mirrored
+        // setBodyTopologyPreselection(nullopt) is an exact no-op.
+        const bool changed =
+            body_preselection_token_.has_value() ||
+            !body_preselection_objects_.empty();
+        body_preselection_token_.reset();
+        if (changed) {
+            clearBodyPreselectionObjects();
+            if (!context_.IsNull()) {
+                updateCurrentViewer();
+            }
+        }
+
         if (body_topology_preselection_intent_handler_) {
             body_topology_preselection_intent_handler_(
                 viewer::BodyTopologyPickQueryResult{},
