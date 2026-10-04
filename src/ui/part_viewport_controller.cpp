@@ -2890,7 +2890,8 @@ PartViewportController::buildBodyScene() {
     }
 
     const auto fail =
-        [this]() -> std::optional<viewer::BodyScene> {
+        [this, &clear_stale_body_selection]()
+            -> std::optional<viewer::BodyScene> {
             body_scene_revision_.reset();
             body_scene_cache_.reset();
             body_topology_catalog_cache_.reset();
