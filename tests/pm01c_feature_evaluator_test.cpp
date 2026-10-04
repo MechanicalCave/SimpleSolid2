@@ -31,7 +31,10 @@ class FakeSolid final
 public:
     std::vector<kernel::RuntimeFaceToken>
         tokens;
+    std::vector<kernel::RuntimeSurfaceToken>
+        surface_tokens;
     std::uint64_t next_token{1U};
+    std::uint64_t next_surface_token{1U};
 };
 
 class FakeKernel final
@@ -106,16 +109,38 @@ public:
             }
             runtime->tokens =
                 existing->tokens;
+            runtime->surface_tokens =
+                existing->surface_tokens;
             runtime->next_token =
                 existing->next_token;
-            for (const auto token :
-                 existing->tokens) {
+            runtime->next_surface_token =
+                existing->next_surface_token;
+            for (std::size_t index = 0U;
+                 index < existing->tokens.size();
+                 ++index) {
+                const auto face_token =
+                    existing->tokens[index];
                 result.inherited_faces.push_back(
                     {
-                        token,
+                        face_token,
                         kernel::ReferenceStatus::
                             resolved,
                         1U,
+                    });
+                CHECK(
+                    index <
+                    existing->surface_tokens.size());
+                result.inherited_surfaces.push_back(
+                    {
+                        existing->surface_tokens[index],
+                        kernel::ReferenceStatus::
+                            resolved,
+                        kernel::ReferenceStatus::
+                            resolved,
+                        1U,
+                        kernel::SurfaceKind::plane,
+                        kernel::Frame3{},
+                        {face_token},
                     });
             }
         }
@@ -123,16 +148,34 @@ public:
         auto publish =
             [&result, &runtime](
                 kernel::ExtrudeFaceRole role) {
-                const kernel::RuntimeFaceToken token{
+                const kernel::RuntimeFaceToken face_token{
                     runtime->next_token++};
-                runtime->tokens.push_back(token);
+                const kernel::RuntimeSurfaceToken
+                    surface_token{
+                        runtime->next_surface_token++};
+                runtime->tokens.push_back(face_token);
+                runtime->surface_tokens.push_back(
+                    surface_token);
                 result.new_faces.push_back(
+                    {
+                        role,
+                        kernel::ReferenceStatus::
+                            resolved,
+                        1U,
+                        face_token,
+                    });
+                result.new_surfaces.push_back(
                     {
                         std::move(role),
                         kernel::ReferenceStatus::
                             resolved,
+                        kernel::ReferenceStatus::
+                            resolved,
                         1U,
-                        token,
+                        kernel::SurfaceKind::plane,
+                        kernel::Frame3{},
+                        surface_token,
+                        {face_token},
                     });
             };
 
@@ -371,6 +414,8 @@ int main() {
         valid_eval.current_topology->stage.feature_id ==
         std::optional<part::FeatureId>{id2});
     CHECK(valid_eval.current_topology->faces.size() == 12U);
+    CHECK(valid_eval.current_topology->surfaces.size() == 12U);
+    CHECK(valid_eval.current_surface_references.size() == 12U);
     CHECK(valid_eval.current_topology->edges.empty());
     CHECK(valid_eval.current_topology->vertices.empty());
     CHECK(valid_eval.features[0].result_solid != nullptr);
@@ -390,6 +435,22 @@ int main() {
             part::TopologyAccountingClass::
                 referenceable);
         CHECK(face.semantic_address.has_value());
+    }
+    for (const auto& surface :
+         valid_eval.current_surface_references) {
+        CHECK(surface.valid());
+        CHECK(
+            surface.status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(
+            surface.strict_face_status ==
+            kernel::ReferenceStatus::resolved);
+        CHECK(surface.runtime_token.has_value());
+        CHECK(surface.current_faces.size() == 1U);
+        CHECK(
+            surface.surface_kind ==
+            kernel::SurfaceKind::plane);
+        CHECK(surface.canonical_frame.has_value());
     }
     for (const auto& reference :
          valid_eval.current_face_references) {
