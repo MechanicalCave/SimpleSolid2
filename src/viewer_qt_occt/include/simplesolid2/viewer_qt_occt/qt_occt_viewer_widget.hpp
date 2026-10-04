@@ -105,6 +105,9 @@ public:
     [[nodiscard]] bool setBodyTopologyPreselection(
         std::optional<viewer::PresentationToken> token) override;
 
+    [[nodiscard]] bool setBodyTopologyOverlayScene(
+        const viewer::BodyTopologyOverlayScene& scene) override;
+
     [[nodiscard]] bool setSolidScene(
         const viewer::SolidScene& scene) override;
 
