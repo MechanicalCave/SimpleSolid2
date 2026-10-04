@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 namespace simplesolid2::viewer {
@@ -70,6 +71,9 @@ enum class ViewStyle : std::uint8_t {
     shaded_with_edges,
     shaded_with_hidden_edges,
 };
+
+using ViewStyleActionHandler =
+    std::function<void(ViewStyle)>;
 
 struct BodyPresentationGeneration final {
     std::uint64_t value{};
