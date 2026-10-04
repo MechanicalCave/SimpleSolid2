@@ -1580,11 +1580,13 @@ int main(int argc, char* argv[]) {
             last_topology_inspection
                 ->carrier_referenceability ==
             kernel::ReferenceStatus::unsupported);
+        const std::optional<kernel::Point3>
+            expected_provider_point{
+                kernel::Point3{0.0, 0.0, 0.0}};
         CHECK(
             last_topology_inspection
                 ->provider_point ==
-            std::optional<kernel::Point3>{
-                kernel::Point3{0.0, 0.0, 0.0}});
+            expected_provider_point);
         CHECK(
             last_topology_inspection
                 ->sketch_support ==
