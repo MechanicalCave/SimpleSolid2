@@ -612,6 +612,165 @@ descendantFaces(
     return descendants;
 }
 
+[[nodiscard]] bool containsSameEdge(
+    const TopoDS_Shape& shape,
+    const TopoDS_Edge& edge) {
+    for (TopExp_Explorer explorer{
+             shape,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(edge)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void appendUniqueEdge(
+    std::vector<TopoDS_Edge>& edges,
+    const TopoDS_Shape& candidate,
+    const TopoDS_Shape& result) {
+    if (candidate.IsNull()) return;
+
+    auto add = [&edges, &result](
+                   const TopoDS_Edge& edge) {
+        if (!containsSameEdge(result, edge)) {
+            return;
+        }
+        const bool duplicate =
+            std::any_of(
+                edges.begin(),
+                edges.end(),
+                [&edge](
+                    const TopoDS_Edge& existing) {
+                    return existing.IsSame(edge);
+                });
+        if (!duplicate) {
+            edges.push_back(edge);
+        }
+    };
+
+    if (candidate.ShapeType() ==
+        TopAbs_EDGE) {
+        add(TopoDS::Edge(candidate));
+        return;
+    }
+
+    for (TopExp_Explorer explorer{
+             candidate,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        add(TopoDS::Edge(
+            explorer.Current()));
+    }
+}
+
+template <typename Operation>
+[[nodiscard]] std::vector<TopoDS_Edge>
+descendantEdges(
+    Operation& operation,
+    const TopoDS_Edge& source,
+    const TopoDS_Shape& result) {
+    std::vector<TopoDS_Edge> descendants;
+
+    const auto& modified =
+        operation.Modified(source);
+    for (const auto& item : modified) {
+        appendUniqueEdge(
+            descendants,
+            item,
+            result);
+    }
+
+    const auto& generated =
+        operation.Generated(source);
+    for (const auto& item : generated) {
+        appendUniqueEdge(
+            descendants,
+            item,
+            result);
+    }
+
+    if (descendants.empty() &&
+        !operation.IsDeleted(source) &&
+        containsSameEdge(result, source)) {
+        descendants.push_back(source);
+    }
+    return descendants;
+}
+
+[[nodiscard]] bool faceContainsEdge(
+    const TopoDS_Face& face,
+    const TopoDS_Edge& edge) {
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_EDGE};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(edge)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool faceContainsVertex(
+    const TopoDS_Face& face,
+    const TopoDS_Vertex& vertex) {
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_VERTEX};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(vertex)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool edgeContainsVertex(
+    const TopoDS_Edge& edge,
+    const TopoDS_Vertex& vertex) {
+    TopoDS_Vertex first;
+    TopoDS_Vertex second;
+    TopExp::Vertices(
+        edge,
+        first,
+        second);
+    return (!first.IsNull() &&
+            first.IsSame(vertex)) ||
+           (!second.IsNull() &&
+            second.IsSame(vertex));
+}
+
+[[nodiscard]] kernel::CurveKind
+providerCurveKind(
+    const TopoDS_Edge& edge) {
+    BRepAdaptor_Curve curve{edge};
+    switch (curve.GetType()) {
+    case GeomAbs_Line:
+        return kernel::CurveKind::line;
+    case GeomAbs_Circle:
+        return kernel::CurveKind::circle;
+    default:
+        return kernel::CurveKind::other;
+    }
+}
+
+[[nodiscard]] kernel::Point3
+providerPoint(
+    const TopoDS_Vertex& vertex) {
+    const auto point =
+        BRep_Tool::Pnt(vertex);
+    return {
+        point.X(),
+        point.Y(),
+        point.Z()};
+}
+
 [[nodiscard]] std::vector<TopoDS_Face>
 facesFromShape(
     const TopoDS_Shape& shape) {
