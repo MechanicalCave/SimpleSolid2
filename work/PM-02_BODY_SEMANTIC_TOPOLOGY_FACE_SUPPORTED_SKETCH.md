@@ -3,7 +3,7 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-04  
 **Decision class:** D2 production Work Contract — Owner accepted 2026-10-04  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.11  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.12  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Entry gate:** PM-02P Body Semantic Topology Evidence COMPLETED — PASS; Owner accepted PM-02P D2 synthesis/recommendation on 2026-10-04  
 **Evidence authority:** `work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md`, `work/PM-02P_REFERENCE_SURVIVAL_MATRIX.md`, `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`  
@@ -832,7 +832,10 @@ Gate:
 
 ### PM-02D — topology-aware Body presentation, Viewer pick, View Style and semantic inspection
 
-**Checkpoint state:** ACTIVE
+**Checkpoint state:** COMPLETED — PASS  
+**Final runtime candidate:** `c325fcf681afff44ca61abb02fd239495db5d67f` — Windows FULL #1421 PASS  
+**Merged final runtime main:** `9dd893ffa0e9cd1e5287b9590c02b317d543cbd3`  
+**Completion evidence:** `work/PM-02D_BODY_PRESENTATION_VIEWER_PICKING_INSPECTION_COMPLETION.md`
 
 Deliver:
 
@@ -886,6 +889,8 @@ Gate:
 - Feature contribution counts match the same semantic query used for tree highlighting;
 
 ### PM-02E — Sketch support schema v9 + deterministic frame resolver
+
+**Checkpoint state:** ACTIVE
 
 Deliver:
 
