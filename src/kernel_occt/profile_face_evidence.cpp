@@ -1126,6 +1126,229 @@ sharedEdges(
         });
 }
 
+void appendUniqueVertex(
+    std::vector<TopoDS_Vertex>& vertices,
+    const TopoDS_Vertex& candidate) {
+    const bool duplicate =
+        std::any_of(
+            vertices.begin(),
+            vertices.end(),
+            [&candidate](const TopoDS_Vertex& existing) {
+                return existing.IsSame(candidate);
+            });
+    if (!duplicate) {
+        vertices.push_back(candidate);
+    }
+}
+
+[[nodiscard]] std::vector<TopoDS_Vertex>
+uniqueVerticesFromShape(
+    const TopoDS_Shape& shape) {
+    std::vector<TopoDS_Vertex> result;
+    if (shape.IsNull()) {
+        return result;
+    }
+
+    TopTools_IndexedMapOfShape unique;
+    TopExp::MapShapes(
+        shape,
+        TopAbs_VERTEX,
+        unique);
+    result.reserve(
+        static_cast<std::size_t>(
+            unique.Extent()));
+    for (Standard_Integer index = 1;
+         index <= unique.Extent();
+         ++index) {
+        result.push_back(
+            TopoDS::Vertex(
+                unique.FindKey(index)));
+    }
+    return result;
+}
+
+[[nodiscard]] bool faceContainsVertex(
+    const TopoDS_Face& face,
+    const TopoDS_Vertex& vertex) {
+    for (TopExp_Explorer explorer{
+             face,
+             TopAbs_VERTEX};
+         explorer.More();
+         explorer.Next()) {
+        if (explorer.Current().IsSame(vertex)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool edgeContainsVertex(
+    const TopoDS_Edge& edge,
+    const TopoDS_Vertex& vertex) {
+    TopoDS_Vertex first;
+    TopoDS_Vertex second;
+    TopExp::Vertices(
+        edge,
+        first,
+        second);
+    return (!first.IsNull() &&
+            first.IsSame(vertex)) ||
+           (!second.IsNull() &&
+            second.IsSame(vertex));
+}
+
+[[nodiscard]] kernel::Point3
+providerPoint(
+    const TopoDS_Vertex& vertex) {
+    const auto point =
+        BRep_Tool::Pnt(vertex);
+    return {
+        point.X(),
+        point.Y(),
+        point.Z()};
+}
+
+[[nodiscard]] bool sameSurfaceKeySet(
+    const std::vector<kernel::EvidenceSurfaceCarrierKey>& first,
+    const std::vector<kernel::EvidenceSurfaceCarrierKey>& second) {
+    if (first.size() != second.size()) {
+        return false;
+    }
+    return std::all_of(
+        first.begin(),
+        first.end(),
+        [&second](const kernel::EvidenceSurfaceCarrierKey& key) {
+            return std::find(
+                       second.begin(),
+                       second.end(),
+                       key) != second.end();
+        });
+}
+
+[[nodiscard]] kernel::EvidenceVertexSemanticKey
+vertexSemanticKey(
+    const EvidencePrismBuild& prism,
+    const TopoDS_Vertex& vertex) {
+    kernel::EvidenceVertexSemanticKey result;
+    for (const auto& surface :
+         prismSurfaceClaims(prism)) {
+        if (faceContainsVertex(
+                surface.face,
+                vertex)) {
+            appendUniqueSurfaceKey(
+                result.adjacent_surfaces,
+                surface.key);
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] std::vector<TopoDS_Vertex>
+resolveVerticesBySemanticKey(
+    const EvidencePrismBuild& prism,
+    const kernel::EvidenceVertexSemanticKey& key) {
+    std::vector<TopoDS_Vertex> result;
+    for (const auto& vertex :
+         uniqueVerticesFromShape(
+             prism.shape)) {
+        const auto candidate =
+            vertexSemanticKey(
+                prism,
+                vertex);
+        if (sameSurfaceKeySet(
+                candidate.adjacent_surfaces,
+                key.adjacent_surfaces)) {
+            appendUniqueVertex(
+                result,
+                vertex);
+        }
+    }
+    return result;
+}
+
+[[nodiscard]] std::size_t
+incidentEdgeCount(
+    const TopoDS_Shape& shape,
+    const TopoDS_Vertex& vertex) {
+    std::size_t count = 0U;
+    for (const auto& edge :
+         uniqueEdgesFromShape(shape)) {
+        if (edgeContainsVertex(
+                edge,
+                vertex)) {
+            ++count;
+        }
+    }
+    return count;
+}
+
+[[nodiscard]] kernel::EvidenceSurfaceCarrierKey
+capKey(
+    kernel::EvidenceSurfaceCarrierRoleKind role) {
+    return {
+        role,
+        std::nullopt};
+}
+
+[[nodiscard]] kernel::EvidenceSurfaceCarrierKey
+sideKey(
+    std::string source_entity,
+    std::uint32_t use_index) {
+    return {
+        kernel::EvidenceSurfaceCarrierRoleKind::side,
+        kernel::BoundaryUseProvenance{
+            std::move(source_entity),
+            0U,
+            use_index,
+            false}};
+}
+
+[[nodiscard]] kernel::EvidenceVertexSemanticKey
+vertexKey(
+    kernel::EvidenceSurfaceCarrierRoleKind cap_role,
+    kernel::EvidenceSurfaceCarrierKey first_side,
+    kernel::EvidenceSurfaceCarrierKey second_side) {
+    kernel::EvidenceVertexSemanticKey result;
+    result.adjacent_surfaces = {
+        capKey(cap_role),
+        std::move(first_side),
+        std::move(second_side)};
+    return result;
+}
+
+[[nodiscard]] kernel::PlanarProfileInput
+evidenceChamferedRectangleProfile() {
+    kernel::PlanarProfileInput input;
+    input.outer.boundary = {
+        evidenceLineUse(
+            {5.0, 0.0},
+            {40.0, 0.0},
+            "base-bottom",
+            0U),
+        evidenceLineUse(
+            {40.0, 0.0},
+            {40.0, 20.0},
+            "base-right",
+            1U),
+        evidenceLineUse(
+            {40.0, 20.0},
+            {0.0, 20.0},
+            "base-top",
+            2U),
+        evidenceLineUse(
+            {0.0, 20.0},
+            {0.0, 5.0},
+            "base-left",
+            3U),
+        evidenceLineUse(
+            {0.0, 5.0},
+            {5.0, 0.0},
+            "base-chamfer",
+            4U),
+    };
+    return input;
+}
+
 [[nodiscard]] kernel::ReferenceStatus
 surfaceStatusFromSingleCarrierLineage(
     std::size_t descendant_face_count) noexcept {
