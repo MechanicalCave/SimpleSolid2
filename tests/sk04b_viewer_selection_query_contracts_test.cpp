@@ -1,4 +1,5 @@
 #include <simplesolid2/viewer/sketch_selection_query.hpp>
+#include <simplesolid2/viewer/solid_presentation.hpp>
 
 #include <cstdlib>
 #include <iostream>
@@ -125,6 +126,70 @@ int main() {
 
     overlay.current.x = nan;
     CHECK(!overlay.valid());
+
+    BodyTopologyPickFilter all;
+    CHECK(all.any());
+    CHECK(all.allows(
+        BodyTopologyPresentationKind::face));
+    CHECK(all.allows(
+        BodyTopologyPresentationKind::edge));
+    CHECK(all.allows(
+        BodyTopologyPresentationKind::vertex));
+
+    BodyTopologyPickFilter face_only{
+        true,
+        false,
+        false};
+    CHECK(face_only.any());
+    CHECK(face_only.allows(
+        BodyTopologyPresentationKind::face));
+    CHECK(!face_only.allows(
+        BodyTopologyPresentationKind::edge));
+
+    BodyTopologyPickQueryResult failed_body;
+    CHECK(failed_body.valid());
+    CHECK(!failed_body.completed);
+
+    BodyTopologyPickQueryResult empty_body{
+        true,
+        {},
+        {}};
+    CHECK(empty_body.valid());
+
+    BodyTopologyPickQueryResult body_hits{
+        true,
+        BodyPresentationGeneration{17U},
+        {
+            {
+                PresentationToken{100U},
+                BodyTopologyPresentationKind::vertex,
+                1.5,
+                5.0},
+            {
+                PresentationToken{101U},
+                BodyTopologyPresentationKind::edge,
+                0.5,
+                5.5},
+        }};
+    CHECK(body_hits.valid());
+
+    body_hits.candidates.front()
+        .screen_distance = -1.0;
+    CHECK(!body_hits.valid());
+
+    BodyTopologyPickQueryResult
+        impossible_body{
+            false,
+            BodyPresentationGeneration{17U},
+            {}};
+    CHECK(!impossible_body.valid());
+
+    CHECK(
+        ViewStyle::shaded !=
+        ViewStyle::shaded_with_edges);
+    CHECK(
+        ViewStyle::shaded_with_edges !=
+        ViewStyle::shaded_with_hidden_edges);
 
     return EXIT_SUCCESS;
 }
