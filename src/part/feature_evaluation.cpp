@@ -2545,6 +2545,62 @@ PartEvaluation evaluatePart(
             continue;
         }
 
+        const auto* source_sketch =
+            document.findSketch(
+                profile->source_sketch_id);
+        if (source_sketch == nullptr) {
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    blocked;
+            evaluated.diagnostic =
+                FeatureEvaluationDiagnosticCode::
+                    unresolved_profile;
+            chain_broken = true;
+            current_references.clear();
+            result.features.push_back(
+                std::move(evaluated));
+            continue;
+        }
+
+        const BodyStageTopologyCatalog*
+            support_topology = nullptr;
+        if (const auto* body_support =
+                bodyPlanarSurfaceReference(
+                    source_sketch->support)) {
+            support_topology =
+                topologyForStage(
+                    result.features,
+                    body_support->stage);
+        }
+
+        const auto support =
+            resolveSketchSupport(
+                source_sketch->support,
+                support_topology);
+        if (!support.valid() ||
+            support.status !=
+                SketchSupportResolutionStatus::
+                    resolved ||
+            !support.frame) {
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    blocked;
+            evaluated.diagnostic =
+                support.valid()
+                ? diagnosticForSketchSupport(
+                      support.status)
+                : FeatureEvaluationDiagnosticCode::
+                      sketch_support_unsupported;
+            chain_broken = true;
+            // No last-good support frame is retained or admitted here.
+            // The only legal Body support context is the exact successful
+            // upstream stage from this same evaluation pass.
+            current_references.clear();
+            result.features.push_back(
+                std::move(evaluated));
+            continue;
+        }
+
         if (extrude->operation ==
                 ExtrudeOperation::cut &&
             current_solid == nullptr) {
@@ -2561,10 +2617,17 @@ PartEvaluation evaluatePart(
             continue;
         }
 
-        auto input =
-            makeKernelExtrudeInput(
+        auto profile_input =
+            makeKernelProfileInputAtResolvedFrame(
                 document,
-                *extrude);
+                profile->id,
+                *support.frame);
+        auto input =
+            profile_input
+            ? buildKernelExtrudeInput(
+                  *extrude,
+                  std::move(*profile_input))
+            : std::nullopt;
         if (!input) {
             evaluated.status =
                 FeatureEvaluationStatus::
