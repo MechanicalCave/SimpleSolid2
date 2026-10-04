@@ -1,5 +1,8 @@
 #include <simplesolid2/part/part_sketch.hpp>
 
+#include <simplesolid2/part/feature_evaluation.hpp>
+
+#include <algorithm>
 #include <cmath>
 
 namespace simplesolid2::part {
@@ -40,8 +43,16 @@ bool SketchPlacement::valid() const noexcept {
            squaredLength(cross(u_axis, v_axis)) > 1.0e-24;
 }
 
+bool BuiltinOriginPlaneSketchSupport::valid() const noexcept {
+    return isSketchOriginPlane(role);
+}
+
 bool PartSketchSupport::valid() const noexcept {
-    return isSketchOriginPlane(builtin_plane);
+    return std::visit(
+        [](const auto& support) {
+            return support.valid();
+        },
+        value);
 }
 
 bool isSketchOriginPlane(
@@ -58,19 +69,67 @@ partSketchSupportForBuiltinPlane(
         return std::nullopt;
     }
 
-    return PartSketchSupport{role};
+    return PartSketchSupport{
+        BuiltinOriginPlaneSketchSupport{
+            role}};
+}
+
+std::optional<PartSketchSupport>
+partSketchSupportForBodyPlanarSurface(
+    SurfaceReference reference) noexcept {
+    BodyPlanarSurfaceSketchSupport support{
+        std::move(reference)};
+    if (!support.valid()) {
+        return std::nullopt;
+    }
+    return PartSketchSupport{
+        std::move(support)};
+}
+
+std::optional<core::BuiltinReferenceRole>
+builtinOriginPlaneForSketchSupport(
+    const PartSketchSupport& support) noexcept {
+    if (!support.valid()) {
+        return std::nullopt;
+    }
+    const auto* origin =
+        std::get_if<
+            BuiltinOriginPlaneSketchSupport>(
+            &support.value);
+    return origin != nullptr
+        ? std::optional<
+              core::BuiltinReferenceRole>{
+              origin->role}
+        : std::nullopt;
+}
+
+const SurfaceReference*
+bodyPlanarSurfaceReference(
+    const PartSketchSupport& support) noexcept {
+    if (!support.valid()) {
+        return nullptr;
+    }
+    const auto* body =
+        std::get_if<
+            BodyPlanarSurfaceSketchSupport>(
+            &support.value);
+    return body != nullptr
+        ? &body->reference
+        : nullptr;
 }
 
 std::optional<SketchPlacement>
 sketchPlacementForSupport(
     const PartSketchSupport& support) noexcept {
-    if (!support.valid()) {
+    const auto role =
+        builtinOriginPlaneForSketchSupport(
+            support);
+    if (!role) {
         return std::nullopt;
     }
 
     SketchPlacement placement;
-
-    switch (support.builtin_plane) {
+    switch (*role) {
     case core::BuiltinReferenceRole::xy_plane:
         placement.u_axis = {1.0, 0.0, 0.0};
         placement.v_axis = {0.0, 1.0, 0.0};
@@ -91,15 +150,188 @@ sketchPlacementForSupport(
     }
 }
 
-bool sketchPlacementMatchesSupport(
-    const SketchPlacement& placement,
-    const PartSketchSupport& support) noexcept {
-    const auto expected =
-        sketchPlacementForSupport(support);
+bool ResolvedSketchSupport::valid() const noexcept {
+    switch (status) {
+    case SketchSupportResolutionStatus::resolved:
+        return diagnostic ==
+                   SketchSupportResolutionDiagnostic::
+                       none &&
+               frame.has_value() &&
+               frame->valid();
+    case SketchSupportResolutionStatus::missing:
+        return !frame.has_value() &&
+               (diagnostic ==
+                    SketchSupportResolutionDiagnostic::
+                        missing_stage ||
+                diagnostic ==
+                    SketchSupportResolutionDiagnostic::
+                        missing_surface);
+    case SketchSupportResolutionStatus::ambiguous:
+        return !frame.has_value() &&
+               diagnostic ==
+                   SketchSupportResolutionDiagnostic::
+                       ambiguous_surface;
+    case SketchSupportResolutionStatus::unsupported:
+        return !frame.has_value() &&
+               (diagnostic ==
+                    SketchSupportResolutionDiagnostic::
+                        invalid_support ||
+                diagnostic ==
+                    SketchSupportResolutionDiagnostic::
+                        unsupported_non_planar ||
+                diagnostic ==
+                    SketchSupportResolutionDiagnostic::
+                        unsupported_surface);
+    }
+    return false;
+}
 
-    return expected.has_value() &&
-           placement.valid() &&
-           placement == *expected;
+ResolvedSketchSupport
+resolveSketchSupport(
+    const PartSketchSupport& support,
+    const BodyStageTopologyCatalog* topology) noexcept {
+    if (!support.valid()) {
+        return {
+            SketchSupportResolutionStatus::
+                unsupported,
+            SketchSupportResolutionDiagnostic::
+                invalid_support,
+            std::nullopt};
+    }
+
+    if (const auto origin =
+            sketchPlacementForSupport(support)) {
+        return {
+            SketchSupportResolutionStatus::
+                resolved,
+            SketchSupportResolutionDiagnostic::
+                none,
+            *origin};
+    }
+
+    const auto* reference =
+        bodyPlanarSurfaceReference(support);
+    if (reference == nullptr) {
+        return {
+            SketchSupportResolutionStatus::
+                unsupported,
+            SketchSupportResolutionDiagnostic::
+                invalid_support,
+            std::nullopt};
+    }
+
+    if (topology == nullptr ||
+        !topology->complete() ||
+        topology->stage != reference->stage) {
+        return {
+            SketchSupportResolutionStatus::
+                missing,
+            SketchSupportResolutionDiagnostic::
+                missing_stage,
+            std::nullopt};
+    }
+
+    const FeatureSurfaceResolution* found =
+        nullptr;
+    for (const auto& surface :
+         topology->surfaces) {
+        if (surface.address !=
+            reference->surface) {
+            continue;
+        }
+        if (found != nullptr) {
+            return {
+                SketchSupportResolutionStatus::
+                    ambiguous,
+                SketchSupportResolutionDiagnostic::
+                    ambiguous_surface,
+                std::nullopt};
+        }
+        found = &surface;
+    }
+
+    if (found == nullptr) {
+        return {
+            SketchSupportResolutionStatus::
+                missing,
+            SketchSupportResolutionDiagnostic::
+                missing_surface,
+            std::nullopt};
+    }
+
+    switch (found->status) {
+    case kernel::ReferenceStatus::missing:
+        return {
+            SketchSupportResolutionStatus::
+                missing,
+            SketchSupportResolutionDiagnostic::
+                missing_surface,
+            std::nullopt};
+    case kernel::ReferenceStatus::ambiguous:
+        return {
+            SketchSupportResolutionStatus::
+                ambiguous,
+            SketchSupportResolutionDiagnostic::
+                ambiguous_surface,
+            std::nullopt};
+    case kernel::ReferenceStatus::unsupported:
+        return {
+            SketchSupportResolutionStatus::
+                unsupported,
+            SketchSupportResolutionDiagnostic::
+                unsupported_surface,
+            std::nullopt};
+    case kernel::ReferenceStatus::resolved:
+        break;
+    }
+
+    if (found->surface_kind !=
+        kernel::SurfaceKind::plane) {
+        return {
+            SketchSupportResolutionStatus::
+                unsupported,
+            SketchSupportResolutionDiagnostic::
+                unsupported_non_planar,
+            std::nullopt};
+    }
+    if (!found->canonical_frame ||
+        !found->canonical_frame->valid()) {
+        return {
+            SketchSupportResolutionStatus::
+                unsupported,
+            SketchSupportResolutionDiagnostic::
+                unsupported_surface,
+            std::nullopt};
+    }
+
+    SketchPlacement frame;
+    frame.origin = {
+        found->canonical_frame->origin.x,
+        found->canonical_frame->origin.y,
+        found->canonical_frame->origin.z};
+    frame.u_axis = {
+        found->canonical_frame->u_axis.x,
+        found->canonical_frame->u_axis.y,
+        found->canonical_frame->u_axis.z};
+    frame.v_axis = {
+        found->canonical_frame->v_axis.x,
+        found->canonical_frame->v_axis.y,
+        found->canonical_frame->v_axis.z};
+    if (!frame.valid()) {
+        return {
+            SketchSupportResolutionStatus::
+                unsupported,
+            SketchSupportResolutionDiagnostic::
+                unsupported_surface,
+            std::nullopt};
+    }
+
+    return {
+        SketchSupportResolutionStatus::
+            resolved,
+        SketchSupportResolutionDiagnostic::
+            none,
+        frame};
 }
 
 } // namespace simplesolid2::part
