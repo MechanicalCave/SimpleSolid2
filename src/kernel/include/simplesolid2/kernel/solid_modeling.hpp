@@ -128,6 +128,56 @@ enum class SurfaceKind {
     other,
 };
 
+enum class CurveKind {
+    line,
+    circle,
+    other,
+};
+
+enum class EdgeSemanticRoleKind {
+    cap_side,
+    side_side,
+    boolean_intersection,
+    periodic_seam,
+    unsupported,
+};
+
+struct CurrentEdgeSemanticRecord final {
+    RuntimeEdgeToken token;
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_count{};
+    EdgeSemanticRoleKind role{
+        EdgeSemanticRoleKind::unsupported};
+    CurveKind curve_kind{CurveKind::other};
+    std::vector<RuntimeSurfaceToken>
+        adjacent_surfaces;
+    bool representation_artifact{false};
+    bool produced_by_current_operation{false};
+    bool integrity_failure{false};
+
+    friend bool operator==(
+        const CurrentEdgeSemanticRecord&,
+        const CurrentEdgeSemanticRecord&) = default;
+};
+
+struct CurrentVertexSemanticRecord final {
+    RuntimeVertexToken token;
+    ReferenceStatus status{
+        ReferenceStatus::unsupported};
+    std::size_t candidate_count{};
+    std::vector<RuntimeSurfaceToken>
+        adjacent_surfaces;
+    std::size_t incident_material_edge_count{};
+    std::optional<Point3> provider_point;
+    bool produced_by_current_operation{false};
+    bool integrity_failure{false};
+
+    friend bool operator==(
+        const CurrentVertexSemanticRecord&,
+        const CurrentVertexSemanticRecord&) = default;
+};
+
 enum class SolidBooleanOperation {
     add,
     cut,
@@ -264,6 +314,15 @@ struct SolidModelingResult final {
     std::vector<RuntimeFaceToken> current_faces;
     std::vector<RuntimeEdgeToken> current_edges;
     std::vector<RuntimeVertexToken> current_vertices;
+
+    // PM-02C evaluated semantic meaning for current bounded Edge/Vertex
+    // realizations. These records are derived runtime state only. Curve/Point
+    // meaning is carried by semantic relationships, not by provider ordinals
+    // or geometry similarity.
+    std::vector<CurrentEdgeSemanticRecord>
+        current_edge_semantics;
+    std::vector<CurrentVertexSemanticRecord>
+        current_vertex_semantics;
 
     // PM-01 semantic Face lineage remains separate from complete inventory.
     std::vector<InheritedFaceLineage>
