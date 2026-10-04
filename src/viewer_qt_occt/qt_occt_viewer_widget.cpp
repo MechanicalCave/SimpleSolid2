@@ -1915,9 +1915,11 @@ public:
             view_style_ = previous;
             static_cast<void>(
                 syncBodyViewStyle());
+            syncViewStyleHud();
             return false;
         }
 
+        syncViewStyleHud();
         if (!context_.IsNull()) {
             updateCurrentViewer();
         }
