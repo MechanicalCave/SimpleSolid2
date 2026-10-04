@@ -385,6 +385,35 @@ set_tests_properties(wb01.cad_workbench PROPERTIES
 
 
 
+add_executable(pm02d5_topology_properties_test
+    pm02d5_topology_properties_test.cpp
+)
+
+target_include_directories(pm02d5_topology_properties_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/src/ui
+)
+
+target_link_libraries(pm02d5_topology_properties_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_ui
+        simplesolid2_viewer
+        Qt6::Widgets
+)
+
+target_compile_features(pm02d5_topology_properties_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm02d5.topology_properties
+    COMMAND pm02d5_topology_properties_test
+)
+
+set_tests_properties(pm02d5.topology_properties PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer"
+)
+
 add_executable(pm01e_cad_workbench_extrude_test
     pm01e_cad_workbench_extrude_test.cpp
 )
