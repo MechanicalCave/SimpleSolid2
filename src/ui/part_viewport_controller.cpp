@@ -511,6 +511,25 @@ PartViewportController::PartViewportController(
                 }
             });
 
+        viewport_->setBodyTopologyPreselectionIntentHandler(
+            [self](
+                const viewer::BodyTopologyPickQueryResult& query,
+                viewer::ViewportPoint2 point) {
+                if (self) {
+                    self->onBodyTopologyPreselectionIntent(
+                        query,
+                        point);
+                }
+            });
+
+        viewport_->setBodyTopologyCycleIntentHandler(
+            [self](bool reverse) {
+                if (self) {
+                    self->onBodyTopologyCycleIntent(
+                        reverse);
+                }
+            });
+
         viewport_->setViewStyleActionHandler(
             [self](viewer::ViewStyle style) {
                 if (self) {
@@ -544,6 +563,7 @@ void PartViewportController::setSolidModelingKernel(
     body_scene_cache_.reset();
     body_topology_catalog_cache_.reset();
     body_topology_bindings_.clear();
+    clearBodyTopologyPreselection();
     clearBodyTopologySelection();
     clearSolidPreview();
     refreshPresentation();
@@ -567,6 +587,7 @@ void PartViewportController::setDocumentSession(
         body_scene_cache_.reset();
         body_topology_catalog_cache_.reset();
         body_topology_bindings_.clear();
+        clearBodyTopologyPreselection();
         clearBodyTopologySelection();
         clearSolidPreview();
         clearSketchPreview();
@@ -600,6 +621,7 @@ void PartViewportController::clear() {
     body_scene_cache_.reset();
     body_topology_catalog_cache_.reset();
     body_topology_bindings_.clear();
+    clearBodyTopologyPreselection();
     clearBodyTopologySelection();
     clearSketchSelectionBoxOverlay();
     tree_->clear();
@@ -660,6 +682,7 @@ void PartViewportController::refreshPresentation() {
         body_scene_cache_.reset();
         body_topology_catalog_cache_.reset();
         body_topology_bindings_.clear();
+        clearBodyTopologyPreselection();
         clearBodyTopologySelection();
         clearSolidPreview();
         clearSketchPreview();
@@ -2237,6 +2260,7 @@ PartViewportController::buildBodyScene() {
     if (presentation_solid == nullptr) {
         body_topology_catalog_cache_.reset();
         body_topology_bindings_.clear();
+        clearBodyTopologyPreselection();
         clearBodyTopologySelection();
         body_scene_revision_ = revision;
         body_scene_cache_ = empty_scene;
@@ -2436,6 +2460,7 @@ PartViewportController::buildBodyScene() {
         return fail();
     }
 
+    clearBodyTopologyPreselection();
     clearBodyTopologySelection();
     body_scene_revision_ = revision;
     body_scene_cache_ = scene;
