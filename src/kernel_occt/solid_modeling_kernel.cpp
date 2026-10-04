@@ -2567,6 +2567,23 @@ finishBoolean(
         return result;
     }
 
+    if (!publishEdgeVertexSemantics(
+            result,
+            *runtime,
+            &upstream,
+            [&operation, &shape](
+                const TopoDS_Edge& source) {
+                return descendantEdges(
+                    operation,
+                    source,
+                    shape);
+            })) {
+        result.status =
+            kernel::SolidModelingStatus::
+                provider_failure;
+        return result;
+    }
+
     result.status =
         kernel::SolidModelingStatus::ok;
     result.solid = std::move(runtime);
@@ -2885,6 +2902,28 @@ OcctSolidModelingKernel::extrude(
                         std::vector<TopoDS_Face>
                             candidates;
                         if (containsSameFace(
+                                tool_shape,
+                                source)) {
+                            candidates.push_back(
+                                source);
+                        }
+                        return candidates;
+                    })) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_failure;
+                return result;
+            }
+
+            if (!publishEdgeVertexSemantics(
+                    result,
+                    *runtime,
+                    nullptr,
+                    [&tool_shape](
+                        const TopoDS_Edge& source) {
+                        std::vector<TopoDS_Edge>
+                            candidates;
+                        if (containsSameEdge(
                                 tool_shape,
                                 source)) {
                             candidates.push_back(
