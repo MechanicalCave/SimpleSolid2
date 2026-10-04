@@ -4,6 +4,7 @@
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
 #include <BRepAdaptor_Surface.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
 #include <BRepBuilderAPI_MakeWire.hxx>
@@ -36,7 +37,9 @@
 #include <gp_Vec.hxx>
 #include <GProp_GProps.hxx>
 #include <GeomAbs_SurfaceType.hxx>
+#include <GeomAbs_CurveType.hxx>
 #include <BRepSweep_Prism.hxx>
+#include <BRepTools.hxx>
 
 #include <algorithm>
 #include <cmath>
@@ -713,10 +716,22 @@ public:
     std::map<std::uint64_t, TrackedSurface>
         tracked_surfaces;
 
+    struct TrackedCurve final {
+        kernel::CurveKind kind{
+            kernel::CurveKind::other};
+        std::vector<kernel::RuntimeSurfaceToken>
+            adjacent_surfaces;
+        std::vector<TopoDS_Edge> edges;
+    };
+
+    std::map<std::uint64_t, TrackedCurve>
+        tracked_curves;
+
     std::uint64_t next_face_token{1U};
     std::uint64_t next_edge_token{1U};
     std::uint64_t next_vertex_token{1U};
     std::uint64_t next_surface_token{1U};
+    std::uint64_t next_curve_token{1U};
 };
 
 struct CandidateClaim final {
