@@ -3,6 +3,7 @@
 #include <BRepAlgoAPI_Common.hxx>
 #include <BRepAlgoAPI_Cut.hxx>
 #include <BRepAlgoAPI_Fuse.hxx>
+#include <BRepAdaptor_Curve.hxx>
 #include <BRepAdaptor_Surface.hxx>
 #include <BRepBuilderAPI_MakeEdge.hxx>
 #include <BRepBuilderAPI_MakeFace.hxx>
@@ -11,6 +12,7 @@
 #include <BRepGProp.hxx>
 #include <BRepLib_ToolTriangulatedShape.hxx>
 #include <BRep_Tool.hxx>
+#include <BRepTools.hxx>
 #include <BRepCheck_Analyzer.hxx>
 #include <Poly_Triangle.hxx>
 #include <Poly_Triangulation.hxx>
@@ -703,15 +705,31 @@ public:
         inventory_vertices;
 
     struct TrackedSurface final {
+        kernel::ExtrudeFaceRole role;
         kernel::SurfaceKind kind{
             kernel::SurfaceKind::other};
         std::optional<kernel::Frame3>
             canonical_frame;
         std::vector<TopoDS_Face> faces;
+        // Stage-relative only: true when this Surface was introduced by the
+        // operation producing this RuntimeSolid. It is reset to false when
+        // the Surface is inherited into the next stage.
+        bool produced_by_current_operation{false};
+    };
+
+    struct TrackedEdge final {
+        TopoDS_Edge edge;
+        kernel::EdgeSemanticRoleKind role{
+            kernel::EdgeSemanticRoleKind::unsupported};
+        kernel::CurveKind curve_kind{
+            kernel::CurveKind::other};
+        std::vector<kernel::RuntimeSurfaceToken>
+            adjacent_surfaces;
     };
 
     std::map<std::uint64_t, TrackedSurface>
         tracked_surfaces;
+    std::vector<TrackedEdge> tracked_edges;
 
     std::uint64_t next_face_token{1U};
     std::uint64_t next_edge_token{1U};
@@ -1218,6 +1236,7 @@ struct SurfaceCandidateClaim final {
     Kind kind{Kind::created};
     std::size_t index{};
     std::vector<TopoDS_Face> candidates;
+    kernel::ExtrudeFaceRole role;
     kernel::SurfaceKind surface_kind{
         kernel::SurfaceKind::other};
     std::optional<kernel::Frame3>
