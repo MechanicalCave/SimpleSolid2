@@ -1,6 +1,6 @@
 # PM-02 — Production Architecture Recommendation after PM-02P
 
-**Status:** OWNER-REVIEWABLE RECOMMENDATION — production PM-02 remains NOT ACTIVE  
+**Status:** OWNER-ACCEPTED D2 RECOMMENDATION — 2026-10-04; production PM-02 remains NOT ACTIVE  
 **Date:** 2026-10-04  
 **Evidence basis:** PM-02P A-E + `work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md`  
 **Decision authority:** ADR-0014 + ADR-0016  
@@ -509,8 +509,10 @@ These choices must remain consistent with ADR-0016 and the PM-02P survival matri
 
 PM-02P evidence does not reveal an architecture blocker to production PM-02.
 
-Recommended next governance action after PM-02P final exact-head FULL and closure:
+Owner accepted this D2 recommendation on 2026-10-04.
 
-**prepare, review and explicitly Owner-accept a bounded production PM-02 Work Contract implementing the architecture above.**
+Next governance action:
+
+**review and explicitly Owner-accept the separate bounded production PM-02 Work Contract candidate before any production mutation.**
 
 Do not activate PM-03 Datum or any later package before production PM-02 completes its own acceptance.
