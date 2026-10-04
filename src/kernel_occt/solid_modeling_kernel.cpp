@@ -1813,6 +1813,526 @@ template <typename Mapper>
     return true;
 }
 
+struct RuntimeEdgeSemanticKey final {
+    kernel::EdgeSemanticRoleKind role{
+        kernel::EdgeSemanticRoleKind::unsupported};
+    kernel::CurveKind curve_kind{
+        kernel::CurveKind::other};
+    std::vector<kernel::RuntimeSurfaceToken>
+        adjacent_surfaces;
+};
+
+[[nodiscard]] bool sameEdgeSemanticKey(
+    const RuntimeEdgeSemanticKey& first,
+    const RuntimeEdgeSemanticKey& second) {
+    return first.role == second.role &&
+           first.curve_kind ==
+               second.curve_kind &&
+           sameSurfaceTokenSet(
+               first.adjacent_surfaces,
+               second.adjacent_surfaces);
+}
+
+[[nodiscard]] bool isCapSurface(
+    const OcctRuntimeSolid::TrackedSurface& surface) noexcept {
+    return surface.role.kind ==
+           kernel::ExtrudeGeneratedFaceRoleKind::cap;
+}
+
+[[nodiscard]] bool isSideSurface(
+    const OcctRuntimeSolid::TrackedSurface& surface) noexcept {
+    return surface.role.kind ==
+           kernel::ExtrudeGeneratedFaceRoleKind::side;
+}
+
+[[nodiscard]] kernel::CurveKind inferredCurveKind(
+    kernel::EdgeSemanticRoleKind role,
+    const OcctRuntimeSolid::TrackedSurface& first,
+    const OcctRuntimeSolid::TrackedSurface& second) noexcept {
+    switch (role) {
+    case kernel::EdgeSemanticRoleKind::cap_side: {
+        const auto& side =
+            isSideSurface(first)
+                ? first
+                : second;
+        switch (side.kind) {
+        case kernel::SurfaceKind::plane:
+            return kernel::CurveKind::line;
+        case kernel::SurfaceKind::cylinder:
+            return kernel::CurveKind::circle;
+        default:
+            return kernel::CurveKind::other;
+        }
+    }
+    case kernel::EdgeSemanticRoleKind::side_side:
+        // Linear Extrude side carriers meet along the semantic sweep
+        // direction, independent of provider edge orientation.
+        return kernel::CurveKind::line;
+    case kernel::EdgeSemanticRoleKind::boolean_intersection:
+        // The current activated Extrude Add/Cut universe only has a
+        // defensible exact intersection Curve class for Plane x Plane.
+        return first.kind == kernel::SurfaceKind::plane &&
+                       second.kind == kernel::SurfaceKind::plane
+            ? kernel::CurveKind::line
+            : kernel::CurveKind::other;
+    case kernel::EdgeSemanticRoleKind::periodic_seam:
+    case kernel::EdgeSemanticRoleKind::unsupported:
+        return kernel::CurveKind::other;
+    }
+    return kernel::CurveKind::other;
+}
+
+[[nodiscard]] bool periodicSeam(
+    const OcctRuntimeSolid& runtime,
+    const TopoDS_Edge& edge,
+    const std::vector<kernel::RuntimeSurfaceToken>&
+        adjacent_surfaces) {
+    for (const auto token : adjacent_surfaces) {
+        const auto* surface =
+            trackedSurface(runtime, token);
+        if (surface == nullptr ||
+            !isSideSurface(*surface)) {
+            continue;
+        }
+        for (const auto& face :
+             surface->faces) {
+            if (faceContainsEdge(face, edge) &&
+                BRepTools::IsReallyClosed(
+                    edge,
+                    face)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool producedByCurrentOperation(
+    const OcctRuntimeSolid& runtime,
+    const std::vector<kernel::RuntimeSurfaceToken>&
+        adjacent_surfaces,
+    bool has_upstream) {
+    if (!has_upstream) {
+        return true;
+    }
+    return std::any_of(
+        adjacent_surfaces.begin(),
+        adjacent_surfaces.end(),
+        [&runtime](kernel::RuntimeSurfaceToken token) {
+            const auto* surface =
+                trackedSurface(runtime, token);
+            return surface != nullptr &&
+                   surface->produced_by_current_operation;
+        });
+}
+
+template <typename EdgeMapper>
+[[nodiscard]] bool publishEdgeVertexSemantics(
+    kernel::SolidModelingResult& result,
+    OcctRuntimeSolid& runtime,
+    const OcctRuntimeSolid* upstream,
+    EdgeMapper&& edge_mapper) {
+    result.current_edge_semantics.clear();
+    result.current_vertex_semantics.clear();
+    runtime.tracked_edges.clear();
+
+    std::map<std::uint64_t, RuntimeEdgeSemanticKey>
+        inherited_keys;
+    std::map<std::uint64_t, std::size_t>
+        inherited_candidate_counts;
+
+    if (upstream != nullptr) {
+        for (const auto& tracked :
+             upstream->tracked_edges) {
+            bool surfaces_still_resolved = true;
+            for (const auto surface_token :
+                 tracked.adjacent_surfaces) {
+                if (trackedSurface(
+                        runtime,
+                        surface_token) == nullptr) {
+                    surfaces_still_resolved = false;
+                    break;
+                }
+            }
+            if (!surfaces_still_resolved) {
+                continue;
+            }
+
+            const auto descendants =
+                edge_mapper(tracked.edge);
+            for (const auto& descendant :
+                 descendants) {
+                const auto token =
+                    inventoryEdgeToken(
+                        runtime,
+                        descendant);
+                if (!token) {
+                    return false;
+                }
+                if (providerCurveKind(descendant) !=
+                    tracked.curve_kind) {
+                    return false;
+                }
+
+                const RuntimeEdgeSemanticKey key{
+                    tracked.role,
+                    tracked.curve_kind,
+                    tracked.adjacent_surfaces};
+                const auto [it, inserted] =
+                    inherited_keys.emplace(
+                        token->value,
+                        key);
+                if (!inserted &&
+                    !sameEdgeSemanticKey(
+                        it->second,
+                        key)) {
+                    // Two independently resolved prior Edge meanings merged
+                    // into one bounded Edge. Current PM-02C has no defensible
+                    // branch discriminator for this merge, so fail closed.
+                    return false;
+                }
+                inherited_candidate_counts[
+                    token->value] =
+                    descendants.size();
+            }
+        }
+    }
+
+    result.current_edge_semantics.reserve(
+        runtime.inventory_edges.size());
+
+    for (const auto& [token_value, edge] :
+         runtime.inventory_edges) {
+        kernel::CurrentEdgeSemanticRecord record;
+        record.token =
+            kernel::RuntimeEdgeToken{token_value};
+
+        const auto inherited =
+            inherited_keys.find(token_value);
+        if (inherited != inherited_keys.end()) {
+            record.role =
+                inherited->second.role;
+            record.curve_kind =
+                inherited->second.curve_kind;
+            record.adjacent_surfaces =
+                inherited->second.adjacent_surfaces;
+            record.candidate_count =
+                inherited_candidate_counts[
+                    token_value];
+            record.status =
+                referenceStatus(
+                    record.candidate_count);
+            record.produced_by_current_operation =
+                false;
+            result.current_edge_semantics.push_back(
+                std::move(record));
+            continue;
+        }
+
+        record.adjacent_surfaces =
+            adjacentSurfaceTokens(
+                runtime,
+                edge);
+
+        if (periodicSeam(
+                runtime,
+                edge,
+                record.adjacent_surfaces)) {
+            record.role =
+                kernel::EdgeSemanticRoleKind::
+                    periodic_seam;
+            record.curve_kind =
+                kernel::CurveKind::other;
+            record.status =
+                kernel::ReferenceStatus::
+                    unsupported;
+            record.representation_artifact = true;
+            result.current_edge_semantics.push_back(
+                std::move(record));
+            continue;
+        }
+
+        if (record.adjacent_surfaces.size() != 2U) {
+            record.status =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.current_edge_semantics.push_back(
+                std::move(record));
+            continue;
+        }
+
+        const auto* first =
+            trackedSurface(
+                runtime,
+                record.adjacent_surfaces[0]);
+        const auto* second =
+            trackedSurface(
+                runtime,
+                record.adjacent_surfaces[1]);
+        if (first == nullptr ||
+            second == nullptr) {
+            return false;
+        }
+
+        const bool mixed_operation_origin =
+            upstream != nullptr &&
+            first->produced_by_current_operation !=
+                second->produced_by_current_operation;
+
+        if (mixed_operation_origin) {
+            record.role =
+                kernel::EdgeSemanticRoleKind::
+                    boolean_intersection;
+        } else {
+            const bool cap_side =
+                (isCapSurface(*first) &&
+                 isSideSurface(*second)) ||
+                (isSideSurface(*first) &&
+                 isCapSurface(*second));
+            const bool side_side =
+                isSideSurface(*first) &&
+                isSideSurface(*second);
+
+            if (cap_side) {
+                record.role =
+                    kernel::EdgeSemanticRoleKind::
+                        cap_side;
+            } else if (side_side) {
+                record.role =
+                    kernel::EdgeSemanticRoleKind::
+                        side_side;
+            }
+        }
+
+        record.curve_kind =
+            inferredCurveKind(
+                record.role,
+                *first,
+                *second);
+        record.produced_by_current_operation =
+            producedByCurrentOperation(
+                runtime,
+                record.adjacent_surfaces,
+                upstream != nullptr);
+
+        if (record.role ==
+                kernel::EdgeSemanticRoleKind::
+                    unsupported ||
+            record.curve_kind ==
+                kernel::CurveKind::other) {
+            record.status =
+                kernel::ReferenceStatus::
+                    unsupported;
+            result.current_edge_semantics.push_back(
+                std::move(record));
+            continue;
+        }
+
+        if (providerCurveKind(edge) !=
+            record.curve_kind) {
+            record.status =
+                kernel::ReferenceStatus::
+                    unsupported;
+            record.integrity_failure = true;
+            result.current_edge_semantics.push_back(
+                std::move(record));
+            continue;
+        }
+
+        result.current_edge_semantics.push_back(
+            std::move(record));
+    }
+
+    // Cardinality is evaluated on semantic meaning, never provider order.
+    for (auto& record :
+         result.current_edge_semantics) {
+        if (record.representation_artifact ||
+            record.integrity_failure ||
+            record.role ==
+                kernel::EdgeSemanticRoleKind::
+                    unsupported ||
+            record.curve_kind ==
+                kernel::CurveKind::other) {
+            continue;
+        }
+
+        const RuntimeEdgeSemanticKey key{
+            record.role,
+            record.curve_kind,
+            record.adjacent_surfaces};
+
+        std::size_t candidates = 0U;
+        for (const auto& other :
+             result.current_edge_semantics) {
+            if (other.representation_artifact ||
+                other.integrity_failure ||
+                other.role ==
+                    kernel::EdgeSemanticRoleKind::
+                        unsupported ||
+                other.curve_kind ==
+                    kernel::CurveKind::other) {
+                continue;
+            }
+            const RuntimeEdgeSemanticKey other_key{
+                other.role,
+                other.curve_kind,
+                other.adjacent_surfaces};
+            if (sameEdgeSemanticKey(
+                    key,
+                    other_key)) {
+                ++candidates;
+            }
+        }
+
+        record.candidate_count = candidates;
+        record.status =
+            referenceStatus(candidates);
+    }
+
+    // Only singular current Edge meanings are eligible for history tracking
+    // into the next stage.
+    for (const auto& record :
+         result.current_edge_semantics) {
+        if (record.status !=
+                kernel::ReferenceStatus::resolved ||
+            record.representation_artifact ||
+            record.integrity_failure) {
+            continue;
+        }
+        const auto found =
+            runtime.inventory_edges.find(
+                record.token.value);
+        if (found ==
+            runtime.inventory_edges.end()) {
+            return false;
+        }
+        runtime.tracked_edges.push_back(
+            {
+                found->second,
+                record.role,
+                record.curve_kind,
+                record.adjacent_surfaces,
+            });
+    }
+
+    if (result.current_edge_semantics.size() !=
+        result.current_edges.size()) {
+        return false;
+    }
+    if (std::any_of(
+            result.current_edge_semantics.begin(),
+            result.current_edge_semantics.end(),
+            [](const auto& edge) {
+                return edge.integrity_failure;
+            })) {
+        return false;
+    }
+
+    result.current_vertex_semantics.reserve(
+        runtime.inventory_vertices.size());
+    for (const auto& [token_value, vertex] :
+         runtime.inventory_vertices) {
+        kernel::CurrentVertexSemanticRecord record;
+        record.token =
+            kernel::RuntimeVertexToken{
+                token_value};
+        record.adjacent_surfaces =
+            adjacentSurfaceTokens(
+                runtime,
+                vertex);
+
+        const auto point =
+            providerPoint(vertex);
+        if (!std::isfinite(point.x) ||
+            !std::isfinite(point.y) ||
+            !std::isfinite(point.z)) {
+            record.integrity_failure = true;
+            result.current_vertex_semantics.push_back(
+                std::move(record));
+            continue;
+        }
+        record.provider_point = point;
+
+        for (const auto& edge_record :
+             result.current_edge_semantics) {
+            if (edge_record.representation_artifact) {
+                continue;
+            }
+            const auto found =
+                runtime.inventory_edges.find(
+                    edge_record.token.value);
+            if (found ==
+                runtime.inventory_edges.end()) {
+                return false;
+            }
+            if (edgeContainsVertex(
+                    found->second,
+                    vertex)) {
+                ++record.incident_material_edge_count;
+            }
+        }
+
+        record.produced_by_current_operation =
+            producedByCurrentOperation(
+                runtime,
+                record.adjacent_surfaces,
+                upstream != nullptr);
+
+        if (record.adjacent_surfaces.size() != 3U ||
+            record.incident_material_edge_count != 3U) {
+            record.status =
+                kernel::ReferenceStatus::
+                    unsupported;
+        }
+
+        result.current_vertex_semantics.push_back(
+            std::move(record));
+    }
+
+    for (auto& record :
+         result.current_vertex_semantics) {
+        if (record.integrity_failure ||
+            record.adjacent_surfaces.size() != 3U ||
+            record.incident_material_edge_count != 3U) {
+            continue;
+        }
+
+        std::size_t candidates = 0U;
+        for (const auto& other :
+             result.current_vertex_semantics) {
+            if (other.integrity_failure ||
+                other.adjacent_surfaces.size() != 3U ||
+                other.incident_material_edge_count != 3U) {
+                continue;
+            }
+            if (sameSurfaceTokenSet(
+                    record.adjacent_surfaces,
+                    other.adjacent_surfaces)) {
+                ++candidates;
+            }
+        }
+
+        record.candidate_count = candidates;
+        record.status =
+            referenceStatus(candidates);
+    }
+
+    if (result.current_vertex_semantics.size() !=
+        result.current_vertices.size()) {
+        return false;
+    }
+    if (std::any_of(
+            result.current_vertex_semantics.begin(),
+            result.current_vertex_semantics.end(),
+            [](const auto& vertex) {
+                return vertex.integrity_failure;
+            })) {
+        return false;
+    }
+
+    return true;
+}
+
 void populateDiagnostics(
     kernel::SolidModelingResult& result,
     const TopoDS_Shape& shape) {
