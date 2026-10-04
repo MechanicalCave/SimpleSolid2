@@ -735,6 +735,214 @@ QString formatRelationalMeasurement(
         measurement);
 }
 
+QString referenceStatusText(
+    kernel::ReferenceStatus status) {
+    switch (status) {
+    case kernel::ReferenceStatus::resolved:
+        return QStringLiteral("Resolved");
+    case kernel::ReferenceStatus::missing:
+        return QStringLiteral("Missing");
+    case kernel::ReferenceStatus::ambiguous:
+        return QStringLiteral("Ambiguous");
+    case kernel::ReferenceStatus::unsupported:
+        return QStringLiteral("Unsupported");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString topologyAccountingText(
+    part::TopologyAccountingClass value) {
+    switch (value) {
+    case part::TopologyAccountingClass::referenceable:
+        return QStringLiteral("Referenceable");
+    case part::TopologyAccountingClass::
+        known_representation_artifact:
+        return QStringLiteral("Representation Artifact");
+    case part::TopologyAccountingClass::
+        semantically_unsupported:
+        return QStringLiteral("Semantically Unsupported");
+    case part::TopologyAccountingClass::
+        integrity_failure:
+        return QStringLiteral("Integrity Failure");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString topologyKindText(
+    viewer::BodyTopologyPresentationKind kind) {
+    switch (kind) {
+    case viewer::BodyTopologyPresentationKind::face:
+        return QStringLiteral("Face");
+    case viewer::BodyTopologyPresentationKind::edge:
+        return QStringLiteral("Edge");
+    case viewer::BodyTopologyPresentationKind::vertex:
+        return QStringLiteral("Vertex");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString surfaceKindText(
+    kernel::SurfaceKind kind) {
+    switch (kind) {
+    case kernel::SurfaceKind::plane:
+        return QStringLiteral("Plane");
+    case kernel::SurfaceKind::cylinder:
+        return QStringLiteral("Cylinder");
+    case kernel::SurfaceKind::cone:
+        return QStringLiteral("Cone");
+    case kernel::SurfaceKind::sphere:
+        return QStringLiteral("Sphere");
+    case kernel::SurfaceKind::torus:
+        return QStringLiteral("Torus");
+    case kernel::SurfaceKind::other:
+        return QStringLiteral("Other");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString curveKindText(
+    kernel::CurveKind kind) {
+    switch (kind) {
+    case kernel::CurveKind::line:
+        return QStringLiteral("Line");
+    case kernel::CurveKind::circle:
+        return QStringLiteral("Circle");
+    case kernel::CurveKind::other:
+        return QStringLiteral("Other");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString stageText(
+    const part::BodyStageRef& stage) {
+    if (!stage.valid()) {
+        return QStringLiteral("Invalid");
+    }
+    switch (stage.kind) {
+    case part::BodyStageKind::empty_body:
+        return QStringLiteral("Empty Body");
+    case part::BodyStageKind::after_feature:
+        return stage.feature_id
+            ? QStringLiteral("After Feature %1")
+                  .arg(QString::fromStdString(
+                      stage.feature_id->serialized()))
+            : QStringLiteral("After Feature ?");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString surfaceRoleText(
+    part::FeatureSurfaceRoleKind role) {
+    switch (role) {
+    case part::FeatureSurfaceRoleKind::profile_cap:
+        return QStringLiteral("Profile Cap");
+    case part::FeatureSurfaceRoleKind::extent_cap:
+        return QStringLiteral("Extent Cap");
+    case part::FeatureSurfaceRoleKind::negative_cap:
+        return QStringLiteral("Negative Cap");
+    case part::FeatureSurfaceRoleKind::positive_cap:
+        return QStringLiteral("Positive Cap");
+    case part::FeatureSurfaceRoleKind::side:
+        return QStringLiteral("Side");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString surfaceAddressText(
+    const part::FeatureSurfaceAddress& address) {
+    QString result =
+        QStringLiteral("Feature %1 / %2")
+            .arg(
+                QString::fromStdString(
+                    address.producer_feature_id
+                        .serialized()),
+                surfaceRoleText(address.role));
+    if (address.source_entity) {
+        result +=
+            QStringLiteral(" / Entity %1")
+                .arg(QString::fromStdString(
+                    address.source_entity->serialized()));
+    }
+    return result;
+}
+
+QString adjacentSurfaceSummary(
+    const std::vector<
+        part::FeatureSurfaceAddress>& surfaces) {
+    if (surfaces.empty()) {
+        return QStringLiteral("—");
+    }
+    QStringList items;
+    items.reserve(
+        static_cast<qsizetype>(
+            surfaces.size()));
+    for (const auto& surface : surfaces) {
+        items.push_back(
+            surfaceAddressText(surface));
+    }
+    return items.join(
+        QStringLiteral("; "));
+}
+
+QString sketchSupportInspectionText(
+    SketchSupportInspectionCapability value) {
+    switch (value) {
+    case SketchSupportInspectionCapability::
+        not_applicable:
+        return QStringLiteral("Not applicable");
+    case SketchSupportInspectionCapability::
+        supported:
+        return QStringLiteral("Supported");
+    case SketchSupportInspectionCapability::
+        unsupported_non_planar:
+        return QStringLiteral(
+            "Unsupported — non-planar");
+    case SketchSupportInspectionCapability::
+        missing:
+        return QStringLiteral("Missing");
+    case SketchSupportInspectionCapability::
+        ambiguous:
+        return QStringLiteral("Ambiguous");
+    case SketchSupportInspectionCapability::
+        unsupported:
+        return QStringLiteral("Unsupported");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString topologySummaryText(
+    const TopologyKindSummary& summary) {
+    return QStringLiteral(
+               "%1 total; %2 referenceable; "
+               "%3 artifacts; %4 unsupported; "
+               "%5 integrity failures")
+        .arg(
+            static_cast<qulonglong>(summary.total))
+        .arg(
+            static_cast<qulonglong>(
+                summary.referenceable))
+        .arg(
+            static_cast<qulonglong>(
+                summary.representation_artifact))
+        .arg(
+            static_cast<qulonglong>(
+                summary.semantically_unsupported))
+        .arg(
+            static_cast<qulonglong>(
+                summary.integrity_failure));
+}
+
+QString providerPointText(
+    const std::optional<kernel::Point3>& point) {
+    if (!point) {
+        return QStringLiteral("—");
+    }
+    return QStringLiteral("XYZ = (%1, %2, %3)")
+        .arg(QString::number(point->x, 'g', 12))
+        .arg(QString::number(point->y, 'g', 12))
+        .arg(QString::number(point->z, 'g', 12));
+}
+
 std::optional<viewer::StandardView>
 standardViewForSketchSupport(
     core::BuiltinReferenceRole role) noexcept {
