@@ -135,11 +135,18 @@ makeKernelProfileInput(
     const auto* source =
         document.findSketch(
             profile->source_sketch_id);
-    if (!source ||
-        !source->placement.valid() ||
-        !sketchPlacementMatchesSupport(
-            source->placement,
-            source->support)) {
+    if (!source) {
+        return std::nullopt;
+    }
+
+    // PM-02E removes authored world placement authority. The legacy
+    // document-only profile conversion remains intentionally Origin-support
+    // only until PM-02F supplies the exact upstream stage topology needed to
+    // resolve Body Surface-backed Sketches.
+    const auto placement =
+        sketchPlacementForSupport(
+            source->support);
+    if (!placement || !placement->valid()) {
         return std::nullopt;
     }
 
@@ -149,16 +156,16 @@ makeKernelProfileInput(
         return std::nullopt;
     }
 
-    const auto n = normal(source->placement);
+    const auto n = normal(*placement);
     if (!n) {
         return std::nullopt;
     }
 
     kernel::PlanarProfileInput result;
     result.frame = {
-        point(source->placement.origin),
-        point(source->placement.u_axis),
-        point(source->placement.v_axis),
+        point(placement->origin),
+        point(placement->u_axis),
+        point(placement->v_axis),
         *n,
     };
 
