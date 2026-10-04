@@ -37,12 +37,36 @@ enum class FeatureEvaluationDiagnosticCode {
     no_effect,
     empty_result,
     multi_solid,
+    topology_integrity_failure,
 };
 
 enum class BodyEvaluationStatus {
     empty,
     up_to_date,
     unavailable,
+};
+
+enum class BodyStageKind {
+    empty_body,
+    after_feature,
+};
+
+struct BodyStageRef final {
+    BodyStageKind kind{BodyStageKind::empty_body};
+    std::optional<FeatureId> feature_id;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const BodyStageRef&,
+        const BodyStageRef&) = default;
+};
+
+enum class TopologyAccountingClass {
+    referenceable,
+    known_representation_artifact,
+    semantically_unsupported,
+    integrity_failure,
 };
 
 enum class FeatureFaceRoleKind {
@@ -84,6 +108,58 @@ struct FeatureFaceResolution final {
         const FeatureFaceResolution&) = default;
 };
 
+struct BodyFaceTopologyRecord final {
+    kernel::RuntimeFaceToken runtime_token;
+    TopologyAccountingClass accounting_class{
+        TopologyAccountingClass::semantically_unsupported};
+    std::optional<FeatureFaceAddress>
+        semantic_address;
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const BodyFaceTopologyRecord&,
+        const BodyFaceTopologyRecord&) = default;
+};
+
+struct BodyEdgeTopologyRecord final {
+    kernel::RuntimeEdgeToken runtime_token;
+    TopologyAccountingClass accounting_class{
+        TopologyAccountingClass::semantically_unsupported};
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const BodyEdgeTopologyRecord&,
+        const BodyEdgeTopologyRecord&) = default;
+};
+
+struct BodyVertexTopologyRecord final {
+    kernel::RuntimeVertexToken runtime_token;
+    TopologyAccountingClass accounting_class{
+        TopologyAccountingClass::semantically_unsupported};
+
+    [[nodiscard]] bool valid() const noexcept;
+
+    friend bool operator==(
+        const BodyVertexTopologyRecord&,
+        const BodyVertexTopologyRecord&) = default;
+};
+
+struct BodyStageTopologyCatalog final {
+    BodyStageRef stage;
+    std::vector<BodyFaceTopologyRecord> faces;
+    std::vector<BodyEdgeTopologyRecord> edges;
+    std::vector<BodyVertexTopologyRecord> vertices;
+
+    [[nodiscard]] bool valid() const noexcept;
+    [[nodiscard]] bool complete() const noexcept;
+
+    friend bool operator==(
+        const BodyStageTopologyCatalog&,
+        const BodyStageTopologyCatalog&) = default;
+};
+
 struct FeatureEvaluation final {
     FeatureId feature_id;
     FeatureEvaluationStatus status{
@@ -94,6 +170,10 @@ struct FeatureEvaluation final {
         kernel_status;
     std::vector<FeatureFaceResolution>
         produced_faces;
+    // Complete runtime-only topology for this successful Feature stage.
+    // Empty for Failed/Blocked/Suppressed Features. Never serialized.
+    std::optional<BodyStageTopologyCatalog>
+        result_topology;
 };
 
 struct PartEvaluation final {
@@ -108,6 +188,14 @@ struct PartEvaluation final {
     // semantic identity, or consumed by downstream evaluation.
     kernel::RuntimeSolidHandle resolved_prefix_solid;
     std::vector<FeatureEvaluation> features;
+    // Complete final Body-stage topology truth. Empty when Body is unavailable
+    // or Empty. This is derived runtime state and is never serialized.
+    std::optional<BodyStageTopologyCatalog>
+        current_topology;
+    // Same-revision topology immediately before the first Failed/Blocked
+    // active Feature. Diagnostic/presentation only, never final Body truth.
+    std::optional<BodyStageTopologyCatalog>
+        resolved_prefix_topology;
     // Semantic references resolved at the current final Body stage only.
     // Empty when Body is unavailable.
     std::vector<FeatureFaceResolution>
