@@ -3483,6 +3483,380 @@ public:
             static_cast<double>(pixel_y)};
     }
 
+    [[nodiscard]] std::optional<viewer::Ray3>
+    bodyPickRayAtPhysical(
+        double physical_x,
+        double physical_y) const {
+        if (view_.IsNull() ||
+            !std::isfinite(physical_x) ||
+            !std::isfinite(physical_y)) {
+            return std::nullopt;
+        }
+
+        double world_x{};
+        double world_y{};
+        double world_z{};
+        double direction_x{};
+        double direction_y{};
+        double direction_z{};
+
+        view_->ConvertWithProj(
+            static_cast<int>(
+                std::lround(physical_x)),
+            static_cast<int>(
+                std::lround(physical_y)),
+            world_x,
+            world_y,
+            world_z,
+            direction_x,
+            direction_y,
+            direction_z);
+
+        const auto direction =
+            viewer::normalized(
+                viewer::Vec3{
+                    direction_x,
+                    direction_y,
+                    direction_z});
+        if (!direction) {
+            return std::nullopt;
+        }
+
+        viewer::Ray3 ray{
+            {world_x, world_y, world_z},
+            *direction};
+        return ray.valid()
+            ? std::optional<viewer::Ray3>{ray}
+            : std::nullopt;
+    }
+
+    struct BodyTriangleHit final {
+        std::size_t triangle_index{};
+        double depth{};
+    };
+
+    [[nodiscard]] std::optional<BodyTriangleHit>
+    nearestBodyTriangleHit(
+        const viewer::Ray3& ray) const {
+        std::optional<BodyTriangleHit> result;
+        for (std::size_t index = 0U;
+             index < body_scene_.triangles.size();
+             ++index) {
+            const auto depth =
+                rayTriangleDepth(
+                    ray,
+                    body_scene_.triangles[index]);
+            if (!depth) {
+                continue;
+            }
+            if (!result ||
+                *depth < result->depth) {
+                result =
+                    BodyTriangleHit{
+                        index,
+                        *depth};
+            }
+        }
+        return result;
+    }
+
+    [[nodiscard]] std::optional<double>
+    bodyPointDepth(
+        const viewer::Ray3& ray,
+        const viewer::Point3& point) const {
+        if (!ray.valid() ||
+            !viewer::finite(point)) {
+            return std::nullopt;
+        }
+        const auto displacement =
+            point - ray.origin;
+        const double depth =
+            viewer::dot(
+                displacement,
+                ray.direction);
+        return std::isfinite(depth) &&
+                       depth >= 0.0
+            ? std::optional<double>{depth}
+            : std::nullopt;
+    }
+
+    [[nodiscard]] bool bodyPointFrontVisible(
+        const viewer::Point3& point,
+        ScreenPoint screen) const {
+        const auto ray =
+            bodyPickRayAtPhysical(
+                screen.x,
+                screen.y);
+        if (!ray) {
+            return false;
+        }
+        const auto point_depth =
+            bodyPointDepth(*ray, point);
+        if (!point_depth) {
+            return false;
+        }
+        const auto nearest =
+            nearestBodyTriangleHit(*ray);
+        if (!nearest) {
+            // A sampled material boundary can lie exactly on a tessellated
+            // silhouette where the ray falls through both adjacent
+            // triangles. With no closer Body triangle, it is front-visible.
+            return true;
+        }
+
+        const double tolerance =
+            std::max(
+                1.0e-7,
+                std::abs(nearest->depth) *
+                    1.0e-7);
+        return *point_depth <=
+               nearest->depth + tolerance;
+    }
+
+    [[nodiscard]] viewer::BodyTopologyPickQueryResult
+    queryBodyTopology(
+        viewer::ViewportPoint2 point,
+        viewer::BodyTopologyPickFilter filter) {
+        if (!point.valid() ||
+            !filter.any()) {
+            return {};
+        }
+
+        ensureInitialized();
+        if (view_.IsNull()) {
+            return {};
+        }
+
+        viewer::BodyTopologyPickQueryResult result;
+        result.completed = true;
+
+        if (body_scene_.empty()) {
+            return result;
+        }
+
+        result.generation =
+            body_scene_.generation;
+
+        if (body_scene_.purpose !=
+            viewer::BodyScenePurpose::current_body) {
+            return result;
+        }
+
+        const double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            return {};
+        }
+
+        const ScreenPoint query{
+            point.x * dpr,
+            point.y * dpr};
+        const auto query_ray =
+            bodyPickRayAtPhysical(
+                query.x,
+                query.y);
+        if (!query_ray) {
+            return {};
+        }
+
+        if (filter.faces) {
+            const auto nearest =
+                nearestBodyTriangleHit(
+                    *query_ray);
+            if (nearest) {
+                const auto face =
+                    std::find_if(
+                        body_scene_.faces.begin(),
+                        body_scene_.faces.end(),
+                        [&nearest](const auto& item) {
+                            return nearest->triangle_index >=
+                                       item.first_triangle &&
+                                   nearest->triangle_index <
+                                       item.first_triangle +
+                                           item.triangle_count;
+                        });
+                if (face !=
+                    body_scene_.faces.end()) {
+                    result.candidates.push_back(
+                        {
+                            face->token,
+                            viewer::BodyTopologyPresentationKind::
+                                face,
+                            0.0,
+                            nearest->depth,
+                        });
+                }
+            }
+        }
+
+        if (filter.vertices) {
+            const double aperture =
+                10.0 * dpr;
+            const double aperture_squared =
+                aperture * aperture;
+
+            for (const auto& vertex :
+                 body_scene_.vertices) {
+                if (!vertex.ordinary_pickable) {
+                    continue;
+                }
+                const auto screen =
+                    projectToScreen(
+                        vertex.point);
+                if (!screen) {
+                    continue;
+                }
+                const double dx =
+                    screen->x - query.x;
+                const double dy =
+                    screen->y - query.y;
+                const double distance_squared =
+                    dx * dx + dy * dy;
+                if (distance_squared >
+                    aperture_squared) {
+                    continue;
+                }
+                if (!bodyPointFrontVisible(
+                        vertex.point,
+                        *screen)) {
+                    continue;
+                }
+                const auto ray =
+                    bodyPickRayAtPhysical(
+                        screen->x,
+                        screen->y);
+                const auto depth =
+                    ray
+                        ? bodyPointDepth(
+                              *ray,
+                              vertex.point)
+                        : std::nullopt;
+                if (!depth) {
+                    continue;
+                }
+                result.candidates.push_back(
+                    {
+                        vertex.token,
+                        viewer::BodyTopologyPresentationKind::
+                            vertex,
+                        std::sqrt(
+                            distance_squared) /
+                            dpr,
+                        *depth,
+                    });
+            }
+        }
+
+        if (filter.edges) {
+            const double aperture =
+                8.0 * dpr;
+            const double aperture_squared =
+                aperture * aperture;
+
+            for (const auto& edge :
+                 body_scene_.edges) {
+                if (!edge.material ||
+                    !edge.ordinary_pickable) {
+                    continue;
+                }
+
+                double best_distance_squared =
+                    aperture_squared;
+                std::optional<viewer::Point3>
+                    best_world;
+                std::optional<ScreenPoint>
+                    best_screen;
+
+                for (std::size_t index = 1U;
+                     index < edge.points.size();
+                     ++index) {
+                    const auto start =
+                        projectToScreen(
+                            edge.points[
+                                index - 1U]);
+                    const auto end =
+                        projectToScreen(
+                            edge.points[index]);
+                    if (!start || !end) {
+                        continue;
+                    }
+
+                    const auto closest =
+                        closestSegmentPoint(
+                            query,
+                            *start,
+                            *end);
+                    if (closest.distance_squared >
+                            best_distance_squared ||
+                        (best_world &&
+                         closest.distance_squared ==
+                             best_distance_squared)) {
+                        continue;
+                    }
+
+                    const auto& a =
+                        edge.points[index - 1U];
+                    const auto& b =
+                        edge.points[index];
+                    const auto delta =
+                        b - a;
+                    best_world =
+                        a +
+                        delta *
+                            closest.parameter;
+                    best_screen =
+                        ScreenPoint{
+                            start->x +
+                                (end->x - start->x) *
+                                    closest.parameter,
+                            start->y +
+                                (end->y - start->y) *
+                                    closest.parameter};
+                    best_distance_squared =
+                        closest.distance_squared;
+                }
+
+                if (!best_world ||
+                    !best_screen ||
+                    !bodyPointFrontVisible(
+                        *best_world,
+                        *best_screen)) {
+                    continue;
+                }
+
+                const auto ray =
+                    bodyPickRayAtPhysical(
+                        best_screen->x,
+                        best_screen->y);
+                const auto depth =
+                    ray
+                        ? bodyPointDepth(
+                              *ray,
+                              *best_world)
+                        : std::nullopt;
+                if (!depth) {
+                    continue;
+                }
+
+                result.candidates.push_back(
+                    {
+                        edge.token,
+                        viewer::BodyTopologyPresentationKind::
+                            edge,
+                        std::sqrt(
+                            best_distance_squared) /
+                            dpr,
+                        *depth,
+                    });
+            }
+        }
+
+        return result.valid()
+            ? result
+            : viewer::BodyTopologyPickQueryResult{};
+    }
+
     struct ReferenceObject final {
         viewer::PresentationToken token;
         viewer::ReferencePresentationKind kind;
