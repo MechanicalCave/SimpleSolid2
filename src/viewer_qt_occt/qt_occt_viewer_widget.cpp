@@ -53,6 +53,7 @@
 #include <QContextMenuEvent>
 #include <QCursor>
 #include <QDebug>
+#include <QKeyEvent>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPaintEvent>
