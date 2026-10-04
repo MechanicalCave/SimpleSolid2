@@ -519,8 +519,10 @@ void PartViewportController::setSolidModelingKernel(
     }
     solid_modeling_kernel_ =
         modeling_kernel;
-    solid_scene_revision_.reset();
-    solid_scene_cache_.reset();
+    body_scene_revision_.reset();
+    body_scene_cache_.reset();
+    body_topology_catalog_cache_.reset();
+    body_topology_bindings_.clear();
     clearSolidPreview();
     refreshPresentation();
 }
@@ -539,8 +541,10 @@ void PartViewportController::setDocumentSession(
         profile_bindings_.clear();
         transient_profile_reveal_.reset();
         transient_profile_hide_.reset();
-        solid_scene_revision_.reset();
-        solid_scene_cache_.reset();
+        body_scene_revision_.reset();
+        body_scene_cache_.reset();
+        body_topology_catalog_cache_.reset();
+        body_topology_bindings_.clear();
         clearSolidPreview();
         clearSketchPreview();
         clearProfileDraftPreview();
@@ -569,8 +573,10 @@ void PartViewportController::clear() {
     profile_bindings_.clear();
     transient_profile_reveal_.reset();
     transient_profile_hide_.reset();
-    solid_scene_revision_.reset();
-    solid_scene_cache_.reset();
+    body_scene_revision_.reset();
+    body_scene_cache_.reset();
+    body_topology_catalog_cache_.reset();
+    body_topology_bindings_.clear();
     clearSketchSelectionBoxOverlay();
     tree_->clear();
 
@@ -579,8 +585,8 @@ void PartViewportController::clear() {
             viewport_->setSolidPreviewScene(
                 viewer::SolidPreviewScene{}));
         static_cast<void>(
-            viewport_->setSolidScene(
-                viewer::SolidScene{}));
+            viewport_->setBodyScene(
+                viewer::BodyScene{}));
         static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));
@@ -626,16 +632,18 @@ void PartViewportController::refreshPresentation() {
     if (session_ == nullptr) {
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
-        solid_scene_revision_.reset();
-        solid_scene_cache_.reset();
+        body_scene_revision_.reset();
+        body_scene_cache_.reset();
+        body_topology_catalog_cache_.reset();
+        body_topology_bindings_.clear();
         clearSolidPreview();
         clearSketchPreview();
         clearProfileDraftPreview();
         clearSketchSelectionBoxOverlay();
         applySketchViewportMode();
         static_cast<void>(
-            viewport_->setSolidScene(
-                viewer::SolidScene{}));
+            viewport_->setBodyScene(
+                viewer::BodyScene{}));
         static_cast<void>(
             viewport_->setReferenceScene(
                 viewer::ReferenceScene{}));
@@ -668,19 +676,19 @@ void PartViewportController::refreshPresentation() {
     }
 
     const auto solid_scene =
-        buildSolidScene();
+        buildBodyScene();
     bool solid_ok = false;
     if (solid_scene) {
         solid_ok =
-            viewport_->setSolidScene(
+            viewport_->setBodyScene(
                 *solid_scene);
     } else {
         // Presentation generation failed. Clear any previously published
         // Body before reporting degradation; stale solid geometry is never
         // allowed to remain current truth.
         static_cast<void>(
-            viewport_->setSolidScene(
-                viewer::SolidScene{}));
+            viewport_->setBodyScene(
+                viewer::BodyScene{}));
     }
 
     const bool reference_ok =
@@ -2088,21 +2096,23 @@ PartViewportController::buildReferenceScene() const {
 }
 
 std::optional<viewer::SolidScene>
-PartViewportController::buildSolidScene() {
+PartViewportController::buildBodyScene() {
     viewer::SolidScene empty_scene;
     if (session_ == nullptr ||
         solid_modeling_kernel_ == nullptr) {
-        solid_scene_revision_.reset();
-        solid_scene_cache_.reset();
+        body_scene_revision_.reset();
+        body_scene_cache_.reset();
+        body_topology_catalog_cache_.reset();
+        body_topology_bindings_.clear();
         return empty_scene;
     }
 
     const auto revision =
         session_->document().revision();
-    if (solid_scene_revision_ &&
-        *solid_scene_revision_ == revision &&
-        solid_scene_cache_) {
-        return *solid_scene_cache_;
+    if (body_scene_revision_ &&
+        *body_scene_revision_ == revision &&
+        body_scene_cache_) {
+        return *body_scene_cache_;
     }
 
     const auto evaluation =
@@ -2131,9 +2141,9 @@ PartViewportController::buildSolidScene() {
     if (presentation_solid == nullptr) {
         // Empty history or failure at the first active Feature has no valid
         // current-revision prefix to present.
-        solid_scene_revision_ = revision;
-        solid_scene_cache_ = empty_scene;
-        return *solid_scene_cache_;
+        body_scene_revision_ = revision;
+        body_scene_cache_ = empty_scene;
+        return *body_scene_cache_;
     }
 
     const auto mesh =
@@ -2143,22 +2153,26 @@ PartViewportController::buildSolidScene() {
     if (!mesh.ok()) {
         // Provider/presentation failure remains retryable at the same
         // authored revision; never cache it as valid current truth.
-        solid_scene_revision_.reset();
-        solid_scene_cache_.reset();
+        body_scene_revision_.reset();
+        body_scene_cache_.reset();
+        body_topology_catalog_cache_.reset();
+        body_topology_bindings_.clear();
         return std::nullopt;
     }
 
     const auto scene =
         viewerSolidScene(mesh.mesh);
     if (!scene) {
-        solid_scene_revision_.reset();
-        solid_scene_cache_.reset();
+        body_scene_revision_.reset();
+        body_scene_cache_.reset();
+        body_topology_catalog_cache_.reset();
+        body_topology_bindings_.clear();
         return std::nullopt;
     }
 
-    solid_scene_revision_ = revision;
-    solid_scene_cache_ = *scene;
-    return *solid_scene_cache_;
+    body_scene_revision_ = revision;
+    body_scene_cache_ = *scene;
+    return *body_scene_cache_;
 }
 
 std::optional<viewer::ProfileRegionPresentation>
