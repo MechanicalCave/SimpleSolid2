@@ -281,7 +281,158 @@ void propagateCurrentReferences(
     }
 }
 
+template <typename Token>
+[[nodiscard]] bool uniqueValidTokens(
+    const std::vector<Token>& tokens) noexcept {
+    for (std::size_t index = 0U;
+         index < tokens.size();
+         ++index) {
+        if (!tokens[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < tokens.size();
+             ++other) {
+            if (tokens[index] == tokens[other]) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] std::optional<BodyStageTopologyCatalog>
+makeBodyStageTopologyCatalog(
+    FeatureId feature_id,
+    const kernel::SolidModelingResult& kernel_result,
+    const std::vector<FeatureFaceResolution>&
+        semantic_faces) {
+    if (!feature_id.valid() ||
+        !kernel_result.ok() ||
+        kernel_result.face_count !=
+            kernel_result.current_faces.size() ||
+        kernel_result.edge_count !=
+            kernel_result.current_edges.size() ||
+        kernel_result.vertex_count !=
+            kernel_result.current_vertices.size() ||
+        !uniqueValidTokens(
+            kernel_result.current_faces) ||
+        !uniqueValidTokens(
+            kernel_result.current_edges) ||
+        !uniqueValidTokens(
+            kernel_result.current_vertices)) {
+        return std::nullopt;
+    }
+
+    BodyStageTopologyCatalog result;
+    result.stage.kind =
+        BodyStageKind::after_feature;
+    result.stage.feature_id = feature_id;
+
+    result.faces.reserve(
+        kernel_result.current_faces.size());
+    for (const auto token :
+         kernel_result.current_faces) {
+        std::size_t claim_count = 0U;
+        std::optional<FeatureFaceAddress>
+            semantic_address;
+
+        for (const auto& reference :
+             semantic_faces) {
+            if (reference.status !=
+                    kernel::ReferenceStatus::
+                        resolved ||
+                !reference.runtime_token ||
+                *reference.runtime_token != token) {
+                continue;
+            }
+            ++claim_count;
+            semantic_address =
+                reference.address;
+        }
+
+        if (claim_count > 1U) {
+            return std::nullopt;
+        }
+
+        BodyFaceTopologyRecord record;
+        record.runtime_token = token;
+        if (claim_count == 1U) {
+            if (!semantic_address ||
+                !semantic_address->valid()) {
+                return std::nullopt;
+            }
+            record.accounting_class =
+                TopologyAccountingClass::
+                    referenceable;
+            record.semantic_address =
+                std::move(semantic_address);
+        } else {
+            record.accounting_class =
+                TopologyAccountingClass::
+                    semantically_unsupported;
+        }
+        result.faces.push_back(
+            std::move(record));
+    }
+
+    // Every semantic Face still reported Resolved must belong to exactly one
+    // current provider Face in this same stage inventory.
+    for (const auto& reference :
+         semantic_faces) {
+        if (reference.status !=
+            kernel::ReferenceStatus::resolved) {
+            continue;
+        }
+        if (!reference.runtime_token ||
+            std::count(
+                kernel_result.current_faces.begin(),
+                kernel_result.current_faces.end(),
+                *reference.runtime_token) != 1) {
+            return std::nullopt;
+        }
+    }
+
+    result.edges.reserve(
+        kernel_result.current_edges.size());
+    for (const auto token :
+         kernel_result.current_edges) {
+        result.edges.push_back(
+            BodyEdgeTopologyRecord{
+                token,
+                TopologyAccountingClass::
+                    semantically_unsupported});
+    }
+
+    result.vertices.reserve(
+        kernel_result.current_vertices.size());
+    for (const auto token :
+         kernel_result.current_vertices) {
+        result.vertices.push_back(
+            BodyVertexTopologyRecord{
+                token,
+                TopologyAccountingClass::
+                    semantically_unsupported});
+    }
+
+    return result.complete()
+        ? std::optional<BodyStageTopologyCatalog>{
+              std::move(result)}
+        : std::nullopt;
+}
+
 } // namespace
+
+bool BodyStageRef::valid() const noexcept {
+    switch (kind) {
+    case BodyStageKind::empty_body:
+        return !feature_id.has_value();
+    case BodyStageKind::after_feature:
+        return feature_id.has_value() &&
+               feature_id->valid();
+    }
+    return false;
+}
 
 bool FeatureFaceAddress::valid() const noexcept {
     if (!producer_feature_id.valid()) {
@@ -292,6 +443,105 @@ bool FeatureFaceAddress::valid() const noexcept {
                source_entity->valid();
     }
     return !source_entity.has_value();
+}
+
+bool BodyFaceTopologyRecord::valid() const noexcept {
+    if (!runtime_token.valid()) {
+        return false;
+    }
+    switch (accounting_class) {
+    case TopologyAccountingClass::referenceable:
+        return semantic_address.has_value() &&
+               semantic_address->valid();
+    case TopologyAccountingClass::
+        known_representation_artifact:
+    case TopologyAccountingClass::
+        semantically_unsupported:
+        return !semantic_address.has_value();
+    case TopologyAccountingClass::
+        integrity_failure:
+        return false;
+    }
+    return false;
+}
+
+bool BodyEdgeTopologyRecord::valid() const noexcept {
+    return runtime_token.valid() &&
+           accounting_class !=
+               TopologyAccountingClass::
+                   integrity_failure;
+}
+
+bool BodyVertexTopologyRecord::valid() const noexcept {
+    return runtime_token.valid() &&
+           accounting_class !=
+               TopologyAccountingClass::
+                   integrity_failure;
+}
+
+bool BodyStageTopologyCatalog::valid() const noexcept {
+    if (!stage.valid()) {
+        return false;
+    }
+
+    if (stage.kind ==
+        BodyStageKind::empty_body) {
+        return faces.empty() &&
+               edges.empty() &&
+               vertices.empty();
+    }
+
+    for (std::size_t index = 0U;
+         index < faces.size();
+         ++index) {
+        if (!faces[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < faces.size();
+             ++other) {
+            if (faces[index].runtime_token ==
+                faces[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+    for (std::size_t index = 0U;
+         index < edges.size();
+         ++index) {
+        if (!edges[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < edges.size();
+             ++other) {
+            if (edges[index].runtime_token ==
+                edges[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+    for (std::size_t index = 0U;
+         index < vertices.size();
+         ++index) {
+        if (!vertices[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < vertices.size();
+             ++other) {
+            if (vertices[index].runtime_token ==
+                vertices[other].runtime_token) {
+                return false;
+            }
+        }
+    }
+
+    return true;
+}
+
+bool BodyStageTopologyCatalog::complete() const noexcept {
+    return valid();
 }
 
 const FeatureEvaluation*
@@ -319,6 +569,8 @@ PartEvaluation evaluatePart(
         document.body().features.size());
 
     kernel::RuntimeSolidHandle current_solid;
+    std::optional<BodyStageTopologyCatalog>
+        current_topology;
     std::vector<FeatureFaceResolution>
         current_references;
     bool chain_broken = false;
@@ -470,8 +722,10 @@ PartEvaluation evaluatePart(
             continue;
         }
 
+        auto candidate_references =
+            current_references;
         propagateCurrentReferences(
-            current_references,
+            candidate_references,
             kernel_result.inherited_faces);
 
         evaluated.produced_faces.reserve(
@@ -484,8 +738,27 @@ PartEvaluation evaluatePart(
                     face);
             evaluated.produced_faces.push_back(
                 converted);
-            current_references.push_back(
+            candidate_references.push_back(
                 std::move(converted));
+        }
+
+        auto candidate_topology =
+            makeBodyStageTopologyCatalog(
+                authored.id,
+                kernel_result,
+                candidate_references);
+        if (!candidate_topology) {
+            evaluated.status =
+                FeatureEvaluationStatus::
+                    failed;
+            evaluated.diagnostic =
+                FeatureEvaluationDiagnosticCode::
+                    topology_integrity_failure;
+            chain_broken = true;
+            current_references.clear();
+            result.features.push_back(
+                std::move(evaluated));
+            continue;
         }
 
         evaluated.status =
@@ -494,6 +767,14 @@ PartEvaluation evaluatePart(
         evaluated.diagnostic =
             FeatureEvaluationDiagnosticCode::
                 none;
+        evaluated.result_solid =
+            kernel_result.solid;
+        evaluated.result_topology =
+            *candidate_topology;
+        current_references =
+            std::move(candidate_references);
+        current_topology =
+            std::move(candidate_topology);
         current_solid =
             std::move(kernel_result.solid);
         result.features.push_back(
@@ -507,6 +788,9 @@ PartEvaluation evaluatePart(
         result.body_solid.reset();
         result.resolved_prefix_solid =
             std::move(current_solid);
+        result.resolved_prefix_topology =
+            std::move(current_topology);
+        result.current_topology.reset();
         result.current_face_references.clear();
         return result;
     }
@@ -517,6 +801,8 @@ PartEvaluation evaluatePart(
                 up_to_date;
         result.body_solid =
             std::move(current_solid);
+        result.current_topology =
+            std::move(current_topology);
         result.current_face_references =
             std::move(current_references);
         return result;
