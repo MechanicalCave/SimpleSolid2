@@ -413,7 +413,12 @@ struct ScreenRect final {
     }
 };
 
-[[nodiscard]] double pointSegmentDistanceSquared(
+struct ClosestSegmentPoint final {
+    double distance_squared{};
+    double parameter{};
+};
+
+[[nodiscard]] ClosestSegmentPoint closestSegmentPoint(
     ScreenPoint point,
     ScreenPoint start,
     ScreenPoint end) noexcept {
@@ -425,7 +430,9 @@ struct ScreenRect final {
     if (length_squared <= 0.0) {
         const double px = point.x - start.x;
         const double py = point.y - start.y;
-        return px * px + py * py;
+        return {
+            px * px + py * py,
+            0.0};
     }
 
     const double parameter =
@@ -442,7 +449,84 @@ struct ScreenRect final {
         start.y + parameter * dy;
     const double px = point.x - closest_x;
     const double py = point.y - closest_y;
-    return px * px + py * py;
+    return {
+        px * px + py * py,
+        parameter};
+}
+
+[[nodiscard]] double pointSegmentDistanceSquared(
+    ScreenPoint point,
+    ScreenPoint start,
+    ScreenPoint end) noexcept {
+    return closestSegmentPoint(
+               point,
+               start,
+               end)
+        .distance_squared;
+}
+
+[[nodiscard]] std::optional<double> rayTriangleDepth(
+    const viewer::Ray3& ray,
+    const viewer::SolidTrianglePresentation& triangle) noexcept {
+    if (!ray.valid() || !triangle.valid()) {
+        return std::nullopt;
+    }
+
+    const auto edge1 =
+        triangle.second - triangle.first;
+    const auto edge2 =
+        triangle.third - triangle.first;
+    const auto h =
+        viewer::cross(
+            ray.direction,
+            edge2);
+    const double determinant =
+        viewer::dot(
+            edge1,
+            h);
+    constexpr double epsilon = 1.0e-12;
+    if (std::abs(determinant) <= epsilon) {
+        return std::nullopt;
+    }
+
+    const double inverse =
+        1.0 / determinant;
+    const auto from_first =
+        ray.origin - triangle.first;
+    const double u =
+        inverse *
+        viewer::dot(
+            from_first,
+            h);
+    if (u < -epsilon ||
+        u > 1.0 + epsilon) {
+        return std::nullopt;
+    }
+
+    const auto q =
+        viewer::cross(
+            from_first,
+            edge1);
+    const double v =
+        inverse *
+        viewer::dot(
+            ray.direction,
+            q);
+    if (v < -epsilon ||
+        u + v > 1.0 + epsilon) {
+        return std::nullopt;
+    }
+
+    const double depth =
+        inverse *
+        viewer::dot(
+            edge2,
+            q);
+    return std::isfinite(depth) &&
+                   depth >= -epsilon
+        ? std::optional<double>{
+              std::max(0.0, depth)}
+        : std::nullopt;
 }
 
 [[nodiscard]] double cross2(
@@ -1405,6 +1489,184 @@ public:
             solid_object_);
     }
 
+    void clearBodyEdgeStyleObjects() noexcept {
+        if (!context_.IsNull()) {
+            for (const auto& object :
+                 body_visible_edge_objects_) {
+                if (object.IsNull()) continue;
+                const auto retained = object;
+                guardedVoid(
+                    "removeBodyVisibleEdge",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+            for (const auto& object :
+                 body_hidden_edge_objects_) {
+                if (object.IsNull()) continue;
+                const auto retained = object;
+                guardedVoid(
+                    "removeBodyHiddenEdge",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+        body_visible_edge_objects_.clear();
+        body_hidden_edge_objects_.clear();
+    }
+
+    [[nodiscard]] Handle(AIS_Shape)
+    makeBodyEdgeStyleObject(
+        const viewer::BodyEdgePresentation& edge,
+        bool hidden_pass) const {
+        if (!edge.valid() ||
+            !edge.material) {
+            return {};
+        }
+
+        BRepBuilderAPI_MakePolygon polygon;
+        for (const auto& point :
+             edge.points) {
+            polygon.Add(toPoint(point));
+        }
+        if (!polygon.IsDone()) {
+            return {};
+        }
+
+        Handle(AIS_Shape) object =
+            new AIS_Shape(polygon.Wire());
+        if (object.IsNull()) {
+            return {};
+        }
+
+        const Quantity_Color color{
+            0.16, 0.17, 0.19,
+            Quantity_TOC_RGB};
+        const auto aspect =
+            occ::handle<Prs3d_LineAspect>{
+                new Prs3d_LineAspect(
+                    color,
+                    hidden_pass
+                        ? Aspect_TOL_DASH
+                        : Aspect_TOL_SOLID,
+                    hidden_pass ? 1.0 : 1.35)};
+
+        object->Attributes()->SetLineAspect(
+            aspect);
+        object->Attributes()->SetWireAspect(
+            aspect);
+        object->Attributes()->SetFreeBoundaryAspect(
+            aspect);
+        object->Attributes()->SetUnFreeBoundaryAspect(
+            aspect);
+
+        if (hidden_pass) {
+            // Hidden pass is display-only and deliberately has no selection
+            // owner. Topmost dashed drawing lets occluded material edges
+            // remain visible while the ordinary depth-tested solid pass
+            // supplies continuous visible edges underneath.
+            object->SetZLayer(
+                Graphic3d_ZLayerId_Topmost);
+        }
+        return object;
+    }
+
+    [[nodiscard]] bool syncBodyViewStyle() {
+        clearBodyEdgeStyleObjects();
+
+        if (context_.IsNull() ||
+            body_scene_.empty() ||
+            view_style_ ==
+                viewer::ViewStyle::shaded) {
+            return true;
+        }
+
+        for (const auto& edge :
+             body_scene_.edges) {
+            if (!edge.material) {
+                continue;
+            }
+
+            auto visible =
+                makeBodyEdgeStyleObject(
+                    edge,
+                    false);
+            if (visible.IsNull()) {
+                clearBodyEdgeStyleObjects();
+                return false;
+            }
+            context_->Display(
+                visible,
+                false);
+            context_->Deactivate(
+                visible);
+            body_visible_edge_objects_.push_back(
+                visible);
+
+            if (view_style_ ==
+                viewer::ViewStyle::
+                    shaded_with_hidden_edges) {
+                auto hidden =
+                    makeBodyEdgeStyleObject(
+                        edge,
+                        true);
+                if (hidden.IsNull()) {
+                    clearBodyEdgeStyleObjects();
+                    return false;
+                }
+                context_->Display(
+                    hidden,
+                    false);
+                context_->Deactivate(
+                    hidden);
+                body_hidden_edge_objects_.push_back(
+                    hidden);
+            }
+        }
+        return true;
+    }
+
+    [[nodiscard]] viewer::ViewStyle
+    viewStyle() const noexcept {
+        return view_style_;
+    }
+
+    [[nodiscard]] bool setViewStyle(
+        viewer::ViewStyle style) {
+        if (view_style_ == style) {
+            return true;
+        }
+
+        const auto previous =
+            view_style_;
+        view_style_ = style;
+        if (!syncBodyViewStyle()) {
+            view_style_ = previous;
+            static_cast<void>(
+                syncBodyViewStyle());
+            return false;
+        }
+
+        if (!context_.IsNull()) {
+            updateCurrentViewer();
+        }
+        if (!view_.IsNull()) {
+            redraw();
+        }
+        return true;
+    }
+
+    void setViewStyleActionHandler(
+        viewer::ViewStyleActionHandler handler) {
+        view_style_action_handler_ =
+            std::move(handler);
+    }
+
     bool setBodyScene(
         const viewer::BodyScene& scene) {
         if (!scene.valid()) return false;
@@ -1449,6 +1711,10 @@ public:
                 solid_object_);
             body_scene_ = scene;
             solid_scene_ = {};
+            if (!syncBodyViewStyle()) {
+                clearSolidScene();
+                return false;
+            }
             syncCommittedSolidVisibilityForPreview();
             updateCurrentViewer();
             return true;
@@ -3011,6 +3277,12 @@ public:
         selection_intent_handler_ = std::move(handler);
     }
 
+    void setBodyTopologySelectionIntentHandler(
+        viewer::BodyTopologySelectionIntentHandler handler) {
+        body_topology_selection_intent_handler_ =
+            std::move(handler);
+    }
+
     void setSpatialPointerHandler(
         viewer::SpatialPointerHandler handler) {
         spatial_pointer_handler_ =
@@ -3248,7 +3520,8 @@ public:
         ensureInitialized();
         if (context_.IsNull() ||
             view_.IsNull() ||
-            !selection_intent_handler_) {
+            (!selection_intent_handler_ &&
+             !body_topology_selection_intent_handler_)) {
             return;
         }
 
@@ -3298,7 +3571,8 @@ public:
         // may synchronously refresh or replace the presentation scene.
         context_->ClearDetected(false);
 
-        if (detected_token) {
+        if (detected_token &&
+            selection_intent_handler_) {
             selection_intent_handler_(
                 viewer::SelectionIntent{
                     *detected_token,
@@ -3308,10 +3582,33 @@ public:
             return;
         }
 
-        selection_intent_handler_(
-            viewer::SelectionIntent{
-                {},
-                viewer::SelectionIntentMode::clear});
+        if (body_topology_selection_intent_handler_) {
+            const auto body_query =
+                queryBodyTopology(
+                    viewer::ViewportPoint2{
+                        static_cast<double>(
+                            logical_x),
+                        static_cast<double>(
+                            logical_y)},
+                    {});
+            if (body_query.valid() &&
+                body_query.completed &&
+                !body_query.candidates.empty()) {
+                body_topology_selection_intent_handler_(
+                    body_query,
+                    toggle
+                        ? viewer::SelectionIntentMode::toggle
+                        : viewer::SelectionIntentMode::replace);
+                return;
+            }
+        }
+
+        if (selection_intent_handler_) {
+            selection_intent_handler_(
+                viewer::SelectionIntent{
+                    {},
+                    viewer::SelectionIntentMode::clear});
+        }
     }
 
     [[nodiscard]] std::optional<viewer::ViewportPoint2>
@@ -3397,6 +3694,380 @@ public:
         return ScreenPoint{
             static_cast<double>(pixel_x),
             static_cast<double>(pixel_y)};
+    }
+
+    [[nodiscard]] std::optional<viewer::Ray3>
+    bodyPickRayAtPhysical(
+        double physical_x,
+        double physical_y) const {
+        if (view_.IsNull() ||
+            !std::isfinite(physical_x) ||
+            !std::isfinite(physical_y)) {
+            return std::nullopt;
+        }
+
+        double world_x{};
+        double world_y{};
+        double world_z{};
+        double direction_x{};
+        double direction_y{};
+        double direction_z{};
+
+        view_->ConvertWithProj(
+            static_cast<int>(
+                std::lround(physical_x)),
+            static_cast<int>(
+                std::lround(physical_y)),
+            world_x,
+            world_y,
+            world_z,
+            direction_x,
+            direction_y,
+            direction_z);
+
+        const auto direction =
+            viewer::normalized(
+                viewer::Vec3{
+                    direction_x,
+                    direction_y,
+                    direction_z});
+        if (!direction) {
+            return std::nullopt;
+        }
+
+        viewer::Ray3 ray{
+            {world_x, world_y, world_z},
+            *direction};
+        return ray.valid()
+            ? std::optional<viewer::Ray3>{ray}
+            : std::nullopt;
+    }
+
+    struct BodyTriangleHit final {
+        std::size_t triangle_index{};
+        double depth{};
+    };
+
+    [[nodiscard]] std::optional<BodyTriangleHit>
+    nearestBodyTriangleHit(
+        const viewer::Ray3& ray) const {
+        std::optional<BodyTriangleHit> result;
+        for (std::size_t index = 0U;
+             index < body_scene_.triangles.size();
+             ++index) {
+            const auto depth =
+                rayTriangleDepth(
+                    ray,
+                    body_scene_.triangles[index]);
+            if (!depth) {
+                continue;
+            }
+            if (!result ||
+                *depth < result->depth) {
+                result =
+                    BodyTriangleHit{
+                        index,
+                        *depth};
+            }
+        }
+        return result;
+    }
+
+    [[nodiscard]] std::optional<double>
+    bodyPointDepth(
+        const viewer::Ray3& ray,
+        const viewer::Point3& point) const {
+        if (!ray.valid() ||
+            !viewer::finite(point)) {
+            return std::nullopt;
+        }
+        const auto displacement =
+            point - ray.origin;
+        const double depth =
+            viewer::dot(
+                displacement,
+                ray.direction);
+        return std::isfinite(depth) &&
+                       depth >= 0.0
+            ? std::optional<double>{depth}
+            : std::nullopt;
+    }
+
+    [[nodiscard]] bool bodyPointFrontVisible(
+        const viewer::Point3& point,
+        ScreenPoint screen) const {
+        const auto ray =
+            bodyPickRayAtPhysical(
+                screen.x,
+                screen.y);
+        if (!ray) {
+            return false;
+        }
+        const auto point_depth =
+            bodyPointDepth(*ray, point);
+        if (!point_depth) {
+            return false;
+        }
+        const auto nearest =
+            nearestBodyTriangleHit(*ray);
+        if (!nearest) {
+            // A sampled material boundary can lie exactly on a tessellated
+            // silhouette where the ray falls through both adjacent
+            // triangles. With no closer Body triangle, it is front-visible.
+            return true;
+        }
+
+        const double tolerance =
+            std::max(
+                1.0e-7,
+                std::abs(nearest->depth) *
+                    1.0e-7);
+        return *point_depth <=
+               nearest->depth + tolerance;
+    }
+
+    [[nodiscard]] viewer::BodyTopologyPickQueryResult
+    queryBodyTopology(
+        viewer::ViewportPoint2 point,
+        viewer::BodyTopologyPickFilter filter) {
+        if (!point.valid() ||
+            !filter.any()) {
+            return {};
+        }
+
+        ensureInitialized();
+        if (view_.IsNull()) {
+            return {};
+        }
+
+        viewer::BodyTopologyPickQueryResult result;
+        result.completed = true;
+
+        if (body_scene_.empty()) {
+            return result;
+        }
+
+        result.generation =
+            body_scene_.generation;
+
+        if (body_scene_.purpose !=
+            viewer::BodyScenePurpose::current_body) {
+            return result;
+        }
+
+        const double dpr =
+            owner_.devicePixelRatioF();
+        if (!std::isfinite(dpr) ||
+            dpr <= 0.0) {
+            return {};
+        }
+
+        const ScreenPoint query{
+            point.x * dpr,
+            point.y * dpr};
+        const auto query_ray =
+            bodyPickRayAtPhysical(
+                query.x,
+                query.y);
+        if (!query_ray) {
+            return {};
+        }
+
+        if (filter.faces) {
+            const auto nearest =
+                nearestBodyTriangleHit(
+                    *query_ray);
+            if (nearest) {
+                const auto face =
+                    std::find_if(
+                        body_scene_.faces.begin(),
+                        body_scene_.faces.end(),
+                        [&nearest](const auto& item) {
+                            return nearest->triangle_index >=
+                                       item.first_triangle &&
+                                   nearest->triangle_index <
+                                       item.first_triangle +
+                                           item.triangle_count;
+                        });
+                if (face !=
+                    body_scene_.faces.end()) {
+                    result.candidates.push_back(
+                        {
+                            face->token,
+                            viewer::BodyTopologyPresentationKind::
+                                face,
+                            0.0,
+                            nearest->depth,
+                        });
+                }
+            }
+        }
+
+        if (filter.vertices) {
+            const double aperture =
+                10.0 * dpr;
+            const double aperture_squared =
+                aperture * aperture;
+
+            for (const auto& vertex :
+                 body_scene_.vertices) {
+                if (!vertex.ordinary_pickable) {
+                    continue;
+                }
+                const auto screen =
+                    projectToScreen(
+                        vertex.point);
+                if (!screen) {
+                    continue;
+                }
+                const double dx =
+                    screen->x - query.x;
+                const double dy =
+                    screen->y - query.y;
+                const double distance_squared =
+                    dx * dx + dy * dy;
+                if (distance_squared >
+                    aperture_squared) {
+                    continue;
+                }
+                if (!bodyPointFrontVisible(
+                        vertex.point,
+                        *screen)) {
+                    continue;
+                }
+                const auto ray =
+                    bodyPickRayAtPhysical(
+                        screen->x,
+                        screen->y);
+                const auto depth =
+                    ray
+                        ? bodyPointDepth(
+                              *ray,
+                              vertex.point)
+                        : std::nullopt;
+                if (!depth) {
+                    continue;
+                }
+                result.candidates.push_back(
+                    {
+                        vertex.token,
+                        viewer::BodyTopologyPresentationKind::
+                            vertex,
+                        std::sqrt(
+                            distance_squared) /
+                            dpr,
+                        *depth,
+                    });
+            }
+        }
+
+        if (filter.edges) {
+            const double aperture =
+                8.0 * dpr;
+            const double aperture_squared =
+                aperture * aperture;
+
+            for (const auto& edge :
+                 body_scene_.edges) {
+                if (!edge.material ||
+                    !edge.ordinary_pickable) {
+                    continue;
+                }
+
+                double best_distance_squared =
+                    aperture_squared;
+                std::optional<viewer::Point3>
+                    best_world;
+                std::optional<ScreenPoint>
+                    best_screen;
+
+                for (std::size_t index = 1U;
+                     index < edge.points.size();
+                     ++index) {
+                    const auto start =
+                        projectToScreen(
+                            edge.points[
+                                index - 1U]);
+                    const auto end =
+                        projectToScreen(
+                            edge.points[index]);
+                    if (!start || !end) {
+                        continue;
+                    }
+
+                    const auto closest =
+                        closestSegmentPoint(
+                            query,
+                            *start,
+                            *end);
+                    if (closest.distance_squared >
+                            best_distance_squared ||
+                        (best_world &&
+                         closest.distance_squared ==
+                             best_distance_squared)) {
+                        continue;
+                    }
+
+                    const auto& a =
+                        edge.points[index - 1U];
+                    const auto& b =
+                        edge.points[index];
+                    const auto delta =
+                        b - a;
+                    best_world =
+                        a +
+                        delta *
+                            closest.parameter;
+                    best_screen =
+                        ScreenPoint{
+                            start->x +
+                                (end->x - start->x) *
+                                    closest.parameter,
+                            start->y +
+                                (end->y - start->y) *
+                                    closest.parameter};
+                    best_distance_squared =
+                        closest.distance_squared;
+                }
+
+                if (!best_world ||
+                    !best_screen ||
+                    !bodyPointFrontVisible(
+                        *best_world,
+                        *best_screen)) {
+                    continue;
+                }
+
+                const auto ray =
+                    bodyPickRayAtPhysical(
+                        best_screen->x,
+                        best_screen->y);
+                const auto depth =
+                    ray
+                        ? bodyPointDepth(
+                              *ray,
+                              *best_world)
+                        : std::nullopt;
+                if (!depth) {
+                    continue;
+                }
+
+                result.candidates.push_back(
+                    {
+                        edge.token,
+                        viewer::BodyTopologyPresentationKind::
+                            edge,
+                        std::sqrt(
+                            best_distance_squared) /
+                            dpr,
+                        *depth,
+                    });
+            }
+        }
+
+        return result.valid()
+            ? result
+            : viewer::BodyTopologyPickQueryResult{};
     }
 
     struct ReferenceObject final {
@@ -3706,6 +4377,8 @@ public:
     }
 
     void clearSolidScene() noexcept {
+        clearBodySelectionObjects();
+        clearBodyEdgeStyleObjects();
         if (!context_.IsNull() &&
             !solid_object_.IsNull()) {
             const auto retained =
@@ -4128,8 +4801,188 @@ public:
                    token) != selection_.selected.end();
     }
 
+    void clearBodySelectionObjects() noexcept {
+        if (!context_.IsNull()) {
+            for (const auto& object :
+                 body_selection_objects_) {
+                if (object.IsNull()) continue;
+                const auto retained = object;
+                guardedVoid(
+                    "removeBodySelectionOverlay",
+                    [this, retained] {
+                        context_->Remove(
+                            retained,
+                            false);
+                    });
+            }
+        }
+        body_selection_objects_.clear();
+    }
+
+    [[nodiscard]] bool appendBodySelectionOverlay(
+        viewer::PresentationToken token,
+        bool primary) {
+        if (context_.IsNull() ||
+            body_scene_.empty()) {
+            return true;
+        }
+
+        const Quantity_Color color =
+            primary
+                ? Quantity_Color{
+                      0.25, 0.90, 1.0,
+                      Quantity_TOC_RGB}
+                : Quantity_Color{
+                      0.18, 0.72, 0.96,
+                      Quantity_TOC_RGB};
+
+        const auto face =
+            std::find_if(
+                body_scene_.faces.begin(),
+                body_scene_.faces.end(),
+                [token](const auto& item) {
+                    return item.token == token;
+                });
+        if (face !=
+            body_scene_.faces.end()) {
+            viewer::SolidScene subset;
+            subset.triangles.reserve(
+                face->triangle_count);
+            for (std::size_t index = 0U;
+                 index < face->triangle_count;
+                 ++index) {
+                subset.triangles.push_back(
+                    body_scene_.triangles[
+                        face->first_triangle +
+                        index]);
+            }
+            auto object =
+                makeSolidObject(subset);
+            if (object.IsNull()) {
+                return false;
+            }
+            setOwnedSolidShadingStyle(
+                object,
+                color,
+                primary ? 0.18 : 0.30);
+            object->SetPolygonOffsets(
+                Aspect_POM_Fill,
+                -2.0F,
+                -2.0F);
+            context_->Display(
+                object,
+                false);
+            context_->Deactivate(
+                object);
+            body_selection_objects_.push_back(
+                object);
+            return true;
+        }
+
+        const auto edge =
+            std::find_if(
+                body_scene_.edges.begin(),
+                body_scene_.edges.end(),
+                [token](const auto& item) {
+                    return item.token == token;
+                });
+        if (edge !=
+            body_scene_.edges.end()) {
+            BRepBuilderAPI_MakePolygon polygon;
+            for (const auto& point :
+                 edge->points) {
+                polygon.Add(toPoint(point));
+            }
+            if (!polygon.IsDone()) {
+                return false;
+            }
+            Handle(AIS_Shape) object =
+                new AIS_Shape(polygon.Wire());
+            const auto aspect =
+                occ::handle<Prs3d_LineAspect>{
+                    new Prs3d_LineAspect(
+                        color,
+                        Aspect_TOL_SOLID,
+                        primary ? 4.0 : 3.0)};
+            object->Attributes()->SetLineAspect(
+                aspect);
+            object->Attributes()->SetWireAspect(
+                aspect);
+            object->Attributes()->SetFreeBoundaryAspect(
+                aspect);
+            object->Attributes()->SetUnFreeBoundaryAspect(
+                aspect);
+            context_->Display(
+                object,
+                false);
+            context_->Deactivate(
+                object);
+            body_selection_objects_.push_back(
+                object);
+            return true;
+        }
+
+        const auto vertex =
+            std::find_if(
+                body_scene_.vertices.begin(),
+                body_scene_.vertices.end(),
+                [token](const auto& item) {
+                    return item.token == token;
+                });
+        if (vertex !=
+            body_scene_.vertices.end()) {
+            double dpr =
+                owner_.devicePixelRatioF();
+            if (!std::isfinite(dpr) ||
+                dpr <= 0.0) {
+                dpr = 1.0;
+            }
+            const int size =
+                gripMarkerPixelSize(
+                    primary ? 11.0 : 9.0,
+                    dpr);
+            Handle(Geom_CartesianPoint) point =
+                new Geom_CartesianPoint(
+                    toPoint(vertex->point));
+            Handle(AIS_Point) object =
+                new AIS_Point(point);
+            object->Attributes()->SetPointAspect(
+                new Prs3d_PointAspect(
+                    color,
+                    size,
+                    size,
+                    squareMarkerBitmap(
+                        size,
+                        true)));
+            context_->Display(
+                object,
+                false);
+            context_->Deactivate(
+                object);
+            body_selection_objects_.push_back(
+                object);
+            return true;
+        }
+
+        return true;
+    }
+
     void applySelectionStyles() {
         if (context_.IsNull()) return;
+
+        clearBodySelectionObjects();
+        for (const auto token :
+             selection_.selected) {
+            const bool primary =
+                selection_.primary &&
+                *selection_.primary == token;
+            if (!appendBodySelectionOverlay(
+                    token,
+                    primary)) {
+                clearBodySelectionObjects();
+                break;
+            }
+        }
 
         for (const auto& entry : reference_objects_) {
             if (entry.object.IsNull()) continue;
@@ -4640,6 +5493,8 @@ private:
         sketch_snap_inference_scene_;
     viewer::PresentationSelection selection_;
     viewer::SelectionIntentHandler selection_intent_handler_;
+    viewer::BodyTopologySelectionIntentHandler
+        body_topology_selection_intent_handler_;
     viewer::SpatialPointerHandler spatial_pointer_handler_;
     viewer::NavigationCubeActionHandler
         navigation_cube_action_handler_;
@@ -4671,6 +5526,16 @@ private:
     Handle(AIS_InteractiveObject) solid_object_;
     Handle(AIS_InteractiveObject) solid_preview_object_;
     viewer::BodyScene body_scene_;
+    viewer::ViewStyle view_style_{
+        viewer::ViewStyle::shaded};
+    viewer::ViewStyleActionHandler
+        view_style_action_handler_;
+    std::vector<Handle(AIS_Shape)>
+        body_visible_edge_objects_;
+    std::vector<Handle(AIS_Shape)>
+        body_hidden_edge_objects_;
+    std::vector<Handle(AIS_InteractiveObject)>
+        body_selection_objects_;
     viewer::SolidScene solid_scene_;
     viewer::SolidPreviewScene solid_preview_scene_;
     std::vector<ProfileObject> profile_objects_;
@@ -4810,6 +5675,32 @@ void QtOcctViewerWidget::setNavigationCubeActionHandler(
         });
 }
 
+viewer::ViewStyle
+QtOcctViewerWidget::viewStyle() const noexcept {
+    return impl_
+        ? impl_->viewStyle()
+        : viewer::ViewStyle::shaded;
+}
+
+bool QtOcctViewerWidget::setViewStyle(
+    viewer::ViewStyle style) {
+    return guardedBool(
+        "setViewStyle",
+        [this, style] {
+            return impl_->setViewStyle(style);
+        });
+}
+
+void QtOcctViewerWidget::setViewStyleActionHandler(
+    viewer::ViewStyleActionHandler handler) {
+    guardedVoid(
+        "setViewStyleActionHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setViewStyleActionHandler(
+                std::move(handler));
+        });
+}
+
 bool QtOcctViewerWidget::animateCameraState(
     const viewer::CameraState& state,
     double duration_seconds,
@@ -4848,6 +5739,30 @@ bool QtOcctViewerWidget::setBodyScene(
         "setBodyScene",
         [this, &scene] {
             return impl_->setBodyScene(scene);
+        });
+}
+
+viewer::BodyTopologyPickQueryResult
+QtOcctViewerWidget::queryBodyTopology(
+    viewer::ViewportPoint2 point,
+    viewer::BodyTopologyPickFilter filter) {
+    return guardedResult<
+        viewer::BodyTopologyPickQueryResult>(
+        "queryBodyTopology",
+        [this, point, filter] {
+            return impl_->queryBodyTopology(
+                point,
+                filter);
+        });
+}
+
+void QtOcctViewerWidget::setBodyTopologySelectionIntentHandler(
+    viewer::BodyTopologySelectionIntentHandler handler) {
+    guardedVoid(
+        "setBodyTopologySelectionIntentHandler",
+        [this, handler = std::move(handler)]() mutable {
+            impl_->setBodyTopologySelectionIntentHandler(
+                std::move(handler));
         });
 }
 

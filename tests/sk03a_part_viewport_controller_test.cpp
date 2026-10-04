@@ -99,6 +99,36 @@ public:
         return true;
     }
 
+    viewer::ViewStyle
+    viewStyle() const noexcept override {
+        return view_style_;
+    }
+
+    bool setViewStyle(
+        viewer::ViewStyle style) override {
+        view_style_ = style;
+        return true;
+    }
+
+    void setViewStyleActionHandler(
+        viewer::ViewStyleActionHandler handler) override {
+        view_style_handler_ =
+            std::move(handler);
+    }
+
+    viewer::BodyTopologyPickQueryResult
+    queryBodyTopology(
+        viewer::ViewportPoint2,
+        viewer::BodyTopologyPickFilter = {}) override {
+        return body_query_;
+    }
+
+    void setBodyTopologySelectionIntentHandler(
+        viewer::BodyTopologySelectionIntentHandler handler) override {
+        body_topology_handler_ =
+            std::move(handler);
+    }
+
     bool setSolidScene(
         const viewer::SolidScene& scene) override {
         ++solid_scene_calls_;
@@ -135,7 +165,9 @@ public:
 
     bool setPresentationSelection(
         const viewer::PresentationSelection& selection) override {
-        return selection.valid();
+        if (!selection.valid()) return false;
+        presentation_selection_ = selection;
+        return true;
     }
 
     viewer::SketchPointQueryResult
@@ -190,6 +222,16 @@ public:
         spatial_handler_(event);
     }
 
+    void emitBodyTopology(
+        const viewer::BodyTopologyPickQueryResult& query,
+        viewer::SelectionIntentMode mode) {
+        CHECK(static_cast<bool>(
+            body_topology_handler_));
+        body_topology_handler_(
+            query,
+            mode);
+    }
+
     viewer::CameraState camera_;
     viewer::ReferenceScene reference_scene_;
     viewer::BodyScene body_scene_;
@@ -198,6 +240,12 @@ public:
         solid_preview_scene_;
     viewer::SketchScene sketch_scene_;
     viewer::SketchPreviewScene preview_scene_;
+    viewer::PresentationSelection
+        presentation_selection_;
+    viewer::BodyTopologyPickQueryResult
+        body_query_;
+    viewer::ViewStyle view_style_{
+        viewer::ViewStyle::shaded};
     std::size_t body_scene_calls_{};
     std::size_t solid_scene_calls_{};
     std::size_t solid_preview_scene_calls_{};
@@ -206,6 +254,10 @@ public:
     bool fail_preview_{};
     bool fail_sketch_scene_{};
     viewer::SelectionIntentHandler selection_handler_;
+    viewer::BodyTopologySelectionIntentHandler
+        body_topology_handler_;
+    viewer::ViewStyleActionHandler
+        view_style_handler_;
     viewer::SpatialPointerHandler spatial_handler_;
     viewer::PrimaryPointerRouting routing_{
         viewer::PrimaryPointerRouting::
@@ -292,6 +344,140 @@ public:
             std::move(mesh)};
     }
 };
+
+class TopologyFakeSolidKernel final
+    : public kernel::ISolidModelingKernel {
+public:
+    kernel::SolidModelingResult extrude(
+        const kernel::LinearExtrudeInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        kernel::SolidModelingResult result;
+        if (!input.valid() || upstream) {
+            result.status =
+                kernel::SolidModelingStatus::
+                    invalid_input;
+            return result;
+        }
+
+        constexpr kernel::RuntimeFaceToken
+            face_token{101U};
+        constexpr kernel::RuntimeEdgeToken
+            edge_token{201U};
+        constexpr kernel::RuntimeVertexToken
+            vertex_token{301U};
+        constexpr kernel::RuntimeSurfaceToken
+            surface_token{401U};
+
+        kernel::ExtrudeFaceRole role;
+        role.kind =
+            kernel::ExtrudeGeneratedFaceRoleKind::cap;
+        role.cap_role =
+            kernel::ExtrudeCapRole::profile_cap;
+
+        kernel::NewFaceLineage face;
+        face.role = role;
+        face.status =
+            kernel::ReferenceStatus::resolved;
+        face.candidate_count = 1U;
+        face.resolved_token = face_token;
+
+        kernel::NewSurfaceLineage surface;
+        surface.role = role;
+        surface.surface_status =
+            kernel::ReferenceStatus::resolved;
+        surface.strict_face_status =
+            kernel::ReferenceStatus::resolved;
+        surface.candidate_face_count = 1U;
+        surface.surface_kind =
+            kernel::SurfaceKind::plane;
+        surface.canonical_frame =
+            input.profile.frame;
+        surface.resolved_token =
+            surface_token;
+        surface.current_faces = {
+            face_token};
+
+        kernel::CurrentEdgeSemanticObservation
+            edge_observation;
+        edge_observation.runtime_token =
+            edge_token;
+        edge_observation.provider_curve_kind =
+            kernel::CurveKind::line;
+
+        kernel::CurrentVertexSemanticObservation
+            vertex_observation;
+        vertex_observation.runtime_token =
+            vertex_token;
+        vertex_observation.provider_point =
+            kernel::Point3{0.0, 0.0, 0.0};
+
+        result.status =
+            kernel::SolidModelingStatus::ok;
+        result.solid =
+            std::make_shared<FakeSolid>();
+        result.brep_valid = true;
+        result.solid_count = 1U;
+        result.face_count = 1U;
+        result.edge_count = 1U;
+        result.vertex_count = 1U;
+        result.current_faces = {face_token};
+        result.current_edges = {edge_token};
+        result.current_vertices = {
+            vertex_token};
+        result.new_faces = {
+            std::move(face)};
+        result.new_surfaces = {
+            std::move(surface)};
+        result.current_edge_semantics = {
+            std::move(edge_observation)};
+        result.current_vertex_semantics = {
+            std::move(vertex_observation)};
+        return result;
+    }
+
+    kernel::BodyPresentationResult
+    bodyPresentation(
+        kernel::RuntimeSolidHandle solid) noexcept override {
+        kernel::BodyPresentationResult result;
+        if (!solid ||
+            dynamic_cast<const FakeSolid*>(
+                solid.get()) == nullptr) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_mismatch;
+            return result;
+        }
+
+        result.status =
+            kernel::SolidPresentationStatus::ok;
+        result.body.mesh.triangles.push_back(
+            {
+                {-10.0, -10.0, 0.0},
+                {10.0, -10.0, 0.0},
+                {0.0, 10.0, 0.0},
+                {0.0, 0.0, 1.0},
+                {0.0, 0.0, 1.0},
+                {0.0, 0.0, 1.0}});
+        result.body.faces.push_back(
+            {
+                kernel::RuntimeFaceToken{101U},
+                0U,
+                1U});
+        result.body.edges.push_back(
+            {
+                kernel::RuntimeEdgeToken{201U},
+                {
+                    {-10.0, 0.0, 0.0},
+                    {10.0, 0.0, 0.0},
+                }});
+        result.body.vertices.push_back(
+            {
+                kernel::RuntimeVertexToken{301U},
+                {0.0, 0.0, 0.0}});
+        return result;
+    }
+};
+
 
 } // namespace
 
@@ -906,6 +1092,265 @@ int main(int argc, char* argv[]) {
             viewport.body_scene_
                 .triangles.empty());
         controller.clear();
+    }
+
+    // PM-02D2: Controller owns Body candidate policy and runtime selection.
+    // Provider order is deliberately Face, Edge, Vertex; policy must choose
+    // Vertex first and stale scene generations must be ignored.
+    {
+        auto topology_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession
+            topology_session{
+                std::filesystem::path{
+                    "pm02d2-body-selection.ss2part"},
+                std::move(topology_document)};
+        TopologyFakeSolidKernel
+            topology_kernel;
+
+        const auto created_sketch =
+            topology_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            created_sketch.ok() &&
+            created_sketch.sketch_id);
+
+        const auto rectangle =
+            topology_session.execute(
+                application::AddSketchRectangleCommand{
+                    *created_sketch.sketch_id,
+                    topology_session.document()
+                        .revision(),
+                    {-5.0, -5.0},
+                    {5.0, 5.0},
+                    sketch::EntityRole::regular,
+                    false});
+        CHECK(rectangle.ok());
+
+        const auto* hosted =
+            topology_session.document()
+                .findSketch(
+                    *created_sketch.sketch_id);
+        CHECK(hosted != nullptr);
+        const auto regions =
+            sketch::analyzeRegions(
+                hosted->model);
+        CHECK(regions.complete());
+        CHECK(regions.regions.size() == 1U);
+        const auto intent =
+            part::makeProfileRegionIntent(
+                regions.regions.front());
+        CHECK(intent);
+
+        const auto profile =
+            topology_session.execute(
+                application::CreateProfileCommand{
+                    *created_sketch.sketch_id,
+                    topology_session.document()
+                        .revision(),
+                    *intent});
+        CHECK(
+            profile.ok() &&
+            profile.profile_id);
+
+        const auto feature =
+            topology_session.execute(
+                application::
+                    CreateExtrudeFeatureCommand{
+                    *profile.profile_id,
+                    topology_session.document()
+                        .revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{5.0},
+                        false},
+                    {}},
+                topology_kernel);
+        CHECK(
+            feature.ok() &&
+            feature.feature_id);
+
+        QTreeWidget topology_tree;
+        ui::PartDocumentTreeController
+            topology_tree_controller{
+                topology_tree};
+        TestViewport topology_viewport;
+        ui::PartViewportController
+            topology_controller{
+                topology_tree_controller,
+                &topology_viewport};
+
+        topology_controller.setSolidModelingKernel(
+            &topology_kernel);
+        topology_controller.setDocumentSession(
+            &topology_session);
+
+        CHECK(
+            topology_viewport.body_scene_
+                .faces.size() == 1U);
+        CHECK(
+            topology_viewport.body_scene_
+                .edges.size() == 1U);
+        CHECK(
+            topology_viewport.body_scene_
+                .vertices.size() == 1U);
+        const auto generation =
+            topology_viewport.body_scene_
+                .generation;
+        CHECK(generation.valid());
+
+        const auto face_token =
+            topology_viewport.body_scene_
+                .faces.front().token;
+        const auto edge_token =
+            topology_viewport.body_scene_
+                .edges.front().token;
+        const auto vertex_token =
+            topology_viewport.body_scene_
+                .vertices.front().token;
+
+        viewer::BodyTopologyPickQueryResult
+            competing;
+        competing.completed = true;
+        competing.generation = generation;
+        competing.candidates = {
+            {
+                face_token,
+                viewer::BodyTopologyPresentationKind::
+                    face,
+                0.0,
+                1.0},
+            {
+                edge_token,
+                viewer::BodyTopologyPresentationKind::
+                    edge,
+                0.5,
+                1.0},
+            {
+                vertex_token,
+                viewer::BodyTopologyPresentationKind::
+                    vertex,
+                5.0,
+                1.0},
+        };
+        CHECK(competing.valid());
+        topology_viewport.emitBodyTopology(
+            competing,
+            viewer::SelectionIntentMode::replace);
+
+        const auto primary =
+            topology_controller
+                .primaryBodyTopologySelection();
+        CHECK(primary.has_value());
+        CHECK(
+            primary->kind ==
+            viewer::BodyTopologyPresentationKind::
+                vertex);
+        CHECK(primary->runtime_token_value == 301U);
+        CHECK(
+            topology_viewport
+                .presentation_selection_
+                .primary ==
+            std::optional<
+                viewer::PresentationToken>{
+                vertex_token});
+
+        viewer::BodyTopologyPickQueryResult stale =
+            competing;
+        stale.generation = {
+            generation.value + 1U};
+        stale.candidates = {
+            {
+                face_token,
+                viewer::BodyTopologyPresentationKind::
+                    face,
+                0.0,
+                0.5},
+        };
+        topology_viewport.emitBodyTopology(
+            stale,
+            viewer::SelectionIntentMode::replace);
+        CHECK(
+            topology_controller
+                .primaryBodyTopologySelection()
+                ->kind ==
+            viewer::BodyTopologyPresentationKind::
+                vertex);
+
+        viewer::BodyTopologyPickQueryResult edge_toggle;
+        edge_toggle.completed = true;
+        edge_toggle.generation = generation;
+        edge_toggle.candidates = {
+            {
+                edge_token,
+                viewer::BodyTopologyPresentationKind::
+                    edge,
+                0.0,
+                1.0},
+        };
+        topology_viewport.emitBodyTopology(
+            edge_toggle,
+            viewer::SelectionIntentMode::toggle);
+        CHECK(
+            topology_controller
+                .bodyTopologySelection()
+                .size() == 2U);
+        CHECK(
+            topology_controller
+                .primaryBodyTopologySelection()
+                ->kind ==
+            viewer::BodyTopologyPresentationKind::
+                edge);
+
+        const auto revision_before_style =
+            topology_session.document()
+                .revision();
+        CHECK(
+            topology_controller.setViewStyle(
+                viewer::ViewStyle::
+                    shaded_with_hidden_edges));
+        CHECK(
+            topology_controller.viewStyle() ==
+            viewer::ViewStyle::
+                shaded_with_hidden_edges);
+        CHECK(
+            topology_viewport.view_style_ ==
+            viewer::ViewStyle::
+                shaded_with_hidden_edges);
+        CHECK(
+            topology_session.document()
+                .revision() ==
+            revision_before_style);
+
+        auto properties =
+            topology_session.document()
+                .properties();
+        properties.title =
+            "PM-02D2 generation invalidation";
+        const auto property_change =
+            topology_session.execute(
+                application::
+                    SetDocumentPropertiesCommand{
+                        std::move(properties)});
+        CHECK(property_change.ok());
+        topology_controller.refreshPresentation();
+        CHECK(
+            topology_viewport.body_scene_
+                .generation != generation);
+        CHECK(
+            topology_controller
+                .bodyTopologySelection()
+                .empty());
+        CHECK(
+            !topology_controller
+                 .primaryBodyTopologySelection());
+
+        topology_controller.setSolidModelingKernel(
+            nullptr);
+        topology_controller.clear();
     }
 
     // H7: if a higher Feature loses its source Profile, the final Body is

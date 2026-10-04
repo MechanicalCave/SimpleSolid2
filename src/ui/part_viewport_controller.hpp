@@ -88,6 +88,22 @@ struct SketchPreviewLine2D final {
     }
 };
 
+struct BodyTopologySelectionAddress final {
+    viewer::BodyTopologyPresentationKind kind{
+        viewer::BodyTopologyPresentationKind::face};
+    std::uint64_t runtime_token_value{};
+    viewer::BodyPresentationGeneration generation;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return runtime_token_value != 0U &&
+               generation.valid();
+    }
+
+    friend bool operator==(
+        const BodyTopologySelectionAddress&,
+        const BodyTopologySelectionAddress&) = default;
+};
+
 class PartViewportController final : public QObject {
 public:
     using SelectionChangedHandler = std::function<void(
@@ -279,12 +295,30 @@ public:
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primarySelection() const;
 
+    [[nodiscard]] std::vector<BodyTopologySelectionAddress>
+    bodyTopologySelection() const;
+
+    [[nodiscard]] std::optional<BodyTopologySelectionAddress>
+    primaryBodyTopologySelection() const;
+
+    [[nodiscard]] viewer::ViewStyle
+    viewStyle() const noexcept;
+
+    [[nodiscard]] bool setViewStyle(
+        viewer::ViewStyle style);
+
 private:
     struct SemanticSelection final {
         std::vector<core::BuiltinReferenceRole> selected;
         std::optional<core::BuiltinReferenceRole> primary;
         std::vector<part::ProfileId> profiles;
         std::optional<part::ProfileId> primary_profile;
+        std::vector<viewer::PresentationToken>
+            body_topology;
+        std::optional<viewer::PresentationToken>
+            primary_body_topology;
+        viewer::BodyPresentationGeneration
+            body_topology_generation;
     };
 
     struct BodyTopologyBinding final {
@@ -338,6 +372,19 @@ private:
     void onViewportIntent(
         const viewer::SelectionIntent& intent);
 
+    void onBodyTopologyIntent(
+        const viewer::BodyTopologyPickQueryResult& query,
+        viewer::SelectionIntentMode mode);
+
+    [[nodiscard]] std::optional<BodyTopologySelectionAddress>
+    bodyTopologyAddressFor(
+        viewer::PresentationToken token) const;
+
+    [[nodiscard]] bool bodyTopologyOrdinaryPickable(
+        const BodyTopologyBinding& binding) const;
+
+    void clearBodyTopologySelection();
+
     void onSpatialPointer(
         const viewer::SpatialPointerEvent& event);
 
@@ -362,6 +409,8 @@ private:
         BodyTopologyBinding>
         body_topology_bindings_;
     std::uint64_t next_body_scene_generation_{1U};
+    viewer::ViewStyle view_style_{
+        viewer::ViewStyle::shaded};
     std::optional<sketch::SketchId>
         sketch_edit_id_;
     viewer::PrimaryPointerRouting
