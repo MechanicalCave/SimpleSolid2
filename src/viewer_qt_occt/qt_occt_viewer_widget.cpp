@@ -825,6 +825,8 @@ public:
 
         createNavigationControlLabels();
         syncNavigationControlVisibility();
+        createViewStyleHudLabels();
+        syncViewStyleHud();
 
         updateCurrentViewer();
         redraw();
@@ -913,6 +915,276 @@ public:
         bool face_only{};
         bool visible{};
     };
+
+    struct ViewStyleHudControl final {
+        Handle(AIS_TextLabel) label;
+        std::optional<viewer::ViewStyle> style;
+        int offset_x{};
+        int offset_y{};
+        int half_width{};
+        int half_height{};
+        bool trigger{};
+        bool visible{};
+    };
+
+    [[nodiscard]] static const char* viewStyleText(
+        viewer::ViewStyle style) noexcept {
+        switch (style) {
+        case viewer::ViewStyle::shaded:
+            return "SHADED";
+        case viewer::ViewStyle::shaded_with_edges:
+            return "SHADED + EDGES";
+        case viewer::ViewStyle::shaded_with_hidden_edges:
+            return "SHADED + HIDDEN EDGES";
+        }
+        return "SHADED";
+    }
+
+    [[nodiscard]] Handle(AIS_TextLabel)
+    makeHudTextLabel(
+        const char* text,
+        int offset_x,
+        int offset_y) {
+        Handle(AIS_TextLabel) label =
+            new AIS_TextLabel();
+        label->SetText(
+            TCollection_ExtendedString{text});
+        label->SetPosition(
+            gp_Pnt{0.0, 0.0, 0.0});
+        label->SetColor(
+            Quantity_Color{
+                0.94,
+                0.94,
+                0.96,
+                Quantity_TOC_RGB});
+        label->SetHeight(12.0);
+        label->SetHJustification(
+            Graphic3d_HTA_CENTER);
+        label->SetVJustification(
+            Graphic3d_VTA_CENTER);
+        label->SetZoomable(false);
+        label->SetZLayer(
+            Graphic3d_ZLayerId_Topmost);
+        label->SetTransformPersistence(
+            new Graphic3d_TransformPers(
+                Graphic3d_TMF_2d,
+                Aspect_TOTP_RIGHT_UPPER,
+                Graphic3d_Vec2i{
+                    offset_x,
+                    offset_y}));
+        return label;
+    }
+
+    void createViewStyleHudLabels() {
+        if (context_.IsNull()) return;
+
+        view_style_hud_controls_.clear();
+
+        constexpr int offset_x = 300;
+        constexpr int half_width = 100;
+        constexpr int half_height = 11;
+
+        auto add =
+            [this](
+                const char* text,
+                std::optional<viewer::ViewStyle> style,
+                int offset_y,
+                bool trigger) {
+                auto label =
+                    makeHudTextLabel(
+                        text,
+                        300,
+                        offset_y);
+                context_->Display(
+                    label,
+                    false);
+                context_->Deactivate(label);
+                view_style_hud_controls_.push_back(
+                    ViewStyleHudControl{
+                        label,
+                        style,
+                        300,
+                        offset_y,
+                        100,
+                        11,
+                        trigger,
+                        true});
+            };
+
+        add(
+            "SHADED v",
+            std::nullopt,
+            18,
+            true);
+        add(
+            "SHADED",
+            viewer::ViewStyle::shaded,
+            44,
+            false);
+        add(
+            "SHADED + EDGES",
+            viewer::ViewStyle::shaded_with_edges,
+            66,
+            false);
+        add(
+            "SHADED + HIDDEN EDGES",
+            viewer::ViewStyle::
+                shaded_with_hidden_edges,
+            88,
+            false);
+
+        static_cast<void>(offset_x);
+        static_cast<void>(half_width);
+        static_cast<void>(half_height);
+    }
+
+    void syncViewStyleHud() {
+        if (context_.IsNull()) return;
+
+        for (auto& control :
+             view_style_hud_controls_) {
+            if (control.label.IsNull()) {
+                continue;
+            }
+
+            const bool next_visible =
+                control.trigger ||
+                view_style_menu_open_;
+
+            if (control.trigger) {
+                std::string text{
+                    viewStyleText(view_style_)};
+                text += " v";
+                control.label->SetText(
+                    TCollection_ExtendedString{
+                        text.c_str()});
+            } else if (control.style) {
+                std::string text =
+                    *control.style == view_style_
+                        ? "* "
+                        : "  ";
+                text += viewStyleText(
+                    *control.style);
+                control.label->SetText(
+                    TCollection_ExtendedString{
+                        text.c_str()});
+            }
+
+            if (next_visible &&
+                !control.visible) {
+                context_->Display(
+                    control.label,
+                    false);
+                context_->Deactivate(
+                    control.label);
+            } else if (!next_visible &&
+                       control.visible) {
+                context_->Erase(
+                    control.label,
+                    false);
+            } else if (next_visible) {
+                context_->Redisplay(
+                    control.label,
+                    false);
+                context_->Deactivate(
+                    control.label);
+            }
+            control.visible = next_visible;
+        }
+    }
+
+    [[nodiscard]] std::optional<std::size_t>
+    viewStyleHudControlAt(
+        int logical_x,
+        int logical_y) const {
+        for (std::size_t index = 0U;
+             index < view_style_hud_controls_.size();
+             ++index) {
+            const auto& control =
+                view_style_hud_controls_[index];
+            if (!control.visible) {
+                continue;
+            }
+
+            const int center_x =
+                owner_.width() -
+                control.offset_x;
+            const int center_y =
+                control.offset_y;
+            if (std::abs(logical_x - center_x) <=
+                    control.half_width &&
+                std::abs(logical_y - center_y) <=
+                    control.half_height) {
+                return index;
+            }
+        }
+        return std::nullopt;
+    }
+
+    [[nodiscard]] bool viewStyleHudCapturesPointerAt(
+        int logical_x,
+        int logical_y) const {
+        return view_style_menu_open_ ||
+               viewStyleHudControlAt(
+                   logical_x,
+                   logical_y)
+                   .has_value();
+    }
+
+    [[nodiscard]] bool activateViewStyleHudAt(
+        int logical_x,
+        int logical_y) {
+        const auto hit =
+            viewStyleHudControlAt(
+                logical_x,
+                logical_y);
+        if (!hit) {
+            if (!view_style_menu_open_) {
+                return false;
+            }
+            view_style_menu_open_ = false;
+            view_style_press_active_ = true;
+            syncViewStyleHud();
+            updateCurrentViewer();
+            redraw();
+            return true;
+        }
+
+        auto& control =
+            view_style_hud_controls_[*hit];
+        view_style_press_active_ = true;
+        clearBodyTopologyPreselectionIntent();
+
+        if (control.trigger) {
+            view_style_menu_open_ =
+                !view_style_menu_open_;
+            syncViewStyleHud();
+            updateCurrentViewer();
+            redraw();
+            return true;
+        }
+
+        const auto requested =
+            control.style;
+        view_style_menu_open_ = false;
+        syncViewStyleHud();
+        updateCurrentViewer();
+        redraw();
+
+        if (requested &&
+            view_style_action_handler_) {
+            view_style_action_handler_(
+                *requested);
+        }
+        return true;
+    }
+
+    [[nodiscard]] bool consumeViewStyleHudRelease() noexcept {
+        const bool active =
+            view_style_press_active_;
+        view_style_press_active_ = false;
+        return active;
+    }
 
     void createNavigationControlLabels() {
         if (context_.IsNull()) return;
