@@ -2745,6 +2745,7 @@ void PartViewportController::onTreeSelection(
     std::optional<core::BuiltinReferenceRole> primary) {
     if (session_ == nullptr) return;
 
+    clearBodyTopologyPreselection();
     auto& selection = activeSelection();
     selection.body_topology.clear();
     selection.primary_body_topology.reset();
@@ -2795,6 +2796,7 @@ void PartViewportController::onViewportIntent(
         return;
     }
 
+    clearBodyTopologyPreselection();
     auto& selection = activeSelection();
 
     if (intent.mode ==
