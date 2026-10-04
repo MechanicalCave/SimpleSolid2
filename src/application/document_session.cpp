@@ -304,19 +304,6 @@ CreatePartSketchResult DocumentSession::execute(
             failed.diagnostic};
     }
 
-    const auto placement =
-        part::sketchPlacementForSupport(*support);
-    if (!placement) {
-        const auto failed = failure(
-            DocumentSessionErrorCode::invalid_command,
-            "Unable to derive a valid Sketch placement from the selected support",
-            path_);
-        return CreatePartSketchResult{
-            false,
-            std::nullopt,
-            failed.diagnostic};
-    }
-
     std::optional<sketch::SketchId> id;
     for (unsigned attempt = 0U;
          attempt < 16U;
@@ -345,7 +332,6 @@ CreatePartSketchResult DocumentSession::execute(
         part::PartSketch{
             *id,
             *support,
-            *placement,
             true});
 
     const auto committed =
