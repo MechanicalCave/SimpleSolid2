@@ -313,11 +313,14 @@ Picking is transient.
 
 Only semantic command inputs may cross into persistent mutation.
 
-The accepted detailed UX/Viewer design inputs are recorded in:
+The current detailed UX/Viewer design inputs for this contract candidate are:
 
 `work/PM-02_VIEW_STYLE_TREE_FEATURE_CONTRIBUTION_UX.md`;  
 `work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`;  
-`work/PM-02_BODY_PRESENTATION_VIEWER_API_DESIGN.md`.
+`work/PM-02_BODY_PRESENTATION_VIEWER_API_DESIGN.md`;  
+`work/PM-02_TOPOLOGY_PROPERTIES_INSPECTION_UX.md`.
+
+The first three inputs were already Owner-accepted before this revision. The topology Properties/inspection input remains proposed until the Owner accepts this exact PM-02 Work Contract revision.
 
 #### Base View Style
 
@@ -505,6 +508,35 @@ The currently visible preselected candidate is the user's acquisition target on 
 Representation artifacts such as a periodic seam remain completely catalogued and diagnosable but are excluded from ordinary material Edge preselection by default. Material topology whose durable referenceability is Unsupported remains visible/selectable for truthful inspection and diagnostics.
 
 Feature Contribution, hidden-edge graphics and semantic support/carrier ghost overlays do not create duplicate selectable geometry. Normal picking always maps through the single current Body topology presentation.
+
+#### Topology Properties / inspection
+
+PM-02 should keep the existing Properties panel as the single product inspection surface and add a bounded adaptive topology context rather than dumping Face/Edge/Vertex nodes into Document Tree.
+
+The detailed proposed behavior is in:
+
+`work/PM-02_TOPOLOGY_PROPERTIES_INSPECTION_UX.md`.
+
+Required contract semantics:
+
+- hover/preselection and Tab/Shift+Tab candidate cycling do not churn Properties;
+- explicit tree selection or committed viewport selection establishes the primary Properties subject;
+- direct current topology presence is distinct from durable semantic referenceability;
+- current selected topology may be Present while durable referenceability is Ambiguous or Unsupported;
+- Face Properties expose Surface carrier/classification, producer/stage/provenance and standard Sketch-support capability;
+- Edge Properties expose Curve classification, material/representation class, producer/provenance, adjacent Surface summary and durable referenceability;
+- Vertex Properties expose Point/provenance, adjacency summary and durable referenceability;
+- XYZ/area/length/radius are diagnostics only and are never identity;
+- Body Properties expose current complete topology/accounting counts;
+- Feature Properties expose Current Feature Contribution counts from the same semantic query used by tree highlighting;
+- Sketch Properties expose authored support intent plus current Resolved/Missing/Ambiguous/Unsupported support state;
+- no RuntimeFaceToken/RuntimeEdgeToken/RuntimeVertexToken, PresentationToken, TopoDS handle or provider traversal index is shown as product identity;
+- deleted direct topology selection clears rather than geometry-rebinding;
+- durable authored Sketch support may remain selected while its target reports Missing;
+- diagnostic resolved-prefix topology is visibly non-authoritative and cannot offer normal mutating reference actions;
+- Document Tree remains authored design/history and does not become a topology catalog dump.
+
+A topology Properties action such as Create Sketch may only delegate to the same semantic command admission used elsewhere. Properties compatibility is never a bypass around command validation.
 
 ### 4.13 Sketch support types
 
@@ -809,6 +841,8 @@ Deliver:
 - persistent Feature Contribution on tree selection;
 - bounded topology overlay roles over the same current tokens;
 - independent overlay roles for direct topology selection versus Feature/tree contribution.
+- adaptive topology Properties/inspection context for Face/Surface, Edge/Curve and Vertex/Point;
+- Body and Feature Properties topology/contribution summaries;
 
 Gate:
 
@@ -833,6 +867,11 @@ Gate:
 - split Surface contribution highlights all surviving current Face realizations as a set-valued query;
 - deleted outputs are not shown as current contribution;
 - selecting a Feature does not implicitly switch to historical Body stage.
+- hover/preselection/candidate cycling does not replace the Properties subject;
+- selected current topology can distinguish Present from durable Referenceability;
+- Properties never expose provider/runtime tokens as durable identity;
+- Body Properties counts match the current complete topology catalog;
+- Feature contribution counts match the same semantic query used for tree highlighting;
 
 ### PM-02E — Sketch support schema v9 + deterministic frame resolver
 
@@ -938,6 +977,15 @@ PM-02 cannot complete without automated and manual evidence covering at least:
 - all current material Faces selectable/inspectable;
 - all current material Edges selectable/inspectable; KnownRepresentationArtifact edges remain fully accounted/inspectable but are excluded from ordinary material pick by default;
 - all current material Vertices selectable/inspectable;
+- selected Face Properties show Surface type, producer/stage/provenance, referenceability and Sketch-support capability;
+- selected Edge Properties distinguish current presence from durable referenceability and identify representation artifacts truthfully;
+- selected Vertex Properties expose Point/provenance while XYZ remains diagnostic only;
+- Body Properties topology/accounting counts equal the current evaluated catalog;
+- Feature Properties contribution counts equal the tree-highlight semantic contribution query;
+- Sketch Properties expose authored support intent and current support state without authored-world-placement dual authority;
+- hover/candidate cycling does not churn Properties;
+- deleted direct topology selection clears rather than geometry-rebinding;
+- diagnostic prefix topology is visibly non-authoritative in Properties;
 - committed Body shading and Face/Edge/Vertex presentation are produced from one current RuntimeSolid/evaluation-provider generation;
 - no Body Face/Edge identity is reconstructed from triangle adjacency;
 - Body presentation installs atomically with one runtime-only scene generation;
@@ -991,21 +1039,22 @@ The final Owner workflow must exercise at minimum:
 
 1. create Body from Origin Sketch + Extrude Add;
 2. inspect/pick Body topology and verify ordinary near-corner -> Vertex, near-boundary -> Edge, Face-interior -> Face acquisition;
-3. create an overlapping/multiple-hit view and verify Tab / Shift+Tab cycles visible candidates without changing authored state;
-4. switch Shaded / Shaded + Edges / Shaded + Hidden Edges from the viewport HUD and verify no Part dirty/Undo change;
-5. verify hidden dashed edges remain non-selectable through the opaque Body;
-6. hover/select multiple Extrude Features in the tree and verify Current Feature Contribution overlays;
-7. verify a later trim/split shows all surviving current contribution fragments while deleted outputs are not ghosted as current truth;
-8. create Sketch on a planar cap;
-9. create Sketch on a planar lateral Face;
-10. create Sketch on a Cut-exposed planar Face when available in the scenario;
-11. attempt standard Sketch on a cylindrical Face and observe structured Unsupported without fallback to a nearby Edge/Face;
-12. author Profile + Extrude Add/Cut from face-supported Sketch;
-13. edit an upstream dimension so the support moves but survives;
-14. exercise a support deletion/ambiguity and verify no stale geometry is modeled;
-15. repair/re-support the Sketch;
-16. Undo/Redo;
-17. Save, close, reopen and verify cold reconstruction.
+3. inspect Face/Edge/Vertex Properties and verify carrier, producer/stage/provenance and referenceability are semantic while geometry values are diagnostic;
+4. create an overlapping/multiple-hit view and verify Tab / Shift+Tab cycles visible candidates without changing authored state or churning Properties;
+5. switch Shaded / Shaded + Edges / Shaded + Hidden Edges from the viewport HUD and verify no Part dirty/Undo change;
+6. verify hidden dashed edges remain non-selectable through the opaque Body;
+7. hover/select multiple Extrude Features in the tree and verify Current Feature Contribution overlays;
+8. verify a later trim/split shows all surviving current contribution fragments while deleted outputs are not ghosted as current truth;
+9. create Sketch on a planar cap;
+10. create Sketch on a planar lateral Face;
+11. create Sketch on a Cut-exposed planar Face when available in the scenario;
+12. attempt standard Sketch on a cylindrical Face and observe structured Unsupported without fallback to a nearby Edge/Face;
+13. author Profile + Extrude Add/Cut from face-supported Sketch;
+14. edit an upstream dimension so the support moves but survives;
+15. exercise a support deletion/ambiguity and verify no stale geometry is modeled;
+16. repair/re-support the Sketch;
+17. Undo/Redo;
+18. Save, close, reopen and verify cold reconstruction.
 
 Exact UI labels may evolve D0/D1 inside the contract; semantic behavior may not.
 
