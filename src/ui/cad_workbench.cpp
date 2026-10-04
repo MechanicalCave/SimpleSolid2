@@ -1391,6 +1391,12 @@ void CadWorkbench::buildUi() {
             selected_profile_id_.reset();
             selected_feature_id_.reset();
             selected_body_id_.reset();
+            if (document_tree_ != nullptr) {
+                const QSignalBlocker blocked{
+                    document_tree_};
+                document_tree_->clearSelection();
+                document_tree_->setCurrentItem(nullptr);
+            }
             if (viewport_controller_) {
                 viewport_controller_->
                     setFeatureContributionSelection(
@@ -6702,6 +6708,41 @@ void CadWorkbench::refreshBodyProperties(
                          unavailable);
     body_status_->setText(
         bodyEvaluationStatusText(status));
+
+    const auto topology =
+        status ==
+                part::BodyEvaluationStatus::
+                    up_to_date &&
+                viewport_controller_ != nullptr
+            ? viewport_controller_->
+                  bodyTopologySummary()
+            : std::nullopt;
+    if (topology) {
+        body_topology_counts_->setText(
+            QStringLiteral(
+                "Faces %1; Edges %2; Vertices %3")
+                .arg(static_cast<qulonglong>(
+                    topology->faces.total))
+                .arg(static_cast<qulonglong>(
+                    topology->edges.total))
+                .arg(static_cast<qulonglong>(
+                    topology->vertices.total)));
+        body_topology_accounting_->setText(
+            QStringLiteral(
+                "Faces: %1\nEdges: %2\nVertices: %3")
+                .arg(topologySummaryText(
+                    topology->faces))
+                .arg(topologySummaryText(
+                    topology->edges))
+                .arg(topologySummaryText(
+                    topology->vertices)));
+    } else {
+        body_topology_counts_->setText(
+            QStringLiteral("—"));
+        body_topology_accounting_->setText(
+            QStringLiteral("—"));
+    }
+
     properties_stack_->setCurrentWidget(
         body_properties_page_);
 }
@@ -6844,8 +6885,156 @@ void CadWorkbench::refreshFeatureProperties(
     feature_delete_button_->setEnabled(
         lifecycle_available);
 
+    const auto contribution =
+        viewport_controller_ != nullptr
+            ? viewport_controller_->
+                  featureContributionSummary(
+                      feature_id)
+            : std::nullopt;
+    if (contribution) {
+        feature_contribution_->setText(
+            QStringLiteral(
+                "Faces %1; direct Edges %2; direct Vertices %3; "
+                "boundary Edges %4; boundary Vertices %5")
+                .arg(static_cast<qulonglong>(
+                    contribution->faces))
+                .arg(static_cast<qulonglong>(
+                    contribution->direct_edges))
+                .arg(static_cast<qulonglong>(
+                    contribution->direct_vertices))
+                .arg(static_cast<qulonglong>(
+                    contribution->boundary_edges))
+                .arg(static_cast<qulonglong>(
+                    contribution->boundary_vertices)));
+        feature_contribution_diagnostics_->setText(
+            QStringLiteral(
+                "Missing %1; Ambiguous %2; %3")
+                .arg(static_cast<qulonglong>(
+                    contribution->missing_outputs))
+                .arg(static_cast<qulonglong>(
+                    contribution->ambiguous_outputs))
+                .arg(stageText(
+                    contribution->current_stage)));
+    } else {
+        feature_contribution_->setText(
+            QStringLiteral("—"));
+        feature_contribution_diagnostics_->setText(
+            QStringLiteral("—"));
+    }
+
     properties_stack_->setCurrentWidget(
         feature_properties_page_);
+}
+
+void CadWorkbench::refreshTopologyProperties(
+    const BodyTopologyInspection& inspection) {
+    if (properties_stack_ == nullptr ||
+        topology_properties_page_ == nullptr ||
+        !inspection.valid()) {
+        return;
+    }
+
+    topology_kind_->setText(
+        topologyKindText(inspection.kind));
+    topology_stage_->setText(
+        stageText(inspection.stage));
+    topology_presence_->setText(
+        inspection.diagnostic_prefix
+            ? QStringLiteral(
+                  "Diagnostic Prefix — non-authoritative")
+            : QStringLiteral("Present"));
+    topology_accounting_->setText(
+        topologyAccountingText(
+            inspection.accounting_class));
+    topology_strict_reference_->setText(
+        referenceStatusText(
+            inspection.strict_referenceability));
+    topology_carrier_reference_->setText(
+        referenceStatusText(
+            inspection.carrier_referenceability));
+    topology_candidates_->setText(
+        QString::number(
+            static_cast<qulonglong>(
+                inspection.semantic_candidate_count)));
+
+    QString carrier = QStringLiteral("—");
+    QString carrier_type = QStringLiteral("—");
+    switch (inspection.kind) {
+    case viewer::BodyTopologyPresentationKind::face:
+        carrier = inspection.surface_address
+            ? surfaceAddressText(
+                  *inspection.surface_address)
+            : QStringLiteral("Surface");
+        carrier_type = inspection.surface_kind
+            ? surfaceKindText(
+                  *inspection.surface_kind)
+            : QStringLiteral("—");
+        break;
+    case viewer::BodyTopologyPresentationKind::edge:
+        carrier = inspection.curve_address
+            ? QStringLiteral("Curve — Feature %1")
+                  .arg(QString::fromStdString(
+                      inspection.curve_address
+                          ->producer_feature_id
+                          .serialized()))
+            : (inspection.periodic_seam
+                   ? QStringLiteral(
+                         "Provider representation seam")
+                   : QStringLiteral("Curve"));
+        carrier_type = inspection.curve_kind
+            ? curveKindText(
+                  *inspection.curve_kind)
+            : QStringLiteral("—");
+        break;
+    case viewer::BodyTopologyPresentationKind::vertex:
+        carrier = inspection.point_address
+            ? QStringLiteral("Point — Feature %1")
+                  .arg(QString::fromStdString(
+                      inspection.point_address
+                          ->producer_feature_id
+                          .serialized()))
+            : QStringLiteral("Point");
+        carrier_type = QStringLiteral("Point");
+        break;
+    }
+    topology_carrier_->setText(carrier);
+    topology_carrier_type_->setText(
+        carrier_type);
+
+    QString producer = QStringLiteral("—");
+    if (inspection.producer_feature_id) {
+        const auto id =
+            *inspection.producer_feature_id;
+        const auto* feature =
+            document_session_ != nullptr
+                ? document_session_->document()
+                      .findFeature(id)
+                : nullptr;
+        producer = feature != nullptr
+            ? QStringLiteral("%1 (Feature %2)")
+                  .arg(
+                      fromUtf8(feature->name),
+                      fromUtf8(id.serialized()))
+            : QStringLiteral("Feature %1")
+                  .arg(fromUtf8(id.serialized()));
+    }
+    topology_producer_->setText(producer);
+    topology_adjacency_->setText(
+        adjacentSurfaceSummary(
+            inspection.adjacent_surfaces));
+    topology_sketch_support_->setText(
+        sketchSupportInspectionText(
+            inspection.sketch_support));
+    topology_geometry_->setText(
+        inspection.kind ==
+                viewer::BodyTopologyPresentationKind::
+                    vertex
+            ? providerPointText(
+                  inspection.provider_point)
+            : QStringLiteral("—"));
+
+    properties_stack_->setCurrentWidget(
+        topology_properties_page_);
 }
 
 void CadWorkbench::navigateToProfile(
