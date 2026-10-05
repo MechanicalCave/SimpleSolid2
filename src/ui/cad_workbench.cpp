@@ -5948,6 +5948,28 @@ CadWorkbench::submitCadInput(
         return {false, "CAD input semantic context is stale."};
     }
 
+    if (sketch_support_pick_active_) {
+        const auto keyword =
+            upperAsciiTrimmed(text);
+        if (keyword == "CANCEL" ||
+            keyword == "ESC") {
+            cancelSketchTool();
+            return {true, {}};
+        }
+        const bool expected_command =
+            sketch_resupport_target_
+                ? keyword == "RESUPPORT"
+                : keyword == "SKETCH";
+        if (expected_command) {
+            return {true, {}};
+        }
+        return {
+            false,
+            sketch_resupport_target_
+                ? "RESUPPORT is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL."
+                : "SKETCH is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL."};
+    }
+
     if (extrude_profile_pick_active_) {
         const auto keyword =
             upperAsciiTrimmed(text);
@@ -5976,13 +5998,46 @@ CadWorkbench::submitCadInput(
         return result;
     }
 
-    if (upperAsciiTrimmed(text) == "EXTRUDE") {
+    const auto top_level_keyword =
+        upperAsciiTrimmed(text);
+    if (top_level_keyword == "EXTRUDE") {
         return startExtrudeTool()
             ? application::CadInputSubmitResult{
                   true, {}}
             : application::CadInputSubmitResult{
                   false,
                   "EXTRUDE could not be activated."};
+    }
+    if (top_level_keyword == "SKETCH") {
+        startSketchTool();
+        return sketch_support_pick_active_ &&
+                       !sketch_resupport_target_
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "SKETCH could not be activated."};
+    }
+    if (top_level_keyword == "RESUPPORT") {
+        const auto sketch_id =
+            tree_controller_ != nullptr
+                ? tree_controller_->primarySketchId()
+                : std::nullopt;
+        if (!sketch_id) {
+            return {
+                false,
+                "RESUPPORT requires one Sketch selected in the document Tree."};
+        }
+        startSketchResupport(*sketch_id);
+        return sketch_support_pick_active_ &&
+                       sketch_resupport_target_ &&
+                       *sketch_resupport_target_ ==
+                           *sketch_id
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "RESUPPORT could not be activated."};
     }
 
     if (!sketch_interaction_controller_) {
@@ -6019,6 +6074,13 @@ CadWorkbench::submitCadInput(
     return result;
 }
 QString CadWorkbench::cadInputPromptText() const {
+    if (sketch_support_pick_active_) {
+        return sketch_resupport_target_
+            ? QStringLiteral(
+                  "Command: RESUPPORT — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc")
+            : QStringLiteral(
+                  "Command: SKETCH — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc");
+    }
     if (extrude_profile_pick_active_) {
         return QStringLiteral(
             "Command: EXTRUDE — Select one valid Profile · CANCEL/Esc");
