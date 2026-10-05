@@ -41,13 +41,13 @@ Part001.ss2part
 
 The common manifest contains format/container metadata, Document kind/identity and Part domain schema version. Shared persistence owns package safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part writer is schema **v8**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1 and one Body with ordered Features.
+The current Part writer is schema **v9**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1 and one Body with ordered Features.
 
-Sketch models persist canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
+Sketches persist stable SketchId, semantic support, visibility, canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Origin support stores the built-in plane role. Body support stores a provider-neutral `BodyStageRef` plus semantic planar `SurfaceReference`; the evaluated world frame is derived and is not persisted. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
 
 The Body persists BodyId, the FeatureId cursor and ordered Feature records. The current Extrude Feature record preserves stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane parameters. Evaluated B-Rep, OCCT handles, runtime topology tokens, evaluation statuses, previews and tessellation are not authored payload.
 
-Schemas v1–v7 remain readable. Older schemas reconstruct the current defaults in memory; pre-PM-01 data receives an Empty Body. The visibility migration maps legacy hidden Profiles to forced hidden and legacy visible Profiles to automatic. A later successful Save publishes schema v8.
+Schemas v1–v8 remain readable. The v8→v9 migration validates legacy Origin support against the legacy absolute `SketchPlacement`, preserves stable authored IDs and local geometry, maps the Sketch to semantic support and stops writing redundant world placement. Incoherent legacy support/placement fails closed. Earlier Profile visibility and pre-PM-01 Body migrations remain intact. A later successful Save publishes schema v9.
 
 DocumentId remains in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tools, CAD input buffer, selection, camera and all provider/runtime geometry remain non-persistent.
 
@@ -96,12 +96,12 @@ The following are derived/runtime and intentionally disposable:
 - `DocumentRevision`, runtime session/request/draft generations and file checkpoints;
 - evaluated Shared-2D arrangements and Profile regions;
 - Part Feature evaluation snapshots and UpToDate/Failed/Blocked/Suppressed diagnostics;
-- runtime solid/B-Rep handles, face tokens and provider history;
+- runtime solid/B-Rep handles, Face/Edge/Vertex tokens, evaluated topology catalogs, canonical carrier frames and provider history;
 - Extrude preview geometry and temporary source-Profile reveal;
 - Viewer presentation objects, tessellation, detection/picking tokens and camera state;
 - active selection, hover, grips, Dynamic Input/Polar/OSNAP tracking state and CAD input buffer.
 
-A clean reopen must recover authored semantic state without any of these objects. PM-01 cold-persistence coverage destroys the session/runtime/provider evaluation state after Save, reloads schema-v8 authored data and rebuilds ordered Add/Cut evaluation from a fresh provider/evaluator.
+A clean reopen must recover authored semantic state without any of these objects. PM-02 lifecycle coverage destroys the session/runtime/provider evaluation state after Save, reloads schema-v9 authored data and rebuilds semantic Sketch support plus the ordered Add/Cut chain from a fresh provider generation. Runtime token values may change; durable Surface support meaning and authored IDs must not.
 
 <!-- section-id: internal.persistence.identity-safety -->
 ## Identity and container safety
@@ -114,7 +114,7 @@ Schema-v6 loading rejects malformed/non-canonical identity strings, duplicate En
 
 Profile loading fails closed on malformed/non-canonical ProfileId/cursor values, duplicate or out-of-range ProfileIds, missing/invalid source Sketch identity, malformed RegionIntent structure or invalid boundary-anchor encoding. Earlier schema validation remains intact for backward read compatibility.
 
-After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid Sketch support/placement relationships or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family. This validation adds no serialized field and does not change the native schema version.
+After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid semantic Sketch support, illegal support/consumer ordering, malformed legacy migration state or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family.
 
 Container v1 rejects unsafe or ambiguous input, including unsupported container versions, ZIP64, encrypted/unsupported entries, duplicate entry names, unsafe entry paths, missing mandatory entries, oversized content, invalid mandatory JSON and unsupported Part domain schemas.
 
@@ -125,7 +125,7 @@ A `.ss2part` whose manifest declares another Document kind fails closed. `docume
 
 Current persistence does not store Undo/Redo history, evaluated B-Rep, Viewer state, runtime topology/provider identity, caches or active edit context.
 
-The native format also does not yet encode datum-plane or planar-face support semantics, topology-reference repair state for later face/edge-driven Features, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics.
+The native format does not encode Datum-plane support, Projection, generic authored Edge/Vertex feature inputs, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics. Planar Body-Surface Sketch support is encoded semantically in v9; evaluated topology, runtime repair candidates and provider identity remain derived.
 
 Save remains whole-file conditional replacement rather than an in-place feature database or event log.
 
