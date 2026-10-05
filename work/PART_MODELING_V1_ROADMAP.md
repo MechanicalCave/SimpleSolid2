@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 ACTIVE  
-**Version:** 1.18  
-**Owner acceptance:** 2026-10-05 — PM-03 bounded Work Contract + UI interaction amendments accepted; v1.18 is activation-state synchronization only  
-**Previous accepted version:** 1.17 — 2026-10-05  
+**Version:** 1.19  
+**Owner acceptance:** 2026-10-05 — PM-03 bounded Work Contract + UI interaction amendments unchanged; v1.19 is checkpoint-state synchronization only  
+**Previous accepted version:** 1.18 — 2026-10-05  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-03A — semantic Datum foundation + schema under `work/PM-03_DATUM_REFERENCE_GEOMETRY.md`  
+**Current active checkpoint:** PM-03B — evaluator + dependency/cycle semantics under `work/PM-03_DATUM_REFERENCE_GEOMETRY.md`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -476,7 +476,9 @@ Accepted sources are Origin XY/XZ/YZ planes, any uniquely resolved planar semant
 
 PM-03 must reuse PM-02 semantic SurfaceReference/BodyStageRef meaning. No provider-native topology identity, geometry-similarity rebinding, global dependency graph, Projection prerequisite, Datum Axis or Datum Point is authorized by this package.
 
-Current implementation checkpoint is **PM-03A — semantic Datum foundation + schema**.
+PM-03A semantic Datum foundation + schema v10 is **COMPLETED — PASS**; exact candidate `41ea901c873f1453e27b2b4973332ecb5295388c` passed Windows FULL #1485 and merged to main as `542d7b50fcd3f7566326f1b2c849d9453a3dcd00`.
+
+Current implementation checkpoint is **PM-03B — evaluator + dependency/cycle semantics**.
 
 Projection is not a prerequisite for Datum and remains separately gated.
 
@@ -660,7 +662,7 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.18 is activation-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P and PM-02A through PM-02J are COMPLETED — PASS. PM-02 is COMPLETED — PASS. PM-03 is ACTIVE at PM-03A.**
+Program v1.19 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P and PM-02A through PM-02J are COMPLETED — PASS. PM-02 is COMPLETED — PASS. PM-03 is ACTIVE at PM-03A.**
 
 Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
