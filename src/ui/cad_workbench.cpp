@@ -1070,6 +1070,10 @@ void CadWorkbench::buildUi() {
         [this](const sketch::SketchId& sketch_id) {
             requestEditSketch(sketch_id);
         });
+    tree_controller_->setSketchSupportChangeHandler(
+        [this](const sketch::SketchId& sketch_id) {
+            startSketchResupport(sketch_id);
+        });
 
     ViewportSurface viewport_surface;
     if (viewport_factory_) {
@@ -1421,6 +1425,10 @@ void CadWorkbench::buildUi() {
                         std::nullopt);
             }
             refreshTopologyProperties(*inspection);
+            if (sketch_support_pick_active_) {
+                tryCreateSketchFromBodyTopology(
+                    *inspection);
+            }
             syncActionState();
         });
 
