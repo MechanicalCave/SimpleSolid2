@@ -2067,6 +2067,7 @@ bool PartViewportController::projectSketchEntitySelection(
         presentation.selected.reserve(
             reference_selection->selected.size() +
             reference_selection->profiles.size() +
+            reference_selection->datums.size() +
             selected.size());
 
         for (const auto role :
@@ -2084,7 +2085,20 @@ bool PartViewportController::projectSketchEntitySelection(
             }
         }
 
-        if (reference_selection->primary_profile) {
+        for (const auto datum_id :
+             reference_selection->datums) {
+            const auto token =
+                datumPresentationFor(datum_id);
+            if (token) {
+                presentation.selected.push_back(*token);
+            }
+        }
+
+        if (reference_selection->primary_datum) {
+            presentation.primary =
+                datumPresentationFor(
+                    *reference_selection->primary_datum);
+        } else if (reference_selection->primary_profile) {
             presentation.primary =
                 profilePresentationFor(
                     *reference_selection->primary_profile);
@@ -4511,6 +4525,7 @@ void PartViewportController::applySelectionToSurfaces() {
     presentation.selected.reserve(
         selection.selected.size() +
         selection.profiles.size() +
+        selection.datums.size() +
         selection.body_topology.size());
 
     for (const auto role : selection.selected) {
@@ -4522,6 +4537,15 @@ void PartViewportController::applySelectionToSurfaces() {
          selection.profiles) {
         const auto token =
             profilePresentationFor(profile_id);
+        if (token) {
+            presentation.selected.push_back(*token);
+        }
+    }
+
+    for (const auto datum_id :
+         selection.datums) {
+        const auto token =
+            datumPresentationFor(datum_id);
         if (token) {
             presentation.selected.push_back(*token);
         }
@@ -4551,6 +4575,10 @@ void PartViewportController::applySelectionToSurfaces() {
             selection.body_topology_generation) {
         presentation.primary =
             selection.primary_body_topology;
+    } else if (selection.primary_datum) {
+        presentation.primary =
+            datumPresentationFor(
+                *selection.primary_datum);
     } else if (selection.primary_profile) {
         presentation.primary =
             profilePresentationFor(
@@ -4613,6 +4641,18 @@ void PartViewportController::notifySelectionChanged() {
             profile_selection_changed_handler_(
                 selection->profiles,
                 selection->primary_profile);
+        }
+    }
+
+    if (datum_selection_changed_handler_) {
+        if (selection == nullptr) {
+            datum_selection_changed_handler_(
+                {},
+                std::nullopt);
+        } else {
+            datum_selection_changed_handler_(
+                selection->datums,
+                selection->primary_datum);
         }
     }
 
