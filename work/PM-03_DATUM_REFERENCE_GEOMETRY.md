@@ -3,7 +3,7 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-05  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.21  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.23  
 **Architecture authority:** Constitution + Foundation + ADR-0014 + ADR-0016 + ADR-0017  
 **Entry gate:** PM-02 Body Semantic Topology / Face-Supported Sketch COMPLETED — PASS  
 **Owner UI acceptance:** 2026-10-05 — single Datum Plane tool, Offset constructor, Extrude-style preview/default 10 mm, Command Line parity, intersection overlay, Reference Geometry tree grouping/visibility  
@@ -579,7 +579,7 @@ Gate:
 
 ### PM-03E — Datum-backed Sketch + existing Extrude
 
-**State:** ACTIVE
+**State:** COMPLETED — PASS; exact candidate `f4c691c50ce28bc311076b94925b719c889e8172`, Windows FULL #1520, merged main `66f31391894eb6a0adfb430d4dd78b37e749f150`. Completion evidence: `work/PM-03E_DATUM_BACKED_SKETCH_EXTRUDE_COMPLETION.md`.
 
 Deliver:
 
@@ -596,6 +596,8 @@ Gate:
 - Body-stage cycle rejected.
 
 ### PM-03F — lifecycle / persistence / docs / Owner acceptance
+
+**State:** ACTIVE
 
 Close:
 
