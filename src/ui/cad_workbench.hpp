@@ -36,6 +36,8 @@ class ISolidModelingKernel;
 
 namespace simplesolid2::ui {
 
+struct BodyTopologyInspection;
+
 class CadWorkbenchShell;
 class PartDocumentTreeController;
 class PartSketchInteractionController;
