@@ -169,12 +169,14 @@ CadWorkbenchShell::CadWorkbenchShell(QWidget* parent)
     // The panel contains forms whose natural size hint is intentionally
     // larger than the accepted normal CAD-shell width. Let the splitter
     // honor the explicit ~270 px default instead of promoting that content
-    // hint to a shell-wide minimum; individual controls remain responsible
+    // hint to a shell-wide minimum in either axis; contextual Operations may
+    // grow substantially (for example Profile tooling) without resizing the
+    // top-level application window. Individual controls remain responsible
     // for their own compact/narrow presentation.
     right_panel->setMinimumWidth(0);
     right_panel->setSizePolicy(
         QSizePolicy::Ignored,
-        QSizePolicy::Expanding);
+        QSizePolicy::Ignored);
     auto* right_layout = new QVBoxLayout(right_panel);
     right_layout->setContentsMargins(0, 0, 0, 0);
 
