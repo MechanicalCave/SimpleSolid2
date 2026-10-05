@@ -6127,7 +6127,7 @@ void CadWorkbench::startSketchResupport(
             "Change Sketch Support: select XY/XZ/YZ Origin plane, a Body Face or a Datum Plane."));
     setStatusText(
         QStringLiteral(
-            "Re-support active — select a new Origin plane or Body Face."));
+            "Re-support active — select a new Origin plane, Body Face or Datum Plane."));
     notifyCadInputContextChanged();
     syncActionState();
 }
