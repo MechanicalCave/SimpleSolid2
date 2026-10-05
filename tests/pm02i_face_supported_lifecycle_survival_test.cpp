@@ -767,8 +767,9 @@ int main() {
                 fixture.base_feature_id) != nullptr);
     }
     {
-        const auto state_before =
-            fixture.session.document().state();
+        // Profile deletion is deliberately repairable authored history:
+        // dependent Features remain authored and become MissingProfile rather
+        // than being silently deleted or rewritten.
         const auto revision_before =
             fixture.session.document().revision();
         const auto deleted =
@@ -776,14 +777,97 @@ int main() {
                 application::DeleteProfileCommand{
                     fixture.face_profile_id,
                     revision_before});
-        CHECK(!deleted.ok());
-        CHECK(!deleted.changed);
+        CHECK(deleted.ok());
+        CHECK(deleted.changed);
         CHECK(
-            fixture.session.document().revision() ==
+            fixture.session.document().revision() !=
             revision_before);
         CHECK(
-            fixture.session.document().state() ==
-            state_before);
+            fixture.session.document().findProfile(
+                fixture.face_profile_id) == nullptr);
+        CHECK(
+            fixture.session.document().findFeature(
+                fixture.add_feature_id) != nullptr);
+        CHECK(
+            fixture.session.document().findFeature(
+                fixture.cut_feature_id) != nullptr);
+
+        authoring_provider.reset();
+        const auto after_delete =
+            part::evaluatePart(
+                fixture.session.document(),
+                authoring_provider);
+        CHECK(
+            after_delete.body_status ==
+            part::BodyEvaluationStatus::unavailable);
+        CHECK(after_delete.features.size() == 3U);
+        CHECK(
+            after_delete.features[0].status ==
+            part::FeatureEvaluationStatus::up_to_date);
+        CHECK(
+            after_delete.features[1].status ==
+            part::FeatureEvaluationStatus::blocked);
+        CHECK(
+            after_delete.features[1].diagnostic ==
+            part::FeatureEvaluationDiagnosticCode::
+                missing_profile);
+        CHECK(
+            after_delete.features[2].status ==
+            part::FeatureEvaluationStatus::blocked);
+        CHECK(
+            after_delete.features[2].diagnostic ==
+            part::FeatureEvaluationDiagnosticCode::
+                upstream_unavailable);
+        CHECK(authoring_provider.inputs.size() == 1U);
+
+        const auto undo_delete =
+            fixture.session.undo();
+        CHECK(
+            undo_delete.ok() &&
+            undo_delete.changed);
+        CHECK(
+            fixture.session.document().findProfile(
+                fixture.face_profile_id) != nullptr);
+        CHECK(
+            fixture.session.document().findFeature(
+                fixture.add_feature_id) != nullptr);
+        CHECK(
+            fixture.session.document().findFeature(
+                fixture.cut_feature_id) != nullptr);
+
+        authoring_provider.reset();
+        verifyBodyUpToDate(
+            fixture.session.document(),
+            authoring_provider);
+
+        const auto redo_delete =
+            fixture.session.redo();
+        CHECK(
+            redo_delete.ok() &&
+            redo_delete.changed);
+        CHECK(
+            fixture.session.document().findProfile(
+                fixture.face_profile_id) == nullptr);
+
+        authoring_provider.reset();
+        const auto after_redo =
+            part::evaluatePart(
+                fixture.session.document(),
+                authoring_provider);
+        CHECK(
+            after_redo.body_status ==
+            part::BodyEvaluationStatus::unavailable);
+        CHECK(
+            after_redo.features[1].diagnostic ==
+            part::FeatureEvaluationDiagnosticCode::
+                missing_profile);
+        CHECK(authoring_provider.inputs.size() == 1U);
+
+        const auto restore_profile =
+            fixture.session.undo();
+        CHECK(
+            restore_profile.ok() &&
+            restore_profile.changed);
         CHECK(
             fixture.session.document().findProfile(
                 fixture.face_profile_id) != nullptr);
@@ -1120,7 +1204,8 @@ int main() {
     std::cout
         << "PM02I_FACE_SUPPORTED_LIFECYCLE_SURVIVAL_PASS"
         << " undo_redo=1"
-        << " delete_rejection=1"
+        << " producer_delete_rejection=1"
+        << " profile_delete_missing_profile=1"
         << " cold_reopen=1"
         << " runtime_token_reuse_irrelevant=1"
         << " stale_selection_rejected=1"
