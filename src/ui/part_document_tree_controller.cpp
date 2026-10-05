@@ -478,12 +478,18 @@ PartDocumentTreeController::primaryBuiltinReference() const {
 
 std::optional<sketch::SketchId>
 PartDocumentTreeController::primarySketchId() const {
-    if (tree_ == nullptr ||
-        tree_->currentItem() == nullptr) {
+    if (tree_ == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto selected =
+        tree_->selectedItems();
+    if (selected.size() != 1U ||
+        selected.front() == nullptr) {
         return std::nullopt;
     }
     return sketchIdForItem(
-        *tree_->currentItem());
+        *selected.front());
 }
 
 
