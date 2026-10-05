@@ -8268,6 +8268,109 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
         std::move(datum_entries));
 }
 
+void CadWorkbench::refreshDatumProperties(
+    part::DatumId datum_id) {
+    if (properties_stack_ == nullptr ||
+        document_session_ == nullptr) {
+        return;
+    }
+
+    const auto& datums =
+        document_session_->document()
+            .datumPlanes();
+    const auto found =
+        std::find_if(
+            datums.begin(),
+            datums.end(),
+            [datum_id](const auto& datum) {
+                return datum.id == datum_id;
+            });
+    if (found == datums.end()) {
+        selected_datum_id_.reset();
+        properties_stack_->setCurrentWidget(
+            document_properties_page_);
+        return;
+    }
+
+    selected_datum_id_ = datum_id;
+    const auto ordinal =
+        static_cast<qulonglong>(
+            std::distance(
+                datums.begin(),
+                found) +
+            1);
+    datum_name_->setText(
+        QStringLiteral("Datum Plane %1")
+            .arg(ordinal));
+    datum_identity_->setText(
+        fromUtf8(
+            found->id.serialized()));
+    datum_constructor_->setText(
+        QStringLiteral("Offset"));
+    datum_source_->setText(
+        datumPlaneSourceText(
+            found->source));
+    datum_offset_->setText(
+        formatLengthForPart(
+            found->offset,
+            document_session_->document()
+                .lengthUnit()));
+    datum_visibility_->setText(
+        found->visible
+            ? QStringLiteral("Shown")
+            : QStringLiteral("Hidden"));
+
+    const auto revision =
+        document_session_->document()
+            .revision();
+    const auto evaluation =
+        part_evaluation_revision_ &&
+                *part_evaluation_revision_ ==
+                    revision
+            ? std::find_if(
+                  datum_evaluation_statuses_
+                      .begin(),
+                  datum_evaluation_statuses_
+                      .end(),
+                  [datum_id](
+                      const DatumEvaluationUiState&
+                          item) {
+                      return item.datum_id ==
+                             datum_id;
+                  })
+            : datum_evaluation_statuses_.end();
+
+    if (evaluation !=
+        datum_evaluation_statuses_.end()) {
+        datum_status_->setText(
+            datumEvaluationStatusText(
+                evaluation->status));
+        datum_diagnostic_->setText(
+            datumEvaluationDiagnosticText(
+                evaluation->diagnostic));
+    } else {
+        datum_status_->setText(
+            QStringLiteral("Not evaluated"));
+        datum_diagnostic_->setText(
+            QStringLiteral("—"));
+    }
+
+    const bool lifecycle_available =
+        !datum_plane_draft_ &&
+        !extrude_profile_pick_active_ &&
+        !extrude_draft_ &&
+        !active_sketch_id_ &&
+        !sketch_support_pick_active_;
+    datum_edit_button_->setEnabled(
+        lifecycle_available &&
+        solid_modeling_kernel_ != nullptr);
+    datum_delete_button_->setEnabled(
+        lifecycle_available);
+
+    properties_stack_->setCurrentWidget(
+        datum_properties_page_);
+}
+
 void CadWorkbench::refreshBodyProperties(
     part::BodyId body_id) {
     if (properties_stack_ == nullptr ||
