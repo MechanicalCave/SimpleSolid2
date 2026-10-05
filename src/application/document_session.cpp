@@ -49,6 +49,24 @@ part::PartSketch* findSketch(
         : &*found;
 }
 
+part::OffsetDatumPlane* findDatumPlane(
+    part::PartAuthoredState& state,
+    part::DatumId id) noexcept {
+    if (!id.valid()) {
+        return nullptr;
+    }
+    const auto found =
+        std::find_if(
+            state.datum_planes.begin(),
+            state.datum_planes.end(),
+            [id](const part::OffsetDatumPlane& item) {
+                return item.id == id;
+            });
+    return found == state.datum_planes.end()
+        ? nullptr
+        : &*found;
+}
+
 part::PartFeature* findFeature(
     part::PartAuthoredState& state,
     part::FeatureId id) noexcept {
@@ -287,6 +305,8 @@ DocumentSession::DocumentSession(
       saved_state_{document_.state()},
       expected_revision_{document_.revision()} {
     absorbSketchEntityIdCursors(document_.state());
+    datum_id_cursor_.preserve(
+        document_.state().next_datum_id);
     profile_id_cursor_.preserve(
         document_.state().next_profile_id);
     body_id_cursor_.preserve(
@@ -310,6 +330,8 @@ DocumentSession::DocumentSession(
             "DocumentSession file checkpoint DocumentId mismatch"};
     }
     absorbSketchEntityIdCursors(document_.state());
+    datum_id_cursor_.preserve(
+        document_.state().next_datum_id);
     profile_id_cursor_.preserve(
         document_.state().next_profile_id);
     body_id_cursor_.preserve(
@@ -336,6 +358,7 @@ DocumentSessionResult DocumentSession::commitCommandState(
     }
 
     applySketchEntityIdCursors(after);
+    applyDatumIdCursor(after);
     applyProfileIdCursor(after);
     applyBodyFeatureIdCursors(after);
 
@@ -358,6 +381,10 @@ DocumentSessionResult DocumentSession::commitCommandState(
     absorbSketchEntityIdCursors(
         prepared_entity_id_cursors,
         pending.after);
+    auto prepared_datum_id_cursor =
+        datum_id_cursor_;
+    prepared_datum_id_cursor.preserve(
+        pending.after.next_datum_id);
     auto prepared_profile_id_cursor =
         profile_id_cursor_;
     prepared_profile_id_cursor.preserve(
@@ -396,6 +423,8 @@ DocumentSessionResult DocumentSession::commitCommandState(
     cursor_ = history_.size();
     sketch_entity_id_cursors_.swap(
         prepared_entity_id_cursors);
+    datum_id_cursor_ =
+        prepared_datum_id_cursor;
     profile_id_cursor_ =
         prepared_profile_id_cursor;
     body_id_cursor_ =
@@ -2506,6 +2535,8 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
     }
     auto adjusted_expected =
         expected_current;
+    applyDatumIdCursor(
+        adjusted_expected);
     applyProfileIdCursor(
         adjusted_expected);
     applyBodyFeatureIdCursors(
@@ -2519,6 +2550,7 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     auto adjusted_target = target;
     applySketchEntityIdCursors(adjusted_target);
+    applyDatumIdCursor(adjusted_target);
     applyProfileIdCursor(adjusted_target);
     applyBodyFeatureIdCursors(adjusted_target);
 
@@ -2535,6 +2567,8 @@ DocumentSessionResult DocumentSession::applyHistoricalState(
 
     expected_revision_ = document_.revision();
     absorbSketchEntityIdCursors(document_.state());
+    datum_id_cursor_.preserve(
+        document_.state().next_datum_id);
     profile_id_cursor_.preserve(
         document_.state().next_profile_id);
     body_id_cursor_.preserve(
@@ -2587,6 +2621,12 @@ void DocumentSession::applySketchEntityIdCursors(
         hosted.model.preserveEntityIdCursor(
             found->second);
     }
+}
+
+void DocumentSession::applyDatumIdCursor(
+    part::PartAuthoredState& state) const noexcept {
+    state.next_datum_id.preserve(
+        datum_id_cursor_);
 }
 
 void DocumentSession::applyProfileIdCursor(
