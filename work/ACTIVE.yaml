@@ -3,7 +3,7 @@ status: active
 active_work: "work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.14"
+program_roadmap_version: "1.15"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -29,12 +29,14 @@ next:
   - PM-02D topology-aware Body presentation, Viewer picking, View Styles and semantic inspection is COMPLETED — PASS; final runtime candidate c325fcf681afff44ca61abb02fd239495db5d67f passed Windows FULL #1421 and merged to main as 9dd893ffa0e9cd1e5287b9590c02b317d543cbd3
   - PM-02E Sketch support schema v9 + deterministic frame resolver is COMPLETED — PASS; final runtime candidate 8b5e2c6844c93648e1884464d138d9a98e2a7a9a passed Windows FULL #1431 and merged to main as e3452d4d0051564f332319a7945344655e91aa3a
   - PM-02F stage-aware Sketch/Profile evaluation is COMPLETED — PASS; final runtime candidate 87d4043f9114952df8228681e4cf16937c6f664b passed Windows FULL #1434 and merged to main as f620d7e9888c09a6c4e9854bca6b3092699c1fe3
-  - current implementation checkpoint is PM-02G — create/re-support Sketch on arbitrary planar Body Surface
-  - PM-02G must add one semantic authored workflow for planar cap/lateral/Cut-exposed Surface support, preserve local U/V plus SketchId/EntityIds on re-support, reject invalid/cyclic support without partial mutation, and keep non-planar Face acquisition visible but Unsupported
+  - PM-02G create/re-support Sketch on arbitrary planar Body Surface is COMPLETED — PASS; final runtime candidate f45ed8ee09aabe098ab88bc7e47a0c614841fb40 passed Windows FULL #1443 and merged to main as 17778bdfe80d0411031b458ef4f6d582eccc205b
+  - current implementation checkpoint is PM-02H — existing Extrude Add/Cut from face-supported Sketch
+  - PM-02H must prove the existing PM-01 Extrude path for face-backed Profile Add/Cut, including upstream edit re-resolution, valid support move/recompute and structural lost/ambiguous failure without stale downstream truth
   - production mutation is authorized only within work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md and its PM-02A..PM-02J sequence
   - PM-03 Datum Reference Geometry and all later Part Modeling packages remain inactive
   - Projection remains outside the PM-02/PM-03 critical path and requires separate later activation
 notes:
+  - PM-02G create/re-support Sketch on arbitrary planar Body Surface is COMPLETED — PASS. Final exact runtime candidate f45ed8ee09aabe098ab88bc7e47a0c614841fb40 passed Windows FULL #1443; squash merge main is 17778bdfe80d0411031b458ef4f6d582eccc205b. Semantic Face/Origin support acquisition now stages a revision-bound runtime draft, Finish performs exactly one Create/Re-support transaction, Cancel/rejected support performs zero mutation, and re-support preserves SketchId/EntityIds/local U/V with bounded cycle rejection. Completion evidence: work/PM-02G_FACE_SUPPORTED_SKETCH_AUTHORING_COMPLETION.md. PM-02H is now the active implementation checkpoint.
   - PM-02F stage-aware Sketch/Profile evaluation is COMPLETED — PASS. Final exact runtime candidate 87d4043f9114952df8228681e4cf16937c6f664b passed Windows FULL #1434; squash merge main is f620d7e9888c09a6c4e9854bca6b3092699c1fe3. Exact-stage support resolution now derives current Profile world frames from current prior Feature topology, with structured Missing/Ambiguous/Unsupported failure and zero stale-frame consumer Kernel calls in the dedicated regression. Completion evidence: work/PM-02F_STAGE_AWARE_SKETCH_PROFILE_EVALUATION_COMPLETION.md. PM-02G is now the active implementation checkpoint.
   - PM-02E Sketch support schema v9 + deterministic frame resolver is COMPLETED — PASS. Final exact runtime candidate 8b5e2c6844c93648e1884464d138d9a98e2a7a9a passed Windows FULL #1431; squash merge main is e3452d4d0051564f332319a7945344655e91aa3a. Schema v9 preserves semantic Sketch support/local geometry, removes persisted absolute placement authority, migrates valid v8 state and rejects malformed legacy support/placement. Completion evidence: work/PM-02E_SKETCH_SUPPORT_SCHEMA_V9_COMPLETION.md. PM-02F is now the active implementation checkpoint.
   - PM-02D topology-aware Body presentation, Viewer picking, View Styles and semantic inspection is COMPLETED — PASS. Final exact runtime candidate c325fcf681afff44ca61abb02fd239495db5d67f passed Windows FULL #1421; squash merge main is 9dd893ffa0e9cd1e5287b9590c02b317d543cbd3. D1-D5 exact-head evidence is recorded in work/PM-02D_BODY_PRESENTATION_VIEWER_PICKING_INSPECTION_COMPLETION.md. PM-02E is now the active implementation checkpoint.
