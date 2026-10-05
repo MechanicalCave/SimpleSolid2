@@ -984,6 +984,51 @@ void verifyCoplanarAddContinuation(
             extended,
             kernel::ExtrudeCapRole::extent_cap);
     CHECK(added_extent != nullptr);
+
+    std::cerr
+        << "PM02J_R2_DIAG inherited_surfaces="
+        << extended.inherited_surfaces.size()
+        << " new_surfaces="
+        << extended.new_surfaces.size()
+        << " edges="
+        << extended.current_edge_semantics.size()
+        << '\n';
+    for (const auto& item :
+         extended.inherited_surfaces) {
+        std::cerr
+            << "  inherited token=" << item.token.value
+            << " status=" << static_cast<int>(item.surface_status)
+            << " strict=" << static_cast<int>(item.strict_face_status)
+            << " faces=" << item.candidate_face_count
+            << " kind=" << static_cast<int>(item.surface_kind)
+            << '\n';
+    }
+    for (const auto& item :
+         extended.new_surfaces) {
+        std::cerr
+            << "  new role=" << static_cast<int>(item.role.kind)
+            << " cap="
+            << (item.role.cap_role
+                    ? static_cast<int>(*item.role.cap_role)
+                    : -1)
+            << " status=" << static_cast<int>(item.surface_status)
+            << " strict=" << static_cast<int>(item.strict_face_status)
+            << " faces=" << item.candidate_face_count
+            << " kind=" << static_cast<int>(item.surface_kind)
+            << '\n';
+    }
+    for (const auto& edge :
+         extended.current_edge_semantics) {
+        if (edge.adjacent_surfaces.size() <= 2U) {
+            std::cerr
+                << "  edge=" << edge.runtime_token.value
+                << " adjacent=" << edge.adjacent_surfaces.size()
+                << " seam=" << edge.periodic_seam
+                << " partition=" << edge.same_surface_partition
+                << '\n';
+        }
+    }
+
     CHECK(
         added_extent->surface_status ==
         kernel::ReferenceStatus::missing);
