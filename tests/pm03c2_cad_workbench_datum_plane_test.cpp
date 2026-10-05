@@ -98,7 +98,11 @@ public:
 
     bool setReferenceScene(
         const viewer::ReferenceScene& scene) override {
-        return scene.valid();
+        if (!scene.valid()) {
+            return false;
+        }
+        reference_scene = scene;
+        return true;
     }
 
     bool setBodyScene(
@@ -180,6 +184,7 @@ public:
         viewer::ViewportCursorMode) override {}
 
     viewer::CameraState camera_;
+    viewer::ReferenceScene reference_scene;
     viewer::SelectionIntentHandler selection_handler;
     viewer::SpatialPointerHandler spatial_handler;
 };
@@ -318,15 +323,45 @@ int main(int argc, char* argv[]) {
         workbench.cadInputPrompt().find(
             "DATUM PLANE") !=
         std::string::npos);
+    CHECK(viewport->reference_scene.preview.has_value());
+    CHECK(
+        viewport->reference_scene.preview->
+            origin.z == 10.0);
+    CHECK(
+        session.document().datumPlanes().empty());
 
     reverse->click();
     CHECK(
         offset->text().contains(
             QStringLiteral("-10")));
+    CHECK(viewport->reference_scene.preview.has_value());
+    CHECK(
+        viewport->reference_scene.preview->
+            origin.z == -10.0);
     reverse->click();
     CHECK(
         offset->text().contains(
             QStringLiteral("10")));
+    CHECK(viewport->reference_scene.preview.has_value());
+    CHECK(
+        viewport->reference_scene.preview->
+            origin.z == 10.0);
+
+    // Invalid transient input clears the visual draft immediately and does
+    // not alter the last valid authored candidate. Command Line then restores
+    // the same shared draft and its visual preview.
+    offset->setText(QStringLiteral("invalid"));
+    QApplication::processEvents();
+    CHECK(!viewport->reference_scene.preview.has_value());
+    auto preview_restore =
+        workbench.submitCadInput(
+            "10 mm",
+            workbench.cadInputContextGeneration());
+    CHECK(preview_restore.accepted);
+    CHECK(viewport->reference_scene.preview.has_value());
+    CHECK(
+        viewport->reference_scene.preview->
+            origin.z == 10.0);
 
     finish->click();
     CHECK(
@@ -345,6 +380,7 @@ int main(int argc, char* argv[]) {
             0U).offset.millimetres ==
         10.0);
     CHECK(!tool->isChecked());
+    CHECK(!viewport->reference_scene.preview.has_value());
     CHECK(kernel.extrude_calls == 0U);
 
     // Command-first enters the same draft without a source, then ordinary
@@ -361,6 +397,7 @@ int main(int argc, char* argv[]) {
     CHECK(result.accepted);
     CHECK(tool->isChecked());
     CHECK(!finish->isEnabled());
+    CHECK(!viewport->reference_scene.preview.has_value());
     CHECK(
         workbench.cadInputPrompt().find(
             "Select XY/XZ/YZ") !=
@@ -375,6 +412,7 @@ int main(int argc, char* argv[]) {
         source->text().contains(
             QStringLiteral("XZ Plane")));
     CHECK(finish->isEnabled());
+    CHECK(viewport->reference_scene.preview.has_value());
 
     result =
         workbench.submitCadInput(
@@ -410,6 +448,7 @@ int main(int argc, char* argv[]) {
         session.undoDepth() ==
         undo_before_cancel);
     CHECK(!tool->isChecked());
+    CHECK(!viewport->reference_scene.preview.has_value());
 
     // Global CadInputSession empty Enter is Finish while Datum Plane owns the
     // endpoint, exactly as the GUI Finish button calls the same Finish path.

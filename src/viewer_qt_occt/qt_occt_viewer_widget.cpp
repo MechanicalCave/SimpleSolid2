@@ -165,6 +165,7 @@ void logProviderFailure(
     if (left.references.size() !=
             right.references.size() ||
         left.overlays != right.overlays ||
+        left.preview != right.preview ||
         left.grid.has_value() !=
             right.grid.has_value()) {
         return false;
@@ -1620,6 +1621,76 @@ public:
                             object,
                             true});
                     context_->Display(object, false);
+                }
+            }
+
+            if (scene.preview) {
+                viewer::ReferencePresentation preview_reference;
+                // Local construction token is required only by the reusable
+                // geometry builder. The preview object is never registered in
+                // reference_objects_, so this token is not exposed to picking.
+                preview_reference.token = viewer::PresentationToken{1U};
+                preview_reference.kind =
+                    viewer::ReferencePresentationKind::datum_plane;
+                preview_reference.origin = scene.preview->origin;
+                preview_reference.u_axis = scene.preview->u_axis;
+                preview_reference.v_axis = scene.preview->v_axis;
+                preview_reference.extent = scene.preview->extent;
+                preview_reference.visible = true;
+
+                auto plane =
+                    makeReferenceObject(preview_reference);
+                if (plane.IsNull()) {
+                    clearReferenceScene();
+                    return false;
+                }
+                context_->Display(plane, false);
+                context_->Deactivate(plane);
+                context_->SetColor(
+                    plane,
+                    Quantity_Color{
+                        0.16, 0.86, 0.96,
+                        Quantity_TOC_RGB},
+                    false);
+                context_->SetTransparency(
+                    plane,
+                    0.58,
+                    false);
+                context_->SetWidth(
+                    plane,
+                    2.6,
+                    false);
+                reference_preview_objects_.push_back(
+                    plane);
+
+                for (const auto& segment :
+                     scene.preview->intersection_segments) {
+                    Handle(Geom_CartesianPoint) first =
+                        new Geom_CartesianPoint(
+                            toPoint(segment.first));
+                    Handle(Geom_CartesianPoint) second =
+                        new Geom_CartesianPoint(
+                            toPoint(segment.second));
+                    Handle(AIS_Line) line =
+                        new AIS_Line(first, second);
+                    if (line.IsNull()) {
+                        clearReferenceScene();
+                        return false;
+                    }
+                    context_->Display(line, false);
+                    context_->Deactivate(line);
+                    context_->SetColor(
+                        line,
+                        Quantity_Color{
+                            0.12, 0.96, 1.0,
+                            Quantity_TOC_RGB},
+                        false);
+                    context_->SetWidth(
+                        line,
+                        3.0,
+                        false);
+                    reference_preview_objects_.push_back(
+                        line);
                 }
             }
 
@@ -5218,6 +5289,18 @@ public:
                     });
             }
 
+            for (const auto& object :
+                 reference_preview_objects_) {
+                if (object.IsNull()) continue;
+                guardedVoid(
+                    "removeReferencePreviewObject",
+                    [this, object] {
+                        context_->Remove(
+                            object,
+                            false);
+                    });
+            }
+
             for (const auto& object : grid_objects_) {
                 if (object.IsNull()) continue;
                 guardedVoid(
@@ -5231,8 +5314,11 @@ public:
         }
 
         reference_objects_.clear();
+        reference_preview_objects_.clear();
         grid_objects_.clear();
         reference_scene_.references.clear();
+        reference_scene_.overlays.clear();
+        reference_scene_.preview.reset();
         reference_scene_.grid.reset();
     }
 
@@ -6216,6 +6302,8 @@ private:
     bool view_style_menu_open_{};
     bool view_style_press_active_{};
     std::vector<ReferenceObject> reference_objects_;
+    std::vector<Handle(AIS_InteractiveObject)>
+        reference_preview_objects_;
     Handle(AIS_InteractiveObject) solid_object_;
     Handle(AIS_InteractiveObject) solid_preview_object_;
     viewer::BodyScene body_scene_;

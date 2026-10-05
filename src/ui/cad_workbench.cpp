@@ -3887,6 +3887,11 @@ void CadWorkbench::buildUi() {
                 if (datum_plane_preview_timer_) {
                     datum_plane_preview_timer_->stop();
                 }
+                if (viewport_controller_ != nullptr) {
+                    viewport_controller_->
+                        setDatumPlaneDraftPreview(
+                            std::nullopt);
+                }
                 syncDatumPlaneUi();
                 return;
             }
@@ -3896,6 +3901,11 @@ void CadWorkbench::buildUi() {
                         quantity->canonical_value})) {
                 datum_plane_offset_input_valid_ = false;
                 datum_plane_evaluation_.reset();
+                if (viewport_controller_ != nullptr) {
+                    viewport_controller_->
+                        setDatumPlaneDraftPreview(
+                            std::nullopt);
+                }
                 syncDatumPlaneUi();
                 return;
             }
@@ -4898,6 +4908,11 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
         !datum_plane_draft_->source() ||
         document_session_ == nullptr ||
         solid_modeling_kernel_ == nullptr) {
+        if (viewport_controller_ != nullptr) {
+            viewport_controller_->
+                setDatumPlaneDraftPreview(
+                    std::nullopt);
+        }
         syncDatumPlaneUi();
         return;
     }
@@ -4907,6 +4922,15 @@ void CadWorkbench::refreshDatumPlaneEvaluation() {
             evaluateDatumPlaneDraft(
                 *datum_plane_draft_,
                 *solid_modeling_kernel_);
+
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setDatumPlaneDraftPreview(
+                datum_plane_evaluation_->committable() &&
+                        datum_plane_evaluation_->frame
+                    ? datum_plane_evaluation_->frame
+                    : std::nullopt);
+    }
     syncDatumPlaneUi();
 }
 
@@ -5174,6 +5198,9 @@ void CadWorkbench::clearDatumPlaneRuntimeContext() {
     datum_plane_offset_input_valid_ = true;
 
     if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setDatumPlaneDraftPreview(
+                std::nullopt);
         viewport_controller_->
             setBodyTopologyFacePickOnly(false);
     }

@@ -119,6 +119,42 @@ struct ReferenceOwnedLineOverlay final {
         const ReferenceOwnedLineOverlay&) = default;
 };
 
+// Transient, non-pickable Datum Plane draft presentation. Unlike a
+// ReferencePresentation it deliberately has no PresentationToken and therefore
+// cannot become semantic selection or durable CAD identity.
+struct ReferencePlanePreviewPresentation final {
+    Point3 origin{};
+    Vec3 u_axis{};
+    Vec3 v_axis{};
+    double extent{1.0};
+    std::vector<ReferenceLineSegmentPresentation>
+        intersection_segments;
+
+    [[nodiscard]] bool valid() const noexcept {
+        if (!finite(origin) ||
+            !finite(u_axis) ||
+            !finite(v_axis) ||
+            u_axis.squaredLength() <= 1.0e-24 ||
+            v_axis.squaredLength() <= 1.0e-24 ||
+            cross(u_axis, v_axis).squaredLength() <=
+                1.0e-24 ||
+            !std::isfinite(extent) ||
+            extent <= 0.0) {
+            return false;
+        }
+        return std::all_of(
+            intersection_segments.begin(),
+            intersection_segments.end(),
+            [](const auto& segment) {
+                return segment.valid();
+            });
+    }
+
+    friend bool operator==(
+        const ReferencePlanePreviewPresentation&,
+        const ReferencePlanePreviewPresentation&) = default;
+};
+
 struct GridPresentation final {
     Point3 origin{};
     Vec3 u_axis{1.0, 0.0, 0.0};
@@ -147,10 +183,14 @@ struct GridPresentation final {
 struct ReferenceScene final {
     std::vector<ReferencePresentation> references;
     std::vector<ReferenceOwnedLineOverlay> overlays;
+    std::optional<ReferencePlanePreviewPresentation> preview;
     std::optional<GridPresentation> grid;
 
     [[nodiscard]] bool valid() const noexcept {
         if (grid && !grid->valid()) {
+            return false;
+        }
+        if (preview && !preview->valid()) {
             return false;
         }
 
