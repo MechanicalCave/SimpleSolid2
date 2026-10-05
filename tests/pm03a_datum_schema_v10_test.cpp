@@ -123,7 +123,7 @@ std::string schema9FromCurrent(
 int main() {
     CHECK(
         part::PartDocumentStore::current_schema_version ==
-        10);
+        11);
 
     // DatumId follows the existing Part-local canonical positive-decimal and
     // high-water allocation rules.
@@ -300,7 +300,7 @@ int main() {
     CHECK(package.ok());
     CHECK(
         package.package->descriptor
-            .domain_schema_version == 10);
+            .domain_schema_version == 11);
 
     const auto authored =
         nlohmann::json::parse(
@@ -417,7 +417,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 10);
+            .domain_schema_version == 11);
     const auto rewritten_authored =
         nlohmann::json::parse(
             rewritten.package->authored_json);

@@ -17,6 +17,7 @@
 namespace simplesolid2::part {
 
 class PartDocument;
+struct DatumEvaluation;
 
 enum class FeatureEvaluationStatus {
     up_to_date,
@@ -378,7 +379,9 @@ makeKernelExtrudeInput(
     const PartDocument& document,
     const ExtrudeFeature& feature,
     const BodyStageTopologyCatalog*
-        support_topology = nullptr);
+        support_topology = nullptr,
+    const DatumEvaluation*
+        datum_evaluation = nullptr);
 
 [[nodiscard]] FeatureContribution currentFeatureContribution(
     const BodyStageTopologyCatalog& catalog,

@@ -7,6 +7,8 @@
 
 namespace simplesolid2::part {
 
+struct DatumEvaluation;
+
 enum class ProfileKernelInputStatus {
     resolved,
     missing_profile,
@@ -35,15 +37,18 @@ struct ProfileKernelInputResult final {
 };
 
 // Resolves one durable Part Profile against the exact current support stage.
-// Origin-backed Profiles do not require a topology catalog. Body-Surface
+// Origin-backed Profiles require no derived support context. Body-Surface
 // support requires the complete catalog for its declared BodyStageRef.
+// Datum-backed support requires a same-revision derived DatumEvaluation.
 // No evaluated frame or world geometry is cached or persisted here.
 [[nodiscard]] ProfileKernelInputResult
 resolveKernelProfileInput(
     const PartDocument& document,
     ProfileId profile_id,
     const BodyStageTopologyCatalog*
-        support_topology = nullptr);
+        support_topology = nullptr,
+    const DatumEvaluation*
+        datum_evaluation = nullptr);
 
 // Compatibility convenience for Origin-backed callers that do not own a
 // Body-stage evaluation context. Body-Surface-backed Profiles intentionally

@@ -347,7 +347,7 @@ int main() {
     CHECK(current_package.ok());
     CHECK(
         current_package.package->descriptor
-            .domain_schema_version == 10);
+            .domain_schema_version == 11);
     CHECK(
         current_package.package->authored_json.find(
             "\"placement\"") ==
@@ -463,7 +463,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 10);
+            .domain_schema_version == 11);
     CHECK(
         rewritten.package->authored_json.find(
             "\"placement\"") ==
@@ -578,7 +578,7 @@ int main() {
     CHECK(body_package.ok());
     CHECK(
         body_package.package->descriptor
-            .domain_schema_version == 10);
+            .domain_schema_version == 11);
     CHECK(
         body_package.package->authored_json.find(
             "\"body_planar_surface\"") !=
@@ -624,7 +624,7 @@ int main() {
 
     std::cout
         << "PM02E_SKETCH_SUPPORT_SCHEMA_V9_PASS"
-        << " current_schema=10"
+        << " current_schema=11"
         << " v9_migration=1"
         << " v8_migration=1"
         << " malformed_legacy_rejected=1"

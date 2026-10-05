@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/core/document_reference.hpp>
+#include <simplesolid2/part/datum_id.hpp>
 #include <simplesolid2/part/semantic_topology_reference.hpp>
 #include <simplesolid2/sketch/sketch_id.hpp>
 #include <simplesolid2/sketch/sketch_model.hpp>
@@ -46,9 +47,22 @@ struct BodyPlanarSurfaceSketchSupport final {
         const BodyPlanarSurfaceSketchSupport&) = default;
 };
 
+struct DatumPlaneSketchSupport final {
+    DatumId datum_id;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return datum_id.valid();
+    }
+
+    friend bool operator==(
+        const DatumPlaneSketchSupport&,
+        const DatumPlaneSketchSupport&) = default;
+};
+
 using PartSketchSupportValue = std::variant<
     BuiltinOriginPlaneSketchSupport,
-    BodyPlanarSurfaceSketchSupport>;
+    BodyPlanarSurfaceSketchSupport,
+    DatumPlaneSketchSupport>;
 
 struct PartSketchSupport final {
     PartSketchSupportValue value{
@@ -60,6 +74,9 @@ struct PartSketchSupport final {
         : value{std::move(support)} {}
     explicit PartSketchSupport(
         BodyPlanarSurfaceSketchSupport support)
+        : value{std::move(support)} {}
+    explicit PartSketchSupport(
+        DatumPlaneSketchSupport support)
         : value{std::move(support)} {}
     explicit PartSketchSupport(
         core::BuiltinReferenceRole role)
@@ -95,12 +112,20 @@ partSketchSupportForBuiltinPlane(
 partSketchSupportForBodyPlanarSurface(
     SurfaceReference reference) noexcept;
 
+[[nodiscard]] std::optional<PartSketchSupport>
+partSketchSupportForDatumPlane(
+    DatumId datum_id) noexcept;
+
 [[nodiscard]] std::optional<core::BuiltinReferenceRole>
 builtinOriginPlaneForSketchSupport(
     const PartSketchSupport& support) noexcept;
 
 [[nodiscard]] const SurfaceReference*
 bodyPlanarSurfaceReference(
+    const PartSketchSupport& support) noexcept;
+
+[[nodiscard]] std::optional<DatumId>
+datumPlaneIdForSketchSupport(
     const PartSketchSupport& support) noexcept;
 
 // Derived frame only. This value is never authored or persisted by schema v9.
@@ -123,6 +148,10 @@ enum class SketchSupportResolutionDiagnostic {
     ambiguous_surface,
     unsupported_non_planar,
     unsupported_surface,
+    missing_datum,
+    ambiguous_datum,
+    unsupported_datum,
+    blocked_datum,
 };
 
 struct ResolvedSketchSupport final {
@@ -140,10 +169,12 @@ struct ResolvedSketchSupport final {
 };
 
 struct BodyStageTopologyCatalog;
+struct DatumEvaluation;
 
 [[nodiscard]] ResolvedSketchSupport
 resolveSketchSupport(
     const PartSketchSupport& support,
-    const BodyStageTopologyCatalog* topology = nullptr) noexcept;
+    const BodyStageTopologyCatalog* topology = nullptr,
+    const DatumEvaluation* datum_evaluation = nullptr) noexcept;
 
 } // namespace simplesolid2::part

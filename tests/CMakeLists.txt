@@ -830,6 +830,35 @@ set_tests_properties(pm03b.datum_evaluation PROPERTIES
     LABELS "tier-fast;subsystem-part;subsystem-kernel"
 )
 
+add_executable(pm03e_datum_backed_sketch_test
+    pm03e_datum_backed_sketch_test.cpp
+)
+
+target_include_directories(pm03e_datum_backed_sketch_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/nlohmann-json-3.12.0/include
+)
+
+target_link_libraries(pm03e_datum_backed_sketch_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_part
+        simplesolid2_persistence
+)
+
+target_compile_features(pm03e_datum_backed_sketch_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm03e.datum_backed_sketch
+    COMMAND pm03e_datum_backed_sketch_test
+)
+
+set_tests_properties(pm03e.datum_backed_sketch PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part;subsystem-persistence"
+)
+
+
 add_executable(pm03c_datum_commands_draft_test
     pm03c_datum_commands_draft_test.cpp
 )

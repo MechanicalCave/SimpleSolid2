@@ -260,6 +260,57 @@ bool PartDocument::validAuthoredState(
         }
     }
 
+    const auto required_body_stage_for_support =
+        [&state](
+            const PartSketchSupport& support)
+            -> std::optional<BodyStageRef> {
+        if (const auto* surface =
+                bodyPlanarSurfaceReference(
+                    support)) {
+            return surface->stage;
+        }
+
+        auto datum_id =
+            datumPlaneIdForSketchSupport(
+                support);
+        std::vector<DatumId> visited;
+        while (datum_id) {
+            if (std::find(
+                    visited.begin(),
+                    visited.end(),
+                    *datum_id) !=
+                visited.end()) {
+                return std::nullopt;
+            }
+            visited.push_back(*datum_id);
+
+            const auto datum =
+                std::find_if(
+                    state.datum_planes.begin(),
+                    state.datum_planes.end(),
+                    [datum_id](
+                        const OffsetDatumPlane& item) {
+                        return item.id == *datum_id;
+                    });
+            if (datum ==
+                state.datum_planes.end()) {
+                return std::nullopt;
+            }
+
+            if (const auto* surface =
+                    bodyPlanarSurfaceForPlaneReference(
+                        datum->source)) {
+                return surface->stage;
+            }
+
+            datum_id =
+                datumPlaneIdForPlaneReference(
+                    datum->source);
+        }
+
+        return std::nullopt;
+    };
+
     for (std::size_t index = 0;
          index < state.sketches.size();
          ++index) {
@@ -274,6 +325,23 @@ bool PartDocument::validAuthoredState(
             surface != nullptr &&
             !valid_surface_reference(*surface)) {
             return false;
+        }
+
+        if (const auto datum_id =
+                datumPlaneIdForSketchSupport(
+                    hosted.support)) {
+            const auto datum =
+                std::find_if(
+                    state.datum_planes.begin(),
+                    state.datum_planes.end(),
+                    [datum_id](
+                        const OffsetDatumPlane& item) {
+                        return item.id == *datum_id;
+                    });
+            if (datum ==
+                state.datum_planes.end()) {
+                return false;
+            }
         }
 
         for (std::size_t previous = 0;
@@ -354,14 +422,15 @@ bool PartDocument::validAuthoredState(
         }
     }
 
-    // PM-02G bounded dependency invariant: a Body-Surface-backed Sketch may
-    // only feed Features strictly downstream of the declared support stage.
-    // This is ordered single-Body history validation, not a universal graph.
+    // PM-02G / PM-03E bounded dependency invariant: a Body-Surface-
+    // or Datum-backed Sketch may only feed Features strictly downstream of
+    // the support's transitive Body-stage floor. This remains ordered
+    // single-Body history validation, not a universal dependency graph.
     for (const auto& hosted : state.sketches) {
-        const auto* support =
-            bodyPlanarSurfaceReference(
+        const auto support_stage =
+            required_body_stage_for_support(
                 hosted.support);
-        if (support == nullptr) {
+        if (!support_stage) {
             continue;
         }
 
@@ -369,10 +438,11 @@ bool PartDocument::validAuthoredState(
             std::find_if(
                 state.body.features.begin(),
                 state.body.features.end(),
-                [support](const PartFeature& feature) {
-                    return support->stage.feature_id &&
+                [support_stage](
+                    const PartFeature& feature) {
+                    return support_stage->feature_id &&
                            feature.id ==
-                               *support->stage.feature_id;
+                               *support_stage->feature_id;
                 });
         if (stage == state.body.features.end()) {
             return false;

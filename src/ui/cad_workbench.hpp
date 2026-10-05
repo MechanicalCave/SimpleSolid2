@@ -236,6 +236,8 @@ private:
         part::ProfileId profile_id);
     void tryCreateSketchFromSupport(
         std::optional<core::BuiltinReferenceRole> support);
+    void tryCreateSketchFromDatum(
+        std::optional<part::DatumId> datum_id);
     void tryCreateSketchFromBodyTopology(
         const BodyTopologyInspection& inspection);
     void stageSketchSupport(

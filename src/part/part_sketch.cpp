@@ -1,5 +1,6 @@
 #include <simplesolid2/part/part_sketch.hpp>
 
+#include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 
 #include <algorithm>
@@ -86,6 +87,18 @@ partSketchSupportForBodyPlanarSurface(
         std::move(support)};
 }
 
+std::optional<PartSketchSupport>
+partSketchSupportForDatumPlane(
+    DatumId datum_id) noexcept {
+    DatumPlaneSketchSupport support{
+        datum_id};
+    if (!support.valid()) {
+        return std::nullopt;
+    }
+    return PartSketchSupport{
+        std::move(support)};
+}
+
 std::optional<core::BuiltinReferenceRole>
 builtinOriginPlaneForSketchSupport(
     const PartSketchSupport& support) noexcept {
@@ -116,6 +129,22 @@ bodyPlanarSurfaceReference(
     return body != nullptr
         ? &body->reference
         : nullptr;
+}
+
+std::optional<DatumId>
+datumPlaneIdForSketchSupport(
+    const PartSketchSupport& support) noexcept {
+    if (!support.valid()) {
+        return std::nullopt;
+    }
+    const auto* datum =
+        std::get_if<
+            DatumPlaneSketchSupport>(
+            &support.value);
+    return datum != nullptr
+        ? std::optional<DatumId>{
+              datum->datum_id}
+        : std::nullopt;
 }
 
 std::optional<SketchPlacement>
@@ -165,12 +194,18 @@ bool ResolvedSketchSupport::valid() const noexcept {
                         missing_stage ||
                 diagnostic ==
                     SketchSupportResolutionDiagnostic::
-                        missing_surface);
+                        missing_surface ||
+                diagnostic ==
+                    SketchSupportResolutionDiagnostic::
+                        missing_datum);
     case SketchSupportResolutionStatus::ambiguous:
         return !frame.has_value() &&
-               diagnostic ==
-                   SketchSupportResolutionDiagnostic::
-                       ambiguous_surface;
+               (diagnostic ==
+                    SketchSupportResolutionDiagnostic::
+                        ambiguous_surface ||
+                diagnostic ==
+                    SketchSupportResolutionDiagnostic::
+                        ambiguous_datum);
     case SketchSupportResolutionStatus::unsupported:
         return !frame.has_value() &&
                (diagnostic ==
@@ -181,7 +216,13 @@ bool ResolvedSketchSupport::valid() const noexcept {
                         unsupported_non_planar ||
                 diagnostic ==
                     SketchSupportResolutionDiagnostic::
-                        unsupported_surface);
+                        unsupported_surface ||
+                diagnostic ==
+                    SketchSupportResolutionDiagnostic::
+                        unsupported_datum ||
+                diagnostic ==
+                    SketchSupportResolutionDiagnostic::
+                        blocked_datum);
     }
     return false;
 }
@@ -189,7 +230,8 @@ bool ResolvedSketchSupport::valid() const noexcept {
 ResolvedSketchSupport
 resolveSketchSupport(
     const PartSketchSupport& support,
-    const BodyStageTopologyCatalog* topology) noexcept {
+    const BodyStageTopologyCatalog* topology,
+    const DatumEvaluation* datum_evaluation) noexcept {
     if (!support.valid()) {
         return {
             SketchSupportResolutionStatus::
@@ -207,6 +249,105 @@ resolveSketchSupport(
             SketchSupportResolutionDiagnostic::
                 none,
             *origin};
+    }
+
+    if (const auto datum_id =
+            datumPlaneIdForSketchSupport(
+                support)) {
+        if (datum_evaluation == nullptr) {
+            return {
+                SketchSupportResolutionStatus::
+                    missing,
+                SketchSupportResolutionDiagnostic::
+                    missing_datum,
+                std::nullopt};
+        }
+
+        const auto* datum =
+            datum_evaluation->find(*datum_id);
+        if (datum == nullptr) {
+            return {
+                SketchSupportResolutionStatus::
+                    missing,
+                SketchSupportResolutionDiagnostic::
+                    missing_datum,
+                std::nullopt};
+        }
+
+        if (datum->status ==
+            DatumPlaneEvaluationStatus::missing) {
+            return {
+                SketchSupportResolutionStatus::
+                    missing,
+                SketchSupportResolutionDiagnostic::
+                    missing_datum,
+                std::nullopt};
+        }
+        if (datum->status ==
+            DatumPlaneEvaluationStatus::ambiguous) {
+            return {
+                SketchSupportResolutionStatus::
+                    ambiguous,
+                SketchSupportResolutionDiagnostic::
+                    ambiguous_datum,
+                std::nullopt};
+        }
+        if (datum->status ==
+            DatumPlaneEvaluationStatus::unsupported) {
+            return {
+                SketchSupportResolutionStatus::
+                    unsupported,
+                SketchSupportResolutionDiagnostic::
+                    unsupported_datum,
+                std::nullopt};
+        }
+        if (datum->status ==
+            DatumPlaneEvaluationStatus::blocked) {
+            return {
+                SketchSupportResolutionStatus::
+                    unsupported,
+                SketchSupportResolutionDiagnostic::
+                    blocked_datum,
+                std::nullopt};
+        }
+
+        if (!datum->frame ||
+            !datum->frame->valid()) {
+            return {
+                SketchSupportResolutionStatus::
+                    unsupported,
+                SketchSupportResolutionDiagnostic::
+                    unsupported_datum,
+                std::nullopt};
+        }
+
+        SketchPlacement frame;
+        frame.origin = {
+            datum->frame->origin.x,
+            datum->frame->origin.y,
+            datum->frame->origin.z};
+        frame.u_axis = {
+            datum->frame->u_axis.x,
+            datum->frame->u_axis.y,
+            datum->frame->u_axis.z};
+        frame.v_axis = {
+            datum->frame->v_axis.x,
+            datum->frame->v_axis.y,
+            datum->frame->v_axis.z};
+
+        return frame.valid()
+            ? ResolvedSketchSupport{
+                  SketchSupportResolutionStatus::
+                      resolved,
+                  SketchSupportResolutionDiagnostic::
+                      none,
+                  frame}
+            : ResolvedSketchSupport{
+                  SketchSupportResolutionStatus::
+                      unsupported,
+                  SketchSupportResolutionDiagnostic::
+                      unsupported_datum,
+                  std::nullopt};
     }
 
     const auto* reference =
