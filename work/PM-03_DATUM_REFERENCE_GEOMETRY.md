@@ -496,6 +496,8 @@ If an already-authored Datum becomes unresolved after an upstream edit:
 
 ### PM-03A — semantic Datum foundation + schema
 
+**State:** COMPLETED — PASS; exact candidate `41ea901c873f1453e27b2b4973332ecb5295388c`, Windows FULL #1485, merged main `542d7b50fcd3f7566326f1b2c849d9453a3dcd00`. Completion evidence: `work/PM-03A_DATUM_FOUNDATION_SCHEMA_V10_COMPLETION.md`.
+
 Deliver:
 
 - DatumId / high-water allocation;
@@ -512,6 +514,8 @@ Gate:
 - invalid/cyclic Datum state rejected fail-closed.
 
 ### PM-03B — evaluator + dependency/cycle semantics
+
+**State:** ACTIVE
 
 Deliver:
 
