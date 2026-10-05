@@ -580,6 +580,10 @@ private:
         body_scene_cache_;
     std::optional<part::BodyStageTopologyCatalog>
         body_topology_catalog_cache_;
+    // Runtime-only exact-stage catalogs from the same current PartEvaluation.
+    // Final-stage catalog above remains authoritative for Body picking.
+    std::vector<part::BodyStageTopologyCatalog>
+        body_stage_topology_catalogs_cache_;
     std::unordered_map<
         std::uint64_t,
         BodyTopologyBinding>
