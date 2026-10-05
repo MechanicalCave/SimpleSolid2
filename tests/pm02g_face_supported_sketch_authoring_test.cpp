@@ -415,7 +415,41 @@ int main() {
             fixture.session.document().revision());
     CHECK(!cyclic_restore.ok());
 
+    const auto same_support_created =
+        fixture.session.execute(
+            application::CreatePartSketchOnSupportCommand{
+                cap_support,
+                fixture.session.document().revision()},
+            &kernel);
+    CHECK(
+        same_support_created.ok() &&
+        same_support_created.sketch_id);
+
     kernel.extent_mode = ExtentMode::non_planar;
+    const auto same_support_state =
+        fixture.session.document().state();
+    const auto same_support_revision =
+        fixture.session.document().revision();
+    const auto same_support_revalidated =
+        fixture.session.execute(
+            application::SetPartSketchSupportCommand{
+                *same_support_created.sketch_id,
+                cap_support,
+                same_support_revision},
+            &kernel);
+    CHECK(!same_support_revalidated.ok());
+    CHECK(!same_support_revalidated.changed);
+    CHECK(
+        same_support_revalidated.status ==
+        application::SketchSupportMutationStatus::
+            unsupported);
+    CHECK(
+        fixture.session.document().revision() ==
+        same_support_revision);
+    CHECK(
+        fixture.session.document().state() ==
+        same_support_state);
+
     const auto unsupported_state = fixture.session.document().state();
     const auto unsupported_revision =
         fixture.session.document().revision();
@@ -487,6 +521,7 @@ int main() {
         << " local_uv_preserved=1"
         << " cycle_rejected=1"
         << " unsupported_non_planar=1"
+        << " same_support_revalidated=1"
         << " rejected_mutation=0\n";
     return EXIT_SUCCESS;
 }
