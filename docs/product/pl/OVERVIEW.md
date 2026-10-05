@@ -20,7 +20,8 @@ Obecny produkt udostępnia:
 - wiele otwartych Partów z Document Tabs;
 - wspólny CAD Workbench z Tree, Properties, Operations, Status i keyboard-first Command Line;
 - OCCT-backed Viewport 3D, ViewCube, Pan/Orbit/Zoom/Fit i Ortho/Perspective;
-- trwały Origin oraz Sketche na płaszczyznach XY/XZ/YZ;
+- trwały Origin, planarne Face Body oraz Offset Datum Planes jako semantyczne podpory Sketch;
+- grupa Reference Geometry z trwałymi Offset Datum Planes, Edit/Show/Hide i preview/intersection w Viewporcie;
 - Shared-2D Line/Circle/Arc/Rectangle, Regular/Construction, grip editing i Move/Copy/Rotate/Scale/Mirror;
 - precision input z jednostkami, Polar, Dynamic Input, OSNAP/Tracking/Inference;
 - Trim/Extend oraz read-only Measure;
@@ -28,11 +29,11 @@ Obecny produkt udostępnia:
 - dokładnie jeden trwały Body i uporządkowane Extrude Features;
 - Extrude Add/Cut z OneSide Forward/Reverse i Midplane;
 - dynamiczny preview, Edit Extrude, Feature status, Suppress/Unsuppress/Delete oraz Undo/Redo;
-- Save z ochroną konfliktu oraz Save/Close/Reopen z cold rebuildem modelu bryłowego.
+- Save z ochroną konfliktu oraz Save/Close/Reopen z cold rebuildem Body, Datumów i ich semantycznych zależności.
 
 Part jest obecnie jedynym zaimplementowanym typem głównego Dokumentu CAD. Assembly i Drawing nie są jeszcze dostępne.
 
-Bieżący solid modeling jest celowo ograniczony do PM-01 Extrude; Datum/planar-face support, topology picking, Revolve, Fillet/Chamfer i multi-body pozostają późniejszym zakresem.
+Bieżący solid modeling pozostaje celowo ograniczony do Extrude Add/Cut. Datum Axis, Datum Point, dodatkowe konstruktory Datum Plane, Projection, Revolve, Fillet/Chamfer i multi-body pozostają późniejszym zakresem.
 
 <!-- section-id: product.overview.browser -->
 ## Product Browser
