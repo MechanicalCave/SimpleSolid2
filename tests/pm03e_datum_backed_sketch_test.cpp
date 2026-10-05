@@ -70,7 +70,13 @@ public:
 
 class TestKernel final : public kernel::ISolidModelingKernel {
 public:
+    explicit TestKernel(
+        std::uint64_t token_seed = 1U) noexcept
+        : token_seed_{token_seed} {}
+
     std::size_t extrude_calls{};
+    std::vector<kernel::RuntimeSurfaceToken>
+        published_surface_tokens;
 
     kernel::SolidModelingResult extrude(
         const kernel::LinearExtrudeInput& input,
@@ -93,6 +99,10 @@ public:
 
         auto runtime =
             std::make_shared<TestSolid>();
+        if (upstream == nullptr) {
+            runtime->next_face = token_seed_;
+            runtime->next_surface = token_seed_;
+        }
         if (upstream != nullptr) {
             const auto* previous =
                 dynamic_cast<const TestSolid*>(
@@ -132,13 +142,15 @@ public:
         }
 
         const auto publish =
-            [&result, &runtime](
+            [this, &result, &runtime](
                 kernel::ExtrudeFaceRole role,
                 std::optional<kernel::Frame3> frame) {
                 const kernel::RuntimeFaceToken face{
                     runtime->next_face++};
                 const kernel::RuntimeSurfaceToken surface{
                     runtime->next_surface++};
+                published_surface_tokens.push_back(
+                    surface);
                 runtime->surfaces.push_back(
                     TestSolid::Surface{
                         face,
@@ -217,6 +229,9 @@ public:
         result.vertex_count = 0U;
         return result;
     }
+
+private:
+    std::uint64_t token_seed_{1U};
 };
 
 struct Fixture final {
