@@ -1626,6 +1626,7 @@ void CadWorkbench::buildUi() {
                 selected_feature_id_.reset();
                 selected_body_id_.reset();
                 refreshDatumProperties(*semantic);
+                tryCreateSketchFromDatum(semantic);
                 tryStageDatumPlaneFromDatum(semantic);
             } else if (properties_stack_ != nullptr &&
                        properties_stack_->currentWidget() ==
@@ -6079,10 +6080,10 @@ void CadWorkbench::startSketchTool() {
     }
     operations_placeholder_->setText(
         QStringLiteral(
-            "Sketch: select XY/XZ/YZ Origin plane or a Body Face."));
+            "Sketch: select XY/XZ/YZ Origin plane, a Body Face or a Datum Plane."));
     setStatusText(
         QStringLiteral(
-            "Sketch tool active — select an Origin plane or Body Face."));
+            "Sketch tool active — select an Origin plane, Body Face or Datum Plane."));
     notifyCadInputContextChanged();
     syncActionState();
 }
@@ -6123,7 +6124,7 @@ void CadWorkbench::startSketchResupport(
     }
     operations_placeholder_->setText(
         QStringLiteral(
-            "Change Sketch Support: select XY/XZ/YZ Origin plane or a Body Face."));
+            "Change Sketch Support: select XY/XZ/YZ Origin plane, a Body Face or a Datum Plane."));
     setStatusText(
         QStringLiteral(
             "Re-support active — select a new Origin plane or Body Face."));
@@ -6298,9 +6299,9 @@ bool CadWorkbench::finishSketchSupport() {
         setStatusText(
             sketch_resupport_target_
                 ? QStringLiteral(
-                      "Select an Origin plane or Body Face before Apply Support.")
+                      "Select an Origin plane, Body Face or Datum Plane before Apply Support.")
                 : QStringLiteral(
-                      "Select an Origin plane or Body Face before Create Sketch."));
+                      "Select an Origin plane, Body Face or Datum Plane before Create Sketch."));
         return false;
     }
 
@@ -6397,6 +6398,26 @@ void CadWorkbench::tryCreateSketchFromSupport(
         setStatusText(
             QStringLiteral(
                 "Sketch support must be XY, XZ or YZ Origin plane."));
+        return;
+    }
+
+    stageSketchSupport(*semantic);
+}
+
+void CadWorkbench::tryCreateSketchFromDatum(
+    std::optional<part::DatumId> datum_id) {
+    if (!sketch_support_pick_active_ ||
+        !datum_id) {
+        return;
+    }
+
+    const auto semantic =
+        part::partSketchSupportForDatumPlane(
+            *datum_id);
+    if (!semantic) {
+        setStatusText(
+            QStringLiteral(
+                "Selected Datum Plane produced an invalid Sketch support reference."));
         return;
     }
 
