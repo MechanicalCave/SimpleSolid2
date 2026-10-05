@@ -73,30 +73,28 @@ Pointer routing and cursor mode remain independent runtime axes. Ordinary Select
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-The public Viewer boundary remains provider-neutral. It accepts derived scenes for authored references/Sketch/Profile presentation plus bounded solid and transient solid-preview presentation required by PM-01.
+The public Viewer boundary remains provider-neutral. It accepts derived scenes for authored references/Sketch/Profile presentation, one atomic topology-aware committed Body scene and a separate transient solid-preview scene.
 
-Part evaluation may hold provider-neutral runtime solid/face tokens while the current runtime exists, but no TopoDS/OCAF handle, provider topology ordinal or Viewer presentation token crosses into durable Part identity.
+Part evaluation may hold provider-neutral runtime solid/Face/Edge/Vertex tokens while the current runtime exists, but no TopoDS/OCAF handle, provider topology ordinal or Viewer presentation token crosses into durable Part identity. `PartViewportController` owns generation-scoped mappings from current runtime topology tokens to neutral presentation tokens and invalidates them whenever the Body scene/evaluation generation changes.
 
-PM-01 does not expose face/edge topology picking. Solid presentation is display-only; tessellation quality, camera, pick aperture and Viewer state cannot alter Add/Cut result, semantic face roles or commit authority.
+Current Face/Edge/Vertex picking is presentation acquisition only. Tessellation quality, camera, pick aperture, candidate order and Viewer state cannot alter Add/Cut results or durable semantic identity.
 
 Presentation setters report failure to the Workbench. A successful authored CAD command is not rolled back because a later Viewer refresh fails; recovery retries presentation from current authored state.
 
 <!-- section-id: internal.cad-workbench-viewer.accepted-next-pm02-visual-topology -->
-## Accepted next PM-02 viewport visual-style and Feature-contribution boundary
+## As-built PM-02 viewport topology, View Style and Feature contribution
 
-This section records an accepted **next production design input**. It is not current as-built behavior. Until the separate PM-02 Work Contract is explicitly activated, the current Viewer boundary above remains authoritative: Body subshape picking is absent and current Part presentation remains the existing PM-01 display path.
-
-The proposed PM-02 Viewer work keeps presentation state independent from authored CAD state.
+This section describes the current PM-02 implementation. Presentation state remains independent from authored CAD state, while current Body topology is available for direct inspection and bounded semantic acquisition through the generation-scoped Body scene.
 
 ### View Style HUD
 
-The viewport navigation/presentation HUD should group one single-select View Style control with the existing provider-surface navigation controls:
+The viewport navigation/presentation HUD groups one single-select View Style control with the existing provider-surface navigation controls:
 
 ```text
 HOME    ORTHO/PERSP    Shaded + Edges ▾
 ```
 
-Required target styles are:
+The available styles are:
 
 - Shaded;
 - Shaded + Edges;
@@ -108,7 +106,7 @@ Hidden-edge rendering is visual only. Showing occluded edges must not silently e
 
 ### Independent overlay layers
 
-Target presentation order is conceptually:
+Presentation order is conceptually:
 
 ```text
 Base View Style
@@ -126,7 +124,7 @@ Direct viewport topology interaction and Document Tree Feature interaction delib
 
 ### Direct topology and semantic carriers
 
-PM-02 direct interaction targets bounded current topology:
+Direct interaction targets bounded current topology:
 
 - Face;
 - Edge;
@@ -142,11 +140,11 @@ Examples:
 
 The carrier cue is never Viewer-owned CAD identity.
 
-### Accepted PM-02 committed Body presentation boundary
+### Committed Body presentation boundary
 
-PM-02 should replace the current triangle-only committed `SolidScene` with one atomic topology-aware committed Body presentation snapshot.
+The current implementation uses one atomic topology-aware committed Body presentation snapshot instead of independent mesh/topology authorities.
 
-The target meaning is:
+Its meaning is:
 
 ```text
 one current RuntimeSolid/evaluation-provider generation
@@ -197,7 +195,7 @@ Semantic support-plane / Curve-extension / Point cues are separate derived overl
 
 If evaluation fails and exposes a `resolved_prefix_solid`, a prefix Body may be shown diagnostically, but it must be marked non-authoritative for successful final-Body command targeting.
 
-The neutral Viewer API may grow bounded concepts equivalent to:
+The neutral Viewer API contains bounded concepts equivalent to:
 
 ```text
 ViewStyle
@@ -256,11 +254,11 @@ Feature Contribution, hidden-edge graphics and semantic carrier/support ghost ov
 
 The detailed accepted design input is `work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`.
 
-### Active PM-02 topology Properties / inspection target boundary
+### Topology Properties / inspection boundary
 
-This subsection is normative design for the active PM-02 Work Contract. It is still a target boundary until the owning PM-02 checkpoint implements and verifies it; current as-built behavior remains described separately below.
+This subsection describes the current as-built topology inspection behavior.
 
-The existing stacked Properties panel remains the single product inspection surface. PM-02 should add one adaptive topology inspection context rather than adding Face/Edge/Vertex nodes to Document Tree.
+The existing stacked Properties panel remains the single product inspection surface. It uses one adaptive topology inspection context rather than adding Face/Edge/Vertex nodes to Document Tree.
 
 The panel should display one primary inspection subject at a time.
 
@@ -276,7 +274,7 @@ durable semantic reference is Resolved
 
 A current material Edge may be directly selectable while a durable singular semantic reference is Ambiguous or Unsupported. Properties must report that truth rather than hide the Edge or silently claim stable identity.
 
-For a selected Face, the proposed Properties context should expose:
+For a selected Face, the Properties context exposes:
 
 - Face as current topology kind;
 - Surface carrier;
@@ -588,7 +586,7 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
-The concrete Qt/OCCT provider presents the current derived Body solid and a separately replaceable transient Extrude preview alongside Origin, Sketch and Profile scenes. If final Part evaluation is Unavailable because a higher active Feature fails or blocks, evaluation may also expose a runtime-only `resolved_prefix_solid`: the same-revision solid result immediately before the first failing active Feature. PartViewportController may present that prefix so lower UpToDate history remains visible. This does not change final Body truth: `body_solid` remains null, final semantic face references remain empty, downstream active Features remain Blocked and no command/persistence/reference path may consume the prefix. If the first active Feature fails, no prefix exists and the Viewer solid scene is empty.
+The concrete Qt/OCCT provider presents the current derived topology-aware Body scene and a separately replaceable transient Extrude preview alongside Origin, Sketch and Profile scenes. If final Part evaluation is Unavailable because a higher active Feature fails or blocks, evaluation may also expose a runtime-only `resolved_prefix_solid`: the same-revision solid result immediately before the first failing active Feature. `PartViewportController` may present that prefix diagnostically so lower UpToDate history remains visible. This does not change final Body truth: final semantic reference authority remains unavailable, downstream active Features remain Blocked and mutating topology-reference actions cannot consume the prefix. If the first active Feature fails, no prefix exists and the Viewer solid scene is empty.
 
 The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude draft evaluation still computes the complete candidate Body and that candidate remains the authority for whether Finish is legal. Separately, the modeling provider derives an exact runtime-only operation delta from the same neutral Extrude input and the ordered Body stage immediately before the target Feature: Add preview is `tool - upstream Body`, while Cut preview is `tool ∩ upstream Body`. The accepted Body therefore remains visible in its normal opaque/default presentation and only material that would actually be added or removed is overlaid translucently. The delta crosses the public boundary only as provider-neutral presentation mesh and carries no durable CAD identity. In the Qt/OCCT provider the committed Body and transient preview each own an independent `Prs3d_ShadingAspect` before `Display()`; Body color/opacity and Add/Cut preview color/transparency are never assigned through shared context-linked shading state. Replacing or clearing preview therefore cannot recolor the committed Body. Polygon offset remains scoped to the preview object only. A valid solid preview transiently hides its source Profile to avoid coplanar z-fighting; if preview becomes invalid during Edit, the Profile may be revealed for diagnosis. Finish, Cancel and context exit clear both runtime overrides without changing the authored Profile visibility policy.
 
@@ -598,7 +596,7 @@ For Cut, provider evaluation performs an explicit fuzzy=0 volumetric common chec
 
 Solid tessellation quality is provider-private presentation policy. PM-01H4b restored the original bounded OCCT display meshing values (0.25 mm linear / 0.35 rad angular) and fixed smooth shading at the representation boundary instead of increasing triangle density. The provider derives nodal normals from each BRep face, transports them as provider-neutral per-vertex presentation normals, and the Qt/OCCT Viewer renders the neutral mesh through `AIS_Triangulation`. Smooth continuity therefore follows one underlying BRep surface such as a cylinder while genuine boundaries between separate BRep faces remain sharp. Nodal normals, tessellation and shading remain presentation data only and cannot change modeling tolerances, B-Rep meaning or semantic references.
 
-PM-01 solid/preview presentation carries no durable semantic topology identity. Face/edge subshape picking is deliberately absent. Existing provider selection/detection cleanup rules still apply before presentation replacement/removal.
+Committed Body Face/Edge/Vertex presentation carries only runtime acquisition identity. Durable meaning lives in the Part semantic topology catalog; Viewer tokens and provider subshape identity remain transient. Existing provider selection/detection cleanup rules apply before presentation replacement/removal, and stale Body-scene generations cannot commit.
 
 <!-- section-id: internal.cad-workbench-viewer.presentation-recovery -->
 ## Presentation failure and recovery
