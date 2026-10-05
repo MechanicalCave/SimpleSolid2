@@ -967,7 +967,10 @@ Gate:
 
 ### PM-02I — lifecycle, repair, persistence and regression matrix
 
-**Checkpoint state:** ACTIVE
+**Checkpoint state:** COMPLETED — PASS  
+**Final runtime/evidence candidate:** `b642a5af625a48d668a21efeaf3d78bfb9bf7c79` — Windows FULL #1451 PASS  
+**Merged runtime/evidence main:** `a26d7e981b160973825603bc3c11f37d5ab594a8`  
+**Completion evidence:** `work/PM-02I_LIFECYCLE_REPAIR_PERSISTENCE_SURVIVAL_COMPLETION.md`
 
 Close:
 
@@ -988,6 +991,8 @@ Gate:
 - no ID/provenance corruption.
 
 ### PM-02J — documentation and Owner Windows acceptance
+
+**Checkpoint state:** ACTIVE
 
 Deliver:
 
