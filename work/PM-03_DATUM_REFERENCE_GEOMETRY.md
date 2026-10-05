@@ -557,7 +557,7 @@ Gate:
 
 ### PM-03D — Viewer / intersection overlay / Tree / Properties
 
-**State:** ACTIVE
+**State:** COMPLETED — PASS; D1 exact candidate `b236e54028a64ba00569a995b592b4ab8de2cd17` / Windows FULL #1511 / merged `28c86f2cb62c5c9156cd2d1ca3f305432957eedf`; D2 exact candidate `adc9dd5c1f970932a03aa43422a105643db9052d` / Windows FULL #1514 / merged `3aa23632892853dbf9bf51574e5b2c762c2ac426`. Completion evidence: `work/PM-03D_VIEWER_TREE_PROPERTIES_COMPLETION.md`.
 
 Deliver:
 
@@ -578,6 +578,8 @@ Gate:
 - Viewer token never becomes CAD identity.
 
 ### PM-03E — Datum-backed Sketch + existing Extrude
+
+**State:** ACTIVE
 
 Deliver:
 
