@@ -951,7 +951,10 @@ Gate:
 
 ### PM-02H — existing Extrude Add/Cut from face-supported Sketch
 
-**Checkpoint state:** ACTIVE
+**Checkpoint state:** COMPLETED — PASS  
+**Final runtime candidate:** `0540a762be42b3f4329e7032545e652b21332486` — Windows FULL #1446 PASS  
+**Merged runtime main:** `16818f4b47d4ec2f1c18410856e2b1c1ba51f2c0`  
+**Completion evidence:** `work/PM-02H_FACE_SUPPORTED_EXTRUDE_ADD_CUT_COMPLETION.md`
 
 Deliver the primary vertical workflow using existing PM-01 Extrude.
 
@@ -963,6 +966,8 @@ Gate:
 - lost/ambiguous support fails structurally without stale downstream truth.
 
 ### PM-02I — lifecycle, repair, persistence and regression matrix
+
+**Checkpoint state:** ACTIVE
 
 Close:
 
