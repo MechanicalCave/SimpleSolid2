@@ -17,6 +17,7 @@
 namespace simplesolid2::part {
 
 class PartDocument;
+struct DatumEvaluation;
 
 enum class FeatureEvaluationStatus {
     up_to_date,
