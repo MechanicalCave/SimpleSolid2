@@ -1,5 +1,7 @@
 #include <simplesolid2/part/profile_kernel_input.hpp>
 
+#include <simplesolid2/part/datum_evaluation.hpp>
+
 #include <simplesolid2/sketch/arc.hpp>
 #include <simplesolid2/sketch/circle.hpp>
 #include <simplesolid2/sketch/line.hpp>
@@ -127,7 +129,9 @@ resolveKernelProfileInput(
     const PartDocument& document,
     ProfileId profile_id,
     const BodyStageTopologyCatalog*
-        support_topology) {
+        support_topology,
+    const DatumEvaluation*
+        datum_evaluation) {
     const auto* profile =
         document.findProfile(profile_id);
     if (!profile) {
@@ -145,10 +149,26 @@ resolveKernelProfileInput(
                 missing_source_sketch};
     }
 
+    const bool datum_backed =
+        datumPlaneIdForSketchSupport(
+            source->support)
+            .has_value();
+    if (datum_backed &&
+        (datum_evaluation == nullptr ||
+         datum_evaluation->source_revision !=
+             document.revision())) {
+        return {
+            ProfileKernelInputStatus::
+                support_unsupported,
+            SketchSupportResolutionDiagnostic::
+                blocked_datum};
+    }
+
     const auto support =
         resolveSketchSupport(
             source->support,
-            support_topology);
+            support_topology,
+            datum_evaluation);
     switch (support.status) {
     case SketchSupportResolutionStatus::missing:
         return {
