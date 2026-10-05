@@ -284,6 +284,9 @@ public:
             emphasis_region = std::nullopt);
     void clearProfileDraftPreview();
 
+    void setDatumPlaneDraftPreview(
+        std::optional<kernel::Frame3> frame);
+
     [[nodiscard]] bool setSketchPrimaryPointerRouting(
         viewer::PrimaryPointerRouting routing);
 
@@ -599,6 +602,8 @@ private:
         body_scene_cache_;
     std::optional<part::DatumEvaluation>
         datum_evaluation_cache_;
+    std::optional<kernel::Frame3>
+        datum_plane_draft_preview_frame_;
     std::optional<part::BodyStageTopologyCatalog>
         body_topology_catalog_cache_;
     // Runtime-only exact-stage catalogs from the same current PartEvaluation.
