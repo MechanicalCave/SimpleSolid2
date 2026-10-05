@@ -534,7 +534,7 @@ Gate:
 
 ### PM-03C — commands + Extrude-style draft / Command Line parity
 
-**State:** COMPLETED — PASS; C1 exact candidate `c633a9714602801e1253d119198ea9e46f73f9a9` / Windows FULL #1496 / merged `4147eba3697dfc345f49762508e92293b6373ff5`; C2 exact candidate `8b9185261e2cf32006f6af7a8c8a9da5e7c9ec04` / Windows FULL #1507 / merged `ad9e64df059091556bca2dc18515fa25a5cc5a32`. Completion evidence: `work/PM-03C_DATUM_COMMANDS_DRAFT_COMMAND_LINE_COMPLETION.md`.
+**State:** COMPLETED — PASS; C1 exact candidate `c633a9714602801e1253d119198ea9e46f73f9a9` / Windows FULL #1496 / merged `4147eba3697dfc345f49762508e92293b6373ff5`; C2 exact candidate `8b9185261e2cf32006f6af7a8c8a9da5e7c9ec04` / Windows FULL #1507 / merged `ad9e64df059091556bca2dc18515fa25a5cc5a32`. Completion evidence: `work/PM-03C_COMMANDS_DRAFT_COMMAND_LINE_COMPLETION.md`.
 
 Deliver:
 
