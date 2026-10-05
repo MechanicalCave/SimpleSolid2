@@ -8736,7 +8736,9 @@ void CadWorkbench::syncActionState() {
 
     finish_sketch_button_->setVisible(
         editing_sketch ||
-        (active && sketch_support_pick_active_));
+        (active &&
+         sketch_support_pick_active_ &&
+         pending_sketch_support_.has_value()));
     finish_sketch_button_->setEnabled(
         editing_sketch ||
         (active &&
