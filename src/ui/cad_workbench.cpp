@@ -2587,14 +2587,20 @@ void CadWorkbench::buildUi() {
     datum_plane_operations_layout->setContentsMargins(
         0, 0, 0, 0);
 
-    datum_plane_constructor_label_ =
-        new QLabel(
-            QStringLiteral("Constructor: Offset"),
+    auto* datum_plane_constructor_form =
+        new QFormLayout;
+    datum_plane_constructor_combo_ =
+        new QComboBox(
             datum_plane_operations_widget_);
-    datum_plane_constructor_label_->setObjectName(
-        QStringLiteral("datumPlaneConstructorLabel"));
-    datum_plane_operations_layout->addWidget(
-        datum_plane_constructor_label_);
+    datum_plane_constructor_combo_->setObjectName(
+        QStringLiteral("datumPlaneConstructorCombo"));
+    datum_plane_constructor_combo_->addItem(
+        QStringLiteral("Offset"));
+    datum_plane_constructor_form->addRow(
+        QStringLiteral("Constructor"),
+        datum_plane_constructor_combo_);
+    datum_plane_operations_layout->addLayout(
+        datum_plane_constructor_form);
 
     datum_plane_source_label_ =
         new QLabel(
@@ -3639,6 +3645,7 @@ void CadWorkbench::buildUi() {
                         document_session_->document()
                             .lengthUnit()});
             if (!quantity) {
+                datum_plane_offset_input_valid_ = false;
                 datum_plane_evaluation_.reset();
                 if (datum_plane_preview_timer_) {
                     datum_plane_preview_timer_->stop();
@@ -3647,12 +3654,18 @@ void CadWorkbench::buildUi() {
                 return;
             }
 
-            if (datum_plane_draft_->setOffset(
+            if (!datum_plane_draft_->setOffset(
                     core::LengthValue{
                         quantity->canonical_value})) {
-                scheduleDatumPlaneEvaluation();
-                notifyCadInputContextChanged();
+                datum_plane_offset_input_valid_ = false;
+                datum_plane_evaluation_.reset();
+                syncDatumPlaneUi();
+                return;
             }
+            datum_plane_offset_input_valid_ = true;
+            datum_plane_evaluation_.reset();
+            scheduleDatumPlaneEvaluation();
+            notifyCadInputContextChanged();
         });
     QObject::connect(
         datum_plane_offset_edit_,
@@ -3672,6 +3685,18 @@ void CadWorkbench::buildUi() {
                 return;
             }
             if (datum_plane_draft_->reverse()) {
+                datum_plane_offset_input_valid_ = true;
+                if (datum_plane_offset_edit_ != nullptr &&
+                    document_session_ != nullptr) {
+                    const QSignalBlocker blocked{
+                        datum_plane_offset_edit_};
+                    datum_plane_offset_edit_->setText(
+                        formatLengthForPart(
+                            datum_plane_draft_->offset(),
+                            document_session_->document()
+                                .lengthUnit()));
+                }
+                datum_plane_evaluation_.reset();
                 refreshDatumPlaneEvaluation();
                 notifyCadInputContextChanged();
             }
