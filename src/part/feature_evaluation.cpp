@@ -813,6 +813,7 @@ struct CurrentEdgeMeaning final {
     kernel::CurveKind provider_curve_kind{
         kernel::CurveKind::other};
     bool periodic_seam{false};
+    bool same_surface_partition{false};
     std::optional<CurveRelation> relation;
 };
 
@@ -957,6 +958,7 @@ buildCurveStage(
                 observation.runtime_token,
                 observation.provider_curve_kind,
                 observation.periodic_seam,
+                observation.same_surface_partition,
                 std::move(relation),
             });
     }
@@ -1211,8 +1213,11 @@ buildCurveStage(
             meaning.provider_curve_kind;
         record.periodic_seam =
             meaning.periodic_seam;
+        record.same_surface_partition =
+            meaning.same_surface_partition;
 
-        if (meaning.periodic_seam) {
+        if (meaning.periodic_seam ||
+            meaning.same_surface_partition) {
             record.accounting_class =
                 TopologyAccountingClass::
                     known_representation_artifact;
@@ -2079,6 +2084,7 @@ bool BodyEdgeTopologyRecord::valid() const noexcept {
     switch (accounting_class) {
     case TopologyAccountingClass::referenceable:
         return !periodic_seam &&
+               !same_surface_partition &&
                !curve_candidates.empty() &&
                curve_kind !=
                    kernel::CurveKind::other &&
@@ -2088,7 +2094,10 @@ bool BodyEdgeTopologyRecord::valid() const noexcept {
                     kernel::ReferenceStatus::ambiguous);
     case TopologyAccountingClass::
         known_representation_artifact:
-        return periodic_seam &&
+        return (periodic_seam ||
+                same_surface_partition) &&
+               !(periodic_seam &&
+                 same_surface_partition) &&
                curve_candidates.empty() &&
                referenceability ==
                    kernel::ReferenceStatus::
@@ -2096,6 +2105,7 @@ bool BodyEdgeTopologyRecord::valid() const noexcept {
     case TopologyAccountingClass::
         semantically_unsupported:
         return !periodic_seam &&
+               !same_surface_partition &&
                curve_candidates.empty() &&
                referenceability ==
                    kernel::ReferenceStatus::
