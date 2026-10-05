@@ -6,6 +6,7 @@
 #include <simplesolid2/part/datum.hpp>
 
 #include <QApplication>
+#include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
@@ -258,9 +259,9 @@ int main(int argc, char* argv[]) {
             QStringLiteral(
                 "datumPlaneToolButton"));
     auto* constructor =
-        workbench.findChild<QLabel*>(
+        workbench.findChild<QComboBox*>(
             QStringLiteral(
-                "datumPlaneConstructorLabel"));
+                "datumPlaneConstructorCombo"));
     auto* source =
         workbench.findChild<QLabel*>(
             QStringLiteral(
@@ -302,8 +303,8 @@ int main(int argc, char* argv[]) {
     tool->click();
     CHECK(tool->isChecked());
     CHECK(
-        constructor->text() ==
-        QStringLiteral("Constructor: Offset"));
+        constructor->currentText() ==
+        QStringLiteral("Offset"));
     CHECK(
         source->text().contains(
             QStringLiteral("XY Plane")));
@@ -416,9 +417,21 @@ int main(int argc, char* argv[]) {
 
     application::CadInputSession input;
     input.attachEndpoint(&workbench);
+    auto input_settings =
+        input.interactionSettings();
+    input_settings.dynamic_input_enabled = true;
+    CHECK(
+        input.setInteractionSettings(
+            input_settings));
     input.setBuffer("DATUM PLANE");
     CHECK(input.submit().accepted);
     CHECK(!finish->isEnabled());
+    const auto datum_fields =
+        input.dynamicInputFields();
+    CHECK(datum_fields.size() == 1U);
+    CHECK(
+        datum_fields.front().label ==
+        "Offset");
 
     selectOnly(
         *tree,
