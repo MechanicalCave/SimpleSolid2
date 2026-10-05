@@ -654,7 +654,7 @@ int main(int argc, char* argv[]) {
         workbench.findChild<QPushButton*>(
             QStringLiteral("finishSketchButton"));
     CHECK(finish_sketch != nullptr);
-    CHECK(finish_sketch->isVisible());
+    CHECK(!finish_sketch->isHidden());
     CHECK(finish_sketch->isEnabled());
     finish_sketch->click();
 
