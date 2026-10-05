@@ -189,7 +189,7 @@ std::optional<part::ResolvedSketchSupport>
 resolveSupportForMutation(
     const part::PartDocument& document,
     const part::PartSketchSupport& support,
-    kernel::ISolidModelingKernel& modeling_kernel) {
+    kernel::ISolidModelingKernel* modeling_kernel) {
     if (!support.valid()) {
         return std::nullopt;
     }
@@ -206,10 +206,14 @@ resolveSupportForMutation(
         return std::nullopt;
     }
 
+    if (modeling_kernel == nullptr) {
+        return std::nullopt;
+    }
+
     const auto evaluation =
         part::evaluatePart(
             document,
-            modeling_kernel);
+            *modeling_kernel);
     const auto* topology =
         topologyAtStage(
             evaluation,
@@ -516,7 +520,7 @@ CreatePartSketchResult DocumentSession::execute(
 
 SketchSupportMutationResult DocumentSession::execute(
     const CreatePartSketchOnSupportCommand& command,
-    kernel::ISolidModelingKernel& modeling_kernel) {
+    kernel::ISolidModelingKernel* modeling_kernel) {
     if (document_.revision() !=
         command.expected_revision) {
         return supportMutationFailure(
@@ -608,7 +612,7 @@ SketchSupportMutationResult DocumentSession::execute(
 
 SketchSupportMutationResult DocumentSession::execute(
     const SetPartSketchSupportCommand& command,
-    kernel::ISolidModelingKernel& modeling_kernel) {
+    kernel::ISolidModelingKernel* modeling_kernel) {
     if (document_.revision() !=
         command.expected_revision) {
         return supportMutationFailure(
