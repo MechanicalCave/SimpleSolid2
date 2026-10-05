@@ -930,7 +930,10 @@ Gate:
 
 ### PM-02G — create/re-support Sketch on arbitrary planar Body Surface
 
-**Checkpoint state:** ACTIVE
+**Checkpoint state:** COMPLETED — PASS  
+**Final runtime candidate:** `f45ed8ee09aabe098ab88bc7e47a0c614841fb40` — Windows FULL #1443 PASS  
+**Merged runtime main:** `17778bdfe80d0411031b458ef4f6d582eccc205b`  
+**Completion evidence:** `work/PM-02G_FACE_SUPPORTED_SKETCH_AUTHORING_COMPLETION.md`
 
 Deliver:
 
@@ -947,6 +950,8 @@ Gate:
 - SketchId/EntityIds preserved on re-support.
 
 ### PM-02H — existing Extrude Add/Cut from face-supported Sketch
+
+**Checkpoint state:** ACTIVE
 
 Deliver the primary vertical workflow using existing PM-01 Extrude.
 
