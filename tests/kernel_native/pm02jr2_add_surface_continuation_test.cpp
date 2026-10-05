@@ -159,15 +159,15 @@ sketch::Point2 projectToFrame(
     const kernel::Frame3& frame,
     kernel::Point3 point) {
     const kernel::Point3 delta{
-        point.u - frame.origin.u,
-        point.v - frame.origin.v,
+        point.x - frame.origin.x,
+        point.y - frame.origin.y,
         point.z - frame.origin.z};
     return {
-        delta.u * frame.u_axis.u +
-            delta.v * frame.u_axis.v +
+        delta.x * frame.u_axis.x +
+            delta.y * frame.u_axis.y +
             delta.z * frame.u_axis.z,
-        delta.u * frame.v_axis.u +
-            delta.v * frame.v_axis.v +
+        delta.x * frame.v_axis.x +
+            delta.y * frame.v_axis.y +
             delta.z * frame.v_axis.z,
     };
 }
@@ -277,7 +277,7 @@ void verifyPartIntegration() {
                        surface.canonical_frame &&
                        std::abs(
                            surface.canonical_frame
-                               ->normal.u) > 0.9;
+                               ->normal.x) > 0.9;
             });
     CHECK(side != base_topology.surfaces.end());
     CHECK(side->canonical_frame.has_value());
@@ -301,7 +301,7 @@ void verifyPartIntegration() {
 
     const auto& frame = *side->canonical_frame;
     const double side_x =
-        frame.normal.u > 0.0
+        frame.normal.x > 0.0
             ? 40.0
             : 0.0;
     const std::vector<kernel::Point3> corners{
