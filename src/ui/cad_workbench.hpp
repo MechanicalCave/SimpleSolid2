@@ -41,7 +41,6 @@ class PartDocumentTreeController;
 class PartSketchInteractionController;
 class PartViewportController;
 class ViewCubeWidget;
-struct BodyTopologyInspection;
 
 struct CadDynamicInputUiState final {
     std::string buffer;
@@ -332,8 +331,6 @@ private:
         sketch_edit_document_id_;
     std::optional<sketch::SketchId>
         active_sketch_id_;
-    std::optional<BodyTopologyInspection>
-        selected_body_topology_;
 
     CloseDocumentHandler
         close_document_handler_;
