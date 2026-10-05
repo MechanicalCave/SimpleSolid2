@@ -1184,6 +1184,17 @@ void CadWorkbench::buildUi() {
         1,
         extrude_button_);
 
+    datum_plane_button_ =
+        new QPushButton(
+            QStringLiteral("Datum Plane"),
+            shell_);
+    datum_plane_button_->setObjectName(
+        QStringLiteral("datumPlaneToolButton"));
+    datum_plane_button_->setCheckable(true);
+    shell_->editorToolsLayout().insertWidget(
+        1,
+        datum_plane_button_);
+
     select_sketch_button_ =
         new QPushButton(
             QStringLiteral("Select"),
@@ -1401,13 +1412,17 @@ void CadWorkbench::buildUi() {
         [this](
             const std::vector<core::BuiltinReferenceRole>&,
             std::optional<core::BuiltinReferenceRole> primary) {
+            selected_body_topology_.reset();
             refreshPropertiesContext(primary);
             tryCreateSketchFromSupport(primary);
+            tryStageDatumPlaneFromSupport(primary);
         });
 
     viewport_controller_->setBodyTopologySelectionChangedHandler(
         [this](std::optional<BodyTopologyInspection> inspection) {
+            selected_body_topology_ = inspection;
             if (!inspection) {
+                syncActionState();
                 return;
             }
             selected_profile_id_.reset();
@@ -1429,6 +1444,8 @@ void CadWorkbench::buildUi() {
                 tryCreateSketchFromBodyTopology(
                     *inspection);
             }
+            tryStageDatumPlaneFromBodyTopology(
+                *inspection);
             syncActionState();
         });
 
@@ -2560,6 +2577,104 @@ void CadWorkbench::buildUi() {
         cancel_line_button_);
 
 
+    datum_plane_operations_widget_ =
+        new QWidget(operations_content);
+    datum_plane_operations_widget_->setObjectName(
+        QStringLiteral("datumPlaneOperationsWidget"));
+    auto* datum_plane_operations_layout =
+        new QVBoxLayout(
+            datum_plane_operations_widget_);
+    datum_plane_operations_layout->setContentsMargins(
+        0, 0, 0, 0);
+
+    datum_plane_constructor_label_ =
+        new QLabel(
+            QStringLiteral("Constructor: Offset"),
+            datum_plane_operations_widget_);
+    datum_plane_constructor_label_->setObjectName(
+        QStringLiteral("datumPlaneConstructorLabel"));
+    datum_plane_operations_layout->addWidget(
+        datum_plane_constructor_label_);
+
+    datum_plane_source_label_ =
+        new QLabel(
+            QStringLiteral("Source: Select XY/XZ/YZ plane or planar Body Face"),
+            datum_plane_operations_widget_);
+    datum_plane_source_label_->setObjectName(
+        QStringLiteral("datumPlaneSourceLabel"));
+    datum_plane_source_label_->setWordWrap(true);
+    datum_plane_operations_layout->addWidget(
+        datum_plane_source_label_);
+
+    auto* datum_plane_offset_form =
+        new QFormLayout;
+    datum_plane_offset_edit_ =
+        new QLineEdit(
+            datum_plane_operations_widget_);
+    datum_plane_offset_edit_->setObjectName(
+        QStringLiteral("datumPlaneOffsetEdit"));
+    datum_plane_offset_edit_->setPlaceholderText(
+        QStringLiteral("e.g. 10 mm or -5 mm"));
+    datum_plane_offset_form->addRow(
+        QStringLiteral("Offset"),
+        datum_plane_offset_edit_);
+    datum_plane_operations_layout->addLayout(
+        datum_plane_offset_form);
+
+    datum_plane_reverse_button_ =
+        new QPushButton(
+            QStringLiteral("Reverse"),
+            datum_plane_operations_widget_);
+    datum_plane_reverse_button_->setObjectName(
+        QStringLiteral("datumPlaneReverseButton"));
+    datum_plane_operations_layout->addWidget(
+        datum_plane_reverse_button_);
+
+    datum_plane_result_label_ =
+        new QLabel(
+            QStringLiteral("Select a valid Datum Plane source."),
+            datum_plane_operations_widget_);
+    datum_plane_result_label_->setObjectName(
+        QStringLiteral("datumPlaneResultLabel"));
+    datum_plane_result_label_->setWordWrap(true);
+    datum_plane_operations_layout->addWidget(
+        datum_plane_result_label_);
+
+    datum_plane_finish_button_ =
+        new QPushButton(
+            QStringLiteral("Finish Datum Plane"),
+            datum_plane_operations_widget_);
+    datum_plane_finish_button_->setObjectName(
+        QStringLiteral("datumPlaneFinishButton"));
+    datum_plane_operations_layout->addWidget(
+        datum_plane_finish_button_);
+
+    datum_plane_cancel_button_ =
+        new QPushButton(
+            QStringLiteral("Cancel"),
+            datum_plane_operations_widget_);
+    datum_plane_cancel_button_->setObjectName(
+        QStringLiteral("datumPlaneCancelButton"));
+    datum_plane_operations_layout->addWidget(
+        datum_plane_cancel_button_);
+
+    datum_plane_preview_timer_ =
+        new QTimer(this);
+    datum_plane_preview_timer_->setSingleShot(true);
+    datum_plane_preview_timer_->setInterval(90);
+    QObject::connect(
+        datum_plane_preview_timer_,
+        &QTimer::timeout,
+        this,
+        [this] {
+            refreshDatumPlaneEvaluation();
+        });
+
+    datum_plane_operations_widget_->setVisible(false);
+    operations_layout->addWidget(
+        datum_plane_operations_widget_);
+
+
     extrude_operations_widget_ =
         new QWidget(operations_content);
     extrude_operations_widget_->setObjectName(
@@ -3489,6 +3604,93 @@ void CadWorkbench::buildUi() {
         [this] {
             setSketchSelectionRole(
                 sketch::EntityRole::construction);
+        });
+
+
+    QObject::connect(
+        datum_plane_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (datum_plane_draft_) {
+                cancelDatumPlane();
+                return;
+            }
+            static_cast<void>(
+                startDatumPlaneTool());
+        });
+    QObject::connect(
+        datum_plane_offset_edit_,
+        &QLineEdit::textChanged,
+        this,
+        [this](const QString& text_value) {
+            if (syncing_datum_plane_ui_ ||
+                !datum_plane_draft_ ||
+                document_session_ == nullptr) {
+                return;
+            }
+
+            const auto quantity =
+                application::parseCadQuantity(
+                    toUtf8(text_value),
+                    {
+                        application::CadQuantityDimension::
+                            length,
+                        document_session_->document()
+                            .lengthUnit()});
+            if (!quantity) {
+                datum_plane_evaluation_.reset();
+                if (datum_plane_preview_timer_) {
+                    datum_plane_preview_timer_->stop();
+                }
+                syncDatumPlaneUi();
+                return;
+            }
+
+            if (datum_plane_draft_->setOffset(
+                    core::LengthValue{
+                        quantity->canonical_value})) {
+                scheduleDatumPlaneEvaluation();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        datum_plane_offset_edit_,
+        &QLineEdit::returnPressed,
+        this,
+        [this] {
+            flushDatumPlaneEvaluation();
+            static_cast<void>(
+                finishDatumPlane());
+        });
+    QObject::connect(
+        datum_plane_reverse_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (!datum_plane_draft_) {
+                return;
+            }
+            if (datum_plane_draft_->reverse()) {
+                refreshDatumPlaneEvaluation();
+                notifyCadInputContextChanged();
+            }
+        });
+    QObject::connect(
+        datum_plane_finish_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            flushDatumPlaneEvaluation();
+            static_cast<void>(
+                finishDatumPlane());
+        });
+    QObject::connect(
+        datum_plane_cancel_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            cancelDatumPlane();
         });
 
 
