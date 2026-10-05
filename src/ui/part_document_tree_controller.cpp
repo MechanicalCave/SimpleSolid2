@@ -30,8 +30,6 @@ constexpr int bodyIdData = Qt::UserRole + 44;
 constexpr int featureIdData = Qt::UserRole + 45;
 constexpr int datumIdData = Qt::UserRole + 46;
 constexpr int referenceGeometryGroupData = Qt::UserRole + 47;
-constexpr int datumIdData = Qt::UserRole + 46;
-constexpr int referenceGeometryGroupData = Qt::UserRole + 47;
 
 constexpr std::array<core::BuiltinReferenceRole, 7> tree_reference_order{
     core::BuiltinReferenceRole::xy_plane,
@@ -188,8 +186,7 @@ QString datumSourceText(
         return QStringLiteral("Body Surface @ Feature %1")
             .arg(
                 fromUtf8(
-                    surface->reference
-                        .address
+                    surface->surface
                         .producer_feature_id
                         .serialized()));
     }
