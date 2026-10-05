@@ -7,6 +7,7 @@
 
 #include <QApplication>
 #include <QComboBox>
+#include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
 #include <QTreeWidget>
