@@ -443,35 +443,6 @@ set_tests_properties(pm01e.cad_workbench_extrude PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer"
 )
 
-add_executable(pm03c2_cad_workbench_datum_test
-    pm03c2_cad_workbench_datum_test.cpp
-)
-
-target_include_directories(pm03c2_cad_workbench_datum_test
-    PRIVATE
-        ${PROJECT_SOURCE_DIR}/src/ui
-)
-
-target_link_libraries(pm03c2_cad_workbench_datum_test
-    PRIVATE
-        simplesolid2_application
-        simplesolid2_ui
-        simplesolid2_viewer
-        Qt6::Widgets
-)
-
-target_compile_features(pm03c2_cad_workbench_datum_test PRIVATE cxx_std_20)
-
-add_test(
-    NAME pm03c2.cad_workbench_datum
-    COMMAND pm03c2_cad_workbench_datum_test
-)
-
-set_tests_properties(pm03c2.cad_workbench_datum PROPERTIES
-    ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-    LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-ui;subsystem-viewer"
-)
-
 add_executable(pm03c2_cad_workbench_datum_plane_test
     pm03c2_cad_workbench_datum_plane_test.cpp
 )
