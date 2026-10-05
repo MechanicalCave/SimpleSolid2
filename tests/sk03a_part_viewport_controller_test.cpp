@@ -404,6 +404,204 @@ public:
     }
 };
 
+class StageAwareSketchSolid final
+    : public kernel::RuntimeSolid {
+public:
+    struct Surface final {
+        kernel::RuntimeFaceToken face;
+        kernel::RuntimeSurfaceToken surface;
+        kernel::Frame3 frame;
+    };
+
+    std::vector<Surface> surfaces;
+    std::uint64_t next_face{1001U};
+    std::uint64_t next_surface{4001U};
+};
+
+kernel::Frame3 offsetStageFrame(
+    const kernel::Frame3& source,
+    double offset) {
+    auto frame = source;
+    frame.origin.x += source.normal.x * offset;
+    frame.origin.y += source.normal.y * offset;
+    frame.origin.z += source.normal.z * offset;
+    return frame;
+}
+
+class StageAwareSketchKernel final
+    : public kernel::ISolidModelingKernel {
+public:
+    kernel::SolidModelingResult extrude(
+        const kernel::LinearExtrudeInput& input,
+        kernel::RuntimeSolidHandle upstream = {}) noexcept override {
+        kernel::SolidModelingResult result;
+        if (!input.valid()) {
+            result.status =
+                kernel::SolidModelingStatus::invalid_input;
+            return result;
+        }
+
+        auto runtime =
+            std::make_shared<StageAwareSketchSolid>();
+        if (upstream) {
+            const auto* prior =
+                dynamic_cast<const StageAwareSketchSolid*>(
+                    upstream.get());
+            if (prior == nullptr) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_mismatch;
+                return result;
+            }
+            runtime->surfaces = prior->surfaces;
+            runtime->next_face = prior->next_face;
+            runtime->next_surface = prior->next_surface;
+
+            for (const auto& inherited :
+                 prior->surfaces) {
+                result.current_faces.push_back(
+                    inherited.face);
+                result.inherited_faces.push_back(
+                    {
+                        inherited.face,
+                        kernel::ReferenceStatus::resolved,
+                        1U,
+                    });
+                result.inherited_surfaces.push_back(
+                    {
+                        inherited.surface,
+                        kernel::ReferenceStatus::resolved,
+                        kernel::ReferenceStatus::resolved,
+                        1U,
+                        kernel::SurfaceKind::plane,
+                        inherited.frame,
+                        {inherited.face},
+                    });
+            }
+        }
+
+        const auto publish =
+            [&result, &runtime](
+                const kernel::ExtrudeFaceRole& role,
+                const kernel::Frame3& frame) {
+                const kernel::RuntimeFaceToken face{
+                    runtime->next_face++};
+                const kernel::RuntimeSurfaceToken surface{
+                    runtime->next_surface++};
+
+                runtime->surfaces.push_back(
+                    {
+                        face,
+                        surface,
+                        frame,
+                    });
+                result.current_faces.push_back(face);
+                result.new_faces.push_back(
+                    {
+                        role,
+                        kernel::ReferenceStatus::resolved,
+                        1U,
+                        face,
+                    });
+
+                kernel::NewSurfaceLineage lineage;
+                lineage.role = role;
+                lineage.surface_status =
+                    kernel::ReferenceStatus::resolved;
+                lineage.strict_face_status =
+                    kernel::ReferenceStatus::resolved;
+                lineage.candidate_face_count = 1U;
+                lineage.surface_kind =
+                    kernel::SurfaceKind::plane;
+                lineage.canonical_frame = frame;
+                lineage.resolved_token = surface;
+                lineage.current_faces = {face};
+                result.new_surfaces.push_back(
+                    std::move(lineage));
+            };
+
+        publish(
+            {
+                kernel::ExtrudeGeneratedFaceRoleKind::cap,
+                input.start_cap_role,
+                std::nullopt,
+            },
+            offsetStageFrame(
+                input.profile.frame,
+                input.start_offset_mm));
+        publish(
+            {
+                kernel::ExtrudeGeneratedFaceRoleKind::cap,
+                input.end_cap_role,
+                std::nullopt,
+            },
+            offsetStageFrame(
+                input.profile.frame,
+                input.end_offset_mm));
+
+        result.status =
+            kernel::SolidModelingStatus::ok;
+        result.solid = std::move(runtime);
+        result.brep_valid = true;
+        result.solid_count = 1U;
+        result.face_count =
+            result.current_faces.size();
+        result.edge_count = 0U;
+        result.vertex_count = 0U;
+        return result;
+    }
+
+    kernel::BodyPresentationResult bodyPresentation(
+        kernel::RuntimeSolidHandle solid) noexcept override {
+        kernel::BodyPresentationResult result;
+        const auto* runtime =
+            dynamic_cast<const StageAwareSketchSolid*>(
+                solid.get());
+        if (runtime == nullptr) {
+            result.status =
+                kernel::SolidPresentationStatus::
+                    provider_mismatch;
+            return result;
+        }
+
+        result.status =
+            kernel::SolidPresentationStatus::ok;
+        for (std::size_t index = 0U;
+             index < runtime->surfaces.size();
+             ++index) {
+            const auto& surface =
+                runtime->surfaces[index];
+            const auto& origin = surface.frame.origin;
+            const auto& u = surface.frame.u_axis;
+            const auto& v = surface.frame.v_axis;
+            result.body.mesh.triangles.push_back(
+                {
+                    origin,
+                    {
+                        origin.x + u.x,
+                        origin.y + u.y,
+                        origin.z + u.z,
+                    },
+                    {
+                        origin.x + v.x,
+                        origin.y + v.y,
+                        origin.z + v.z,
+                    },
+                    surface.frame.normal,
+                    surface.frame.normal,
+                    surface.frame.normal,
+                });
+            result.body.faces.push_back(
+                {
+                    surface.face,
+                    index,
+                    1U,
+                });
+        }
+        return result;
+    }
+};
+
 class TopologyFakeSolidKernel final
     : public kernel::ISolidModelingKernel {
 public:
@@ -1151,6 +1349,219 @@ int main(int argc, char* argv[]) {
             viewport.body_scene_
                 .triangles.empty());
         controller.clear();
+    }
+
+    // PM-02J R3: editing a face-supported Sketch after a downstream
+    // Extrude must resolve presentation against the Sketch support's exact
+    // earlier Body stage, not only the final Body topology catalog.
+    {
+        auto stage_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession stage_session{
+            std::filesystem::path{
+                "pm02jr3-stage-sketch-edit.ss2part"},
+            std::move(stage_document)};
+        StageAwareSketchKernel stage_kernel;
+
+        const auto base_sketch =
+            stage_session.execute(
+                application::CreatePartSketchCommand{
+                    core::BuiltinReferenceRole::
+                        xy_plane});
+        CHECK(
+            base_sketch.ok() &&
+            base_sketch.sketch_id);
+
+        CHECK(
+            stage_session.execute(
+                application::AddSketchRectangleCommand{
+                    *base_sketch.sketch_id,
+                    stage_session.document().revision(),
+                    {0.0, 0.0},
+                    {20.0, 10.0},
+                    sketch::EntityRole::regular,
+                    false})
+                .ok());
+
+        const auto* base_hosted =
+            stage_session.document().findSketch(
+                *base_sketch.sketch_id);
+        CHECK(base_hosted != nullptr);
+        const auto base_regions =
+            sketch::analyzeRegions(
+                base_hosted->model);
+        CHECK(
+            base_regions.complete() &&
+            base_regions.regions.size() == 1U);
+        const auto base_intent =
+            part::makeProfileRegionIntent(
+                base_regions.regions.front());
+        CHECK(base_intent);
+
+        const auto base_profile =
+            stage_session.execute(
+                application::CreateProfileCommand{
+                    *base_sketch.sketch_id,
+                    stage_session.document().revision(),
+                    *base_intent});
+        CHECK(
+            base_profile.ok() &&
+            base_profile.profile_id);
+
+        const auto base_feature =
+            stage_session.execute(
+                application::CreateExtrudeFeatureCommand{
+                    *base_profile.profile_id,
+                    stage_session.document().revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{10.0},
+                        false},
+                    "Base"},
+                stage_kernel);
+        CHECK(
+            base_feature.ok() &&
+            base_feature.feature_id);
+
+        const auto base_eval =
+            part::evaluatePart(
+                stage_session.document(),
+                stage_kernel);
+        CHECK(
+            base_eval.body_status ==
+            part::BodyEvaluationStatus::
+                up_to_date);
+        CHECK(base_eval.current_topology);
+
+        const auto cap =
+            std::find_if(
+                base_eval.current_topology
+                    ->surfaces.begin(),
+                base_eval.current_topology
+                    ->surfaces.end(),
+                [feature_id =
+                     *base_feature.feature_id](
+                    const auto& surface) {
+                    return surface.status ==
+                               kernel::ReferenceStatus::
+                                   resolved &&
+                           surface.address
+                                   .producer_feature_id ==
+                               feature_id &&
+                           surface.address.role ==
+                               part::FeatureSurfaceRoleKind::
+                                   extent_cap;
+                });
+        CHECK(
+            cap !=
+            base_eval.current_topology
+                ->surfaces.end());
+        const auto support =
+            part::partSketchSupportForBodyPlanarSurface(
+                part::SurfaceReference{
+                    base_eval.current_topology->stage,
+                    cap->address});
+        CHECK(support);
+
+        const auto face_sketch =
+            stage_session.execute(
+                application::
+                    CreatePartSketchOnSupportCommand{
+                    *support,
+                    stage_session.document().revision()},
+                &stage_kernel);
+        CHECK(
+            face_sketch.ok() &&
+            face_sketch.sketch_id);
+
+        CHECK(
+            stage_session.execute(
+                application::AddSketchRectangleCommand{
+                    *face_sketch.sketch_id,
+                    stage_session.document().revision(),
+                    {2.0, 3.0},
+                    {8.0, 9.0},
+                    sketch::EntityRole::regular,
+                    false})
+                .ok());
+
+        const auto* face_hosted =
+            stage_session.document().findSketch(
+                *face_sketch.sketch_id);
+        CHECK(face_hosted != nullptr);
+        const auto face_regions =
+            sketch::analyzeRegions(
+                face_hosted->model);
+        CHECK(
+            face_regions.complete() &&
+            face_regions.regions.size() == 1U);
+        const auto face_intent =
+            part::makeProfileRegionIntent(
+                face_regions.regions.front());
+        CHECK(face_intent);
+
+        const auto face_profile =
+            stage_session.execute(
+                application::CreateProfileCommand{
+                    *face_sketch.sketch_id,
+                    stage_session.document().revision(),
+                    *face_intent});
+        CHECK(
+            face_profile.ok() &&
+            face_profile.profile_id);
+
+        const auto downstream =
+            stage_session.execute(
+                application::CreateExtrudeFeatureCommand{
+                    *face_profile.profile_id,
+                    stage_session.document().revision(),
+                    part::ExtrudeOperation::add,
+                    part::OneSidedExtrudeExtent{
+                        core::LengthValue{4.0},
+                        false},
+                    "Downstream"},
+                stage_kernel);
+        CHECK(
+            downstream.ok() &&
+            downstream.feature_id);
+
+        QTreeWidget stage_tree;
+        ui::PartDocumentTreeController
+            stage_tree_controller{
+                stage_tree};
+        TestViewport stage_viewport;
+        ui::PartViewportController
+            stage_controller{
+                stage_tree_controller,
+                &stage_viewport};
+        stage_controller.setSolidModelingKernel(
+            &stage_kernel);
+        stage_controller.setDocumentSession(
+            &stage_session);
+
+        CHECK(
+            stage_viewport.body_scene_.faces.size() ==
+            4U);
+
+        stage_controller.setSketchEditSketch(
+            *face_sketch.sketch_id);
+
+        CHECK(
+            stage_viewport.sketch_scene_.lines.size() ==
+            4U);
+        CHECK(
+            stage_viewport.reference_scene_.grid
+                .has_value());
+        CHECK(
+            stage_viewport.reference_scene_.grid
+                ->origin.z == 10.0);
+
+        stage_controller.setSketchEditSketch(
+            std::nullopt);
+        stage_controller.setSolidModelingKernel(
+            nullptr);
+        stage_controller.clear();
     }
 
     // PM-02D2: Controller owns Body candidate policy and runtime selection.
