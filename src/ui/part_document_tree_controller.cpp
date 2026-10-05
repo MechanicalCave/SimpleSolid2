@@ -30,6 +30,8 @@ constexpr int bodyIdData = Qt::UserRole + 44;
 constexpr int featureIdData = Qt::UserRole + 45;
 constexpr int datumIdData = Qt::UserRole + 46;
 constexpr int referenceGeometryGroupData = Qt::UserRole + 47;
+constexpr int datumIdData = Qt::UserRole + 46;
+constexpr int referenceGeometryGroupData = Qt::UserRole + 47;
 
 constexpr std::array<core::BuiltinReferenceRole, 7> tree_reference_order{
     core::BuiltinReferenceRole::xy_plane,
@@ -72,6 +74,54 @@ QString bodyStatusText(
         return QStringLiteral("UpToDate");
     case part::BodyEvaluationStatus::unavailable:
         return QStringLiteral("Unavailable");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString datumStatusText(
+    part::DatumPlaneEvaluationStatus status) {
+    switch (status) {
+    case part::DatumPlaneEvaluationStatus::resolved:
+        return QStringLiteral("Resolved");
+    case part::DatumPlaneEvaluationStatus::missing:
+        return QStringLiteral("Missing");
+    case part::DatumPlaneEvaluationStatus::ambiguous:
+        return QStringLiteral("Ambiguous");
+    case part::DatumPlaneEvaluationStatus::unsupported:
+        return QStringLiteral("Unsupported");
+    case part::DatumPlaneEvaluationStatus::blocked:
+        return QStringLiteral("Blocked");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString datumDiagnosticText(
+    part::DatumPlaneEvaluationDiagnostic diagnostic) {
+    switch (diagnostic) {
+    case part::DatumPlaneEvaluationDiagnostic::none:
+        return QStringLiteral("None");
+    case part::DatumPlaneEvaluationDiagnostic::invalid_datum:
+        return QStringLiteral("Invalid Datum");
+    case part::DatumPlaneEvaluationDiagnostic::stale_part_evaluation:
+        return QStringLiteral("Stale Part evaluation");
+    case part::DatumPlaneEvaluationDiagnostic::body_stage_unavailable:
+        return QStringLiteral("Body stage unavailable");
+    case part::DatumPlaneEvaluationDiagnostic::missing_surface:
+        return QStringLiteral("Missing Surface");
+    case part::DatumPlaneEvaluationDiagnostic::ambiguous_surface:
+        return QStringLiteral("Ambiguous Surface");
+    case part::DatumPlaneEvaluationDiagnostic::unsupported_surface:
+        return QStringLiteral("Unsupported Surface");
+    case part::DatumPlaneEvaluationDiagnostic::unsupported_non_planar:
+        return QStringLiteral("Non-planar Surface");
+    case part::DatumPlaneEvaluationDiagnostic::missing_datum:
+        return QStringLiteral("Missing Datum");
+    case part::DatumPlaneEvaluationDiagnostic::cyclic_dependency:
+        return QStringLiteral("Cyclic dependency");
+    case part::DatumPlaneEvaluationDiagnostic::upstream_datum_unavailable:
+        return QStringLiteral("Upstream Datum unavailable");
+    case part::DatumPlaneEvaluationDiagnostic::invalid_frame:
+        return QStringLiteral("Invalid frame");
     }
     return QStringLiteral("Unknown");
 }
