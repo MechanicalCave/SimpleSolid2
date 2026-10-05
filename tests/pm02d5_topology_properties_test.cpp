@@ -5,6 +5,7 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
+#include <QAction>
 #include <QApplication>
 #include <QLabel>
 #include <QPushButton>
@@ -647,10 +648,33 @@ int main(int argc, char* argv[]) {
     created_item->setSelected(true);
     tree->setCurrentItem(created_item);
 
-    const auto state_before_resupport_cli =
+    const auto state_before_resupport =
         session.document().state();
-    const auto undo_before_resupport_cli =
+    const auto undo_before_resupport =
         session.undoDepth();
+
+    auto* change_support =
+        workbench.findChild<QAction*>(
+            QStringLiteral(
+                "changeSketchSupportAction"));
+    CHECK(change_support != nullptr);
+    change_support->trigger();
+    CHECK(workbench.cadInputPrompt().find("RESUPPORT") !=
+          std::string::npos);
+    cad_result =
+        workbench.submitCadInput(
+            "CANCEL",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(
+        session.document().state() ==
+        state_before_resupport);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_resupport);
+
+    // Command Line RESUPPORT enters the same acquisition state for the
+    // currently selected Sketch.
     cad_result =
         workbench.submitCadInput(
             "RESUPPORT",
@@ -665,10 +689,10 @@ int main(int argc, char* argv[]) {
     CHECK(cad_result.accepted);
     CHECK(
         session.document().state() ==
-        state_before_resupport_cli);
+        state_before_resupport);
     CHECK(
         session.undoDepth() ==
-        undo_before_resupport_cli);
+        undo_before_resupport);
     CHECK(
         session.document().findSketch(created_id) !=
         nullptr);
