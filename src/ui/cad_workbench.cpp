@@ -262,6 +262,92 @@ QString featureEvaluationDiagnosticText(
     return QStringLiteral("Unknown");
 }
 
+QString datumEvaluationStatusText(
+    part::DatumPlaneEvaluationStatus status) {
+    switch (status) {
+    case part::DatumPlaneEvaluationStatus::resolved:
+        return QStringLiteral("Resolved");
+    case part::DatumPlaneEvaluationStatus::missing:
+        return QStringLiteral("Missing");
+    case part::DatumPlaneEvaluationStatus::ambiguous:
+        return QStringLiteral("Ambiguous");
+    case part::DatumPlaneEvaluationStatus::unsupported:
+        return QStringLiteral("Unsupported");
+    case part::DatumPlaneEvaluationStatus::blocked:
+        return QStringLiteral("Blocked");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString datumEvaluationDiagnosticText(
+    part::DatumPlaneEvaluationDiagnostic diagnostic) {
+    switch (diagnostic) {
+    case part::DatumPlaneEvaluationDiagnostic::none:
+        return QStringLiteral("—");
+    case part::DatumPlaneEvaluationDiagnostic::invalid_datum:
+        return QStringLiteral("Invalid Datum");
+    case part::DatumPlaneEvaluationDiagnostic::stale_part_evaluation:
+        return QStringLiteral("Stale Part evaluation");
+    case part::DatumPlaneEvaluationDiagnostic::body_stage_unavailable:
+        return QStringLiteral("Body stage unavailable");
+    case part::DatumPlaneEvaluationDiagnostic::missing_surface:
+        return QStringLiteral("Missing Surface");
+    case part::DatumPlaneEvaluationDiagnostic::ambiguous_surface:
+        return QStringLiteral("Ambiguous Surface");
+    case part::DatumPlaneEvaluationDiagnostic::unsupported_surface:
+        return QStringLiteral("Unsupported Surface");
+    case part::DatumPlaneEvaluationDiagnostic::unsupported_non_planar:
+        return QStringLiteral("Non-planar Surface");
+    case part::DatumPlaneEvaluationDiagnostic::missing_datum:
+        return QStringLiteral("Missing Datum");
+    case part::DatumPlaneEvaluationDiagnostic::cyclic_dependency:
+        return QStringLiteral("Cyclic dependency");
+    case part::DatumPlaneEvaluationDiagnostic::upstream_datum_unavailable:
+        return QStringLiteral("Upstream Datum unavailable");
+    case part::DatumPlaneEvaluationDiagnostic::invalid_frame:
+        return QStringLiteral("Invalid frame");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString datumPlaneSourceText(
+    const part::PlaneReference& source) {
+    if (const auto origin =
+            part::builtinOriginPlaneForPlaneReference(
+                source)) {
+        switch (*origin) {
+        case core::BuiltinReferenceRole::xy_plane:
+            return QStringLiteral("XY Plane");
+        case core::BuiltinReferenceRole::xz_plane:
+            return QStringLiteral("XZ Plane");
+        case core::BuiltinReferenceRole::yz_plane:
+            return QStringLiteral("YZ Plane");
+        default:
+            return QStringLiteral("<invalid Origin plane>");
+        }
+    }
+    if (const auto* surface =
+            part::bodyPlanarSurfaceForPlaneReference(
+                source)) {
+        return QStringLiteral("Body Surface @ Feature %1")
+            .arg(
+                fromUtf8(
+                    surface->reference.address
+                        .producer_feature_id
+                        .serialized()));
+    }
+    if (const auto datum =
+            part::datumPlaneIdForPlaneReference(
+                source)) {
+        return QStringLiteral("Datum Plane %1")
+            .arg(
+                fromUtf8(
+                    datum->serialized()));
+    }
+    return QStringLiteral("<invalid source>");
+}
+
+
 QString formatLengthForPart(
     core::LengthValue value,
     core::LengthUnit unit) {
