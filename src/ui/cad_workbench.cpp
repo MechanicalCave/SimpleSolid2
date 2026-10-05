@@ -4236,6 +4236,7 @@ void CadWorkbench::setFeatureSuppressed(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr ||
+        datum_plane_draft_ ||
         extrude_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
@@ -4289,6 +4290,7 @@ void CadWorkbench::deleteFeature(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr ||
+        datum_plane_draft_ ||
         extrude_draft_ ||
         active_sketch_id_ ||
         sketch_support_pick_active_) {
@@ -5998,6 +6000,56 @@ void CadWorkbench::syncExtrudeUi() {
 }
 
 application::CadInputSubmitResult
+CadWorkbench::submitDatumPlaneCadInput(
+    std::string_view text) {
+    if (!datum_plane_draft_ ||
+        document_session_ == nullptr) {
+        return {
+            false,
+            "No active Datum Plane draft."};
+    }
+
+    const auto parsed =
+        application::submitDatumPlaneCadInput(
+            *datum_plane_draft_,
+            text,
+            application::CadInputNumberFormat{
+                toUtf8(
+                    QLocale{}.decimalPoint()),
+                document_session_->document()
+                    .lengthUnit()});
+    if (!parsed.accepted) {
+        return {
+            false,
+            parsed.diagnostic};
+    }
+
+    switch (parsed.action) {
+    case application::DatumPlaneCadInputAction::
+        finish:
+        return finishDatumPlane()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Datum Plane Finish was rejected."};
+    case application::DatumPlaneCadInputAction::
+        cancel:
+        cancelDatumPlane();
+        return {true, {}};
+    case application::DatumPlaneCadInputAction::
+        none:
+        refreshDatumPlaneEvaluation();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+
+    return {
+        false,
+        "Datum Plane command action is invalid."};
+}
+
+application::CadInputSubmitResult
 CadWorkbench::submitExtrudeCadInput(
     std::string_view text) {
     if (!extrude_draft_ ||
@@ -7193,6 +7245,14 @@ CadWorkbench::submitCadDynamicInputRequest(
             false,
             "CAD input semantic context is stale."};
     }
+    if (datum_plane_draft_) {
+        return finishDatumPlane()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Datum Plane Finish was rejected."};
+    }
     if (extrude_draft_) {
         return finishExtrude()
             ? application::CadInputSubmitResult{
@@ -7279,6 +7339,18 @@ CadWorkbench::submitCadInput(
             "EXTRUDE is waiting for one valid Profile selection; use Tree/viewport or CANCEL."};
     }
 
+    if (datum_plane_draft_) {
+        auto result =
+            submitDatumPlaneCadInput(text);
+        if (!result.accepted &&
+            status_ != nullptr &&
+            !result.diagnostic.empty()) {
+            setStatusText(
+                fromUtf8(result.diagnostic));
+        }
+        return result;
+    }
+
     if (extrude_draft_) {
         auto result =
             submitExtrudeCadInput(text);
@@ -7293,6 +7365,15 @@ CadWorkbench::submitCadInput(
 
     const auto top_level_keyword =
         upperAsciiTrimmed(text);
+    if (top_level_keyword == "DATUMPLANE" ||
+        top_level_keyword == "DATUM PLANE") {
+        return startDatumPlaneTool()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "DATUM PLANE could not be activated."};
+    }
     if (top_level_keyword == "EXTRUDE") {
         return startExtrudeTool()
             ? application::CadInputSubmitResult{
@@ -7380,6 +7461,13 @@ QString CadWorkbench::cadInputPromptText() const {
                   "Command: RESUPPORT — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc")
             : QStringLiteral(
                   "Command: SKETCH — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc");
+    }
+    if (datum_plane_draft_) {
+        return datum_plane_draft_->source()
+            ? QStringLiteral(
+                  "Command: DATUM PLANE — OFFSET · signed Length · REVERSE · FINISH/CANCEL")
+            : QStringLiteral(
+                  "Command: DATUM PLANE — Select XY/XZ/YZ Origin plane or planar Body Face · CANCEL/Esc");
     }
     if (extrude_profile_pick_active_) {
         return QStringLiteral(
@@ -8729,6 +8817,23 @@ bool CadWorkbench::eventFilter(
             static_cast<QKeyEvent*>(event);
 
         if (watched == viewport_widget_ &&
+            datum_plane_draft_) {
+            if (key_event->key() ==
+                Qt::Key_Escape) {
+                cancelDatumPlane();
+                return true;
+            }
+            if (key_event->key() ==
+                    Qt::Key_Return ||
+                key_event->key() ==
+                    Qt::Key_Enter) {
+                static_cast<void>(
+                    finishDatumPlane());
+                return true;
+            }
+        }
+
+        if (watched == viewport_widget_ &&
             extrude_profile_pick_active_ &&
             key_event->key() == Qt::Key_Escape) {
             cancelExtrudeProfilePick();
@@ -9889,12 +9994,14 @@ void CadWorkbench::syncActionState() {
     undo_button_->setEnabled(
         active &&
         !sketch_support_pick_active_ &&
+        !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         document_session->canUndo());
     redo_button_->setEnabled(
         active &&
         !sketch_support_pick_active_ &&
+        !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         document_session->canRedo());
@@ -9919,8 +10026,23 @@ void CadWorkbench::syncActionState() {
         active &&
         !editing_sketch &&
         !sketch_support_pick_active_ &&
+        !datum_plane_draft_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_);
+
+    if (datum_plane_button_ != nullptr) {
+        datum_plane_button_->setVisible(
+            !editing_sketch);
+        datum_plane_button_->setEnabled(
+            active &&
+            !editing_sketch &&
+            !sketch_support_pick_active_ &&
+            !extrude_profile_pick_active_ &&
+            !extrude_draft_ &&
+            solid_modeling_kernel_ != nullptr);
+        datum_plane_button_->setChecked(
+            datum_plane_draft_.has_value());
+    }
 
     if (extrude_button_ != nullptr) {
         extrude_button_->setVisible(
@@ -9929,6 +10051,7 @@ void CadWorkbench::syncActionState() {
             active &&
             !editing_sketch &&
             !sketch_support_pick_active_ &&
+            !datum_plane_draft_ &&
             !extrude_draft_ &&
             solid_modeling_kernel_ != nullptr);
         extrude_button_->setChecked(
@@ -9999,6 +10122,7 @@ void CadWorkbench::syncActionState() {
     }
 
     syncSketchInteractionUi();
+    syncDatumPlaneUi();
     syncExtrudeUi();
 }
 
