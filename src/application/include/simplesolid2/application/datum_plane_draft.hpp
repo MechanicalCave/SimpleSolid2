@@ -1,7 +1,6 @@
 #pragma once
 
-#include <simplesolid2/application/cad_input.hpp>
-#include <simplesolid2/application/precision_input.hpp>
+#include <simplesolid2/application/cad_input_semantics.hpp>
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/core/units.hpp>
 #include <simplesolid2/kernel/profile_input.hpp>
