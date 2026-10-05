@@ -992,7 +992,7 @@ Gate:
 
 ### PM-02J — documentation and Owner Windows acceptance
 
-**Checkpoint state:** ACTIVE
+**Checkpoint state:** ACTIVE — AUTOMATED/DOCS PASS; OWNER WINDOWS MANUAL PENDING
 
 Deliver:
 
