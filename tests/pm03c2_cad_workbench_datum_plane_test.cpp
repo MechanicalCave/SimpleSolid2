@@ -721,7 +721,62 @@ int main(int argc, char* argv[]) {
         CHECK(datum.visible);
     }
 
+    // PM-03E: the same semantic Datum selection is an ordinary Sketch
+    // support candidate. No Viewer token or derived Datum frame is authored.
+    auto* sketch_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("sketchToolButton"));
+    auto* finish_sketch =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("finishSketchButton"));
+    CHECK(sketch_tool && finish_sketch);
+
+    const auto sketch_count_before =
+        session.document().sketches().size();
+    const auto undo_before_datum_sketch =
+        session.undoDepth();
+
+    sketch_tool->click();
+    QApplication::processEvents();
+
+    datum_one =
+        findItem(
+            *tree,
+            QStringLiteral("Datum Plane 1"));
+    CHECK(datum_one != nullptr);
+    selectOnly(*tree, datum_one);
+
+    CHECK(finish_sketch->isVisible());
+    CHECK(finish_sketch->isEnabled());
+    CHECK(
+        finish_sketch->text() ==
+        QStringLiteral("Create Sketch"));
+
+    finish_sketch->click();
+    QApplication::processEvents();
+
+    CHECK(
+        session.document().sketches().size() ==
+        sketch_count_before + 1U);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_datum_sketch + 1U);
+
+    const auto& datum_sketch =
+        session.document().sketches().back();
+    const auto datum_support =
+        part::datumPlaneIdForSketchSupport(
+            datum_sketch.support);
+    CHECK(datum_support.has_value());
+    CHECK(*datum_support == first_datum_id);
+
+    CHECK(
+        finish_sketch->text() ==
+        QStringLiteral("Finish Sketch"));
+    finish_sketch->click();
+    QApplication::processEvents();
+
     std::cout
-        << "PM-03C2 / PM-03D2 CadWorkbench Datum Plane parity PASS\n";
+        << "PM-03C2 / PM-03D2 / PM-03E CadWorkbench Datum Plane parity PASS\n";
     return EXIT_SUCCESS;
 }
