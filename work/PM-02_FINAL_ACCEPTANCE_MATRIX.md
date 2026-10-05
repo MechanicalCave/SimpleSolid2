@@ -124,15 +124,16 @@ PM-02 completion still requires:
 
 ## 4. Final verification status
 
-- semantic/core verification — **PASS** in FULL #1451.
-- kernel-native verification — **PASS** in FULL #1451.
-- complete Windows desktop CTest graph — **PASS** in FULL #1451.
-- FAST/SUBSYSTEM selector verification — **PASS** in FULL #1451.
-- final runtime candidate exact-head gate — **PASS**, `b642a5af625a48d668a21efeaf3d78bfb9bf7c79`.
-- canonical documentation update — **IN PROGRESS, PM-02J**.
-- Product Browser regeneration via `.\ss2.ps1 docs` — **IN PROGRESS, PM-02J**.
-- final docs/closure gate — **PENDING**.
-- Owner Windows manual workflow — **PENDING**.
+- original semantic/core verification — **PASS** in FULL #1451.
+- post-remediation complete Windows FULL — **PASS** in #1473 on exact `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`; this includes core-only, kernel-native, complete desktop CTest, FAST/SUBSYSTEM selectors, SR-02 and CI-04 parity evidence.
+- J-R2 Add Surface continuation / representation-partition Edge — **PASS**, FULL #1470.
+- J-R3 exact support-stage face-Sketch Edit presentation — **PASS**, FULL #1471.
+- J-R4 topology hover/preselection/candidate cycling/pick stability — **PASS**, FULL #1472.
+- J-R5 Create Sketch / Apply Support labeling and Profile window-size containment — **PASS**, FULL #1473.
+- canonical internal + PL/EN remediation documentation — **PASS**, exact `1dbaef95b2ea48f8e529425a154b795984d6551f`.
+- Product Browser regeneration via `.\ss2.ps1 docs` — **PASS**, Windows DOCS #1474 with zero generated diff.
+- J-R6 automated/docs readiness bookkeeping — **PASS**, merged through #231.
+- Owner Windows re-test — **PENDING**; this is the sole remaining PM-02 completion gate.
 
 ## 5. Owner Windows manual workflow
 
