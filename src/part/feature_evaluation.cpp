@@ -1,5 +1,7 @@
 #include <simplesolid2/part/feature_evaluation.hpp>
 
+#include <simplesolid2/part/datum_evaluation.hpp>
+
 #include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/part_document.hpp>
 #include <simplesolid2/part/profile_kernel_input.hpp>
@@ -163,12 +165,15 @@ makeKernelExtrudeInput(
     const PartDocument& document,
     const ExtrudeFeature& feature,
     const BodyStageTopologyCatalog*
-        support_topology) {
+        support_topology,
+    const DatumEvaluation*
+        datum_evaluation) {
     auto profile =
         resolveKernelProfileInput(
             document,
             feature.profile_id,
-            support_topology);
+            support_topology,
+            datum_evaluation);
     if (!profile.ok()) {
         return std::nullopt;
     }
@@ -2571,6 +2576,8 @@ PartEvaluation evaluatePart(
 
         const BodyStageTopologyCatalog*
             support_topology = nullptr;
+        std::optional<DatumEvaluation>
+            support_datums;
         if (const auto* source =
                 document.findSketch(
                     profile->source_sketch_id)) {
@@ -2592,6 +2599,16 @@ PartEvaluation evaluatePart(
                     support_topology =
                         &*stage->result_topology;
                 }
+            } else if (
+                datumPlaneIdForSketchSupport(
+                    source->support)) {
+                // Same-revision prefix only: a Datum that requires this
+                // Feature or a later stage cannot resolve yet, so the
+                // downstream Feature blocks before any Kernel mutation.
+                support_datums =
+                    evaluateDatums(
+                        document,
+                        result);
             }
         }
 
@@ -2599,7 +2616,10 @@ PartEvaluation evaluatePart(
             resolveKernelProfileInput(
                 document,
                 profile->id,
-                support_topology);
+                support_topology,
+                support_datums
+                    ? &*support_datums
+                    : nullptr);
         if (!materialized_profile.ok()) {
             evaluated.status =
                 materialized_profile.status ==
