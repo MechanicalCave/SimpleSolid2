@@ -734,5 +734,57 @@ int main(int argc, char* argv[]) {
         session.document().findSketch(created_id) !=
         nullptr);
 
+    // Keyboard-first RESUPPORT uses the same staged support draft. Selecting
+    // a new Origin target is still non-authoring until FINISH.
+    const auto state_before_cli_finish =
+        session.document().state();
+    const auto revision_before_cli_finish =
+        session.document().revision();
+    const auto undo_before_cli_finish =
+        session.undoDepth();
+
+    cad_result =
+        workbench.submitCadInput(
+            "RESUPPORT",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+
+    auto* xy_item =
+        findItem(*tree, QStringLiteral("XY Plane"));
+    CHECK(xy_item != nullptr);
+    tree->clearSelection();
+    xy_item->setSelected(true);
+    tree->setCurrentItem(xy_item);
+
+    CHECK(
+        workbench.cadInputPrompt().find("FINISH") !=
+        std::string::npos);
+    CHECK(
+        session.document().state() ==
+        state_before_cli_finish);
+    CHECK(
+        session.document().revision() ==
+        revision_before_cli_finish);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_cli_finish);
+
+    cad_result =
+        workbench.submitCadInput(
+            "FINISH",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_cli_finish + 1U);
+    const auto* cli_resupported =
+        session.document().findSketch(created_id);
+    CHECK(cli_resupported != nullptr);
+    CHECK(
+        part::builtinOriginPlaneForSketchSupport(
+            cli_resupported->support) ==
+        std::optional<core::BuiltinReferenceRole>{
+            core::BuiltinReferenceRole::xy_plane});
+
     return EXIT_SUCCESS;
 }
