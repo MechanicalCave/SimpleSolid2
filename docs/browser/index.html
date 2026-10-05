@@ -120,11 +120,11 @@ The current discovery backend provides Part candidates only. The dialog is docum
 
 The Workspace location flow rejects targets outside the current Workspace, rejects existing target files, and keeps private `.simplesolid` metadata outside the normal Document location tree.
 
-The active DocumentSession owns runtime Undo/Redo history, the saved-authored-state checkpoint used by `needsSave()`, and — for a persisted/opened native Part — the exact native-file checkpoint used by conditional Save. Editing Number, Title, Description, Engineering Revision, persistent Origin visibility or Part-hosted Sketch geometry goes through semantic commands and PartDocument transactions.
+The active DocumentSession owns runtime Undo/Redo history, the saved-authored-state checkpoint used by `needsSave()`, and — for a persisted/opened native Part — the exact native-file checkpoint used by conditional Save. Editing Document properties, persistent Origin/Datum visibility, Datum source/Offset, Sketch support/geometry or Part Feature state goes through semantic commands and PartDocument transactions.
 
-The Part `Sketch` launcher lives in the editor toolbar above the 3D Viewport. Creation validates a selected XY/XZ/YZ built-in Origin plane, creates one durable Sketch and enters its runtime edit context in the same 3D Viewport. Operations is contextual: support-pick may show Cancel guidance and active Sketch edit shows `Finish Sketch`. An existing Sketch can re-enter the same edit context by Tree double-click or `Edit Sketch` context action without authored mutation.
+The Part `Datum Plane` and `Sketch` launchers live in the editor toolbar above the 3D Viewport. Datum Plane creation uses one runtime `DatumPlaneDraft` for GUI and Command Line, accepts semantic Origin/planar Body-Surface/earlier-Datum sources and commits exactly one durable Datum only at Finish. A committable draft may publish a transient non-pickable plane/intersection preview; Cancel or invalid/stale input authors nothing. Sketch creation accepts a selected XY/XZ/YZ Origin plane, planar semantic Body Face/Surface or resolved Datum Plane, creates one durable Sketch and enters its runtime edit context in the same 3D Viewport. Existing Datum/Sketch objects re-enter their edit paths from Tree/Properties without authored mutation until Finish/Apply.
 
-Closing and reopening a Part destroys runtime Undo/Redo and Sketch edit context while preserving saved authored state, including SketchId/support/placement/visibility, and DocumentId on disk.
+Closing and reopening a Part destroys runtime Undo/Redo, active Datum/Sketch/Extrude drafts, derived Datum frames, Viewer tokens and provider state while preserving saved authored state: DocumentId, DatumId/source/signed Offset/visibility, SketchId/semantic support/local U/V/visibility, Profile/Feature identities and parameters. Reopen performs fresh evaluation; no authored world Sketch placement, Datum frame, B-Rep or last-good runtime cache is required.
 
 <!-- section-id: internal.application-lifecycle.workbench -->
 ## Active document and Workbench lifecycle
@@ -1321,7 +1321,8 @@ App start
 → discover native .ss2part Documents
 → canonical DocumentSessions + Document Tabs
 → shared CAD Workbench
-→ Part Origin + persistent Origin-plane / planar Body-Surface Sketches
+→ Part Origin + durable Offset Datum reference geometry
+→ persistent Origin-plane / planar Body-Surface / Datum-backed Sketches
 → Shared 2D Line / Circle / Arc / Rectangle authoring
 → precision input + Polar + Dynamic Input + OSNAP/Tracking/Inference
 → Trim / Extend / Measure
@@ -1336,7 +1337,7 @@ App start
 
 The Part Feature model currently supports one Body and one Feature family: Extrude. The first successful solid-producing Feature is Add; later ordered Features may be Add or Cut. OneSide supports Forward/Reverse and Midplane uses total-distance symmetric semantics. Failed, Blocked and Suppressed Feature states remain explicit; derived B-Rep is never persisted as authored truth.
 
-Assembly and Drawing remain unimplemented. Part now provides planar Body-Face Sketch support, direct current Face/Edge/Vertex inspection, View Styles and explicit semantic re-support/repair for Sketch support. It still does not provide Datum-plane support, Projection, Revolve, Fillet/Chamfer, multi-body modeling or general authored topology-reference repair for arbitrary future Feature inputs.
+Assembly and Drawing remain unimplemented. Part now provides Offset Datum Planes, Sketch support on Origin planes, planar Body Faces and Datum Planes, direct current Face/Edge/Vertex inspection, View Styles and explicit semantic re-support/repair for Sketch support. It does not yet provide Datum Axis/Point, additional Datum Plane constructors, Projection, Revolve, Fillet/Chamfer, multi-body modeling or general authored topology-reference repair for arbitrary future Feature inputs.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
@@ -1351,10 +1352,10 @@ ProjectSession / DocumentSession
 semantic Commands + PartDocumentTransaction
         ↓
 PartDocument authored state
-  ├── Sketch / Profile semantics
+  ├── Datum / Sketch / Profile semantics
   └── Body / ordered Feature semantics
         ↓
-provider-neutral Part evaluation / Kernel API
+provider-neutral Part + Datum evaluation / Kernel API
         ↓
 OCCT solid-modeling provider
         ↓
@@ -1365,7 +1366,7 @@ Qt/OCCT Viewer provider
 
 `CadWorkbenchShell` owns only fixed application UI regions. Tree, Properties, Operations, Command Line and Viewer adapters project or invoke semantic state; they are not additional CAD models.
 
-OCCT handles, topology ordinals and Viewer presentation tokens stay runtime/provider-local. They do not participate in Part authored identity, persistence, Body/Feature identity or semantic reference meaning.
+OCCT handles, topology ordinals, Datum presentation objects/intersection segments and Viewer presentation tokens stay runtime/provider-local. They do not participate in Part authored identity, persistence, DatumId, Body/Feature identity or semantic reference meaning.
 
 <!-- section-id: internal.overview.identity -->
 ## Identity and location
@@ -1383,9 +1384,9 @@ A copied `.ss2part` file preserves its embedded DocumentId. If more than one fil
 <!-- section-id: internal.overview.runtime-presentation -->
 ## Runtime and persistent presentation state
 
-Camera, projection, pan/orbit/zoom, active selection, preview geometry, evaluated B-Rep handles and presentation tokens are runtime-only. They do not become authored Part identity.
+Camera, projection, pan/orbit/zoom, active selection, Extrude/Datum preview geometry, virtual Datum/Body intersection segments, evaluated B-Rep handles, derived Datum frames and presentation tokens are runtime-only. They do not become authored Part identity.
 
-User-authored visibility of built-in Origin references and Profile visibility policy are persistent presentation semantics changed through semantic commands and covered by Undo/Redo. Profile policy is `automatic`, `force_shown` or `force_hidden`; automatic presentation reacts to active Feature consumption without changing evaluation.
+User-authored visibility of built-in Origin references, individual Datum Planes and Profile visibility policy are persistent presentation semantics changed through semantic commands and covered by Undo/Redo. `Reference Geometry` group Show/Hide bulk-updates child Datum visibility and owns no second persisted group flag. Profile policy is `automatic`, `force_shown` or `force_hidden`; automatic presentation reacts to active Feature consumption without changing evaluation.
 
 Feature Suppress is not visibility. Suppress is authored modeling state that preserves FeatureId and parameters while removing the Feature contribution from evaluation.
 
