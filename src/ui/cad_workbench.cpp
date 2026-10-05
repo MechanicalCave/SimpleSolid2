@@ -334,7 +334,7 @@ QString datumPlaneSourceText(
         return QStringLiteral("Body Surface @ Feature %1")
             .arg(
                 fromUtf8(
-                    surface->reference.address
+                    surface->surface
                         .producer_feature_id
                         .serialized()));
     }
@@ -10181,6 +10181,24 @@ void CadWorkbench::syncActionState() {
     } else {
         finish_sketch_button_->setText(
             QStringLiteral("Finish Sketch"));
+    }
+
+    const bool datum_lifecycle_available =
+        active &&
+        selected_datum_id_.has_value() &&
+        !datum_plane_draft_ &&
+        !extrude_profile_pick_active_ &&
+        !extrude_draft_ &&
+        !active_sketch_id_ &&
+        !sketch_support_pick_active_;
+    if (datum_edit_button_ != nullptr) {
+        datum_edit_button_->setEnabled(
+            datum_lifecycle_available &&
+            solid_modeling_kernel_ != nullptr);
+    }
+    if (datum_delete_button_ != nullptr) {
+        datum_delete_button_->setEnabled(
+            datum_lifecycle_available);
     }
 
     syncSketchInteractionUi();
