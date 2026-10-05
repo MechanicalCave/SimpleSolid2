@@ -5996,6 +5996,16 @@ CadWorkbench::submitCadInput(
             cancelSketchTool();
             return {true, {}};
         }
+        if ((keyword == "FINISH" ||
+             keyword.empty()) &&
+            pending_sketch_support_) {
+            return finishSketchSupport()
+                ? application::CadInputSubmitResult{
+                      true, {}}
+                : application::CadInputSubmitResult{
+                      false,
+                      "Sketch support Finish was rejected."};
+        }
         const bool expected_command =
             sketch_resupport_target_
                 ? keyword == "RESUPPORT"
@@ -6005,9 +6015,13 @@ CadWorkbench::submitCadInput(
         }
         return {
             false,
-            sketch_resupport_target_
-                ? "RESUPPORT is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL."
-                : "SKETCH is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL."};
+            pending_sketch_support_
+                ? (sketch_resupport_target_
+                       ? "RESUPPORT target selected; use FINISH/Enter to commit or CANCEL."
+                       : "SKETCH support selected; use FINISH/Enter to create or CANCEL.")
+                : (sketch_resupport_target_
+                       ? "RESUPPORT is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL."
+                       : "SKETCH is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL.")};
     }
 
     if (extrude_profile_pick_active_) {
@@ -6115,6 +6129,13 @@ CadWorkbench::submitCadInput(
 }
 QString CadWorkbench::cadInputPromptText() const {
     if (sketch_support_pick_active_) {
+        if (pending_sketch_support_) {
+            return sketch_resupport_target_
+                ? QStringLiteral(
+                      "Command: RESUPPORT — Support selected · FINISH/Enter or CANCEL/Esc")
+                : QStringLiteral(
+                      "Command: SKETCH — Support selected · FINISH/Enter or CANCEL/Esc");
+        }
         return sketch_resupport_target_
             ? QStringLiteral(
                   "Command: RESUPPORT — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc")
@@ -6374,6 +6395,11 @@ QString CadWorkbench::cadInputPromptText() const {
 }
 
 void CadWorkbench::finishSketch() {
+    if (sketch_support_pick_active_) {
+        static_cast<void>(
+            finishSketchSupport());
+        return;
+    }
     if (!active_sketch_id_) {
         return;
     }
@@ -6392,6 +6418,8 @@ void CadWorkbench::clearSketchRuntimeContext() {
     }
     sketch_support_pick_active_ = false;
     sketch_resupport_target_.reset();
+    pending_sketch_support_.reset();
+    pending_sketch_support_revision_.reset();
     dynamic_input_anchor_.reset();
     if (viewport_controller_ != nullptr) {
         viewport_controller_->
@@ -8616,11 +8644,13 @@ void CadWorkbench::syncActionState() {
     apply_button_->setEnabled(active);
     undo_button_->setEnabled(
         active &&
+        !sketch_support_pick_active_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         document_session->canUndo());
     redo_button_->setEnabled(
         active &&
+        !sketch_support_pick_active_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         document_session->canRedo());
@@ -8705,9 +8735,22 @@ void CadWorkbench::syncActionState() {
         active && sketch_support_pick_active_);
 
     finish_sketch_button_->setVisible(
-        editing_sketch);
+        editing_sketch ||
+        (active && sketch_support_pick_active_));
     finish_sketch_button_->setEnabled(
-        editing_sketch);
+        editing_sketch ||
+        (active &&
+         sketch_support_pick_active_ &&
+         pending_sketch_support_.has_value()));
+    if (sketch_support_pick_active_) {
+        finish_sketch_button_->setText(
+            sketch_resupport_target_
+                ? QStringLiteral("Finish Support")
+                : QStringLiteral("Finish Sketch"));
+    } else {
+        finish_sketch_button_->setText(
+            QStringLiteral("Finish Sketch"));
+    }
 
     syncSketchInteractionUi();
     syncExtrudeUi();
