@@ -5,6 +5,7 @@
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/sketch/interaction_state.hpp>
 #include <simplesolid2/sketch/measurement.hpp>
+#include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
@@ -212,6 +213,11 @@ public:
             const std::vector<part::ProfileId>&,
             std::optional<part::ProfileId>)>;
 
+    using DatumSelectionChangedHandler =
+        std::function<void(
+            const std::vector<part::DatumId>&,
+            std::optional<part::DatumId>)>;
+
     using BodyTopologySelectionChangedHandler =
         std::function<void(
             std::optional<BodyTopologyInspection>)>;
@@ -361,6 +367,11 @@ public:
     [[nodiscard]] std::optional<viewer::PresentationToken>
     profilePresentationFor(part::ProfileId profile_id) const;
 
+    [[nodiscard]] std::optional<part::DatumId>
+    datumFor(viewer::PresentationToken token) const;
+    [[nodiscard]] std::optional<viewer::PresentationToken>
+    datumPresentationFor(part::DatumId datum_id) const;
+
     void setProfileSelectionFromTree(
         const std::vector<part::ProfileId>& selected,
         std::optional<part::ProfileId> primary);
@@ -390,6 +401,12 @@ public:
     void setProfileSelectionChangedHandler(
         ProfileSelectionChangedHandler handler) {
         profile_selection_changed_handler_ =
+            std::move(handler);
+    }
+
+    void setDatumSelectionChangedHandler(
+        DatumSelectionChangedHandler handler) {
+        datum_selection_changed_handler_ =
             std::move(handler);
     }
 
@@ -437,6 +454,8 @@ private:
         std::optional<core::BuiltinReferenceRole> primary;
         std::vector<part::ProfileId> profiles;
         std::optional<part::ProfileId> primary_profile;
+        std::vector<part::DatumId> datums;
+        std::optional<part::DatumId> primary_datum;
         std::vector<viewer::PresentationToken>
             body_topology;
         std::optional<viewer::PresentationToken>
@@ -490,8 +509,8 @@ private:
         const part::PartSketch& sketch,
         sketch::Point2 point) const noexcept;
 
-    [[nodiscard]] viewer::ReferenceScene
-    buildReferenceScene() const;
+    [[nodiscard]] std::optional<viewer::ReferenceScene>
+    buildReferenceScene();
 
     [[nodiscard]] std::optional<viewer::BodyScene>
     buildBodyScene();
@@ -578,6 +597,8 @@ private:
         body_scene_revision_;
     std::optional<viewer::BodyScene>
         body_scene_cache_;
+    std::optional<part::DatumEvaluation>
+        datum_evaluation_cache_;
     std::optional<part::BodyStageTopologyCatalog>
         body_topology_catalog_cache_;
     // Runtime-only exact-stage catalogs from the same current PartEvaluation.
@@ -619,6 +640,10 @@ private:
         std::uint64_t,
         part::ProfileId>
         profile_bindings_;
+    std::unordered_map<
+        std::uint64_t,
+        part::DatumId>
+        datum_bindings_;
     std::optional<part::ProfileId>
         transient_profile_reveal_;
     std::optional<part::ProfileId>
@@ -634,6 +659,8 @@ private:
     SelectionChangedHandler selection_changed_handler_;
     ProfileSelectionChangedHandler
         profile_selection_changed_handler_;
+    DatumSelectionChangedHandler
+        datum_selection_changed_handler_;
     BodyTopologySelectionChangedHandler
         body_topology_selection_changed_handler_;
     SketchPointerHandler sketch_pointer_handler_;
