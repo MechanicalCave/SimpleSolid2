@@ -2171,10 +2171,30 @@ DocumentSession::evaluateExtrudeDraft(
         }
     }
 
+    const part::BodyStageTopologyCatalog*
+        preview_support_topology = nullptr;
+    if (const auto* profile =
+            candidate.document->findProfile(
+                definition.profile_id)) {
+        if (const auto* source =
+                candidate.document->findSketch(
+                    profile->source_sketch_id)) {
+            if (const auto* support =
+                    part::bodyPlanarSurfaceReference(
+                        source->support)) {
+                preview_support_topology =
+                    topologyAtStage(
+                        evaluation,
+                        support->stage);
+            }
+        }
+    }
+
     auto preview_input =
         part::makeKernelExtrudeInput(
             *candidate.document,
-            definition);
+            definition,
+            preview_support_topology);
     if (preview_input &&
         preview_upstream_ready) {
         auto preview =

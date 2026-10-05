@@ -799,6 +799,28 @@ set_tests_properties(pm02g.face_supported_sketch_authoring PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part"
 )
 
+add_executable(pm02h_face_supported_extrude_workflow_test
+    pm02h_face_supported_extrude_workflow_test.cpp
+)
+
+target_link_libraries(pm02h_face_supported_extrude_workflow_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_part
+)
+
+target_compile_features(pm02h_face_supported_extrude_workflow_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm02h.face_supported_extrude_workflow
+    COMMAND pm02h_face_supported_extrude_workflow_test
+)
+
+set_tests_properties(pm02h.face_supported_extrude_workflow PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part"
+)
+
 add_executable(sk03a_viewer_sketch_contracts_test
     sk03a_viewer_sketch_contracts_test.cpp
 )
@@ -1598,6 +1620,7 @@ set(_ss2_fast_tests
     sk07b.transform_controller
     r11.snap_core
     pm02f.stage_aware_profile_evaluation
+    pm02h.face_supported_extrude_workflow
 )
 set_property(TEST ${_ss2_fast_tests} APPEND PROPERTY LABELS "tier-fast")
 set_property(TEST wb01a.workbench_native_stress APPEND PROPERTY LABELS
@@ -1695,6 +1718,7 @@ set(_ss2_part_tests
     r12.structural_edit_document_session
     r12.structural_edit_persistence
     pm02f.stage_aware_profile_evaluation
+    pm02h.face_supported_extrude_workflow
 )
 set_property(TEST ${_ss2_part_tests} APPEND PROPERTY LABELS "subsystem-part")
 
@@ -1793,6 +1817,7 @@ set(_ss2_application_tests
     r12.structural_edit_document_session
     r12.structural_edit_persistence
     pm02f.stage_aware_profile_evaluation
+    pm02h.face_supported_extrude_workflow
 )
 set_property(TEST ${_ss2_application_tests} APPEND PROPERTY LABELS "subsystem-application")
 
@@ -1828,6 +1853,7 @@ set_property(TEST ${_ss2_core_tests} APPEND PROPERTY LABELS "subsystem-core")
 set(_ss2_kernel_tests
     pm00a.kernel_boundaries
     pm02f.stage_aware_profile_evaluation
+    pm02h.face_supported_extrude_workflow
 )
 set_property(TEST ${_ss2_kernel_tests} APPEND PROPERTY LABELS "subsystem-kernel")
 
