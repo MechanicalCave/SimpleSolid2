@@ -4837,6 +4837,519 @@ void CadWorkbench::syncDatumPlaneUi() {
 }
 
 
+
+bool CadWorkbench::startDatumPlaneTool() {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Datum Plane requires an active Part and modeling Kernel."));
+        return false;
+    }
+    if (datum_plane_draft_) {
+        setStatusText(
+            QStringLiteral(
+                "A Datum Plane operation is already active."));
+        return false;
+    }
+    if (extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        active_sketch_id_ ||
+        sketch_support_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active modeling context before Datum Plane."));
+        return false;
+    }
+
+    datum_plane_draft_ =
+        application::DatumPlaneDraft::beginCreate(
+            *document_session);
+    datum_plane_evaluation_.reset();
+    datum_plane_offset_input_valid_ = true;
+
+    if (datum_plane_offset_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            datum_plane_offset_edit_};
+        datum_plane_offset_edit_->setText(
+            formatLengthForPart(
+                datum_plane_draft_->offset(),
+                document_session->document()
+                    .lengthUnit()));
+    }
+
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyFacePickOnly(true);
+
+        tryStageDatumPlaneFromSupport(
+            viewport_controller_->
+                primarySelection());
+    }
+    if (datum_plane_draft_ &&
+        !datum_plane_draft_->source() &&
+        selected_body_topology_) {
+        tryStageDatumPlaneFromBodyTopology(
+            *selected_body_topology_);
+    }
+
+    refreshDatumPlaneEvaluation();
+    syncActionState();
+    syncDatumPlaneUi();
+    notifyCadInputContextChanged();
+
+    setStatusText(
+        datum_plane_draft_->source()
+            ? QStringLiteral(
+                  "Datum Plane active — Offset constructor, default 10 mm; adjust Offset or Finish.")
+            : QStringLiteral(
+                  "Datum Plane active — select XY/XZ/YZ Origin plane or planar Body Face."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::stageDatumPlaneSource(
+    part::PlaneReference source) {
+    if (!datum_plane_draft_ ||
+        !source.valid()) {
+        return;
+    }
+    if (!datum_plane_draft_->setSource(
+            std::move(source))) {
+        setStatusText(
+            QStringLiteral(
+                "Datum Plane source could not be staged."));
+        return;
+    }
+    datum_plane_evaluation_.reset();
+    refreshDatumPlaneEvaluation();
+    notifyCadInputContextChanged();
+}
+
+void CadWorkbench::tryStageDatumPlaneFromSupport(
+    std::optional<core::BuiltinReferenceRole> support) {
+    if (!datum_plane_draft_ ||
+        !support ||
+        !part::isDatumOriginPlane(*support)) {
+        return;
+    }
+
+    stageDatumPlaneSource(
+        part::PlaneReference{
+            part::BuiltinOriginPlaneReference{
+                *support}});
+}
+
+void CadWorkbench::tryStageDatumPlaneFromBodyTopology(
+    const BodyTopologyInspection& inspection) {
+    if (!datum_plane_draft_ ||
+        inspection.diagnostic_prefix ||
+        inspection.kind !=
+            viewer::BodyTopologyPresentationKind::face ||
+        inspection.sketch_support !=
+            SketchSupportInspectionCapability::supported ||
+        !inspection.stage.valid() ||
+        !inspection.surface_address ||
+        (inspection.surface_kind &&
+         *inspection.surface_kind !=
+             kernel::SurfaceKind::plane)) {
+        return;
+    }
+
+    part::SurfaceReference surface{
+        inspection.stage,
+        *inspection.surface_address};
+    if (!surface.valid()) {
+        return;
+    }
+
+    stageDatumPlaneSource(
+        part::PlaneReference{
+            part::BodyPlanarSurfacePlaneReference{
+                std::move(surface)}});
+}
+
+void CadWorkbench::scheduleDatumPlaneEvaluation() {
+    if (datum_plane_preview_timer_ == nullptr) {
+        refreshDatumPlaneEvaluation();
+        return;
+    }
+    datum_plane_preview_timer_->start();
+}
+
+void CadWorkbench::flushDatumPlaneEvaluation() {
+    if (datum_plane_preview_timer_ == nullptr ||
+        !datum_plane_preview_timer_->isActive()) {
+        return;
+    }
+    datum_plane_preview_timer_->stop();
+    refreshDatumPlaneEvaluation();
+}
+
+void CadWorkbench::refreshDatumPlaneEvaluation() {
+    if (datum_plane_preview_timer_ != nullptr) {
+        datum_plane_preview_timer_->stop();
+    }
+    datum_plane_evaluation_.reset();
+
+    if (!datum_plane_draft_ ||
+        !datum_plane_offset_input_valid_ ||
+        !datum_plane_draft_->source() ||
+        document_session_ == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        syncDatumPlaneUi();
+        return;
+    }
+
+    datum_plane_evaluation_ =
+        document_session_->
+            evaluateDatumPlaneDraft(
+                *datum_plane_draft_,
+                *solid_modeling_kernel_);
+    syncDatumPlaneUi();
+}
+
+void CadWorkbench::syncDatumPlaneUi() {
+    const bool active =
+        datum_plane_draft_.has_value();
+
+    if (datum_plane_operations_widget_ != nullptr) {
+        datum_plane_operations_widget_->
+            setVisible(active);
+    }
+    if (datum_plane_button_ != nullptr) {
+        datum_plane_button_->setChecked(active);
+    }
+    if (!active) {
+        return;
+    }
+
+    syncing_datum_plane_ui_ = true;
+
+    if (datum_plane_constructor_combo_ != nullptr) {
+        datum_plane_constructor_combo_->
+            setCurrentIndex(0);
+    }
+
+    QString source_text =
+        QStringLiteral(
+            "Select XY/XZ/YZ Origin plane or planar Body Face");
+    if (datum_plane_draft_->source()) {
+        const auto& source =
+            *datum_plane_draft_->source();
+        if (const auto origin =
+                part::builtinOriginPlaneForPlaneReference(
+                    source)) {
+            switch (*origin) {
+            case core::BuiltinReferenceRole::xy_plane:
+                source_text =
+                    QStringLiteral("XY Plane");
+                break;
+            case core::BuiltinReferenceRole::xz_plane:
+                source_text =
+                    QStringLiteral("XZ Plane");
+                break;
+            case core::BuiltinReferenceRole::yz_plane:
+                source_text =
+                    QStringLiteral("YZ Plane");
+                break;
+            default:
+                source_text =
+                    QStringLiteral("<invalid Origin plane>");
+                break;
+            }
+        } else if (const auto* surface =
+                       part::bodyPlanarSurfaceForPlaneReference(
+                           source)) {
+            source_text =
+                QStringLiteral(
+                    "Body Surface @ Feature %1")
+                    .arg(
+                        fromUtf8(
+                            surface->surface
+                                .producer_feature_id
+                                .serialized()));
+        } else if (const auto datum_id =
+                       part::datumPlaneIdForPlaneReference(
+                           source)) {
+            source_text =
+                QStringLiteral("Datum Plane %1")
+                    .arg(
+                        fromUtf8(
+                            datum_id->serialized()));
+        }
+    }
+
+    if (datum_plane_source_label_ != nullptr) {
+        datum_plane_source_label_->setText(
+            source_text);
+    }
+
+    if (datum_plane_offset_edit_ != nullptr &&
+        datum_plane_offset_input_valid_ &&
+        !datum_plane_offset_edit_->hasFocus() &&
+        document_session_ != nullptr) {
+        const QSignalBlocker blocked{
+            datum_plane_offset_edit_};
+        datum_plane_offset_edit_->setText(
+            formatLengthForPart(
+                datum_plane_draft_->offset(),
+                document_session_->document()
+                    .lengthUnit()));
+    }
+
+    QString result_text;
+    if (!datum_plane_offset_input_valid_) {
+        result_text =
+            QStringLiteral(
+                "Offset expects a finite signed Length.");
+    } else if (!datum_plane_draft_->source()) {
+        result_text =
+            QStringLiteral(
+                "Select a source plane.");
+    } else if (!datum_plane_evaluation_) {
+        result_text =
+            QStringLiteral(
+                "Resolving Datum Plane...");
+    } else if (datum_plane_evaluation_->
+                   committable()) {
+        result_text =
+            QStringLiteral(
+                "Resolved — current Datum frame is valid.");
+    } else {
+        switch (datum_plane_evaluation_->status) {
+        case application::
+            DatumPlaneDraftEvaluationStatus::
+                stale_document:
+        case application::
+            DatumPlaneDraftEvaluationStatus::
+                stale_revision:
+            result_text =
+                QStringLiteral(
+                    "Stale context — restart Datum Plane.");
+            break;
+        case application::
+            DatumPlaneDraftEvaluationStatus::
+                missing_datum:
+            result_text =
+                QStringLiteral(
+                    "Source Datum is Missing.");
+            break;
+        case application::
+            DatumPlaneDraftEvaluationStatus::
+                id_exhausted:
+            result_text =
+                QStringLiteral(
+                    "DatumId allocation is exhausted.");
+            break;
+        case application::
+            DatumPlaneDraftEvaluationStatus::
+                source_unresolved:
+            result_text =
+                QStringLiteral(
+                    "Source is not currently Resolved.");
+            break;
+        case application::
+            DatumPlaneDraftEvaluationStatus::
+                invalid_candidate:
+        case application::
+            DatumPlaneDraftEvaluationStatus::
+                invalid_draft:
+        case application::
+            DatumPlaneDraftEvaluationStatus::ok:
+            result_text =
+                QStringLiteral(
+                    "Datum Plane cannot currently Finish.");
+            break;
+        }
+    }
+
+    if (datum_plane_result_label_ != nullptr) {
+        datum_plane_result_label_->setText(
+            result_text);
+    }
+    if (datum_plane_reverse_button_ != nullptr) {
+        datum_plane_reverse_button_->setEnabled(
+            active &&
+            datum_plane_offset_input_valid_);
+    }
+    if (datum_plane_finish_button_ != nullptr) {
+        datum_plane_finish_button_->setEnabled(
+            datum_plane_offset_input_valid_ &&
+            datum_plane_evaluation_ &&
+            datum_plane_evaluation_->
+                committable());
+    }
+    if (datum_plane_cancel_button_ != nullptr) {
+        datum_plane_cancel_button_->setEnabled(
+            active);
+    }
+
+    syncing_datum_plane_ui_ = false;
+}
+
+void CadWorkbench::cancelDatumPlane() {
+    if (!datum_plane_draft_) {
+        return;
+    }
+
+    clearDatumPlaneRuntimeContext();
+    syncActionState();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Datum Plane cancelled — no authored change."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+}
+
+bool CadWorkbench::finishDatumPlane() {
+    flushDatumPlaneEvaluation();
+
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr ||
+        !datum_plane_draft_ ||
+        !datum_plane_offset_input_valid_ ||
+        !datum_plane_evaluation_ ||
+        !datum_plane_evaluation_->
+            committable()) {
+        setStatusText(
+            QStringLiteral(
+                "Datum Plane cannot finish until Source and Offset resolve successfully."));
+        return false;
+    }
+
+    const auto result =
+        application::finishDatumPlaneDraft(
+            *document_session,
+            *datum_plane_draft_,
+            *datum_plane_evaluation_,
+            *solid_modeling_kernel_);
+    if (!result.ok()) {
+        setStatusText(
+            result.diagnostic.empty()
+                ? QStringLiteral(
+                      "Datum Plane Finish was rejected.")
+                : fromUtf8(
+                      result.diagnostic));
+        refreshDatumPlaneEvaluation();
+        return false;
+    }
+
+    const auto datum_id =
+        result.datum_id;
+    clearDatumPlaneRuntimeContext();
+    refreshActiveContext();
+    syncActionState();
+    notifyCadInputContextChanged();
+    notifyDocumentStateChanged();
+
+    setStatusText(
+        datum_id
+            ? QStringLiteral(
+                  "Datum Plane %1 finished — one transaction committed.")
+                  .arg(
+                      fromUtf8(
+                          datum_id->serialized()))
+            : QStringLiteral(
+                  "Datum Plane finished — one transaction committed."));
+    if (viewport_widget_ != nullptr) {
+        viewport_widget_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::clearDatumPlaneRuntimeContext() {
+    if (datum_plane_preview_timer_ != nullptr) {
+        datum_plane_preview_timer_->stop();
+    }
+    datum_plane_draft_.reset();
+    datum_plane_evaluation_.reset();
+    datum_plane_offset_input_valid_ = true;
+
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyFacePickOnly(false);
+    }
+
+    if (datum_plane_offset_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            datum_plane_offset_edit_};
+        datum_plane_offset_edit_->clear();
+    }
+    syncDatumPlaneUi();
+}
+
+application::CadInputSubmitResult
+CadWorkbench::submitDatumPlaneCadInput(
+    std::string_view text) {
+    if (!datum_plane_draft_ ||
+        document_session_ == nullptr) {
+        return {
+            false,
+            "No active Datum Plane command."};
+    }
+
+    auto result =
+        application::submitDatumPlaneCadInput(
+            *datum_plane_draft_,
+            text,
+            application::CadInputNumberFormat{
+                toUtf8(
+                    QLocale{}.decimalPoint()),
+                document_session_->document()
+                    .lengthUnit()});
+    if (!result.accepted) {
+        return {
+            false,
+            result.diagnostic};
+    }
+
+    switch (result.action) {
+    case application::DatumPlaneCadInputAction::finish:
+        return finishDatumPlane()
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "Datum Plane Finish was rejected."};
+
+    case application::DatumPlaneCadInputAction::cancel:
+        cancelDatumPlane();
+        return {true, {}};
+
+    case application::DatumPlaneCadInputAction::none:
+        datum_plane_offset_input_valid_ = true;
+        if (datum_plane_offset_edit_ != nullptr) {
+            const QSignalBlocker blocked{
+                datum_plane_offset_edit_};
+            datum_plane_offset_edit_->setText(
+                formatLengthForPart(
+                    datum_plane_draft_->offset(),
+                    document_session_->document()
+                        .lengthUnit()));
+        }
+        datum_plane_evaluation_.reset();
+        refreshDatumPlaneEvaluation();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+
+    return {
+        false,
+        "Datum Plane input action is invalid."};
+}
+
 bool CadWorkbench::startExtrudeTool() {
     auto* document_session =
         activeDocumentSession();
