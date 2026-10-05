@@ -98,7 +98,7 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie i wyświetlanie Sketchu
 
-W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin lub bieżącą Face Body w viewporcie 3D. Podczas wyboru supportu Sketch viewport przyjmuje wyłącznie Face. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Sam wybór supportu pozostaje runtime draftem: **Finish Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu.
+W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin lub bieżącą Face Body w viewporcie 3D. Podczas wyboru supportu Sketch viewport przyjmuje wyłącznie Face. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Sam wybór supportu pozostaje runtime draftem: **Create Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu. Gdy Sketch już istnieje i trwa Sketch Edit, **Finish Sketch** zachowuje normalne znaczenie: zakończenie edycji Sketchu.
 
 Podczas Sketch Edit narzędzia są uporządkowane w grupy:
 
@@ -290,7 +290,7 @@ Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uru
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję.
 
-Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin lub planarną Face Body, a następnie Finish, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported albo powodujący cykl jest odrzucany bez częściowej mutacji. Undo/Redo przywraca poprzedni semantyczny support.
+Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin lub planarną Face Body, a następnie użyj **Apply Support**, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported albo powodujący cykl jest odrzucany bez częściowej mutacji. Undo/Redo przywraca poprzedni semantyczny support.
 
 Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions i płaszczyzny Datum pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
 
@@ -477,6 +477,8 @@ Zaznaczenie bieżącej topologii aktualizuje Properties bez dodawania wierszy Fa
 - Body pokazuje kompletne bieżące topology/accounting counts.
 
 Bieżący element topologii może być **Present**, gdy trwała singular referenceability jest **Ambiguous** albo **Unsupported**. SimpleSolid raportuje ten stan zamiast automatycznie przepinać referencję na podobną lub najbliższą geometrię.
+
+Gdy Extrude Add rozszerza jeden istniejący planarny material carrier i Boolean lineage jednoznacznie potwierdza ciągłość, odziedziczony semantyczny Surface pozostaje pojedynczym carrierem dla wszystkich bounded Face fragments. Techniczna krawędź podziału między tymi fragmentami pozostaje w topology accounting, ale jest traktowana jako representation artifact: nie jest pokazywana jako zwykła inżynierska Edge i nie uczestniczy w ordinary picking. Nie jest to scalanie na podstawie geometrii — sama współpłaszczyznowość bez jednoznacznego lineage nie przepina identity.
 
 Zaznaczenie albo hover Feature w Document Tree podświetla jego **Current Feature Contribution** na bieżącym Body. Nie jest to podmiana Body na historyczny stage i nie tworzy duplikatów selectable topology. Gdy bezpośrednio wybrany element topologii znika po recompute, zaznaczenie jest czyszczone zamiast przeskakiwać na podobną geometrię.
 
