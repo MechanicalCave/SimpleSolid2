@@ -276,6 +276,23 @@ bool PartDocument::validAuthoredState(
             return false;
         }
 
+        if (const auto datum_id =
+                datumPlaneIdForSketchSupport(
+                    hosted.support)) {
+            const auto datum =
+                std::find_if(
+                    state.datum_planes.begin(),
+                    state.datum_planes.end(),
+                    [datum_id](
+                        const OffsetDatumPlane& item) {
+                        return item.id == *datum_id;
+                    });
+            if (datum ==
+                state.datum_planes.end()) {
+                return false;
+            }
+        }
+
         for (std::size_t previous = 0;
              previous < index;
              ++previous) {
