@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
-**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; NO LATER PACKAGE ACTIVE  
-**Version:** 1.17  
-**Owner acceptance:** 2026-10-04 — PM-02 Work Contract authority; PM-02 completion state synchronized 2026-10-05 after Owner manual PASS  
-**Previous accepted version:** 1.16 — 2026-10-04  
+**Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 ACTIVE  
+**Version:** 1.18  
+**Owner acceptance:** 2026-10-05 — PM-03 bounded Work Contract + UI interaction amendments accepted; v1.18 is activation-state synchronization only  
+**Previous accepted version:** 1.17 — 2026-10-05  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current completed checkpoint:** PM-02 — final Owner Windows acceptance PASS 2026-10-05; closure synchronization is work/governance-only  
+**Current active checkpoint:** PM-03A — semantic Datum foundation + schema under `work/PM-03_DATUM_REFERENCE_GEOMETRY.md`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -127,7 +127,7 @@ The order is strict unless the Owner explicitly amends this roadmap:
 | 3 | **PM-01 — Extrude Feature Vertical Slice: Body / Feature / Add / Cut** | durable Body/Feature architecture plus complete Extrude Add/Cut OneSide/Midplane lifecycle | **COMPLETED — PASS; Owner final manual acceptance 2026-10-03; runtime FULL #1369, docs #1370** |
 | 4 | **PM-02P — Body Semantic Topology Evidence Gate** | prove complete Face/Edge/Vertex accounting, carrier Surface/Curve/Point semantics, deterministic planar frames, split/merge/delete behavior and prospective dynamic Sketch support before production schema/API | **COMPLETED — PASS; runtime FULL #1387; Owner accepted D2 synthesis 2026-10-04** |
 | 5 | **PM-02 — Body Semantic Topology / Face-Supported Sketch** | production semantic topology catalog and picking plus Sketch/Profile on arbitrary resolved planar Body surfaces, reusing PM-01 Extrude Add/Cut | **COMPLETED — PASS; runtime FULL #1473, docs #1474, Owner final manual Windows PASS 2026-10-05** |
-| 6 | **PM-03 — Datum Reference Geometry** | Datum Plane/Axis/Point constructors justified by accepted workflows, built on PM-02 Surface/Curve/Point references | future separate Work Contract |
+| 6 | **PM-03 — Datum Reference Geometry** | bounded Offset Datum Plane + Datum-backed Sketch support on PM-02 semantic references | **ACTIVE — Owner accepted 2026-10-05; exact contract `work/PM-03_DATUM_REFERENCE_GEOMETRY.md`** |
 | 7 | **PM-04 — Axis / Revolve** | Axis semantics plus complete Revolve Add/Cut lifecycle using accepted reference geometry | future separate Work Contract |
 | 8 | **PM-05 — Edge Features: Fillet / Chamfer** | complete edge-feature lifecycle with lineage/refine handling and repair | future separate Work Contract |
 | 9 | **PM-06 — Part v1 Completion / Published References / Evidence** | close accepted Part-v1 scope, minimal future-Assembly read contract, docs and performance evidence; no Assembly implementation | future separate Work Contract |
@@ -464,13 +464,21 @@ Projection is explicitly out of PM-02.
 
 ## 14. PM-03 — Datum Reference Geometry
 
-PM-03 implements accepted Datum Plane/Axis/Point reference geometry on top of PM-02 semantic Surface/Curve/Point references rather than introducing an Origin-only special-case reference architecture.
+**Status:** ACTIVE — Owner accepted the exact bounded Work Contract and UI/interaction amendments on 2026-10-05.
 
-PM-03 owns the exact bounded datum constructors justified by Part-v1 workflows and closes O-02 for those constructors.
+Active authority:
 
-Datum constructors may consume accepted Origin, Sketch and Body semantic references only according to their explicit contracts. No provider-native topology identity or geometry-similarity rebinding is permitted.
+`work/PM-03_DATUM_REFERENCE_GEOMETRY.md`.
 
-Projection is not a prerequisite for Datum.
+PM-03 deliberately delivers **Offset Datum Plane only** as the first construction-reference vertical slice. Datum Axis and Datum Point remain deferred until a concrete accepted consumer justifies them.
+
+Accepted sources are Origin XY/XZ/YZ planes, any uniquely resolved planar semantic Body Surface at an explicit Body stage, and an existing Datum Plane. The package adds durable DatumId, deterministic offset-frame evaluation, bounded Datum dependency/cycle rules, Datum-backed Sketch support, persistence/lifecycle, one shared GUI/Command Line draft, Extrude-style default 10 mm preview, presentation-only plane/Body intersection overlay, and Reference Geometry tree grouping/visibility.
+
+PM-03 must reuse PM-02 semantic SurfaceReference/BodyStageRef meaning. No provider-native topology identity, geometry-similarity rebinding, global dependency graph, Projection prerequisite, Datum Axis or Datum Point is authorized by this package.
+
+Current implementation checkpoint is **PM-03A — semantic Datum foundation + schema**.
+
+Projection is not a prerequisite for Datum and remains separately gated.
 
 ## 15. PM-04 — Axis / Revolve
 
@@ -652,11 +660,11 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.17 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P and PM-02A through PM-02J are COMPLETED — PASS. PM-02 is COMPLETED — PASS after Owner final Windows acceptance on 2026-10-05. No later package is active.**
+Program v1.18 is activation-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P and PM-02A through PM-02J are COMPLETED — PASS. PM-02 is COMPLETED — PASS. PM-03 is ACTIVE at PM-03A.**
 
 Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
-PM-02 production mutation authority is closed. There is currently **no active production CAD Work Contract**. PM-03 requires its own bounded Work Contract and explicit Owner acceptance before mutation.
+PM-02 production mutation authority is closed. Current legal production authority is the Owner-accepted PM-03 Work Contract: **`work/PM-03_DATUM_REFERENCE_GEOMETRY.md`**.
 
 PM-02A production accounting is closed: runtime candidate `58368a6ada5f6c30e03cb845682dbf5408ecb763` passed Windows FULL #1397 and was squash-merged to main as `b95f72105b8242eedce9cd79dd8bf910f3ccb715`.
 
@@ -678,4 +686,4 @@ PM-02I lifecycle, repair, persistence and regression matrix is closed: final run
 
 PM-02 is **COMPLETED — PASS**. Final accepted evidence is post-remediation runtime FULL #1473 on `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`, remediation docs DOCS #1474 on `1dbaef95b2ea48f8e529425a154b795984d6551f`, bookkeeping #1476 PASS, and Owner Windows re-test PASS on 2026-10-05 against current main `d8d73e213f24d5b82c5a7a13dbeba07282520a40`.
 
-No production CAD Work Contract is active after PM-02 closure. PM-03 Datum and all later product packages remain NOT ACTIVE. Projection remains separately gated and outside the PM-02/PM-03 critical path.
+PM-03 is ACTIVE at PM-03A under the bounded accepted Work Contract. PM-04 and all later product packages remain NOT ACTIVE. Projection remains separately gated and outside the PM-02/PM-03 critical path.

@@ -1,9 +1,9 @@
 version: 1
-status: completed
-active_work: "work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md"
+status: active
+active_work: "work/PM-03_DATUM_REFERENCE_GEOMETRY.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.17"
+program_roadmap_version: "1.18"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -40,10 +40,12 @@ next:
   - J-R5 Sketch support labels + Profile window-size containment is COMPLETED — PASS; post-remediation runtime candidate b9e70c684c2d054da21662ef3a8ae56ac59f60c0 passed Windows FULL #1473 and merged as 7baf13b255f7e5a587a8caeffde19d0ab69434d0
   - J-R6 canonical docs + Product Browser are COMPLETED — PASS; exact candidate 1dbaef95b2ea48f8e529425a154b795984d6551f passed Windows DOCS #1474 and merged as bdb718f292f1432e1156219edfa664b1a8aab92c
   - all PM-02 completion gates are satisfied: runtime FULL #1473 PASS, docs #1474 PASS, bookkeeping #1476 PASS and Owner Windows re-test PASS
-  - no production CAD Work Contract is active after PM-02 completion
-  - PM-03 Datum Reference Geometry is the next roadmap package but remains NOT ACTIVE until its own bounded Work Contract is explicitly Owner-accepted
+  - PM-03 Datum Reference Geometry / Offset Datum Plane is ACTIVE under the Owner-accepted Work Contract `work/PM-03_DATUM_REFERENCE_GEOMETRY.md`
+  - current implementation checkpoint is PM-03A — semantic Datum foundation + schema
+  - production mutation is authorized only within the accepted PM-03 contract and its ordered PM-03A..PM-03F checkpoints
   - Projection remains outside the PM-02/PM-03 critical path and requires separate later activation
 notes:
+  - PM-03 activation: Owner accepted the exact bounded PM-03 Work Contract and UI interaction amendments on 2026-10-05. Accepted contract PR #235 exact head `60a26ebd54b2b2d2718e94f03934f46877b1c2f1` passed governance gate #1480 and merged to main as `c60833166b64f3a4bb73d51bb8a73482cdfa2937`. Activation PR #236 is governance-only; PM-03A is the first authorized implementation checkpoint only after the activation exact-head gate passes and #236 merges. PM-04 and Projection remain inactive.
   - PM-02 is COMPLETED — PASS. Owner post-remediation Windows re-test on 2026-10-05 confirmed all requested manual checks PASS on current main `d8d73e213f24d5b82c5a7a13dbeba07282520a40`; runtime authority remains exact candidate `b9e70c684c2d054da21662ef3a8ae56ac59f60c0` / Windows FULL #1473 PASS, remediation docs authority remains `1dbaef95b2ea48f8e529425a154b795984d6551f` / Windows DOCS #1474 PASS, and bookkeeping #1476 PASS. This closure is work/governance-only. PM-03 and Projection remain inactive pending separate acceptance.
   - PM-02J post-remediation documentation is PASS. Exact docs candidate 1dbaef95b2ea48f8e529425a154b795984d6551f passed Windows DOCS #1474 with repo-native Product Browser regeneration and merged as bdb718f292f1432e1156219edfa664b1a8aab92c. Automated remediation runtime remains FULL #1473 PASS on b9e70c684c2d054da21662ef3a8ae56ac59f60c0. Owner Windows re-test is now the sole PM-02 completion gate.
   - PM-02J manual-remediation runtime is now automated PASS through J-R5. Final post-remediation runtime candidate b9e70c684c2d054da21662ef3a8ae56ac59f60c0 passed Windows FULL #1473 and merged as 7baf13b255f7e5a587a8caeffde19d0ab69434d0. R2 #1470 proves lineage-driven Add Surface continuation and representation-partition Edge handling; R3 #1471 proves exact support-stage Sketch Edit presentation; R4 #1472 proves stable box-corner hover/preselection/pick; R5 #1473 proves Create Sketch/Apply Support labeling and no Profile-driven top-level resize. J-R6 docs/Browser synchronization is active; Owner Windows re-test remains required before PM-02 closure.
