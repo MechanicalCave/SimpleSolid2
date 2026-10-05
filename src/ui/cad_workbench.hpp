@@ -142,7 +142,9 @@ public:
             expected_context_generation) override;
     [[nodiscard]] bool
     acceptsEmptyCadInput() const noexcept override {
-        return extrude_draft_.has_value();
+        return extrude_draft_.has_value() ||
+               (sketch_support_pick_active_ &&
+                pending_sketch_support_.has_value());
     }
     [[nodiscard]] std::vector<
         application::CadDynamicInputField>
@@ -210,8 +212,9 @@ private:
         std::optional<core::BuiltinReferenceRole> support);
     void tryCreateSketchFromBodyTopology(
         const BodyTopologyInspection& inspection);
-    void applySketchSupport(
+    void stageSketchSupport(
         part::PartSketchSupport support);
+    [[nodiscard]] bool finishSketchSupport();
     void enterSketchEdit(
         const sketch::SketchId& sketch_id);
     void finishSketch();
@@ -300,6 +303,10 @@ private:
     bool sketch_support_pick_active_{};
     std::optional<sketch::SketchId>
         sketch_resupport_target_;
+    std::optional<part::PartSketchSupport>
+        pending_sketch_support_;
+    std::optional<core::DocumentRevision>
+        pending_sketch_support_revision_;
     application::CadInputContextGeneration
         sketch_support_pick_generation_{};
     std::optional<core::DocumentId>

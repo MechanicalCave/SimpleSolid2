@@ -873,8 +873,23 @@ int main(int argc, char* argv[]) {
         xz_plane_token);
     QApplication::processEvents();
 
+    CHECK(session->document().sketches().empty());
+    CHECK(!session->needsSave());
+    CHECK(!finish_button->isHidden());
+    CHECK(finish_button->isEnabled());
+    CHECK(!cancel_button->isHidden());
+    CHECK(!sketch_button->isEnabled());
+
+    const auto support_finish_undo =
+        session->undoDepth();
+    finish_button->click();
+    QApplication::processEvents();
+
     CHECK(session->document().sketches().size() == 1U);
     CHECK(session->needsSave());
+    CHECK(
+        session->undoDepth() ==
+        support_finish_undo + 1U);
     CHECK(!finish_button->isHidden());
     CHECK(finish_button->isEnabled());
     CHECK(cancel_button->isHidden());
@@ -3258,8 +3273,11 @@ int main(int argc, char* argv[]) {
         yz_plane_token);
     QApplication::processEvents();
 
-    CHECK(session->document().sketches().size() == 2U);
+    CHECK(session->document().sketches().size() == 1U);
     CHECK(finish_button->isEnabled());
+    finish_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().sketches().size() == 2U);
     CHECK(
         viewport->lastStandardView() ==
         viewer::StandardView::right);
@@ -3281,8 +3299,11 @@ int main(int argc, char* argv[]) {
         xy_plane_token);
     QApplication::processEvents();
 
-    CHECK(session->document().sketches().size() == 2U);
+    CHECK(session->document().sketches().size() == 1U);
     CHECK(finish_button->isEnabled());
+    finish_button->click();
+    QApplication::processEvents();
+    CHECK(session->document().sketches().size() == 2U);
     CHECK(
         viewport->lastStandardView() ==
         viewer::StandardView::top);

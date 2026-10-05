@@ -4932,6 +4932,8 @@ void CadWorkbench::startSketchTool() {
         return;
     }
     sketch_resupport_target_.reset();
+    pending_sketch_support_.reset();
+    pending_sketch_support_revision_.reset();
     sketch_support_pick_active_ = true;
     ++sketch_support_pick_generation_;
     if (viewport_controller_ != nullptr) {
@@ -4971,6 +4973,8 @@ void CadWorkbench::startSketchResupport(
     }
 
     sketch_resupport_target_ = sketch_id;
+    pending_sketch_support_.reset();
+    pending_sketch_support_revision_.reset();
     sketch_support_pick_active_ = true;
     ++sketch_support_pick_generation_;
     if (viewport_controller_ != nullptr) {
@@ -4996,6 +5000,8 @@ void CadWorkbench::cancelSketchTool() {
         sketch_resupport_target_.has_value();
     sketch_support_pick_active_ = false;
     sketch_resupport_target_.reset();
+    pending_sketch_support_.reset();
+    pending_sketch_support_revision_.reset();
     ++sketch_support_pick_generation_;
     if (viewport_controller_ != nullptr) {
         viewport_controller_->
@@ -5116,7 +5122,7 @@ void CadWorkbench::requestEditProfile(
             "Profile edit context opened."));
 }
 
-void CadWorkbench::applySketchSupport(
+void CadWorkbench::stageSketchSupport(
     part::PartSketchSupport support) {
     if (!sketch_support_pick_active_) {
         return;
@@ -5129,8 +5135,39 @@ void CadWorkbench::applySketchSupport(
         return;
     }
 
-    const auto expected_revision =
+    pending_sketch_support_ =
+        std::move(support);
+    pending_sketch_support_revision_ =
         document_session->document().revision();
+    ++sketch_support_pick_generation_;
+
+    setStatusText(
+        sketch_resupport_target_
+            ? QStringLiteral(
+                  "New Sketch support selected — Finish to commit or Cancel.")
+            : QStringLiteral(
+                  "Sketch support selected — Finish to create or Cancel."));
+    notifyCadInputContextChanged();
+    syncActionState();
+}
+
+bool CadWorkbench::finishSketchSupport() {
+    if (!sketch_support_pick_active_ ||
+        !pending_sketch_support_ ||
+        !pending_sketch_support_revision_) {
+        setStatusText(
+            QStringLiteral(
+                "Select an Origin plane or Body Face before Finish."));
+        return false;
+    }
+
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        cancelSketchTool();
+        return false;
+    }
+
     const bool resupport =
         sketch_resupport_target_.has_value();
 
@@ -5140,39 +5177,50 @@ void CadWorkbench::applySketchSupport(
             document_session->execute(
                 application::SetPartSketchSupportCommand{
                     *sketch_resupport_target_,
-                    std::move(support),
-                    expected_revision},
+                    *pending_sketch_support_,
+                    *pending_sketch_support_revision_},
                 solid_modeling_kernel_);
     } else {
         result =
             document_session->execute(
                 application::CreatePartSketchOnSupportCommand{
-                    std::move(support),
-                    expected_revision},
+                    *pending_sketch_support_,
+                    *pending_sketch_support_revision_},
                 solid_modeling_kernel_);
     }
 
     if (!result.ok()) {
+        if (result.status ==
+            application::SketchSupportMutationStatus::
+                stale_revision) {
+            pending_sketch_support_.reset();
+            pending_sketch_support_revision_.reset();
+            ++sketch_support_pick_generation_;
+            notifyCadInputContextChanged();
+            syncActionState();
+        }
         setStatusText(
             fromUtf8(
                 result.diagnostic.message.empty()
                     ? std::string{
-                          "Sketch support was rejected."}
+                          "Sketch support Finish was rejected."}
                     : result.diagnostic.message));
-        return;
+        return false;
     }
 
     if (!result.sketch_id) {
         setStatusText(
             QStringLiteral(
-                "Sketch support command produced no Sketch target."));
-        return;
+                "Sketch support Finish produced no Sketch target."));
+        return false;
     }
 
     const auto target_id =
         *result.sketch_id;
     sketch_support_pick_active_ = false;
     sketch_resupport_target_.reset();
+    pending_sketch_support_.reset();
+    pending_sketch_support_revision_.reset();
     ++sketch_support_pick_generation_;
     if (viewport_controller_ != nullptr) {
         viewport_controller_->
@@ -5186,9 +5234,10 @@ void CadWorkbench::applySketchSupport(
     setStatusText(
         resupport
             ? QStringLiteral(
-                  "Sketch support changed — SketchId and local geometry preserved.")
+                  "Sketch support changed — one transaction committed; SketchId and local geometry preserved.")
             : QStringLiteral(
-                  "Sketch created on selected support — editing in the 3D Viewport."));
+                  "Sketch created — one transaction committed; editing in the 3D Viewport."));
+    return true;
 }
 
 void CadWorkbench::tryCreateSketchFromSupport(
@@ -5208,7 +5257,7 @@ void CadWorkbench::tryCreateSketchFromSupport(
         return;
     }
 
-    applySketchSupport(*semantic);
+    stageSketchSupport(*semantic);
 }
 
 void CadWorkbench::tryCreateSketchFromBodyTopology(
@@ -5267,7 +5316,7 @@ void CadWorkbench::tryCreateSketchFromBodyTopology(
         return;
     }
 
-    applySketchSupport(*semantic);
+    stageSketchSupport(*semantic);
 }
 
 void CadWorkbench::enterSketchEdit(
@@ -5947,6 +5996,16 @@ CadWorkbench::submitCadInput(
             cancelSketchTool();
             return {true, {}};
         }
+        if ((keyword == "FINISH" ||
+             keyword.empty()) &&
+            pending_sketch_support_) {
+            return finishSketchSupport()
+                ? application::CadInputSubmitResult{
+                      true, {}}
+                : application::CadInputSubmitResult{
+                      false,
+                      "Sketch support Finish was rejected."};
+        }
         const bool expected_command =
             sketch_resupport_target_
                 ? keyword == "RESUPPORT"
@@ -5956,9 +6015,13 @@ CadWorkbench::submitCadInput(
         }
         return {
             false,
-            sketch_resupport_target_
-                ? "RESUPPORT is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL."
-                : "SKETCH is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL."};
+            pending_sketch_support_
+                ? (sketch_resupport_target_
+                       ? "RESUPPORT target selected; use FINISH/Enter to commit or CANCEL."
+                       : "SKETCH support selected; use FINISH/Enter to create or CANCEL.")
+                : (sketch_resupport_target_
+                       ? "RESUPPORT is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL."
+                       : "SKETCH is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL.")};
     }
 
     if (extrude_profile_pick_active_) {
@@ -6066,6 +6129,13 @@ CadWorkbench::submitCadInput(
 }
 QString CadWorkbench::cadInputPromptText() const {
     if (sketch_support_pick_active_) {
+        if (pending_sketch_support_) {
+            return sketch_resupport_target_
+                ? QStringLiteral(
+                      "Command: RESUPPORT — Support selected · FINISH/Enter or CANCEL/Esc")
+                : QStringLiteral(
+                      "Command: SKETCH — Support selected · FINISH/Enter or CANCEL/Esc");
+        }
         return sketch_resupport_target_
             ? QStringLiteral(
                   "Command: RESUPPORT — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc")
@@ -6325,6 +6395,11 @@ QString CadWorkbench::cadInputPromptText() const {
 }
 
 void CadWorkbench::finishSketch() {
+    if (sketch_support_pick_active_) {
+        static_cast<void>(
+            finishSketchSupport());
+        return;
+    }
     if (!active_sketch_id_) {
         return;
     }
@@ -6343,6 +6418,8 @@ void CadWorkbench::clearSketchRuntimeContext() {
     }
     sketch_support_pick_active_ = false;
     sketch_resupport_target_.reset();
+    pending_sketch_support_.reset();
+    pending_sketch_support_revision_.reset();
     dynamic_input_anchor_.reset();
     if (viewport_controller_ != nullptr) {
         viewport_controller_->
@@ -8567,11 +8644,13 @@ void CadWorkbench::syncActionState() {
     apply_button_->setEnabled(active);
     undo_button_->setEnabled(
         active &&
+        !sketch_support_pick_active_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         document_session->canUndo());
     redo_button_->setEnabled(
         active &&
+        !sketch_support_pick_active_ &&
         !extrude_profile_pick_active_ &&
         !extrude_draft_ &&
         document_session->canRedo());
@@ -8656,9 +8735,24 @@ void CadWorkbench::syncActionState() {
         active && sketch_support_pick_active_);
 
     finish_sketch_button_->setVisible(
-        editing_sketch);
+        editing_sketch ||
+        (active &&
+         sketch_support_pick_active_ &&
+         pending_sketch_support_.has_value()));
     finish_sketch_button_->setEnabled(
-        editing_sketch);
+        editing_sketch ||
+        (active &&
+         sketch_support_pick_active_ &&
+         pending_sketch_support_.has_value()));
+    if (sketch_support_pick_active_) {
+        finish_sketch_button_->setText(
+            sketch_resupport_target_
+                ? QStringLiteral("Finish Support")
+                : QStringLiteral("Finish Sketch"));
+    } else {
+        finish_sketch_button_->setText(
+            QStringLiteral("Finish Sketch"));
+    }
 
     syncSketchInteractionUi();
     syncExtrudeUi();

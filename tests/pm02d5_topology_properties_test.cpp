@@ -600,6 +600,9 @@ int main(int argc, char* argv[]) {
     CHECK(cad_result.accepted);
     CHECK(workbench.cadInputPrompt().find("SKETCH") !=
           std::string::npos);
+    viewport->clickMixedBodyCandidates();
+    CHECK(workbench.cadInputPrompt().find("FINISH") !=
+          std::string::npos);
     cad_result =
         workbench.submitCadInput(
             "CANCEL",
@@ -617,15 +620,53 @@ int main(int argc, char* argv[]) {
     CHECK(sketch_tool != nullptr);
     const auto sketch_count_before =
         session.document().sketches().size();
+    const auto state_before_face_pick =
+        session.document().state();
+    const auto revision_before_face_pick =
+        session.document().revision();
+    const auto undo_before_face_pick =
+        session.undoDepth();
     sketch_tool->click();
     CHECK(workbench.cadInputPrompt().find("SKETCH") !=
           std::string::npos);
 
     viewport->clickMixedBodyCandidates();
 
+    // Selecting the semantic Face is draft-only. Finish owns the single
+    // authored transaction.
+    CHECK(
+        session.document().sketches().size() ==
+        sketch_count_before);
+    CHECK(
+        session.document().state() ==
+        state_before_face_pick);
+    CHECK(
+        session.document().revision() ==
+        revision_before_face_pick);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_face_pick);
+    CHECK(
+        workbench.cadInputPrompt().find("FINISH") !=
+        std::string::npos);
+
+    auto* finish_sketch =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("finishSketchButton"));
+    CHECK(finish_sketch != nullptr);
+    CHECK(!finish_sketch->isHidden());
+    CHECK(finish_sketch->isEnabled());
+    finish_sketch->click();
+
     CHECK(
         session.document().sketches().size() ==
         sketch_count_before + 1U);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_face_pick + 1U);
+    CHECK(
+        session.document().revision() !=
+        revision_before_face_pick);
     const auto created_id =
         session.document().sketches().back().id;
     CHECK(
@@ -635,10 +676,6 @@ int main(int argc, char* argv[]) {
 
     // RESUPPORT is also the same global CAD-input acquisition state. Merely
     // entering/cancelling it cannot mutate the authored Sketch.
-    auto* finish_sketch =
-        workbench.findChild<QPushButton*>(
-            QStringLiteral("finishSketchButton"));
-    CHECK(finish_sketch != nullptr);
     finish_sketch->click();
 
     auto* created_item =
@@ -696,6 +733,58 @@ int main(int argc, char* argv[]) {
     CHECK(
         session.document().findSketch(created_id) !=
         nullptr);
+
+    // Keyboard-first RESUPPORT uses the same staged support draft. Selecting
+    // a new Origin target is still non-authoring until FINISH.
+    const auto state_before_cli_finish =
+        session.document().state();
+    const auto revision_before_cli_finish =
+        session.document().revision();
+    const auto undo_before_cli_finish =
+        session.undoDepth();
+
+    cad_result =
+        workbench.submitCadInput(
+            "RESUPPORT",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+
+    auto* xy_item =
+        findItem(*tree, QStringLiteral("XY Plane"));
+    CHECK(xy_item != nullptr);
+    tree->clearSelection();
+    xy_item->setSelected(true);
+    tree->setCurrentItem(xy_item);
+
+    CHECK(
+        workbench.cadInputPrompt().find("FINISH") !=
+        std::string::npos);
+    CHECK(
+        session.document().state() ==
+        state_before_cli_finish);
+    CHECK(
+        session.document().revision() ==
+        revision_before_cli_finish);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_cli_finish);
+
+    cad_result =
+        workbench.submitCadInput(
+            "FINISH",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_cli_finish + 1U);
+    const auto* cli_resupported =
+        session.document().findSketch(created_id);
+    CHECK(cli_resupported != nullptr);
+    CHECK(
+        part::builtinOriginPlaneForSketchSupport(
+            cli_resupported->support) ==
+        std::optional<core::BuiltinReferenceRole>{
+            core::BuiltinReferenceRole::xy_plane});
 
     return EXIT_SUCCESS;
 }
