@@ -1747,22 +1747,23 @@ makeBodyStageTopologyCatalog(
 
         for (const auto& produced :
              kernel_result.new_surfaces) {
-            if (std::find(
+            if (!produced.continued_into ||
+                std::find(
                     produced.contribution_faces.begin(),
                     produced.contribution_faces.end(),
                     token) ==
-                produced.contribution_faces.end()) {
+                    produced.contribution_faces.end()) {
                 continue;
             }
-            if (produced.continued_into) {
-                const auto owner =
-                    semanticSurfaceForRuntimeToken(
-                        *produced.continued_into,
-                        semantic_surfaces);
-                if (!owner) {
-                    return std::nullopt;
-                }
+
+            const auto owner =
+                semanticSurfaceForRuntimeToken(
+                    *produced.continued_into,
+                    semantic_surfaces);
+            if (!owner) {
+                return std::nullopt;
             }
+
             if (std::find(
                     record.contributing_features.begin(),
                     record.contributing_features.end(),
