@@ -358,7 +358,9 @@ The as-built invariants are:
 
 For singular Edge/Curve meaning, Owner accepted the PM-02P finding that a Surface pair alone may be insufficient when several disconnected branches exist. A bounded semantic branch/provenance discriminator is permitted only when producer semantics can defend it; otherwise the singular meaning remains Ambiguous. Provider branch order, nearest/longest geometry and XYZ sorting are not valid identity.
 
-The implementation remains bounded by `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md` and ADR-0016. Planar Body Faces may host standard Sketches through semantic Surface support; non-planar Faces remain selectable/inspectable but standard Sketch support reports `Unsupported`. Re-support preserves SketchId, EntityIds and local U/V geometry, and cycle-causing downstream/self support is rejected before mutation.
+The implementation remains bounded by `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`, ADR-0016 and ADR-0017. Planar Body Faces may host standard Sketches through semantic Surface support; non-planar Faces remain selectable/inspectable but standard Sketch support reports `Unsupported`. Re-support preserves SketchId, EntityIds and local U/V geometry, and cycle-causing downstream/self support is rejected before mutation.
+
+ADR-0017 adds one bounded Add-only continuation rule: when provider Boolean lineage uniquely proves material continuity between a newly-created planar Add Surface claim and one inherited planar carrier, the inherited Surface keeps semantic identity and expands across the current bounded Face fragments. Current Feature Contribution remains separate runtime evidence. A current Edge that only partitions bounded Face realizations of that same semantic Surface is a representation partition: it remains fully accounted, but is non-referenceable and excluded from ordinary engineering edge display/picking. Coplanarity or geometric similarity alone never selects continuation.
 
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
