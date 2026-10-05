@@ -692,4 +692,4 @@ PM-02I lifecycle, repair, persistence and regression matrix is closed: final run
 
 PM-02 is **COMPLETED — PASS**. Final accepted evidence is post-remediation runtime FULL #1473 on `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`, remediation docs DOCS #1474 on `1dbaef95b2ea48f8e529425a154b795984d6551f`, bookkeeping #1476 PASS, and Owner Windows re-test PASS on 2026-10-05 against current main `d8d73e213f24d5b82c5a7a13dbeba07282520a40`.
 
-PM-03 is ACTIVE at PM-03C under the bounded accepted Work Contract. PM-03A and PM-03B are COMPLETED — PASS. PM-04 and all later product packages remain NOT ACTIVE. Projection remains separately gated and outside the PM-02/PM-03 critical path.
+PM-03 is ACTIVE at PM-03D under the bounded accepted Work Contract. PM-03A, PM-03B and PM-03C are COMPLETED — PASS. PM-04 and all later product packages remain NOT ACTIVE. Projection remains separately gated and outside the PM-02/PM-03 critical path.
