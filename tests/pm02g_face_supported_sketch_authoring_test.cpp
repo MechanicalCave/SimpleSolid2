@@ -203,6 +203,25 @@ part::PartSketchSupport supportFor(part::SurfaceReference reference) {
 } // namespace
 
 int main() {
+    // Origin-backed semantic creation remains independent of any modeling
+    // provider and keeps the pre-PM-02 Origin workflow intact.
+    application::DocumentSession origin_session{
+        {},
+        part::PartDocument::create(
+            core::DocumentId::generate())};
+    const auto origin_support =
+        part::partSketchSupportForBuiltinPlane(
+            core::BuiltinReferenceRole::xz_plane);
+    CHECK(origin_support.has_value());
+    const auto origin_created =
+        origin_session.execute(
+            application::CreatePartSketchOnSupportCommand{
+                *origin_support,
+                origin_session.document().revision()});
+    CHECK(origin_created.ok());
+    CHECK(origin_created.changed);
+    CHECK(origin_created.sketch_id.has_value());
+
     SupportKernel kernel;
     auto fixture = makeFixture(kernel);
 
@@ -304,6 +323,28 @@ int main() {
     CHECK(fixture.session.document().revision() == cycle_revision);
     CHECK(fixture.session.document().state() == cycle_state);
 
+    // The same bounded dependency rule is a Domain reconstruction invariant,
+    // so malformed authored state cannot bypass the semantic command path.
+    auto cyclic_state =
+        fixture.session.document().state();
+    auto cyclic_sketch =
+        std::find_if(
+            cyclic_state.sketches.begin(),
+            cyclic_state.sketches.end(),
+            [&fixture](const auto& sketch) {
+                return sketch.id ==
+                       fixture.base_sketch_id;
+            });
+    CHECK(cyclic_sketch !=
+          cyclic_state.sketches.end());
+    cyclic_sketch->support = cap_support;
+    const auto cyclic_restore =
+        part::PartDocument::restore(
+            fixture.session.document().documentId(),
+            std::move(cyclic_state),
+            fixture.session.document().revision());
+    CHECK(!cyclic_restore.ok());
+
     kernel.extent_mode = ExtentMode::non_planar;
     const auto unsupported_state = fixture.session.document().state();
     const auto unsupported_revision =
@@ -333,6 +374,7 @@ int main() {
 
     std::cout
         << "PM02G_FACE_SUPPORTED_SKETCH_AUTHORING_PASS"
+        << " origin_parity=1"
         << " cap=1"
         << " lateral=1"
         << " ids_preserved=1"
