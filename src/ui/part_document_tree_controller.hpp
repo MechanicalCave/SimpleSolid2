@@ -1,6 +1,7 @@
 #pragma once
 
 #include <simplesolid2/application/document_session.hpp>
+#include <simplesolid2/part/datum_evaluation.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
 
 #include <QObject>
@@ -26,6 +27,15 @@ struct FeatureTreeEvaluationEntry final {
         part::FeatureEvaluationDiagnosticCode::none};
 };
 
+struct DatumTreeEvaluationEntry final {
+    part::DatumId datum_id;
+    part::DatumPlaneEvaluationStatus status{
+        part::DatumPlaneEvaluationStatus::blocked};
+    part::DatumPlaneEvaluationDiagnostic diagnostic{
+        part::DatumPlaneEvaluationDiagnostic::
+            invalid_datum};
+};
+
 class PartDocumentTreeController final : public QObject {
 public:
     using ResultHandler = std::function<void(
@@ -45,6 +55,14 @@ public:
         std::function<void(
             const std::vector<part::ProfileId>&,
             std::optional<part::ProfileId>)>;
+    using DatumSelectionHandler =
+        std::function<void(
+            const std::vector<part::DatumId>&,
+            std::optional<part::DatumId>)>;
+    using DatumEditHandler =
+        std::function<void(part::DatumId)>;
+    using DatumDeleteHandler =
+        std::function<void(part::DatumId)>;
     using DatumSelectionHandler =
         std::function<void(
             const std::vector<part::DatumId>&,
@@ -109,7 +127,9 @@ public:
     void setEvaluationSnapshot(
         part::BodyEvaluationStatus body_status,
         std::vector<FeatureTreeEvaluationEntry>
-            feature_evaluations);
+            feature_evaluations,
+        std::vector<DatumTreeEvaluationEntry>
+            datum_evaluations = {});
 
     void setSketchEditHandler(SketchEditHandler handler) {
         sketch_edit_handler_ = std::move(handler);
@@ -127,6 +147,21 @@ public:
     void setProfileEditHandler(
         ProfileEditHandler handler) {
         profile_edit_handler_ =
+            std::move(handler);
+    }
+    void setDatumSelectionHandler(
+        DatumSelectionHandler handler) {
+        datum_selection_handler_ =
+            std::move(handler);
+    }
+    void setDatumEditHandler(
+        DatumEditHandler handler) {
+        datum_edit_handler_ =
+            std::move(handler);
+    }
+    void setDatumDeleteHandler(
+        DatumDeleteHandler handler) {
+        datum_delete_handler_ =
             std::move(handler);
     }
     void setDatumSelectionHandler(
@@ -217,6 +252,7 @@ private:
     void notifySelectionChanged();
 
     [[nodiscard]] bool selectionContainsOnlyBuiltinReferences() const;
+    [[nodiscard]] bool selectionContainsOnlyDatumsOrReferenceGeometry() const;
     [[nodiscard]] bool selectionContainsOnlyDatumReferences() const;
     [[nodiscard]] bool referenceGeometryGroupSelected() const;
     [[nodiscard]] std::vector<part::DatumId>
@@ -274,6 +310,8 @@ private:
         part::BodyEvaluationStatus::empty};
     std::vector<FeatureTreeEvaluationEntry>
         feature_evaluations_;
+    std::vector<DatumTreeEvaluationEntry>
+        datum_evaluations_;
     std::optional<part::FeatureId>
         hovered_feature_id_;
 };
