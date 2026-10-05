@@ -569,6 +569,7 @@ void PartDocumentTreeController::clear() {
     }
     session_ = nullptr;
     feature_evaluations_.clear();
+    datum_evaluations_.clear();
     body_status_ =
         part::BodyEvaluationStatus::empty;
     tree_->clear();
@@ -946,10 +947,14 @@ void PartDocumentTreeController::setFeatureSelection(
 void PartDocumentTreeController::setEvaluationSnapshot(
     part::BodyEvaluationStatus body_status,
     std::vector<FeatureTreeEvaluationEntry>
-        feature_evaluations) {
+        feature_evaluations,
+    std::vector<DatumTreeEvaluationEntry>
+        datum_evaluations) {
     body_status_ = body_status;
     feature_evaluations_ =
         std::move(feature_evaluations);
+    datum_evaluations_ =
+        std::move(datum_evaluations);
     rebuild(true);
 }
 
@@ -1315,13 +1320,37 @@ void PartDocumentTreeController::rebuild(
             datumIdData,
             fromUtf8(datum.id.serialized()));
 
+        const auto evaluation =
+            std::find_if(
+                datum_evaluations_.begin(),
+                datum_evaluations_.end(),
+                [&datum](
+                    const DatumTreeEvaluationEntry& entry) {
+                    return entry.datum_id == datum.id;
+                });
+        const bool evaluated =
+            evaluation != datum_evaluations_.end();
+        const bool resolved =
+            evaluated &&
+            evaluation->status ==
+                part::DatumPlaneEvaluationStatus::
+                    resolved;
+
         auto font = item->font(0);
         font.setItalic(!datum.visible);
+        font.setBold(evaluated && !resolved);
         item->setFont(0, font);
+        if (evaluated && !resolved) {
+            item->setIcon(
+                0,
+                tree_->style()->standardIcon(
+                    QStyle::SP_MessageBoxWarning));
+        }
 
         item->setToolTip(
             0,
-            QStringLiteral("DatumId: %1\nSource: %2\nOffset: %3 mm\nVisibility: %4")
+            QStringLiteral(
+                "DatumId: %1\nSource: %2\nOffset: %3 mm\nVisibility: %4\nStatus: %5\nDiagnostic: %6")
                 .arg(
                     fromUtf8(datum.id.serialized()),
                     datumSourceText(datum.source),
@@ -1331,7 +1360,16 @@ void PartDocumentTreeController::rebuild(
                         12),
                     datum.visible
                         ? QStringLiteral("Shown")
-                        : QStringLiteral("Hidden")));
+                        : QStringLiteral("Hidden"),
+                    evaluated
+                        ? datumStatusText(
+                              evaluation->status)
+                        : QStringLiteral(
+                              "Not evaluated"),
+                    evaluated
+                        ? datumDiagnosticText(
+                              evaluation->diagnostic)
+                        : QStringLiteral("—")));
 
         if (preserve_reference_selection) {
             const bool was_selected =
