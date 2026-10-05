@@ -250,6 +250,12 @@ public:
         cursor_mode_ = mode;
     }
 
+    void emitSelectionIntent(
+        const viewer::SelectionIntent& intent) {
+        CHECK(static_cast<bool>(selection_handler_));
+        selection_handler_(intent);
+    }
+
     void emitSpatial(
         const viewer::SpatialPointerEvent& event) {
         CHECK(static_cast<bool>(spatial_handler_));
@@ -2361,6 +2367,136 @@ int main(int argc, char* argv[]) {
         controller.setSolidModelingKernel(
             nullptr);
         controller.clear();
+    }
+
+    // PM-03D1: Datum presentation identity is semantic DatumId while
+    // PresentationToken is disposable runtime state. Origin-backed Datums
+    // resolve without a Body and still participate in ordinary Viewer
+    // selection through the existing reference-presentation path.
+    {
+        auto datum_document =
+            part::PartDocument::create(
+                core::DocumentId::generate());
+        application::DocumentSession
+            datum_session{
+                std::filesystem::path{
+                    "pm03d1-datum-presentation.ss2part"},
+                std::move(datum_document)};
+        FakeSolidKernel datum_kernel;
+
+        const auto created_datum =
+            datum_session.execute(
+                application::CreateDatumPlaneCommand{
+                    part::PlaneReference{
+                        part::BuiltinOriginPlaneReference{
+                            core::BuiltinReferenceRole::
+                                xy_plane}},
+                    datum_session.document().revision(),
+                    core::LengthValue{10.0},
+                    true},
+                datum_kernel);
+        CHECK(created_datum.ok());
+        CHECK(created_datum.changed);
+        CHECK(created_datum.datum_id.has_value());
+
+        QTreeWidget datum_tree;
+        ui::PartDocumentTreeController
+            datum_tree_controller{datum_tree};
+        TestViewport datum_viewport;
+        ui::PartViewportController
+            datum_controller{
+                datum_tree_controller,
+                &datum_viewport};
+
+        datum_controller.setSolidModelingKernel(
+            &datum_kernel);
+        datum_controller.setDocumentSession(
+            &datum_session);
+
+        const auto datum_reference =
+            std::find_if(
+                datum_viewport.reference_scene_.
+                    references.begin(),
+                datum_viewport.reference_scene_.
+                    references.end(),
+                [](const auto& reference) {
+                    return reference.kind ==
+                        viewer::
+                            ReferencePresentationKind::
+                                datum_plane;
+                });
+        CHECK(
+            datum_reference !=
+            datum_viewport.reference_scene_.
+                references.end());
+        CHECK(
+            datum_viewport.reference_scene_.
+                overlays.empty());
+        const auto first_datum_token =
+            datum_reference->token;
+        CHECK(
+            datum_controller.datumFor(
+                first_datum_token) ==
+            created_datum.datum_id);
+        CHECK(
+            datum_controller.datumPresentationFor(
+                *created_datum.datum_id) ==
+            first_datum_token);
+
+        std::vector<part::DatumId>
+            reported_datums;
+        std::optional<part::DatumId>
+            reported_primary_datum;
+        datum_controller
+            .setDatumSelectionChangedHandler(
+                [&reported_datums,
+                 &reported_primary_datum](
+                    const std::vector<part::DatumId>&
+                        selected,
+                    std::optional<part::DatumId>
+                        primary) {
+                    reported_datums = selected;
+                    reported_primary_datum =
+                        primary;
+                });
+
+        datum_viewport.emitSelectionIntent(
+            viewer::SelectionIntent{
+                first_datum_token,
+                viewer::SelectionIntentMode::
+                    replace});
+        CHECK(
+            reported_datums ==
+            std::vector<part::DatumId>{
+                *created_datum.datum_id});
+        CHECK(
+            reported_primary_datum ==
+            created_datum.datum_id);
+        CHECK(
+            datum_viewport.presentation_selection_.
+                primary ==
+            first_datum_token);
+
+        datum_controller.refreshPresentation();
+        CHECK(
+            !datum_controller.datumFor(
+                 first_datum_token)
+                 .has_value());
+        const auto second_datum_token =
+            datum_controller.datumPresentationFor(
+                *created_datum.datum_id);
+        CHECK(second_datum_token.has_value());
+        CHECK(
+            *second_datum_token !=
+            first_datum_token);
+        CHECK(
+            datum_viewport.presentation_selection_.
+                primary ==
+            second_datum_token);
+
+        datum_controller.setSolidModelingKernel(
+            nullptr);
+        datum_controller.clear();
     }
 
     return EXIT_SUCCESS;
