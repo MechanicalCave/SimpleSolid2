@@ -16,6 +16,7 @@
 #include <BRepCheck_Analyzer.hxx>
 #include <Poly_Triangle.hxx>
 #include <Poly_Triangulation.hxx>
+#include <Precision.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_Orientation.hxx>
 #include <TopAbs_ShapeEnum.hxx>
@@ -1433,7 +1434,196 @@ struct SurfaceCandidateClaim final {
     std::optional<kernel::Frame3>
         canonical_frame;
     bool aliased{false};
+    std::optional<kernel::RuntimeSurfaceToken>
+        inherited_token;
+    std::optional<kernel::RuntimeSurfaceToken>
+        continued_into;
+    std::vector<TopoDS_Face>
+        contribution_candidates;
 };
+
+[[nodiscard]] bool surfaceClaimsShareFace(
+    const SurfaceCandidateClaim& first,
+    const SurfaceCandidateClaim& second) {
+    for (const auto& first_face :
+         first.candidates) {
+        const bool shared =
+            std::any_of(
+                second.candidates.begin(),
+                second.candidates.end(),
+                [&first_face](
+                    const TopoDS_Face& second_face) {
+                    return first_face.IsSame(
+                        second_face);
+                });
+        if (shared) return true;
+    }
+    return false;
+}
+
+[[nodiscard]] bool facesShareResultEdge(
+    const TopoDS_Face& first,
+    const TopoDS_Face& second) {
+    for (TopExp_Explorer first_edges{
+             first,
+             TopAbs_EDGE};
+         first_edges.More();
+         first_edges.Next()) {
+        const auto first_edge =
+            TopoDS::Edge(
+                first_edges.Current());
+        for (TopExp_Explorer second_edges{
+                 second,
+                 TopAbs_EDGE};
+             second_edges.More();
+             second_edges.Next()) {
+            if (first_edge.IsSame(
+                    second_edges.Current())) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool planarFacesSameDomain(
+    const TopoDS_Face& first,
+    const TopoDS_Face& second) {
+    if (providerSurfaceKind(first) !=
+            kernel::SurfaceKind::plane ||
+        providerSurfaceKind(second) !=
+            kernel::SurfaceKind::plane) {
+        return false;
+    }
+
+    const BRepAdaptor_Surface first_surface{
+        first,
+        true};
+    const BRepAdaptor_Surface second_surface{
+        second,
+        true};
+    if (first_surface.GetType() !=
+            GeomAbs_Plane ||
+        second_surface.GetType() !=
+            GeomAbs_Plane) {
+        return false;
+    }
+
+    const auto first_plane =
+        first_surface.Plane();
+    const auto second_plane =
+        second_surface.Plane();
+    const auto& first_normal =
+        first_plane.Axis().Direction();
+    const auto& second_normal =
+        second_plane.Axis().Direction();
+
+    if (!first_normal.IsParallel(
+            second_normal,
+            Precision::Angular())) {
+        return false;
+    }
+
+    const double tolerance =
+        std::max(
+            {
+                Precision::Confusion(),
+                BRep_Tool::Tolerance(first),
+                BRep_Tool::Tolerance(second),
+            });
+    return first_plane.Distance(
+               second_plane.Location()) <=
+           tolerance;
+}
+
+[[nodiscard]] bool surfaceClaimsHaveCertifiedContinuation(
+    const SurfaceCandidateClaim& created,
+    const SurfaceCandidateClaim& inherited) {
+    if (surfaceClaimsShareFace(
+            created,
+            inherited)) {
+        return true;
+    }
+
+    for (const auto& created_face :
+         created.candidates) {
+        for (const auto& inherited_face :
+             inherited.candidates) {
+            if (!facesShareResultEdge(
+                    created_face,
+                    inherited_face)) {
+                continue;
+            }
+            if (planarFacesSameDomain(
+                    created_face,
+                    inherited_face)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+void applyAddSurfaceContinuations(
+    std::vector<SurfaceCandidateClaim>& claims) {
+    for (std::size_t created_index = 0U;
+         created_index < claims.size();
+         ++created_index) {
+        auto& created = claims[created_index];
+        if (created.kind !=
+                SurfaceCandidateClaim::Kind::created ||
+            created.surface_kind !=
+                kernel::SurfaceKind::plane ||
+            created.candidates.empty()) {
+            continue;
+        }
+
+        std::vector<std::size_t>
+            inherited_matches;
+        for (std::size_t inherited_index = 0U;
+             inherited_index < claims.size();
+             ++inherited_index) {
+            const auto& inherited =
+                claims[inherited_index];
+            if (inherited.kind !=
+                    SurfaceCandidateClaim::Kind::
+                        inherited ||
+                inherited.surface_kind !=
+                    kernel::SurfaceKind::plane ||
+                !inherited.inherited_token ||
+                !surfaceClaimsHaveCertifiedContinuation(
+                    created,
+                    inherited)) {
+                continue;
+            }
+            inherited_matches.push_back(
+                inherited_index);
+        }
+
+        // ADR-0017: only one inherited Boolean-lineage claim may own the
+        // continuation. The provider may certify a shared descendant or one
+        // same-domain planar partition adjacency between exact descendants;
+        // no global proximity/coplanarity search participates in ownership.
+        if (inherited_matches.size() != 1U) {
+            continue;
+        }
+
+        auto& inherited =
+            claims[inherited_matches.front()];
+        created.continued_into =
+            inherited.inherited_token;
+        for (const auto& candidate :
+             created.candidates) {
+            appendUniqueFaceCandidate(
+                inherited.candidates,
+                candidate);
+        }
+
+        // The created Surface role remains contribution evidence but no longer
+        // competes as an independent semantic carrier.
+        created.candidates.clear();
+    }
+}
 
 void markAliasedSurfaceClaims(
     std::vector<SurfaceCandidateClaim>& claims) {
@@ -1496,6 +1686,7 @@ template <typename Mapper>
     OcctRuntimeSolid& runtime,
     const OcctRuntimeSolid* upstream,
     const std::vector<NewSemanticSource>& created,
+    bool allow_add_continuation,
     Mapper&& mapper) {
     std::vector<SurfaceCandidateClaim> claims;
 
@@ -1545,6 +1736,9 @@ template <typename Mapper>
                     tracked.canonical_frame,
                     false,
                 });
+            claims.back().inherited_token =
+                kernel::RuntimeSurfaceToken{
+                    token};
         }
     }
 
@@ -1588,8 +1782,13 @@ template <typename Mapper>
                 source.canonical_frame,
                 false,
             });
+        claims.back().contribution_candidates =
+            claims.back().candidates;
     }
 
+    if (allow_add_continuation) {
+        applyAddSurfaceContinuations(claims);
+    }
     markAliasedSurfaceClaims(claims);
 
     for (const auto& claim : claims) {
@@ -1601,6 +1800,29 @@ template <typename Mapper>
             }
         } else if (claim.canonical_frame) {
             return false;
+        }
+
+        std::vector<kernel::RuntimeFaceToken>
+            contribution_faces;
+        contribution_faces.reserve(
+            claim.contribution_candidates.size());
+        for (const auto& candidate :
+             claim.contribution_candidates) {
+            const auto token =
+                inventoryFaceToken(
+                    runtime,
+                    candidate);
+            if (!token) {
+                return false;
+            }
+            if (std::find(
+                    contribution_faces.begin(),
+                    contribution_faces.end(),
+                    *token) ==
+                contribution_faces.end()) {
+                contribution_faces.push_back(
+                    *token);
+            }
         }
 
         std::vector<kernel::RuntimeFaceToken>
@@ -1673,6 +1895,10 @@ template <typename Mapper>
         auto& published =
             result.new_surfaces[
                 claim.index];
+        published.contribution_faces =
+            std::move(contribution_faces);
+        published.continued_into =
+            claim.continued_into;
         published.surface_status =
             surface_status;
         published.strict_face_status =
@@ -1682,6 +1908,20 @@ template <typename Mapper>
         published.current_faces =
             std::move(current_faces);
         published.canonical_frame.reset();
+
+        if (published.continued_into) {
+            if (!published.continued_into->valid() ||
+                published.contribution_faces.empty()) {
+                return false;
+            }
+            published.surface_status =
+                kernel::ReferenceStatus::unsupported;
+            published.strict_face_status =
+                kernel::ReferenceStatus::unsupported;
+            published.candidate_face_count = 0U;
+            published.current_faces.clear();
+            continue;
+        }
 
         if (surface_status !=
             kernel::ReferenceStatus::resolved) {
@@ -1977,9 +2217,10 @@ template <typename Operation>
         observation.provider_curve_kind =
             providerCurveKind(edge);
 
+        std::size_t partition_surface_count = 0U;
         for (const auto& [surface_value, surface] :
              runtime.tracked_surfaces) {
-            bool adjacent = false;
+            std::size_t adjacent_face_count = 0U;
             bool seam = false;
             for (const auto& face :
                  surface.faces) {
@@ -1988,23 +2229,31 @@ template <typename Operation>
                         edge)) {
                     continue;
                 }
-                adjacent = true;
+                ++adjacent_face_count;
                 if (BRepTools::IsReallyClosed(
                         edge,
                         face)) {
                     seam = true;
                 }
             }
-            if (adjacent) {
+            if (adjacent_face_count > 0U) {
                 appendUniqueToken(
                     observation.adjacent_surfaces,
                     kernel::RuntimeSurfaceToken{
                         surface_value});
             }
+            if (adjacent_face_count >= 2U) {
+                ++partition_surface_count;
+            }
             observation.periodic_seam =
                 observation.periodic_seam ||
                 seam;
         }
+
+        observation.same_surface_partition =
+            !observation.periodic_seam &&
+            observation.adjacent_surfaces.size() == 1U &&
+            partition_surface_count == 1U;
 
         result.current_edge_semantics.push_back(
             std::move(observation));
@@ -2042,7 +2291,8 @@ template <typename Operation>
 
         for (const auto& edge_observation :
              result.current_edge_semantics) {
-            if (edge_observation.periodic_seam) {
+            if (edge_observation.periodic_seam ||
+                edge_observation.same_surface_partition) {
                 continue;
             }
             const auto found =
@@ -2336,6 +2586,8 @@ finishBoolean(
             *runtime,
             &upstream,
             created,
+            kind ==
+                kernel::SolidBooleanOperation::add,
             [&operation, &shape](
                 const TopoDS_Face& source) {
                 return descendantFaces(
@@ -2719,6 +2971,7 @@ OcctSolidModelingKernel::extrude(
                     *runtime,
                     nullptr,
                     created,
+                    false,
                     [&tool_shape](
                         const TopoDS_Face& source) {
                         std::vector<TopoDS_Face>

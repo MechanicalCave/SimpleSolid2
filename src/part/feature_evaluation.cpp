@@ -590,7 +590,8 @@ curveRelationForObservation(
     bool& provider_mismatch) {
     provider_mismatch = false;
     if (!observation.runtime_token.valid() ||
-        observation.periodic_seam) {
+        observation.periodic_seam ||
+        observation.same_surface_partition) {
         return std::nullopt;
     }
 
@@ -813,6 +814,7 @@ struct CurrentEdgeMeaning final {
     kernel::CurveKind provider_curve_kind{
         kernel::CurveKind::other};
     bool periodic_seam{false};
+    bool representation_partition{false};
     std::optional<CurveRelation> relation;
 };
 
@@ -957,6 +959,7 @@ buildCurveStage(
                 observation.runtime_token,
                 observation.provider_curve_kind,
                 observation.periodic_seam,
+                observation.same_surface_partition,
                 std::move(relation),
             });
     }
@@ -1143,6 +1146,7 @@ buildCurveStage(
 
     for (const auto& meaning : meanings) {
         if (meaning.periodic_seam ||
+            meaning.representation_partition ||
             !meaning.relation ||
             std::find(
                 inherited_claimed.begin(),
@@ -1211,8 +1215,11 @@ buildCurveStage(
             meaning.provider_curve_kind;
         record.periodic_seam =
             meaning.periodic_seam;
+        record.representation_partition =
+            meaning.representation_partition;
 
-        if (meaning.periodic_seam) {
+        if (meaning.periodic_seam ||
+            meaning.representation_partition) {
             record.accounting_class =
                 TopologyAccountingClass::
                     known_representation_artifact;
@@ -1738,6 +1745,35 @@ makeBodyStageTopologyCatalog(
             }
         }
 
+        for (const auto& produced :
+             kernel_result.new_surfaces) {
+            if (!produced.continued_into ||
+                std::find(
+                    produced.contribution_faces.begin(),
+                    produced.contribution_faces.end(),
+                    token) ==
+                    produced.contribution_faces.end()) {
+                continue;
+            }
+
+            const auto owner =
+                semanticSurfaceForRuntimeToken(
+                    *produced.continued_into,
+                    semantic_surfaces);
+            if (!owner) {
+                return std::nullopt;
+            }
+
+            if (std::find(
+                    record.contributing_features.begin(),
+                    record.contributing_features.end(),
+                    feature_id) ==
+                record.contributing_features.end()) {
+                record.contributing_features.push_back(
+                    feature_id);
+            }
+        }
+
         if (!record.surface_candidates.empty()) {
             record.accounting_class =
                 TopologyAccountingClass::
@@ -2039,6 +2075,21 @@ bool BodyFaceTopologyRecord::valid() const noexcept {
             }
         }
     }
+    for (std::size_t index = 0U;
+         index < contributing_features.size();
+         ++index) {
+        if (!contributing_features[index].valid()) {
+            return false;
+        }
+        for (std::size_t other = index + 1U;
+             other < contributing_features.size();
+             ++other) {
+            if (contributing_features[index] ==
+                contributing_features[other]) {
+                return false;
+            }
+        }
+    }
 
     switch (accounting_class) {
     case TopologyAccountingClass::referenceable:
@@ -2088,7 +2139,8 @@ bool BodyEdgeTopologyRecord::valid() const noexcept {
                     kernel::ReferenceStatus::ambiguous);
     case TopologyAccountingClass::
         known_representation_artifact:
-        return periodic_seam &&
+        return (periodic_seam ||
+                representation_partition) &&
                curve_candidates.empty() &&
                referenceability ==
                    kernel::ReferenceStatus::
@@ -2096,6 +2148,7 @@ bool BodyEdgeTopologyRecord::valid() const noexcept {
     case TopologyAccountingClass::
         semantically_unsupported:
         return !periodic_seam &&
+               !representation_partition &&
                curve_candidates.empty() &&
                referenceability ==
                    kernel::ReferenceStatus::
@@ -2319,7 +2372,13 @@ FeatureContribution currentFeatureContribution(
     }
 
     for (const auto& face : catalog.faces) {
-        const bool contributes =
+        const bool explicit_contribution =
+            std::find(
+                face.contributing_features.begin(),
+                face.contributing_features.end(),
+                feature_id) !=
+            face.contributing_features.end();
+        const bool owned_surface =
             std::any_of(
                 face.surface_candidates.begin(),
                 face.surface_candidates.end(),
@@ -2327,7 +2386,8 @@ FeatureContribution currentFeatureContribution(
                     return surface.producer_feature_id ==
                            feature_id;
                 });
-        if (contributes) {
+        if (explicit_contribution ||
+            owned_surface) {
             result.faces.push_back(
                 face.runtime_token);
         }
@@ -2666,6 +2726,19 @@ PartEvaluation evaluatePart(
             kernel_result.new_surfaces.size());
         for (const auto& surface :
              kernel_result.new_surfaces) {
+            if (surface.continued_into) {
+                if (!surface.continued_into->valid() ||
+                    surface.contribution_faces.empty()) {
+                    evaluated.status =
+                        FeatureEvaluationStatus::failed;
+                    evaluated.diagnostic =
+                        FeatureEvaluationDiagnosticCode::
+                            topology_integrity_failure;
+                    chain_broken = true;
+                    break;
+                }
+                continue;
+            }
             auto converted =
                 convertNewSurface(
                     authored.id,
@@ -2674,6 +2747,15 @@ PartEvaluation evaluatePart(
                 converted);
             candidate_surfaces.push_back(
                 std::move(converted));
+        }
+        if (chain_broken) {
+            current_references.clear();
+            current_surfaces.clear();
+            current_curves.clear();
+            current_points.clear();
+            result.features.push_back(
+                std::move(evaluated));
+            continue;
         }
 
         const auto curve_stage =
