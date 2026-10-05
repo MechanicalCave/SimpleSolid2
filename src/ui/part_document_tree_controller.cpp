@@ -166,6 +166,13 @@ PartDocumentTreeController::PartDocumentTreeController(
     edit_sketch_action_->setObjectName(
         QStringLiteral("editSketchAction"));
 
+    change_sketch_support_action_ =
+        new QAction(
+            QStringLiteral("Change Sketch Support"),
+            tree_);
+    change_sketch_support_action_->setObjectName(
+        QStringLiteral("changeSketchSupportAction"));
+
     edit_profile_action_ =
         new QAction(QStringLiteral("Edit Profile"), tree_);
     edit_profile_action_->setObjectName(
@@ -269,6 +276,17 @@ PartDocumentTreeController::PartDocumentTreeController(
             if (auto* item = tree_->currentItem();
                 item != nullptr) {
                 requestSketchEdit(*item);
+            }
+        });
+
+    QObject::connect(
+        change_sketch_support_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (auto* item = tree_->currentItem();
+                item != nullptr) {
+                requestSketchSupportChange(*item);
             }
         });
 
@@ -457,6 +475,17 @@ PartDocumentTreeController::primaryBuiltinReference() const {
 
     return std::nullopt;
 }
+
+std::optional<sketch::SketchId>
+PartDocumentTreeController::primarySketchId() const {
+    if (tree_ == nullptr ||
+        tree_->currentItem() == nullptr) {
+        return std::nullopt;
+    }
+    return sketchIdForItem(
+        *tree_->currentItem());
+}
+
 
 std::vector<part::ProfileId>
 PartDocumentTreeController::selectedProfileIds() const {
@@ -1213,6 +1242,8 @@ void PartDocumentTreeController::showContextMenu(
             tree_->setCurrentItem(item);
             QMenu menu{tree_};
             menu.addAction(edit_sketch_action_);
+            menu.addAction(
+                change_sketch_support_action_);
             menu.exec(
                 tree_->viewport()->mapToGlobal(
                     position));
@@ -1266,6 +1297,18 @@ void PartDocumentTreeController::requestSketchEdit(
     }
 
     sketch_edit_handler_(*sketch_id);
+}
+
+void PartDocumentTreeController::requestSketchSupportChange(
+    const QTreeWidgetItem& item) {
+    const auto sketch_id =
+        sketchIdForItem(item);
+    if (!sketch_id ||
+        !sketch_support_change_handler_) {
+        return;
+    }
+    sketch_support_change_handler_(
+        *sketch_id);
 }
 
 void PartDocumentTreeController::requestProfileEdit(
