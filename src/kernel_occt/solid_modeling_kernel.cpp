@@ -1433,7 +1433,91 @@ struct SurfaceCandidateClaim final {
     std::optional<kernel::Frame3>
         canonical_frame;
     bool aliased{false};
+    std::optional<kernel::RuntimeSurfaceToken>
+        inherited_token;
+    std::optional<kernel::RuntimeSurfaceToken>
+        continued_into;
+    std::vector<TopoDS_Face>
+        contribution_candidates;
 };
+
+[[nodiscard]] bool surfaceClaimsShareFace(
+    const SurfaceCandidateClaim& first,
+    const SurfaceCandidateClaim& second) {
+    for (const auto& first_face :
+         first.candidates) {
+        const bool shared =
+            std::any_of(
+                second.candidates.begin(),
+                second.candidates.end(),
+                [&first_face](
+                    const TopoDS_Face& second_face) {
+                    return first_face.IsSame(
+                        second_face);
+                });
+        if (shared) return true;
+    }
+    return false;
+}
+
+void applyAddSurfaceContinuations(
+    std::vector<SurfaceCandidateClaim>& claims) {
+    for (std::size_t created_index = 0U;
+         created_index < claims.size();
+         ++created_index) {
+        auto& created = claims[created_index];
+        if (created.kind !=
+                SurfaceCandidateClaim::Kind::created ||
+            created.surface_kind !=
+                kernel::SurfaceKind::plane ||
+            created.candidates.empty()) {
+            continue;
+        }
+
+        std::vector<std::size_t>
+            inherited_matches;
+        for (std::size_t inherited_index = 0U;
+             inherited_index < claims.size();
+             ++inherited_index) {
+            const auto& inherited =
+                claims[inherited_index];
+            if (inherited.kind !=
+                    SurfaceCandidateClaim::Kind::
+                        inherited ||
+                inherited.surface_kind !=
+                    kernel::SurfaceKind::plane ||
+                !inherited.inherited_token ||
+                !surfaceClaimsShareFace(
+                    created,
+                    inherited)) {
+                continue;
+            }
+            inherited_matches.push_back(
+                inherited_index);
+        }
+
+        // ADR-0017: only unique Boolean lineage overlap can continue an
+        // inherited carrier. Geometry equality/coplanarity is never queried.
+        if (inherited_matches.size() != 1U) {
+            continue;
+        }
+
+        auto& inherited =
+            claims[inherited_matches.front()];
+        created.continued_into =
+            inherited.inherited_token;
+        for (const auto& candidate :
+             created.candidates) {
+            appendUniqueFaceCandidate(
+                inherited.candidates,
+                candidate);
+        }
+
+        // The created Surface role remains contribution evidence but no longer
+        // competes as an independent semantic carrier.
+        created.candidates.clear();
+    }
+}
 
 void markAliasedSurfaceClaims(
     std::vector<SurfaceCandidateClaim>& claims) {
@@ -1496,6 +1580,7 @@ template <typename Mapper>
     OcctRuntimeSolid& runtime,
     const OcctRuntimeSolid* upstream,
     const std::vector<NewSemanticSource>& created,
+    bool allow_add_continuation,
     Mapper&& mapper) {
     std::vector<SurfaceCandidateClaim> claims;
 
@@ -1545,6 +1630,9 @@ template <typename Mapper>
                     tracked.canonical_frame,
                     false,
                 });
+            claims.back().inherited_token =
+                kernel::RuntimeSurfaceToken{
+                    token};
         }
     }
 
@@ -1588,8 +1676,13 @@ template <typename Mapper>
                 source.canonical_frame,
                 false,
             });
+        claims.back().contribution_candidates =
+            claims.back().candidates;
     }
 
+    if (allow_add_continuation) {
+        applyAddSurfaceContinuations(claims);
+    }
     markAliasedSurfaceClaims(claims);
 
     for (const auto& claim : claims) {
@@ -1601,6 +1694,24 @@ template <typename Mapper>
             }
         } else if (claim.canonical_frame) {
             return false;
+        }
+
+        std::vector<kernel::RuntimeFaceToken>
+            contribution_faces;
+        contribution_faces.reserve(
+            claim.contribution_candidates.size());
+        for (const auto& candidate :
+             claim.contribution_candidates) {
+            const auto token =
+                inventoryFaceToken(
+                    runtime,
+                    candidate);
+            if (!token) {
+                return false;
+            }
+            appendUniqueToken(
+                contribution_faces,
+                *token);
         }
 
         std::vector<kernel::RuntimeFaceToken>
@@ -1673,6 +1784,10 @@ template <typename Mapper>
         auto& published =
             result.new_surfaces[
                 claim.index];
+        published.contribution_faces =
+            std::move(contribution_faces);
+        published.continued_into =
+            claim.continued_into;
         published.surface_status =
             surface_status;
         published.strict_face_status =
@@ -1682,6 +1797,20 @@ template <typename Mapper>
         published.current_faces =
             std::move(current_faces);
         published.canonical_frame.reset();
+
+        if (published.continued_into) {
+            if (!published.continued_into->valid() ||
+                published.contribution_faces.empty()) {
+                return false;
+            }
+            published.surface_status =
+                kernel::ReferenceStatus::unsupported;
+            published.strict_face_status =
+                kernel::ReferenceStatus::unsupported;
+            published.candidate_face_count = 0U;
+            published.current_faces.clear();
+            continue;
+        }
 
         if (surface_status !=
             kernel::ReferenceStatus::resolved) {
@@ -2336,6 +2465,8 @@ finishBoolean(
             *runtime,
             &upstream,
             created,
+            kind ==
+                kernel::SolidBooleanOperation::add,
             [&operation, &shape](
                 const TopoDS_Face& source) {
                 return descendantFaces(
@@ -2719,6 +2850,7 @@ OcctSolidModelingKernel::extrude(
                     *runtime,
                     nullptr,
                     created,
+                    false,
                     [&tool_shape](
                         const TopoDS_Face& source) {
                         std::vector<TopoDS_Face>
