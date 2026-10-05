@@ -644,15 +644,6 @@ SketchSupportMutationResult DocumentSession::execute(
             "Re-support contains an invalid support reference",
             path_);
     }
-    if (existing->support == command.support) {
-        return {
-            false,
-            command.sketch_id,
-            SketchSupportMutationStatus::
-                no_change,
-            DocumentSessionDiagnostic{}};
-    }
-
     const auto resolved =
         resolveSupportForMutation(
             document_,
@@ -677,6 +668,15 @@ SketchSupportMutationResult DocumentSession::execute(
                 invalid_command,
             supportResolutionMessage(*resolved),
             path_);
+    }
+
+    if (existing->support == command.support) {
+        return {
+            false,
+            command.sketch_id,
+            SketchSupportMutationStatus::
+                no_change,
+            DocumentSessionDiagnostic{}};
     }
 
     if (supportWouldCreateCycle(
