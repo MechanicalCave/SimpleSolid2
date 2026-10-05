@@ -87,6 +87,7 @@ target_compile_features(simplesolid2_kernel PUBLIC cxx_std_20)
 add_library(simplesolid2_part STATIC
     part/body_id.cpp
     part/datum.cpp
+    part/datum_evaluation.cpp
     part/datum_id.cpp
     part/feature.cpp
     part/feature_evaluation.cpp
