@@ -77,7 +77,7 @@ The current discovery backend provides Part candidates only. The dialog is docum
 
 The Workspace location flow rejects targets outside the current Workspace, rejects existing target files, and keeps private `.simplesolid` metadata outside the normal Document location tree.
 
-The active DocumentSession owns runtime Undo/Redo history, the saved-authored-state checkpoint used by `needsSave()`, and — for a persisted/opened native Part — the exact native-file checkpoint used by conditional Save. Editing Number, Title, Description, Engineering Revision, persistent Origin visibility or Part-hosted Sketch geometry goes through semantic commands and PartDocument transactions.
+The active DocumentSession owns runtime Undo/Redo history, the saved-authored-state checkpoint used by `needsSave()`, and — for a persisted/opened native Part — the exact native-file checkpoint used by conditional Save. Editing Document properties, persistent Origin/Datum visibility, Datum source/Offset, Sketch support/geometry or Part Feature state goes through semantic commands and PartDocument transactions.
 
 The Part `Sketch` launcher lives in the editor toolbar above the 3D Viewport. Creation validates a selected XY/XZ/YZ built-in Origin plane, creates one durable Sketch and enters its runtime edit context in the same 3D Viewport. Operations is contextual: support-pick may show Cancel guidance and active Sketch edit shows `Finish Sketch`. An existing Sketch can re-enter the same edit context by Tree double-click or `Edit Sketch` context action without authored mutation.
 
