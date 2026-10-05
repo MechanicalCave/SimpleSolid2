@@ -1709,9 +1709,14 @@ template <typename Mapper>
             if (!token) {
                 return false;
             }
-            appendUniqueToken(
-                contribution_faces,
-                *token);
+            if (std::find(
+                    contribution_faces.begin(),
+                    contribution_faces.end(),
+                    *token) ==
+                contribution_faces.end()) {
+                contribution_faces.push_back(
+                    *token);
+            }
         }
 
         std::vector<kernel::RuntimeFaceToken>
@@ -2106,9 +2111,10 @@ template <typename Operation>
         observation.provider_curve_kind =
             providerCurveKind(edge);
 
+        std::size_t partition_surface_count = 0U;
         for (const auto& [surface_value, surface] :
              runtime.tracked_surfaces) {
-            bool adjacent = false;
+            std::size_t adjacent_face_count = 0U;
             bool seam = false;
             for (const auto& face :
                  surface.faces) {
@@ -2117,23 +2123,31 @@ template <typename Operation>
                         edge)) {
                     continue;
                 }
-                adjacent = true;
+                ++adjacent_face_count;
                 if (BRepTools::IsReallyClosed(
                         edge,
                         face)) {
                     seam = true;
                 }
             }
-            if (adjacent) {
+            if (adjacent_face_count > 0U) {
                 appendUniqueToken(
                     observation.adjacent_surfaces,
                     kernel::RuntimeSurfaceToken{
                         surface_value});
             }
+            if (adjacent_face_count >= 2U) {
+                ++partition_surface_count;
+            }
             observation.periodic_seam =
                 observation.periodic_seam ||
                 seam;
         }
+
+        observation.same_surface_partition =
+            !observation.periodic_seam &&
+            observation.adjacent_surfaces.size() == 1U &&
+            partition_surface_count == 1U;
 
         result.current_edge_semantics.push_back(
             std::move(observation));
@@ -2171,7 +2185,8 @@ template <typename Operation>
 
         for (const auto& edge_observation :
              result.current_edge_semantics) {
-            if (edge_observation.periodic_seam) {
+            if (edge_observation.periodic_seam ||
+                edge_observation.same_surface_partition) {
                 continue;
             }
             const auto found =
