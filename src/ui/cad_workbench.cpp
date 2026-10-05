@@ -4931,13 +4931,6 @@ void CadWorkbench::startSketchTool() {
                 "Finish the active Sketch before creating another one."));
         return;
     }
-    if (solid_modeling_kernel_ == nullptr) {
-        setStatusText(
-            QStringLiteral(
-                "Sketch support validation is unavailable."));
-        return;
-    }
-
     sketch_resupport_target_.reset();
     sketch_support_pick_active_ = true;
     ++sketch_support_pick_generation_;
@@ -4969,8 +4962,7 @@ void CadWorkbench::startSketchResupport(
                 "Finish the active Sketch edit before changing support."));
         return;
     }
-    if (solid_modeling_kernel_ == nullptr ||
-        document_session->document()
+    if (document_session->document()
             .findSketch(sketch_id) == nullptr) {
         setStatusText(
             QStringLiteral(
@@ -5132,8 +5124,7 @@ void CadWorkbench::applySketchSupport(
 
     auto* document_session =
         activeDocumentSession();
-    if (document_session == nullptr ||
-        solid_modeling_kernel_ == nullptr) {
+    if (document_session == nullptr) {
         cancelSketchTool();
         return;
     }
@@ -5151,14 +5142,14 @@ void CadWorkbench::applySketchSupport(
                     *sketch_resupport_target_,
                     std::move(support),
                     expected_revision},
-                *solid_modeling_kernel_);
+                solid_modeling_kernel_);
     } else {
         result =
             document_session->execute(
                 application::CreatePartSketchOnSupportCommand{
                     std::move(support),
                     expected_revision},
-                *solid_modeling_kernel_);
+                solid_modeling_kernel_);
     }
 
     if (!result.ok()) {
