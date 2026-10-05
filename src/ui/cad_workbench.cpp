@@ -5771,6 +5771,15 @@ std::string CadWorkbench::cadInputPrompt() const {
 
 application::CadInputContextGeneration
 CadWorkbench::cadInputContextGeneration() const noexcept {
+    if (sketch_support_pick_active_) {
+        constexpr application::CadInputContextGeneration
+            sketch_support_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 61U};
+        return sketch_support_namespace |
+               (sketch_support_pick_generation_ &
+                (sketch_support_namespace - 1U));
+    }
     if (extrude_profile_pick_active_) {
         constexpr application::CadInputContextGeneration
             extrude_pick_namespace =
@@ -5797,7 +5806,8 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
 
 std::vector<application::CadDynamicInputField>
 CadWorkbench::cadDynamicInputFields() const {
-    if (extrude_profile_pick_active_) {
+    if (sketch_support_pick_active_ ||
+        extrude_profile_pick_active_) {
         return {};
     }
     if (extrude_draft_) {
@@ -6274,9 +6284,16 @@ void CadWorkbench::finishSketch() {
 }
 
 void CadWorkbench::clearSketchRuntimeContext() {
+    if (sketch_support_pick_active_ ||
+        sketch_resupport_target_) {
+        ++sketch_support_pick_generation_;
+    }
     sketch_support_pick_active_ = false;
+    sketch_resupport_target_.reset();
     dynamic_input_anchor_.reset();
     if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyFacePickOnly(false);
         viewport_controller_->clearSketchDynamicInputOverlay();
     }
 
