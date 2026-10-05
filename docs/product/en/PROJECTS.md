@@ -117,5 +117,5 @@ After a Project is opened, its name, `ProjectId` and Workspace path are shown in
 
 The Workspace Shell contains the persistent native `.ss2part` Part document type with Document Properties, Undo/Redo, conditional Save and several simultaneously open Part sessions.
 
-The shared CAD Workbench and 3D Viewer support Part Origin/reference work, durable Origin-plane Sketches and the current Sketch editing workflow. Body/Feature solid modeling, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.
+The shared CAD Workbench and 3D Viewer support Part Origin/reference work, Origin-plane and planar Body-Face Sketches, direct current Face/Edge/Vertex inspection and one durable Body with ordered Extrude Add/Cut Features. Datum/Projection, Revolve, Fillet/Chamfer, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.
 

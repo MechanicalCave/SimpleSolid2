@@ -98,7 +98,7 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie i wyświetlanie Sketchu
 
-W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin. Płaszczyznę możesz wybrać w Document Tree lub — gdy jest widoczna — w viewporcie 3D.
+W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin lub bieżącą Face Body w viewporcie 3D. Podczas wyboru supportu Sketch viewport przyjmuje wyłącznie Face. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Sam wybór supportu pozostaje runtime draftem: **Finish Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu.
 
 Podczas Sketch Edit narzędzia są uporządkowane w grupy:
 
@@ -288,9 +288,11 @@ Polar/DYN nie tworzą Document revision, dirty ani Undo i nie są zapisywane do 
 
 Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uruchamia akcji CAD.
 
-Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję. Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin.
+Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję.
 
-Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions, płaszczyzny Datum i płaskie ściany modelu pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
+Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin lub planarną Face Body, a następnie Finish, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported albo powodujący cykl jest odrzucany bez częściowej mutacji. Undo/Redo przywraca poprzedni semantyczny support.
+
+Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions i płaszczyzny Datum pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
 
 <!-- section-id: product.parts.structural-editing -->
 ## Edycja strukturalna — Trim i Extend
@@ -450,7 +452,35 @@ Document Tree pokazuje najpierw Origin i źródłowe Sketch/Profile, a **Body** 
 
 Command Line i GUI sterują tym samym Extrude draftem. Obsługiwane słowa kontekstowe obejmują `ADD`, `CUT`, `REVERSE`, `MIDPLANE`, `ONESIDE`, `FINISH` i `CANCEL`; Length korzysta ze wspólnego unit-aware quantity input.
 
-Body/Feature nie mają osobnego Show/Hide. Suppress jest semantyką modelowania, a nie widocznością. Obecny Extrude nie udostępnia także wybierania ścian/krawędzi bryły jako trwałych referencji.
+Body/Feature nie mają osobnego Show/Hide. Suppress jest semantyką modelowania, a nie widocznością. Bieżące Face, Edge i Vertex Body są bezpośrednio wybieralne do inspekcji. Trwałe znaczenie modelowania pozostaje semantyczne i stage-scoped; tokeny Viewera ani kolejność topologii nie są zapisywane jako referencje.
+
+<!-- section-id: product.parts.body-topology -->
+## Topologia Body, View Style i inspekcja semantyczna
+
+Zatwierdzona prezentacja Body udostępnia bieżącą topologię **Face**, **Edge** i **Vertex** z tej samej generacji ewaluacji co shaded Body. Bezpośredni wybór służy do inspekcji i acquisition, a nie jako trwała tożsamość providera.
+
+Selektor View Style w viewport oferuje:
+
+- **Shaded**;
+- **Shaded + Edges**;
+- **Shaded + Hidden Edges**.
+
+View Style jest tymczasowym stanem prezentacji. Nie dirty'uje Parta, nie tworzy historii Undo/Redo i nie zmienia semantycznego zaznaczenia. Pokazanie hidden edges nie włącza wyboru przez zasłoniętą geometrię.
+
+Przy zwykłym wyborze wszystkich typów widoczne kandydaty używają screen-space priority **Vertex → Edge → Face**. Gdy kilka kandydatów nakłada się pod kursorem, **Tab** i **Shift+Tab** przełączają runtime candidate stack przed kliknięciem. Widoczny preselection, który klikniesz, jest celem acquisition; kolejność zwrócona przez providera nie staje się CAD identity.
+
+Zaznaczenie bieżącej topologii aktualizuje Properties bez dodawania wierszy Face/Edge/Vertex do Document Tree:
+
+- Face pokazuje semantyczny Surface, klasę powierzchni, producer/stage/provenance, referenceability i możliwość standardowego Sketch support;
+- Edge pokazuje znaczenie Curve, stan material/representation-artifact, sąsiednie Surfaces i referenceability;
+- Vertex pokazuje semantyczny Point/provenance, a bieżące XYZ wyłącznie jako diagnostykę geometrii;
+- Body pokazuje kompletne bieżące topology/accounting counts.
+
+Bieżący element topologii może być **Present**, gdy trwała singular referenceability jest **Ambiguous** albo **Unsupported**. SimpleSolid raportuje ten stan zamiast automatycznie przepinać referencję na podobną lub najbliższą geometrię.
+
+Zaznaczenie albo hover Feature w Document Tree podświetla jego **Current Feature Contribution** na bieżącym Body. Nie jest to podmiana Body na historyczny stage i nie tworzy duplikatów selectable topology. Gdy bezpośrednio wybrany element topologii znika po recompute, zaznaczenie jest czyszczone zamiast przeskakiwać na podobną geometrię.
+
+Sketch oparty na Face jest trwale związany z semantycznym planarnym **Surface**, nie z providerowym uchwytem Face. Jeśli późniejsze modelowanie rozdzieli ten Surface na kilka bounded Face fragments, Sketch może nadal pozostać Resolved. Gdy semantyczny support zostanie usunięty, stan przechodzi w **Missing**; gdy pozostaje wiele semantycznych kandydatów — w **Ambiguous**. Downstream modeling nie używa stale last-good frame. Do jawnej naprawy użyj Change Sketch Support / `RESUPPORT`.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
@@ -477,9 +507,9 @@ Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę pr
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, Sketche i ich geometrię, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed.
+`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, Sketche z semantycznym supportem Origin/Body-Surface i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed.
 
-Bieżąca bryła B-Rep, preview, status ewaluacji, tokeny ścian/providera i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
+Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface, preview, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
 
 Ordinary Save pozostaje warunkowy względem dokładnej wersji natywnego pliku wczytanej lub ostatnio zapisanej przez sesję. Usunięty, podmieniony albo zewnętrznie zmieniony target powoduje konflikt Save zamiast cichego nadpisania. In-memory Part, Undo/Redo i lokalne zmiany pozostają wtedy otwarte.
 
@@ -488,7 +518,7 @@ Przy zamykaniu Parta z niezapisanymi zmianami aplikacja wymaga `Save`, `Discard`
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
 
-Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, SketchId/ProfileId, BodyId oraz FeatureId.
+Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, SketchId/ProfileId, BodyId oraz FeatureId. Sketche oparte na Face zachowują semantyczny support i lokalną geometrię U/V, mimo że runtime topology tokeny są budowane od nowa.
 
 Body i jego ordered Extrude Add/Cut są przeliczane od zera z authored state. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów. Usunięty Feature pozostaje usunięty, natomiast jego źródłowy Profile pozostaje dostępny, jeżeli sam nie został usunięty.
 
@@ -506,11 +536,11 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles oraz jeden trwały Body z ordered Extrude Features.
+Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin oraz planarnych Face Body, Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles, bezpośrednią inspekcję Face/Edge/Vertex oraz jeden trwały Body z ordered Extrude Features.
 
-Solid modeling jest obecnie ograniczony do **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**. Dostępne są Edit Extrude, statusy Feature, Suppress/Unsuppress, Delete, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
+Solid modeling jest obecnie ograniczony do **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**. Dostępne są Edit Extrude, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
 
-Nie ma jeszcze Sketch support na Datum ani planar model face, face/edge topology picking i repair, Revolve, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, multi-body, Material ani narzędzi Assembly/Drawing.
+Nie ma jeszcze Sketch support na Datum, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, Revolve, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, multi-body, Material ani narzędzi Assembly/Drawing.
 
 Po stronie Sketch nadal poza zakresem pozostają authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy i docelowe ordinary-Select RMB convergence.
 

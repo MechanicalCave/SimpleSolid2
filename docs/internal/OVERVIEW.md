@@ -18,7 +18,7 @@ App start
 → discover native .ss2part Documents
 → canonical DocumentSessions + Document Tabs
 → shared CAD Workbench
-→ Part Origin + persistent Origin-plane Sketches
+→ Part Origin + persistent Origin-plane / planar Body-Surface Sketches
 → Shared 2D Line / Circle / Arc / Rectangle authoring
 → precision input + Polar + Dynamic Input + OSNAP/Tracking/Inference
 → Trim / Extend / Measure
@@ -33,7 +33,7 @@ App start
 
 The Part Feature model currently supports one Body and one Feature family: Extrude. The first successful solid-producing Feature is Add; later ordered Features may be Add or Cut. OneSide supports Forward/Reverse and Midplane uses total-distance symmetric semantics. Failed, Blocked and Suppressed Feature states remain explicit; derived B-Rep is never persisted as authored truth.
 
-Assembly and Drawing remain unimplemented. Part also does not yet provide datum-plane or planar-face Sketch support, topology face/edge picking, Revolve, Fillet/Chamfer, multi-body modeling or general persistent topology-repair UI.
+Assembly and Drawing remain unimplemented. Part now provides planar Body-Face Sketch support, direct current Face/Edge/Vertex inspection, View Styles and explicit semantic re-support/repair for Sketch support. It still does not provide Datum-plane support, Projection, Revolve, Fillet/Chamfer, multi-body modeling or general authored topology-reference repair for arbitrary future Feature inputs.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
