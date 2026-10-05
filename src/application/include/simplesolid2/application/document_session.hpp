@@ -420,10 +420,10 @@ public:
         const CreatePartSketchCommand& command);
     [[nodiscard]] SketchSupportMutationResult execute(
         const CreatePartSketchOnSupportCommand& command,
-        kernel::ISolidModelingKernel& modeling_kernel);
+        kernel::ISolidModelingKernel* modeling_kernel = nullptr);
     [[nodiscard]] SketchSupportMutationResult execute(
         const SetPartSketchSupportCommand& command,
-        kernel::ISolidModelingKernel& modeling_kernel);
+        kernel::ISolidModelingKernel* modeling_kernel = nullptr);
     [[nodiscard]] AddSketchLineResult execute(
         const AddSketchLineCommand& command);
     [[nodiscard]] AddSketchCircleResult execute(
