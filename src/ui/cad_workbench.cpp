@@ -5144,9 +5144,9 @@ void CadWorkbench::stageSketchSupport(
     setStatusText(
         sketch_resupport_target_
             ? QStringLiteral(
-                  "New Sketch support selected — Finish to commit or Cancel.")
+                  "New Sketch support selected — Apply Support to commit or Cancel.")
             : QStringLiteral(
-                  "Sketch support selected — Finish to create or Cancel."));
+                  "Sketch support selected — Create Sketch to commit or Cancel."));
     notifyCadInputContextChanged();
     syncActionState();
 }
@@ -5156,8 +5156,11 @@ bool CadWorkbench::finishSketchSupport() {
         !pending_sketch_support_ ||
         !pending_sketch_support_revision_) {
         setStatusText(
-            QStringLiteral(
-                "Select an Origin plane or Body Face before Finish."));
+            sketch_resupport_target_
+                ? QStringLiteral(
+                      "Select an Origin plane or Body Face before Apply Support.")
+                : QStringLiteral(
+                      "Select an Origin plane or Body Face before Create Sketch."));
         return false;
     }
 
@@ -8747,8 +8750,8 @@ void CadWorkbench::syncActionState() {
     if (sketch_support_pick_active_) {
         finish_sketch_button_->setText(
             sketch_resupport_target_
-                ? QStringLiteral("Finish Support")
-                : QStringLiteral("Finish Sketch"));
+                ? QStringLiteral("Apply Support")
+                : QStringLiteral("Create Sketch"));
     } else {
         finish_sketch_button_->setText(
             QStringLiteral("Finish Sketch"));
