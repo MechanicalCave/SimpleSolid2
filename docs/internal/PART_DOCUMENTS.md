@@ -6,17 +6,19 @@
 <!-- section-id: internal.part-documents.model -->
 ## Current model
 
-The current `PartDocument` is persistent and owns Part-hosted Sketches, Part-owned Profiles and exactly one durable Part Body. The Body has stable `BodyId`, a monotonic `FeatureId` cursor and an ordered collection of authored Features.
+The current `PartDocument` is persistent and owns Part-hosted Sketches, Part-owned Profiles, Part-owned Datum Planes and exactly one durable Part Body. The Body has stable `BodyId`, a monotonic `FeatureId` cursor and an ordered collection of authored Features.
 
-The authored state contains stable `DocumentId`, common Document Properties, the display/input `LengthUnit`, persistent built-in Origin visibility, Sketches, Profiles, `ModelingSemanticsVersion`, the Body identity/cursor and ordered Features. Canonical geometric length remains millimetres; display/input unit changes do not rescale authored geometry.
+The authored state contains stable `DocumentId`, common Document Properties, display/input `LengthUnit`, persistent built-in Origin visibility, Sketches, Profiles, a monotonic `DatumId` cursor, ordered Offset Datum Plane records, `ModelingSemanticsVersion`, Body identity/cursor and ordered Features. Canonical geometric length remains millimetres; display/input unit changes do not rescale authored geometry.
 
-Each Part Sketch has stable `SketchId`, persistent visibility and one value-owned Shared-2D `SketchModel`. Durable support is either one built-in XY/XZ/YZ Origin plane or one semantic planar Body `SurfaceReference` scoped to an explicit upstream `BodyStageRef`. For semantically resolvable support, world-space placement is derived from the current deterministic support frame; schema v9 no longer stores an independent authored `SketchPlacement` as a second authority.
+Each Offset Datum Plane has stable `DatumId`, one semantic `PlaneReference`, one signed authored Offset and authored visibility. The current constructor is Offset only. A PlaneReference may name a built-in XY/XZ/YZ Origin plane, a planar Body `SurfaceReference` at an explicit `BodyStageRef`, or an earlier Datum Plane by `DatumId`. No world frame, provider object or Viewer token is authored as Datum identity.
+
+Each Part Sketch has stable `SketchId`, persistent visibility and one value-owned Shared-2D `SketchModel`. Durable support may be a built-in XY/XZ/YZ Origin plane, one semantic planar Body `SurfaceReference`, or one Datum Plane by `DatumId`. For resolvable support, world-space placement is derived from the current support frame. Datum-backed Sketches persist only DatumId support; their world frame remains derived. Authored local U/V geometry, SketchId and EntityIds survive support changes.
 
 Each Profile has stable `ProfileId`, source `SketchId`, authored name, durable `ProfileRegionIntent` and authored visibility policy: `automatic`, `force_shown` or `force_hidden`. RegionIntent references source EntityIds and semantic anchors; it does not store Viewer tokens, OCCT topology or sampled fill geometry.
 
 The only current durable Feature definition is Extrude. An Extrude references exactly one existing ProfileId and authors Add/Cut plus either OneSide distance with Forward/Reverse meaning or Midplane total distance. A `PartFeature` also owns stable `FeatureId`, name and authored Suppressed state.
 
-Evaluated solid geometry is derived. Ordered evaluation produces Body status `Empty`, `UpToDate` or `Unavailable` and Feature status `UpToDate`, `Failed`, `Blocked` or `Suppressed`. Runtime B-Rep/provider handles are disposable and are rebuilt from authored state.
+Evaluated solid geometry and Datum frames are derived. Ordered Part evaluation produces Body status `Empty`, `UpToDate` or `Unavailable`; Features report `UpToDate`, `Failed`, `Blocked` or `Suppressed`; Datum evaluation reports structured Resolved/Missing/Ambiguous/Unsupported/Blocked outcomes. A failed Datum has no stale last-good frame. Runtime B-Rep/provider handles are disposable and are rebuilt from authored state.
 
 `DocumentRevision` remains a technical monotonic freshness counter for successful semantic mutations within the loaded lifecycle.
 
@@ -264,19 +266,21 @@ This is evidence synthesis only. It does not introduce a persistent topology-ref
 
 The native extension is `.ss2part`.
 
-The current Part domain writer uses schema **v9**. In addition to document properties, length unit, built-in Origin visibility, Sketches and Profiles, v9 persists modeling-semantics version 1, Body identity/cursor and the ordered Feature records required to reconstruct the current Add/Cut Body.
+The current Part domain writer uses schema **v11**. In addition to document properties, length unit, built-in Origin visibility, Sketches, Profiles, modeling-semantics version 1, Body identity/cursor and ordered Features, v11 persists the DatumId high-water cursor and ordered Offset Datum Plane records.
 
-Each Sketch stores stable SketchId, semantic support, visibility and one embedded Shared-2D model with canonical entity IDs and authored Regular/Construction role. Origin support is stored as its built-in plane role. Body support stores the provider-neutral stage plus semantic Surface address/provenance. Derived world support frames, runtime topology catalogs and provider tokens are never serialized.
+Each Datum record persists stable DatumId, semantic source, signed offset in millimetres and authored visibility. Origin sources store the built-in plane role; Body sources store the provider-neutral Body stage plus semantic Surface address/provenance; Datum-to-Datum sources store only the source DatumId. Derived O/U/V/N frames, runtime topology/provider tokens and Viewer presentation identity are never serialized.
+
+Each Sketch stores stable SketchId, semantic support, visibility and one embedded Shared-2D model with canonical entity IDs and authored Regular/Construction role. Origin support stores its built-in plane role. Body support stores `BodyStageRef` plus semantic `SurfaceReference`. Datum support stores only `DatumId`. No independent authored world `SketchPlacement` is written for current semantic support.
 
 Each Profile stores canonical ProfileId, source SketchId, name, visibility policy and semantic RegionIntent. Automatic/forced Profile presentation is authored policy; evaluated region geometry remains derived.
 
-The Body stores stable BodyId, `next_feature_id` and ordered Features. Current Extrude records preserve FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane extent parameters. B-Rep, provider handles, runtime face tokens, cached Feature evaluations and tessellation are not serialized.
+The Body stores stable BodyId, `next_feature_id` and ordered Features. Current Extrude records preserve FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane extent parameters. B-Rep, provider handles, runtime topology tokens, cached Feature/Datum evaluations, preview geometry and tessellation are not serialized.
 
-Schemas v1–v8 remain readable. The v8→v9 migration validates that legacy Origin support and legacy absolute `SketchPlacement` describe the same canonical Origin frame, preserves stable Document/Body/Feature/Sketch/Entity/Profile identities and local Sketch geometry, maps the support to the v9 semantic representation and drops redundant absolute placement on the next successful Save. Malformed legacy support/placement fails closed. Earlier visibility/body migrations remain intact; pre-PM-01 Parts receive an Empty Body rather than synthesized solid history.
+Legacy schemas remain readable according to their migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement before dropping redundant placement. Loading schema v9 introduces no synthetic Datum records, preserves existing Document/Body/Sketch identities and starts the DatumId cursor at 1; a later successful Save emits the current v11 schema. Schema v11 extends Sketch support with the `datum_plane` variant without persisting a Datum frame. Malformed support, identity or dependency state fails closed through Part-owned reconstruction.
 
-ProjectId, DocumentSession, Undo/Redo, active tools, preview, selection, camera, evaluated solid handles and provider state remain runtime-only.
+ProjectId, DocumentSession, Undo/Redo, active tools, preview, selection, camera, evaluated solid handles, Datum evaluation frames, provider state and Viewer tokens remain runtime-only.
 
-Ordinary Save remains conditional on the session's native-file checkpoint. Save-conflict rules and whole-file atomic publication are unchanged.
+Ordinary Save remains conditional on the session's native-file checkpoint. Save-conflict rules and whole-file atomic publication are unchanged. PM-03 lifecycle coverage saves through `DocumentSession`, destroys the loaded session/provider state, reopens authored v11 data and rebuilds Datum-backed Sketch/Profile/Extrude semantics with a fresh provider token generation.
 
 <!-- section-id: internal.part-documents.discovery -->
 ## Discovery and canonical sessions
@@ -360,16 +364,29 @@ For singular Edge/Curve meaning, Owner accepted the PM-02P finding that a Surfac
 
 The implementation remains bounded by `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`, ADR-0016 and ADR-0017. Planar Body Faces may host standard Sketches through semantic Surface support; non-planar Faces remain selectable/inspectable but standard Sketch support reports `Unsupported`. Re-support preserves SketchId, EntityIds and local U/V geometry, and cycle-causing downstream/self support is rejected before mutation. For Extrude Add only, provider Boolean lineage may prove that a newly-created planar tool Surface uniquely continues one inherited semantic Surface carrier. The inherited carrier keeps durable identity and expands over the current bounded Face fragments; visual coplanarity alone is never identity authority. An Edge separating bounded fragments of that same carrier is a runtime representation partition: fully accounted, non-referenceable and excluded from ordinary engineering Edge presentation/picking. Feature Contribution remains a separate runtime query, so the Add can truthfully contribute current fragments without stealing Surface ownership.
 
+<!-- section-id: internal.part-documents.datum-reference-geometry -->
+## Datum reference geometry and Datum-backed Sketch
+
+The implemented construction-reference object is **Offset Datum Plane**. One semantic Datum Plane tool owns both GUI and Command Line input through the same revision-bound `DatumPlaneDraft`. A new draft starts at 10 mm. Offset is one signed authored Length; Reverse only negates that value. Preview, Cancel, rejected Finish and semantic no-op do not create CAD history.
+
+Datum evaluation is Part-owned and provider-neutral. Origin-backed Datum frames use deterministic built-in frames. Body-backed Datums resolve the exact declared planar semantic Surface at its explicit Body stage. Datum-backed Datums recursively resolve earlier DatumId sources. Local Datum cycles and transitive Datum/Sketch/Feature Body-stage cycles fail closed without a global dependency graph.
+
+A successful Create/Edit commits through `DocumentSession`; Edit preserves DatumId. Delete rejects atomically while another Datum or Sketch depends on the target. Individual Show/Hide persists the Datum's authored visibility. The Tree group `Reference Geometry`, directly below Origin, has no separate persisted visibility state: group Show/Hide bulk-updates child authored visibility in one command/Undo step.
+
+The Viewer derives a finite translucent Datum patch/border from the current resolved frame. It may also derive a virtual intersection between that plane and the current Body. The intersection overlay has no independent presentation token or Edge/Curve identity: every rendered segment is owned by the Datum presentation and picking it selects the Datum Plane. It cannot become Projection or durable topology meaning.
+
+A Datum Plane may host a standard Sketch. The Sketch persists only DatumId support and keeps local U/V geometry authored independently of the current world frame. Profile evaluation and existing Extrude Add/Cut consume the currently resolved Datum-backed Sketch through the same stage-aware evaluator. Missing, Ambiguous, Unsupported or Blocked Datum support publishes no stale frame and prevents stale downstream modeling. Repair is explicit through Datum source/offset edit or Change Sketch Support.
+
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The current Part model supports persistent Origin-plane and planar Body-Surface Sketches, Shared-2D authoring/precision/OSNAP/structural-edit workflows, live-reference Profiles, direct current Face/Edge/Vertex inspection and one durable Body with ordered Extrude Features.
+The current Part model supports persistent Sketches on Origin planes, planar Body Surfaces and Offset Datum Planes; Part-owned Offset Datum Plane reference geometry; Shared-2D authoring/precision/OSNAP/structural-edit workflows; live-reference Profiles; direct current Face/Edge/Vertex inspection; and one durable Body with ordered Extrude Features.
 
-Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane. Feature Tree/Properties expose ordered Feature identity, current Feature Contribution, topology/accounting diagnostics, support state and Edit Extrude. Suppress/Unsuppress, Delete and semantic re-support participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v9 semantic support and the ordered Body without persisted B-Rep, topology catalogs or runtime tokens.
+Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane. Feature and Datum Tree/Properties expose semantic identity/status and lifecycle actions. Suppress/Unsuppress, Delete, semantic Sketch re-support, Datum edit/visibility and Reference Geometry bulk visibility participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v11 semantic support, Datum references and the ordered Body without persisted B-Rep, topology catalogs, derived Datum frames or runtime tokens.
 
-Not yet implemented are Datum/construction-plane Sketch support, non-planar standard Sketch mapping, Projection, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body modeling, Material, Assembly and Drawing.
+Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, non-planar standard Sketch mapping, Projection, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body modeling, Material, Assembly and Drawing.
 
 Authored constraints/dimensions/solver, Grid Snap, Rotate/Scale/Mirror+Copy, ordinary-Select RMB convergence and clipboard/cross-Sketch Copy also remain outside the current surface.
 
-The Viewer is not a second model: OCCT objects, runtime solid/face tokens, tessellation and Viewer presentation tokens are never durable Part identity or authored state.
+The Viewer is not a second model: OCCT objects, runtime solid/face tokens, Datum presentation/intersection objects, tessellation and Viewer presentation tokens are never durable Part identity or authored state.
 
