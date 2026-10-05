@@ -3829,13 +3829,15 @@ void PartViewportController::onTreeSelection(
     selection.primary_body_topology.reset();
     selection.body_topology_generation = {};
     selection.selected = selected;
-    selection.datums.clear();
-    selection.primary_datum.reset();
     selection.profiles =
         tree_->selectedProfileIds();
+    selection.datums =
+        tree_->selectedDatumIds();
 
     const auto profile_primary =
         tree_->primaryProfileId();
+    const auto datum_primary =
+        tree_->primaryDatumId();
 
     if (primary &&
         std::find(
@@ -3844,6 +3846,17 @@ void PartViewportController::onTreeSelection(
             *primary) != selected.end()) {
         selection.primary = primary;
         selection.primary_profile.reset();
+        selection.primary_datum.reset();
+    } else if (datum_primary &&
+               std::find(
+                   selection.datums.begin(),
+                   selection.datums.end(),
+                   *datum_primary) !=
+                   selection.datums.end()) {
+        selection.primary.reset();
+        selection.primary_profile.reset();
+        selection.primary_datum =
+            datum_primary;
     } else if (profile_primary &&
                std::find(
                    selection.profiles.begin(),
@@ -3853,16 +3866,25 @@ void PartViewportController::onTreeSelection(
         selection.primary.reset();
         selection.primary_profile =
             profile_primary;
+        selection.primary_datum.reset();
     } else if (!selected.empty()) {
         selection.primary = selected.front();
         selection.primary_profile.reset();
+        selection.primary_datum.reset();
+    } else if (!selection.datums.empty()) {
+        selection.primary.reset();
+        selection.primary_profile.reset();
+        selection.primary_datum =
+            selection.datums.front();
     } else if (!selection.profiles.empty()) {
         selection.primary.reset();
         selection.primary_profile =
             selection.profiles.front();
+        selection.primary_datum.reset();
     } else {
         selection.primary.reset();
         selection.primary_profile.reset();
+        selection.primary_datum.reset();
     }
 
     applySelectionToSurfaces();
@@ -4508,6 +4530,9 @@ void PartViewportController::applySelectionToSurfaces() {
         tree_->setProfileSelection(
             {},
             std::nullopt);
+        tree_->setDatumSelection(
+            {},
+            std::nullopt);
         if (viewport_ != nullptr) {
             static_cast<void>(
                 viewport_->setPresentationSelection(
@@ -4523,6 +4548,9 @@ void PartViewportController::applySelectionToSurfaces() {
     tree_->setProfileSelection(
         selection.profiles,
         selection.primary_profile);
+    tree_->setDatumSelection(
+        selection.datums,
+        selection.primary_datum);
 
     if (viewport_ == nullptr) return;
 

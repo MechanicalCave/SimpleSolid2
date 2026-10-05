@@ -28,6 +28,8 @@ constexpr int sketchIdData = Qt::UserRole + 42;
 constexpr int profileIdData = Qt::UserRole + 43;
 constexpr int bodyIdData = Qt::UserRole + 44;
 constexpr int featureIdData = Qt::UserRole + 45;
+constexpr int datumIdData = Qt::UserRole + 46;
+constexpr int referenceGeometryGroupData = Qt::UserRole + 47;
 
 constexpr std::array<core::BuiltinReferenceRole, 7> tree_reference_order{
     core::BuiltinReferenceRole::xy_plane,
@@ -74,6 +76,54 @@ QString bodyStatusText(
     return QStringLiteral("Unknown");
 }
 
+QString datumStatusText(
+    part::DatumPlaneEvaluationStatus status) {
+    switch (status) {
+    case part::DatumPlaneEvaluationStatus::resolved:
+        return QStringLiteral("Resolved");
+    case part::DatumPlaneEvaluationStatus::missing:
+        return QStringLiteral("Missing");
+    case part::DatumPlaneEvaluationStatus::ambiguous:
+        return QStringLiteral("Ambiguous");
+    case part::DatumPlaneEvaluationStatus::unsupported:
+        return QStringLiteral("Unsupported");
+    case part::DatumPlaneEvaluationStatus::blocked:
+        return QStringLiteral("Blocked");
+    }
+    return QStringLiteral("Unknown");
+}
+
+QString datumDiagnosticText(
+    part::DatumPlaneEvaluationDiagnostic diagnostic) {
+    switch (diagnostic) {
+    case part::DatumPlaneEvaluationDiagnostic::none:
+        return QStringLiteral("None");
+    case part::DatumPlaneEvaluationDiagnostic::invalid_datum:
+        return QStringLiteral("Invalid Datum");
+    case part::DatumPlaneEvaluationDiagnostic::stale_part_evaluation:
+        return QStringLiteral("Stale Part evaluation");
+    case part::DatumPlaneEvaluationDiagnostic::body_stage_unavailable:
+        return QStringLiteral("Body stage unavailable");
+    case part::DatumPlaneEvaluationDiagnostic::missing_surface:
+        return QStringLiteral("Missing Surface");
+    case part::DatumPlaneEvaluationDiagnostic::ambiguous_surface:
+        return QStringLiteral("Ambiguous Surface");
+    case part::DatumPlaneEvaluationDiagnostic::unsupported_surface:
+        return QStringLiteral("Unsupported Surface");
+    case part::DatumPlaneEvaluationDiagnostic::unsupported_non_planar:
+        return QStringLiteral("Non-planar Surface");
+    case part::DatumPlaneEvaluationDiagnostic::missing_datum:
+        return QStringLiteral("Missing Datum");
+    case part::DatumPlaneEvaluationDiagnostic::cyclic_dependency:
+        return QStringLiteral("Cyclic dependency");
+    case part::DatumPlaneEvaluationDiagnostic::upstream_datum_unavailable:
+        return QStringLiteral("Upstream Datum unavailable");
+    case part::DatumPlaneEvaluationDiagnostic::invalid_frame:
+        return QStringLiteral("Invalid frame");
+    }
+    return QStringLiteral("Unknown");
+}
+
 QString featureDiagnosticText(
     part::FeatureEvaluationDiagnosticCode diagnostic) {
     switch (diagnostic) {
@@ -111,6 +161,44 @@ QString featureDiagnosticText(
         return QStringLiteral("Multi-solid result");
     }
     return QStringLiteral("Unknown");
+}
+
+QString datumSourceText(
+    const part::PlaneReference& source) {
+    if (const auto origin =
+            part::builtinOriginPlaneForPlaneReference(
+                source)) {
+        switch (*origin) {
+        case core::BuiltinReferenceRole::xy_plane:
+            return QStringLiteral("XY Plane");
+        case core::BuiltinReferenceRole::xz_plane:
+            return QStringLiteral("XZ Plane");
+        case core::BuiltinReferenceRole::yz_plane:
+            return QStringLiteral("YZ Plane");
+        default:
+            return QStringLiteral("<invalid Origin plane>");
+        }
+    }
+
+    if (const auto* surface =
+            part::bodyPlanarSurfaceForPlaneReference(
+                source)) {
+        return QStringLiteral("Body Surface @ Feature %1")
+            .arg(
+                fromUtf8(
+                    surface->surface
+                        .producer_feature_id
+                        .serialized()));
+    }
+
+    if (const auto datum =
+            part::datumPlaneIdForPlaneReference(
+                source)) {
+        return QStringLiteral("Datum Plane %1")
+            .arg(fromUtf8(datum->serialized()));
+    }
+
+    return QStringLiteral("<invalid source>");
 }
 
 QString displayName(
@@ -177,6 +265,20 @@ PartDocumentTreeController::PartDocumentTreeController(
         new QAction(QStringLiteral("Edit Profile"), tree_);
     edit_profile_action_->setObjectName(
         QStringLiteral("editProfileAction"));
+
+    edit_datum_action_ =
+        new QAction(
+            QStringLiteral("Edit Datum Plane"),
+            tree_);
+    edit_datum_action_->setObjectName(
+        QStringLiteral("editDatumPlaneAction"));
+
+    delete_datum_action_ =
+        new QAction(
+            QStringLiteral("Delete Datum Plane"),
+            tree_);
+    delete_datum_action_->setObjectName(
+        QStringLiteral("deleteDatumPlaneAction"));
 
     edit_feature_action_ =
         new QAction(
@@ -265,6 +367,28 @@ PartDocumentTreeController::PartDocumentTreeController(
             if (auto* item = tree_->currentItem();
                 item != nullptr) {
                 requestProfileEdit(*item);
+            }
+        });
+
+    QObject::connect(
+        edit_datum_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (auto* item = tree_->currentItem();
+                item != nullptr) {
+                requestDatumEdit(*item);
+            }
+        });
+
+    QObject::connect(
+        delete_datum_action_,
+        &QAction::triggered,
+        this,
+        [this] {
+            if (auto* item = tree_->currentItem();
+                item != nullptr) {
+                requestDatumDelete(*item);
             }
         });
 
@@ -407,6 +531,11 @@ bool PartDocumentTreeController::eventFilter(
                     requestProfileEdit(*item);
                     return true;
                 }
+                if (datumIdForItem(*item)) {
+                    tree_->setCurrentItem(item);
+                    requestDatumEdit(*item);
+                    return true;
+                }
                 if (sketchIdForItem(*item)) {
                     tree_->setCurrentItem(item);
                     requestSketchEdit(*item);
@@ -437,6 +566,7 @@ void PartDocumentTreeController::clear() {
     }
     session_ = nullptr;
     feature_evaluations_.clear();
+    datum_evaluations_.clear();
     body_status_ =
         part::BodyEvaluationStatus::empty;
     tree_->clear();
@@ -520,6 +650,33 @@ PartDocumentTreeController::primaryProfileId() const {
     return selected.empty()
         ? std::nullopt
         : std::optional<part::ProfileId>{selected.front()};
+}
+
+std::vector<part::DatumId>
+PartDocumentTreeController::selectedDatumIds() const {
+    std::vector<part::DatumId> ids;
+    for (const auto* item : tree_->selectedItems()) {
+        if (item == nullptr) continue;
+        if (const auto id = datumIdForItem(*item)) {
+            ids.push_back(*id);
+        }
+    }
+    return ids;
+}
+
+std::optional<part::DatumId>
+PartDocumentTreeController::primaryDatumId() const {
+    const auto* current = tree_->currentItem();
+    if (current != nullptr && current->isSelected()) {
+        if (const auto id = datumIdForItem(*current)) {
+            return id;
+        }
+    }
+    const auto selected = selectedDatumIds();
+    return selected.empty()
+        ? std::nullopt
+        : std::optional<part::DatumId>{
+              selected.front()};
 }
 
 
@@ -673,6 +830,62 @@ void PartDocumentTreeController::setProfileSelection(
 }
 
 
+void PartDocumentTreeController::setDatumSelection(
+    const std::vector<part::DatumId>& selected,
+    std::optional<part::DatumId> primary) {
+    const QSignalBlocker blocked{tree_};
+
+    QTreeWidgetItem* first_selected = nullptr;
+    QTreeWidgetItem* primary_item = nullptr;
+
+    const auto visit =
+        [&](auto&& self, QTreeWidgetItem* item) -> void {
+            if (item == nullptr) return;
+            if (const auto id = datumIdForItem(*item)) {
+                const bool should_select =
+                    std::find(
+                        selected.begin(),
+                        selected.end(),
+                        *id) != selected.end();
+                item->setSelected(should_select);
+                if (should_select &&
+                    first_selected == nullptr) {
+                    first_selected = item;
+                }
+                if (should_select &&
+                    primary &&
+                    *primary == *id) {
+                    primary_item = item;
+                }
+            }
+            for (int index = 0;
+                 index < item->childCount();
+                 ++index) {
+                self(self, item->child(index));
+            }
+        };
+
+    for (int index = 0;
+         index < tree_->topLevelItemCount();
+         ++index) {
+        visit(visit, tree_->topLevelItem(index));
+    }
+
+    if (primary_item != nullptr) {
+        tree_->setCurrentItem(
+            primary_item,
+            0,
+            QItemSelectionModel::NoUpdate);
+    } else if (first_selected != nullptr) {
+        tree_->setCurrentItem(
+            first_selected,
+            0,
+            QItemSelectionModel::NoUpdate);
+    }
+    updateVisibilityActions();
+}
+
+
 void PartDocumentTreeController::setFeatureSelection(
     const std::vector<part::FeatureId>& selected,
     std::optional<part::FeatureId> primary) {
@@ -731,10 +944,14 @@ void PartDocumentTreeController::setFeatureSelection(
 void PartDocumentTreeController::setEvaluationSnapshot(
     part::BodyEvaluationStatus body_status,
     std::vector<FeatureTreeEvaluationEntry>
-        feature_evaluations) {
+        feature_evaluations,
+    std::vector<DatumTreeEvaluationEntry>
+        datum_evaluations) {
     body_status_ = body_status;
     feature_evaluations_ =
         std::move(feature_evaluations);
+    datum_evaluations_ =
+        std::move(datum_evaluations);
     rebuild(true);
 }
 
@@ -749,6 +966,62 @@ selectionContainsOnlyBuiltinReferences() const {
         }
     }
     return true;
+}
+
+bool PartDocumentTreeController::
+selectionContainsOnlyDatumReferences() const {
+    const auto selected = tree_->selectedItems();
+    if (selected.empty()) return false;
+
+    for (const auto* item : selected) {
+        if (item == nullptr ||
+            (!datumIdForItem(*item) &&
+             !isReferenceGeometryGroupItem(*item))) {
+            return false;
+        }
+    }
+    return true;
+}
+
+bool PartDocumentTreeController::
+referenceGeometryGroupSelected() const {
+    for (const auto* item : tree_->selectedItems()) {
+        if (item != nullptr &&
+            isReferenceGeometryGroupItem(*item)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+std::vector<part::DatumId>
+PartDocumentTreeController::
+selectedDatumVisibilityTargets() const {
+    std::vector<part::DatumId> targets;
+    if (session_ == nullptr) {
+        return targets;
+    }
+
+    if (referenceGeometryGroupSelected()) {
+        targets.reserve(
+            session_->document()
+                .datumPlanes()
+                .size());
+        for (const auto& datum :
+             session_->document().datumPlanes()) {
+            targets.push_back(datum.id);
+        }
+        return targets;
+    }
+
+    targets = selectedDatumIds();
+    std::sort(targets.begin(), targets.end());
+    targets.erase(
+        std::unique(
+            targets.begin(),
+            targets.end()),
+        targets.end());
+    return targets;
 }
 
 void PartDocumentTreeController::rebuild(
@@ -766,6 +1039,9 @@ void PartDocumentTreeController::rebuild(
         previously_selected;
     std::vector<part::ProfileId>
         previously_selected_profiles;
+    std::vector<part::DatumId>
+        previously_selected_datums;
+    bool reference_geometry_group_selected = false;
     std::vector<part::FeatureId>
         previously_selected_features;
     std::optional<part::BodyId>
@@ -776,6 +1052,10 @@ void PartDocumentTreeController::rebuild(
             selectedBuiltinReferences();
         previously_selected_profiles =
             selectedProfileIds();
+        previously_selected_datums =
+            selectedDatumIds();
+        reference_geometry_group_selected =
+            referenceGeometryGroupSelected();
         previously_selected_features =
             selectedFeatureIds();
         previously_selected_body =
@@ -1002,6 +1282,104 @@ void PartDocumentTreeController::rebuild(
         }
     }
 
+    auto* reference_geometry =
+        new QTreeWidgetItem(
+            root,
+            QStringList{
+                QStringLiteral("Reference Geometry")});
+    reference_geometry->setData(
+        0,
+        referenceGeometryGroupData,
+        true);
+    reference_geometry->setToolTip(
+        0,
+        QStringLiteral(
+            "Authored Datum reference geometry. Show/Hide on this group updates the visibility of all contained Datum objects in one transaction."));
+    if (preserve_reference_selection &&
+        reference_geometry_group_selected) {
+        reference_geometry->setSelected(true);
+    }
+
+    std::size_t datum_index = 0U;
+    for (const auto& datum :
+         session_->document().datumPlanes()) {
+        ++datum_index;
+        auto* item =
+            new QTreeWidgetItem(
+                reference_geometry,
+                QStringList{
+                    QStringLiteral("Datum Plane %1")
+                        .arg(
+                            static_cast<qulonglong>(
+                                datum_index))});
+        item->setData(
+            0,
+            datumIdData,
+            fromUtf8(datum.id.serialized()));
+
+        const auto evaluation =
+            std::find_if(
+                datum_evaluations_.begin(),
+                datum_evaluations_.end(),
+                [&datum](
+                    const DatumTreeEvaluationEntry& entry) {
+                    return entry.datum_id == datum.id;
+                });
+        const bool evaluated =
+            evaluation != datum_evaluations_.end();
+        const bool resolved =
+            evaluated &&
+            evaluation->status ==
+                part::DatumPlaneEvaluationStatus::
+                    resolved;
+
+        auto font = item->font(0);
+        font.setItalic(!datum.visible);
+        font.setBold(evaluated && !resolved);
+        item->setFont(0, font);
+        if (evaluated && !resolved) {
+            item->setIcon(
+                0,
+                tree_->style()->standardIcon(
+                    QStyle::SP_MessageBoxWarning));
+        }
+
+        item->setToolTip(
+            0,
+            QStringLiteral(
+                "DatumId: %1\nSource: %2\nOffset: %3 mm\nVisibility: %4\nStatus: %5\nDiagnostic: %6")
+                .arg(
+                    fromUtf8(datum.id.serialized()),
+                    datumSourceText(datum.source),
+                    QString::number(
+                        datum.offset.millimetres,
+                        'g',
+                        12),
+                    datum.visible
+                        ? QStringLiteral("Shown")
+                        : QStringLiteral("Hidden"),
+                    evaluated
+                        ? datumStatusText(
+                              evaluation->status)
+                        : QStringLiteral(
+                              "Not evaluated"),
+                    evaluated
+                        ? datumDiagnosticText(
+                              evaluation->diagnostic)
+                        : QStringLiteral("—")));
+
+        if (preserve_reference_selection) {
+            const bool was_selected =
+                std::find(
+                    previously_selected_datums.begin(),
+                    previously_selected_datums.end(),
+                    datum.id) !=
+                previously_selected_datums.end();
+            item->setSelected(was_selected);
+        }
+    }
+    reference_geometry->setExpanded(true);
+
     if (!session_->document().sketches().empty()) {
         auto* sketches = new QTreeWidgetItem(
             root,
@@ -1172,8 +1550,7 @@ void PartDocumentTreeController::rebuild(
 }
 
 void PartDocumentTreeController::updateVisibilityActions() {
-    if (session_ == nullptr ||
-        !selectionContainsOnlyBuiltinReferences()) {
+    if (session_ == nullptr) {
         show_action_->setEnabled(false);
         hide_action_->setEnabled(false);
         return;
@@ -1182,11 +1559,32 @@ void PartDocumentTreeController::updateVisibilityActions() {
     bool any_visible = false;
     bool any_hidden = false;
 
-    for (const auto role : selectedBuiltinReferences()) {
-        if (session_->document().builtinReferenceVisible(role)) {
-            any_visible = true;
-        } else {
-            any_hidden = true;
+    if (selectionContainsOnlyBuiltinReferences()) {
+        for (const auto role :
+             selectedBuiltinReferences()) {
+            if (session_->document()
+                    .builtinReferenceVisible(role)) {
+                any_visible = true;
+            } else {
+                any_hidden = true;
+            }
+        }
+    } else if (
+        selectionContainsOnlyDatumReferences()) {
+        const auto targets =
+            selectedDatumVisibilityTargets();
+        for (const auto id : targets) {
+            const auto* datum =
+                session_->document()
+                    .findDatumPlane(id);
+            if (datum == nullptr) {
+                continue;
+            }
+            if (datum->visible) {
+                any_visible = true;
+            } else {
+                any_hidden = true;
+            }
         }
     }
 
@@ -1235,6 +1633,39 @@ void PartDocumentTreeController::showContextMenu(
                     position));
             return;
         }
+        if (datumIdForItem(*item)) {
+            tree_->setCurrentItem(item);
+            updateVisibilityActions();
+            QMenu menu{tree_};
+            menu.addAction(edit_datum_action_);
+            if (show_action_->isEnabled() ||
+                hide_action_->isEnabled()) {
+                menu.addSeparator();
+                menu.addAction(show_action_);
+                menu.addAction(hide_action_);
+            }
+            menu.addSeparator();
+            menu.addAction(delete_datum_action_);
+            menu.exec(
+                tree_->viewport()->mapToGlobal(
+                    position));
+            return;
+        }
+        if (isReferenceGeometryGroupItem(*item)) {
+            tree_->setCurrentItem(item);
+            updateVisibilityActions();
+            if (!show_action_->isEnabled() &&
+                !hide_action_->isEnabled()) {
+                return;
+            }
+            QMenu menu{tree_};
+            menu.addAction(show_action_);
+            menu.addAction(hide_action_);
+            menu.exec(
+                tree_->viewport()->mapToGlobal(
+                    position));
+            return;
+        }
         if (profileIdForItem(*item)) {
             tree_->setCurrentItem(item);
             QMenu menu{tree_};
@@ -1270,19 +1701,40 @@ void PartDocumentTreeController::showContextMenu(
 
 void PartDocumentTreeController::applySelectedVisibility(
     bool visible) {
-    if (session_ == nullptr ||
-        !selectionContainsOnlyBuiltinReferences()) {
+    if (session_ == nullptr) {
         return;
     }
 
-    const auto roles =
-        selectedBuiltinReferences();
-    if (roles.empty()) return;
+    application::DocumentSessionResult result;
+    bool attempted = false;
 
-    const auto result = session_->execute(
-        application::SetBuiltinReferenceVisibilityCommand{
-            roles,
-            visible});
+    if (selectionContainsOnlyBuiltinReferences()) {
+        const auto roles =
+            selectedBuiltinReferences();
+        if (roles.empty()) return;
+        attempted = true;
+        result = session_->execute(
+            application::
+                SetBuiltinReferenceVisibilityCommand{
+                    roles,
+                    visible});
+    } else if (
+        selectionContainsOnlyDatumReferences()) {
+        const auto targets =
+            selectedDatumVisibilityTargets();
+        if (targets.empty()) return;
+        attempted = true;
+        result = session_->execute(
+            application::
+                SetDatumPlaneVisibilityCommand{
+                    targets,
+                    session_->document().revision(),
+                    visible});
+    }
+
+    if (!attempted) {
+        return;
+    }
 
     if (result.ok() && result.changed) {
         rebuild(true);
@@ -1329,6 +1781,28 @@ void PartDocumentTreeController::requestProfileEdit(
     profile_edit_handler_(*profile_id);
 }
 
+void PartDocumentTreeController::requestDatumEdit(
+    const QTreeWidgetItem& item) {
+    const auto datum_id =
+        datumIdForItem(item);
+    if (!datum_id ||
+        !datum_edit_handler_) {
+        return;
+    }
+    datum_edit_handler_(*datum_id);
+}
+
+void PartDocumentTreeController::requestDatumDelete(
+    const QTreeWidgetItem& item) {
+    const auto datum_id =
+        datumIdForItem(item);
+    if (!datum_id ||
+        !datum_delete_handler_) {
+        return;
+    }
+    datum_delete_handler_(*datum_id);
+}
+
 
 void PartDocumentTreeController::requestFeatureEdit(
     const QTreeWidgetItem& item) {
@@ -1351,6 +1825,11 @@ void PartDocumentTreeController::notifySelectionChanged() {
         profile_selection_handler_(
             selectedProfileIds(),
             primaryProfileId());
+    }
+    if (datum_selection_handler_) {
+        datum_selection_handler_(
+            selectedDatumIds(),
+            primaryDatumId());
     }
     if (feature_selection_handler_) {
         feature_selection_handler_(
@@ -1441,6 +1920,35 @@ PartDocumentTreeController::profileIdForItem(
             bytes.constData(),
             static_cast<std::size_t>(
                 bytes.size())});
+}
+
+
+std::optional<part::DatumId>
+PartDocumentTreeController::datumIdForItem(
+    const QTreeWidgetItem& item) {
+    const auto value =
+        item.data(0, datumIdData);
+    if (!value.isValid()) {
+        return std::nullopt;
+    }
+    const auto bytes =
+        value.toString().toUtf8();
+    return part::DatumId::parse(
+        std::string_view{
+            bytes.constData(),
+            static_cast<std::size_t>(
+                bytes.size())});
+}
+
+bool PartDocumentTreeController::
+isReferenceGeometryGroupItem(
+    const QTreeWidgetItem& item) {
+    const auto value =
+        item.data(
+            0,
+            referenceGeometryGroupData);
+    return value.isValid() &&
+           value.toBool();
 }
 
 

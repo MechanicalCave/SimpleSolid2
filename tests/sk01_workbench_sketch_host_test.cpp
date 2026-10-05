@@ -3142,7 +3142,14 @@ int main(int argc, char* argv[]) {
     auto* root =
         tree->topLevelItem(0);
     CHECK(root != nullptr);
-    CHECK(root->childCount() == 3);
+    CHECK(root->childCount() == 4);
+    CHECK(
+        root->child(0)->text(0) ==
+        QStringLiteral("Origin"));
+    CHECK(
+        root->child(1)->text(0) ==
+        QStringLiteral("Reference Geometry"));
+    CHECK(root->child(1)->childCount() == 0);
     QTreeWidgetItem* sketches_node = nullptr;
     for (int index = 0;
          index < root->childCount();

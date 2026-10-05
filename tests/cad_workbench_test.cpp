@@ -735,9 +735,16 @@ int main(int argc, char* argv[]) {
     auto* root = tree->topLevelItem(0);
     CHECK(root != nullptr);
     CHECK(root->text(0) == QStringLiteral("Drive Shaft"));
-    CHECK(root->childCount() == 2);
+    CHECK(root->childCount() == 3);
+    CHECK(
+        root->child(0)->text(0) ==
+        QStringLiteral("Origin"));
+    CHECK(
+        root->child(1)->text(0) ==
+        QStringLiteral("Reference Geometry"));
 
     QTreeWidgetItem* origin = nullptr;
+    QTreeWidgetItem* reference_geometry = nullptr;
     QTreeWidgetItem* body = nullptr;
     for (int index = 0;
          index < root->childCount();
@@ -751,12 +758,18 @@ int main(int argc, char* argv[]) {
             item->text(0) ==
             QStringLiteral("Origin")) {
             origin = item;
+        } else if (
+            item->text(0) ==
+            QStringLiteral("Reference Geometry")) {
+            reference_geometry = item;
         }
     }
     CHECK(body != nullptr);
     CHECK(body->text(0) ==
           QStringLiteral("Body [Empty]"));
     CHECK(origin != nullptr);
+    CHECK(reference_geometry != nullptr);
+    CHECK(reference_geometry->childCount() == 0);
     CHECK(origin->childCount() == 7);
     CHECK(tree->selectionMode() ==
           QAbstractItemView::ExtendedSelection);

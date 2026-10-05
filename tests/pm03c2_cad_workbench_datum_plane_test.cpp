@@ -5,7 +5,9 @@
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/part/datum.hpp>
 
+#include <QAction>
 #include <QApplication>
+#include <QStackedWidget>
 #include <QComboBox>
 #include <QLabel>
 #include <QLineEdit>
@@ -467,7 +469,259 @@ int main(int argc, char* argv[]) {
     CHECK(!tool->isChecked());
     CHECK(kernel.extrude_calls == 0U);
 
+    // PM-03D2: authored Datums live under Reference Geometry directly
+    // below Origin. Tree/Properties selection is DatumId-based, while
+    // Show/Hide remains the existing per-Datum authored visibility truth.
+    auto* properties_stack =
+        workbench.findChild<QStackedWidget*>(
+            QStringLiteral(
+                "propertiesContextStack"));
+    auto* datum_identity =
+        workbench.findChild<QLabel*>(
+            QStringLiteral(
+                "datumPropertyIdentity"));
+    auto* datum_source_property =
+        workbench.findChild<QLabel*>(
+            QStringLiteral(
+                "datumPropertySource"));
+    auto* datum_offset_property =
+        workbench.findChild<QLabel*>(
+            QStringLiteral(
+                "datumPropertyOffset"));
+    auto* datum_visibility_property =
+        workbench.findChild<QLabel*>(
+            QStringLiteral(
+                "datumPropertyVisibility"));
+    auto* datum_status_property =
+        workbench.findChild<QLabel*>(
+            QStringLiteral(
+                "datumPropertyStatus"));
+    auto* datum_edit_property =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral(
+                "editDatumPlanePropertyButton"));
+    auto* hide_references =
+        workbench.findChild<QAction*>(
+            QStringLiteral(
+                "hideBuiltinReferencesAction"));
+    auto* show_references =
+        workbench.findChild<QAction*>(
+            QStringLiteral(
+                "showBuiltinReferencesAction"));
+
+    CHECK(
+        properties_stack &&
+        datum_identity &&
+        datum_source_property &&
+        datum_offset_property &&
+        datum_visibility_property &&
+        datum_status_property &&
+        datum_edit_property &&
+        hide_references &&
+        show_references);
+
+    auto* root =
+        tree->topLevelItem(0);
+    CHECK(root != nullptr);
+    CHECK(root->childCount() >= 3);
+    CHECK(
+        root->child(0)->text(0) ==
+        QStringLiteral("Origin"));
+    CHECK(
+        root->child(1)->text(0) ==
+        QStringLiteral("Reference Geometry"));
+    auto* reference_geometry =
+        root->child(1);
+    CHECK(reference_geometry->childCount() == 2);
+
+    const auto first_datum_id =
+        requireDatum(session, 0U).id;
+    auto* datum_one =
+        findItem(
+            *tree,
+            QStringLiteral("Datum Plane 1"));
+    CHECK(datum_one != nullptr);
+    selectOnly(*tree, datum_one);
+
+    CHECK(
+        properties_stack->currentWidget()->
+            objectName() ==
+        QStringLiteral("datumPropertiesPage"));
+    CHECK(
+        datum_identity->text() ==
+        QString::fromStdString(
+            first_datum_id.serialized()));
+    CHECK(
+        datum_source_property->text() ==
+        QStringLiteral("XY Plane"));
+    CHECK(
+        datum_offset_property->text().contains(
+            QStringLiteral("10")));
+    CHECK(
+        datum_visibility_property->text() ==
+        QStringLiteral("Shown"));
+    CHECK(
+        datum_status_property->text() ==
+        QStringLiteral("Resolved"));
+    CHECK(datum_edit_property->isEnabled());
+
+    // Per-Datum Tree visibility uses one existing authored visibility field
+    // and one command transaction.
+    const auto undo_before_hide_one =
+        session.undoDepth();
+    CHECK(hide_references->isEnabled());
+    hide_references->trigger();
+    QApplication::processEvents();
+    CHECK(
+        !session.document()
+             .findDatumPlane(first_datum_id)->
+             visible);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_hide_one + 1U);
+    datum_one =
+        findItem(
+            *tree,
+            QStringLiteral("Datum Plane 1"));
+    CHECK(datum_one != nullptr);
+    CHECK(datum_one->font(0).italic());
+    selectOnly(*tree, datum_one);
+    CHECK(
+        datum_visibility_property->text() ==
+        QStringLiteral("Hidden"));
+
+    CHECK(show_references->isEnabled());
+    show_references->trigger();
+    QApplication::processEvents();
+    CHECK(
+        session.document()
+            .findDatumPlane(first_datum_id)->
+            visible);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_hide_one + 2U);
+
+    // An earlier Datum Plane is a semantic source for the same create draft.
+    datum_one =
+        findItem(
+            *tree,
+            QStringLiteral("Datum Plane 1"));
+    selectOnly(*tree, datum_one);
+    tool->click();
+    CHECK(tool->isChecked());
+    CHECK(finish->isEnabled());
+    CHECK(
+        source->text().contains(
+            QString::fromStdString(
+                first_datum_id.serialized())));
+
+    const auto undo_before_datum_source =
+        session.undoDepth();
+    finish->click();
+    CHECK(
+        session.document().datumPlanes().size() ==
+        3U);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_datum_source + 1U);
+
+    const auto third_datum_id =
+        requireDatum(session, 2U).id;
+    const auto third_source =
+        part::datumPlaneIdForPlaneReference(
+            requireDatum(session, 2U).source);
+    CHECK(third_source.has_value());
+    CHECK(*third_source == first_datum_id);
+
+    // Edit reuses the shared Datum draft and preserves durable DatumId.
+    auto* datum_three =
+        findItem(
+            *tree,
+            QStringLiteral("Datum Plane 3"));
+    CHECK(datum_three != nullptr);
+    selectOnly(*tree, datum_three);
+    CHECK(
+        datum_identity->text() ==
+        QString::fromStdString(
+            third_datum_id.serialized()));
+    CHECK(
+        datum_source_property->text().contains(
+            QString::fromStdString(
+                first_datum_id.serialized())));
+
+    datum_edit_property->click();
+    CHECK(tool->isChecked());
+    CHECK(
+        source->text().contains(
+            QString::fromStdString(
+                first_datum_id.serialized())));
+    offset->setText(
+        QStringLiteral("-4 mm"));
+    QApplication::processEvents();
+    CHECK(finish->isEnabled());
+
+    const auto datum_count_before_edit =
+        session.document().datumPlanes().size();
+    const auto undo_before_edit =
+        session.undoDepth();
+    finish->click();
+    CHECK(
+        session.document().datumPlanes().size() ==
+        datum_count_before_edit);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_edit + 1U);
+    const auto* edited =
+        session.document()
+            .findDatumPlane(third_datum_id);
+    CHECK(edited != nullptr);
+    CHECK(edited->id == third_datum_id);
+    CHECK(edited->offset.millimetres == -4.0);
+
+    // Group visibility is a bulk command over authored Datum visibility.
+    // The group itself owns no persisted visibility flag.
+    root = tree->topLevelItem(0);
+    CHECK(root != nullptr);
+    CHECK(
+        root->child(0)->text(0) ==
+        QStringLiteral("Origin"));
+    CHECK(
+        root->child(1)->text(0) ==
+        QStringLiteral("Reference Geometry"));
+    reference_geometry = root->child(1);
+    selectOnly(*tree, reference_geometry);
+
+    const auto undo_before_hide_group =
+        session.undoDepth();
+    CHECK(hide_references->isEnabled());
+    hide_references->trigger();
+    QApplication::processEvents();
+    CHECK(
+        session.undoDepth() ==
+        undo_before_hide_group + 1U);
+    for (const auto& datum :
+         session.document().datumPlanes()) {
+        CHECK(!datum.visible);
+    }
+
+    reference_geometry =
+        findItem(
+            *tree,
+            QStringLiteral("Reference Geometry"));
+    CHECK(reference_geometry != nullptr);
+    selectOnly(*tree, reference_geometry);
+    CHECK(show_references->isEnabled());
+    show_references->trigger();
+    QApplication::processEvents();
+    CHECK(
+        session.undoDepth() ==
+        undo_before_hide_group + 2U);
+    for (const auto& datum :
+         session.document().datumPlanes()) {
+        CHECK(datum.visible);
+    }
+
     std::cout
-        << "PM-03C2 CadWorkbench Datum Plane parity PASS\n";
+        << "PM-03C2 / PM-03D2 CadWorkbench Datum Plane parity PASS\n";
     return EXIT_SUCCESS;
 }
