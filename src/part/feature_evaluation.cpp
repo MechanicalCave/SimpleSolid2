@@ -58,22 +58,42 @@ kernelOperation(
         : kernel::SolidBooleanOperation::add;
 }
 
-} // namespace
-
-std::optional<kernel::LinearExtrudeInput>
-makeKernelExtrudeInput(
-    const PartDocument& document,
-    const ExtrudeFeature& feature) {
-    auto profile =
-        makeKernelProfileInput(
-            document,
-            feature.profile_id);
-    if (!profile) {
-        return std::nullopt;
+[[nodiscard]] FeatureEvaluationDiagnosticCode
+diagnosticForProfileMaterialization(
+    ProfileKernelInputStatus status) noexcept {
+    switch (status) {
+    case ProfileKernelInputStatus::resolved:
+        return FeatureEvaluationDiagnosticCode::none;
+    case ProfileKernelInputStatus::missing_profile:
+        return FeatureEvaluationDiagnosticCode::
+            missing_profile;
+    case ProfileKernelInputStatus::missing_source_sketch:
+    case ProfileKernelInputStatus::unresolved_profile:
+        return FeatureEvaluationDiagnosticCode::
+            unresolved_profile;
+    case ProfileKernelInputStatus::support_missing:
+        return FeatureEvaluationDiagnosticCode::
+            sketch_support_missing;
+    case ProfileKernelInputStatus::support_ambiguous:
+        return FeatureEvaluationDiagnosticCode::
+            sketch_support_ambiguous;
+    case ProfileKernelInputStatus::support_unsupported:
+        return FeatureEvaluationDiagnosticCode::
+            sketch_support_unsupported;
+    case ProfileKernelInputStatus::invalid_input:
+        return FeatureEvaluationDiagnosticCode::
+            kernel_invalid_input;
     }
+    return FeatureEvaluationDiagnosticCode::
+        kernel_invalid_input;
+}
 
+[[nodiscard]] std::optional<kernel::LinearExtrudeInput>
+makeKernelExtrudeInputFromProfile(
+    kernel::PlanarProfileInput profile,
+    const ExtrudeFeature& feature) {
     kernel::LinearExtrudeInput result;
-    result.profile = std::move(*profile);
+    result.profile = std::move(profile);
     result.operation =
         kernelOperation(feature.operation);
 
@@ -134,6 +154,28 @@ makeKernelExtrudeInput(
               kernel::LinearExtrudeInput>{
               std::move(result)}
         : std::nullopt;
+}
+
+} // namespace
+
+std::optional<kernel::LinearExtrudeInput>
+makeKernelExtrudeInput(
+    const PartDocument& document,
+    const ExtrudeFeature& feature,
+    const BodyStageTopologyCatalog*
+        support_topology) {
+    auto profile =
+        resolveKernelProfileInput(
+            document,
+            feature.profile_id,
+            support_topology);
+    if (!profile.ok()) {
+        return std::nullopt;
+    }
+
+    return makeKernelExtrudeInputFromProfile(
+        std::move(*profile.input),
+        feature);
 }
 
 namespace {
@@ -2467,21 +2509,51 @@ PartEvaluation evaluatePart(
             continue;
         }
 
-        if (!document.evaluateProfile(
-                 profile->id)
-                 .value_or(
-                     ResolvedProfileRegion{})
-                 .valid()) {
+        const BodyStageTopologyCatalog*
+            support_topology = nullptr;
+        if (const auto* source =
+                document.findSketch(
+                    profile->source_sketch_id)) {
+            if (const auto* surface =
+                    bodyPlanarSurfaceReference(
+                        source->support)) {
+                const auto stage =
+                    std::find_if(
+                        result.features.begin(),
+                        result.features.end(),
+                        [surface](
+                            const FeatureEvaluation& prior) {
+                            return prior.result_topology &&
+                                   prior.result_topology
+                                       ->stage ==
+                                       surface->stage;
+                        });
+                if (stage != result.features.end()) {
+                    support_topology =
+                        &*stage->result_topology;
+                }
+            }
+        }
+
+        auto materialized_profile =
+            resolveKernelProfileInput(
+                document,
+                profile->id,
+                support_topology);
+        if (!materialized_profile.ok()) {
             evaluated.status =
-                FeatureEvaluationStatus::
-                    blocked;
+                materialized_profile.status ==
+                        ProfileKernelInputStatus::
+                            invalid_input
+                    ? FeatureEvaluationStatus::failed
+                    : FeatureEvaluationStatus::blocked;
             evaluated.diagnostic =
-                FeatureEvaluationDiagnosticCode::
-                    unresolved_profile;
+                diagnosticForProfileMaterialization(
+                    materialized_profile.status);
             chain_broken = true;
-            // Keep the current-revision upstream result available only as a
-            // presentation prefix. chain_broken prevents all later active
-            // Features from consuming it as Body truth.
+            // The exact current support stage is mandatory. A prior
+            // evaluation's world frame is never reused after Missing,
+            // Ambiguous or Unsupported resolution.
             current_references.clear();
             result.features.push_back(
                 std::move(evaluated));
@@ -2505,8 +2577,9 @@ PartEvaluation evaluatePart(
         }
 
         auto input =
-            makeKernelExtrudeInput(
-                document,
+            makeKernelExtrudeInputFromProfile(
+                std::move(
+                    *materialized_profile.input),
                 *extrude);
         if (!input) {
             evaluated.status =

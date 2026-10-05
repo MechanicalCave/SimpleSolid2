@@ -29,6 +29,9 @@ enum class FeatureEvaluationDiagnosticCode {
     none,
     missing_profile,
     unresolved_profile,
+    sketch_support_missing,
+    sketch_support_ambiguous,
+    sketch_support_unsupported,
     missing_upstream_body,
     upstream_unavailable,
     kernel_invalid_input,
@@ -367,7 +370,9 @@ struct PartEvaluation final {
     kernel::LinearExtrudeInput>
 makeKernelExtrudeInput(
     const PartDocument& document,
-    const ExtrudeFeature& feature);
+    const ExtrudeFeature& feature,
+    const BodyStageTopologyCatalog*
+        support_topology = nullptr);
 
 [[nodiscard]] FeatureContribution currentFeatureContribution(
     const BodyStageTopologyCatalog& catalog,

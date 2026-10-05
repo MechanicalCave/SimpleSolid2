@@ -83,6 +83,12 @@ QString featureDiagnosticText(
         return QStringLiteral("Missing Profile");
     case part::FeatureEvaluationDiagnosticCode::unresolved_profile:
         return QStringLiteral("Unresolved Profile");
+    case part::FeatureEvaluationDiagnosticCode::sketch_support_missing:
+        return QStringLiteral("Sketch support missing");
+    case part::FeatureEvaluationDiagnosticCode::sketch_support_ambiguous:
+        return QStringLiteral("Sketch support ambiguous");
+    case part::FeatureEvaluationDiagnosticCode::sketch_support_unsupported:
+        return QStringLiteral("Sketch support unsupported");
     case part::FeatureEvaluationDiagnosticCode::missing_upstream_body:
         return QStringLiteral("Missing upstream Body");
     case part::FeatureEvaluationDiagnosticCode::upstream_unavailable:
