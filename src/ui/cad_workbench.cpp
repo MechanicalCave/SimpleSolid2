@@ -3563,6 +3563,27 @@ void CadWorkbench::buildUi() {
             }
         });
     QObject::connect(
+        datum_edit_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (selected_datum_id_) {
+                static_cast<void>(
+                    startDatumPlaneEdit(
+                        *selected_datum_id_));
+            }
+        });
+    QObject::connect(
+        datum_delete_button_,
+        &QPushButton::clicked,
+        this,
+        [this] {
+            if (selected_datum_id_) {
+                deleteDatumPlane(
+                    *selected_datum_id_);
+            }
+        });
+    QObject::connect(
         apply_profile_button_,
         &QPushButton::clicked,
         this,
