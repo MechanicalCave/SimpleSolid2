@@ -36,12 +36,13 @@ class ISolidModelingKernel;
 
 namespace simplesolid2::ui {
 
+struct BodyTopologyInspection;
+
 class CadWorkbenchShell;
 class PartDocumentTreeController;
 class PartSketchInteractionController;
 class PartViewportController;
 class ViewCubeWidget;
-struct BodyTopologyInspection;
 
 struct CadDynamicInputUiState final {
     std::string buffer;
@@ -142,7 +143,8 @@ public:
             expected_context_generation) override;
     [[nodiscard]] bool
     acceptsEmptyCadInput() const noexcept override {
-        return extrude_draft_.has_value() ||
+        return datum_plane_draft_.has_value() ||
+               extrude_draft_.has_value() ||
                (sketch_support_pick_active_ &&
                 pending_sketch_support_.has_value());
     }
@@ -171,6 +173,24 @@ private:
         core::LengthUnit unit);
     void applyProfileProperties();
     void deleteSelectedProfile();
+
+    [[nodiscard]] bool startDatumPlaneTool();
+    void cancelDatumPlane();
+    [[nodiscard]] bool finishDatumPlane();
+    void clearDatumPlaneRuntimeContext();
+    void stageDatumPlaneSource(
+        part::PlaneReference source);
+    void tryStageDatumPlaneFromSupport(
+        std::optional<core::BuiltinReferenceRole> support);
+    void tryStageDatumPlaneFromBodyTopology(
+        const BodyTopologyInspection& inspection);
+    void refreshDatumPlaneEvaluation();
+    void scheduleDatumPlaneEvaluation();
+    void flushDatumPlaneEvaluation();
+    void syncDatumPlaneUi();
+    [[nodiscard]] application::CadInputSubmitResult
+    submitDatumPlaneCadInput(
+        std::string_view text);
 
     [[nodiscard]] bool startExtrudeTool();
     [[nodiscard]] bool startExtrudeFromSelectedProfile();
@@ -454,6 +474,7 @@ private:
     QComboBox* circle_size_mode_combo_{};
     bool syncing_precision_ui_{};
     QPushButton* sketch_button_{};
+    QPushButton* datum_plane_button_{};
     QPushButton* extrude_button_{};
     QPushButton* select_sketch_button_{};
     QLabel* create_tools_label_{};
@@ -485,6 +506,23 @@ private:
     QLabel* entity_role_label_{};
     QPushButton* regular_role_button_{};
     QPushButton* construction_role_button_{};
+
+    QWidget* datum_plane_operations_widget_{};
+    QComboBox* datum_plane_constructor_combo_{};
+    QLabel* datum_plane_source_label_{};
+    QLineEdit* datum_plane_offset_edit_{};
+    QPushButton* datum_plane_reverse_button_{};
+    QTimer* datum_plane_preview_timer_{};
+    QLabel* datum_plane_result_label_{};
+    QPushButton* datum_plane_finish_button_{};
+    QPushButton* datum_plane_cancel_button_{};
+    std::optional<application::DatumPlaneDraft>
+        datum_plane_draft_;
+    std::optional<
+        application::DatumPlaneDraftEvaluationResult>
+        datum_plane_evaluation_;
+    bool datum_plane_offset_input_valid_{true};
+    bool syncing_datum_plane_ui_{};
 
     QWidget* extrude_operations_widget_{};
     QPushButton* extrude_add_button_{};
