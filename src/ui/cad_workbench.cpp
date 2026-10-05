@@ -4604,9 +4604,14 @@ bool CadWorkbench::startDatumPlaneTool() {
         viewport_controller_->
             setBodyTopologyFacePickOnly(true);
 
-        tryStageDatumPlaneFromSupport(
-            viewport_controller_->
-                primarySelection());
+        tryStageDatumPlaneFromDatum(
+            selected_datum_id_);
+        if (datum_plane_draft_ &&
+            !datum_plane_draft_->source()) {
+            tryStageDatumPlaneFromSupport(
+                viewport_controller_->
+                    primarySelection());
+        }
     }
     if (datum_plane_draft_ &&
         !datum_plane_draft_->source() &&
@@ -4630,12 +4635,132 @@ bool CadWorkbench::startDatumPlaneTool() {
             ? QStringLiteral(
                   "Datum Plane active — Offset constructor, default 10 mm; adjust Offset or Finish.")
             : QStringLiteral(
-                  "Datum Plane active — select XY/XZ/YZ Origin plane or planar Body Face."));
+                  "Datum Plane active — select XY/XZ/YZ Origin plane, planar Body Face or existing Datum Plane."));
     if (viewport_widget_ != nullptr) {
         viewport_widget_->setFocus(
             Qt::OtherFocusReason);
     }
     return true;
+}
+
+bool CadWorkbench::startDatumPlaneEdit(
+    part::DatumId datum_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        solid_modeling_kernel_ == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Edit Datum Plane requires an active Part and modeling Kernel."));
+        return false;
+    }
+    if (datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        active_sketch_id_ ||
+        sketch_support_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active modeling context before Edit Datum Plane."));
+        return false;
+    }
+
+    auto draft =
+        application::DatumPlaneDraft::beginEdit(
+            *document_session,
+            datum_id);
+    if (!draft) {
+        setStatusText(
+            QStringLiteral(
+                "Selected Datum Plane is no longer available."));
+        return false;
+    }
+
+    datum_plane_draft_ =
+        std::move(*draft);
+    datum_plane_evaluation_.reset();
+    datum_plane_offset_input_valid_ = true;
+
+    if (datum_plane_offset_edit_ != nullptr) {
+        const QSignalBlocker blocked{
+            datum_plane_offset_edit_};
+        datum_plane_offset_edit_->setText(
+            formatLengthForPart(
+                datum_plane_draft_->offset(),
+                document_session->document()
+                    .lengthUnit()));
+    }
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyFacePickOnly(true);
+    }
+
+    refreshDatumPlaneEvaluation();
+    syncActionState();
+    syncDatumPlaneUi();
+    notifyCadInputContextChanged();
+    setStatusText(
+        QStringLiteral(
+            "Edit Datum Plane active — select a new Source or adjust signed Offset; Finish preserves DatumId."));
+    if (datum_plane_offset_edit_ != nullptr) {
+        datum_plane_offset_edit_->setFocus(
+            Qt::OtherFocusReason);
+    }
+    return true;
+}
+
+void CadWorkbench::deleteDatumPlane(
+    part::DatumId datum_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr) {
+        return;
+    }
+    if (datum_plane_draft_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_ ||
+        active_sketch_id_ ||
+        sketch_support_pick_active_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish or cancel the active modeling context before deleting a Datum Plane."));
+        return;
+    }
+    if (document_session->document()
+            .findDatumPlane(datum_id) == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Datum Plane is no longer available."));
+        return;
+    }
+
+    const auto result =
+        document_session->execute(
+            application::DeleteDatumPlaneCommand{
+                datum_id,
+                document_session->document()
+                    .revision()});
+    if (!result.ok()) {
+        showFailure(result.diagnostic);
+        refreshActiveContext();
+        return;
+    }
+    if (!result.changed) {
+        return;
+    }
+
+    if (selected_datum_id_ &&
+        *selected_datum_id_ == datum_id) {
+        selected_datum_id_.reset();
+    }
+    refreshActiveContext();
+    if (properties_stack_ != nullptr) {
+        properties_stack_->setCurrentWidget(
+            document_properties_page_);
+    }
+    setStatusText(
+        QStringLiteral(
+            "Datum Plane deleted — dependency-safe command committed."));
 }
 
 void CadWorkbench::stageDatumPlaneSource(
