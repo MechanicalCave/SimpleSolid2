@@ -1145,11 +1145,11 @@ void CadWorkbench::buildUi() {
                 result.changed
                     ? (visible
                            ? QStringLiteral(
-                                 "Selected Origin references shown.")
+                                 "Selected references shown.")
                            : QStringLiteral(
-                                 "Selected Origin references hidden."))
+                                 "Selected references hidden."))
                     : QStringLiteral(
-                          "No Origin visibility change."));
+                          "No reference visibility change."));
         });
 
     tree_controller_->setSketchEditHandler(
@@ -1159,6 +1159,15 @@ void CadWorkbench::buildUi() {
     tree_controller_->setSketchSupportChangeHandler(
         [this](const sketch::SketchId& sketch_id) {
             startSketchResupport(sketch_id);
+        });
+    tree_controller_->setDatumEditHandler(
+        [this](part::DatumId datum_id) {
+            static_cast<void>(
+                startDatumPlaneEdit(datum_id));
+        });
+    tree_controller_->setDatumDeleteHandler(
+        [this](part::DatumId datum_id) {
+            deleteDatumPlane(datum_id);
         });
 
     ViewportSurface viewport_surface;
@@ -1510,6 +1519,7 @@ void CadWorkbench::buildUi() {
                 return;
             }
             selected_profile_id_.reset();
+            selected_datum_id_.reset();
             selected_feature_id_.reset();
             selected_body_id_.reset();
             if (document_tree_ != nullptr) {
@@ -1583,6 +1593,7 @@ void CadWorkbench::buildUi() {
                         semantic);
             }
             if (primary) {
+                selected_datum_id_.reset();
                 selected_feature_id_.reset();
                 selected_body_id_.reset();
                 refreshProfileProperties(*primary);
@@ -1599,6 +1610,30 @@ void CadWorkbench::buildUi() {
             }
             syncActionState();
         });
+    viewport_controller_->setDatumSelectionChangedHandler(
+        [this](
+            const std::vector<part::DatumId>& selected,
+            std::optional<part::DatumId> primary) {
+            const auto semantic =
+                selected.size() == 1U && primary
+                    ? primary
+                    : std::nullopt;
+            selected_datum_id_ = semantic;
+            if (semantic) {
+                selected_profile_id_.reset();
+                selected_feature_id_.reset();
+                selected_body_id_.reset();
+                refreshDatumProperties(*semantic);
+                tryStageDatumPlaneFromDatum(semantic);
+            } else if (properties_stack_ != nullptr &&
+                       properties_stack_->currentWidget() ==
+                           datum_properties_page_) {
+                properties_stack_->setCurrentWidget(
+                    document_properties_page_);
+            }
+            syncActionState();
+        });
+
     viewport_controller_->setProfileSelectionChangedHandler(
         [this](
             const std::vector<part::ProfileId>& selected,
@@ -1637,6 +1672,7 @@ void CadWorkbench::buildUi() {
         [this](std::optional<part::BodyId> body_id) {
             selected_body_id_ = body_id;
             if (body_id) {
+                selected_datum_id_.reset();
                 refreshBodyProperties(*body_id);
             }
         });
@@ -1649,6 +1685,9 @@ void CadWorkbench::buildUi() {
                     ? primary
                     : std::nullopt;
             selected_feature_id_ = semantic;
+            if (semantic) {
+                selected_datum_id_.reset();
+            }
             if (viewport_controller_) {
                 viewport_controller_->
                     setFeatureContributionSelection(
