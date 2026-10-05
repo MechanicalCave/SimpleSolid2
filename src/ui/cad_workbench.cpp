@@ -1843,6 +1843,96 @@ void CadWorkbench::buildUi() {
     properties_stack_->addWidget(
         reference_properties_page_);
 
+    datum_properties_page_ =
+        new QWidget(properties_stack_);
+    datum_properties_page_->setObjectName(
+        QStringLiteral("datumPropertiesPage"));
+    auto* datum_properties_root =
+        new QFormLayout(datum_properties_page_);
+
+    datum_name_ =
+        new QLabel(datum_properties_page_);
+    datum_name_->setObjectName(
+        QStringLiteral("datumPropertyName"));
+    datum_identity_ =
+        new QLabel(datum_properties_page_);
+    datum_identity_->setObjectName(
+        QStringLiteral("datumPropertyIdentity"));
+    datum_identity_->setWordWrap(true);
+    datum_constructor_ =
+        new QLabel(
+            QStringLiteral("Offset"),
+            datum_properties_page_);
+    datum_constructor_->setObjectName(
+        QStringLiteral("datumPropertyConstructor"));
+    datum_source_ =
+        new QLabel(datum_properties_page_);
+    datum_source_->setObjectName(
+        QStringLiteral("datumPropertySource"));
+    datum_source_->setWordWrap(true);
+    datum_offset_ =
+        new QLabel(datum_properties_page_);
+    datum_offset_->setObjectName(
+        QStringLiteral("datumPropertyOffset"));
+    datum_visibility_ =
+        new QLabel(datum_properties_page_);
+    datum_visibility_->setObjectName(
+        QStringLiteral("datumPropertyVisibility"));
+    datum_status_ =
+        new QLabel(datum_properties_page_);
+    datum_status_->setObjectName(
+        QStringLiteral("datumPropertyStatus"));
+    datum_diagnostic_ =
+        new QLabel(datum_properties_page_);
+    datum_diagnostic_->setObjectName(
+        QStringLiteral("datumPropertyDiagnostic"));
+    datum_diagnostic_->setWordWrap(true);
+
+    datum_edit_button_ =
+        new QPushButton(
+            QStringLiteral("Edit Datum Plane"),
+            datum_properties_page_);
+    datum_edit_button_->setObjectName(
+        QStringLiteral("editDatumPlanePropertyButton"));
+    datum_delete_button_ =
+        new QPushButton(
+            QStringLiteral("Delete Datum Plane"),
+            datum_properties_page_);
+    datum_delete_button_->setObjectName(
+        QStringLiteral("deleteDatumPlanePropertyButton"));
+
+    datum_properties_root->addRow(
+        QStringLiteral("Name"),
+        datum_name_);
+    datum_properties_root->addRow(
+        QStringLiteral("DatumId"),
+        datum_identity_);
+    datum_properties_root->addRow(
+        QStringLiteral("Constructor"),
+        datum_constructor_);
+    datum_properties_root->addRow(
+        QStringLiteral("Source"),
+        datum_source_);
+    datum_properties_root->addRow(
+        QStringLiteral("Offset"),
+        datum_offset_);
+    datum_properties_root->addRow(
+        QStringLiteral("Visibility"),
+        datum_visibility_);
+    datum_properties_root->addRow(
+        QStringLiteral("Status"),
+        datum_status_);
+    datum_properties_root->addRow(
+        QStringLiteral("Diagnostic"),
+        datum_diagnostic_);
+    datum_properties_root->addRow(
+        datum_edit_button_);
+    datum_properties_root->addRow(
+        datum_delete_button_);
+
+    properties_stack_->addWidget(
+        datum_properties_page_);
+
     profile_properties_page_ =
         new QWidget(properties_stack_);
     profile_properties_page_->setObjectName(
