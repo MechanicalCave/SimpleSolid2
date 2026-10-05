@@ -23,6 +23,194 @@ constexpr viewer::Vec3 zAxis{0.0, 0.0, 1.0};
 constexpr double axisExtent = 45.0;
 constexpr double planeExtent = 35.0;
 constexpr double pointExtent = 3.0;
+constexpr double datumIntersectionEpsilon = 1.0e-8;
+
+[[nodiscard]] viewer::Point3 viewerPoint(
+    const kernel::Point3& point) noexcept {
+    return {point.x, point.y, point.z};
+}
+
+[[nodiscard]] viewer::Vec3 viewerVector(
+    const kernel::Vector3& vector) noexcept {
+    return {vector.x, vector.y, vector.z};
+}
+
+[[nodiscard]] double datumPlaneSignedDistance(
+    const viewer::Point3& point,
+    const kernel::Frame3& frame) noexcept {
+    return
+        (point.x - frame.origin.x) * frame.normal.x +
+        (point.y - frame.origin.y) * frame.normal.y +
+        (point.z - frame.origin.z) * frame.normal.z;
+}
+
+[[nodiscard]] double pointDistanceSquared(
+    const viewer::Point3& left,
+    const viewer::Point3& right) noexcept {
+    const double dx = left.x - right.x;
+    const double dy = left.y - right.y;
+    const double dz = left.z - right.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+[[nodiscard]] std::optional<
+    viewer::ReferenceLineSegmentPresentation>
+datumTriangleIntersection(
+    const viewer::SolidTrianglePresentation& triangle,
+    const kernel::Frame3& frame) noexcept {
+    if (!triangle.valid() || !frame.valid()) {
+        return std::nullopt;
+    }
+
+    const std::array<viewer::Point3, 3U> points{
+        triangle.first,
+        triangle.second,
+        triangle.third};
+    const std::array<double, 3U> distances{
+        datumPlaneSignedDistance(points[0], frame),
+        datumPlaneSignedDistance(points[1], frame),
+        datumPlaneSignedDistance(points[2], frame)};
+
+    const bool all_on_plane =
+        std::all_of(
+            distances.begin(),
+            distances.end(),
+            [](double value) {
+                return std::abs(value) <=
+                       datumIntersectionEpsilon;
+            });
+    if (all_on_plane) {
+        // Coplanar area has no unique line intersection. Do not invent
+        // presentation geometry from provider triangulation.
+        return std::nullopt;
+    }
+
+    std::array<viewer::Point3, 6U> candidates{};
+    std::size_t candidate_count = 0U;
+    const auto append_unique =
+        [&candidates, &candidate_count](
+            viewer::Point3 point) {
+            constexpr double epsilon_squared =
+                datumIntersectionEpsilon *
+                datumIntersectionEpsilon;
+            for (std::size_t index = 0U;
+                 index < candidate_count;
+                 ++index) {
+                if (pointDistanceSquared(
+                        candidates[index],
+                        point) <= epsilon_squared) {
+                    return;
+                }
+            }
+            if (candidate_count < candidates.size()) {
+                candidates[candidate_count++] = point;
+            }
+        };
+
+    for (std::size_t index = 0U;
+         index < points.size();
+         ++index) {
+        if (std::abs(distances[index]) <=
+            datumIntersectionEpsilon) {
+            append_unique(points[index]);
+        }
+    }
+
+    constexpr std::array<
+        std::pair<std::size_t, std::size_t>,
+        3U>
+        edges{{
+            {0U, 1U},
+            {1U, 2U},
+            {2U, 0U},
+        }};
+    for (const auto [first, second] : edges) {
+        const double first_distance =
+            distances[first];
+        const double second_distance =
+            distances[second];
+        if ((first_distance <
+                 -datumIntersectionEpsilon &&
+             second_distance >
+                 datumIntersectionEpsilon) ||
+            (first_distance >
+                 datumIntersectionEpsilon &&
+             second_distance <
+                 -datumIntersectionEpsilon)) {
+            const double denominator =
+                first_distance - second_distance;
+            if (std::abs(denominator) <=
+                datumIntersectionEpsilon) {
+                continue;
+            }
+            const double parameter =
+                first_distance / denominator;
+            append_unique(
+                {
+                    points[first].x +
+                        (points[second].x -
+                         points[first].x) *
+                            parameter,
+                    points[first].y +
+                        (points[second].y -
+                         points[first].y) *
+                            parameter,
+                    points[first].z +
+                        (points[second].z -
+                         points[first].z) *
+                            parameter,
+                });
+        }
+    }
+
+    if (candidate_count != 2U ||
+        pointDistanceSquared(
+            candidates[0],
+            candidates[1]) <=
+            datumIntersectionEpsilon *
+                datumIntersectionEpsilon) {
+        return std::nullopt;
+    }
+
+    viewer::ReferenceLineSegmentPresentation
+        result{
+            candidates[0],
+            candidates[1]};
+    return result.valid()
+        ? std::optional<
+              viewer::ReferenceLineSegmentPresentation>{
+              result}
+        : std::nullopt;
+}
+
+[[nodiscard]] std::vector<
+    viewer::ReferenceLineSegmentPresentation>
+datumBodyIntersection(
+    const viewer::BodyScene& body,
+    const kernel::Frame3& frame) {
+    std::vector<
+        viewer::ReferenceLineSegmentPresentation>
+        result;
+    if (!body.valid() ||
+        body.empty() ||
+        body.purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !frame.valid()) {
+        return result;
+    }
+
+    result.reserve(body.triangles.size());
+    for (const auto& triangle : body.triangles) {
+        const auto segment =
+            datumTriangleIntersection(
+                triangle,
+                frame);
+        if (segment) {
+            result.push_back(*segment);
+        }
+    }
+    return result;
+}
 
 
 [[nodiscard]] std::optional<viewer::SolidScene>
