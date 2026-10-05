@@ -8158,10 +8158,12 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
         part_evaluation_revision_.reset();
         body_evaluation_status_.reset();
         feature_evaluation_statuses_.clear();
+        datum_evaluation_statuses_.clear();
         return;
     }
 
     feature_evaluation_statuses_.clear();
+    datum_evaluation_statuses_.clear();
     auto body_status =
         document_session_->document()
                 .body().features.empty()
@@ -8185,6 +8187,28 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                     feature.feature_id,
                     feature.status,
                     feature.diagnostic});
+        }
+        const auto datums =
+            part::evaluateDatums(
+                document_session_->document(),
+                evaluation);
+        if (datums.source_revision ==
+                document_session_->document()
+                    .revision() &&
+            datums.planes.size() ==
+                document_session_->document()
+                    .datumPlanes()
+                    .size()) {
+            datum_evaluation_statuses_.reserve(
+                datums.planes.size());
+            for (const auto& datum :
+                 datums.planes) {
+                datum_evaluation_statuses_.push_back(
+                    DatumEvaluationUiState{
+                        datum.datum_id,
+                        datum.status,
+                        datum.diagnostic});
+            }
         }
     } else {
         feature_evaluation_statuses_.reserve(
@@ -8225,9 +8249,23 @@ void CadWorkbench::refreshPartFeatureEvaluationSnapshot() {
                 feature.diagnostic});
     }
 
+    std::vector<DatumTreeEvaluationEntry>
+        datum_entries;
+    datum_entries.reserve(
+        datum_evaluation_statuses_.size());
+    for (const auto& datum :
+         datum_evaluation_statuses_) {
+        datum_entries.push_back(
+            DatumTreeEvaluationEntry{
+                datum.datum_id,
+                datum.status,
+                datum.diagnostic});
+    }
+
     tree_controller_->setEvaluationSnapshot(
         body_status,
-        std::move(entries));
+        std::move(entries),
+        std::move(datum_entries));
 }
 
 void CadWorkbench::refreshBodyProperties(
