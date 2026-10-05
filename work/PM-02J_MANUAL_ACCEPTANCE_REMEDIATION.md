@@ -1,6 +1,6 @@
 # PM-02J — Owner Manual Acceptance Remediation
 
-**Status:** ACTIVE — AUTOMATED REMEDIATION + DOCS PASS; OWNER WINDOWS RE-TEST PENDING  
+**Status:** COMPLETED — PASS; AUTOMATED REMEDIATION + DOCS + OWNER WINDOWS RE-TEST PASS  
 **Parent Work Contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Architecture authority:** ADR-0016 + ADR-0017  
 **Trigger:** Owner Windows manual acceptance on 2026-10-05  
@@ -139,7 +139,7 @@ Gate:
 
 ### J-R6 — consolidated automated gate + Owner re-test
 
-**State:** ACTIVE — RUNTIME + DOCS PASS; OWNER RE-TEST PENDING  
+**State:** COMPLETED — PASS; RUNTIME + DOCS + OWNER RE-TEST PASS  
 **Post-remediation runtime:** `b9e70c684c2d054da21662ef3a8ae56ac59f60c0` — Windows FULL #1473 PASS  
 **Post-remediation docs candidate:** `1dbaef95b2ea48f8e529425a154b795984d6551f` — Windows DOCS #1474 PASS  
 **Merged docs/readiness main:** `bdb718f292f1432e1156219edfa664b1a8aab92c`
@@ -148,12 +148,9 @@ J-R2..J-R5 are now complete. The post-remediation runtime candidate is `b9e70c68
 
 Canonical internal + PL/EN documentation and Product Browser are now PASS under Windows DOCS #1474.
 
-Remaining J-R6 work:
+Owner post-remediation Windows re-test on 2026-10-05: **PASS**. The Owner confirmed all requested focused checks, including topology hover/preselection/picking and Tab cycling, same-Surface Add partition behavior, face-supported Sketch Edit after downstream Extrude, Create Sketch / Apply Support labeling, window-size containment and final sanity lifecycle checks.
 
-- repeat focused Owner Windows checks for manual items 2, 4, 9-15 and the window/label observations;
-- then repeat final PM-02 acceptance matrix as needed.
-
-PM-02 must remain ACTIVE until Owner reports PASS.
+PM-02J remediation is closed. Runtime authority remains FULL #1473; canonical remediation docs remain DOCS #1474; bookkeeping #1476 is PASS. Final PM-02 governance closure is work-only and does not reopen runtime acceptance.
 
 ## Deferred but recorded gaps
 
@@ -171,9 +168,11 @@ Do not confuse that future authored operation with representation partitions int
 
 ## Completion rule
 
-Do not mark PM-02 COMPLETED and do not activate PM-03 until:
+All PM-02J completion conditions are satisfied:
 
-- J-R2..J-R5 pass automated verification;
-- canonical docs/Product Browser are current after remediation;
-- Owner Windows manual re-test passes;
+- J-R2..J-R5 automated verification — PASS;
+- canonical docs/Product Browser after remediation — PASS (#1474);
+- Owner Windows manual re-test — PASS on 2026-10-05;
 - final closure records the post-remediation runtime/docs candidates.
+
+PM-02J is COMPLETED — PASS. PM-03 remains inactive until separately contracted and Owner-accepted.
