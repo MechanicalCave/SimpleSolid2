@@ -3044,10 +3044,21 @@ PartViewportController::resolvedPlacementForSketch(
         }
     }
 
+    const part::DatumEvaluation* datums =
+        datum_evaluation_cache_ &&
+                session_ != nullptr &&
+                datum_evaluation_cache_->
+                    source_revision ==
+                    session_->document()
+                        .revision()
+            ? &*datum_evaluation_cache_
+            : nullptr;
+
     const auto resolved =
         part::resolveSketchSupport(
             sketch.support,
-            topology);
+            topology,
+            datums);
     if (!resolved.valid() ||
         resolved.status !=
             part::SketchSupportResolutionStatus::
