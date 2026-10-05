@@ -1,21 +1,21 @@
 # PM-02 — Final Acceptance Matrix
 
-**Status:** OWNER WINDOWS MANUAL FAIL — REMEDIATION ACTIVE  
+**Status:** POST-REMEDIATION AUTOMATED PASS; OWNER WINDOWS RE-TEST PENDING  
 **Work Contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
-**Final runtime/evidence candidate:** `b642a5af625a48d668a21efeaf3d78bfb9bf7c79`  
-**Final runtime gate:** Windows FULL #1451 — PASS  
-**Merged runtime/evidence main:** `a26d7e981b160973825603bc3c11f37d5ab594a8`  
+**Final post-remediation runtime candidate:** `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`  
+**Final post-remediation runtime gate:** Windows FULL #1473 — PASS  
+**Merged post-remediation runtime main:** `7baf13b255f7e5a587a8caeffde19d0ab69434d0`  
 **PM-02J activation main:** `e28c756318e59cb68a28c375ddb96fc19d7ea67f`  
 **Documentation candidate:** `65919f28f8c8dade4ba2904ec699957f9077d1f1`  
 **Documentation gate:** Windows DOCS #1454 — PASS (`.\\ss2.ps1 docs` produced zero Browser diff)  
 **Merged documentation main:** `300459629658432bb94f938e51cb1df4a17b353e`  
-**Owner Windows manual acceptance:** FAIL on 2026-10-05 — see `work/PM-02J_MANUAL_ACCEPTANCE_REMEDIATION.md`
+**Owner Windows manual acceptance:** initial FAIL on 2026-10-05; automated remediation PASS; re-test PENDING — see `work/PM-02J_MANUAL_ACCEPTANCE_REMEDIATION.md`
 
 ## 1. Gate interpretation
 
 PM-02J does not add new modeling semantics. It closes documentation and final acceptance for the already-implemented PM-02A..PM-02I production slice.
 
-The final runtime gate remains FULL #1451 on exact candidate `b642a5af625a48d668a21efeaf3d78bfb9bf7c79`. PM-02J documentation-only commits do not change runtime behavior and therefore do not replace that runtime candidate.
+The original pre-manual runtime gate was FULL #1451. Owner manual acceptance exposed bounded defects, now remediated through J-R2..J-R5. The current post-remediation runtime authority is exact candidate `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`, Windows FULL #1473 PASS. R2/R3/R4 exact evidence is #1470/#1471/#1472 respectively.
 
 PM-02 completion still requires:
 
@@ -133,7 +133,9 @@ PM-02 completion still requires:
 
 ## 5. Owner Windows manual workflow
 
-**2026-10-05 result:** FAIL — remediation active.
+**2026-10-05 initial result:** FAIL.  
+**J-R2..J-R5 automated remediation:** PASS through Windows FULL #1473.  
+**Owner Windows re-test:** PENDING.
 
 Blocking/manual findings include unstable or absent topology preselection/candidate cycling, unstable ordinary pick in one box orientation, stage-incorrect face-supported Sketch Edit presentation after downstream Extrude, and coplanar Add Surface/partition behavior that can block Sketch support. User-facing Create Sketch labeling and a reproducible top-level window resize also require remediation before the next Owner PASS.
 
