@@ -586,9 +586,30 @@ int main(int argc, char* argv[]) {
     CHECK(!all_text.contains(
         QStringLiteral("401")));
 
-    // PM-02G: Sketch support acquisition is Face-only even when a nearer
-    // Vertex/Edge is present in the same hit stack. The selected semantic
-    // Face is converted to SurfaceReference and creates exactly one Sketch.
+    // PM-02G Command Line activates the same support-acquisition state.
+    // CANCEL is explicitly non-authoring.
+    const auto state_before_cli =
+        session.document().state();
+    const auto undo_before_cli =
+        session.undoDepth();
+    auto cad_result =
+        workbench.submitCadInput(
+            "SKETCH",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(workbench.cadInputPrompt().find("SKETCH") !=
+          std::string::npos);
+    cad_result =
+        workbench.submitCadInput(
+            "CANCEL",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(session.document().state() == state_before_cli);
+    CHECK(session.undoDepth() == undo_before_cli);
+
+    // GUI Sketch acquisition is Face-only even when a nearer Vertex/Edge is
+    // present in the same hit stack. The selected semantic Face is converted
+    // to SurfaceReference and creates exactly one Sketch.
     auto* sketch_tool =
         workbench.findChild<QPushButton*>(
             QStringLiteral("sketchToolButton"));
@@ -604,11 +625,53 @@ int main(int argc, char* argv[]) {
     CHECK(
         session.document().sketches().size() ==
         sketch_count_before + 1U);
-    const auto& created_sketch =
-        session.document().sketches().back();
+    const auto created_id =
+        session.document().sketches().back().id;
     CHECK(
         part::bodyPlanarSurfaceReference(
-            created_sketch.support) != nullptr);
+            session.document().sketches().back().support) !=
+        nullptr);
+
+    // RESUPPORT is also the same global CAD-input acquisition state. Merely
+    // entering/cancelling it cannot mutate the authored Sketch.
+    auto* finish_sketch =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("finishSketchButton"));
+    CHECK(finish_sketch != nullptr);
+    finish_sketch->click();
+
+    auto* created_item =
+        findItem(*tree, QStringLiteral("Sketch 2"));
+    CHECK(created_item != nullptr);
+    tree->clearSelection();
+    created_item->setSelected(true);
+    tree->setCurrentItem(created_item);
+
+    const auto state_before_resupport_cli =
+        session.document().state();
+    const auto undo_before_resupport_cli =
+        session.undoDepth();
+    cad_result =
+        workbench.submitCadInput(
+            "RESUPPORT",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(workbench.cadInputPrompt().find("RESUPPORT") !=
+          std::string::npos);
+    cad_result =
+        workbench.submitCadInput(
+            "CANCEL",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(
+        session.document().state() ==
+        state_before_resupport_cli);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_resupport_cli);
+    CHECK(
+        session.document().findSketch(created_id) !=
+        nullptr);
 
     return EXIT_SUCCESS;
 }
