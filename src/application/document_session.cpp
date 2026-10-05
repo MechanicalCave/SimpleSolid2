@@ -2241,6 +2241,471 @@ DocumentSession::evaluateExtrudeDraft(
     return result;
 }
 
+DatumPlaneDraftEvaluationResult
+DocumentSession::evaluateDatumPlaneDraft(
+    const DatumPlaneDraft& draft,
+    kernel::ISolidModelingKernel& modeling_kernel) const {
+    DatumPlaneDraftEvaluationResult result;
+    result.document_id = draft.documentId();
+    result.source_revision = draft.sourceRevision();
+    result.draft_generation = draft.generation();
+    result.mode = draft.mode();
+    result.authored_datum_id = draft.datumId();
+    result.source = draft.source();
+    result.offset = draft.offset();
+
+    if (draft.documentId() != document_.documentId()) {
+        result.status =
+            DatumPlaneDraftEvaluationStatus::
+                stale_document;
+        return result;
+    }
+    if (draft.sourceRevision() !=
+        document_.revision()) {
+        result.status =
+            DatumPlaneDraftEvaluationStatus::
+                stale_revision;
+        return result;
+    }
+    if (!draft.valid() || !draft.source()) {
+        result.status =
+            DatumPlaneDraftEvaluationStatus::
+                invalid_draft;
+        return result;
+    }
+
+    auto after = document_.state();
+    applyDatumIdCursor(after);
+
+    part::DatumId target_id;
+    if (draft.mode() ==
+        DatumPlaneDraftMode::create) {
+        const auto allocated =
+            after.next_datum_id.allocate();
+        if (!allocated) {
+            result.status =
+                DatumPlaneDraftEvaluationStatus::
+                    id_exhausted;
+            return result;
+        }
+        target_id = *allocated;
+        after.datum_planes.push_back(
+            part::OffsetDatumPlane{
+                target_id,
+                *draft.source(),
+                draft.offset(),
+                true});
+    } else {
+        const auto authored_id =
+            draft.datumId();
+        if (!authored_id) {
+            result.status =
+                DatumPlaneDraftEvaluationStatus::
+                    invalid_draft;
+            return result;
+        }
+        auto* target =
+            findDatumPlane(after, *authored_id);
+        if (target == nullptr) {
+            result.status =
+                DatumPlaneDraftEvaluationStatus::
+                    missing_datum;
+            return result;
+        }
+        target_id = *authored_id;
+        target->source = *draft.source();
+        target->offset = draft.offset();
+    }
+    result.candidate_datum_id = target_id;
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            std::move(after),
+            document_.revision());
+    if (!candidate.ok()) {
+        result.status =
+            DatumPlaneDraftEvaluationStatus::
+                invalid_candidate;
+        return result;
+    }
+
+    const auto part_evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    const auto datum_evaluation =
+        part::evaluateDatums(
+            *candidate.document,
+            part_evaluation);
+    const auto* evaluated =
+        datum_evaluation.find(target_id);
+    if (evaluated == nullptr ||
+        !evaluated->valid()) {
+        result.status =
+            DatumPlaneDraftEvaluationStatus::
+                invalid_candidate;
+        return result;
+    }
+
+    result.datum_status = evaluated->status;
+    result.datum_diagnostic =
+        evaluated->diagnostic;
+    result.frame = evaluated->frame;
+    result.required_body_stage =
+        evaluated->required_body_stage;
+
+    if (evaluated->status !=
+            part::DatumPlaneEvaluationStatus::
+                resolved ||
+        !evaluated->frame) {
+        result.status =
+            DatumPlaneDraftEvaluationStatus::
+                source_unresolved;
+        return result;
+    }
+
+    result.status =
+        DatumPlaneDraftEvaluationStatus::ok;
+    return result;
+}
+
+CreateDatumPlaneResult DocumentSession::execute(
+    const CreateDatumPlaneCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    revision_diverged,
+                "Create Datum Plane was started from a stale DocumentRevision",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+    if (!command.source.valid() ||
+        !command.offset.finite()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Datum Plane contains an invalid source or offset",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    auto after = document_.state();
+    applyDatumIdCursor(after);
+    const auto id =
+        after.next_datum_id.allocate();
+    if (!id) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    transaction_failure,
+                "DatumId allocation space is exhausted",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    after.datum_planes.push_back(
+        part::OffsetDatumPlane{
+            *id,
+            command.source,
+            command.offset,
+            command.visible});
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Datum Plane candidate violates Part authored-state invariants",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto part_evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    const auto datum_evaluation =
+        part::evaluateDatums(
+            *candidate.document,
+            part_evaluation);
+    const auto* target =
+        datum_evaluation.find(*id);
+    if (target == nullptr ||
+        target->status !=
+            part::DatumPlaneEvaluationStatus::
+                resolved ||
+        !target->frame) {
+        const auto failed =
+            failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Create Datum Plane source is not currently Resolved; no authored mutation committed",
+                path_);
+        return {
+            false,
+            std::nullopt,
+            target != nullptr
+                ? std::optional<
+                      part::DatumPlaneEvaluationDiagnostic>{
+                      target->diagnostic}
+                : std::nullopt,
+            failed.diagnostic};
+    }
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while creating Datum Plane");
+    if (!committed.ok() ||
+        !committed.changed) {
+        return {
+            committed.changed,
+            std::nullopt,
+            std::nullopt,
+            committed.diagnostic};
+    }
+
+    return {
+        true,
+        *id,
+        part::DatumPlaneEvaluationDiagnostic::none,
+        DocumentSessionDiagnostic{}};
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const EditDatumPlaneCommand& command,
+    kernel::ISolidModelingKernel& modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Edit Datum Plane was started from a stale DocumentRevision",
+            path_);
+    }
+    if (!command.datum_id.valid() ||
+        !command.source.valid() ||
+        !command.offset.finite()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Datum Plane contains an invalid target, source or offset",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* target =
+        findDatumPlane(
+            after,
+            command.datum_id);
+    if (target == nullptr) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Datum Plane target DatumId does not exist",
+            path_);
+    }
+    if (target->source == command.source &&
+        target->offset == command.offset) {
+        return success(false);
+    }
+
+    target->source = command.source;
+    target->offset = command.offset;
+
+    auto candidate =
+        part::PartDocument::restore(
+            document_.documentId(),
+            after,
+            document_.revision());
+    if (!candidate.ok()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Datum Plane candidate violates Part authored-state or dependency invariants",
+            path_);
+    }
+
+    const auto part_evaluation =
+        part::evaluatePart(
+            *candidate.document,
+            modeling_kernel);
+    const auto datum_evaluation =
+        part::evaluateDatums(
+            *candidate.document,
+            part_evaluation);
+    const auto* evaluated =
+        datum_evaluation.find(
+            command.datum_id);
+    if (evaluated == nullptr ||
+        evaluated->status !=
+            part::DatumPlaneEvaluationStatus::
+                resolved ||
+        !evaluated->frame) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Edit Datum Plane source is not currently Resolved; no authored mutation committed",
+            path_);
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while editing Datum Plane");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const SetDatumPlaneVisibilityCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Datum visibility change was started from a stale DocumentRevision",
+            path_);
+    }
+
+    std::set<part::DatumId> unique_targets;
+    for (const auto id : command.targets) {
+        if (!id.valid() ||
+            document_.findDatumPlane(id) ==
+                nullptr) {
+            return failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Datum visibility command contains a missing or invalid DatumId",
+                path_);
+        }
+        unique_targets.insert(id);
+    }
+    if (unique_targets.empty()) {
+        return success(false);
+    }
+
+    auto after = document_.state();
+    for (const auto id : unique_targets) {
+        auto* target =
+            findDatumPlane(after, id);
+        if (target == nullptr) {
+            return failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Datum visibility target disappeared before commit",
+                path_);
+        }
+        target->visible = command.visible;
+    }
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while changing Datum Plane visibility");
+}
+
+DocumentSessionResult DocumentSession::execute(
+    const DeleteDatumPlaneCommand& command) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return failure(
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Delete Datum Plane was started from a stale DocumentRevision",
+            path_);
+    }
+    if (!command.datum_id.valid()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Delete Datum Plane contains an invalid DatumId",
+            path_);
+    }
+
+    const auto& datums =
+        document_.datumPlanes();
+    const auto found =
+        std::find_if(
+            datums.begin(),
+            datums.end(),
+            [&command](
+                const part::OffsetDatumPlane& datum) {
+                return datum.id ==
+                       command.datum_id;
+            });
+    if (found == datums.end()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Delete Datum Plane target DatumId does not exist",
+            path_);
+    }
+
+    for (const auto& datum : datums) {
+        if (datum.id == command.datum_id) {
+            continue;
+        }
+        const auto source =
+            part::datumPlaneIdForPlaneReference(
+                datum.source);
+        if (source &&
+            *source == command.datum_id) {
+            return failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Delete Datum Plane rejected because another Datum Plane depends on it",
+                path_);
+        }
+    }
+
+    auto after = document_.state();
+    const auto erase =
+        std::find_if(
+            after.datum_planes.begin(),
+            after.datum_planes.end(),
+            [&command](
+                const part::OffsetDatumPlane& datum) {
+                return datum.id ==
+                       command.datum_id;
+            });
+    if (erase ==
+        after.datum_planes.end()) {
+        return failure(
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Delete Datum Plane target disappeared before commit",
+            path_);
+    }
+    after.datum_planes.erase(erase);
+
+    return commitCommandState(
+        std::move(after),
+        "Part transaction failed while deleting Datum Plane");
+}
+
 CreateExtrudeFeatureResult DocumentSession::execute(
     const CreateExtrudeFeatureCommand& command,
     kernel::ISolidModelingKernel& modeling_kernel) {
