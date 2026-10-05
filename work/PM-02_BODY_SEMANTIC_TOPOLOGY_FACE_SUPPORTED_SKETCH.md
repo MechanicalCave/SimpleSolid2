@@ -992,7 +992,7 @@ Gate:
 
 ### PM-02J — documentation and Owner Windows acceptance
 
-**Checkpoint state:** ACTIVE — OWNER MANUAL FAIL; REMEDIATION IN PROGRESS
+**Checkpoint state:** ACTIVE — AUTOMATED REMEDIATION PASS; OWNER WINDOWS RE-TEST PENDING
 
 **Remediation authority:** `work/PM-02J_MANUAL_ACCEPTANCE_REMEDIATION.md` + ADR-0017
 
