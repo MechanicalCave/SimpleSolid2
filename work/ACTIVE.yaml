@@ -3,7 +3,7 @@ status: active
 active_work: "work/PM-03_DATUM_REFERENCE_GEOMETRY.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.21"
+program_roadmap_version: "1.22"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -44,10 +44,12 @@ next:
   - PM-03A semantic Datum foundation + schema v10 is COMPLETED — PASS; exact candidate 41ea901c873f1453e27b2b4973332ecb5295388c passed Windows FULL #1485 and merged to main as 542d7b50fcd3f7566326f1b2c849d9453a3dcd00
   - PM-03B Datum evaluator + dependency/cycle semantics is COMPLETED — PASS; exact candidate e12f6c606132eadab5283372dee1a9f3f3008abd passed Windows FULL #1491 and merged to main as 42b36d427bdb4c5c75b4961444576c7905032eb2
   - PM-03C commands + Extrude-style draft / Command Line parity is COMPLETED — PASS; C1 exact candidate c633a9714602801e1253d119198ea9e46f73f9a9 passed Windows FULL #1496 and merged as 4147eba3697dfc345f49762508e92293b6373ff5; C2 exact candidate 8b9185261e2cf32006f6af7a8c8a9da5e7c9ec04 passed Windows FULL #1507 and merged as ad9e64df059091556bca2dc18515fa25a5cc5a32
-  - current implementation checkpoint is PM-03D — Viewer / intersection overlay / Tree / Properties
+  - PM-03D Viewer / intersection overlay / Tree / Properties is COMPLETED — PASS; D1 exact candidate b236e54028a64ba00569a995b592b4ab8de2cd17 passed Windows FULL #1511 and merged as 28c86f2cb62c5c9156cd2d1ca3f305432957eedf; D2 exact candidate adc9dd5c1f970932a03aa43422a105643db9052d passed Windows FULL #1514 and merged as 3aa23632892853dbf9bf51574e5b2c762c2ac426
+  - current implementation checkpoint is PM-03E — Datum-backed Sketch + existing Extrude
   - production mutation is authorized only within the accepted PM-03 contract and its ordered PM-03A..PM-03F checkpoints
   - Projection remains outside the PM-02/PM-03 critical path and requires separate later activation
 notes:
+  - PM-03D is COMPLETED — PASS. D1 Viewer presentation/semantic picking exact candidate `b236e54028a64ba00569a995b592b4ab8de2cd17` passed Windows FULL #1511 and merged as `28c86f2cb62c5c9156cd2d1ca3f305432957eedf`; D2 Reference Geometry Tree/Properties/source/edit/bulk visibility exact candidate `adc9dd5c1f970932a03aa43422a105643db9052d` passed Windows FULL #1514 and merged as `3aa23632892853dbf9bf51574e5b2c762c2ac426`. Completion evidence: `work/PM-03D_VIEWER_TREE_PROPERTIES_COMPLETION.md`. PM-03E is now the active checkpoint.
   - PM-03C is COMPLETED — PASS. C1 semantic commands/shared draft exact candidate `c633a9714602801e1253d119198ea9e46f73f9a9` passed Windows FULL #1496 and merged as `4147eba3697dfc345f49762508e92293b6373ff5`; C2 CadWorkbench/Command Line parity exact candidate `8b9185261e2cf32006f6af7a8c8a9da5e7c9ec04` passed Windows FULL #1507 and merged as `ad9e64df059091556bca2dc18515fa25a5cc5a32`. Completion evidence: `work/PM-03C_COMMANDS_DRAFT_COMMAND_LINE_COMPLETION.md`. PM-03D is now the active checkpoint.
   - PM-03B is COMPLETED — PASS. Part-owned derived Datum evaluation, exact-stage planar Surface resolution, Datum chaining, structured fail-closed status and transitive Body-stage dependency floor are merged as `42b36d427bdb4c5c75b4961444576c7905032eb2`; exact runtime candidate `e12f6c606132eadab5283372dee1a9f3f3008abd` passed Windows FULL #1491. Completion evidence: `work/PM-03B_DATUM_EVALUATION_COMPLETION.md`. PM-03C is now the active checkpoint.
   - PM-03A is COMPLETED — PASS. Durable DatumId/PlaneReference/OffsetDatumPlane authored state, fail-closed local dependency validation and native Part schema v10 are merged as `542d7b50fcd3f7566326f1b2c849d9453a3dcd00`; exact runtime candidate `41ea901c873f1453e27b2b4973332ecb5295388c` passed Windows FULL #1485. Completion evidence: `work/PM-03A_DATUM_FOUNDATION_SCHEMA_V10_COMPLETION.md`. PM-03B is now the active checkpoint.
