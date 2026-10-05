@@ -98,7 +98,7 @@ After `Save`, Origin visibility survives closing and restarting the application.
 <!-- section-id: product.parts.sketch-host -->
 ## Creating and viewing a Sketch
 
-Use `Sketch` in the expanding left side of the active-Document top row, then select either `XY Plane`, `XZ Plane` or `YZ Plane` from Origin, or a current Body Face in the 3D Viewport. During Sketch support acquisition the viewport accepts Faces only. A planar semantic Face is accepted as standard Sketch support; a non-planar Face remains selectable but reports **Unsupported** instead of falling through to another target. Selecting the support is still a runtime draft: **Finish Sketch** performs the single authored Create transaction and **Cancel** changes nothing.
+Use `Sketch` in the expanding left side of the active-Document top row, then select either `XY Plane`, `XZ Plane` or `YZ Plane` from Origin, or a current Body Face in the 3D Viewport. During Sketch support acquisition the viewport accepts Faces only. A planar semantic Face is accepted as standard Sketch support; a non-planar Face remains selectable but reports **Unsupported** instead of falling through to another target. Selecting the support is still a runtime draft: **Create Sketch** performs the single authored Create transaction and **Cancel** changes nothing. After the Sketch exists and edit mode is active, **Finish Sketch** keeps its normal meaning: leave Sketch Edit.
 
 During Sketch Edit the tools are grouped as:
 
@@ -290,7 +290,7 @@ Space typed while a text-entry field has focus remains text input; it does not t
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit.
 
-An existing Sketch can use **Change Sketch Support** from Document Tree or `RESUPPORT` in Command Line. Select a new Origin plane or planar Body Face, then Finish to commit exactly one support change. Re-support preserves SketchId, EntityIds and authored local U/V geometry; it changes the host mapping. Missing, Ambiguous, Unsupported or cycle-causing targets are rejected without partial mutation. Undo/Redo restores the previous semantic support intent.
+An existing Sketch can use **Change Sketch Support** from Document Tree or `RESUPPORT` in Command Line. Select a new Origin plane or planar Body Face, then use **Apply Support** to commit exactly one support change. Re-support preserves SketchId, EntityIds and authored local U/V geometry; it changes the host mapping. Missing, Ambiguous, Unsupported or cycle-causing targets are rejected without partial mutation. Undo/Redo restores the previous semantic support intent.
 
 Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions and Datum planes remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
 
@@ -477,6 +477,8 @@ Selecting current topology updates Properties without adding Face/Edge/Vertex ro
 - Body shows current complete topology/accounting counts.
 
 A current topology item can be **Present** while durable singular referenceability is **Ambiguous** or **Unsupported**. SimpleSolid reports that state instead of silently rebinding by proximity or geometry similarity.
+
+When an Extrude Add extends one existing planar material carrier and Boolean lineage proves unique continuity, the inherited semantic Surface remains the single carrier across the bounded Face fragments. The technical partition Edge between those fragments remains in topology accounting but is treated as a representation artifact: it is hidden from ordinary engineering edge display and excluded from ordinary picking. This is not geometry-based merging; coincident/coplanar geometry without unique lineage does not rebind identity.
 
 Selecting or hovering a Feature in Document Tree highlights its **Current Feature Contribution** on the current Body. This is not a historical-stage replacement and does not create duplicate selectable topology. If a selected topology item disappears after recompute, direct selection clears instead of jumping to similar geometry.
 
