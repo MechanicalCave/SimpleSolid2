@@ -24,7 +24,7 @@ Delivered production semantics:
 
 ## Verification
 
-Exact-head Windows FULL #1485 PASS on `41ea901c873f7566326f1b2c849d9453a3dcd00` is **not** the authority; the tested exact candidate is `41ea901c873f1453e27b2b4973332ecb5295388c`.
+Exact-head Windows FULL #1485 PASS on `41ea901c873f1453e27b2b4973332ecb5295388c` is the runtime verification authority for PM-03A.
 
 The FULL run passed:
 
