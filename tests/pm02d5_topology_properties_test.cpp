@@ -617,15 +617,53 @@ int main(int argc, char* argv[]) {
     CHECK(sketch_tool != nullptr);
     const auto sketch_count_before =
         session.document().sketches().size();
+    const auto state_before_face_pick =
+        session.document().state();
+    const auto revision_before_face_pick =
+        session.document().revision();
+    const auto undo_before_face_pick =
+        session.undoDepth();
     sketch_tool->click();
     CHECK(workbench.cadInputPrompt().find("SKETCH") !=
           std::string::npos);
 
     viewport->clickMixedBodyCandidates();
 
+    // Selecting the semantic Face is draft-only. Finish owns the single
+    // authored transaction.
+    CHECK(
+        session.document().sketches().size() ==
+        sketch_count_before);
+    CHECK(
+        session.document().state() ==
+        state_before_face_pick);
+    CHECK(
+        session.document().revision() ==
+        revision_before_face_pick);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_face_pick);
+    CHECK(
+        workbench.cadInputPrompt().find("FINISH") !=
+        std::string::npos);
+
+    auto* finish_sketch =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("finishSketchButton"));
+    CHECK(finish_sketch != nullptr);
+    CHECK(finish_sketch->isVisible());
+    CHECK(finish_sketch->isEnabled());
+    finish_sketch->click();
+
     CHECK(
         session.document().sketches().size() ==
         sketch_count_before + 1U);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_face_pick + 1U);
+    CHECK(
+        session.document().revision() !=
+        revision_before_face_pick);
     const auto created_id =
         session.document().sketches().back().id;
     CHECK(
@@ -635,10 +673,6 @@ int main(int argc, char* argv[]) {
 
     // RESUPPORT is also the same global CAD-input acquisition state. Merely
     // entering/cancelling it cannot mutate the authored Sketch.
-    auto* finish_sketch =
-        workbench.findChild<QPushButton*>(
-            QStringLiteral("finishSketchButton"));
-    CHECK(finish_sketch != nullptr);
     finish_sketch->click();
 
     auto* created_item =
