@@ -3,7 +3,7 @@ status: active
 active_work: "work/PM-03_DATUM_REFERENCE_GEOMETRY.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.19"
+program_roadmap_version: "1.20"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -42,10 +42,12 @@ next:
   - all PM-02 completion gates are satisfied: runtime FULL #1473 PASS, docs #1474 PASS, bookkeeping #1476 PASS and Owner Windows re-test PASS
   - PM-03 Datum Reference Geometry / Offset Datum Plane is ACTIVE under the Owner-accepted Work Contract `work/PM-03_DATUM_REFERENCE_GEOMETRY.md`
   - PM-03A semantic Datum foundation + schema v10 is COMPLETED — PASS; exact candidate 41ea901c873f1453e27b2b4973332ecb5295388c passed Windows FULL #1485 and merged to main as 542d7b50fcd3f7566326f1b2c849d9453a3dcd00
-  - current implementation checkpoint is PM-03B — evaluator + dependency/cycle semantics
+  - PM-03B Datum evaluator + dependency/cycle semantics is COMPLETED — PASS; exact candidate e12f6c606132eadab5283372dee1a9f3f3008abd passed Windows FULL #1491 and merged to main as 42b36d427bdb4c5c75b4961444576c7905032eb2
+  - current implementation checkpoint is PM-03C — commands + Extrude-style draft / Command Line parity
   - production mutation is authorized only within the accepted PM-03 contract and its ordered PM-03A..PM-03F checkpoints
   - Projection remains outside the PM-02/PM-03 critical path and requires separate later activation
 notes:
+  - PM-03B is COMPLETED — PASS. Part-owned derived Datum evaluation, exact-stage planar Surface resolution, Datum chaining, structured fail-closed status and transitive Body-stage dependency floor are merged as `42b36d427bdb4c5c75b4961444576c7905032eb2`; exact runtime candidate `e12f6c606132eadab5283372dee1a9f3f3008abd` passed Windows FULL #1491. Completion evidence: `work/PM-03B_DATUM_EVALUATION_COMPLETION.md`. PM-03C is now the active checkpoint.
   - PM-03A is COMPLETED — PASS. Durable DatumId/PlaneReference/OffsetDatumPlane authored state, fail-closed local dependency validation and native Part schema v10 are merged as `542d7b50fcd3f7566326f1b2c849d9453a3dcd00`; exact runtime candidate `41ea901c873f1453e27b2b4973332ecb5295388c` passed Windows FULL #1485. Completion evidence: `work/PM-03A_DATUM_FOUNDATION_SCHEMA_V10_COMPLETION.md`. PM-03B is now the active checkpoint.
   - PM-03 activation: Owner accepted the exact bounded PM-03 Work Contract and UI interaction amendments on 2026-10-05. Accepted contract PR #235 exact head `60a26ebd54b2b2d2718e94f03934f46877b1c2f1` passed governance gate #1480 and merged to main as `c60833166b64f3a4bb73d51bb8a73482cdfa2937`. Activation PR #236 is governance-only; PM-03A is the first authorized implementation checkpoint only after the activation exact-head gate passes and #236 merges. PM-04 and Projection remain inactive.
   - PM-02 is COMPLETED — PASS. Owner post-remediation Windows re-test on 2026-10-05 confirmed all requested manual checks PASS on current main `d8d73e213f24d5b82c5a7a13dbeba07282520a40`; runtime authority remains exact candidate `b9e70c684c2d054da21662ef3a8ae56ac59f60c0` / Windows FULL #1473 PASS, remediation docs authority remains `1dbaef95b2ea48f8e529425a154b795984d6551f` / Windows DOCS #1474 PASS, and bookkeeping #1476 PASS. This closure is work/governance-only. PM-03 and Projection remain inactive pending separate acceptance.

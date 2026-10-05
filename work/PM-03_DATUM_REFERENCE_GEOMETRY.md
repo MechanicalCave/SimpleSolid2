@@ -3,7 +3,7 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-05  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.17  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.20  
 **Architecture authority:** Constitution + Foundation + ADR-0014 + ADR-0016 + ADR-0017  
 **Entry gate:** PM-02 Body Semantic Topology / Face-Supported Sketch COMPLETED — PASS  
 **Owner UI acceptance:** 2026-10-05 — single Datum Plane tool, Offset constructor, Extrude-style preview/default 10 mm, Command Line parity, intersection overlay, Reference Geometry tree grouping/visibility  
@@ -515,7 +515,7 @@ Gate:
 
 ### PM-03B — evaluator + dependency/cycle semantics
 
-**State:** ACTIVE
+**State:** COMPLETED — PASS; exact candidate `e12f6c606132eadab5283372dee1a9f3f3008abd`, Windows FULL #1491, merged main `42b36d427bdb4c5c75b4961444576c7905032eb2`. Completion evidence: `work/PM-03B_DATUM_EVALUATION_COMPLETION.md`.
 
 Deliver:
 
@@ -533,6 +533,8 @@ Gate:
 - cold semantic evaluation deterministic.
 
 ### PM-03C — commands + Extrude-style draft / Command Line parity
+
+**State:** ACTIVE
 
 Deliver:
 
