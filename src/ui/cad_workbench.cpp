@@ -4873,11 +4873,12 @@ bool CadWorkbench::startExtrudeTool() {
                 "An Extrude operation is already active."));
         return false;
     }
-    if (active_sketch_id_ ||
+    if (datum_plane_draft_ ||
+        active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
             QStringLiteral(
-                "Finish or cancel the active Sketch context before Extrude."));
+                "Finish or cancel the active Datum Plane/Sketch context before Extrude."));
         return false;
     }
 
@@ -4975,11 +4976,12 @@ bool CadWorkbench::startExtrudeFromSelectedProfile() {
                 "An Extrude operation is already active."));
         return false;
     }
-    if (active_sketch_id_ ||
+    if (datum_plane_draft_ ||
+        active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
             QStringLiteral(
-                "Finish or cancel the active Sketch context before Extrude."));
+                "Finish or cancel the active Datum Plane/Sketch context before Extrude."));
         return false;
     }
     if (!selected_profile_id_) {
@@ -5083,11 +5085,12 @@ bool CadWorkbench::startExtrudeEdit(
                 "Finish or cancel the active Extrude before editing another Feature."));
         return false;
     }
-    if (active_sketch_id_ ||
+    if (datum_plane_draft_ ||
+        active_sketch_id_ ||
         sketch_support_pick_active_) {
         setStatusText(
             QStringLiteral(
-                "Finish or cancel the active Sketch context before Edit Extrude."));
+                "Finish or cancel the active Datum Plane/Sketch context before Edit Extrude."));
         return false;
     }
 
@@ -5664,7 +5667,10 @@ void CadWorkbench::setSketchSelectionRole(
 
 void CadWorkbench::startSketchTool() {
     if (activeDocumentSession() == nullptr ||
-        sketch_support_pick_active_) {
+        datum_plane_draft_ ||
+        sketch_support_pick_active_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_) {
         return;
     }
 
@@ -5698,7 +5704,10 @@ void CadWorkbench::startSketchResupport(
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr ||
-        sketch_support_pick_active_) {
+        datum_plane_draft_ ||
+        sketch_support_pick_active_ ||
+        extrude_profile_pick_active_ ||
+        extrude_draft_) {
         return;
     }
     if (active_sketch_id_) {
