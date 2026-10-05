@@ -157,6 +157,15 @@ nlohmann::json sketchSupportJson(
         };
     }
 
+    if (const auto datum_id =
+            datumPlaneIdForSketchSupport(
+                support)) {
+        return nlohmann::json{
+            {"kind", "datum_plane"},
+            {"datum_id", datum_id->serialized()},
+        };
+    }
+
     const auto* reference =
         bodyPlanarSurfaceReference(support);
     if (reference == nullptr ||
@@ -1085,6 +1094,48 @@ parseSketchSupportV9(
     return support;
 }
 
+std::optional<PartSketchSupport>
+parseSketchSupportV11(
+    const nlohmann::json& value,
+    std::string& error) {
+    if (value.is_object() &&
+        value.contains("kind") &&
+        value["kind"].is_string() &&
+        value["kind"].get<std::string>() ==
+            "datum_plane") {
+        if (value.size() != 2U ||
+            !value.contains("datum_id") ||
+            !value["datum_id"].is_string()) {
+            error =
+                "Native Part contains malformed schema-v11 Datum Sketch support";
+            return std::nullopt;
+        }
+
+        const auto datum_id =
+            DatumId::parse(
+                value["datum_id"]
+                    .get<std::string>());
+        if (!datum_id) {
+            error =
+                "Native Part contains invalid schema-v11 DatumId Sketch support";
+            return std::nullopt;
+        }
+
+        auto support =
+            partSketchSupportForDatumPlane(
+                *datum_id);
+        if (!support) {
+            error =
+                "Native Part contains invalid schema-v11 Datum Sketch support";
+        }
+        return support;
+    }
+
+    return parseSketchSupportV9(
+        value,
+        error);
+}
+
 std::optional<PlaneReference>
 parsePlaneReferenceV10(
     const nlohmann::json& value,
@@ -1275,6 +1326,8 @@ bool parseSketches(
         schema_version >= 3;
     const bool schema_v9 =
         schema_version >= 9;
+    const bool schema_v11 =
+        schema_version >= 11;
     const std::size_t expected_fields =
         schema_v9
             ? 4U
@@ -1317,13 +1370,17 @@ bool parseSketches(
         }
 
         auto support =
-            schema_v9
-                ? parseSketchSupportV9(
+            schema_v11
+                ? parseSketchSupportV11(
                       item["support"],
                       error)
-                : parseLegacyOriginSketchSupport(
-                      item["support"],
-                      error);
+                : (schema_v9
+                       ? parseSketchSupportV9(
+                             item["support"],
+                             error)
+                       : parseLegacyOriginSketchSupport(
+                             item["support"],
+                             error));
         if (!support) {
             return false;
         }
