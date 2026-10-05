@@ -30,7 +30,7 @@ ADR-0017 is accepted for this remediation.
 
 A coplanar Add must **not** merge semantic Surface identity because geometry looks equal.
 
-A newly-created planar Add Surface may continue exactly one inherited planar Surface only when Boolean lineage proves a unique overlap in the current result. The inherited carrier keeps durable identity; runtime contribution evidence remains separate.
+A newly-created planar Add Surface may continue exactly one inherited planar Surface only when Boolean lineage proves unique material continuity in the current result: either a shared current Face descendant or adjacent created/inherited descendants separated by one current partition Edge that the modeling kernel certifies as planar same-domain. The inherited carrier keeps durable identity; runtime contribution evidence remains separate. Part/Application code must never search by coplanarity/proximity.
 
 A current Edge that only partitions two bounded Face realizations of that same semantic Surface is a representation partition: complete/accounted, but not an ordinary visible/pickable engineering Edge.
 
@@ -50,8 +50,8 @@ Scope:
 
 - production OCCT/Kernel lineage and Part topology only;
 - Add only for the accepted first remediation;
-- unique lineage-proven inherited continuation;
-- no geometry similarity/proximity identity;
+- unique lineage-proven inherited continuation through shared descendant or provider-certified same-domain partition adjacency;
+- no geometry similarity/proximity search or global same-domain healing;
 - inherited Surface expands to current continued Face realizations;
 - created claim does not become a competing Sketch-support carrier;
 - Feature Contribution remains runtime-truthful without stealing carrier identity;
@@ -59,7 +59,7 @@ Scope:
 
 Required regressions:
 
-- coplanar Add extension yields one Resolved semantic Surface support across bounded fragments;
+- coplanar Add extension whose OCCT Fuse keeps adjacent bounded Faces separated by a result partition Edge yields one Resolved semantic Surface support across those fragments;
 - Sketch can be created by selecting either current Face fragment of the continued Surface;
 - strict Face may remain split/Ambiguous while Surface support stays Resolved;
 - partition Edge is not ordinary visible/pickable;

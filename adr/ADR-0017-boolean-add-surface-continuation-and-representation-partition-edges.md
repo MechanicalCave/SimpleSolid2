@@ -33,17 +33,23 @@ Geometry equality or coplanarity alone must not be used to repair this. Equal ge
 
 ### 1. Add continuation is lineage-driven, never proximity-driven
 
-Within the currently supported Extrude **Add** Boolean only, a newly-created planar tool Surface may continue one inherited planar semantic Surface when provider Boolean history proves a unique overlap in the current result.
+Within the currently supported Extrude **Add** Boolean only, a newly-created planar tool Surface may continue one inherited planar semantic Surface when provider Boolean history proves a unique material-continuity relation in the current result.
 
-The bounded continuation test is:
+The bounded continuation test accepts either of these provider-history forms:
+
+- **shared descendant:** one or more current Face descendants of the created claim are also descendants of one inherited planar Surface claim; or
+- **same-domain partition adjacency:** one current Face descendant of the created claim and one current Face descendant of an inherited planar Surface claim share one current result Edge, and the modeling kernel certifies those two adjacent Faces as one planar same-domain material carrier across that Edge.
+
+For either form:
 
 - operation is Add;
 - created claim is planar;
-- one or more current Face descendants of the created claim are also descendants of an inherited planar Surface claim;
 - exactly one inherited semantic Surface is the continuation candidate;
 - no second inherited Surface competes for that continuation.
 
-No plane-distance tolerance, normal comparison, centroid, area, nearest geometry, provider traversal order or current Face ordinal may select the winner.
+The same-domain certificate is an **admissibility check inside the modeling provider**, not identity selection by geometric search. Ownership still comes exclusively from unique Boolean lineage to the inherited claim. Part/Application code may not search nearby/equal planes or choose a carrier from geometry.
+
+No centroid, area, nearest geometry, provider traversal order, current Face ordinal or global same-domain healing may select the winner. No loose plane-distance/normal heuristic may search for a candidate outside the exact created↔inherited Boolean descendants joined by the current result partition Edge.
 
 If zero or more than one inherited continuation candidate exists, existing fail-closed Missing/Ambiguous/Unsupported behavior remains authoritative.
 
@@ -130,14 +136,15 @@ Positive:
 
 Costs:
 
-- provider/Part lineage handling must distinguish continuation from ordinary alias ambiguity;
+- provider/Part lineage handling must distinguish shared-descendant or provider-certified same-domain partition continuation from ordinary alias ambiguity;
 - Feature Contribution can no longer rely solely on Surface producer ownership in the continuation case;
 - topology regressions must prove no false continuation for coincident/similar but lineage-unrelated surfaces.
 
 ## Rejected directions
 
-- merge Surfaces because their planes are numerically equal;
-- use angular/distance tolerance as identity;
+- merge arbitrary Surfaces because their planes are numerically equal;
+- search by angular/distance tolerance for a Surface owner;
+- treat same-domain geometry alone as sufficient without the exact Add Boolean descendant/partition relation;
 - let the newest Add always steal Surface ownership;
 - keep both claims Ambiguous when unique Boolean lineage proves continuation;
 - hide every semantically-unsupported Edge;
