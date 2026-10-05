@@ -199,6 +199,8 @@ private:
     void setSketchSelectionRole(
         sketch::EntityRole role);
     void startSketchTool();
+    void startSketchResupport(
+        const sketch::SketchId& sketch_id);
     void cancelSketchTool();
     void requestEditSketch(
         const sketch::SketchId& sketch_id);
@@ -206,6 +208,10 @@ private:
         part::ProfileId profile_id);
     void tryCreateSketchFromSupport(
         std::optional<core::BuiltinReferenceRole> support);
+    void tryCreateSketchFromBodyTopology(
+        const BodyTopologyInspection& inspection);
+    void applySketchSupport(
+        part::PartSketchSupport support);
     void enterSketchEdit(
         const sketch::SketchId& sketch_id);
     void finishSketch();
@@ -292,6 +298,10 @@ private:
         document_view_states_;
 
     bool sketch_support_pick_active_{};
+    std::optional<sketch::SketchId>
+        sketch_resupport_target_;
+    application::CadInputContextGeneration
+        sketch_support_pick_generation_{};
     std::optional<core::DocumentId>
         sketch_edit_document_id_;
     std::optional<sketch::SketchId>
