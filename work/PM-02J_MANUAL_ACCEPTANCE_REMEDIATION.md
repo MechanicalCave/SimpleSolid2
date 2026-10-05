@@ -50,8 +50,8 @@ Scope:
 
 - production OCCT/Kernel lineage and Part topology only;
 - Add only for the accepted first remediation;
-- unique lineage-proven inherited continuation;
-- no geometry similarity/proximity identity;
+- unique lineage-proven inherited continuation through shared descendant or provider-certified same-domain partition adjacency;
+- no geometry similarity/proximity search or global same-domain healing;
 - inherited Surface expands to current continued Face realizations;
 - created claim does not become a competing Sketch-support carrier;
 - Feature Contribution remains runtime-truthful without stealing carrier identity;
@@ -59,7 +59,7 @@ Scope:
 
 Required regressions:
 
-- coplanar Add extension yields one Resolved semantic Surface support across bounded fragments;
+- coplanar Add extension whose OCCT Fuse keeps adjacent bounded Faces separated by a result partition Edge yields one Resolved semantic Surface support across those fragments;
 - Sketch can be created by selecting either current Face fragment of the continued Surface;
 - strict Face may remain split/Ambiguous while Surface support stays Resolved;
 - partition Edge is not ordinary visible/pickable;
