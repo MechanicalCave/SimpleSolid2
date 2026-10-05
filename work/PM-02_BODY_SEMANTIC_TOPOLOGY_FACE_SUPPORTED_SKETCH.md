@@ -3,7 +3,7 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-04  
 **Decision class:** D2 production Work Contract — Owner accepted 2026-10-04  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.13  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.14  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Entry gate:** PM-02P Body Semantic Topology Evidence COMPLETED — PASS; Owner accepted PM-02P D2 synthesis/recommendation on 2026-10-04  
 **Evidence authority:** `work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md`, `work/PM-02P_REFERENCE_SURVIVAL_MATRIX.md`, `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`  
@@ -911,7 +911,10 @@ Gate:
 
 ### PM-02F — stage-aware Sketch/Profile evaluation
 
-**Checkpoint state:** ACTIVE
+**Checkpoint state:** COMPLETED — PASS  
+**Final runtime candidate:** `87d4043f9114952df8228681e4cf16937c6f664b` — Windows FULL #1434 PASS  
+**Merged runtime main:** `f620d7e9888c09a6c4e9854bca6b3092699c1fe3`  
+**Completion evidence:** `work/PM-02F_STAGE_AWARE_SKETCH_PROFILE_EVALUATION_COMPLETION.md`
 
 Deliver:
 
@@ -926,6 +929,8 @@ Gate:
 - no stale frame feeds Feature evaluation.
 
 ### PM-02G — create/re-support Sketch on arbitrary planar Body Surface
+
+**Checkpoint state:** ACTIVE
 
 Deliver:
 
