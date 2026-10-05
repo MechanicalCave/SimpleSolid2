@@ -214,6 +214,11 @@ std::string buildSchema8FromCurrentOriginDocument(
         nlohmann::json::parse(
             package.authored_json);
     CHECK(authored.contains("sketches"));
+    // Current schema may contain later-domain fields. An exact v8 payload
+    // must remove everything introduced after v8 before adding legacy
+    // authored placement.
+    authored.erase("next_datum_id");
+    authored.erase("datum_planes");
     for (auto& sketch : authored["sketches"]) {
         auto placement =
             legacyPlacementFor(
@@ -235,6 +240,29 @@ std::string buildSchema8FromCurrentOriginDocument(
                 "part",
                 package.descriptor.document_id,
                 8},
+            text);
+    CHECK(built.ok());
+    return *built.bytes;
+}
+
+std::string buildSchema9FromCurrentDocument(
+    const persistence::NativeDocumentPackage& package) {
+    auto authored =
+        nlohmann::json::parse(
+            package.authored_json);
+    CHECK(authored.contains("next_datum_id"));
+    CHECK(authored.contains("datum_planes"));
+    authored.erase("next_datum_id");
+    authored.erase("datum_planes");
+
+    auto text = authored.dump(2);
+    text.push_back('\n');
+    const auto built =
+        persistence::buildNativeDocumentContainer(
+            persistence::NativeDocumentDescriptor{
+                "part",
+                package.descriptor.document_id,
+                9},
             text);
     CHECK(built.ok());
     return *built.bytes;
@@ -319,14 +347,55 @@ int main() {
     CHECK(current_package.ok());
     CHECK(
         current_package.package->descriptor
-            .domain_schema_version == 9);
+            .domain_schema_version == 10);
     CHECK(
         current_package.package->authored_json.find(
             "\"placement\"") ==
         std::string::npos);
 
-    // v8 -> v9 migration: all durable identities and local Sketch geometry
-    // survive; absolute placement is validated and then discarded.
+    // Exact v9 -> v10 migration preserves every durable identity already
+    // present in PM-02 while introducing an empty Datum collection.
+    const auto legacy_v9_path =
+        temp.path / "LegacyV9Rich.ss2part";
+    writeBytes(
+        legacy_v9_path,
+        buildSchema9FromCurrentDocument(
+            *current_package.package));
+
+    auto migrated_v9 =
+        store.load(legacy_v9_path);
+    CHECK(migrated_v9.ok());
+    CHECK(
+        migrated_v9.document->documentId() ==
+        document_id);
+    CHECK(
+        migrated_v9.document->body().id ==
+        ids.body_id);
+    CHECK(
+        migrated_v9.document->findFeature(
+            ids.feature_id) != nullptr);
+    CHECK(
+        migrated_v9.document->findProfile(
+            ids.profile_id) != nullptr);
+    const auto* migrated_v9_sketch =
+        migrated_v9.document->findSketch(
+            ids.sketch_id);
+    CHECK(migrated_v9_sketch != nullptr);
+    CHECK(
+        migrated_v9_sketch->model.entityCount() ==
+        ids.entity_ids.size());
+    for (const auto entity : ids.entity_ids) {
+        CHECK(
+            migrated_v9_sketch->model.findLine(
+                entity) != nullptr);
+    }
+    CHECK(migrated_v9.document->datumPlanes().empty());
+    CHECK(
+        migrated_v9.document->datumIdCursor()
+            .serialized() == "1");
+
+    // v8 -> current migration: all durable identities and local Sketch
+    // geometry survive; absolute placement is validated and discarded.
     const auto legacy_path =
         temp.path / "LegacyV8.ss2part";
     writeBytes(
@@ -394,7 +463,7 @@ int main() {
     CHECK(rewritten.ok());
     CHECK(
         rewritten.package->descriptor
-            .domain_schema_version == 9);
+            .domain_schema_version == 10);
     CHECK(
         rewritten.package->authored_json.find(
             "\"placement\"") ==
@@ -509,7 +578,7 @@ int main() {
     CHECK(body_package.ok());
     CHECK(
         body_package.package->descriptor
-            .domain_schema_version == 9);
+            .domain_schema_version == 10);
     CHECK(
         body_package.package->authored_json.find(
             "\"body_planar_surface\"") !=
@@ -555,7 +624,8 @@ int main() {
 
     std::cout
         << "PM02E_SKETCH_SUPPORT_SCHEMA_V9_PASS"
-        << " schema=9"
+        << " current_schema=10"
+        << " v9_migration=1"
         << " v8_migration=1"
         << " malformed_legacy_rejected=1"
         << " body_surface_roundtrip=1"

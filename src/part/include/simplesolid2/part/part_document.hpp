@@ -3,6 +3,7 @@
 #include <simplesolid2/core/document.hpp>
 #include <simplesolid2/core/document_reference.hpp>
 #include <simplesolid2/core/units.hpp>
+#include <simplesolid2/part/datum.hpp>
 #include <simplesolid2/part/feature.hpp>
 #include <simplesolid2/part/part_sketch.hpp>
 #include <simplesolid2/part/profile.hpp>
@@ -32,6 +33,8 @@ struct PartAuthoredState final {
 
     core::DocumentProperties properties;
     PartPresentationState presentation;
+    DatumIdCursor next_datum_id;
+    std::vector<OffsetDatumPlane> datum_planes;
     std::vector<PartSketch> sketches;
     ProfileIdCursor next_profile_id;
     std::vector<PartProfile> profiles;
@@ -103,6 +106,18 @@ public:
         core::BuiltinReferenceRole role) const noexcept {
         return state_.presentation.builtin_references.visible(role);
     }
+
+    [[nodiscard]] DatumIdCursor datumIdCursor() const noexcept {
+        return state_.next_datum_id;
+    }
+
+    [[nodiscard]] const std::vector<OffsetDatumPlane>&
+    datumPlanes() const noexcept {
+        return state_.datum_planes;
+    }
+
+    [[nodiscard]] const OffsetDatumPlane* findDatumPlane(
+        DatumId id) const noexcept;
 
     [[nodiscard]] const std::vector<PartSketch>& sketches() const noexcept {
         return state_.sketches;

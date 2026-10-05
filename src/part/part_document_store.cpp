@@ -199,6 +199,41 @@ nlohmann::json sketchSupportJson(
     };
 }
 
+nlohmann::json planeReferenceJson(
+    const PlaneReference& reference) {
+    if (const auto role =
+            builtinOriginPlaneForPlaneReference(
+                reference)) {
+        const auto support =
+            partSketchSupportForBuiltinPlane(*role);
+        return support
+            ? sketchSupportJson(*support)
+            : nlohmann::json{};
+    }
+
+    if (const auto* surface =
+            bodyPlanarSurfaceForPlaneReference(
+                reference)) {
+        const auto support =
+            partSketchSupportForBodyPlanarSurface(
+                *surface);
+        return support
+            ? sketchSupportJson(*support)
+            : nlohmann::json{};
+    }
+
+    if (const auto datum_id =
+            datumPlaneIdForPlaneReference(
+                reference)) {
+        return nlohmann::json{
+            {"kind", "datum_plane"},
+            {"datum_id", datum_id->serialized()},
+        };
+    }
+
+    return nlohmann::json{};
+}
+
 const char* profileVisibilityPolicyName(
     ProfileVisibilityPolicy policy) noexcept {
     switch (policy) {
@@ -345,6 +380,29 @@ std::string serializeAuthored(
     const PartDocument& document) {
     const auto& properties =
         document.properties();
+
+    nlohmann::json datum_planes =
+        nlohmann::json::array();
+    for (const auto& datum :
+         document.datumPlanes()) {
+        const auto source =
+            planeReferenceJson(datum.source);
+        if (source.empty() ||
+            !offsetDatumPlaneStructurallyValid(
+                datum)) {
+            return {};
+        }
+
+        datum_planes.push_back(
+            {
+                {"id", datum.id.serialized()},
+                {"kind", "offset_plane"},
+                {"source", source},
+                {"offset_mm",
+                 datum.offset.millimetres},
+                {"visible", datum.visible},
+            });
+    }
 
     nlohmann::json sketches =
         nlohmann::json::array();
@@ -501,6 +559,10 @@ std::string serializeAuthored(
          std::string{
              core::lengthUnitSuffix(
                  document.lengthUnit())}},
+        {"next_datum_id",
+         document.datumIdCursor().serialized()},
+        {"datum_planes",
+         std::move(datum_planes)},
         {"sketches", std::move(sketches)},
         {"next_profile_id",
          document.profileIdCursor().serialized()},
@@ -1021,6 +1083,145 @@ parseSketchSupportV9(
             "Native Part contains invalid schema-v9 Body Surface Sketch support";
     }
     return support;
+}
+
+std::optional<PlaneReference>
+parsePlaneReferenceV10(
+    const nlohmann::json& value,
+    std::string& error) {
+    if (!value.is_object() ||
+        !value.contains("kind") ||
+        !value["kind"].is_string()) {
+        error =
+            "Native Part contains malformed schema-v10 PlaneReference";
+        return std::nullopt;
+    }
+
+    const auto kind =
+        value["kind"].get<std::string>();
+    if (kind == "datum_plane") {
+        if (value.size() != 2U ||
+            !value.contains("datum_id") ||
+            !value["datum_id"].is_string()) {
+            error =
+                "Native Part contains malformed schema-v10 Datum Plane reference";
+            return std::nullopt;
+        }
+
+        const auto datum_id =
+            DatumId::parse(
+                value["datum_id"]
+                    .get<std::string>());
+        if (!datum_id) {
+            error =
+                "Native Part contains invalid schema-v10 DatumId reference";
+            return std::nullopt;
+        }
+
+        return PlaneReference{
+            DatumPlaneReference{*datum_id}};
+    }
+
+    auto support =
+        parseSketchSupportV9(value, error);
+    if (!support) {
+        return std::nullopt;
+    }
+
+    if (const auto role =
+            builtinOriginPlaneForSketchSupport(
+                *support)) {
+        return PlaneReference{
+            BuiltinOriginPlaneReference{*role}};
+    }
+
+    if (const auto* surface =
+            bodyPlanarSurfaceReference(
+                *support)) {
+        return PlaneReference{
+            BodyPlanarSurfacePlaneReference{
+                *surface}};
+    }
+
+    error =
+        "Native Part contains unsupported schema-v10 PlaneReference";
+    return std::nullopt;
+}
+
+bool parseDatumPlanesV10(
+    const nlohmann::json& value,
+    DatumIdCursor cursor,
+    std::vector<OffsetDatumPlane>& datum_planes,
+    std::string& error) {
+    if (!value.is_array()) {
+        error =
+            "Native Part Datum Plane payload must be an array";
+        return false;
+    }
+
+    datum_planes.clear();
+    datum_planes.reserve(value.size());
+    std::set<std::string> ids;
+
+    for (const auto& item : value) {
+        if (!item.is_object() ||
+            item.size() != 5U ||
+            !item.contains("id") ||
+            !item.contains("kind") ||
+            !item.contains("source") ||
+            !item.contains("offset_mm") ||
+            !item.contains("visible") ||
+            !item["id"].is_string() ||
+            !item["kind"].is_string() ||
+            item["kind"].get<std::string>() !=
+                "offset_plane" ||
+            !item["offset_mm"].is_number() ||
+            !item["visible"].is_boolean()) {
+            error =
+                "Native Part contains malformed schema-v10 Datum Plane";
+            return false;
+        }
+
+        const auto serialized_id =
+            item["id"].get<std::string>();
+        const auto id =
+            DatumId::parse(serialized_id);
+        auto source =
+            parsePlaneReferenceV10(
+                item["source"],
+                error);
+        const auto offset =
+            item["offset_mm"].get<double>();
+
+        if (!id ||
+            !cursor.containsAllocated(*id) ||
+            !ids.insert(serialized_id).second ||
+            !source ||
+            !std::isfinite(offset)) {
+            if (error.empty()) {
+                error =
+                    "Native Part contains invalid schema-v10 Datum Plane state";
+            }
+            return false;
+        }
+
+        OffsetDatumPlane datum{
+            *id,
+            std::move(*source),
+            core::LengthValue{offset},
+            item["visible"].get<bool>()};
+        if (!offsetDatumPlaneStructurallyValid(
+                datum)) {
+            error =
+                "Native Part contains structurally invalid schema-v10 Datum Plane";
+            return false;
+        }
+
+        datum_planes.push_back(
+            std::move(datum));
+    }
+
+    return true;
 }
 
 std::optional<PartSketchSupport>
@@ -1673,14 +1874,18 @@ std::optional<PartAuthoredState> parseAuthored(
         schema_version >= 7;
     const bool has_body_features =
         schema_version >= 8;
+    const bool has_datums =
+        schema_version >= 10;
     const std::size_t expected_fields =
         legacy_v1
             ? 2U
-            : (has_body_features
-                   ? 9U
-                   : (has_profiles
-                          ? (has_length_unit ? 6U : 5U)
-                          : 3U));
+            : (has_datums
+                   ? 11U
+                   : (has_body_features
+                          ? 9U
+                          : (has_profiles
+                                 ? (has_length_unit ? 6U : 5U)
+                                 : 3U)));
 
     if (authored.is_discarded() ||
         !authored.is_object() ||
@@ -1699,7 +1904,12 @@ std::optional<PartAuthoredState> parseAuthored(
          (!authored.contains("modeling_semantics_version") ||
           !authored.contains("next_body_id") ||
           !authored.contains("body") ||
-          !authored["next_body_id"].is_string()))) {
+          !authored["next_body_id"].is_string())) ||
+        (has_datums &&
+         (!authored.contains("next_datum_id") ||
+          !authored["next_datum_id"].is_string() ||
+          !authored.contains("datum_planes") ||
+          !authored["datum_planes"].is_array()))) {
         error =
             "Native Part authored payload has an invalid top-level schema";
         return std::nullopt;
@@ -1840,6 +2050,26 @@ std::optional<PartAuthoredState> parseAuthored(
                 *body_cursor,
                 state.next_profile_id,
                 state.body,
+                error)) {
+            return std::nullopt;
+        }
+    }
+
+    if (has_datums) {
+        const auto cursor =
+            DatumIdCursor::parse(
+                authored["next_datum_id"]
+                    .get<std::string>());
+        if (!cursor) {
+            error =
+                "Native Part next_datum_id is invalid";
+            return std::nullopt;
+        }
+        state.next_datum_id = *cursor;
+        if (!parseDatumPlanesV10(
+                authored["datum_planes"],
+                *cursor,
+                state.datum_planes,
                 error)) {
             return std::nullopt;
         }

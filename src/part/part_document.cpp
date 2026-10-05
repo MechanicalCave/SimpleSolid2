@@ -27,6 +27,22 @@ PartReconstructResult PartDocument::restore(
         PartReconstructErrorCode::none};
 }
 
+const OffsetDatumPlane* PartDocument::findDatumPlane(
+    DatumId id) const noexcept {
+    if (!id.valid()) {
+        return nullptr;
+    }
+    const auto found = std::find_if(
+        state_.datum_planes.begin(),
+        state_.datum_planes.end(),
+        [id](const OffsetDatumPlane& item) {
+            return item.id == id;
+        });
+    return found == state_.datum_planes.end()
+        ? nullptr
+        : &*found;
+}
+
 const PartSketch* PartDocument::findSketch(
     const sketch::SketchId& id) const noexcept {
     const auto found = std::find_if(
@@ -129,6 +145,121 @@ bool PartDocument::validAuthoredState(
         return false;
     }
 
+    const auto valid_surface_reference =
+        [&state](const SurfaceReference& surface) {
+            const auto producer =
+                std::find_if(
+                    state.body.features.begin(),
+                    state.body.features.end(),
+                    [&surface](const PartFeature& feature) {
+                        return feature.id ==
+                               surface.surface
+                                   .producer_feature_id;
+                    });
+            const auto stage =
+                std::find_if(
+                    state.body.features.begin(),
+                    state.body.features.end(),
+                    [&surface](const PartFeature& feature) {
+                        return surface.stage.feature_id &&
+                               feature.id ==
+                                   *surface.stage.feature_id;
+                    });
+            return producer !=
+                       state.body.features.end() &&
+                   stage !=
+                       state.body.features.end() &&
+                   producer <= stage;
+        };
+
+    for (std::size_t index = 0U;
+         index < state.datum_planes.size();
+         ++index) {
+        const auto& datum =
+            state.datum_planes[index];
+        if (!offsetDatumPlaneStructurallyValid(
+                datum) ||
+            !state.next_datum_id
+                 .containsAllocated(datum.id)) {
+            return false;
+        }
+
+        if (const auto* surface =
+                bodyPlanarSurfaceForPlaneReference(
+                    datum.source);
+            surface != nullptr &&
+            !valid_surface_reference(*surface)) {
+            return false;
+        }
+
+        if (const auto source_datum =
+                datumPlaneIdForPlaneReference(
+                    datum.source)) {
+            const auto source =
+                std::find_if(
+                    state.datum_planes.begin(),
+                    state.datum_planes.end(),
+                    [source_datum](
+                        const OffsetDatumPlane& item) {
+                        return item.id ==
+                               *source_datum;
+                    });
+            if (source ==
+                state.datum_planes.end()) {
+                return false;
+            }
+        }
+
+        for (std::size_t previous = 0U;
+             previous < index;
+             ++previous) {
+            if (state.datum_planes[previous].id ==
+                datum.id) {
+                return false;
+            }
+        }
+    }
+
+    // PM-03A bounded Datum dependency invariant. Datum references form a
+    // single-parent local graph in this package; cycles fail closed without
+    // introducing a universal Part dependency graph.
+    for (const auto& root : state.datum_planes) {
+        std::vector<DatumId> path;
+        const OffsetDatumPlane* current = &root;
+
+        while (current != nullptr) {
+            if (std::find(
+                    path.begin(),
+                    path.end(),
+                    current->id) != path.end()) {
+                return false;
+            }
+            path.push_back(current->id);
+
+            const auto source_id =
+                datumPlaneIdForPlaneReference(
+                    current->source);
+            if (!source_id) {
+                break;
+            }
+
+            const auto source =
+                std::find_if(
+                    state.datum_planes.begin(),
+                    state.datum_planes.end(),
+                    [source_id](
+                        const OffsetDatumPlane& item) {
+                        return item.id ==
+                               *source_id;
+                    });
+            if (source ==
+                state.datum_planes.end()) {
+                return false;
+            }
+            current = &*source;
+        }
+    }
+
     for (std::size_t index = 0;
          index < state.sketches.size();
          ++index) {
@@ -139,34 +270,10 @@ bool PartDocument::validAuthoredState(
 
         if (const auto* surface =
                 bodyPlanarSurfaceReference(
-                    hosted.support)) {
-            const auto producer =
-                std::find_if(
-                    state.body.features.begin(),
-                    state.body.features.end(),
-                    [surface](const PartFeature& feature) {
-                        return feature.id ==
-                               surface->surface
-                                   .producer_feature_id;
-                    });
-            const auto stage =
-                std::find_if(
-                    state.body.features.begin(),
-                    state.body.features.end(),
-                    [surface](const PartFeature& feature) {
-                        return surface->stage
-                                   .feature_id &&
-                               feature.id ==
-                                   *surface->stage
-                                        .feature_id;
-                    });
-            if (producer ==
-                    state.body.features.end() ||
-                stage ==
-                    state.body.features.end() ||
-                producer > stage) {
-                return false;
-            }
+                    hosted.support);
+            surface != nullptr &&
+            !valid_surface_reference(*surface)) {
+            return false;
         }
 
         for (std::size_t previous = 0;
