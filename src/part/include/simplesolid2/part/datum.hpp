@@ -6,6 +6,7 @@
 #include <simplesolid2/part/semantic_topology_reference.hpp>
 
 #include <optional>
+#include <utility>
 #include <variant>
 
 namespace simplesolid2::part {
