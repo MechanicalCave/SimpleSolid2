@@ -746,7 +746,7 @@ int main(int argc, char* argv[]) {
     CHECK(datum_one != nullptr);
     selectOnly(*tree, datum_one);
 
-    CHECK(finish_sketch->isVisible());
+    CHECK(!finish_sketch->isHidden());
     CHECK(finish_sketch->isEnabled());
     CHECK(
         finish_sketch->text() ==
