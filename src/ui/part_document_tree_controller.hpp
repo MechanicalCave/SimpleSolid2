@@ -38,6 +38,9 @@ public:
 
     using SketchEditHandler = std::function<void(
         const sketch::SketchId&)>;
+    using SketchSupportChangeHandler =
+        std::function<void(
+            const sketch::SketchId&)>;
     using ProfileSelectionHandler =
         std::function<void(
             const std::vector<part::ProfileId>&,
@@ -99,6 +102,11 @@ public:
     void setSketchEditHandler(SketchEditHandler handler) {
         sketch_edit_handler_ = std::move(handler);
     }
+    void setSketchSupportChangeHandler(
+        SketchSupportChangeHandler handler) {
+        sketch_support_change_handler_ =
+            std::move(handler);
+    }
     void setProfileSelectionHandler(
         ProfileSelectionHandler handler) {
         profile_selection_handler_ =
@@ -145,6 +153,8 @@ public:
 
     [[nodiscard]] std::optional<core::BuiltinReferenceRole>
     primaryBuiltinReference() const;
+    [[nodiscard]] std::optional<sketch::SketchId>
+    primarySketchId() const;
     [[nodiscard]] std::vector<part::ProfileId>
     selectedProfileIds() const;
     [[nodiscard]] std::optional<part::ProfileId>
@@ -167,6 +177,8 @@ private:
     void showContextMenu(const QPoint& position);
     void applySelectedVisibility(bool visible);
     void requestSketchEdit(const QTreeWidgetItem& item);
+    void requestSketchSupportChange(
+        const QTreeWidgetItem& item);
     void requestProfileEdit(const QTreeWidgetItem& item);
     void requestFeatureEdit(const QTreeWidgetItem& item);
     void notifySelectionChanged();
@@ -190,6 +202,7 @@ private:
     QAction* show_action_{};
     QAction* hide_action_{};
     QAction* edit_sketch_action_{};
+    QAction* change_sketch_support_action_{};
     QAction* edit_profile_action_{};
     QAction* edit_feature_action_{};
     QAction* suppress_feature_action_{};
@@ -198,6 +211,8 @@ private:
     ResultHandler result_handler_;
     SelectionHandler selection_handler_;
     SketchEditHandler sketch_edit_handler_;
+    SketchSupportChangeHandler
+        sketch_support_change_handler_;
     ProfileSelectionHandler profile_selection_handler_;
     ProfileEditHandler profile_edit_handler_;
     FeatureSelectionHandler feature_selection_handler_;
