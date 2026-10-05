@@ -2762,6 +2762,21 @@ DocumentSessionResult DocumentSession::execute(
         }
     }
 
+    for (const auto& sketch :
+         document_.sketches()) {
+        const auto support =
+            part::datumPlaneIdForSketchSupport(
+                sketch.support);
+        if (support &&
+            *support == command.datum_id) {
+            return failure(
+                DocumentSessionErrorCode::
+                    invalid_command,
+                "Delete Datum Plane rejected because a Sketch depends on it",
+                path_);
+        }
+    }
+
     auto after = document_.state();
     const auto erase =
         std::find_if(
