@@ -759,6 +759,7 @@ void PartViewportController::setSolidModelingKernel(
     body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
     body_topology_bindings_.clear();
+    datum_bindings_.clear();
     clearBodyTopologyPreselection();
     clearBodyTopologySelection();
     if (had_body_selection) {
@@ -783,6 +784,7 @@ void PartViewportController::setDocumentSession(
                 select_pick_box;
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
+        datum_bindings_.clear();
         transient_profile_reveal_.reset();
         transient_profile_hide_.reset();
         body_scene_revision_.reset();
@@ -821,6 +823,7 @@ void PartViewportController::clear() {
             select_pick_box;
     sketch_entity_bindings_.clear();
     profile_bindings_.clear();
+    datum_bindings_.clear();
     transient_profile_reveal_.reset();
     transient_profile_hide_.reset();
     body_scene_revision_.reset();
@@ -889,6 +892,7 @@ void PartViewportController::refreshPresentation() {
     if (session_ == nullptr) {
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
+        datum_bindings_.clear();
         body_scene_revision_.reset();
         body_scene_cache_.reset();
         datum_evaluation_cache_.reset();
@@ -961,9 +965,17 @@ void PartViewportController::refreshPresentation() {
             : viewport_->setBodyTopologyOverlayScene(
                   viewer::BodyTopologyOverlayScene{});
 
+    const auto reference_scene =
+        buildReferenceScene();
     const bool reference_ok =
+        reference_scene.has_value() &&
         viewport_->setReferenceScene(
-            buildReferenceScene());
+            *reference_scene);
+    if (!reference_scene) {
+        static_cast<void>(
+            viewport_->setReferenceScene(
+                viewer::ReferenceScene{}));
+    }
 
     const auto profile_scene =
         buildProfileScene();
