@@ -247,6 +247,58 @@ bool PartDocument::validAuthoredState(
         }
     }
 
+    // PM-02G bounded dependency invariant: a Body-Surface-backed Sketch may
+    // only feed Features strictly downstream of the declared support stage.
+    // This is ordered single-Body history validation, not a universal graph.
+    for (const auto& hosted : state.sketches) {
+        const auto* support =
+            bodyPlanarSurfaceReference(
+                hosted.support);
+        if (support == nullptr) {
+            continue;
+        }
+
+        const auto stage =
+            std::find_if(
+                state.body.features.begin(),
+                state.body.features.end(),
+                [support](const PartFeature& feature) {
+                    return support->stage.feature_id &&
+                           feature.id ==
+                               *support->stage.feature_id;
+                });
+        if (stage == state.body.features.end()) {
+            return false;
+        }
+        const auto stage_index =
+            static_cast<std::size_t>(
+                std::distance(
+                    state.body.features.begin(),
+                    stage));
+
+        for (const auto& profile : state.profiles) {
+            if (profile.source_sketch_id !=
+                hosted.id) {
+                continue;
+            }
+            for (std::size_t feature_index = 0U;
+                 feature_index <
+                     state.body.features.size();
+                 ++feature_index) {
+                const auto source =
+                    sourceProfileId(
+                        state.body.features[
+                            feature_index]);
+                if (source &&
+                    *source == profile.id &&
+                    stage_index >=
+                        feature_index) {
+                    return false;
+                }
+            }
+        }
+    }
+
     return true;
 }
 
