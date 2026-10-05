@@ -554,7 +554,7 @@ The Product Browser must be regenerated with `.\ss2.ps1 docs` whenever canonical
 
 `CadWorkbenchShell` is the reusable one-document editor layout. Its active-Document top row contains the domain/context tool surface on the left and the existing Undo / Redo / Save / Close Document actions on the right; visual alignment does not merge their ownership. The body contains Document Tree, the Editor Surface, Properties plus contextual Operations, followed by Status/Diagnostics. Project-level Document Tabs live outside it in `ProjectWorkspaceShell`, so the Workbench shell represents only one active CAD Document editor.
 
-The shell owns layout only. At normal desktop width it targets about 150 px for Document Tree and 270 px for Properties/Operations while the center Editor receives stretch surplus. Compact mode keeps all three surfaces with smaller side targets (currently 120/230 px). Narrow mode collapses the side surfaces and exposes local `Tree` and `Panel` recovery controls in the active-Document row; recovering one side keeps the Editor present and does not introduce docking/window ownership. Separate enter/leave thresholds provide resize hysteresis. If focus is inside a side-panel text/property editor when narrow mode is entered, that owning panel remains recovered so text focus is not discarded by reflow.
+The shell owns layout only. At normal desktop width it targets about 150 px for Document Tree and 270 px for Properties/Operations while the center Editor receives stretch surplus. Compact mode keeps all three surfaces with smaller side targets (currently 120/230 px). Narrow mode collapses the side surfaces and exposes local `Tree` and `Panel` recovery controls in the active-Document row; recovering one side keeps the Editor present and does not introduce docking/window ownership. Separate enter/leave thresholds provide resize hysteresis. If focus is inside a side-panel text/property editor when narrow mode is entered, that owning panel remains recovered so text focus is not discarded by reflow. The right contextual panel ignores its natural size hint in both axes, so showing Profile/Sketch Operations cannot promote content height into an unexpected top-level window resize.
 
 Responsive transitions are presentation-only: they do not mutate the Document, revision, dirty state, Undo/Redo, semantic selection or active Sketch/Profile context. The current Part composition is implemented by `CadWorkbench` plus narrow adapters.
 
@@ -792,9 +792,9 @@ When several visible candidates remain under the same pointer sample, the intera
 
 Topology cycling is lower priority than focused text input, Dynamic Input field traversal or another semantic request that already owns Tab. Pointer neighborhood, view, tool/filter, scene or evaluation/provider generation changes reset the stack.
 
-The currently preselected candidate is visibly highlighted before click. The user's click on that visible preselection is the acquisition authority; provider return order has no durable semantic meaning.
+The currently preselected candidate is visibly highlighted before click. The user's click on that visible preselection is the acquisition authority; provider return order has no durable semantic meaning. Boundary Vertex/Edge front-visibility includes only a bounded sub-pixel world-space allowance for projection/ray round-trip error; it does not enlarge semantic identity tolerance or permit hidden select-through.
 
-A `KnownRepresentationArtifact` such as a periodic seam remains completely accounted and diagnosable but is excluded from ordinary material Edge preselection by default. Material topology whose durable referenceability is Unsupported remains visible/selectable for truthful inspection and diagnostics.
+A `KnownRepresentationArtifact` such as a periodic seam or an ADR-0017 same-Surface representation partition remains completely accounted and diagnosable but is excluded from ordinary engineering Edge display and preselection by default. A same-Surface partition is recognized from tracked carrier/Boolean lineage, not because two planes merely look coplanar. Other material topology whose durable referenceability is Unsupported remains visible/selectable for truthful inspection and diagnostics.
 
 Feature Contribution, hidden-edge graphics and semantic carrier/support ghost overlays do not create duplicate pick geometry. All normal Body picking uses the one current topology presentation/token mapping.
 
@@ -1698,7 +1698,7 @@ Delete Profile removes only the Profile and leaves source Sketch geometry author
 <!-- section-id: internal.part-documents.sketch-presentation -->
 ## Active Sketch presentation and spatial input
 
-While a Part Sketch is actively edited, `PartViewportController` rebuilds a neutral authored Sketch scene from the current embedded `SketchModel`, resolves the current support frame and maps Line/Circle/Arc geometry from local Sketch U/V into 3D. Origin-backed Sketches use the canonical built-in frame; Body-Surface-backed Sketches resolve their declared upstream stage and semantic planar Surface. The intrinsic Sketch Origin is presentation-only and runtime presentation-token bindings map back to `SketchId + EntityId`.
+While a Part Sketch is actively edited, `PartViewportController` rebuilds a neutral authored Sketch scene from the current embedded `SketchModel`, resolves the current support frame and maps Line/Circle/Arc geometry from local Sketch U/V into 3D. Origin-backed Sketches use the canonical built-in frame; Body-Surface-backed Sketches resolve their declared upstream stage and semantic planar Surface from the same-revision stage topology catalogs retained by the current evaluation. Later Features do not force edit presentation to use final-stage topology. The intrinsic Sketch Origin is presentation-only and runtime presentation-token bindings map back to `SketchId + EntityId`.
 
 A separate preview scene is transient and independently replaceable/clearable. Neutral provider rays are intersected with the active Sketch frame to produce Sketch-local U/V. Selection, hover, grips, preview, pointer candidates and Command Line input state remain runtime-only and do not change Part revision, dirty state, history or persistence until a semantic command commits.
 
@@ -1753,7 +1753,7 @@ The as-built invariants are:
 
 For singular Edge/Curve meaning, Owner accepted the PM-02P finding that a Surface pair alone may be insufficient when several disconnected branches exist. A bounded semantic branch/provenance discriminator is permitted only when producer semantics can defend it; otherwise the singular meaning remains Ambiguous. Provider branch order, nearest/longest geometry and XYZ sorting are not valid identity.
 
-The implementation remains bounded by `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md` and ADR-0016. Planar Body Faces may host standard Sketches through semantic Surface support; non-planar Faces remain selectable/inspectable but standard Sketch support reports `Unsupported`. Re-support preserves SketchId, EntityIds and local U/V geometry, and cycle-causing downstream/self support is rejected before mutation.
+The implementation remains bounded by `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`, ADR-0016 and ADR-0017. Planar Body Faces may host standard Sketches through semantic Surface support; non-planar Faces remain selectable/inspectable but standard Sketch support reports `Unsupported`. Re-support preserves SketchId, EntityIds and local U/V geometry, and cycle-causing downstream/self support is rejected before mutation. For Extrude Add only, provider Boolean lineage may prove that a newly-created planar tool Surface uniquely continues one inherited semantic Surface carrier. The inherited carrier keeps durable identity and expands over the current bounded Face fragments; visual coplanarity alone is never identity authority. An Edge separating bounded fragments of that same carrier is a runtime representation partition: fully accounted, non-referenceable and excluded from ordinary engineering Edge presentation/picking. Feature Contribution remains a separate runtime query, so the Add can truthfully contribute current fragments without stealing Surface ownership.
 
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
@@ -2560,7 +2560,7 @@ After `Save`, Origin visibility survives closing and restarting the application.
 <!-- section-id: product.parts.sketch-host -->
 ## Creating and viewing a Sketch
 
-Use `Sketch` in the expanding left side of the active-Document top row, then select either `XY Plane`, `XZ Plane` or `YZ Plane` from Origin, or a current Body Face in the 3D Viewport. During Sketch support acquisition the viewport accepts Faces only. A planar semantic Face is accepted as standard Sketch support; a non-planar Face remains selectable but reports **Unsupported** instead of falling through to another target. Selecting the support is still a runtime draft: **Finish Sketch** performs the single authored Create transaction and **Cancel** changes nothing.
+Use `Sketch` in the expanding left side of the active-Document top row, then select either `XY Plane`, `XZ Plane` or `YZ Plane` from Origin, or a current Body Face in the 3D Viewport. During Sketch support acquisition the viewport accepts Faces only. A planar semantic Face is accepted as standard Sketch support; a non-planar Face remains selectable but reports **Unsupported** instead of falling through to another target. Selecting the support is still a runtime draft: **Create Sketch** performs the single authored Create transaction and **Cancel** changes nothing. After the Sketch exists and Edit is active, the same action area becomes **Finish Sketch**.
 
 During Sketch Edit the tools are grouped as:
 
@@ -2752,7 +2752,7 @@ Space typed while a text-entry field has focus remains text input; it does not t
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit.
 
-An existing Sketch can use **Change Sketch Support** from Document Tree or `RESUPPORT` in Command Line. Select a new Origin plane or planar Body Face, then Finish to commit exactly one support change. Re-support preserves SketchId, EntityIds and authored local U/V geometry; it changes the host mapping. Missing, Ambiguous, Unsupported or cycle-causing targets are rejected without partial mutation. Undo/Redo restores the previous semantic support intent.
+An existing Sketch can use **Change Sketch Support** from Document Tree or `RESUPPORT` in Command Line. Select a new Origin plane or planar Body Face, then **Apply Support** to commit exactly one support change. Re-support preserves SketchId, EntityIds and authored local U/V geometry; it changes the host mapping. Missing, Ambiguous, Unsupported or cycle-causing targets are rejected without partial mutation. Undo/Redo restores the previous semantic support intent.
 
 Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions and Datum planes remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
 
@@ -2927,7 +2927,7 @@ The viewport View Style selector offers:
 - **Shaded + Edges**;
 - **Shaded + Hidden Edges**.
 
-View Style is temporary presentation state. It does not dirty the Part, create Undo/Redo history or change semantic selection. Hidden-edge display does not enable occluded select-through.
+View Style is temporary presentation state. It does not dirty the Part, create Undo/Redo history or change semantic selection. Hidden-edge display does not enable occluded select-through. An Edge that only partitions bounded Face fragments of the same semantic Surface is a representation partition: it stays in topology accounting but is hidden from normal engineering edge display and ordinary picking.
 
 For ordinary all-kind picking, visible candidates use the screen-space priority **Vertex → Edge → Face**. When several candidates overlap under the pointer, **Tab** and **Shift+Tab** cycle the runtime candidate stack before click. The visible preselection you click is the acquisition target; provider return order does not become CAD identity.
 
@@ -2942,7 +2942,7 @@ A current topology item can be **Present** while durable singular referenceabili
 
 Selecting or hovering a Feature in Document Tree highlights its **Current Feature Contribution** on the current Body. This is not a historical-stage replacement and does not create duplicate selectable topology. If a selected topology item disappears after recompute, direct selection clears instead of jumping to similar geometry.
 
-Face-supported Sketches attach durably to the semantic planar **Surface**, not to a provider Face handle. If later modeling splits that Surface into multiple bounded Face fragments, the Sketch may remain Resolved. If the semantic support is deleted it becomes **Missing**; if multiple semantic candidates remain it becomes **Ambiguous**. No stale last-good support frame is used for downstream modeling. Use Change Sketch Support / `RESUPPORT` for explicit repair.
+Face-supported Sketches attach durably to the semantic planar **Surface**, not to a provider Face handle. If later modeling splits that Surface into multiple bounded Face fragments, the Sketch may remain Resolved. A coplanar Extrude Add may extend an existing Surface carrier only when Boolean lineage proves unique continuation; visual coplanarity alone never rebinds identity. The artificial partition Edge between continued fragments is not an engineering boundary. Re-entering Sketch Edit resolves presentation against the Sketch support's exact upstream Body stage, even when later Features exist. If the semantic support is deleted it becomes **Missing**; if multiple semantic candidates remain it becomes **Ambiguous**. No stale last-good support frame is used for downstream modeling. Use Change Sketch Support / `RESUPPORT` for explicit repair.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -3275,7 +3275,7 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie i wyświetlanie Sketchu
 
-W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin lub bieżącą Face Body w viewporcie 3D. Podczas wyboru supportu Sketch viewport przyjmuje wyłącznie Face. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Sam wybór supportu pozostaje runtime draftem: **Finish Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu.
+W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin lub bieżącą Face Body w viewporcie 3D. Podczas wyboru supportu Sketch viewport przyjmuje wyłącznie Face. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Sam wybór supportu pozostaje runtime draftem: **Create Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu. Po utworzeniu Sketchu i wejściu w Edit ten sam obszar akcji zmienia się na **Finish Sketch**.
 
 Podczas Sketch Edit narzędzia są uporządkowane w grupy:
 
@@ -3467,7 +3467,7 @@ Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uru
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję.
 
-Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin lub planarną Face Body, a następnie Finish, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported albo powodujący cykl jest odrzucany bez częściowej mutacji. Undo/Redo przywraca poprzedni semantyczny support.
+Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin lub planarną Face Body, a następnie **Apply Support**, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported albo powodujący cykl jest odrzucany bez częściowej mutacji. Undo/Redo przywraca poprzedni semantyczny support.
 
 Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions i płaszczyzny Datum pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
 
@@ -3642,7 +3642,7 @@ Selektor View Style w viewport oferuje:
 - **Shaded + Edges**;
 - **Shaded + Hidden Edges**.
 
-View Style jest tymczasowym stanem prezentacji. Nie dirty'uje Parta, nie tworzy historii Undo/Redo i nie zmienia semantycznego zaznaczenia. Pokazanie hidden edges nie włącza wyboru przez zasłoniętą geometrię.
+View Style jest tymczasowym stanem prezentacji. Nie dirty'uje Parta, nie tworzy historii Undo/Redo i nie zmienia semantycznego zaznaczenia. Pokazanie hidden edges nie włącza wyboru przez zasłoniętą geometrię. Edge, która wyłącznie rozdziela bounded Face fragments należące do tego samego semantycznego Surface, jest representation partition: pozostaje w topology accounting, ale jest ukryta w normalnym inżynierskim wyświetlaniu krawędzi i ordinary picking.
 
 Przy zwykłym wyborze wszystkich typów widoczne kandydaty używają screen-space priority **Vertex → Edge → Face**. Gdy kilka kandydatów nakłada się pod kursorem, **Tab** i **Shift+Tab** przełączają runtime candidate stack przed kliknięciem. Widoczny preselection, który klikniesz, jest celem acquisition; kolejność zwrócona przez providera nie staje się CAD identity.
 
@@ -3657,7 +3657,7 @@ Bieżący element topologii może być **Present**, gdy trwała singular referen
 
 Zaznaczenie albo hover Feature w Document Tree podświetla jego **Current Feature Contribution** na bieżącym Body. Nie jest to podmiana Body na historyczny stage i nie tworzy duplikatów selectable topology. Gdy bezpośrednio wybrany element topologii znika po recompute, zaznaczenie jest czyszczone zamiast przeskakiwać na podobną geometrię.
 
-Sketch oparty na Face jest trwale związany z semantycznym planarnym **Surface**, nie z providerowym uchwytem Face. Jeśli późniejsze modelowanie rozdzieli ten Surface na kilka bounded Face fragments, Sketch może nadal pozostać Resolved. Gdy semantyczny support zostanie usunięty, stan przechodzi w **Missing**; gdy pozostaje wiele semantycznych kandydatów — w **Ambiguous**. Downstream modeling nie używa stale last-good frame. Do jawnej naprawy użyj Change Sketch Support / `RESUPPORT`.
+Sketch oparty na Face jest trwale związany z semantycznym planarnym **Surface**, nie z providerowym uchwytem Face. Jeśli późniejsze modelowanie rozdzieli ten Surface na kilka bounded Face fragments, Sketch może nadal pozostać Resolved. Współpłaszczyznowy Extrude Add może rozszerzyć istniejący carrier Surface wyłącznie wtedy, gdy Boolean lineage dowodzi jednoznacznej kontynuacji; sama współpłaszczyznowość nigdy nie przepina identity. Sztuczna partition Edge pomiędzy kontynuowanymi fragmentami nie jest granicą inżynierską. Ponowne wejście w Sketch Edit rozwiązuje prezentację względem dokładnego upstream Body stage zapisanego w support Sketchu, nawet gdy istnieją późniejsze Features. Gdy semantyczny support zostanie usunięty, stan przechodzi w **Missing**; gdy pozostaje wiele semantycznych kandydatów — w **Ambiguous**. Downstream modeling nie używa stale last-good frame. Do jawnej naprawy użyj Change Sketch Support / `RESUPPORT`.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
