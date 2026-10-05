@@ -755,6 +755,28 @@ set_tests_properties(pm02e.sketch_support_schema_v9 PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-persistence"
 )
 
+add_executable(pm02f_stage_aware_profile_evaluation_test
+    pm02f_stage_aware_profile_evaluation_test.cpp
+)
+
+target_link_libraries(pm02f_stage_aware_profile_evaluation_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_part
+)
+
+target_compile_features(pm02f_stage_aware_profile_evaluation_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm02f.stage_aware_profile_evaluation
+    COMMAND pm02f_stage_aware_profile_evaluation_test
+)
+
+set_tests_properties(pm02f.stage_aware_profile_evaluation PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part"
+)
+
 add_executable(sk03a_viewer_sketch_contracts_test
     sk03a_viewer_sketch_contracts_test.cpp
 )
