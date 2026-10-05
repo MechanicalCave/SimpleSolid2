@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 ACTIVE  
-**Version:** 1.15  
-**Owner acceptance:** 2026-10-04 — PM-02 Work Contract authority unchanged; v1.15 is checkpoint-state synchronization only  
-**Previous accepted version:** 1.14 — 2026-10-04  
+**Version:** 1.16  
+**Owner acceptance:** 2026-10-04 — PM-02 Work Contract authority unchanged; v1.16 is checkpoint-state synchronization only  
+**Previous accepted version:** 1.15 — 2026-10-04  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-02H — existing Extrude Add/Cut from face-supported Sketch under the active PM-02 Work Contract  
+**Current active checkpoint:** PM-02I — lifecycle, repair, persistence and regression matrix under the active PM-02 Work Contract  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -446,7 +446,8 @@ Checkpoint state:
 - `PM-02E — Sketch support schema v9 + deterministic frame resolver` — **COMPLETED — PASS**; final runtime candidate `8b5e2c6844c93648e1884464d138d9a98e2a7a9a`, Windows FULL #1431 PASS, merged runtime main `e3452d4d0051564f332319a7945344655e91aa3a`;
 - `PM-02F — stage-aware Sketch/Profile evaluation` — **COMPLETED — PASS**; final runtime candidate `87d4043f9114952df8228681e4cf16937c6f664b`, Windows FULL #1434 PASS, merged runtime main `f620d7e9888c09a6c4e9854bca6b3092699c1fe3`;
 - `PM-02G — create/re-support Sketch on arbitrary planar Body Surface` — **COMPLETED — PASS**; final runtime candidate `f45ed8ee09aabe098ab88bc7e47a0c614841fb40`, Windows FULL #1443 PASS, merged runtime main `17778bdfe80d0411031b458ef4f6d582eccc205b`;
-- `PM-02H — existing Extrude Add/Cut from face-supported Sketch` — **ACTIVE**.
+- `PM-02H — existing Extrude Add/Cut from face-supported Sketch` — **COMPLETED — PASS**; final runtime candidate `0540a762be42b3f4329e7032545e652b21332486`, Windows FULL #1446 PASS, merged runtime main `16818f4b47d4ec2f1c18410856e2b1c1ba51f2c0`;
+- `PM-02I — lifecycle, repair, persistence and regression matrix` — **ACTIVE**.
 
 Primary vertical scenario:
 
@@ -650,7 +651,7 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.15 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02A, PM-02B, PM-02C, PM-02D, PM-02E, PM-02F and PM-02G are COMPLETED — PASS. PM-02 remains ACTIVE at PM-02H.**
+Program v1.16 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P, PM-02A, PM-02B, PM-02C, PM-02D, PM-02E, PM-02F, PM-02G and PM-02H are COMPLETED — PASS. PM-02 remains ACTIVE at PM-02I.**
 
 Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
@@ -672,7 +673,9 @@ PM-02F stage-aware Sketch/Profile evaluation is closed: final runtime candidate 
 
 PM-02G create/re-support Sketch on arbitrary planar Body Surface is closed: final runtime candidate `f45ed8ee09aabe098ab88bc7e47a0c614841fb40` passed Windows FULL #1443 and was squash-merged to main as `17778bdfe80d0411031b458ef4f6d582eccc205b`. Completion evidence is `work/PM-02G_FACE_SUPPORTED_SKETCH_AUTHORING_COMPLETION.md`. The final gate includes the post-#1439 remediation that made support selection draft-only and Finish the single transaction boundary.
 
-The active implementation checkpoint is **PM-02H — existing Extrude Add/Cut from face-supported Sketch**.
+PM-02H existing Extrude Add/Cut from face-supported Sketch is closed: final runtime candidate `0540a762be42b3f4329e7032545e652b21332486` passed Windows FULL #1446 and was squash-merged to main as `16818f4b47d4ec2f1c18410856e2b1c1ba51f2c0`. Completion evidence is `work/PM-02H_FACE_SUPPORTED_EXTRUDE_ADD_CUT_COMPLETION.md`. PR #216 / FULL #1445 is superseded evidence only; PR #217 is the selected final runtime candidate because its regression discovers support from the actual evaluated topology catalog.
+
+The active implementation checkpoint is **PM-02I — lifecycle, repair, persistence and regression matrix**.
 
 Mutation must follow PM-02A through PM-02J in order and remain inside the accepted Work Contract. Later checkpoint scope is not permission to skip earlier evidence/gates.
 
