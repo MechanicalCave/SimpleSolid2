@@ -1,12 +1,12 @@
 # Part Modeling v1 — Program Roadmap
 
 **Status:** ACCEPTED — PROGRAM FROZEN; PM-01 COMPLETED — PASS; PM-02P COMPLETED — PASS; PM-02 COMPLETED — PASS; PM-03 ACTIVE  
-**Version:** 1.20  
-**Owner acceptance:** 2026-10-05 — PM-03 bounded Work Contract + UI interaction amendments unchanged; v1.20 is checkpoint-state synchronization only  
-**Previous accepted version:** 1.19 — 2026-10-05  
+**Version:** 1.21  
+**Owner acceptance:** 2026-10-05 — PM-03 bounded Work Contract + UI interaction amendments unchanged; v1.21 is checkpoint-state synchronization only  
+**Previous accepted version:** 1.20 — 2026-10-05  
 **Decision class:** D2 program sequencing and Part-v1 scope freeze; individual D2/D3 architecture/product decisions remain owned by the package that explicitly closes them  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Current active checkpoint:** PM-03C — commands + Extrude-style draft / Command Line parity under `work/PM-03_DATUM_REFERENCE_GEOMETRY.md`  
+**Current active checkpoint:** PM-03D — Viewer / intersection overlay / Tree / Properties under `work/PM-03_DATUM_REFERENCE_GEOMETRY.md`  
 **Upstream readiness authority:** `work/SKETCH_ROADMAP.md` v1.9  
 **Source design:** Owner Part Modeling v1 draft 0.1 plus architecture-audited draft 0.2 reviewed and accepted as the basis for this program on 2026-10-02
 
@@ -480,7 +480,9 @@ PM-03A semantic Datum foundation + schema v10 is **COMPLETED — PASS**; exact c
 
 PM-03B Datum evaluator + dependency/cycle semantics is **COMPLETED — PASS**; exact candidate `e12f6c606132eadab5283372dee1a9f3f3008abd` passed Windows FULL #1491 and merged to main as `42b36d427bdb4c5c75b4961444576c7905032eb2`.
 
-Current implementation checkpoint is **PM-03C — commands + Extrude-style draft / Command Line parity**.
+PM-03C commands + Extrude-style draft / Command Line parity is **COMPLETED — PASS**. C1 exact candidate `c633a9714602801e1253d119198ea9e46f73f9a9` passed Windows FULL #1496 and merged as `4147eba3697dfc345f49762508e92293b6373ff5`; C2 exact candidate `8b9185261e2cf32006f6af7a8c8a9da5e7c9ec04` passed Windows FULL #1507 and merged as `ad9e64df059091556bca2dc18515fa25a5cc5a32`. Completion evidence: `work/PM-03C_DATUM_COMMANDS_DRAFT_COMMAND_LINE_COMPLETION.md`.
+
+Current implementation checkpoint is **PM-03D — Viewer / intersection overlay / Tree / Properties**.
 
 Projection is not a prerequisite for Datum and remains separately gated.
 
@@ -664,7 +666,7 @@ Planned Part features must not be documented as already implemented.
 
 ## 24. Activation boundary
 
-Program v1.20 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P and PM-02A through PM-02J are COMPLETED — PASS. PM-02 is COMPLETED — PASS. PM-03 is ACTIVE at PM-03C.**
+Program v1.21 is checkpoint-state synchronized against the accepted frozen Part-v1 program. **G0, PM-00A, PM-00B, PM-01, PM-02P and PM-02A through PM-02J are COMPLETED — PASS. PM-02 is COMPLETED — PASS. PM-03A, PM-03B and PM-03C are COMPLETED — PASS. PM-03 is ACTIVE at PM-03D.**
 
 Owner accepted ADR-0016 and PM-02P evidence activation on 2026-10-03, accepted the final PM-02P D2 synthesis/recommendation on 2026-10-04, and explicitly accepted the exact PM-02 production Work Contract plus all four referenced UX/Viewer design inputs on 2026-10-04.
 
@@ -690,4 +692,4 @@ PM-02I lifecycle, repair, persistence and regression matrix is closed: final run
 
 PM-02 is **COMPLETED — PASS**. Final accepted evidence is post-remediation runtime FULL #1473 on `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`, remediation docs DOCS #1474 on `1dbaef95b2ea48f8e529425a154b795984d6551f`, bookkeeping #1476 PASS, and Owner Windows re-test PASS on 2026-10-05 against current main `d8d73e213f24d5b82c5a7a13dbeba07282520a40`.
 
-PM-03 is ACTIVE at PM-03C under the bounded accepted Work Contract. PM-03A and PM-03B are COMPLETED — PASS. PM-04 and all later product packages remain NOT ACTIVE. Projection remains separately gated and outside the PM-02/PM-03 critical path.
+PM-03 is ACTIVE at PM-03D under the bounded accepted Work Contract. PM-03A, PM-03B and PM-03C are COMPLETED — PASS. PM-04 and all later product packages remain NOT ACTIVE. Projection remains separately gated and outside the PM-02/PM-03 critical path.
