@@ -4262,11 +4262,29 @@ public:
             return true;
         }
 
-        const double tolerance =
+        double tolerance =
             std::max(
                 1.0e-7,
                 std::abs(nearest->depth) *
                     1.0e-7);
+
+        // Edge/Vertex samples lie exactly on tessellated Face boundaries.
+        // Projection/ray round-tripping can put the sampled boundary a tiny
+        // amount behind the nearest triangle, especially on side views and
+        // high-DPI displays. Use a small sub-pixel world-space allowance
+        // rather than treating that numerical delta as occlusion.
+        if (!view_.IsNull()) {
+            const double one_pixel_world =
+                std::abs(view_->Convert(1));
+            if (std::isfinite(one_pixel_world) &&
+                one_pixel_world > 0.0) {
+                tolerance =
+                    std::max(
+                        tolerance,
+                        one_pixel_world * 0.05);
+            }
+        }
+
         return *point_depth <=
                nearest->depth + tolerance;
     }
