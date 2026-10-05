@@ -755,6 +755,7 @@ void PartViewportController::setSolidModelingKernel(
         modeling_kernel;
     body_scene_revision_.reset();
     body_scene_cache_.reset();
+    datum_evaluation_cache_.reset();
     body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
     body_topology_bindings_.clear();
@@ -786,6 +787,7 @@ void PartViewportController::setDocumentSession(
         transient_profile_hide_.reset();
         body_scene_revision_.reset();
         body_scene_cache_.reset();
+        datum_evaluation_cache_.reset();
         body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
@@ -823,6 +825,7 @@ void PartViewportController::clear() {
     transient_profile_hide_.reset();
     body_scene_revision_.reset();
     body_scene_cache_.reset();
+    datum_evaluation_cache_.reset();
     body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
     body_topology_bindings_.clear();
@@ -888,6 +891,7 @@ void PartViewportController::refreshPresentation() {
         profile_bindings_.clear();
         body_scene_revision_.reset();
         body_scene_cache_.reset();
+        datum_evaluation_cache_.reset();
         body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
@@ -3180,6 +3184,7 @@ PartViewportController::buildBodyScene() {
         solid_modeling_kernel_ == nullptr) {
         body_scene_revision_.reset();
         body_scene_cache_.reset();
+        datum_evaluation_cache_.reset();
         body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
@@ -3190,7 +3195,10 @@ PartViewportController::buildBodyScene() {
         session_->document().revision();
     if (body_scene_revision_ &&
         *body_scene_revision_ == revision &&
-        body_scene_cache_) {
+        body_scene_cache_ &&
+        datum_evaluation_cache_ &&
+        datum_evaluation_cache_->
+                source_revision == revision) {
         return *body_scene_cache_;
     }
 
@@ -3199,6 +3207,7 @@ PartViewportController::buildBodyScene() {
             -> std::optional<viewer::BodyScene> {
             body_scene_revision_.reset();
             body_scene_cache_.reset();
+            datum_evaluation_cache_.reset();
             body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
             body_topology_bindings_.clear();
@@ -3210,6 +3219,18 @@ PartViewportController::buildBodyScene() {
         part::evaluatePart(
             session_->document(),
             *solid_modeling_kernel_);
+    const auto datum_evaluation =
+        part::evaluateDatums(
+            session_->document(),
+            evaluation);
+    if (datum_evaluation.source_revision !=
+            revision ||
+        datum_evaluation.planes.size() !=
+            session_->document()
+                .datumPlanes()
+                .size()) {
+        return fail();
+    }
 
     std::vector<part::BodyStageTopologyCatalog>
         stage_topologies;
@@ -3263,6 +3284,8 @@ PartViewportController::buildBodyScene() {
         clear_stale_body_selection();
         body_scene_revision_ = revision;
         body_scene_cache_ = empty_scene;
+        datum_evaluation_cache_ =
+            datum_evaluation;
         return *body_scene_cache_;
     }
     if (topology == nullptr ||
@@ -3463,6 +3486,8 @@ PartViewportController::buildBodyScene() {
     clear_stale_body_selection();
     body_scene_revision_ = revision;
     body_scene_cache_ = scene;
+    datum_evaluation_cache_ =
+        datum_evaluation;
     body_topology_catalog_cache_ = *topology;
     body_stage_topology_catalogs_cache_ =
         std::move(stage_topologies);
