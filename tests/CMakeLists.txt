@@ -755,6 +755,32 @@ set_tests_properties(pm02e.sketch_support_schema_v9 PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-persistence"
 )
 
+add_executable(pm03a_datum_schema_v10_test
+    pm03a_datum_schema_v10_test.cpp
+)
+
+target_include_directories(pm03a_datum_schema_v10_test
+    PRIVATE
+        ${PROJECT_SOURCE_DIR}/third_party/nlohmann-json-3.12.0/include
+)
+
+target_link_libraries(pm03a_datum_schema_v10_test
+    PRIVATE
+        simplesolid2_part
+        simplesolid2_persistence
+)
+
+target_compile_features(pm03a_datum_schema_v10_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm03a.datum_schema_v10
+    COMMAND pm03a_datum_schema_v10_test
+)
+
+set_tests_properties(pm03a.datum_schema_v10 PROPERTIES
+    LABELS "tier-fast;subsystem-part;subsystem-persistence"
+)
+
 add_executable(pm02f_stage_aware_profile_evaluation_test
     pm02f_stage_aware_profile_evaluation_test.cpp
 )
