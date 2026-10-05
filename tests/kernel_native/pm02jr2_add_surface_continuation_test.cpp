@@ -260,7 +260,27 @@ void verifyPartIntegration() {
 
     const auto& base_topology =
         *base_eval.current_topology;
-    const auto side =
+    const auto top =
+        std::find_if(
+            base_topology.surfaces.begin(),
+            base_topology.surfaces.end(),
+            [id = *base.feature_id](
+                const auto& surface) {
+                return surface.status ==
+                           kernel::ReferenceStatus::resolved &&
+                       surface.address.producer_feature_id ==
+                           id &&
+                       surface.address.role ==
+                           part::FeatureSurfaceRoleKind::
+                               extent_cap &&
+                       surface.surface_kind ==
+                           kernel::SurfaceKind::plane &&
+                       surface.canonical_frame;
+            });
+    CHECK(top != base_topology.surfaces.end());
+    CHECK(top->canonical_frame.has_value());
+
+    const auto continued_side =
         std::find_if(
             base_topology.surfaces.begin(),
             base_topology.surfaces.end(),
@@ -275,46 +295,43 @@ void verifyPartIntegration() {
                        surface.surface_kind ==
                            kernel::SurfaceKind::plane &&
                        surface.canonical_frame &&
-                       std::abs(
-                           surface.canonical_frame
-                               ->normal.x) > 0.9;
+                       surface.canonical_frame->normal.x > 0.9;
             });
-    CHECK(side != base_topology.surfaces.end());
-    CHECK(side->canonical_frame.has_value());
+    CHECK(continued_side !=
+          base_topology.surfaces.end());
 
-    const part::SurfaceReference side_ref{
+    const part::SurfaceReference top_ref{
         base_topology.stage,
-        side->address};
-    const auto side_support =
+        top->address};
+    const auto top_support =
         part::partSketchSupportForBodyPlanarSurface(
-            side_ref);
-    CHECK(side_support.has_value());
+            top_ref);
+    CHECK(top_support.has_value());
 
-    const auto extension_sketch =
+    const auto boss_sketch =
         session.execute(
             application::CreatePartSketchOnSupportCommand{
-                *side_support,
+                *top_support,
                 session.document().revision()},
             &provider);
-    CHECK(extension_sketch.ok());
-    CHECK(extension_sketch.sketch_id.has_value());
+    CHECK(boss_sketch.ok());
+    CHECK(boss_sketch.sketch_id.has_value());
 
-    const auto& frame = *side->canonical_frame;
-    const double side_x =
-        frame.normal.x > 0.0
-            ? 40.0
-            : 0.0;
-    const std::vector<kernel::Point3> corners{
-        {side_x, 5.0, 0.0},
-        {side_x, 25.0, 0.0},
-        {side_x, 5.0, 10.0},
-        {side_x, 25.0, 10.0},
+    const auto& top_frame =
+        *top->canonical_frame;
+    const std::vector<kernel::Point3> boss_corners{
+        {20.0, 5.0, 10.0},
+        {40.0, 5.0, 10.0},
+        {20.0, 25.0, 10.0},
+        {40.0, 25.0, 10.0},
     };
     std::vector<sketch::Point2> uv;
-    uv.reserve(corners.size());
-    for (const auto& point : corners) {
+    uv.reserve(boss_corners.size());
+    for (const auto& point : boss_corners) {
         uv.push_back(
-            projectToFrame(frame, point));
+            projectToFrame(
+                top_frame,
+                point));
     }
     double min_u = uv.front().u;
     double max_u = uv.front().u;
@@ -329,26 +346,26 @@ void verifyPartIntegration() {
     CHECK(max_u - min_u > 1.0);
     CHECK(max_v - min_v > 1.0);
 
-    const auto extension_profile =
+    const auto boss_profile =
         createRectangleProfile(
             session,
-            *extension_sketch.sketch_id,
+            *boss_sketch.sketch_id,
             {min_u, min_v},
             {max_u, max_v});
 
-    const auto extension =
+    const auto boss =
         session.execute(
             application::CreateExtrudeFeatureCommand{
-                extension_profile,
+                boss_profile,
                 session.document().revision(),
                 part::ExtrudeOperation::add,
                 part::OneSidedExtrudeExtent{
                     core::LengthValue{10.0},
                     false},
-                "Extension"},
+                "Boss"},
             provider);
-    CHECK(extension.ok());
-    CHECK(extension.feature_id.has_value());
+    CHECK(boss.ok());
+    CHECK(boss.feature_id.has_value());
 
     const auto final_eval =
         part::evaluatePart(
@@ -361,29 +378,25 @@ void verifyPartIntegration() {
     const auto& topology =
         *final_eval.current_topology;
 
-    const auto top =
+    const auto current_side =
         std::find_if(
             topology.surfaces.begin(),
             topology.surfaces.end(),
-            [id = *base.feature_id](
+            [address = continued_side->address](
                 const auto& surface) {
-                return surface.address
-                           .producer_feature_id == id &&
-                       surface.address.role ==
-                           part::FeatureSurfaceRoleKind::
-                               extent_cap;
+                return surface.address == address;
             });
-    CHECK(top != topology.surfaces.end());
+    CHECK(current_side != topology.surfaces.end());
     CHECK(
-        top->status ==
+        current_side->status ==
         kernel::ReferenceStatus::resolved);
-    CHECK(top->current_faces.size() >= 2U);
+    CHECK(current_side->current_faces.size() >= 2U);
     CHECK(
-        top->strict_face_status ==
+        current_side->strict_face_status ==
         kernel::ReferenceStatus::ambiguous);
 
     for (const auto face_token :
-         top->current_faces) {
+         current_side->current_faces) {
         const auto face =
             std::find_if(
                 topology.faces.begin(),
@@ -396,13 +409,13 @@ void verifyPartIntegration() {
         CHECK(face->surface_candidates.size() == 1U);
         CHECK(
             face->surface_candidates.front() ==
-            top->address);
+            current_side->address);
     }
 
     const auto contribution =
         part::currentFeatureContribution(
             topology,
-            *extension.feature_id);
+            *boss.feature_id);
     CHECK(contribution.valid());
     CHECK(!contribution.faces.empty());
 
@@ -421,33 +434,22 @@ void verifyPartIntegration() {
             });
     CHECK(partition_count >= 1);
 
-    // Picking either bounded Face fragment maps to the same SurfaceReference,
-    // so Create Sketch is singular and succeeds from the current Body stage.
-    const part::SurfaceReference final_top_ref{
+    const part::SurfaceReference final_side_ref{
         topology.stage,
-        top->address};
-    const auto top_support =
+        current_side->address};
+    const auto side_support =
         part::partSketchSupportForBodyPlanarSurface(
-            final_top_ref);
-    CHECK(top_support.has_value());
+            final_side_ref);
+    CHECK(side_support.has_value());
 
-    const auto first_new_sketch =
+    const auto new_sketch =
         session.execute(
             application::CreatePartSketchOnSupportCommand{
-                *top_support,
+                *side_support,
                 session.document().revision()},
             &provider);
-    CHECK(first_new_sketch.ok());
-    CHECK(first_new_sketch.sketch_id.has_value());
-
-    const auto second_new_sketch =
-        session.execute(
-            application::CreatePartSketchOnSupportCommand{
-                *top_support,
-                session.document().revision()},
-            &provider);
-    CHECK(second_new_sketch.ok());
-    CHECK(second_new_sketch.sketch_id.has_value());
+    CHECK(new_sketch.ok());
+    CHECK(new_sketch.sketch_id.has_value());
 }
 
 } // namespace
@@ -469,79 +471,78 @@ int main() {
                 10.0));
     CHECK(base.ok());
 
-    const auto* base_top =
-        newCap(
+    const auto* base_right =
+        newSide(
             base,
-            kernel::ExtrudeCapRole::extent_cap);
-    CHECK(base_top != nullptr);
+            "base-right");
+    CHECK(base_right != nullptr);
     CHECK(
-        base_top->surface_status ==
+        base_right->surface_status ==
         kernel::ReferenceStatus::resolved);
-    CHECK(base_top->resolved_token.has_value());
+    CHECK(base_right->resolved_token.has_value());
 
-    // Extend the box from its +X side through the full Z height. The extension
-    // top lies on the existing z=10 engineering Surface. OCCT may retain the
-    // old/new top boundary as a B-Rep partition, but ADR-0017 requires one
-    // semantic carrier rather than competing coplanar Surface identities.
-    kernel::Frame3 yz;
-    yz.origin = {40.0, 0.0, 0.0};
-    yz.u_axis = {0.0, 1.0, 0.0};
-    yz.v_axis = {0.0, 0.0, 1.0};
-    yz.normal = {1.0, 0.0, 0.0};
-    CHECK(yz.valid());
+    // Boss from the top plane touches the +X outer boundary. Its generated
+    // "boss-right" side extends the existing "base-right" engineering
+    // Surface upward. Any retained z=10 boundary is a representation
+    // partition, not a second semantic Surface.
+    kernel::Frame3 top_frame;
+    top_frame.origin = {0.0, 0.0, 10.0};
+    CHECK(top_frame.valid());
 
     const auto extended =
         provider.extrude(
             add(
                 rectangle(
-                    yz,
+                    top_frame,
+                    20.0,
                     5.0,
-                    0.0,
+                    40.0,
                     25.0,
-                    10.0,
-                    "extension"),
+                    "boss"),
                 10.0),
             base.solid);
     CHECK(extended.ok());
 
-    const auto* inherited_top =
+    const auto* inherited_right =
         inheritedSurface(
             extended,
-            *base_top->resolved_token);
-    CHECK(inherited_top != nullptr);
+            *base_right->resolved_token);
+    CHECK(inherited_right != nullptr);
     CHECK(
-        inherited_top->surface_status ==
+        inherited_right->surface_status ==
         kernel::ReferenceStatus::resolved);
-    CHECK(inherited_top->canonical_frame.has_value());
-    CHECK(inherited_top->current_faces.size() >= 2U);
     CHECK(
-        inherited_top->strict_face_status ==
-        kernel::ReferenceStatus::ambiguous);
+        inherited_right->canonical_frame.has_value());
 
-    const auto* created_top =
+    const auto* created_right =
         newSide(
             extended,
-            "extension-top");
-    CHECK(created_top != nullptr);
-    CHECK(created_top->continued_into.has_value());
+            "boss-right");
+    CHECK(created_right != nullptr);
+    CHECK(created_right->continued_into.has_value());
     CHECK(
-        *created_top->continued_into ==
-        *base_top->resolved_token);
+        *created_right->continued_into ==
+        *base_right->resolved_token);
     CHECK(
-        created_top->surface_status ==
+        created_right->surface_status ==
         kernel::ReferenceStatus::unsupported);
-    CHECK(!created_top->resolved_token.has_value());
-    CHECK(created_top->current_faces.empty());
-    CHECK(!created_top->contribution_faces.empty());
+    CHECK(!created_right->resolved_token.has_value());
+    CHECK(created_right->current_faces.empty());
+    CHECK(!created_right->contribution_faces.empty());
+
+    CHECK(inherited_right->current_faces.size() >= 2U);
+    CHECK(
+        inherited_right->strict_face_status ==
+        kernel::ReferenceStatus::ambiguous);
 
     for (const auto token :
-         created_top->contribution_faces) {
+         created_right->contribution_faces) {
         CHECK(
             std::find(
-                inherited_top->current_faces.begin(),
-                inherited_top->current_faces.end(),
+                inherited_right->current_faces.begin(),
+                inherited_right->current_faces.end(),
                 token) !=
-            inherited_top->current_faces.end());
+            inherited_right->current_faces.end());
     }
 
     std::size_t partition_edges = 0U;
@@ -555,8 +556,7 @@ int main() {
         CHECK(edge.adjacent_surfaces.size() == 1U);
         CHECK(
             edge.adjacent_surfaces.front() ==
-            *base_top->resolved_token ||
-            edge.adjacent_surfaces.front().valid());
+            *base_right->resolved_token);
     }
     CHECK(partition_edges >= 1U);
 
@@ -564,10 +564,10 @@ int main() {
 
     std::cout
         << "PM02JR2_ADD_SURFACE_CONTINUATION_PASS"
-        << " inherited_top_faces="
-        << inherited_top->current_faces.size()
+        << " inherited_side_faces="
+        << inherited_right->current_faces.size()
         << " contribution_faces="
-        << created_top->contribution_faces.size()
+        << created_right->contribution_faces.size()
         << " partition_edges="
         << partition_edges
         << " geometry_similarity_authority=0"
