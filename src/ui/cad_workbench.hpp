@@ -509,7 +509,7 @@ private:
     QPushButton* construction_role_button_{};
 
     QWidget* datum_plane_operations_widget_{};
-    QLabel* datum_plane_constructor_label_{};
+    QComboBox* datum_plane_constructor_combo_{};
     QLabel* datum_plane_source_label_{};
     QLineEdit* datum_plane_offset_edit_{};
     QPushButton* datum_plane_reverse_button_{};
@@ -522,6 +522,7 @@ private:
     std::optional<
         application::DatumPlaneDraftEvaluationResult>
         datum_plane_evaluation_;
+    bool datum_plane_offset_input_valid_{true};
     bool syncing_datum_plane_ui_{};
 
     QWidget* extrude_operations_widget_{};
