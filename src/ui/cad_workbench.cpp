@@ -30,6 +30,7 @@
 #include <QTimer>
 #include <QVBoxLayout>
 
+#include <algorithm>
 #include <cctype>
 #include <cmath>
 #include <numbers>
@@ -44,6 +45,7 @@
 namespace simplesolid2::ui {
 namespace {
 
+QString fromUtf8(std::string_view value);
 
 [[nodiscard]] std::string upperAsciiTrimmed(
     std::string_view value) {
