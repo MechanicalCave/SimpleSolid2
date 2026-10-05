@@ -30,6 +30,11 @@ constexpr double datumIntersectionEpsilon = 1.0e-8;
     return {point.x, point.y, point.z};
 }
 
+[[nodiscard]] viewer::Vec3 viewerVector(
+    const kernel::Point3& vector) noexcept {
+    return {vector.x, vector.y, vector.z};
+}
+
 [[nodiscard]] double datumPlaneSignedDistance(
     const viewer::Point3& point,
     const kernel::Frame3& frame) noexcept {
@@ -3173,9 +3178,9 @@ PartViewportController::buildReferenceScene() {
         reference.origin =
             viewerPoint(frame.origin);
         reference.u_axis =
-            viewerPoint(frame.u_axis);
+            viewerVector(frame.u_axis);
         reference.v_axis =
-            viewerPoint(frame.v_axis);
+            viewerVector(frame.v_axis);
         reference.extent = planeExtent;
         reference.visible = true;
         if (!reference.valid()) {
