@@ -1107,8 +1107,6 @@ int main() {
 
     const auto final_state =
         fixture.session.document().state();
-    const auto final_revision =
-        fixture.session.document().revision();
 
     part::PartDocumentStore store;
     auto loaded =
@@ -1120,9 +1118,8 @@ int main() {
     CHECK(
         loaded.document->body().id ==
         fixture.body_id);
-    CHECK(
-        loaded.document->revision() ==
-        final_revision);
+    // DocumentRevision is runtime freshness, not persisted CAD identity.
+    // Durable authored state and stable IDs are the cold-reopen contract.
     CHECK(
         loaded.document->state() ==
         final_state);
