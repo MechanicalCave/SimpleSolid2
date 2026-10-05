@@ -799,6 +799,28 @@ set_tests_properties(pm02g.face_supported_sketch_authoring PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part"
 )
 
+add_executable(pm02h_face_backed_extrude_workflow_test
+    pm02h_face_backed_extrude_workflow_test.cpp
+)
+
+target_link_libraries(pm02h_face_backed_extrude_workflow_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_part
+)
+
+target_compile_features(pm02h_face_backed_extrude_workflow_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm02h.face_backed_extrude_workflow
+    COMMAND pm02h_face_backed_extrude_workflow_test
+)
+
+set_tests_properties(pm02h.face_backed_extrude_workflow PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part"
+)
+
 add_executable(sk03a_viewer_sketch_contracts_test
     sk03a_viewer_sketch_contracts_test.cpp
 )
