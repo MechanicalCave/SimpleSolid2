@@ -30,11 +30,6 @@ constexpr double datumIntersectionEpsilon = 1.0e-8;
     return {point.x, point.y, point.z};
 }
 
-[[nodiscard]] viewer::Vec3 viewerVector(
-    const kernel::Vector3& vector) noexcept {
-    return {vector.x, vector.y, vector.z};
-}
-
 [[nodiscard]] double datumPlaneSignedDistance(
     const viewer::Point3& point,
     const kernel::Frame3& frame) noexcept {
