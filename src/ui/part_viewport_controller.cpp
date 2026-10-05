@@ -761,6 +761,7 @@ void PartViewportController::setSolidModelingKernel(
     body_scene_revision_.reset();
     body_scene_cache_.reset();
     datum_evaluation_cache_.reset();
+    datum_plane_draft_preview_frame_.reset();
     body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
     body_topology_bindings_.clear();
@@ -795,6 +796,7 @@ void PartViewportController::setDocumentSession(
         body_scene_revision_.reset();
         body_scene_cache_.reset();
         datum_evaluation_cache_.reset();
+        datum_plane_draft_preview_frame_.reset();
         body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
@@ -834,6 +836,7 @@ void PartViewportController::clear() {
     body_scene_revision_.reset();
     body_scene_cache_.reset();
     datum_evaluation_cache_.reset();
+    datum_plane_draft_preview_frame_.reset();
     body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
     body_topology_bindings_.clear();
@@ -1296,6 +1299,19 @@ void PartViewportController::clearProfileDraftPreview() {
             viewport_->setProfilePreviewScene(
                 viewer::ProfilePreviewScene{}));
     }
+}
+
+void PartViewportController::setDatumPlaneDraftPreview(
+    std::optional<kernel::Frame3> frame) {
+    if (frame && !frame->valid()) {
+        frame.reset();
+    }
+    if (datum_plane_draft_preview_frame_ == frame) {
+        return;
+    }
+    datum_plane_draft_preview_frame_ =
+        std::move(frame);
+    refreshPresentation();
 }
 
 bool PartViewportController::setSketchPrimaryPointerRouting(
@@ -3137,87 +3153,115 @@ PartViewportController::buildReferenceScene() {
 
     const auto& datums =
         session_->document().datumPlanes();
-    if (datums.empty()) {
-        return scene;
-    }
 
-    if (!datum_evaluation_cache_ ||
-        datum_evaluation_cache_->source_revision !=
-            session_->document().revision() ||
-        datum_evaluation_cache_->planes.size() !=
-            datums.size()) {
-        return std::nullopt;
-    }
-
-    for (const auto& datum : datums) {
-        const auto* evaluation =
-            datum_evaluation_cache_->find(
-                datum.id);
-        if (evaluation == nullptr) {
-            datum_bindings_.clear();
+    if (!datums.empty()) {
+        if (!datum_evaluation_cache_ ||
+            datum_evaluation_cache_->source_revision !=
+                session_->document().revision() ||
+            datum_evaluation_cache_->planes.size() !=
+                datums.size()) {
             return std::nullopt;
         }
 
-        if (!datum.visible ||
-            evaluation->status !=
-                part::DatumPlaneEvaluationStatus::
-                    resolved ||
-            !evaluation->frame) {
-            continue;
-        }
+        for (const auto& datum : datums) {
+            const auto* evaluation =
+                datum_evaluation_cache_->find(
+                    datum.id);
+            if (evaluation == nullptr) {
+                datum_bindings_.clear();
+                return std::nullopt;
+            }
 
-        const auto token =
-            allocatePresentationToken();
-        if (!token ||
-            !datum_bindings_
-                 .emplace(
-                     token->value,
-                     datum.id)
-                 .second) {
-            datum_bindings_.clear();
-            return std::nullopt;
-        }
+            if (!datum.visible ||
+                evaluation->status !=
+                    part::DatumPlaneEvaluationStatus::
+                        resolved ||
+                !evaluation->frame) {
+                continue;
+            }
 
+            const auto token =
+                allocatePresentationToken();
+            if (!token ||
+                !datum_bindings_
+                     .emplace(
+                         token->value,
+                         datum.id)
+                     .second) {
+                datum_bindings_.clear();
+                return std::nullopt;
+            }
+
+            const auto& frame =
+                *evaluation->frame;
+            viewer::ReferencePresentation
+                reference;
+            reference.token = *token;
+            reference.kind =
+                viewer::ReferencePresentationKind::
+                    datum_plane;
+            reference.origin =
+                viewerPoint(frame.origin);
+            reference.u_axis =
+                viewerVector(frame.u_axis);
+            reference.v_axis =
+                viewerVector(frame.v_axis);
+            reference.extent = planeExtent;
+            reference.visible = true;
+            if (!reference.valid()) {
+                datum_bindings_.clear();
+                return std::nullopt;
+            }
+            scene.references.push_back(
+                std::move(reference));
+
+            if (body_scene_cache_ &&
+                body_scene_cache_->purpose ==
+                    viewer::BodyScenePurpose::
+                        current_body &&
+                !body_scene_cache_->empty()) {
+                auto segments =
+                    datumBodyIntersection(
+                        *body_scene_cache_,
+                        frame);
+                if (!segments.empty()) {
+                    scene.overlays.push_back(
+                        viewer::
+                            ReferenceOwnedLineOverlay{
+                                *token,
+                                std::move(segments)});
+                }
+            }
+        }
+    }
+
+    if (datum_plane_draft_preview_frame_) {
         const auto& frame =
-            *evaluation->frame;
-        viewer::ReferencePresentation
-            reference;
-        reference.token = *token;
-        reference.kind =
-            viewer::ReferencePresentationKind::
-                datum_plane;
-        reference.origin =
+            *datum_plane_draft_preview_frame_;
+        viewer::ReferencePlanePreviewPresentation
+            preview;
+        preview.origin =
             viewerPoint(frame.origin);
-        reference.u_axis =
+        preview.u_axis =
             viewerVector(frame.u_axis);
-        reference.v_axis =
+        preview.v_axis =
             viewerVector(frame.v_axis);
-        reference.extent = planeExtent;
-        reference.visible = true;
-        if (!reference.valid()) {
-            datum_bindings_.clear();
-            return std::nullopt;
-        }
-        scene.references.push_back(
-            std::move(reference));
-
+        preview.extent = planeExtent;
         if (body_scene_cache_ &&
             body_scene_cache_->purpose ==
                 viewer::BodyScenePurpose::
                     current_body &&
             !body_scene_cache_->empty()) {
-            auto segments =
+            preview.intersection_segments =
                 datumBodyIntersection(
                     *body_scene_cache_,
                     frame);
-            if (!segments.empty()) {
-                scene.overlays.push_back(
-                    viewer::
-                        ReferenceOwnedLineOverlay{
-                            *token,
-                            std::move(segments)});
-            }
         }
+        if (!preview.valid()) {
+            return std::nullopt;
+        }
+        scene.preview =
+            std::move(preview);
     }
 
     if (!scene.valid()) {
