@@ -1,6 +1,6 @@
 # PM-02 — Final Acceptance Matrix
 
-**Status:** POST-REMEDIATION AUTOMATED PASS; OWNER WINDOWS RE-TEST PENDING  
+**Status:** POST-REMEDIATION AUTOMATED + DOCS PASS; OWNER WINDOWS RE-TEST PENDING  
 **Work Contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Final post-remediation runtime candidate:** `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`  
 **Final post-remediation runtime gate:** Windows FULL #1473 — PASS  
@@ -9,6 +9,9 @@
 **Documentation candidate:** `65919f28f8c8dade4ba2904ec699957f9077d1f1`  
 **Documentation gate:** Windows DOCS #1454 — PASS (`.\\ss2.ps1 docs` produced zero Browser diff)  
 **Merged documentation main:** `300459629658432bb94f938e51cb1df4a17b353e`  
+**Post-remediation documentation candidate:** `1dbaef95b2ea48f8e529425a154b795984d6551f`  
+**Post-remediation documentation gate:** Windows DOCS #1474 — PASS (`.\\ss2.ps1 docs` zero diff)  
+**Merged post-remediation documentation main:** `bdb718f292f1432e1156219edfa664b1a8aab92c`  
 **Owner Windows manual acceptance:** initial FAIL on 2026-10-05; automated remediation PASS; re-test PENDING — see `work/PM-02J_MANUAL_ACCEPTANCE_REMEDIATION.md`
 
 ## 1. Gate interpretation
