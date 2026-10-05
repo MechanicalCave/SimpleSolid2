@@ -5505,56 +5505,6 @@ void CadWorkbench::syncExtrudeUi() {
 }
 
 application::CadInputSubmitResult
-CadWorkbench::submitDatumPlaneCadInput(
-    std::string_view text) {
-    if (!datum_plane_draft_ ||
-        document_session_ == nullptr) {
-        return {
-            false,
-            "No active Datum Plane draft."};
-    }
-
-    const auto parsed =
-        application::submitDatumPlaneCadInput(
-            *datum_plane_draft_,
-            text,
-            application::CadInputNumberFormat{
-                toUtf8(
-                    QLocale{}.decimalPoint()),
-                document_session_->document()
-                    .lengthUnit()});
-    if (!parsed.accepted) {
-        return {
-            false,
-            parsed.diagnostic};
-    }
-
-    switch (parsed.action) {
-    case application::DatumPlaneCadInputAction::
-        finish:
-        return finishDatumPlane()
-            ? application::CadInputSubmitResult{
-                  true, {}}
-            : application::CadInputSubmitResult{
-                  false,
-                  "Datum Plane Finish was rejected."};
-    case application::DatumPlaneCadInputAction::
-        cancel:
-        cancelDatumPlane();
-        return {true, {}};
-    case application::DatumPlaneCadInputAction::
-        none:
-        refreshDatumPlaneEvaluation();
-        notifyCadInputContextChanged();
-        return {true, {}};
-    }
-
-    return {
-        false,
-        "Datum Plane command action is invalid."};
-}
-
-application::CadInputSubmitResult
 CadWorkbench::submitExtrudeCadInput(
     std::string_view text) {
     if (!extrude_draft_ ||
