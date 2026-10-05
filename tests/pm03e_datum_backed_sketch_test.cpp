@@ -323,7 +323,7 @@ part::SurfaceReference findBaseCap(
                     surface.address
                             .producer_feature_id ==
                         producer &&
-                    surface.address.role.kind ==
+                    surface.address.role ==
                         part::FeatureSurfaceRoleKind::
                             extent_cap &&
                     surface.status ==
