@@ -1,6 +1,6 @@
 # PM-02J — Owner Manual Acceptance Remediation
 
-**Status:** ACTIVE — AUTOMATED REMEDIATION PASS; OWNER WINDOWS RE-TEST PENDING  
+**Status:** ACTIVE — AUTOMATED REMEDIATION + DOCS PASS; OWNER WINDOWS RE-TEST PENDING  
 **Parent Work Contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Architecture authority:** ADR-0016 + ADR-0017  
 **Trigger:** Owner Windows manual acceptance on 2026-10-05  
@@ -139,14 +139,17 @@ Gate:
 
 ### J-R6 — consolidated automated gate + Owner re-test
 
-**State:** ACTIVE — DOCS/READINESS UPDATE; OWNER RE-TEST PENDING
+**State:** ACTIVE — RUNTIME + DOCS PASS; OWNER RE-TEST PENDING  
+**Post-remediation runtime:** `b9e70c684c2d054da21662ef3a8ae56ac59f60c0` — Windows FULL #1473 PASS  
+**Post-remediation docs candidate:** `1dbaef95b2ea48f8e529425a154b795984d6551f` — Windows DOCS #1474 PASS  
+**Merged docs/readiness main:** `bdb718f292f1432e1156219edfa664b1a8aab92c`
 
 J-R2..J-R5 are now complete. The post-remediation runtime candidate is `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`, Windows FULL #1473 PASS; it includes the already-passed R2/R3/R4 runtime merges plus R5.
 
+Canonical internal + PL/EN documentation and Product Browser are now PASS under Windows DOCS #1474.
+
 Remaining J-R6 work:
 
-- canonical internal + PL/EN documentation update;
-- Product Browser regeneration and docs/closure verification;
 - repeat focused Owner Windows checks for manual items 2, 4, 9-15 and the window/label observations;
 - then repeat final PM-02 acceptance matrix as needed.
 
