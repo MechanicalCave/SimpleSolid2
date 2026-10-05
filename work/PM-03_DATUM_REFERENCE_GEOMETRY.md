@@ -3,7 +3,7 @@
 **Status:** ACTIVE — OWNER ACCEPTED 2026-10-05  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
-**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.17  
+**Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.19  
 **Architecture authority:** Constitution + Foundation + ADR-0014 + ADR-0016 + ADR-0017  
 **Entry gate:** PM-02 Body Semantic Topology / Face-Supported Sketch COMPLETED — PASS  
 **Owner UI acceptance:** 2026-10-05 — single Datum Plane tool, Offset constructor, Extrude-style preview/default 10 mm, Command Line parity, intersection overlay, Reference Geometry tree grouping/visibility  
@@ -496,6 +496,11 @@ If an already-authored Datum becomes unresolved after an upstream edit:
 
 ### PM-03A — semantic Datum foundation + schema
 
+**Checkpoint state:** COMPLETED — PASS  
+**Runtime candidate:** `41ea901c873f1453e27b2b4973332ecb5295388c` — Windows FULL #1485 PASS  
+**Merged runtime main:** `542d7b50fcd3f7566326f1b2c849d9453a3dcd00`  
+**Completion evidence:** `work/PM-03A_DATUM_FOUNDATION_SCHEMA_COMPLETION.md`
+
 Deliver:
 
 - DatumId / high-water allocation;
@@ -512,6 +517,8 @@ Gate:
 - invalid/cyclic Datum state rejected fail-closed.
 
 ### PM-03B — evaluator + dependency/cycle semantics
+
+**Checkpoint state:** ACTIVE
 
 Deliver:
 
