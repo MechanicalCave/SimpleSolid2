@@ -60,10 +60,49 @@ int main() {
     plane.v_axis = {0.0, 1.0, 0.0};
     CHECK(plane.valid());
 
+    ReferencePresentation datum;
+    datum.token = {4U};
+    datum.kind =
+        ReferencePresentationKind::datum_plane;
+    datum.origin = {0.0, 0.0, 5.0};
+    datum.u_axis = {1.0, 0.0, 0.0};
+    datum.v_axis = {0.0, 1.0, 0.0};
+    datum.extent = 40.0;
+    CHECK(datum.valid());
+
+    ReferenceOwnedLineOverlay overlay;
+    overlay.owner = datum.token;
+    overlay.segments.push_back(
+        {
+            {-5.0, 0.0, 5.0},
+            {5.0, 0.0, 5.0}});
+    CHECK(overlay.valid());
+
     ReferenceScene scene;
     scene.grid = GridPresentation{};
-    scene.references = {point, plane};
+    scene.references = {point, plane, datum};
+    scene.overlays = {overlay};
     CHECK(scene.valid());
+
+    // Overlay ownership is semantic presentation ownership only: it must
+    // resolve to one visible Datum Plane and may never introduce a second
+    // token/identity.
+    auto invalid_owner = scene;
+    invalid_owner.overlays.front().owner = point.token;
+    CHECK(!invalid_owner.valid());
+
+    auto hidden_owner = scene;
+    hidden_owner.references.back().visible = false;
+    CHECK(!hidden_owner.valid());
+
+    auto duplicate_overlay = scene;
+    duplicate_overlay.overlays.push_back(overlay);
+    CHECK(!duplicate_overlay.valid());
+
+    auto invalid_segment = scene;
+    invalid_segment.overlays.front().segments.front().second =
+        invalid_segment.overlays.front().segments.front().first;
+    CHECK(!invalid_segment.valid());
 
     scene.references.push_back(point);
     CHECK(!scene.valid());
