@@ -619,30 +619,28 @@ Pointer routing and cursor mode remain independent runtime axes. Ordinary Select
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-The public Viewer boundary remains provider-neutral. It accepts derived scenes for authored references/Sketch/Profile presentation plus bounded solid and transient solid-preview presentation required by PM-01.
+The public Viewer boundary remains provider-neutral. It accepts derived scenes for authored references/Sketch/Profile presentation, one atomic topology-aware committed Body scene and a separate transient solid-preview scene.
 
-Part evaluation may hold provider-neutral runtime solid/face tokens while the current runtime exists, but no TopoDS/OCAF handle, provider topology ordinal or Viewer presentation token crosses into durable Part identity.
+Part evaluation may hold provider-neutral runtime solid/Face/Edge/Vertex tokens while the current runtime exists, but no TopoDS/OCAF handle, provider topology ordinal or Viewer presentation token crosses into durable Part identity. `PartViewportController` owns generation-scoped mappings from current runtime topology tokens to neutral presentation tokens and invalidates them whenever the Body scene/evaluation generation changes.
 
-PM-01 does not expose face/edge topology picking. Solid presentation is display-only; tessellation quality, camera, pick aperture and Viewer state cannot alter Add/Cut result, semantic face roles or commit authority.
+Current Face/Edge/Vertex picking is presentation acquisition only. Tessellation quality, camera, pick aperture, candidate order and Viewer state cannot alter Add/Cut results or durable semantic identity.
 
 Presentation setters report failure to the Workbench. A successful authored CAD command is not rolled back because a later Viewer refresh fails; recovery retries presentation from current authored state.
 
 <!-- section-id: internal.cad-workbench-viewer.accepted-next-pm02-visual-topology -->
-## Accepted next PM-02 viewport visual-style and Feature-contribution boundary
+## As-built PM-02 viewport topology, View Style and Feature contribution
 
-This section records an accepted **next production design input**. It is not current as-built behavior. Until the separate PM-02 Work Contract is explicitly activated, the current Viewer boundary above remains authoritative: Body subshape picking is absent and current Part presentation remains the existing PM-01 display path.
-
-The proposed PM-02 Viewer work keeps presentation state independent from authored CAD state.
+This section describes the current PM-02 implementation. Presentation state remains independent from authored CAD state, while current Body topology is available for direct inspection and bounded semantic acquisition through the generation-scoped Body scene.
 
 ### View Style HUD
 
-The viewport navigation/presentation HUD should group one single-select View Style control with the existing provider-surface navigation controls:
+The viewport navigation/presentation HUD groups one single-select View Style control with the existing provider-surface navigation controls:
 
 ```text
 HOME    ORTHO/PERSP    Shaded + Edges ▾
 ```
 
-Required target styles are:
+The available styles are:
 
 - Shaded;
 - Shaded + Edges;
@@ -654,7 +652,7 @@ Hidden-edge rendering is visual only. Showing occluded edges must not silently e
 
 ### Independent overlay layers
 
-Target presentation order is conceptually:
+Presentation order is conceptually:
 
 ```text
 Base View Style
@@ -672,7 +670,7 @@ Direct viewport topology interaction and Document Tree Feature interaction delib
 
 ### Direct topology and semantic carriers
 
-PM-02 direct interaction targets bounded current topology:
+Direct interaction targets bounded current topology:
 
 - Face;
 - Edge;
@@ -688,11 +686,11 @@ Examples:
 
 The carrier cue is never Viewer-owned CAD identity.
 
-### Accepted PM-02 committed Body presentation boundary
+### Committed Body presentation boundary
 
-PM-02 should replace the current triangle-only committed `SolidScene` with one atomic topology-aware committed Body presentation snapshot.
+The current implementation uses one atomic topology-aware committed Body presentation snapshot instead of independent mesh/topology authorities.
 
-The target meaning is:
+Its meaning is:
 
 ```text
 one current RuntimeSolid/evaluation-provider generation
@@ -743,7 +741,7 @@ Semantic support-plane / Curve-extension / Point cues are separate derived overl
 
 If evaluation fails and exposes a `resolved_prefix_solid`, a prefix Body may be shown diagnostically, but it must be marked non-authoritative for successful final-Body command targeting.
 
-The neutral Viewer API may grow bounded concepts equivalent to:
+The neutral Viewer API contains bounded concepts equivalent to:
 
 ```text
 ViewStyle
@@ -802,11 +800,11 @@ Feature Contribution, hidden-edge graphics and semantic carrier/support ghost ov
 
 The detailed accepted design input is `work/PM-02_DIRECT_TOPOLOGY_SELECTION_UX.md`.
 
-### Active PM-02 topology Properties / inspection target boundary
+### Topology Properties / inspection boundary
 
-This subsection is normative design for the active PM-02 Work Contract. It is still a target boundary until the owning PM-02 checkpoint implements and verifies it; current as-built behavior remains described separately below.
+This subsection describes the current as-built topology inspection behavior.
 
-The existing stacked Properties panel remains the single product inspection surface. PM-02 should add one adaptive topology inspection context rather than adding Face/Edge/Vertex nodes to Document Tree.
+The existing stacked Properties panel remains the single product inspection surface. It uses one adaptive topology inspection context rather than adding Face/Edge/Vertex nodes to Document Tree.
 
 The panel should display one primary inspection subject at a time.
 
@@ -822,7 +820,7 @@ durable semantic reference is Resolved
 
 A current material Edge may be directly selectable while a durable singular semantic reference is Ambiguous or Unsupported. Properties must report that truth rather than hide the Edge or silently claim stable identity.
 
-For a selected Face, the proposed Properties context should expose:
+For a selected Face, the Properties context exposes:
 
 - Face as current topology kind;
 - Surface carrier;
@@ -1134,7 +1132,7 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
 
-The concrete Qt/OCCT provider presents the current derived Body solid and a separately replaceable transient Extrude preview alongside Origin, Sketch and Profile scenes. If final Part evaluation is Unavailable because a higher active Feature fails or blocks, evaluation may also expose a runtime-only `resolved_prefix_solid`: the same-revision solid result immediately before the first failing active Feature. PartViewportController may present that prefix so lower UpToDate history remains visible. This does not change final Body truth: `body_solid` remains null, final semantic face references remain empty, downstream active Features remain Blocked and no command/persistence/reference path may consume the prefix. If the first active Feature fails, no prefix exists and the Viewer solid scene is empty.
+The concrete Qt/OCCT provider presents the current derived topology-aware Body scene and a separately replaceable transient Extrude preview alongside Origin, Sketch and Profile scenes. If final Part evaluation is Unavailable because a higher active Feature fails or blocks, evaluation may also expose a runtime-only `resolved_prefix_solid`: the same-revision solid result immediately before the first failing active Feature. `PartViewportController` may present that prefix diagnostically so lower UpToDate history remains visible. This does not change final Body truth: final semantic reference authority remains unavailable, downstream active Features remain Blocked and mutating topology-reference actions cannot consume the prefix. If the first active Feature fails, no prefix exists and the Viewer solid scene is empty.
 
 The committed solid scene is rebuilt from the current accepted Part evaluation. Extrude draft evaluation still computes the complete candidate Body and that candidate remains the authority for whether Finish is legal. Separately, the modeling provider derives an exact runtime-only operation delta from the same neutral Extrude input and the ordered Body stage immediately before the target Feature: Add preview is `tool - upstream Body`, while Cut preview is `tool ∩ upstream Body`. The accepted Body therefore remains visible in its normal opaque/default presentation and only material that would actually be added or removed is overlaid translucently. The delta crosses the public boundary only as provider-neutral presentation mesh and carries no durable CAD identity. In the Qt/OCCT provider the committed Body and transient preview each own an independent `Prs3d_ShadingAspect` before `Display()`; Body color/opacity and Add/Cut preview color/transparency are never assigned through shared context-linked shading state. Replacing or clearing preview therefore cannot recolor the committed Body. Polygon offset remains scoped to the preview object only. A valid solid preview transiently hides its source Profile to avoid coplanar z-fighting; if preview becomes invalid during Edit, the Profile may be revealed for diagnosis. Finish, Cancel and context exit clear both runtime overrides without changing the authored Profile visibility policy.
 
@@ -1144,7 +1142,7 @@ For Cut, provider evaluation performs an explicit fuzzy=0 volumetric common chec
 
 Solid tessellation quality is provider-private presentation policy. PM-01H4b restored the original bounded OCCT display meshing values (0.25 mm linear / 0.35 rad angular) and fixed smooth shading at the representation boundary instead of increasing triangle density. The provider derives nodal normals from each BRep face, transports them as provider-neutral per-vertex presentation normals, and the Qt/OCCT Viewer renders the neutral mesh through `AIS_Triangulation`. Smooth continuity therefore follows one underlying BRep surface such as a cylinder while genuine boundaries between separate BRep faces remain sharp. Nodal normals, tessellation and shading remain presentation data only and cannot change modeling tolerances, B-Rep meaning or semantic references.
 
-PM-01 solid/preview presentation carries no durable semantic topology identity. Face/edge subshape picking is deliberately absent. Existing provider selection/detection cleanup rules still apply before presentation replacement/removal.
+Committed Body Face/Edge/Vertex presentation carries only runtime acquisition identity. Durable meaning lives in the Part semantic topology catalog; Viewer tokens and provider subshape identity remain transient. Existing provider selection/detection cleanup rules apply before presentation replacement/removal, and stale Body-scene generations cannot commit.
 
 <!-- section-id: internal.cad-workbench-viewer.presentation-recovery -->
 ## Presentation failure and recovery
@@ -1311,7 +1309,7 @@ App start
 → discover native .ss2part Documents
 → canonical DocumentSessions + Document Tabs
 → shared CAD Workbench
-→ Part Origin + persistent Origin-plane Sketches
+→ Part Origin + persistent Origin-plane / planar Body-Surface Sketches
 → Shared 2D Line / Circle / Arc / Rectangle authoring
 → precision input + Polar + Dynamic Input + OSNAP/Tracking/Inference
 → Trim / Extend / Measure
@@ -1326,7 +1324,7 @@ App start
 
 The Part Feature model currently supports one Body and one Feature family: Extrude. The first successful solid-producing Feature is Add; later ordered Features may be Add or Cut. OneSide supports Forward/Reverse and Midplane uses total-distance symmetric semantics. Failed, Blocked and Suppressed Feature states remain explicit; derived B-Rep is never persisted as authored truth.
 
-Assembly and Drawing remain unimplemented. Part also does not yet provide datum-plane or planar-face Sketch support, topology face/edge picking, Revolve, Fillet/Chamfer, multi-body modeling or general persistent topology-repair UI.
+Assembly and Drawing remain unimplemented. Part now provides planar Body-Face Sketch support, direct current Face/Edge/Vertex inspection, View Styles and explicit semantic re-support/repair for Sketch support. It still does not provide Datum-plane support, Projection, Revolve, Fillet/Chamfer, multi-body modeling or general authored topology-reference repair for arbitrary future Feature inputs.
 
 <!-- section-id: internal.overview.layers -->
 ## Current implementation layers
@@ -1407,7 +1405,7 @@ The current `PartDocument` is persistent and owns Part-hosted Sketches, Part-own
 
 The authored state contains stable `DocumentId`, common Document Properties, the display/input `LengthUnit`, persistent built-in Origin visibility, Sketches, Profiles, `ModelingSemanticsVersion`, the Body identity/cursor and ordered Features. Canonical geometric length remains millimetres; display/input unit changes do not rescale authored geometry.
 
-Each Part Sketch has stable `SketchId`, support restricted in PM-01 to XY/XZ/YZ built-in Origin planes, explicit `SketchPlacement`, persistent visibility and one value-owned Shared-2D `SketchModel`.
+Each Part Sketch has stable `SketchId`, persistent visibility and one value-owned Shared-2D `SketchModel`. Durable support is either one built-in XY/XZ/YZ Origin plane or one semantic planar Body `SurfaceReference` scoped to an explicit upstream `BodyStageRef`. For semantically resolvable support, world-space placement is derived from the current deterministic support frame; schema v9 no longer stores an independent authored `SketchPlacement` as a second authority.
 
 Each Profile has stable `ProfileId`, source `SketchId`, authored name, durable `ProfileRegionIntent` and authored visibility policy: `automatic`, `force_shown` or `force_hidden`. RegionIntent references source EntityIds and semantic anchors; it does not store Viewer tokens, OCCT topology or sampled fill geometry.
 
@@ -1661,15 +1659,15 @@ This is evidence synthesis only. It does not introduce a persistent topology-ref
 
 The native extension is `.ss2part`.
 
-The current Part domain writer uses schema **v8**. In addition to document properties, length unit, built-in Origin visibility, Sketches and Profiles, v8 persists modeling-semantics version 1, Body identity/cursor and the ordered Feature records required to reconstruct the PM-01 Body.
+The current Part domain writer uses schema **v9**. In addition to document properties, length unit, built-in Origin visibility, Sketches and Profiles, v9 persists modeling-semantics version 1, Body identity/cursor and the ordered Feature records required to reconstruct the current Add/Cut Body.
 
-Each Sketch stores stable SketchId, Origin-plane support, placement, visibility and one embedded Shared-2D model with canonical entity IDs and authored Regular/Construction role.
+Each Sketch stores stable SketchId, semantic support, visibility and one embedded Shared-2D model with canonical entity IDs and authored Regular/Construction role. Origin support is stored as its built-in plane role. Body support stores the provider-neutral stage plus semantic Surface address/provenance. Derived world support frames, runtime topology catalogs and provider tokens are never serialized.
 
 Each Profile stores canonical ProfileId, source SketchId, name, visibility policy and semantic RegionIntent. Automatic/forced Profile presentation is authored policy; evaluated region geometry remains derived.
 
 The Body stores stable BodyId, `next_feature_id` and ordered Features. Current Extrude records preserve FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane extent parameters. B-Rep, provider handles, runtime face tokens, cached Feature evaluations and tessellation are not serialized.
 
-Schemas v1–v7 remain readable. Older data is restored into current in-memory defaults and a later successful Save publishes schema v8. The PM-01 visibility migration preserves an older hidden Profile as forced hidden while an older visible Profile becomes automatic. Pre-PM-01 Parts receive an Empty Body rather than synthesized solid history.
+Schemas v1–v8 remain readable. The v8→v9 migration validates that legacy Origin support and legacy absolute `SketchPlacement` describe the same canonical Origin frame, preserves stable Document/Body/Feature/Sketch/Entity/Profile identities and local Sketch geometry, maps the support to the v9 semantic representation and drops redundant absolute placement on the next successful Save. Malformed legacy support/placement fails closed. Earlier visibility/body migrations remain intact; pre-PM-01 Parts receive an Empty Body rather than synthesized solid history.
 
 ProjectId, DocumentSession, Undo/Redo, active tools, preview, selection, camera, evaluated solid handles and provider state remain runtime-only.
 
@@ -1700,7 +1698,7 @@ Delete Profile removes only the Profile and leaves source Sketch geometry author
 <!-- section-id: internal.part-documents.sketch-presentation -->
 ## Active Sketch presentation and spatial input
 
-While a Part Sketch is actively edited, `PartViewportController` rebuilds a neutral authored Sketch scene from the current embedded `SketchModel`, maps Line/Circle/Arc geometry from Sketch U/V through `SketchPlacement` into 3D, presents the intrinsic Sketch Origin as a non-authored overlay and keeps runtime presentation-token bindings back to `SketchId + EntityId`.
+While a Part Sketch is actively edited, `PartViewportController` rebuilds a neutral authored Sketch scene from the current embedded `SketchModel`, resolves the current support frame and maps Line/Circle/Arc geometry from local Sketch U/V into 3D. Origin-backed Sketches use the canonical built-in frame; Body-Surface-backed Sketches resolve their declared upstream stage and semantic planar Surface. The intrinsic Sketch Origin is presentation-only and runtime presentation-token bindings map back to `SketchId + EntityId`.
 
 A separate preview scene is transient and independently replaceable/clearable. Neutral provider rays are intersected with the active Sketch frame to produce Sketch-local U/V. Selection, hover, grips, preview, pointer candidates and Command Line input state remain runtime-only and do not change Part revision, dirty state, history or persistence until a semantic command commits.
 
@@ -1721,16 +1719,14 @@ Already-authored Features retain identity and inputs when Failed, Blocked or Sup
 
 Extrude Create/Edit uses one runtime draft shared by GUI and Command Line. Valid parameter changes update derived preview; Finish revalidates document revision, draft generation, source Profile and successful evaluation before one authored transaction. Edit preserves FeatureId. Cancel or stale/rejected Finish commits nothing.
 
-The Viewer receives provider-neutral derived solid/preview presentation only. PM-01 does not add face/edge topology picking or durable provider identity.
+The Viewer receives provider-neutral derived committed Body and preview presentation. The current Body scene includes generation-scoped Face/Edge/Vertex presentation records derived from the same current `RuntimeSolid` evaluation generation; direct picking maps transient presentation/runtime tokens immediately back to the Part semantic topology catalog. No Viewer/provider token becomes durable Part identity.
 
 <!-- section-id: internal.part-documents.accepted-next-topology-boundary -->
-## Accepted next semantic-topology production boundary
+## As-built semantic topology and face-supported Sketch boundary
 
-PM-02P architecture evidence is complete and Owner-accepted, but its product implementation is **not yet active**.
+PM-02 is implemented for the current Extrude Add/Cut universe. The Part evaluator publishes a complete disposable topology catalog for every successful Body Feature stage, with current Face/Edge/Vertex realization separated from semantic Surface/Curve/Point carrier meaning.
 
-The current as-built Part remains schema v8 with Origin-plane Sketch support and persisted `SketchPlacement`. No Body topology picking or face-supported Sketch exists in the current product yet.
-
-The accepted next production boundary for a separately activated PM-02 contract is:
+The current production flow is:
 
 ```text
 Body Feature stage
@@ -1742,7 +1738,7 @@ Body Feature stage
 -> existing Profile / Extrude Add-Cut pipeline
 ```
 
-The accepted architecture requires:
+The as-built invariants are:
 
 - complete topology accounting at every successful Body stage;
 - Face/Surface, Edge/Curve and Vertex/Point to remain distinct semantic levels;
@@ -1757,16 +1753,16 @@ The accepted architecture requires:
 
 For singular Edge/Curve meaning, Owner accepted the PM-02P finding that a Surface pair alone may be insufficient when several disconnected branches exist. A bounded semantic branch/provenance discriminator is permitted only when producer semantics can defend it; otherwise the singular meaning remains Ambiguous. Provider branch order, nearest/longest geometry and XYZ sorting are not valid identity.
 
-The proposed production contract is `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`. It remains inactive until explicitly accepted and activated through `work/ACTIVE.yaml`.
+The implementation remains bounded by `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md` and ADR-0016. Planar Body Faces may host standard Sketches through semantic Surface support; non-planar Faces remain selectable/inspectable but standard Sketch support reports `Unsupported`. Re-support preserves SketchId, EntityIds and local U/V geometry, and cycle-causing downstream/self support is rejected before mutation.
 
 <!-- section-id: internal.part-documents.current-limits -->
 ## Current limits
 
-The current Part model supports persistent Origin-plane Sketches, Shared-2D authoring/precision/OSNAP/structural-edit workflows, live-reference Profiles and one durable Body with ordered Extrude Features.
+The current Part model supports persistent Origin-plane and planar Body-Surface Sketches, Shared-2D authoring/precision/OSNAP/structural-edit workflows, live-reference Profiles, direct current Face/Edge/Vertex inspection and one durable Body with ordered Extrude Features.
 
-Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane. Feature Tree/Properties expose ordered Feature identity, status/diagnostics, Profile relationships and Edit Extrude. Suppress/Unsuppress and Delete are semantic, Undoable lifecycle operations. Save/Close/Reopen reconstructs the ordered Body from authored v8 state without persisted B-Rep.
+Solid modeling is intentionally bounded to Extrude Add/Cut with OneSide Forward/Reverse and Midplane. Feature Tree/Properties expose ordered Feature identity, current Feature Contribution, topology/accounting diagnostics, support state and Edit Extrude. Suppress/Unsuppress, Delete and semantic re-support participate in Undo/Redo. Save/Close/Reopen reconstructs schema-v9 semantic support and the ordered Body without persisted B-Rep, topology catalogs or runtime tokens.
 
-Not yet implemented are datum/construction-plane Sketch support, planar-face Sketch support, topology face/edge picking and repair UX, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body modeling, Material, Assembly and Drawing.
+Not yet implemented are Datum/construction-plane Sketch support, non-planar standard Sketch mapping, Projection, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body modeling, Material, Assembly and Drawing.
 
 Authored constraints/dimensions/solver, Grid Snap, Rotate/Scale/Mirror+Copy, ordinary-Select RMB convergence and clipboard/cross-Sketch Copy also remain outside the current surface.
 
@@ -1816,13 +1812,13 @@ Part001.ss2part
 
 The common manifest contains format/container metadata, Document kind/identity and Part domain schema version. Shared persistence owns package safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part writer is schema **v8**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1 and one Body with ordered Features.
+The current Part writer is schema **v9**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1 and one Body with ordered Features.
 
-Sketch models persist canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
+Sketches persist stable SketchId, semantic support, visibility, canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Origin support stores the built-in plane role. Body support stores a provider-neutral `BodyStageRef` plus semantic planar `SurfaceReference`; the evaluated world frame is derived and is not persisted. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
 
 The Body persists BodyId, the FeatureId cursor and ordered Feature records. The current Extrude Feature record preserves stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane parameters. Evaluated B-Rep, OCCT handles, runtime topology tokens, evaluation statuses, previews and tessellation are not authored payload.
 
-Schemas v1–v7 remain readable. Older schemas reconstruct the current defaults in memory; pre-PM-01 data receives an Empty Body. The visibility migration maps legacy hidden Profiles to forced hidden and legacy visible Profiles to automatic. A later successful Save publishes schema v8.
+Schemas v1–v8 remain readable. The v8→v9 migration validates legacy Origin support against the legacy absolute `SketchPlacement`, preserves stable authored IDs and local geometry, maps the Sketch to semantic support and stops writing redundant world placement. Incoherent legacy support/placement fails closed. Earlier Profile visibility and pre-PM-01 Body migrations remain intact. A later successful Save publishes schema v9.
 
 DocumentId remains in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tools, CAD input buffer, selection, camera and all provider/runtime geometry remain non-persistent.
 
@@ -1871,12 +1867,12 @@ The following are derived/runtime and intentionally disposable:
 - `DocumentRevision`, runtime session/request/draft generations and file checkpoints;
 - evaluated Shared-2D arrangements and Profile regions;
 - Part Feature evaluation snapshots and UpToDate/Failed/Blocked/Suppressed diagnostics;
-- runtime solid/B-Rep handles, face tokens and provider history;
+- runtime solid/B-Rep handles, Face/Edge/Vertex tokens, evaluated topology catalogs, canonical carrier frames and provider history;
 - Extrude preview geometry and temporary source-Profile reveal;
 - Viewer presentation objects, tessellation, detection/picking tokens and camera state;
 - active selection, hover, grips, Dynamic Input/Polar/OSNAP tracking state and CAD input buffer.
 
-A clean reopen must recover authored semantic state without any of these objects. PM-01 cold-persistence coverage destroys the session/runtime/provider evaluation state after Save, reloads schema-v8 authored data and rebuilds ordered Add/Cut evaluation from a fresh provider/evaluator.
+A clean reopen must recover authored semantic state without any of these objects. PM-02 lifecycle coverage destroys the session/runtime/provider evaluation state after Save, reloads schema-v9 authored data and rebuilds semantic Sketch support plus the ordered Add/Cut chain from a fresh provider generation. Runtime token values may change; durable Surface support meaning and authored IDs must not.
 
 <!-- section-id: internal.persistence.identity-safety -->
 ## Identity and container safety
@@ -1889,7 +1885,7 @@ Schema-v6 loading rejects malformed/non-canonical identity strings, duplicate En
 
 Profile loading fails closed on malformed/non-canonical ProfileId/cursor values, duplicate or out-of-range ProfileIds, missing/invalid source Sketch identity, malformed RegionIntent structure or invalid boundary-anchor encoding. Earlier schema validation remains intact for backward read compatibility.
 
-After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid Sketch support/placement relationships or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family. This validation adds no serialized field and does not change the native schema version.
+After the schema-specific parser reconstructs `PartAuthoredState`, loading passes that state through the owning Part-domain validated reconstruction boundary. The same invariant check used by Part transaction commit therefore also guards native-file reconstruction: invalid semantic Sketch support, illegal support/consumer ordering, malformed legacy migration state or duplicate hosted Sketch identity cannot produce a live `PartDocument`. Domain reconstruction rejection maps to the existing `malformed_document` load failure family.
 
 Container v1 rejects unsafe or ambiguous input, including unsupported container versions, ZIP64, encrypted/unsupported entries, duplicate entry names, unsafe entry paths, missing mandatory entries, oversized content, invalid mandatory JSON and unsupported Part domain schemas.
 
@@ -1900,7 +1896,7 @@ A `.ss2part` whose manifest declares another Document kind fails closed. `docume
 
 Current persistence does not store Undo/Redo history, evaluated B-Rep, Viewer state, runtime topology/provider identity, caches or active edit context.
 
-The native format also does not yet encode datum-plane or planar-face support semantics, topology-reference repair state for later face/edge-driven Features, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics.
+The native format does not encode Datum-plane support, Projection, generic authored Edge/Vertex feature inputs, multi-body ownership, Assembly occurrence/constraint data or Drawing semantics. Planar Body-Surface Sketch support is encoded semantically in v9; evaluated topology, runtime repair candidates and provider identity remain derived.
 
 Save remains whole-file conditional replacement rather than an in-place feature database or event log.
 </script>
@@ -2564,7 +2560,7 @@ After `Save`, Origin visibility survives closing and restarting the application.
 <!-- section-id: product.parts.sketch-host -->
 ## Creating and viewing a Sketch
 
-Use `Sketch` in the expanding left side of the active-Document top row, then select `XY Plane`, `XZ Plane` or `YZ Plane` from Origin. You may select the plane in Document Tree or, when visible, in the 3D Viewport.
+Use `Sketch` in the expanding left side of the active-Document top row, then select either `XY Plane`, `XZ Plane` or `YZ Plane` from Origin, or a current Body Face in the 3D Viewport. During Sketch support acquisition the viewport accepts Faces only. A planar semantic Face is accepted as standard Sketch support; a non-planar Face remains selectable but reports **Unsupported** instead of falling through to another target. Selecting the support is still a runtime draft: **Finish Sketch** performs the single authored Create transaction and **Cancel** changes nothing.
 
 During Sketch Edit the tools are grouped as:
 
@@ -2754,9 +2750,11 @@ Polar/DYN create no Document revision, dirty state or Undo step and are not save
 
 Space typed while a text-entry field has focus remains text input; it does not trigger a CAD action.
 
-Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit. Sketch support is currently limited to the three Origin planes.
+Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit.
 
-Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions, Datum planes and planar model faces remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
+An existing Sketch can use **Change Sketch Support** from Document Tree or `RESUPPORT` in Command Line. Select a new Origin plane or planar Body Face, then Finish to commit exactly one support change. Re-support preserves SketchId, EntityIds and authored local U/V geometry; it changes the host mapping. Missing, Ambiguous, Unsupported or cycle-causing targets are rejected without partial mutation. Undo/Redo restores the previous semantic support intent.
+
+Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions and Datum planes remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
 
 <!-- section-id: product.parts.structural-editing -->
 ## Structural editing — Trim and Extend
@@ -2916,7 +2914,35 @@ Document Tree shows Origin and source Sketch/Profile objects first, with the **B
 
 Command Line and GUI control the same Extrude draft. Supported contextual words include `ADD`, `CUT`, `REVERSE`, `MIDPLANE`, `ONESIDE`, `FINISH` and `CANCEL`; Length uses the shared unit-aware quantity input.
 
-Body/Feature do not have a separate Show/Hide state. Suppress is modeling semantics, not visibility. Current Extrude also does not expose solid face/edge picking as durable references.
+Body/Feature do not have a separate Show/Hide state. Suppress is modeling semantics, not visibility. Current Body Faces, Edges and Vertices are directly selectable for inspection. Durable modeling meaning remains semantic and stage-scoped; Viewer tokens or topology order are never stored as references.
+
+<!-- section-id: product.parts.body-topology -->
+## Body topology, View Style and semantic inspection
+
+The committed Body presentation exposes current **Face**, **Edge** and **Vertex** topology from the same current evaluation generation as the shaded Body. Direct selection is an inspection/acquisition surface, not persistent provider identity.
+
+The viewport View Style selector offers:
+
+- **Shaded**;
+- **Shaded + Edges**;
+- **Shaded + Hidden Edges**.
+
+View Style is temporary presentation state. It does not dirty the Part, create Undo/Redo history or change semantic selection. Hidden-edge display does not enable occluded select-through.
+
+For ordinary all-kind picking, visible candidates use the screen-space priority **Vertex → Edge → Face**. When several candidates overlap under the pointer, **Tab** and **Shift+Tab** cycle the runtime candidate stack before click. The visible preselection you click is the acquisition target; provider return order does not become CAD identity.
+
+Selecting current topology updates Properties without adding Face/Edge/Vertex rows to Document Tree:
+
+- Face shows its semantic Surface, surface class, producer/stage/provenance, referenceability and standard Sketch-support capability;
+- Edge shows its Curve meaning, material/representation-artifact state, adjacent Surfaces and referenceability;
+- Vertex shows semantic Point/provenance and current XYZ as diagnostic geometry only;
+- Body shows current complete topology/accounting counts.
+
+A current topology item can be **Present** while durable singular referenceability is **Ambiguous** or **Unsupported**. SimpleSolid reports that state instead of silently rebinding by proximity or geometry similarity.
+
+Selecting or hovering a Feature in Document Tree highlights its **Current Feature Contribution** on the current Body. This is not a historical-stage replacement and does not create duplicate selectable topology. If a selected topology item disappears after recompute, direct selection clears instead of jumping to similar geometry.
+
+Face-supported Sketches attach durably to the semantic planar **Surface**, not to a provider Face handle. If later modeling splits that Surface into multiple bounded Face fragments, the Sketch may remain Resolved. If the semantic support is deleted it becomes **Missing**; if multiple semantic candidates remain it becomes **Ambiguous**. No stale last-good support frame is used for downstream modeling. Use Change Sketch Support / `RESUPPORT` for explicit repair.
 
 <!-- section-id: product.parts.navigation -->
 ## 3D navigation and Navigation Cube
@@ -2943,9 +2969,9 @@ The next normal full Viewer refresh automatically retries presentation from the 
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state: Document properties, Origin visibility, Sketches and geometry, Profiles with RegionIntent/visibility policy, and the Body with ordered Extrude Features, stable identities, parameters and Suppressed state.
+`Save` writes the current authored Part state: Document properties, Origin visibility, Sketches with semantic Origin/Body-Surface support and local geometry, Profiles with RegionIntent/visibility policy, and the Body with ordered Extrude Features, stable identities, parameters and Suppressed state.
 
-The current B-Rep solid, preview, evaluation status, provider face tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
+The current B-Rep solid, evaluated topology catalog, derived Body-Surface support frames, preview, evaluation status, provider topology tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
 
 Ordinary Save remains conditional on the exact native file version loaded or last saved by the session. A removed, replaced or externally changed target reports a Save conflict rather than being silently overwritten. The in-memory Part, Undo/Redo and local changes stay open.
 
@@ -2954,7 +2980,7 @@ Closing a dirty Part requires `Save`, `Discard` or `Cancel`. Closing the complet
 <!-- section-id: product.parts.restart -->
 ## Restart and reopen
 
-After restarting, open the same Project. SimpleSolid scans the Workspace again and opens the saved Part with the same DocumentId, SketchId/ProfileId, BodyId and FeatureId values.
+After restarting, open the same Project. SimpleSolid scans the Workspace again and opens the saved Part with the same DocumentId, SketchId/ProfileId, BodyId and FeatureId values. Face-supported Sketches keep their semantic support and local U/V geometry even though runtime topology token values are rebuilt.
 
 The Body and its ordered Extrude Add/Cut Features are evaluated from scratch from authored state. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers. A deleted Feature stays deleted while its source Profile remains available unless the Profile itself was removed.
 
@@ -2972,11 +2998,11 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides persistent Origin-plane Sketches, Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles, and one durable Body with ordered Extrude Features.
+The current Part provides persistent Origin-plane and planar Body-Face Sketch support, Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles, direct Face/Edge/Vertex inspection and one durable Body with ordered Extrude Features.
 
-Solid modeling is currently limited to **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**. Edit Extrude, Feature status, Suppress/Unsuppress, Delete, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
+Solid modeling is currently limited to **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**. Edit Extrude, Feature status, Suppress/Unsuppress, Delete, semantic Sketch re-support, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
 
-Not yet implemented are Sketch support on Datums or planar model faces, face/edge topology picking and repair, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body, Material, Assembly or Drawing tools.
+Not yet implemented are Sketch support on Datums, non-planar standard Sketch mapping, Projection, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body, Material, Assembly or Drawing tools.
 
 On the Sketch side, authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy and final ordinary-Select RMB convergence remain outside the current surface.
 
@@ -3102,7 +3128,7 @@ After a Project is opened, its name, `ProjectId` and Workspace path are shown in
 
 The Workspace Shell contains the persistent native `.ss2part` Part document type with Document Properties, Undo/Redo, conditional Save and several simultaneously open Part sessions.
 
-The shared CAD Workbench and 3D Viewer support Part Origin/reference work, durable Origin-plane Sketches and the current Sketch editing workflow. Body/Feature solid modeling, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.
+The shared CAD Workbench and 3D Viewer support Part Origin/reference work, Origin-plane and planar Body-Face Sketches, direct current Face/Edge/Vertex inspection and one durable Body with ordered Extrude Add/Cut Features. Datum/Projection, Revolve, Fillet/Chamfer, Assembly and Drawing are not yet available. The current Part workflow is described in `Part Documents`.
 </script>
 <script type="text/plain" class="doc-source" data-doc-id="product.overview" data-kind="product" data-lang="pl" data-path="docs/product/pl/OVERVIEW.md">
 # Dokumentacja produktu SimpleSolid 2.0
@@ -3249,7 +3275,7 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie i wyświetlanie Sketchu
 
-W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin. Płaszczyznę możesz wybrać w Document Tree lub — gdy jest widoczna — w viewporcie 3D.
+W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin lub bieżącą Face Body w viewporcie 3D. Podczas wyboru supportu Sketch viewport przyjmuje wyłącznie Face. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Sam wybór supportu pozostaje runtime draftem: **Finish Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu.
 
 Podczas Sketch Edit narzędzia są uporządkowane w grupy:
 
@@ -3439,9 +3465,11 @@ Polar/DYN nie tworzą Document revision, dirty ani Undo i nie są zapisywane do 
 
 Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uruchamia akcji CAD.
 
-Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję. Support Sketchu jest obecnie ograniczony do trzech płaszczyzn Origin.
+Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję.
 
-Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions, płaszczyzny Datum i płaskie ściany modelu pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
+Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin lub planarną Face Body, a następnie Finish, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported albo powodujący cykl jest odrzucany bez częściowej mutacji. Undo/Redo przywraca poprzedni semantyczny support.
+
+Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions i płaszczyzny Datum pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
 
 <!-- section-id: product.parts.structural-editing -->
 ## Edycja strukturalna — Trim i Extend
@@ -3601,7 +3629,35 @@ Document Tree pokazuje najpierw Origin i źródłowe Sketch/Profile, a **Body** 
 
 Command Line i GUI sterują tym samym Extrude draftem. Obsługiwane słowa kontekstowe obejmują `ADD`, `CUT`, `REVERSE`, `MIDPLANE`, `ONESIDE`, `FINISH` i `CANCEL`; Length korzysta ze wspólnego unit-aware quantity input.
 
-Body/Feature nie mają osobnego Show/Hide. Suppress jest semantyką modelowania, a nie widocznością. Obecny Extrude nie udostępnia także wybierania ścian/krawędzi bryły jako trwałych referencji.
+Body/Feature nie mają osobnego Show/Hide. Suppress jest semantyką modelowania, a nie widocznością. Bieżące Face, Edge i Vertex Body są bezpośrednio wybieralne do inspekcji. Trwałe znaczenie modelowania pozostaje semantyczne i stage-scoped; tokeny Viewera ani kolejność topologii nie są zapisywane jako referencje.
+
+<!-- section-id: product.parts.body-topology -->
+## Topologia Body, View Style i inspekcja semantyczna
+
+Zatwierdzona prezentacja Body udostępnia bieżącą topologię **Face**, **Edge** i **Vertex** z tej samej generacji ewaluacji co shaded Body. Bezpośredni wybór służy do inspekcji i acquisition, a nie jako trwała tożsamość providera.
+
+Selektor View Style w viewport oferuje:
+
+- **Shaded**;
+- **Shaded + Edges**;
+- **Shaded + Hidden Edges**.
+
+View Style jest tymczasowym stanem prezentacji. Nie dirty'uje Parta, nie tworzy historii Undo/Redo i nie zmienia semantycznego zaznaczenia. Pokazanie hidden edges nie włącza wyboru przez zasłoniętą geometrię.
+
+Przy zwykłym wyborze wszystkich typów widoczne kandydaty używają screen-space priority **Vertex → Edge → Face**. Gdy kilka kandydatów nakłada się pod kursorem, **Tab** i **Shift+Tab** przełączają runtime candidate stack przed kliknięciem. Widoczny preselection, który klikniesz, jest celem acquisition; kolejność zwrócona przez providera nie staje się CAD identity.
+
+Zaznaczenie bieżącej topologii aktualizuje Properties bez dodawania wierszy Face/Edge/Vertex do Document Tree:
+
+- Face pokazuje semantyczny Surface, klasę powierzchni, producer/stage/provenance, referenceability i możliwość standardowego Sketch support;
+- Edge pokazuje znaczenie Curve, stan material/representation-artifact, sąsiednie Surfaces i referenceability;
+- Vertex pokazuje semantyczny Point/provenance, a bieżące XYZ wyłącznie jako diagnostykę geometrii;
+- Body pokazuje kompletne bieżące topology/accounting counts.
+
+Bieżący element topologii może być **Present**, gdy trwała singular referenceability jest **Ambiguous** albo **Unsupported**. SimpleSolid raportuje ten stan zamiast automatycznie przepinać referencję na podobną lub najbliższą geometrię.
+
+Zaznaczenie albo hover Feature w Document Tree podświetla jego **Current Feature Contribution** na bieżącym Body. Nie jest to podmiana Body na historyczny stage i nie tworzy duplikatów selectable topology. Gdy bezpośrednio wybrany element topologii znika po recompute, zaznaczenie jest czyszczone zamiast przeskakiwać na podobną geometrię.
+
+Sketch oparty na Face jest trwale związany z semantycznym planarnym **Surface**, nie z providerowym uchwytem Face. Jeśli późniejsze modelowanie rozdzieli ten Surface na kilka bounded Face fragments, Sketch może nadal pozostać Resolved. Gdy semantyczny support zostanie usunięty, stan przechodzi w **Missing**; gdy pozostaje wiele semantycznych kandydatów — w **Ambiguous**. Downstream modeling nie używa stale last-good frame. Do jawnej naprawy użyj Change Sketch Support / `RESUPPORT`.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
@@ -3628,9 +3684,9 @@ Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę pr
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, Sketche i ich geometrię, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed.
+`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, Sketche z semantycznym supportem Origin/Body-Surface i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed.
 
-Bieżąca bryła B-Rep, preview, status ewaluacji, tokeny ścian/providera i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
+Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface, preview, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
 
 Ordinary Save pozostaje warunkowy względem dokładnej wersji natywnego pliku wczytanej lub ostatnio zapisanej przez sesję. Usunięty, podmieniony albo zewnętrznie zmieniony target powoduje konflikt Save zamiast cichego nadpisania. In-memory Part, Undo/Redo i lokalne zmiany pozostają wtedy otwarte.
 
@@ -3639,7 +3695,7 @@ Przy zamykaniu Parta z niezapisanymi zmianami aplikacja wymaga `Save`, `Discard`
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
 
-Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, SketchId/ProfileId, BodyId oraz FeatureId.
+Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, SketchId/ProfileId, BodyId oraz FeatureId. Sketche oparte na Face zachowują semantyczny support i lokalną geometrię U/V, mimo że runtime topology tokeny są budowane od nowa.
 
 Body i jego ordered Extrude Add/Cut są przeliczane od zera z authored state. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów. Usunięty Feature pozostaje usunięty, natomiast jego źródłowy Profile pozostaje dostępny, jeżeli sam nie został usunięty.
 
@@ -3657,11 +3713,11 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles oraz jeden trwały Body z ordered Extrude Features.
+Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin oraz planarnych Face Body, Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles, bezpośrednią inspekcję Face/Edge/Vertex oraz jeden trwały Body z ordered Extrude Features.
 
-Solid modeling jest obecnie ograniczony do **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**. Dostępne są Edit Extrude, statusy Feature, Suppress/Unsuppress, Delete, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
+Solid modeling jest obecnie ograniczony do **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**. Dostępne są Edit Extrude, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
 
-Nie ma jeszcze Sketch support na Datum ani planar model face, face/edge topology picking i repair, Revolve, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, multi-body, Material ani narzędzi Assembly/Drawing.
+Nie ma jeszcze Sketch support na Datum, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, Revolve, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, multi-body, Material ani narzędzi Assembly/Drawing.
 
 Po stronie Sketch nadal poza zakresem pozostają authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy i docelowe ordinary-Select RMB convergence.
 
@@ -3787,7 +3843,7 @@ Po otwarciu Projektu jego nazwa, `ProjectId` i ścieżka Workspace są pokazane 
 
 Workspace Shell zawiera trwały typ dokumentu Part `.ss2part` z właściwościami Dokumentu, Undo/Redo, warunkowym Save i możliwością utrzymywania kilku otwartych Partów jednocześnie.
 
-Wspólny CAD Workbench i Viewer 3D obsługują Origin/referencje Parta, trwałe Sketche na płaszczyznach Origin oraz bieżący workflow edycji Sketchu. Modelowanie bryłowe Body/Feature, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Dokumenty Part`.
+Wspólny CAD Workbench i Viewer 3D obsługują Origin/reference Parta, Sketche na płaszczyznach Origin i planarnych Face Body, bezpośrednią inspekcję bieżących Face/Edge/Vertex oraz jeden trwały Body z uporządkowanymi Feature Extrude Add/Cut. Datum/Projection, Revolve, Fillet/Chamfer, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Part Documents`.
 </script>
 
 <script>
