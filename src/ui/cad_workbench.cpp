@@ -4933,7 +4933,7 @@ void CadWorkbench::syncDatumPlaneUi() {
 
     QString source_text =
         QStringLiteral(
-            "Select XY/XZ/YZ Origin plane or planar Body Face");
+            "Select XY/XZ/YZ Origin plane, planar Body Face or existing Datum Plane");
     if (datum_plane_draft_->source()) {
         const auto& source =
             *datum_plane_draft_->source();
@@ -7373,7 +7373,7 @@ QString CadWorkbench::cadInputPromptText() const {
             ? QStringLiteral(
                   "Command: DATUM PLANE — OFFSET · signed Length · REVERSE · FINISH/CANCEL")
             : QStringLiteral(
-                  "Command: DATUM PLANE — Select XY/XZ/YZ Origin plane or planar Body Face · CANCEL/Esc");
+                  "Command: DATUM PLANE — Select XY/XZ/YZ Origin plane, planar Body Face or existing Datum Plane · CANCEL/Esc");
     }
     if (extrude_profile_pick_active_) {
         return QStringLiteral(
