@@ -1412,7 +1412,6 @@ void CadWorkbench::buildUi() {
         [this](
             const std::vector<core::BuiltinReferenceRole>&,
             std::optional<core::BuiltinReferenceRole> primary) {
-            selected_body_topology_.reset();
             refreshPropertiesContext(primary);
             tryCreateSketchFromSupport(primary);
             tryStageDatumPlaneFromSupport(primary);
@@ -1420,7 +1419,6 @@ void CadWorkbench::buildUi() {
 
     viewport_controller_->setBodyTopologySelectionChangedHandler(
         [this](std::optional<BodyTopologyInspection> inspection) {
-            selected_body_topology_ = inspection;
             if (!inspection) {
                 syncActionState();
                 return;
@@ -4397,9 +4395,14 @@ bool CadWorkbench::startDatumPlaneTool() {
     }
     if (datum_plane_draft_ &&
         !datum_plane_draft_->source() &&
-        selected_body_topology_) {
-        tryStageDatumPlaneFromBodyTopology(
-            *selected_body_topology_);
+        viewport_controller_ != nullptr) {
+        const auto inspection =
+            viewport_controller_->
+                primaryBodyTopologyInspection();
+        if (inspection) {
+            tryStageDatumPlaneFromBodyTopology(
+                *inspection);
+        }
     }
 
     refreshDatumPlaneEvaluation();
@@ -7487,7 +7490,6 @@ void CadWorkbench::clearActiveContext() {
     selected_profile_id_.reset();
     selected_feature_id_.reset();
     selected_body_id_.reset();
-    selected_body_topology_.reset();
     part_evaluation_revision_.reset();
     body_evaluation_status_.reset();
     feature_evaluation_statuses_.clear();
