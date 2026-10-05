@@ -4824,6 +4824,28 @@ void CadWorkbench::tryStageDatumPlaneFromBodyTopology(
                 std::move(surface)}});
 }
 
+void CadWorkbench::tryStageDatumPlaneFromDatum(
+    std::optional<part::DatumId> datum_id) {
+    if (!datum_plane_draft_ ||
+        !datum_id ||
+        !datum_id->valid() ||
+        (datum_plane_draft_->datumId() &&
+         *datum_plane_draft_->datumId() ==
+             *datum_id) ||
+        document_session_ == nullptr ||
+        document_session_->document()
+                .findDatumPlane(*datum_id) ==
+            nullptr) {
+        return;
+    }
+
+    stageDatumPlaneSource(
+        part::PlaneReference{
+            part::DatumPlaneReference{
+                *datum_id}});
+}
+
+
 void CadWorkbench::scheduleDatumPlaneEvaluation() {
     if (datum_plane_preview_timer_ == nullptr) {
         refreshDatumPlaneEvaluation();
