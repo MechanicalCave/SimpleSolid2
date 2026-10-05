@@ -486,7 +486,7 @@ evaluateCreateDraft(
         draft->setDistance(
             core::LengthValue{distance}));
 
-    kernel.reset();
+    provider.reset();
     auto evaluation =
         session.evaluateExtrudeDraft(
             *draft,
@@ -588,7 +588,7 @@ int main() {
             part::ExtrudeOperation::cut,
             2.0);
     CHECK(
-        kernel.preview_inputs.front()
+        provider.preview_inputs.front()
             .profile.frame.origin.z == 10.0);
     CHECK(
         cut_evaluation.evaluation_diagnostic ==
