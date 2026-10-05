@@ -312,7 +312,7 @@ struct Fixture final {
     sketch::SketchModelState local_state;
 };
 
-Fixture makeFixture(WorkflowKernel& kernel) {
+Fixture makeFixture(WorkflowKernel& provider) {
     application::DocumentSession session{
         {},
         part::PartDocument::create(
@@ -367,17 +367,17 @@ Fixture makeFixture(WorkflowKernel& kernel) {
                     core::LengthValue{10.0},
                     false},
                 "Base"},
-            kernel);
+            provider);
     CHECK(
         base_feature.ok() &&
         base_feature.changed &&
         base_feature.feature_id);
 
-    kernel.reset();
+    provider.reset();
     const auto base_evaluation =
         part::evaluatePart(
             session.document(),
-            kernel);
+            provider);
     CHECK(
         base_evaluation.body_status ==
         part::BodyEvaluationStatus::up_to_date);
@@ -418,7 +418,7 @@ Fixture makeFixture(WorkflowKernel& kernel) {
             application::CreatePartSketchOnSupportCommand{
                 *support,
                 session.document().revision()},
-            &kernel);
+            &provider);
     CHECK(
         face_sketch.ok() &&
         face_sketch.changed &&
@@ -471,7 +471,7 @@ Fixture makeFixture(WorkflowKernel& kernel) {
 application::ExtrudeDraftEvaluationResult
 evaluateCreateDraft(
     application::DocumentSession& session,
-    WorkflowKernel& kernel,
+    WorkflowKernel& provider,
     part::ProfileId profile_id,
     part::ExtrudeOperation operation,
     double distance) {
@@ -490,13 +490,13 @@ evaluateCreateDraft(
     auto evaluation =
         session.evaluateExtrudeDraft(
             *draft,
-            kernel);
+            provider);
     CHECK(evaluation.committable());
     CHECK(evaluation.previewSolidAvailable());
     CHECK(evaluation.body_solid != nullptr);
-    CHECK(kernel.preview_inputs.size() == 1U);
+    CHECK(provider.preview_inputs.size() == 1U);
     CHECK(
-        kernel.preview_inputs.front()
+        provider.preview_inputs.front()
             .operation ==
         (operation == part::ExtrudeOperation::cut
              ? kernel::SolidBooleanOperation::cut
@@ -507,7 +507,7 @@ evaluateCreateDraft(
             session,
             *draft,
             evaluation,
-            kernel);
+            provider);
     CHECK(finished.ok());
     CHECK(finished.changed);
     CHECK(finished.feature_id);
@@ -517,14 +517,14 @@ evaluateCreateDraft(
 
 void verifySupportFailure(
     const Fixture& fixture,
-    WorkflowKernel& kernel,
+    WorkflowKernel& provider,
     SupportMode mode,
     part::FeatureEvaluationDiagnosticCode expected) {
-    kernel.reset(mode);
+    provider.reset(mode);
     const auto evaluation =
         part::evaluatePart(
             fixture.session.document(),
-            kernel);
+            provider);
 
     CHECK(
         evaluation.body_status ==
@@ -542,15 +542,15 @@ void verifySupportFailure(
 
     // Neither the Add nor Cut consumer reaches the Kernel after current
     // support loss/ambiguity. A previously valid world frame is not reused.
-    CHECK(kernel.inputs.size() == 1U);
-    CHECK(kernel.preview_inputs.empty());
+    CHECK(provider.inputs.size() == 1U);
+    CHECK(provider.preview_inputs.empty());
 }
 
 } // namespace
 
 int main() {
-    WorkflowKernel kernel;
-    auto fixture = makeFixture(kernel);
+    WorkflowKernel provider;
+    auto fixture = makeFixture(provider);
 
     const auto* authored_face_sketch =
         fixture.session.document().findSketch(
@@ -566,12 +566,12 @@ int main() {
     const auto add_evaluation =
         evaluateCreateDraft(
             fixture.session,
-            kernel,
+            provider,
             fixture.face_profile_id,
             part::ExtrudeOperation::add,
             4.0);
     CHECK(
-        kernel.preview_inputs.front()
+        provider.preview_inputs.front()
             .profile.frame.origin.z == 10.0);
     CHECK(
         add_evaluation.evaluation_diagnostic ==
@@ -583,7 +583,7 @@ int main() {
     const auto cut_evaluation =
         evaluateCreateDraft(
             fixture.session,
-            kernel,
+            provider,
             fixture.face_profile_id,
             part::ExtrudeOperation::cut,
             2.0);
@@ -601,7 +601,7 @@ int main() {
         fixture.session.document()
             .body().features.size() == 3U);
 
-    kernel.reset();
+    provider.reset();
     const auto upstream_edit =
         fixture.session.execute(
             application::EditExtrudeFeatureCommand{
@@ -613,7 +613,7 @@ int main() {
                     core::LengthValue{20.0},
                     false},
                 "Base"},
-            kernel);
+            provider);
     CHECK(upstream_edit.ok());
     CHECK(upstream_edit.changed);
 
@@ -628,38 +628,38 @@ int main() {
         moved_face_sketch->model.state() ==
         fixture.local_state);
 
-    kernel.reset();
+    provider.reset();
     const auto moved =
         part::evaluatePart(
             fixture.session.document(),
-            kernel);
+            provider);
     CHECK(
         moved.body_status ==
         part::BodyEvaluationStatus::up_to_date);
     CHECK(moved.features.size() == 3U);
-    CHECK(kernel.inputs.size() == 3U);
+    CHECK(provider.inputs.size() == 3U);
     CHECK(
-        kernel.inputs[1].profile.frame.origin.z ==
+        provider.inputs[1].profile.frame.origin.z ==
         20.0);
     CHECK(
-        kernel.inputs[2].profile.frame.origin.z ==
+        provider.inputs[2].profile.frame.origin.z ==
         20.0);
     CHECK(
-        kernel.inputs[1].operation ==
+        provider.inputs[1].operation ==
         kernel::SolidBooleanOperation::add);
     CHECK(
-        kernel.inputs[2].operation ==
+        provider.inputs[2].operation ==
         kernel::SolidBooleanOperation::cut);
 
     verifySupportFailure(
         fixture,
-        kernel,
+        provider,
         SupportMode::missing,
         part::FeatureEvaluationDiagnosticCode::
             sketch_support_missing);
     verifySupportFailure(
         fixture,
-        kernel,
+        provider,
         SupportMode::ambiguous,
         part::FeatureEvaluationDiagnosticCode::
             sketch_support_ambiguous);
