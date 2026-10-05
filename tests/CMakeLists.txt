@@ -821,6 +821,28 @@ set_tests_properties(pm02h.face_supported_extrude_workflow PROPERTIES
     LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part"
 )
 
+add_executable(pm02i_face_supported_lifecycle_survival_test
+    pm02i_face_supported_lifecycle_survival_test.cpp
+)
+
+target_link_libraries(pm02i_face_supported_lifecycle_survival_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_part
+)
+
+target_compile_features(pm02i_face_supported_lifecycle_survival_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm02i.face_supported_lifecycle_survival
+    COMMAND pm02i_face_supported_lifecycle_survival_test
+)
+
+set_tests_properties(pm02i.face_supported_lifecycle_survival PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part;subsystem-persistence"
+)
+
 add_executable(sk03a_viewer_sketch_contracts_test
     sk03a_viewer_sketch_contracts_test.cpp
 )
