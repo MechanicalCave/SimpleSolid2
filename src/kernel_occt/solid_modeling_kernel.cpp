@@ -16,6 +16,7 @@
 #include <BRepCheck_Analyzer.hxx>
 #include <Poly_Triangle.hxx>
 #include <Poly_Triangulation.hxx>
+#include <Precision.hxx>
 #include <Standard_Failure.hxx>
 #include <TopAbs_Orientation.hxx>
 #include <TopAbs_ShapeEnum.hxx>
@@ -1460,6 +1461,109 @@ struct SurfaceCandidateClaim final {
     return false;
 }
 
+[[nodiscard]] bool facesShareResultEdge(
+    const TopoDS_Face& first,
+    const TopoDS_Face& second) {
+    for (TopExp_Explorer first_edges{
+             first,
+             TopAbs_EDGE};
+         first_edges.More();
+         first_edges.Next()) {
+        const auto first_edge =
+            TopoDS::Edge(
+                first_edges.Current());
+        for (TopExp_Explorer second_edges{
+                 second,
+                 TopAbs_EDGE};
+             second_edges.More();
+             second_edges.Next()) {
+            if (first_edge.IsSame(
+                    second_edges.Current())) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+[[nodiscard]] bool planarFacesSameDomain(
+    const TopoDS_Face& first,
+    const TopoDS_Face& second) {
+    if (providerSurfaceKind(first) !=
+            kernel::SurfaceKind::plane ||
+        providerSurfaceKind(second) !=
+            kernel::SurfaceKind::plane) {
+        return false;
+    }
+
+    const BRepAdaptor_Surface first_surface{
+        first,
+        true};
+    const BRepAdaptor_Surface second_surface{
+        second,
+        true};
+    if (first_surface.GetType() !=
+            GeomAbs_Plane ||
+        second_surface.GetType() !=
+            GeomAbs_Plane) {
+        return false;
+    }
+
+    const auto first_plane =
+        first_surface.Plane();
+    const auto second_plane =
+        second_surface.Plane();
+    const auto& first_normal =
+        first_plane.Axis().Direction();
+    const auto& second_normal =
+        second_plane.Axis().Direction();
+
+    if (!first_normal.IsParallel(
+            second_normal,
+            Precision::Angular())) {
+        return false;
+    }
+
+    const double tolerance =
+        std::max(
+            {
+                Precision::Confusion(),
+                BRep_Tool::Tolerance(first),
+                BRep_Tool::Tolerance(second),
+            });
+    return first_plane.Distance(
+               second_plane.Location()) <=
+           tolerance;
+}
+
+[[nodiscard]] bool surfaceClaimsHaveCertifiedContinuation(
+    const SurfaceCandidateClaim& created,
+    const SurfaceCandidateClaim& inherited) {
+    if (surfaceClaimsShareFace(
+            created,
+            inherited)) {
+        return true;
+    }
+
+    for (const auto& created_face :
+         created.candidates) {
+        for (const auto& inherited_face :
+             inherited.candidates) {
+            if (!facesShareResultEdge(
+                    created_face,
+                    inherited_face)) {
+                continue;
+            }
+            if (planarFacesSameDomain(
+                    created_face,
+                    inherited_face)) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 void applyAddSurfaceContinuations(
     std::vector<SurfaceCandidateClaim>& claims) {
     for (std::size_t created_index = 0U;
@@ -1487,7 +1591,7 @@ void applyAddSurfaceContinuations(
                 inherited.surface_kind !=
                     kernel::SurfaceKind::plane ||
                 !inherited.inherited_token ||
-                !surfaceClaimsShareFace(
+                !surfaceClaimsHaveCertifiedContinuation(
                     created,
                     inherited)) {
                 continue;
@@ -1496,8 +1600,10 @@ void applyAddSurfaceContinuations(
                 inherited_index);
         }
 
-        // ADR-0017: only unique Boolean lineage overlap can continue an
-        // inherited carrier. Geometry equality/coplanarity is never queried.
+        // ADR-0017: only one inherited Boolean-lineage claim may own the
+        // continuation. The provider may certify a shared descendant or one
+        // same-domain planar partition adjacency between exact descendants;
+        // no global proximity/coplanarity search participates in ownership.
         if (inherited_matches.size() != 1U) {
             continue;
         }
