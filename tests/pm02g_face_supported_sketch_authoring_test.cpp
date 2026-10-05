@@ -379,6 +379,27 @@ int main() {
     CHECK(side_again->support == side_support);
     CHECK(side_again->model.state() == local_before);
 
+    const auto yz_support =
+        part::partSketchSupportForBuiltinPlane(
+            core::BuiltinReferenceRole::yz_plane);
+    CHECK(yz_support.has_value());
+    const auto origin_resupport =
+        fixture.session.execute(
+            application::SetPartSketchSupportCommand{
+                created_id,
+                *yz_support,
+                fixture.session.document().revision()},
+            &kernel);
+    CHECK(origin_resupport.ok());
+    CHECK(origin_resupport.changed);
+    const auto* origin_again =
+        fixture.session.document().findSketch(
+            created_id);
+    CHECK(origin_again != nullptr);
+    CHECK(origin_again->support == *yz_support);
+    CHECK(origin_again->model.state() == local_before);
+    CHECK(origin_again->id == created_id);
+
     const auto cycle_state = fixture.session.document().state();
     const auto cycle_revision = fixture.session.document().revision();
     const auto cycle = fixture.session.execute(
@@ -516,6 +537,7 @@ int main() {
         << " origin_parity=1"
         << " cap=1"
         << " lateral=1"
+        << " surface_to_origin=1"
         << " cut_exposed=1"
         << " ids_preserved=1"
         << " local_uv_preserved=1"
