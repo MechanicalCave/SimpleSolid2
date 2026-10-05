@@ -162,7 +162,7 @@ Fixture makeFixture(SupportKernel& kernel) {
             part::OneSidedExtrudeExtent{
                 core::LengthValue{10.0}, false},
             "Base"},
-        &kernel);
+        kernel);
     CHECK(feature.ok() && feature.changed && feature.feature_id);
 
     return {std::move(session), *sketch_created.sketch_id};
