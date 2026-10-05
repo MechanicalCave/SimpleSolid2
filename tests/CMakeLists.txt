@@ -781,6 +781,28 @@ set_tests_properties(pm03a.datum_schema_v10 PROPERTIES
     LABELS "tier-fast;subsystem-part;subsystem-persistence"
 )
 
+add_executable(pm03b_datum_evaluation_test
+    pm03b_datum_evaluation_test.cpp
+)
+
+target_link_libraries(pm03b_datum_evaluation_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_part
+)
+
+target_compile_features(pm03b_datum_evaluation_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm03b.datum_evaluation
+    COMMAND pm03b_datum_evaluation_test
+)
+
+set_tests_properties(pm03b.datum_evaluation PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part"
+)
+
 add_executable(pm02f_stage_aware_profile_evaluation_test
     pm02f_stage_aware_profile_evaluation_test.cpp
 )
