@@ -573,6 +573,7 @@ void PartViewportController::setSolidModelingKernel(
     body_scene_revision_.reset();
     body_scene_cache_.reset();
     body_topology_catalog_cache_.reset();
+        body_stage_topology_catalogs_cache_.clear();
     body_topology_bindings_.clear();
     clearBodyTopologyPreselection();
     clearBodyTopologySelection();
@@ -603,6 +604,7 @@ void PartViewportController::setDocumentSession(
         body_scene_revision_.reset();
         body_scene_cache_.reset();
         body_topology_catalog_cache_.reset();
+        body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
         clearBodyTopologyPreselection();
         clearBodyTopologySelection();
@@ -639,6 +641,7 @@ void PartViewportController::clear() {
     body_scene_revision_.reset();
     body_scene_cache_.reset();
     body_topology_catalog_cache_.reset();
+        body_stage_topology_catalogs_cache_.clear();
     body_topology_bindings_.clear();
     clearBodyTopologyPreselection();
     clearBodyTopologySelection();
@@ -703,6 +706,7 @@ void PartViewportController::refreshPresentation() {
         body_scene_revision_.reset();
         body_scene_cache_.reset();
         body_topology_catalog_cache_.reset();
+        body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
         clearBodyTopologyPreselection();
         clearBodyTopologySelection();
@@ -2779,12 +2783,19 @@ PartViewportController::resolvedPlacementForSketch(
     if (const auto* reference =
             part::bodyPlanarSurfaceReference(
                 sketch.support);
-        reference != nullptr &&
-        body_topology_catalog_cache_ &&
-        body_topology_catalog_cache_->stage ==
-            reference->stage) {
-        topology =
-            &*body_topology_catalog_cache_;
+        reference != nullptr) {
+        const auto found =
+            std::find_if(
+                body_stage_topology_catalogs_cache_.begin(),
+                body_stage_topology_catalogs_cache_.end(),
+                [reference](const auto& candidate) {
+                    return candidate.stage ==
+                           reference->stage;
+                });
+        if (found !=
+            body_stage_topology_catalogs_cache_.end()) {
+            topology = &*found;
+        }
     }
 
     const auto resolved =
@@ -2896,6 +2907,7 @@ PartViewportController::buildBodyScene() {
         body_scene_revision_.reset();
         body_scene_cache_.reset();
         body_topology_catalog_cache_.reset();
+        body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
         return empty_scene;
     }
@@ -2914,6 +2926,7 @@ PartViewportController::buildBodyScene() {
             body_scene_revision_.reset();
             body_scene_cache_.reset();
             body_topology_catalog_cache_.reset();
+        body_stage_topology_catalogs_cache_.clear();
             body_topology_bindings_.clear();
             clear_stale_body_selection();
             return std::nullopt;
@@ -2923,6 +2936,20 @@ PartViewportController::buildBodyScene() {
         part::evaluatePart(
             session_->document(),
             *solid_modeling_kernel_);
+
+    std::vector<part::BodyStageTopologyCatalog>
+        stage_topologies;
+    stage_topologies.reserve(
+        evaluation.features.size());
+    for (const auto& feature :
+         evaluation.features) {
+        if (!feature.result_topology ||
+            !feature.result_topology->complete()) {
+            continue;
+        }
+        stage_topologies.push_back(
+            *feature.result_topology);
+    }
 
     kernel::RuntimeSolidHandle presentation_solid;
     const part::BodyStageTopologyCatalog*
@@ -2956,6 +2983,7 @@ PartViewportController::buildBodyScene() {
 
     if (presentation_solid == nullptr) {
         body_topology_catalog_cache_.reset();
+        body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
         clearBodyTopologyPreselection();
         clear_stale_body_selection();
@@ -3162,6 +3190,8 @@ PartViewportController::buildBodyScene() {
     body_scene_revision_ = revision;
     body_scene_cache_ = scene;
     body_topology_catalog_cache_ = *topology;
+    body_stage_topology_catalogs_cache_ =
+        std::move(stage_topologies);
     body_topology_bindings_ =
         std::move(bindings);
     return *body_scene_cache_;
