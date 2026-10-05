@@ -4,11 +4,13 @@
 #include <simplesolid2/part/profile_kernel_input.hpp>
 #include <simplesolid2/sketch/region_analysis.hpp>
 
+#include <cstdint>
 #include <cstdlib>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <utility>
+#include <variant>
 #include <vector>
 
 using namespace simplesolid2;
