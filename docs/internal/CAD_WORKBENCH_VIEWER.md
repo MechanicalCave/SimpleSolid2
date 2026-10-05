@@ -248,7 +248,7 @@ Topology cycling is lower priority than focused text input, Dynamic Input field 
 
 The currently preselected candidate is visibly highlighted before click. The user's click on that visible preselection is the acquisition authority; provider return order has no durable semantic meaning.
 
-A `KnownRepresentationArtifact` such as a periodic seam remains completely accounted and diagnosable but is excluded from ordinary material Edge preselection by default. Material topology whose durable referenceability is Unsupported remains visible/selectable for truthful inspection and diagnostics.
+A `KnownRepresentationArtifact` such as a periodic seam or an ADR-0017 same-Surface representation partition remains completely accounted and diagnosable but is excluded from ordinary material Edge rendering/preselection by default. A representation partition is a provider B-Rep boundary between bounded Face realizations of one tracked semantic Surface; it is not an authored/design boundary. Other material topology whose durable referenceability is Unsupported remains visible/selectable for truthful inspection and diagnostics.
 
 Feature Contribution, hidden-edge graphics and semantic carrier/support ghost overlays do not create duplicate pick geometry. All normal Body picking uses the one current topology presentation/token mapping.
 
