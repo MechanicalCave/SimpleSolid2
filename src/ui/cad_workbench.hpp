@@ -175,6 +175,10 @@ private:
     void deleteSelectedProfile();
 
     [[nodiscard]] bool startDatumPlaneTool();
+    [[nodiscard]] bool startDatumPlaneEdit(
+        part::DatumId datum_id);
+    void deleteDatumPlane(
+        part::DatumId datum_id);
     void cancelDatumPlane();
     [[nodiscard]] bool finishDatumPlane();
     void clearDatumPlaneRuntimeContext();
@@ -184,6 +188,8 @@ private:
         std::optional<core::BuiltinReferenceRole> support);
     void tryStageDatumPlaneFromBodyTopology(
         const BodyTopologyInspection& inspection);
+    void tryStageDatumPlaneFromDatum(
+        std::optional<part::DatumId> datum_id);
     void refreshDatumPlaneEvaluation();
     void scheduleDatumPlaneEvaluation();
     void flushDatumPlaneEvaluation();
@@ -272,6 +278,8 @@ private:
         std::optional<core::BuiltinReferenceRole> primary);
     void refreshProfileProperties(
         part::ProfileId profile_id);
+    void refreshDatumProperties(
+        part::DatumId datum_id);
     void refreshBodyProperties(
         part::BodyId body_id);
     void refreshFeatureProperties(
@@ -307,6 +315,15 @@ private:
             part::FeatureEvaluationStatus::blocked};
         part::FeatureEvaluationDiagnosticCode diagnostic{
             part::FeatureEvaluationDiagnosticCode::none};
+    };
+
+    struct DatumEvaluationUiState final {
+        part::DatumId datum_id;
+        part::DatumPlaneEvaluationStatus status{
+            part::DatumPlaneEvaluationStatus::blocked};
+        part::DatumPlaneEvaluationDiagnostic diagnostic{
+            part::DatumPlaneEvaluationDiagnostic::
+                invalid_datum};
     };
 
     application::DocumentSession* document_session_{};
@@ -367,6 +384,7 @@ private:
     QStackedWidget* properties_stack_{};
     QWidget* document_properties_page_{};
     QWidget* reference_properties_page_{};
+    QWidget* datum_properties_page_{};
     QWidget* profile_properties_page_{};
     QWidget* body_properties_page_{};
     QWidget* feature_properties_page_{};
@@ -377,6 +395,16 @@ private:
     QLabel* reference_kind_{};
     QLabel* reference_identity_{};
     QLabel* reference_visibility_{};
+    QLabel* datum_name_{};
+    QLabel* datum_identity_{};
+    QLabel* datum_constructor_{};
+    QLabel* datum_source_{};
+    QLabel* datum_offset_{};
+    QLabel* datum_visibility_{};
+    QLabel* datum_status_{};
+    QLabel* datum_diagnostic_{};
+    QPushButton* datum_edit_button_{};
+    QPushButton* datum_delete_button_{};
     QLineEdit* profile_name_{};
     QLabel* profile_identity_{};
     QLabel* profile_source_{};
@@ -392,6 +420,8 @@ private:
     QPushButton* delete_profile_button_{};
     std::optional<part::ProfileId>
         selected_profile_id_;
+    std::optional<part::DatumId>
+        selected_datum_id_;
     std::optional<part::FeatureId>
         selected_feature_id_;
     std::optional<part::BodyId>
@@ -402,6 +432,8 @@ private:
         body_evaluation_status_;
     std::vector<FeatureEvaluationUiState>
         feature_evaluation_statuses_;
+    std::vector<DatumEvaluationUiState>
+        datum_evaluation_statuses_;
     QLineEdit* number_{};
     QLineEdit* title_{};
     QPlainTextEdit* description_{};
