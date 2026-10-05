@@ -1,13 +1,13 @@
 # PM-03 — Datum Reference Geometry / Offset Datum Plane
 
-**Status:** OWNER ACCEPTED 2026-10-05 — NOT ACTIVE; GOVERNANCE ACTIVATION PENDING  
-**Decision class:** D2 production Work Contract candidate  
+**Status:** ACTIVE — OWNER ACCEPTED 2026-10-05  
+**Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.17  
 **Architecture authority:** Constitution + Foundation + ADR-0014 + ADR-0016 + ADR-0017  
 **Entry gate:** PM-02 Body Semantic Topology / Face-Supported Sketch COMPLETED — PASS  
 **Owner UI acceptance:** 2026-10-05 — single Datum Plane tool, Offset constructor, Extrude-style preview/default 10 mm, Command Line parity, intersection overlay, Reference Geometry tree grouping/visibility  
-**Production mutation:** NOT AUTHORIZED until `work/ACTIVE.yaml` activation passes its repository gate
+**Production mutation:** AUTHORIZED ONLY WITHIN THIS ACTIVE CONTRACT after activation merge
 
 ## 1. Goal
 
@@ -31,11 +31,11 @@ Origin Plane OR resolved planar Body Surface OR existing Datum Plane
 
 The package proves durable Datum identity, bounded Datum dependency semantics and Datum-backed Sketch support without introducing a general dependency framework.
 
-## 2. Proposed package narrowing — Owner decision
+## 2. Accepted package narrowing
 
 The Part-v1 roadmap names Datum Plane/Axis/Point constructors that are justified by accepted workflows.
 
-This contract proposes that PM-03 deliver **Offset Datum Plane only** because it is the only Datum constructor required by the currently accepted next workflow: create a stable construction plane and host a Sketch/Profile that can feed the already-delivered Extrude Feature.
+This contract delivers **Offset Datum Plane only** because it is the only Datum constructor required by the currently accepted next workflow: create a stable construction plane and host a Sketch/Profile that can feed the already-delivered Extrude Feature.
 
 PM-03 therefore does **not** create Datum Axis or Datum Point merely to populate a generic reference-geometry framework.
 
@@ -694,12 +694,9 @@ STOP and return to Owner review if implementation would require:
 
 The Owner accepted the PM-03 D2 scope and the UI/interaction amendments materialized in this contract on 2026-10-05: Offset-Datum-Plane-only scope, single Datum Plane tool, 10 mm default Extrude-style preview, Command Line parity, required presentation-only plane/Body intersection overlay, and Reference Geometry tree grouping/visibility semantics.
 
-No production mutation is legal until:
+This contract is activated only by the governance change that points `work/ACTIVE.yaml` here with `status: active` and passes its repository gate. Production mutation is legal only after that activation change is merged.
 
-1. this accepted contract revision passes its exact-head repository gate and is merged;
-2. repository governance records activation;
-3. `work/ACTIVE.yaml` points to this contract with `status: active`;
-4. the activation change passes the required repository gate.
+Once active, implementation must follow PM-03A through PM-03F in order and remain inside this contract. Any STOP condition or scope expansion returns to Owner review.
 
 PM-03 completion authorizes only the delivered Offset Datum Plane / Datum-backed Sketch vertical slice.
 
