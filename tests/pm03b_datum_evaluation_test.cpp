@@ -468,9 +468,9 @@ int main() {
         part::DatumPlaneEvaluationStatus::resolved);
     CHECK(xy.frame.has_value());
     checkOrigin(*xy.frame, 0.0, 0.0, 10.0);
-    CHECK(
+    CHECK((
         xy.frame->normal ==
-        kernel::Point3{0.0, 0.0, 1.0});
+        kernel::Point3{0.0, 0.0, 1.0}));
     CHECK(!xy.required_body_stage.has_value());
 
     const auto& xz =
@@ -479,15 +479,15 @@ int main() {
             fixture.xz_datum);
     CHECK(xz.frame.has_value());
     checkOrigin(*xz.frame, 0.0, -4.0, 0.0);
-    CHECK(
+    CHECK((
         xz.frame->u_axis ==
-        kernel::Point3{1.0, 0.0, 0.0});
-    CHECK(
+        kernel::Point3{1.0, 0.0, 0.0}));
+    CHECK((
         xz.frame->v_axis ==
-        kernel::Point3{0.0, 0.0, 1.0});
-    CHECK(
+        kernel::Point3{0.0, 0.0, 1.0}));
+    CHECK((
         xz.frame->normal ==
-        kernel::Point3{0.0, -1.0, 0.0});
+        kernel::Point3{0.0, -1.0, 0.0}));
 
     const auto& yz =
         requireDatum(
@@ -495,9 +495,9 @@ int main() {
             fixture.yz_datum);
     CHECK(yz.frame.has_value());
     checkOrigin(*yz.frame, -2.0, 0.0, 0.0);
-    CHECK(
+    CHECK((
         yz.frame->normal ==
-        kernel::Point3{1.0, 0.0, 0.0});
+        kernel::Point3{1.0, 0.0, 0.0}));
 
     const auto& zero =
         requireDatum(
