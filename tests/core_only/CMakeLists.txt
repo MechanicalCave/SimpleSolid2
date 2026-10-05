@@ -47,6 +47,9 @@ target_link_libraries(pm00a_e09_stale_publication_test PRIVATE simplesolid2_appl
 ss2_core_only_test(pm02p_e_core_lifecycle_test pm02p.e_core_lifecycle pm02p_e_core_lifecycle_test.cpp)
 target_link_libraries(pm02p_e_core_lifecycle_test PRIVATE simplesolid2_application simplesolid2_kernel simplesolid2_part)
 
+ss2_core_only_test(pm02f_stage_aware_profile_evaluation_test pm02f.stage_aware_profile_evaluation pm02f_stage_aware_profile_evaluation_test.cpp)
+target_link_libraries(pm02f_stage_aware_profile_evaluation_test PRIVATE simplesolid2_application simplesolid2_kernel simplesolid2_part)
+
 ss2_core_only_test(sk04a_line_commit_protocol_test sk04a.line_commit_protocol sk04a_line_commit_protocol_test.cpp)
 target_link_libraries(sk04a_line_commit_protocol_test PRIVATE simplesolid2_application simplesolid2_sketch)
 
@@ -105,6 +108,7 @@ set_tests_properties(pm01g.feature_cold_persistence PROPERTIES LABELS "tier-fast
 set_tests_properties(pm00a.e08_support_frame_stability PROPERTIES LABELS "tier-full-only;subsystem-application;subsystem-core;subsystem-part;subsystem-persistence")
 set_tests_properties(pm00a.e09_stale_publication PROPERTIES LABELS "tier-full-only;subsystem-application;subsystem-core;subsystem-part;subsystem-persistence")
 set_tests_properties(pm02p.e_core_lifecycle PROPERTIES LABELS "tier-full-only;subsystem-application;subsystem-core;subsystem-kernel;subsystem-part;subsystem-persistence")
+set_tests_properties(pm02f.stage_aware_profile_evaluation PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-core;subsystem-kernel;subsystem-part")
 set_tests_properties(sk04a.line_commit_protocol PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-part;subsystem-sketch")
 set_tests_properties(sk05a.line_geometry_command PROPERTIES LABELS "tier-fast;subsystem-application;subsystem-persistence;subsystem-part;subsystem-sketch")
 set_tests_properties(e1.arc_numerical_stability PROPERTIES LABELS "tier-fast;subsystem-sketch")
