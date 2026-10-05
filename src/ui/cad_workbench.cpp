@@ -7844,7 +7844,10 @@ void CadWorkbench::refreshActiveContext() {
     if (extrude_draft_) {
         refreshExtrudePreview();
     }
-    if (selected_feature_id_) {
+    if (selected_datum_id_) {
+        refreshDatumProperties(
+            *selected_datum_id_);
+    } else if (selected_feature_id_) {
         refreshFeatureProperties(
             *selected_feature_id_);
     } else if (selected_body_id_) {
@@ -7871,11 +7874,24 @@ void CadWorkbench::clearActiveContext() {
     length_unit_combo_->setEnabled(false);
     syncing_precision_ui_ = false;
     selected_profile_id_.reset();
+    selected_datum_id_.reset();
     selected_feature_id_.reset();
     selected_body_id_.reset();
     part_evaluation_revision_.reset();
     body_evaluation_status_.reset();
     feature_evaluation_statuses_.clear();
+    datum_evaluation_statuses_.clear();
+    datum_name_->clear();
+    datum_identity_->clear();
+    datum_constructor_->setText(
+        QStringLiteral("Offset"));
+    datum_source_->clear();
+    datum_offset_->clear();
+    datum_visibility_->clear();
+    datum_status_->clear();
+    datum_diagnostic_->clear();
+    datum_edit_button_->setEnabled(false);
+    datum_delete_button_->setEnabled(false);
     profile_name_->clear();
     profile_identity_->clear();
     profile_source_->clear();
