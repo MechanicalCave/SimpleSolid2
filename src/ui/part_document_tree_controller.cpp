@@ -1426,6 +1426,14 @@ void PartDocumentTreeController::rebuild(
                                 surface->stage
                                     .feature_id
                                     ->serialized()));
+            } else if (const auto datum_id =
+                           part::datumPlaneIdForSketchSupport(
+                               sketch.support)) {
+                support =
+                    QStringLiteral("Datum Plane %1")
+                        .arg(
+                            fromUtf8(
+                                datum_id->serialized()));
             } else {
                 support = QStringLiteral("<invalid>");
             }
