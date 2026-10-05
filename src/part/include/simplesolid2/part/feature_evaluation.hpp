@@ -215,6 +215,11 @@ struct BodyFaceTopologyRecord final {
     // Ambiguous carrier situation, never provider-order winner selection.
     std::vector<FeatureSurfaceAddress>
         surface_candidates;
+    // Runtime-only Feature contribution membership. This is deliberately
+    // separate from semantic Surface ownership so an Add may continue an
+    // inherited carrier without losing truthful Current Feature Contribution.
+    std::vector<FeatureId>
+        contributing_features;
 
     [[nodiscard]] bool valid() const noexcept;
 
@@ -232,6 +237,7 @@ struct BodyEdgeTopologyRecord final {
     kernel::CurveKind curve_kind{
         kernel::CurveKind::other};
     bool periodic_seam{false};
+    bool representation_partition{false};
     std::vector<FeatureCurveAddress>
         curve_candidates;
 
