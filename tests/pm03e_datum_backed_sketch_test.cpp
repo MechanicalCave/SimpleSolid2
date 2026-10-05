@@ -763,6 +763,25 @@ int main() {
     const auto path =
         temp.path / "DatumBacked.ss2part";
     part::PartDocumentStore store;
+
+    // Capture one provider-local runtime token before closing the authored
+    // document. PM-03F later rebuilds the same semantic model with a fresh
+    // provider generation whose tokens deliberately start elsewhere.
+    kernel.published_surface_tokens.clear();
+    kernel.extrude_calls = 0U;
+    const auto warm_before_close =
+        part::evaluatePart(
+            fixture.session.document(),
+            kernel);
+    CHECK(
+        warm_before_close.body_status ==
+        part::BodyEvaluationStatus::
+            up_to_date);
+    CHECK(
+        !kernel.published_surface_tokens.empty());
+    const auto warm_runtime_surface =
+        kernel.published_surface_tokens.front();
+
     const auto saved =
         store.createNew(
             path,
@@ -811,8 +830,76 @@ int main() {
     }
     CHECK(found_datum_sketch);
 
+    auto opened = store.load(path);
+    CHECK(opened.ok());
+
+    // Real application-session persistence path: reopen with the guarded file
+    // checkpoint, author visibility through the semantic command, exercise
+    // Undo/Redo, then save through DocumentSession::save(). Destroying this
+    // scope models Close; the next store.load() is a fresh Reopen.
+    {
+        application::DocumentSession reopened_session{
+            path,
+            std::move(*opened.document),
+            *opened.checkpoint};
+        CHECK(!reopened_session.needsSave());
+
+        const auto hide =
+            reopened_session.execute(
+                application::
+                    SetDatumPlaneVisibilityCommand{
+                        {*datum.datum_id},
+                        reopened_session.document()
+                            .revision(),
+                        false});
+        CHECK(hide.ok() && hide.changed);
+        CHECK(reopened_session.needsSave());
+        CHECK(
+            !reopened_session.document()
+                 .findDatumPlane(
+                     *datum.datum_id)
+                 ->visible);
+
+        const auto undo_visibility =
+            reopened_session.undo();
+        CHECK(
+            undo_visibility.ok() &&
+            undo_visibility.changed);
+        CHECK(!reopened_session.needsSave());
+        CHECK(
+            reopened_session.document()
+                .findDatumPlane(
+                    *datum.datum_id)
+                ->visible);
+
+        const auto redo_visibility =
+            reopened_session.redo();
+        CHECK(
+            redo_visibility.ok() &&
+            redo_visibility.changed);
+        CHECK(reopened_session.needsSave());
+        CHECK(
+            !reopened_session.document()
+                 .findDatumPlane(
+                     *datum.datum_id)
+                 ->visible);
+
+        const auto session_save =
+            reopened_session.save();
+        CHECK(session_save.ok());
+        CHECK(!reopened_session.needsSave());
+    }
+
     auto loaded = store.load(path);
     CHECK(loaded.ok());
+    CHECK(
+        loaded.document->findDatumPlane(
+            *datum.datum_id) != nullptr);
+    CHECK(
+        !loaded.document->findDatumPlane(
+             *datum.datum_id)
+             ->visible);
+
     const auto* loaded_sketch =
         loaded.document->findSketch(
             datum_sketch_id);
@@ -824,12 +911,24 @@ int main() {
     CHECK(
         loaded_sketch->model.state() ==
         local_state);
+    CHECK(
+        loaded.document->findFeature(
+            fixture.base_feature_id) != nullptr);
+    CHECK(
+        loaded.document->findFeature(
+            *add.feature_id) != nullptr);
+    CHECK(
+        loaded.document->findFeature(
+            *cut.feature_id) != nullptr);
 
-    kernel.extrude_calls = 0U;
+    // True cold rebuild: a brand-new provider deliberately starts runtime
+    // Surface tokens at 9000. Durable Datum/Sketch/Feature meaning must remain
+    // identical and no previous runtime token may act as CAD identity.
+    TestKernel cold_kernel{9000U};
     const auto rebuilt =
         part::evaluatePart(
             *loaded.document,
-            kernel);
+            cold_kernel);
     CHECK(
         rebuilt.body_status ==
         part::BodyEvaluationStatus::
@@ -844,7 +943,36 @@ int main() {
             *cut.feature_id)->status ==
         part::FeatureEvaluationStatus::
             up_to_date);
-    CHECK(kernel.extrude_calls == 3U);
+    CHECK(cold_kernel.extrude_calls == 3U);
+    CHECK(
+        !cold_kernel.published_surface_tokens.empty());
+    CHECK(
+        cold_kernel.published_surface_tokens.front() !=
+        warm_runtime_surface);
+
+    const auto cold_datums =
+        part::evaluateDatums(
+            *loaded.document,
+            rebuilt);
+    const auto* cold_datum =
+        cold_datums.find(*datum.datum_id);
+    CHECK(cold_datum != nullptr);
+    CHECK(
+        cold_datum->status ==
+        part::DatumPlaneEvaluationStatus::
+            resolved);
+    CHECK(cold_datum->frame.has_value());
+
+    const auto cold_support =
+        part::resolveSketchSupport(
+            *datum_support,
+            nullptr,
+            &cold_datums);
+    CHECK(
+        cold_support.status ==
+        part::SketchSupportResolutionStatus::
+            resolved);
+    CHECK(cold_support.frame.has_value());
 
     std::cout
         << "PM-03E_DATUM_BACKED_SKETCH_PASS"
@@ -856,6 +984,10 @@ int main() {
         << " cycle_rejected=1"
         << " stale_frame_rejected=1"
         << " delete_dependency_safe=1"
+        << " session_save_reopen=1"
+        << " visibility_persisted=1"
+        << " undo_redo=1"
+        << " fresh_runtime_tokens=1"
         << " cold_rebuild=1\n";
     return EXIT_SUCCESS;
 }
