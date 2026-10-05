@@ -1,12 +1,17 @@
+#include <simplesolid2/application/document_session.hpp>
 #include <simplesolid2/kernel/solid_modeling.hpp>
 #include <simplesolid2/kernel_occt/solid_modeling_kernel.hpp>
+#include <simplesolid2/part/feature_evaluation.hpp>
+#include <simplesolid2/sketch/region_analysis.hpp>
 
 #include <algorithm>
 #include <cstdlib>
 #include <iostream>
+#include <cmath>
 #include <optional>
 #include <string>
 #include <string_view>
+#include <vector>
 
 using namespace simplesolid2;
 
@@ -149,6 +154,301 @@ inheritedSurface(
         : &*found;
 }
 
+sketch::Point2 projectToFrame(
+    const kernel::Frame3& frame,
+    kernel::Point3 point) {
+    const kernel::Point3 delta{
+        point.x - frame.origin.x,
+        point.y - frame.origin.y,
+        point.z - frame.origin.z};
+    return {
+        delta.x * frame.u_axis.x +
+            delta.y * frame.u_axis.y +
+            delta.z * frame.u_axis.z,
+        delta.x * frame.v_axis.x +
+            delta.y * frame.v_axis.y +
+            delta.z * frame.v_axis.z,
+    };
+}
+
+part::ProfileId createRectangleProfile(
+    application::DocumentSession& session,
+    sketch::SketchId sketch_id,
+    sketch::Point2 first,
+    sketch::Point2 opposite) {
+    const auto rectangle =
+        session.execute(
+            application::AddSketchRectangleCommand{
+                sketch_id,
+                session.document().revision(),
+                first,
+                opposite,
+                sketch::EntityRole::regular,
+                false});
+    CHECK(rectangle.ok());
+
+    const auto* hosted =
+        session.document().findSketch(sketch_id);
+    CHECK(hosted != nullptr);
+    const auto regions =
+        sketch::analyzeRegions(hosted->model);
+    CHECK(regions.complete());
+    CHECK(regions.regions.size() == 1U);
+    const auto intent =
+        part::makeProfileRegionIntent(
+            regions.regions.front());
+    CHECK(intent.has_value());
+
+    const auto profile =
+        session.execute(
+            application::CreateProfileCommand{
+                sketch_id,
+                session.document().revision(),
+                *intent});
+    CHECK(profile.ok());
+    CHECK(profile.profile_id.has_value());
+    return *profile.profile_id;
+}
+
+void verifyPartIntegration() {
+    kernel_occt::OcctSolidModelingKernel provider;
+    auto document =
+        part::PartDocument::create(
+            core::DocumentId::generate());
+    application::DocumentSession session{
+        std::filesystem::path{
+            "pm02jr2-add-continuation.ss2part"},
+        std::move(document)};
+
+    const auto base_sketch =
+        session.execute(
+            application::CreatePartSketchCommand{
+                core::BuiltinReferenceRole::xy_plane});
+    CHECK(base_sketch.ok());
+    CHECK(base_sketch.sketch_id.has_value());
+
+    const auto base_profile =
+        createRectangleProfile(
+            session,
+            *base_sketch.sketch_id,
+            {0.0, 0.0},
+            {40.0, 30.0});
+
+    const auto base =
+        session.execute(
+            application::CreateExtrudeFeatureCommand{
+                base_profile,
+                session.document().revision(),
+                part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{10.0},
+                    false},
+                "Base"},
+            provider);
+    CHECK(base.ok());
+    CHECK(base.feature_id.has_value());
+
+    const auto base_eval =
+        part::evaluatePart(
+            session.document(),
+            provider);
+    CHECK(
+        base_eval.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(base_eval.current_topology.has_value());
+
+    const auto& base_topology =
+        *base_eval.current_topology;
+    const auto side =
+        std::find_if(
+            base_topology.surfaces.begin(),
+            base_topology.surfaces.end(),
+            [id = *base.feature_id](
+                const auto& surface) {
+                return surface.status ==
+                           kernel::ReferenceStatus::resolved &&
+                       surface.address.producer_feature_id ==
+                           id &&
+                       surface.address.role ==
+                           part::FeatureSurfaceRoleKind::side &&
+                       surface.surface_kind ==
+                           kernel::SurfaceKind::plane &&
+                       surface.canonical_frame &&
+                       std::abs(
+                           surface.canonical_frame
+                               ->normal.x) > 0.9;
+            });
+    CHECK(side != base_topology.surfaces.end());
+    CHECK(side->canonical_frame.has_value());
+
+    const part::SurfaceReference side_ref{
+        base_topology.stage,
+        side->address};
+    const auto side_support =
+        part::partSketchSupportForBodyPlanarSurface(
+            side_ref);
+    CHECK(side_support.has_value());
+
+    const auto extension_sketch =
+        session.execute(
+            application::CreatePartSketchOnSupportCommand{
+                *side_support,
+                session.document().revision()},
+            &provider);
+    CHECK(extension_sketch.ok());
+    CHECK(extension_sketch.sketch_id.has_value());
+
+    const auto& frame = *side->canonical_frame;
+    const double side_x =
+        frame.normal.x > 0.0
+            ? 40.0
+            : 0.0;
+    const std::vector<kernel::Point3> corners{
+        {side_x, 5.0, 0.0},
+        {side_x, 25.0, 0.0},
+        {side_x, 5.0, 10.0},
+        {side_x, 25.0, 10.0},
+    };
+    std::vector<sketch::Point2> uv;
+    uv.reserve(corners.size());
+    for (const auto& point : corners) {
+        uv.push_back(
+            projectToFrame(frame, point));
+    }
+    double min_u = uv.front().x;
+    double max_u = uv.front().x;
+    double min_v = uv.front().y;
+    double max_v = uv.front().y;
+    for (const auto point : uv) {
+        min_u = std::min(min_u, point.x);
+        max_u = std::max(max_u, point.x);
+        min_v = std::min(min_v, point.y);
+        max_v = std::max(max_v, point.y);
+    }
+    CHECK(max_u - min_u > 1.0);
+    CHECK(max_v - min_v > 1.0);
+
+    const auto extension_profile =
+        createRectangleProfile(
+            session,
+            *extension_sketch.sketch_id,
+            {min_u, min_v},
+            {max_u, max_v});
+
+    const auto extension =
+        session.execute(
+            application::CreateExtrudeFeatureCommand{
+                extension_profile,
+                session.document().revision(),
+                part::ExtrudeOperation::add,
+                part::OneSidedExtrudeExtent{
+                    core::LengthValue{10.0},
+                    false},
+                "Extension"},
+            provider);
+    CHECK(extension.ok());
+    CHECK(extension.feature_id.has_value());
+
+    const auto final_eval =
+        part::evaluatePart(
+            session.document(),
+            provider);
+    CHECK(
+        final_eval.body_status ==
+        part::BodyEvaluationStatus::up_to_date);
+    CHECK(final_eval.current_topology.has_value());
+    const auto& topology =
+        *final_eval.current_topology;
+
+    const auto top =
+        std::find_if(
+            topology.surfaces.begin(),
+            topology.surfaces.end(),
+            [id = *base.feature_id](
+                const auto& surface) {
+                return surface.address
+                           .producer_feature_id == id &&
+                       surface.address.role ==
+                           part::FeatureSurfaceRoleKind::
+                               extent_cap;
+            });
+    CHECK(top != topology.surfaces.end());
+    CHECK(
+        top->status ==
+        kernel::ReferenceStatus::resolved);
+    CHECK(top->current_faces.size() >= 2U);
+    CHECK(
+        top->strict_face_status ==
+        kernel::ReferenceStatus::ambiguous);
+
+    for (const auto face_token :
+         top->current_faces) {
+        const auto face =
+            std::find_if(
+                topology.faces.begin(),
+                topology.faces.end(),
+                [face_token](const auto& record) {
+                    return record.runtime_token ==
+                           face_token;
+                });
+        CHECK(face != topology.faces.end());
+        CHECK(face->surface_candidates.size() == 1U);
+        CHECK(
+            face->surface_candidates.front() ==
+            top->address);
+    }
+
+    const auto contribution =
+        part::currentFeatureContribution(
+            topology,
+            *extension.feature_id);
+    CHECK(contribution.valid());
+    CHECK(!contribution.faces.empty());
+
+    const auto partition_count =
+        std::count_if(
+            topology.edges.begin(),
+            topology.edges.end(),
+            [](const auto& edge) {
+                return edge.representation_partition &&
+                       edge.accounting_class ==
+                           part::TopologyAccountingClass::
+                               known_representation_artifact &&
+                       edge.referenceability ==
+                           kernel::ReferenceStatus::
+                               unsupported;
+            });
+    CHECK(partition_count >= 1);
+
+    // Picking either bounded Face fragment maps to the same SurfaceReference,
+    // so Create Sketch is singular and succeeds from the current Body stage.
+    const part::SurfaceReference final_top_ref{
+        topology.stage,
+        top->address};
+    const auto top_support =
+        part::partSketchSupportForBodyPlanarSurface(
+            final_top_ref);
+    CHECK(top_support.has_value());
+
+    const auto first_new_sketch =
+        session.execute(
+            application::CreatePartSketchOnSupportCommand{
+                *top_support,
+                session.document().revision()},
+            &provider);
+    CHECK(first_new_sketch.ok());
+    CHECK(first_new_sketch.sketch_id.has_value());
+
+    const auto second_new_sketch =
+        session.execute(
+            application::CreatePartSketchOnSupportCommand{
+                *top_support,
+                session.document().revision()},
+            &provider);
+    CHECK(second_new_sketch.ok());
+    CHECK(second_new_sketch.sketch_id.has_value());
+}
+
 } // namespace
 
 int main() {
@@ -258,6 +558,8 @@ int main() {
             edge.adjacent_surfaces.front().valid());
     }
     CHECK(partition_edges >= 1U);
+
+    verifyPartIntegration();
 
     std::cout
         << "PM02JR2_ADD_SURFACE_CONTINUATION_PASS"
