@@ -877,6 +877,9 @@ int main(int argc, char* argv[]) {
     CHECK(!session->needsSave());
     CHECK(!finish_button->isHidden());
     CHECK(finish_button->isEnabled());
+    CHECK(
+        finish_button->text() ==
+        QStringLiteral("Create Sketch"));
     CHECK(!cancel_button->isHidden());
     CHECK(!sketch_button->isEnabled());
 
@@ -892,6 +895,9 @@ int main(int argc, char* argv[]) {
         support_finish_undo + 1U);
     CHECK(!finish_button->isHidden());
     CHECK(finish_button->isEnabled());
+    CHECK(
+        finish_button->text() ==
+        QStringLiteral("Finish Sketch"));
     CHECK(cancel_button->isHidden());
     CHECK(!sketch_button->isEnabled());
 
@@ -1396,8 +1402,18 @@ int main(int argc, char* argv[]) {
     const auto profile_ui_undo_before =
         session->undoDepth();
 
+    // PM-02J R5: contextual Profile Operations must not promote their
+    // natural vertical size hint into a top-level window resize.
+    workspace_shell.resize(1200, 720);
+    QApplication::processEvents();
+    const auto profile_window_size_before =
+        workspace_shell.size();
+
     profile_button->click();
     QApplication::processEvents();
+    CHECK(
+        workspace_shell.size() ==
+        profile_window_size_before);
     CHECK(profile_button->isChecked());
     CHECK(!profile_operations->isHidden());
     CHECK(profile_add_button->isChecked());
@@ -1458,6 +1474,9 @@ int main(int argc, char* argv[]) {
 
     profile_cancel_button->click();
     QApplication::processEvents();
+    CHECK(
+        workspace_shell.size() ==
+        profile_window_size_before);
     CHECK(!profile_button->isChecked());
     CHECK(profile_operations->isHidden());
     CHECK(
