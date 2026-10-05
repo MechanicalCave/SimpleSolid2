@@ -5,8 +5,10 @@
 #include <simplesolid2/sketch/region_analysis.hpp>
 #include <simplesolid2/viewer/document_viewport.hpp>
 
+#include <QAction>
 #include <QApplication>
 #include <QLabel>
+#include <QPushButton>
 #include <QStackedWidget>
 #include <QTreeWidget>
 #include <QTreeWidgetItemIterator>
@@ -314,6 +316,35 @@ public:
             viewer::SelectionIntentMode::replace);
     }
 
+    void clickMixedBodyCandidates() {
+        CHECK(static_cast<bool>(topology_handler));
+        CHECK(body_scene.faces.size() == 1U);
+        CHECK(body_scene.edges.size() == 1U);
+        CHECK(body_scene.vertices.size() == 1U);
+
+        viewer::BodyTopologyPickQueryResult query;
+        query.completed = true;
+        query.generation = body_scene.generation;
+        query.candidates = {
+            {body_scene.vertices.front().token,
+             viewer::BodyTopologyPresentationKind::vertex,
+             0.0,
+             0.5},
+            {body_scene.edges.front().token,
+             viewer::BodyTopologyPresentationKind::edge,
+             0.1,
+             0.7},
+            {body_scene.faces.front().token,
+             viewer::BodyTopologyPresentationKind::face,
+             0.2,
+             1.0},
+        };
+        CHECK(query.valid());
+        topology_handler(
+            query,
+            viewer::SelectionIntentMode::replace);
+    }
+
     viewer::CameraState camera_;
     viewer::BodyScene body_scene;
     viewer::ViewStyle style{
@@ -555,6 +586,116 @@ int main(int argc, char* argv[]) {
         QStringLiteral("101")));
     CHECK(!all_text.contains(
         QStringLiteral("401")));
+
+    // PM-02G Command Line activates the same support-acquisition state.
+    // CANCEL is explicitly non-authoring.
+    const auto state_before_cli =
+        session.document().state();
+    const auto undo_before_cli =
+        session.undoDepth();
+    auto cad_result =
+        workbench.submitCadInput(
+            "SKETCH",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(workbench.cadInputPrompt().find("SKETCH") !=
+          std::string::npos);
+    cad_result =
+        workbench.submitCadInput(
+            "CANCEL",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(session.document().state() == state_before_cli);
+    CHECK(session.undoDepth() == undo_before_cli);
+
+    // GUI Sketch acquisition is Face-only even when a nearer Vertex/Edge is
+    // present in the same hit stack. The selected semantic Face is converted
+    // to SurfaceReference and creates exactly one Sketch.
+    auto* sketch_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("sketchToolButton"));
+    CHECK(sketch_tool != nullptr);
+    const auto sketch_count_before =
+        session.document().sketches().size();
+    sketch_tool->click();
+    CHECK(workbench.cadInputPrompt().find("SKETCH") !=
+          std::string::npos);
+
+    viewport->clickMixedBodyCandidates();
+
+    CHECK(
+        session.document().sketches().size() ==
+        sketch_count_before + 1U);
+    const auto created_id =
+        session.document().sketches().back().id;
+    CHECK(
+        part::bodyPlanarSurfaceReference(
+            session.document().sketches().back().support) !=
+        nullptr);
+
+    // RESUPPORT is also the same global CAD-input acquisition state. Merely
+    // entering/cancelling it cannot mutate the authored Sketch.
+    auto* finish_sketch =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("finishSketchButton"));
+    CHECK(finish_sketch != nullptr);
+    finish_sketch->click();
+
+    auto* created_item =
+        findItem(*tree, QStringLiteral("Sketch 2"));
+    CHECK(created_item != nullptr);
+    tree->clearSelection();
+    created_item->setSelected(true);
+    tree->setCurrentItem(created_item);
+
+    const auto state_before_resupport =
+        session.document().state();
+    const auto undo_before_resupport =
+        session.undoDepth();
+
+    auto* change_support =
+        workbench.findChild<QAction*>(
+            QStringLiteral(
+                "changeSketchSupportAction"));
+    CHECK(change_support != nullptr);
+    change_support->trigger();
+    CHECK(workbench.cadInputPrompt().find("RESUPPORT") !=
+          std::string::npos);
+    cad_result =
+        workbench.submitCadInput(
+            "CANCEL",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(
+        session.document().state() ==
+        state_before_resupport);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_resupport);
+
+    // Command Line RESUPPORT enters the same acquisition state for the
+    // currently selected Sketch.
+    cad_result =
+        workbench.submitCadInput(
+            "RESUPPORT",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(workbench.cadInputPrompt().find("RESUPPORT") !=
+          std::string::npos);
+    cad_result =
+        workbench.submitCadInput(
+            "CANCEL",
+            workbench.cadInputContextGeneration());
+    CHECK(cad_result.accepted);
+    CHECK(
+        session.document().state() ==
+        state_before_resupport);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_resupport);
+    CHECK(
+        session.document().findSketch(created_id) !=
+        nullptr);
 
     return EXIT_SUCCESS;
 }

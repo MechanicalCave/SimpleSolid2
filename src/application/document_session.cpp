@@ -110,6 +110,173 @@ std::string defaultProfileName(
     return result;
 }
 
+SketchSupportMutationResult supportMutationFailure(
+    SketchSupportMutationStatus status,
+    DocumentSessionErrorCode code,
+    std::string message,
+    const std::filesystem::path& path) {
+    return {
+        false,
+        std::nullopt,
+        status,
+        DocumentSessionDiagnostic{
+            code,
+            part::PartCommitErrorCode::none,
+            part::PartStoreErrorCode::none,
+            std::move(message),
+            path}};
+}
+
+const part::BodyStageTopologyCatalog*
+topologyAtStage(
+    const part::PartEvaluation& evaluation,
+    const part::BodyStageRef& stage) noexcept {
+    if (!stage.valid()) {
+        return nullptr;
+    }
+    for (const auto& feature : evaluation.features) {
+        if (feature.status !=
+                part::FeatureEvaluationStatus::
+                    up_to_date ||
+            !feature.result_topology ||
+            feature.result_topology->stage != stage) {
+            continue;
+        }
+        return &*feature.result_topology;
+    }
+    return nullptr;
+}
+
+SketchSupportMutationStatus supportMutationStatus(
+    part::SketchSupportResolutionStatus status) noexcept {
+    switch (status) {
+    case part::SketchSupportResolutionStatus::resolved:
+        return SketchSupportMutationStatus::applied;
+    case part::SketchSupportResolutionStatus::missing:
+        return SketchSupportMutationStatus::missing;
+    case part::SketchSupportResolutionStatus::ambiguous:
+        return SketchSupportMutationStatus::ambiguous;
+    case part::SketchSupportResolutionStatus::unsupported:
+        return SketchSupportMutationStatus::unsupported;
+    }
+    return SketchSupportMutationStatus::invalid_support;
+}
+
+std::string supportResolutionMessage(
+    const part::ResolvedSketchSupport& resolved) {
+    using Diagnostic =
+        part::SketchSupportResolutionDiagnostic;
+    switch (resolved.diagnostic) {
+    case Diagnostic::none:
+        return {};
+    case Diagnostic::invalid_support:
+        return "Sketch support is structurally invalid";
+    case Diagnostic::missing_stage:
+        return "Sketch support Body stage is unavailable in the current evaluation";
+    case Diagnostic::missing_surface:
+        return "Sketch support Surface is missing at its declared Body stage";
+    case Diagnostic::ambiguous_surface:
+        return "Sketch support Surface is ambiguous at its declared Body stage";
+    case Diagnostic::unsupported_non_planar:
+        return "Selected Surface is non-planar and cannot host a standard Sketch";
+    case Diagnostic::unsupported_surface:
+        return "Selected Surface is unsupported for standard Sketch support";
+    }
+    return "Sketch support could not be resolved";
+}
+
+std::optional<part::ResolvedSketchSupport>
+resolveSupportForMutation(
+    const part::PartDocument& document,
+    const part::PartSketchSupport& support,
+    kernel::ISolidModelingKernel* modeling_kernel) {
+    if (!support.valid()) {
+        return std::nullopt;
+    }
+    if (part::builtinOriginPlaneForSketchSupport(
+            support)) {
+        return part::resolveSketchSupport(
+            support);
+    }
+
+    const auto* reference =
+        part::bodyPlanarSurfaceReference(
+            support);
+    if (reference == nullptr) {
+        return std::nullopt;
+    }
+
+    if (modeling_kernel == nullptr) {
+        return std::nullopt;
+    }
+
+    const auto evaluation =
+        part::evaluatePart(
+            document,
+            *modeling_kernel);
+    const auto* topology =
+        topologyAtStage(
+            evaluation,
+            reference->stage);
+    return part::resolveSketchSupport(
+        support,
+        topology);
+}
+
+bool supportWouldCreateCycle(
+    const part::PartAuthoredState& state,
+    sketch::SketchId sketch_id,
+    const part::PartSketchSupport& support) noexcept {
+    const auto* reference =
+        part::bodyPlanarSurfaceReference(
+            support);
+    if (reference == nullptr) {
+        return false;
+    }
+
+    const auto stage_it =
+        std::find_if(
+            state.body.features.begin(),
+            state.body.features.end(),
+            [reference](const part::PartFeature& feature) {
+                return reference->stage.feature_id &&
+                       feature.id ==
+                           *reference->stage.feature_id;
+            });
+    if (stage_it == state.body.features.end()) {
+        return true;
+    }
+    const auto stage_index =
+        static_cast<std::size_t>(
+            std::distance(
+                state.body.features.begin(),
+                stage_it));
+
+    std::set<part::ProfileId> consumed_profiles;
+    for (const auto& profile : state.profiles) {
+        if (profile.source_sketch_id == sketch_id) {
+            consumed_profiles.insert(profile.id);
+        }
+    }
+
+    for (std::size_t index = 0U;
+         index < state.body.features.size();
+         ++index) {
+        const auto source =
+            part::sourceProfileId(
+                state.body.features[index]);
+        if (!source ||
+            consumed_profiles.find(*source) ==
+                consumed_profiles.end()) {
+            continue;
+        }
+        if (stage_index >= index) {
+            return true;
+        }
+    }
+    return false;
+}
+
 } // namespace
 
 DocumentSession::DocumentSession(
@@ -349,6 +516,217 @@ CreatePartSketchResult DocumentSession::execute(
         true,
         *id,
         DocumentSessionDiagnostic{}};
+}
+
+SketchSupportMutationResult DocumentSession::execute(
+    const CreatePartSketchOnSupportCommand& command,
+    kernel::ISolidModelingKernel* modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return supportMutationFailure(
+            SketchSupportMutationStatus::
+                stale_revision,
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Create Sketch support selection is stale",
+            path_);
+    }
+
+    const auto resolved =
+        resolveSupportForMutation(
+            document_,
+            command.support,
+            modeling_kernel);
+    if (!resolved) {
+        return supportMutationFailure(
+            SketchSupportMutationStatus::
+                invalid_support,
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Create Sketch contains an invalid support reference",
+            path_);
+    }
+    if (resolved->status !=
+        part::SketchSupportResolutionStatus::
+            resolved) {
+        return supportMutationFailure(
+            supportMutationStatus(
+                resolved->status),
+            DocumentSessionErrorCode::
+                invalid_command,
+            supportResolutionMessage(*resolved),
+            path_);
+    }
+
+    std::optional<sketch::SketchId> id;
+    for (unsigned attempt = 0U;
+         attempt < 16U;
+         ++attempt) {
+        auto candidate =
+            sketch::SketchId::generate();
+        if (document_.findSketch(candidate) == nullptr) {
+            id = std::move(candidate);
+            break;
+        }
+    }
+    if (!id) {
+        return supportMutationFailure(
+            SketchSupportMutationStatus::
+                evaluation_failure,
+            DocumentSessionErrorCode::
+                transaction_failure,
+            "Unable to allocate a unique SketchId",
+            path_);
+    }
+
+    auto after = document_.state();
+    after.sketches.push_back(
+        part::PartSketch{
+            *id,
+            command.support,
+            true});
+
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while creating supported Sketch");
+    if (!committed.ok() ||
+        !committed.changed) {
+        return {
+            committed.changed,
+            std::nullopt,
+            committed.ok()
+                ? SketchSupportMutationStatus::
+                      no_change
+                : SketchSupportMutationStatus::
+                      evaluation_failure,
+            committed.diagnostic};
+    }
+
+    return {
+        true,
+        *id,
+        SketchSupportMutationStatus::applied,
+        DocumentSessionDiagnostic{}};
+}
+
+SketchSupportMutationResult DocumentSession::execute(
+    const SetPartSketchSupportCommand& command,
+    kernel::ISolidModelingKernel* modeling_kernel) {
+    if (document_.revision() !=
+        command.expected_revision) {
+        return supportMutationFailure(
+            SketchSupportMutationStatus::
+                stale_revision,
+            DocumentSessionErrorCode::
+                revision_diverged,
+            "Re-support selection is stale",
+            path_);
+    }
+    const auto* existing =
+        document_.findSketch(
+            command.sketch_id);
+    if (existing == nullptr) {
+        return supportMutationFailure(
+            SketchSupportMutationStatus::
+                missing_sketch,
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Re-support target SketchId does not exist",
+            path_);
+    }
+    if (!command.support.valid()) {
+        return supportMutationFailure(
+            SketchSupportMutationStatus::
+                invalid_support,
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Re-support contains an invalid support reference",
+            path_);
+    }
+    const auto resolved =
+        resolveSupportForMutation(
+            document_,
+            command.support,
+            modeling_kernel);
+    if (!resolved) {
+        return supportMutationFailure(
+            SketchSupportMutationStatus::
+                invalid_support,
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Re-support contains an invalid support reference",
+            path_);
+    }
+    if (resolved->status !=
+        part::SketchSupportResolutionStatus::
+            resolved) {
+        return supportMutationFailure(
+            supportMutationStatus(
+                resolved->status),
+            DocumentSessionErrorCode::
+                invalid_command,
+            supportResolutionMessage(*resolved),
+            path_);
+    }
+
+    if (existing->support == command.support) {
+        return {
+            false,
+            command.sketch_id,
+            SketchSupportMutationStatus::
+                no_change,
+            DocumentSessionDiagnostic{}};
+    }
+
+    if (supportWouldCreateCycle(
+            document_.state(),
+            command.sketch_id,
+            command.support)) {
+        return supportMutationFailure(
+            SketchSupportMutationStatus::
+                cycle_dependency,
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Re-support would create a Sketch -> Profile -> Feature dependency cycle",
+            path_);
+    }
+
+    auto after = document_.state();
+    auto* target =
+        findSketch(
+            after,
+            command.sketch_id);
+    if (target == nullptr) {
+        return supportMutationFailure(
+            SketchSupportMutationStatus::
+                missing_sketch,
+            DocumentSessionErrorCode::
+                invalid_command,
+            "Re-support target disappeared before commit",
+            path_);
+    }
+
+    target->support = command.support;
+    const auto committed =
+        commitCommandState(
+            std::move(after),
+            "Part transaction failed while changing Sketch support");
+    if (!committed.ok()) {
+        return {
+            false,
+            std::nullopt,
+            SketchSupportMutationStatus::
+                evaluation_failure,
+            committed.diagnostic};
+    }
+    return {
+        committed.changed,
+        command.sketch_id,
+        committed.changed
+            ? SketchSupportMutationStatus::applied
+            : SketchSupportMutationStatus::no_change,
+        committed.diagnostic};
 }
 
 AddSketchLineResult DocumentSession::execute(

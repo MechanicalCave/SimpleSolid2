@@ -38,6 +38,17 @@ struct CreatePartSketchCommand final {
         core::BuiltinReferenceRole::xy_plane};
 };
 
+struct CreatePartSketchOnSupportCommand final {
+    part::PartSketchSupport support;
+    core::DocumentRevision expected_revision;
+};
+
+struct SetPartSketchSupportCommand final {
+    sketch::SketchId sketch_id;
+    part::PartSketchSupport support;
+    core::DocumentRevision expected_revision;
+};
+
 struct AddSketchLineCommand final {
     sketch::SketchId sketch_id;
     sketch::Point2 start;
@@ -234,6 +245,36 @@ struct DocumentSessionResult final {
     }
 };
 
+enum class SketchSupportMutationStatus {
+    applied,
+    no_change,
+    stale_revision,
+    missing_sketch,
+    invalid_support,
+    missing,
+    ambiguous,
+    unsupported,
+    cycle_dependency,
+    evaluation_failure,
+};
+
+struct SketchSupportMutationResult final {
+    bool changed{false};
+    std::optional<sketch::SketchId> sketch_id;
+    SketchSupportMutationStatus status{
+        SketchSupportMutationStatus::invalid_support};
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code ==
+                   DocumentSessionErrorCode::none &&
+               (status ==
+                    SketchSupportMutationStatus::applied ||
+                status ==
+                    SketchSupportMutationStatus::no_change);
+    }
+};
+
 struct CreatePartSketchResult final {
     bool changed{false};
     std::optional<sketch::SketchId> sketch_id;
@@ -377,6 +418,12 @@ public:
         const SetBuiltinReferenceVisibilityCommand& command);
     [[nodiscard]] CreatePartSketchResult execute(
         const CreatePartSketchCommand& command);
+    [[nodiscard]] SketchSupportMutationResult execute(
+        const CreatePartSketchOnSupportCommand& command,
+        kernel::ISolidModelingKernel* modeling_kernel = nullptr);
+    [[nodiscard]] SketchSupportMutationResult execute(
+        const SetPartSketchSupportCommand& command,
+        kernel::ISolidModelingKernel* modeling_kernel = nullptr);
     [[nodiscard]] AddSketchLineResult execute(
         const AddSketchLineCommand& command);
     [[nodiscard]] AddSketchCircleResult execute(

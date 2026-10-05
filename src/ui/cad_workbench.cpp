@@ -1070,6 +1070,10 @@ void CadWorkbench::buildUi() {
         [this](const sketch::SketchId& sketch_id) {
             requestEditSketch(sketch_id);
         });
+    tree_controller_->setSketchSupportChangeHandler(
+        [this](const sketch::SketchId& sketch_id) {
+            startSketchResupport(sketch_id);
+        });
 
     ViewportSurface viewport_surface;
     if (viewport_factory_) {
@@ -1421,6 +1425,10 @@ void CadWorkbench::buildUi() {
                         std::nullopt);
             }
             refreshTopologyProperties(*inspection);
+            if (sketch_support_pick_active_) {
+                tryCreateSketchFromBodyTopology(
+                    *inspection);
+            }
             syncActionState();
         });
 
@@ -4923,14 +4931,59 @@ void CadWorkbench::startSketchTool() {
                 "Finish the active Sketch before creating another one."));
         return;
     }
-
+    sketch_resupport_target_.reset();
     sketch_support_pick_active_ = true;
+    ++sketch_support_pick_generation_;
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyFacePickOnly(true);
+    }
     operations_placeholder_->setText(
         QStringLiteral(
-            "Sketch: select XY, XZ or YZ Origin plane in the Tree or 3D Viewport."));
+            "Sketch: select XY/XZ/YZ Origin plane or a Body Face."));
     setStatusText(
         QStringLiteral(
-            "Sketch tool active — select an Origin plane."));
+            "Sketch tool active — select an Origin plane or Body Face."));
+    notifyCadInputContextChanged();
+    syncActionState();
+}
+
+void CadWorkbench::startSketchResupport(
+    const sketch::SketchId& sketch_id) {
+    auto* document_session =
+        activeDocumentSession();
+    if (document_session == nullptr ||
+        sketch_support_pick_active_) {
+        return;
+    }
+    if (active_sketch_id_) {
+        setStatusText(
+            QStringLiteral(
+                "Finish the active Sketch edit before changing support."));
+        return;
+    }
+    if (document_session->document()
+            .findSketch(sketch_id) == nullptr) {
+        setStatusText(
+            QStringLiteral(
+                "Sketch support change is unavailable."));
+        return;
+    }
+
+    sketch_resupport_target_ = sketch_id;
+    sketch_support_pick_active_ = true;
+    ++sketch_support_pick_generation_;
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyFacePickOnly(true);
+    }
+    operations_placeholder_->setText(
+        QStringLiteral(
+            "Change Sketch Support: select XY/XZ/YZ Origin plane or a Body Face."));
+    setStatusText(
+        QStringLiteral(
+            "Re-support active — select a new Origin plane or Body Face."));
+    notifyCadInputContextChanged();
     syncActionState();
 }
 
@@ -4939,10 +4992,25 @@ void CadWorkbench::cancelSketchTool() {
         return;
     }
 
-    clearSketchRuntimeContext();
+    const bool resupport =
+        sketch_resupport_target_.has_value();
+    sketch_support_pick_active_ = false;
+    sketch_resupport_target_.reset();
+    ++sketch_support_pick_generation_;
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyFacePickOnly(false);
+        viewport_controller_->
+            clearSketchDynamicInputOverlay();
+    }
+    dynamic_input_anchor_.reset();
     setStatusText(
-        QStringLiteral(
-            "Sketch creation cancelled."));
+        resupport
+            ? QStringLiteral(
+                  "Sketch support change cancelled — no authored state changed.")
+            : QStringLiteral(
+                  "Sketch creation cancelled — no authored state changed."));
+    notifyCadInputContextChanged();
     syncActionState();
 }
 
@@ -4968,7 +5036,7 @@ void CadWorkbench::requestEditSketch(
     }
 
     if (sketch_support_pick_active_) {
-        clearSketchRuntimeContext();
+        cancelSketchTool();
     }
 
     if (document_session->document()
@@ -5035,9 +5103,6 @@ void CadWorkbench::requestEditProfile(
         return;
     }
 
-    // The Profile edit target is a semantic context of its own. Keep its
-    // Properties surface bound to that target even if entering the tool
-    // clears incidental Viewer/Tree presentation selection.
     sketch_interaction_controller_->
         setSelectedProfileForCadInput(profile_id);
     refreshProfileProperties(profile_id);
@@ -5051,59 +5116,158 @@ void CadWorkbench::requestEditProfile(
             "Profile edit context opened."));
 }
 
-void CadWorkbench::tryCreateSketchFromSupport(
-    std::optional<core::BuiltinReferenceRole> support) {
+void CadWorkbench::applySketchSupport(
+    part::PartSketchSupport support) {
     if (!sketch_support_pick_active_) {
-        return;
-    }
-
-    if (!support) {
-        return;
-    }
-
-    if (!part::isSketchOriginPlane(*support)) {
-        setStatusText(
-            QStringLiteral(
-                "Sketch support must be XY, XZ or YZ Origin plane."));
         return;
     }
 
     auto* document_session =
         activeDocumentSession();
     if (document_session == nullptr) {
-        clearSketchRuntimeContext();
+        cancelSketchTool();
         return;
     }
 
-    const auto created =
-        document_session->execute(
-            application::CreatePartSketchCommand{
-                *support});
-    if (!created.ok()) {
-        showFailure(created.diagnostic);
+    const auto expected_revision =
+        document_session->document().revision();
+    const bool resupport =
+        sketch_resupport_target_.has_value();
+
+    application::SketchSupportMutationResult result;
+    if (resupport) {
+        result =
+            document_session->execute(
+                application::SetPartSketchSupportCommand{
+                    *sketch_resupport_target_,
+                    std::move(support),
+                    expected_revision},
+                solid_modeling_kernel_);
+    } else {
+        result =
+            document_session->execute(
+                application::CreatePartSketchOnSupportCommand{
+                    std::move(support),
+                    expected_revision},
+                solid_modeling_kernel_);
+    }
+
+    if (!result.ok()) {
+        setStatusText(
+            fromUtf8(
+                result.diagnostic.message.empty()
+                    ? std::string{
+                          "Sketch support was rejected."}
+                    : result.diagnostic.message));
         return;
     }
 
-    if (!created.changed ||
-        !created.sketch_id) {
+    if (!result.sketch_id) {
         setStatusText(
             QStringLiteral(
-                "Sketch was not created."));
+                "Sketch support command produced no Sketch target."));
         return;
     }
 
+    const auto target_id =
+        *result.sketch_id;
     sketch_support_pick_active_ = false;
-
-    const auto created_id =
-        *created.sketch_id;
+    sketch_resupport_target_.reset();
+    ++sketch_support_pick_generation_;
+    if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyFacePickOnly(false);
+    }
 
     refreshActiveContext();
-    enterSketchEdit(created_id);
+    enterSketchEdit(target_id);
+    notifyCadInputContextChanged();
 
     setStatusText(
-        QStringLiteral(
-            "Sketch created — editing in the 3D Viewport. "
-            "Pan/Zoom/Orbit remain available."));
+        resupport
+            ? QStringLiteral(
+                  "Sketch support changed — SketchId and local geometry preserved.")
+            : QStringLiteral(
+                  "Sketch created on selected support — editing in the 3D Viewport."));
+}
+
+void CadWorkbench::tryCreateSketchFromSupport(
+    std::optional<core::BuiltinReferenceRole> support) {
+    if (!sketch_support_pick_active_ ||
+        !support) {
+        return;
+    }
+
+    const auto semantic =
+        part::partSketchSupportForBuiltinPlane(
+            *support);
+    if (!semantic) {
+        setStatusText(
+            QStringLiteral(
+                "Sketch support must be XY, XZ or YZ Origin plane."));
+        return;
+    }
+
+    applySketchSupport(*semantic);
+}
+
+void CadWorkbench::tryCreateSketchFromBodyTopology(
+    const BodyTopologyInspection& inspection) {
+    if (!sketch_support_pick_active_ ||
+        inspection.kind !=
+            viewer::BodyTopologyPresentationKind::
+                face) {
+        return;
+    }
+
+    switch (inspection.sketch_support) {
+    case SketchSupportInspectionCapability::supported:
+        break;
+    case SketchSupportInspectionCapability::
+        unsupported_non_planar:
+        setStatusText(
+            QStringLiteral(
+                "Unsupported — the selected Body Face is non-planar."));
+        return;
+    case SketchSupportInspectionCapability::missing:
+        setStatusText(
+            QStringLiteral(
+                "Sketch support is Missing at the current Body stage."));
+        return;
+    case SketchSupportInspectionCapability::ambiguous:
+        setStatusText(
+            QStringLiteral(
+                "Sketch support is Ambiguous at the current Body stage."));
+        return;
+    case SketchSupportInspectionCapability::unsupported:
+    case SketchSupportInspectionCapability::not_applicable:
+        setStatusText(
+            QStringLiteral(
+                "Selected Face cannot provide standard Sketch support."));
+        return;
+    }
+
+    if (!inspection.stage.valid() ||
+        !inspection.surface_address) {
+        setStatusText(
+            QStringLiteral(
+                "Selected Face has no singular semantic Surface support."));
+        return;
+    }
+
+    const auto semantic =
+        part::partSketchSupportForBodyPlanarSurface(
+            part::SurfaceReference{
+                inspection.stage,
+                *inspection.surface_address});
+    if (!semantic) {
+        setStatusText(
+            QStringLiteral(
+                "Selected Face produced an invalid semantic Surface reference."));
+        return;
+    }
+
+    applySketchSupport(*semantic);
 }
 
 void CadWorkbench::enterSketchEdit(
@@ -5598,6 +5762,15 @@ std::string CadWorkbench::cadInputPrompt() const {
 
 application::CadInputContextGeneration
 CadWorkbench::cadInputContextGeneration() const noexcept {
+    if (sketch_support_pick_active_) {
+        constexpr application::CadInputContextGeneration
+            sketch_support_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 61U};
+        return sketch_support_namespace |
+               (sketch_support_pick_generation_ &
+                (sketch_support_namespace - 1U));
+    }
     if (extrude_profile_pick_active_) {
         constexpr application::CadInputContextGeneration
             extrude_pick_namespace =
@@ -5624,7 +5797,8 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
 
 std::vector<application::CadDynamicInputField>
 CadWorkbench::cadDynamicInputFields() const {
-    if (extrude_profile_pick_active_) {
+    if (sketch_support_pick_active_ ||
+        extrude_profile_pick_active_) {
         return {};
     }
     if (extrude_draft_) {
@@ -5765,6 +5939,28 @@ CadWorkbench::submitCadInput(
         return {false, "CAD input semantic context is stale."};
     }
 
+    if (sketch_support_pick_active_) {
+        const auto keyword =
+            upperAsciiTrimmed(text);
+        if (keyword == "CANCEL" ||
+            keyword == "ESC") {
+            cancelSketchTool();
+            return {true, {}};
+        }
+        const bool expected_command =
+            sketch_resupport_target_
+                ? keyword == "RESUPPORT"
+                : keyword == "SKETCH";
+        if (expected_command) {
+            return {true, {}};
+        }
+        return {
+            false,
+            sketch_resupport_target_
+                ? "RESUPPORT is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL."
+                : "SKETCH is waiting for an Origin plane or Body Face selection; use Tree/viewport or CANCEL."};
+    }
+
     if (extrude_profile_pick_active_) {
         const auto keyword =
             upperAsciiTrimmed(text);
@@ -5793,13 +5989,46 @@ CadWorkbench::submitCadInput(
         return result;
     }
 
-    if (upperAsciiTrimmed(text) == "EXTRUDE") {
+    const auto top_level_keyword =
+        upperAsciiTrimmed(text);
+    if (top_level_keyword == "EXTRUDE") {
         return startExtrudeTool()
             ? application::CadInputSubmitResult{
                   true, {}}
             : application::CadInputSubmitResult{
                   false,
                   "EXTRUDE could not be activated."};
+    }
+    if (top_level_keyword == "SKETCH") {
+        startSketchTool();
+        return sketch_support_pick_active_ &&
+                       !sketch_resupport_target_
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "SKETCH could not be activated."};
+    }
+    if (top_level_keyword == "RESUPPORT") {
+        const auto sketch_id =
+            tree_controller_ != nullptr
+                ? tree_controller_->primarySketchId()
+                : std::nullopt;
+        if (!sketch_id) {
+            return {
+                false,
+                "RESUPPORT requires one Sketch selected in the document Tree."};
+        }
+        startSketchResupport(*sketch_id);
+        return sketch_support_pick_active_ &&
+                       sketch_resupport_target_ &&
+                       *sketch_resupport_target_ ==
+                           *sketch_id
+            ? application::CadInputSubmitResult{
+                  true, {}}
+            : application::CadInputSubmitResult{
+                  false,
+                  "RESUPPORT could not be activated."};
     }
 
     if (!sketch_interaction_controller_) {
@@ -5836,6 +6065,13 @@ CadWorkbench::submitCadInput(
     return result;
 }
 QString CadWorkbench::cadInputPromptText() const {
+    if (sketch_support_pick_active_) {
+        return sketch_resupport_target_
+            ? QStringLiteral(
+                  "Command: RESUPPORT — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc")
+            : QStringLiteral(
+                  "Command: SKETCH — Select XY/XZ/YZ Origin plane or Body Face · CANCEL/Esc");
+    }
     if (extrude_profile_pick_active_) {
         return QStringLiteral(
             "Command: EXTRUDE — Select one valid Profile · CANCEL/Esc");
@@ -6101,9 +6337,16 @@ void CadWorkbench::finishSketch() {
 }
 
 void CadWorkbench::clearSketchRuntimeContext() {
+    if (sketch_support_pick_active_ ||
+        sketch_resupport_target_) {
+        ++sketch_support_pick_generation_;
+    }
     sketch_support_pick_active_ = false;
+    sketch_resupport_target_.reset();
     dynamic_input_anchor_.reset();
     if (viewport_controller_ != nullptr) {
+        viewport_controller_->
+            setBodyTopologyFacePickOnly(false);
         viewport_controller_->clearSketchDynamicInputOverlay();
     }
 

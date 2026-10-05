@@ -3700,6 +3700,12 @@ PartViewportController::rankedBodyTopologyCandidates(
     candidates.reserve(query.candidates.size());
     for (const auto& candidate :
          query.candidates) {
+        if (body_topology_face_pick_only_ &&
+            candidate.kind !=
+                viewer::BodyTopologyPresentationKind::
+                    face) {
+            continue;
+        }
         const auto found =
             body_topology_bindings_.find(
                 candidate.token.value);
@@ -3754,6 +3760,15 @@ PartViewportController::rankedBodyTopologyCandidates(
         });
 
     return candidates;
+}
+
+void PartViewportController::setBodyTopologyFacePickOnly(
+    bool enabled) {
+    if (body_topology_face_pick_only_ == enabled) {
+        return;
+    }
+    body_topology_face_pick_only_ = enabled;
+    clearBodyTopologyPreselection();
 }
 
 void PartViewportController::clearBodyTopologyPreselection() {

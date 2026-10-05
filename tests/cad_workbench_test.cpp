@@ -376,6 +376,9 @@ int main(int argc, char* argv[]) {
     auto* hide_references =
         workbench.findChild<QAction*>(
             QStringLiteral("hideBuiltinReferencesAction"));
+    auto* change_sketch_support =
+        workbench.findChild<QAction*>(
+            QStringLiteral("changeSketchSupportAction"));
     auto* properties_stack =
         workbench.findChild<QStackedWidget*>(
             QStringLiteral("propertiesContextStack"));
@@ -405,6 +408,7 @@ int main(int argc, char* argv[]) {
     CHECK(undo != nullptr);
     CHECK(redo != nullptr);
     CHECK(save != nullptr);
+    CHECK(change_sketch_support != nullptr);
     CHECK(close_document != nullptr);
     CHECK(show_references != nullptr);
     CHECK(hide_references != nullptr);
