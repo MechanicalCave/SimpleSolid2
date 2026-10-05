@@ -3,7 +3,7 @@ status: active
 active_work: "work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md"
 foundation_version: "1.0"
 program_roadmap: "work/PART_MODELING_V1_ROADMAP.md"
-program_roadmap_version: "1.16"
+program_roadmap_version: "1.17"
 accepted_adrs:
   - "adr/ADR-0001-project-identity-and-workspace-clones.md"
   - "adr/ADR-0002-document-identity-lifecycle-and-properties.md"
@@ -31,12 +31,14 @@ next:
   - PM-02F stage-aware Sketch/Profile evaluation is COMPLETED — PASS; final runtime candidate 87d4043f9114952df8228681e4cf16937c6f664b passed Windows FULL #1434 and merged to main as f620d7e9888c09a6c4e9854bca6b3092699c1fe3
   - PM-02G create/re-support Sketch on arbitrary planar Body Surface is COMPLETED — PASS; final runtime candidate f45ed8ee09aabe098ab88bc7e47a0c614841fb40 passed Windows FULL #1443 and merged to main as 17778bdfe80d0411031b458ef4f6d582eccc205b
   - PM-02H existing Extrude Add/Cut from face-supported Sketch is COMPLETED — PASS; final runtime candidate 0540a762be42b3f4329e7032545e652b21332486 passed Windows FULL #1446 and merged to main as 16818f4b47d4ec2f1c18410856e2b1c1ba51f2c0
-  - current implementation checkpoint is PM-02I — lifecycle, repair, persistence and regression matrix
-  - PM-02I must close Undo/Redo, Delete interactions, Save/Close/Reopen, cold rebuild, stale selection, split/delete/alias failure, same-geometry replacement traps, semantic repair/re-support and exact diagnostics with zero false Resolved and no identity/provenance corruption
+  - PM-02I lifecycle, repair, persistence and regression matrix is COMPLETED — PASS; final runtime/evidence candidate b642a5af625a48d668a21efeaf3d78bfb9bf7c79 passed Windows FULL #1451 and merged to main as a26d7e981b160973825603bc3c11f37d5ab594a8
+  - current implementation checkpoint is PM-02J — documentation and Owner Windows acceptance
+  - PM-02J must update current internal as-built docs, PL/EN product docs and Product Browser, produce final acceptance evidence, pass the required exact-head runtime/docs gates and receive Owner manual Windows PASS before PM-02 completion
   - production mutation is authorized only within work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md and its PM-02A..PM-02J sequence
   - PM-03 Datum Reference Geometry and all later Part Modeling packages remain inactive
   - Projection remains outside the PM-02/PM-03 critical path and requires separate later activation
 notes:
+  - PM-02I lifecycle, repair, persistence and regression matrix is COMPLETED — PASS. Final exact runtime/evidence candidate b642a5af625a48d668a21efeaf3d78bfb9bf7c79 passed Windows FULL #1451; squash merge main is a26d7e981b160973825603bc3c11f37d5ab594a8. Integrated production regression covers producer Delete rejection, repairable Profile Delete -> MissingProfile, Undo/Redo, stale support mutation rejection, split Face/stable Surface, deleted support with exact-geometry decoy -> Missing, alias -> Ambiguous, explicit re-support repair, Save/Close/Reopen and cold rebuild with different runtime tokens. Zero false Resolved and no durable ID/provenance corruption. Completion evidence: work/PM-02I_LIFECYCLE_REPAIR_PERSISTENCE_SURVIVAL_COMPLETION.md. PM-02J is now the active implementation checkpoint.
   - PM-02H existing Extrude Add/Cut from face-supported Sketch is COMPLETED — PASS. Final exact runtime candidate 0540a762be42b3f4329e7032545e652b21332486 passed Windows FULL #1446; squash merge main is 16818f4b47d4ec2f1c18410856e2b1c1ba51f2c0. The existing PM-01 ExtrudeDraft Add/Cut path now uses exact-stage support topology for face-backed Profile preview/evaluation, upstream edits re-resolve the derived support frame, and Missing/Ambiguous support fails closed with no stale downstream Kernel consumption. Completion evidence: work/PM-02H_FACE_SUPPORTED_EXTRUDE_ADD_CUT_COMPLETION.md. PM-02I is now the active implementation checkpoint.
   - PM-02G create/re-support Sketch on arbitrary planar Body Surface is COMPLETED — PASS. Final exact runtime candidate f45ed8ee09aabe098ab88bc7e47a0c614841fb40 passed Windows FULL #1443; squash merge main is 17778bdfe80d0411031b458ef4f6d582eccc205b. Semantic Face/Origin support acquisition now stages a revision-bound runtime draft, Finish performs exactly one Create/Re-support transaction, Cancel/rejected support performs zero mutation, and re-support preserves SketchId/EntityIds/local U/V with bounded cycle rejection. Completion evidence: work/PM-02G_FACE_SUPPORTED_SKETCH_AUTHORING_COMPLETION.md. PM-02H is now the active implementation checkpoint.
   - PM-02F stage-aware Sketch/Profile evaluation is COMPLETED — PASS. Final exact runtime candidate 87d4043f9114952df8228681e4cf16937c6f664b passed Windows FULL #1434; squash merge main is f620d7e9888c09a6c4e9854bca6b3092699c1fe3. Exact-stage support resolution now derives current Profile world frames from current prior Feature topology, with structured Missing/Ambiguous/Unsupported failure and zero stale-frame consumer Kernel calls in the dedicated regression. Completion evidence: work/PM-02F_STAGE_AWARE_SKETCH_PROFILE_EVALUATION_COMPLETION.md. PM-02G is now the active implementation checkpoint.
