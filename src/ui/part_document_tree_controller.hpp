@@ -63,14 +63,6 @@ public:
         std::function<void(part::DatumId)>;
     using DatumDeleteHandler =
         std::function<void(part::DatumId)>;
-    using DatumSelectionHandler =
-        std::function<void(
-            const std::vector<part::DatumId>&,
-            std::optional<part::DatumId>)>;
-    using DatumEditHandler =
-        std::function<void(part::DatumId)>;
-    using DatumDeleteHandler =
-        std::function<void(part::DatumId)>;
     using ProfileEditHandler =
         std::function<void(part::ProfileId)>;
     using FeatureSelectionHandler =
@@ -164,21 +156,6 @@ public:
         datum_delete_handler_ =
             std::move(handler);
     }
-    void setDatumSelectionHandler(
-        DatumSelectionHandler handler) {
-        datum_selection_handler_ =
-            std::move(handler);
-    }
-    void setDatumEditHandler(
-        DatumEditHandler handler) {
-        datum_edit_handler_ =
-            std::move(handler);
-    }
-    void setDatumDeleteHandler(
-        DatumDeleteHandler handler) {
-        datum_delete_handler_ =
-            std::move(handler);
-    }
     void setFeatureSelectionHandler(
         FeatureSelectionHandler handler) {
         feature_selection_handler_ =
@@ -252,7 +229,6 @@ private:
     void notifySelectionChanged();
 
     [[nodiscard]] bool selectionContainsOnlyBuiltinReferences() const;
-    [[nodiscard]] bool selectionContainsOnlyDatumsOrReferenceGeometry() const;
     [[nodiscard]] bool selectionContainsOnlyDatumReferences() const;
     [[nodiscard]] bool referenceGeometryGroupSelected() const;
     [[nodiscard]] std::vector<part::DatumId>
