@@ -1,5 +1,6 @@
 #pragma once
 
+#include <simplesolid2/application/datum_plane_draft.hpp>
 #include <simplesolid2/application/extrude_draft.hpp>
 #include <simplesolid2/core/units.hpp>
 #include <simplesolid2/part/feature_evaluation.hpp>
@@ -188,6 +189,31 @@ struct DeleteProfileCommand final {
     core::DocumentRevision expected_revision;
 };
 
+struct CreateDatumPlaneCommand final {
+    part::PlaneReference source;
+    core::DocumentRevision expected_revision;
+    core::LengthValue offset{10.0};
+    bool visible{true};
+};
+
+struct EditDatumPlaneCommand final {
+    part::DatumId datum_id;
+    part::PlaneReference source;
+    core::DocumentRevision expected_revision;
+    core::LengthValue offset;
+};
+
+struct SetDatumPlaneVisibilityCommand final {
+    std::vector<part::DatumId> targets;
+    core::DocumentRevision expected_revision;
+    bool visible{true};
+};
+
+struct DeleteDatumPlaneCommand final {
+    part::DatumId datum_id;
+    core::DocumentRevision expected_revision;
+};
+
 struct CreateExtrudeFeatureCommand final {
     part::ProfileId profile_id;
     core::DocumentRevision expected_revision;
@@ -359,6 +385,20 @@ struct CreateProfileResult final {
     }
 };
 
+struct CreateDatumPlaneResult final {
+    bool changed{false};
+    std::optional<part::DatumId> datum_id;
+    std::optional<
+        part::DatumPlaneEvaluationDiagnostic>
+        evaluation_diagnostic;
+    DocumentSessionDiagnostic diagnostic;
+
+    [[nodiscard]] bool ok() const noexcept {
+        return diagnostic.code ==
+               DocumentSessionErrorCode::none;
+    }
+};
+
 struct CreateExtrudeFeatureResult final {
     bool changed{false};
     std::optional<part::FeatureId> feature_id;
@@ -463,6 +503,22 @@ public:
         const ExtrudeDraft& draft,
         kernel::ISolidModelingKernel& modeling_kernel) const;
 
+    [[nodiscard]] DatumPlaneDraftEvaluationResult
+    evaluateDatumPlaneDraft(
+        const DatumPlaneDraft& draft,
+        kernel::ISolidModelingKernel& modeling_kernel) const;
+
+    [[nodiscard]] CreateDatumPlaneResult execute(
+        const CreateDatumPlaneCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const EditDatumPlaneCommand& command,
+        kernel::ISolidModelingKernel& modeling_kernel);
+    [[nodiscard]] DocumentSessionResult execute(
+        const SetDatumPlaneVisibilityCommand& command);
+    [[nodiscard]] DocumentSessionResult execute(
+        const DeleteDatumPlaneCommand& command);
+
     [[nodiscard]] CreateExtrudeFeatureResult execute(
         const CreateExtrudeFeatureCommand& command,
         kernel::ISolidModelingKernel& modeling_kernel);
@@ -533,6 +589,8 @@ private:
         const part::PartAuthoredState& state);
     void applySketchEntityIdCursors(
         part::PartAuthoredState& state) const;
+    void applyDatumIdCursor(
+        part::PartAuthoredState& state) const noexcept;
     void applyProfileIdCursor(
         part::PartAuthoredState& state) const noexcept;
     void applyBodyFeatureIdCursors(
@@ -547,6 +605,7 @@ private:
     std::vector<HistoryEntry> history_;
     std::size_t cursor_{0};
     SketchEntityIdCursorMap sketch_entity_id_cursors_;
+    part::DatumIdCursor datum_id_cursor_;
     part::ProfileIdCursor profile_id_cursor_;
     part::BodyIdCursor body_id_cursor_;
     part::FeatureIdCursor feature_id_cursor_;

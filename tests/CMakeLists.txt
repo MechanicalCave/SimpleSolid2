@@ -801,6 +801,28 @@ set_tests_properties(pm03b.datum_evaluation PROPERTIES
     LABELS "tier-fast;subsystem-part;subsystem-kernel"
 )
 
+add_executable(pm03c_datum_commands_draft_test
+    pm03c_datum_commands_draft_test.cpp
+)
+
+target_link_libraries(pm03c_datum_commands_draft_test
+    PRIVATE
+        simplesolid2_application
+        simplesolid2_kernel
+        simplesolid2_part
+)
+
+target_compile_features(pm03c_datum_commands_draft_test PRIVATE cxx_std_20)
+
+add_test(
+    NAME pm03c.datum_commands_draft
+    COMMAND pm03c_datum_commands_draft_test
+)
+
+set_tests_properties(pm03c.datum_commands_draft PROPERTIES
+    LABELS "tier-fast;subsystem-application;subsystem-kernel;subsystem-part"
+)
+
 add_executable(pm02f_stage_aware_profile_evaluation_test
     pm02f_stage_aware_profile_evaluation_test.cpp
 )

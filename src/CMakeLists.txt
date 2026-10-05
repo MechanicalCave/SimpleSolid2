@@ -132,6 +132,7 @@ target_include_directories(simplesolid2_cad_input
 target_compile_features(simplesolid2_cad_input PUBLIC cxx_std_20)
 
 add_library(simplesolid2_application STATIC
+    application/datum_plane_draft.cpp
     application/extrude_draft.cpp
     application/precision_input.cpp
     application/cad_input_semantics.cpp
