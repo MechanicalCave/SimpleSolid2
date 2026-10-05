@@ -5316,7 +5316,7 @@ void CadWorkbench::tryCreateSketchFromBodyTopology(
         return;
     }
 
-    applySketchSupport(*semantic);
+    stageSketchSupport(*semantic);
 }
 
 void CadWorkbench::enterSketchEdit(
