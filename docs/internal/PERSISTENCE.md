@@ -41,15 +41,17 @@ Part001.ss2part
 
 The common manifest contains format/container metadata, Document kind/identity and Part domain schema version. Shared persistence owns package safety; Part owns engineering meaning in `authored/document.json`.
 
-The current Part writer is schema **v9**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1 and one Body with ordered Features.
+The current Part writer is schema **v11**. It persists document properties, display/input length unit, Origin visibility, hosted Sketches, Profiles, modeling-semantics version 1, one Body with ordered Features, the DatumId high-water cursor and ordered Offset Datum Plane records.
 
-Sketches persist stable SketchId, semantic support, visibility, canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Origin support stores the built-in plane role. Body support stores a provider-neutral `BodyStageRef` plus semantic planar `SurfaceReference`; the evaluated world frame is derived and is not persisted. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
+Each Datum Plane persists stable DatumId, one semantic source, one signed offset in millimetres and authored visibility. Source encoding is provider-neutral: an Origin source stores a built-in XY/XZ/YZ role; a Body source stores explicit `BodyStageRef` plus semantic planar `SurfaceReference`; a Datum source stores only the earlier source DatumId. Derived O/U/V/N frame, runtime provider/topology identity, Viewer token, plane patch and Body-intersection overlay are never authored payload.
 
-The Body persists BodyId, the FeatureId cursor and ordered Feature records. The current Extrude Feature record preserves stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane parameters. Evaluated B-Rep, OCCT handles, runtime topology tokens, evaluation statuses, previews and tessellation are not authored payload.
+Sketches persist stable SketchId, semantic support, visibility, canonical EntityIds, exact Line/Circle/Arc geometry and authored Regular/Construction role. Current support may be a built-in Origin plane, a provider-neutral planar Body Surface reference, or a Datum Plane by DatumId. The evaluated world frame is derived and is not persisted. Schema v11 does not write a separate world placement for Datum-backed Sketch support. Profiles persist ProfileId, source SketchId, name, semantic RegionIntent and visibility policy (`automatic`, `force_shown`, `force_hidden`).
 
-Schemas v1–v8 remain readable. The v8→v9 migration validates legacy Origin support against the legacy absolute `SketchPlacement`, preserves stable authored IDs and local geometry, maps the Sketch to semantic support and stops writing redundant world placement. Incoherent legacy support/placement fails closed. Earlier Profile visibility and pre-PM-01 Body migrations remain intact. A later successful Save publishes schema v9.
+The Body persists BodyId, FeatureId cursor and ordered Feature records. The current Extrude Feature record preserves stable FeatureId, name, suppression, source ProfileId, Add/Cut operation and OneSide/Midplane parameters. Evaluated B-Rep, OCCT handles, runtime topology tokens, Datum/Feature evaluation statuses, previews and tessellation are not authored payload.
 
-DocumentId remains in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tools, CAD input buffer, selection, camera and all provider/runtime geometry remain non-persistent.
+Legacy schemas remain readable according to their existing migration rules. The v8→v9 migration validates legacy Origin support against legacy absolute Sketch placement and removes redundant placement on a later successful Save. Loading schema v9 preserves existing Document/Body/Sketch identity, creates no synthetic Datum records and starts the DatumId cursor at 1. Schema v10 introduced durable Datum records; schema v11 adds DatumId Sketch support. A later successful Save publishes current schema v11. Invalid IDs, malformed references, illegal Datum dependency/cycle state or invalid Sketch support fail closed through Part-domain reconstruction.
+
+DocumentId remains in the common manifest. ProjectId, DocumentRevision, Undo/Redo, active tools, CAD input buffer, selection, camera, current Datum frames and all provider/runtime geometry remain non-persistent.
 
 <!-- section-id: internal.persistence.atomic-save -->
 ## Atomic Document publication and Save
@@ -96,12 +98,13 @@ The following are derived/runtime and intentionally disposable:
 - `DocumentRevision`, runtime session/request/draft generations and file checkpoints;
 - evaluated Shared-2D arrangements and Profile regions;
 - Part Feature evaluation snapshots and UpToDate/Failed/Blocked/Suppressed diagnostics;
+- Datum evaluation status, current O/U/V/N frames and transitive Body-stage dependency floors;
 - runtime solid/B-Rep handles, Face/Edge/Vertex tokens, evaluated topology catalogs, canonical carrier frames and provider history;
-- Extrude preview geometry and temporary source-Profile reveal;
-- Viewer presentation objects, tessellation, detection/picking tokens and camera state;
+- Extrude and Datum Plane preview presentation plus temporary source-Profile reveal;
+- Viewer Datum plane patch/border, owner-bound Body-intersection overlay, presentation objects, tessellation, detection/picking tokens and camera state;
 - active selection, hover, grips, Dynamic Input/Polar/OSNAP tracking state and CAD input buffer.
 
-A clean reopen must recover authored semantic state without any of these objects. PM-02 lifecycle coverage destroys the session/runtime/provider evaluation state after Save, reloads schema-v9 authored data and rebuilds semantic Sketch support plus the ordered Add/Cut chain from a fresh provider generation. Runtime token values may change; durable Surface support meaning and authored IDs must not.
+A clean reopen must recover authored semantic state without any of these objects. PM-03 lifecycle coverage saves through the guarded `DocumentSession` path, destroys the loaded session/provider state, reloads schema-v11 authored data and rebuilds Body-Surface/Datum references, Datum-backed Sketch/Profile support and ordered Add/Cut features with a deliberately different runtime token generation. Runtime token values may change; DatumId, semantic source, signed Offset, visibility, Sketch support and authored IDs must not.
 
 <!-- section-id: internal.persistence.identity-safety -->
 ## Identity and container safety
