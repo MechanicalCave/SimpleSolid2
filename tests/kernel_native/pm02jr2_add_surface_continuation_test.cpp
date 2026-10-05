@@ -316,15 +316,15 @@ void verifyPartIntegration() {
         uv.push_back(
             projectToFrame(frame, point));
     }
-    double min_u = uv.front().x;
-    double max_u = uv.front().x;
-    double min_v = uv.front().y;
-    double max_v = uv.front().y;
+    double min_u = uv.front().u;
+    double max_u = uv.front().u;
+    double min_v = uv.front().v;
+    double max_v = uv.front().v;
     for (const auto point : uv) {
-        min_u = std::min(min_u, point.x);
-        max_u = std::max(max_u, point.x);
-        min_v = std::min(min_v, point.y);
-        max_v = std::max(max_v, point.y);
+        min_u = std::min(min_u, point.u);
+        max_u = std::max(max_u, point.u);
+        min_v = std::min(min_v, point.v);
+        max_v = std::max(max_v, point.v);
     }
     CHECK(max_u - min_u > 1.0);
     CHECK(max_v - min_v > 1.0);
