@@ -1,6 +1,6 @@
 # PM-02 — Final Acceptance Matrix
 
-**Status:** AUTOMATED + DOCUMENTATION EVIDENCE COMPLETE; OWNER WINDOWS MANUAL PENDING  
+**Status:** OWNER WINDOWS MANUAL FAIL — REMEDIATION ACTIVE  
 **Work Contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Final runtime/evidence candidate:** `b642a5af625a48d668a21efeaf3d78bfb9bf7c79`  
 **Final runtime gate:** Windows FULL #1451 — PASS  
@@ -9,7 +9,7 @@
 **Documentation candidate:** `65919f28f8c8dade4ba2904ec699957f9077d1f1`  
 **Documentation gate:** Windows DOCS #1454 — PASS (`.\\ss2.ps1 docs` produced zero Browser diff)  
 **Merged documentation main:** `300459629658432bb94f938e51cb1df4a17b353e`  
-**Owner Windows manual acceptance:** PENDING
+**Owner Windows manual acceptance:** FAIL on 2026-10-05 — see `work/PM-02J_MANUAL_ACCEPTANCE_REMEDIATION.md`
 
 ## 1. Gate interpretation
 
@@ -132,6 +132,14 @@ PM-02 completion still requires:
 - Owner Windows manual workflow — **PENDING**.
 
 ## 5. Owner Windows manual workflow
+
+**2026-10-05 result:** FAIL — remediation active.
+
+Blocking/manual findings include unstable or absent topology preselection/candidate cycling, unstable ordinary pick in one box orientation, stage-incorrect face-supported Sketch Edit presentation after downstream Extrude, and coplanar Add Surface/partition behavior that can block Sketch support. User-facing Create Sketch labeling and a reproducible top-level window resize also require remediation before the next Owner PASS.
+
+Detailed authority: `work/PM-02J_MANUAL_ACCEPTANCE_REMEDIATION.md`.
+
+
 
 Run on the final accepted Windows build. Record PASS/FAIL for each step.
 
