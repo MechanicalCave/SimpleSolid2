@@ -1,13 +1,13 @@
 # PM-02 — Body Semantic Topology / Face-Supported Sketch
 
-**Status:** ACTIVE — OWNER ACCEPTED 2026-10-04  
+**Status:** COMPLETED — PASS; OWNER ACCEPTED 2026-10-04, FINAL MANUAL PASS 2026-10-05  
 **Decision class:** D2 production Work Contract — Owner accepted 2026-10-04  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.14  
 **Architecture authority:** ADR-0014 + ADR-0016  
 **Entry gate:** PM-02P Body Semantic Topology Evidence COMPLETED — PASS; Owner accepted PM-02P D2 synthesis/recommendation on 2026-10-04  
 **Evidence authority:** `work/PM-02P_TOPOLOGY_EVIDENCE_REPORT.md`, `work/PM-02P_REFERENCE_SURVIVAL_MATRIX.md`, `work/PM-02_PRODUCTION_ARCHITECTURE_RECOMMENDATION.md`  
-**Production mutation:** AUTHORIZED ONLY WITHIN THIS ACTIVE CONTRACT
+**Production mutation:** CLOSED — future production change requires separate accepted authority
 
 ## 1. Goal
 
@@ -36,13 +36,11 @@ Projection is explicitly independent and remains outside PM-02.
 
 ## 2. Activation rule
 
-Owner explicitly accepted this exact Work Contract revision on 2026-10-04, including all four referenced UX/Viewer design inputs.
+Owner explicitly accepted this Work Contract on 2026-10-04, including all four referenced UX/Viewer design inputs. PM-02 completed after automated remediation/runtime evidence, current documentation evidence and Owner final post-remediation Windows PASS on 2026-10-05.
 
-Activation is completed when `work/ACTIVE.yaml` points to this contract and the activation change passes the repository gate.
+PM-02 production mutation is now closed. Any future change to delivered PM-02 semantics requires a separately authorized Work Contract or an explicitly accepted amendment under normal governance.
 
-Once activated, production mutation is authorized only within this contract and its ordered checkpoints PM-02A through PM-02J.
-
-Any scope expansion or D2 contradiction against ADR-0014, ADR-0016, PM-02P evidence or this contract is STOP and returns to Owner review.
+Any future scope expansion or D2 contradiction against ADR-0014, ADR-0016, ADR-0017, PM-02P evidence or this completed contract is STOP and returns to Owner review.
 
 ## 3. Governing invariants
 
@@ -992,7 +990,7 @@ Gate:
 
 ### PM-02J — documentation and Owner Windows acceptance
 
-**Checkpoint state:** ACTIVE — AUTOMATED REMEDIATION + DOCS PASS; OWNER WINDOWS RE-TEST PENDING
+**Checkpoint state:** COMPLETED — PASS; AUTOMATED REMEDIATION + DOCS + OWNER WINDOWS RE-TEST PASS
 
 **Remediation authority:** `work/PM-02J_MANUAL_ACCEPTANCE_REMEDIATION.md` + ADR-0017
 
@@ -1009,7 +1007,7 @@ Gate:
 - required docs valid;
 - final exact-head runtime gate;
 - final docs/closure gate as appropriate;
-- Owner manual PASS before PM-02 completion.
+- Owner manual PASS before PM-02 completion — **SATISFIED 2026-10-05**.
 
 ## 8. Acceptance requirements
 
@@ -1142,8 +1140,10 @@ STOP and return to Owner review if implementation would require:
 
 ## 12. Completion boundary
 
-PM-02 completion authorizes only the delivered Body Semantic Topology / Face-Supported Sketch vertical slice.
+PM-02 is COMPLETED — PASS. Final closure evidence is runtime FULL #1473, docs #1474, bookkeeping #1476 and Owner post-remediation Windows re-test PASS on 2026-10-05 against current main `d8d73e213f24d5b82c5a7a13dbeba07282520a40`.
 
-PM-03 Datum and all later Part-v1 packages remain separately gated by their own accepted Work Contracts.
+Completion authorizes only the delivered Body Semantic Topology / Face-Supported Sketch vertical slice; PM-02 production mutation is closed.
+
+PM-03 Datum and all later Part-v1 packages remain separately gated by their own accepted Work Contracts. Completion does not activate PM-03.
 
 Projection remains separate and inactive.

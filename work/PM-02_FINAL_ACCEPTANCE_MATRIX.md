@@ -1,6 +1,6 @@
 # PM-02 — Final Acceptance Matrix
 
-**Status:** POST-REMEDIATION AUTOMATED + DOCS PASS; OWNER WINDOWS RE-TEST PENDING  
+**Status:** COMPLETED — PASS  
 **Work Contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Final post-remediation runtime candidate:** `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`  
 **Final post-remediation runtime gate:** Windows FULL #1473 — PASS  
@@ -12,7 +12,7 @@
 **Post-remediation documentation candidate:** `1dbaef95b2ea48f8e529425a154b795984d6551f`  
 **Post-remediation documentation gate:** Windows DOCS #1474 — PASS (`.\\ss2.ps1 docs` zero diff)  
 **Merged post-remediation documentation main:** `bdb718f292f1432e1156219edfa664b1a8aab92c`  
-**Owner Windows manual acceptance:** initial FAIL on 2026-10-05; automated remediation PASS; re-test PENDING — see `work/PM-02J_MANUAL_ACCEPTANCE_REMEDIATION.md`
+**Owner Windows manual acceptance:** initial FAIL on 2026-10-05; automated remediation PASS; post-remediation re-test PASS on 2026-10-05 — see `work/PM-02J_MANUAL_ACCEPTANCE_REMEDIATION.md`
 
 ## 1. Gate interpretation
 
@@ -133,15 +133,15 @@ PM-02 completion still requires:
 - canonical internal + PL/EN remediation documentation — **PASS**, exact `1dbaef95b2ea48f8e529425a154b795984d6551f`.
 - Product Browser regeneration via `.\ss2.ps1 docs` — **PASS**, Windows DOCS #1474 with zero generated diff.
 - J-R6 automated/docs readiness bookkeeping — **PASS**, merged through #231.
-- Owner Windows re-test — **PENDING**; this is the sole remaining PM-02 completion gate.
+- Owner Windows re-test — **PASS** on 2026-10-05; all PM-02 acceptance gates are satisfied.
 
 ## 5. Owner Windows manual workflow
 
 **2026-10-05 initial result:** FAIL.  
 **J-R2..J-R5 automated remediation:** PASS through Windows FULL #1473.  
-**Owner Windows re-test:** PENDING.
+**Owner Windows re-test:** PASS on 2026-10-05.
 
-Blocking/manual findings include unstable or absent topology preselection/candidate cycling, unstable ordinary pick in one box orientation, stage-incorrect face-supported Sketch Edit presentation after downstream Extrude, and coplanar Add Surface/partition behavior that can block Sketch support. User-facing Create Sketch labeling and a reproducible top-level window resize also require remediation before the next Owner PASS.
+The initial blocking/manual findings were remediated through J-R2..J-R5 and the Owner confirmed the focused post-remediation workflow PASS, including topology preselection/candidate cycling and ordinary pick stability, stage-correct face-supported Sketch Edit after downstream Extrude, coplanar Add Surface continuation/partition-edge behavior, Create Sketch / Apply Support labels and top-level window-size containment.
 
 Detailed authority: `work/PM-02J_MANUAL_ACCEPTANCE_REMEDIATION.md`.
 
@@ -168,16 +168,13 @@ Run on the final accepted Windows build. Record PASS/FAIL for each step.
 17. Undo and Redo the support lifecycle.
 18. Save, close, reopen; verify the semantic support, stable authored IDs and Add/Cut chain reconstruct correctly.
 
-**Owner result:** PENDING  
-**Owner date:** PENDING  
-**Owner notes:** PENDING
+**Owner result:** PASS  
+**Owner date:** 2026-10-05  
+**Owner-tested main:** `d8d73e213f24d5b82c5a7a13dbeba07282520a40`  
+**Owner notes:** All requested post-remediation manual checks passed. Runtime authority remains exact candidate `b9e70c684c2d054da21662ef3a8ae56ac59f60c0` / Windows FULL #1473; docs authority remains `1dbaef95b2ea48f8e529425a154b795984d6551f` / Windows DOCS #1474; bookkeeping #1476 PASS. No PM-02 blocker remains open at closure.
 
 ## 6. Completion rule
 
-Do not mark PM-02 completed and do not activate PM-03 until:
+PM-02 acceptance is satisfied: canonical docs/generated Browser are verified, runtime/docs/bookkeeping gates pass and the Owner recorded manual Windows PASS on 2026-10-05.
 
-- canonical docs and generated Browser are verified;
-- final docs/closure gate passes;
-- the Owner records manual Windows **PASS** for the workflow above.
-
-PM-03 Datum Reference Geometry and Projection remain inactive until that closure.
+PM-02 is COMPLETED — PASS. PM-03 Datum Reference Geometry and Projection remain inactive; PM-03 requires a separate bounded Work Contract and explicit Owner acceptance.
