@@ -58,22 +58,42 @@ kernelOperation(
         : kernel::SolidBooleanOperation::add;
 }
 
-} // namespace
-
-std::optional<kernel::LinearExtrudeInput>
-makeKernelExtrudeInput(
-    const PartDocument& document,
-    const ExtrudeFeature& feature) {
-    auto profile =
-        makeKernelProfileInput(
-            document,
-            feature.profile_id);
-    if (!profile) {
-        return std::nullopt;
+[[nodiscard]] FeatureEvaluationDiagnosticCode
+diagnosticForProfileMaterialization(
+    ProfileKernelInputStatus status) noexcept {
+    switch (status) {
+    case ProfileKernelInputStatus::resolved:
+        return FeatureEvaluationDiagnosticCode::none;
+    case ProfileKernelInputStatus::missing_profile:
+        return FeatureEvaluationDiagnosticCode::
+            missing_profile;
+    case ProfileKernelInputStatus::missing_source_sketch:
+    case ProfileKernelInputStatus::unresolved_profile:
+        return FeatureEvaluationDiagnosticCode::
+            unresolved_profile;
+    case ProfileKernelInputStatus::support_missing:
+        return FeatureEvaluationDiagnosticCode::
+            sketch_support_missing;
+    case ProfileKernelInputStatus::support_ambiguous:
+        return FeatureEvaluationDiagnosticCode::
+            sketch_support_ambiguous;
+    case ProfileKernelInputStatus::support_unsupported:
+        return FeatureEvaluationDiagnosticCode::
+            sketch_support_unsupported;
+    case ProfileKernelInputStatus::invalid_input:
+        return FeatureEvaluationDiagnosticCode::
+            kernel_invalid_input;
     }
+    return FeatureEvaluationDiagnosticCode::
+        kernel_invalid_input;
+}
 
+[[nodiscard]] std::optional<kernel::LinearExtrudeInput>
+makeKernelExtrudeInputFromProfile(
+    kernel::PlanarProfileInput profile,
+    const ExtrudeFeature& feature) {
     kernel::LinearExtrudeInput result;
-    result.profile = std::move(*profile);
+    result.profile = std::move(profile);
     result.operation =
         kernelOperation(feature.operation);
 
@@ -134,6 +154,28 @@ makeKernelExtrudeInput(
               kernel::LinearExtrudeInput>{
               std::move(result)}
         : std::nullopt;
+}
+
+} // namespace
+
+std::optional<kernel::LinearExtrudeInput>
+makeKernelExtrudeInput(
+    const PartDocument& document,
+    const ExtrudeFeature& feature,
+    const BodyStageTopologyCatalog*
+        support_topology) {
+    auto profile =
+        resolveKernelProfileInput(
+            document,
+            feature.profile_id,
+            support_topology);
+    if (!profile.ok()) {
+        return std::nullopt;
+    }
+
+    return makeKernelExtrudeInputFromProfile(
+        std::move(*profile.input),
+        feature);
 }
 
 namespace {
