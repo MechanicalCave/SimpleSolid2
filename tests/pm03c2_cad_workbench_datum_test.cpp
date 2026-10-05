@@ -259,7 +259,7 @@ int main(int argc, char* argv[]) {
     CHECK(
         constructor->currentText() ==
         QStringLiteral("Offset"));
-    CHECK(!datum_panel->isVisible());
+    CHECK(datum_panel->isHidden());
 
     const auto undo_before =
         session.undoDepth();
@@ -271,7 +271,7 @@ int main(int argc, char* argv[]) {
             workbench.cadInputContextGeneration());
     CHECK(result.accepted);
     CHECK(datum_button->isChecked());
-    CHECK(datum_panel->isVisible());
+    CHECK(!datum_panel->isHidden());
     CHECK(
         workbench.cadInputPrompt().find(
             "DATUM PLANE") !=
@@ -378,7 +378,7 @@ int main(int argc, char* argv[]) {
             "DATUMPLANE",
             workbench.cadInputContextGeneration());
     CHECK(result.accepted);
-    CHECK(datum_panel->isVisible());
+    CHECK(!datum_panel->isHidden());
     CHECK(
         source->text().contains(
             QStringLiteral("XY Plane")));
