@@ -23,6 +23,194 @@ constexpr viewer::Vec3 zAxis{0.0, 0.0, 1.0};
 constexpr double axisExtent = 45.0;
 constexpr double planeExtent = 35.0;
 constexpr double pointExtent = 3.0;
+constexpr double datumIntersectionEpsilon = 1.0e-8;
+
+[[nodiscard]] viewer::Point3 viewerPoint(
+    const kernel::Point3& point) noexcept {
+    return {point.x, point.y, point.z};
+}
+
+[[nodiscard]] viewer::Vec3 viewerVector(
+    const kernel::Point3& vector) noexcept {
+    return {vector.x, vector.y, vector.z};
+}
+
+[[nodiscard]] double datumPlaneSignedDistance(
+    const viewer::Point3& point,
+    const kernel::Frame3& frame) noexcept {
+    return
+        (point.x - frame.origin.x) * frame.normal.x +
+        (point.y - frame.origin.y) * frame.normal.y +
+        (point.z - frame.origin.z) * frame.normal.z;
+}
+
+[[nodiscard]] double pointDistanceSquared(
+    const viewer::Point3& left,
+    const viewer::Point3& right) noexcept {
+    const double dx = left.x - right.x;
+    const double dy = left.y - right.y;
+    const double dz = left.z - right.z;
+    return dx * dx + dy * dy + dz * dz;
+}
+
+[[nodiscard]] std::optional<
+    viewer::ReferenceLineSegmentPresentation>
+datumTriangleIntersection(
+    const viewer::SolidTrianglePresentation& triangle,
+    const kernel::Frame3& frame) noexcept {
+    if (!triangle.valid() || !frame.valid()) {
+        return std::nullopt;
+    }
+
+    const std::array<viewer::Point3, 3U> points{
+        triangle.first,
+        triangle.second,
+        triangle.third};
+    const std::array<double, 3U> distances{
+        datumPlaneSignedDistance(points[0], frame),
+        datumPlaneSignedDistance(points[1], frame),
+        datumPlaneSignedDistance(points[2], frame)};
+
+    const bool all_on_plane =
+        std::all_of(
+            distances.begin(),
+            distances.end(),
+            [](double value) {
+                return std::abs(value) <=
+                       datumIntersectionEpsilon;
+            });
+    if (all_on_plane) {
+        // Coplanar area has no unique line intersection. Do not invent
+        // presentation geometry from provider triangulation.
+        return std::nullopt;
+    }
+
+    std::array<viewer::Point3, 6U> candidates{};
+    std::size_t candidate_count = 0U;
+    const auto append_unique =
+        [&candidates, &candidate_count](
+            viewer::Point3 point) {
+            constexpr double epsilon_squared =
+                datumIntersectionEpsilon *
+                datumIntersectionEpsilon;
+            for (std::size_t index = 0U;
+                 index < candidate_count;
+                 ++index) {
+                if (pointDistanceSquared(
+                        candidates[index],
+                        point) <= epsilon_squared) {
+                    return;
+                }
+            }
+            if (candidate_count < candidates.size()) {
+                candidates[candidate_count++] = point;
+            }
+        };
+
+    for (std::size_t index = 0U;
+         index < points.size();
+         ++index) {
+        if (std::abs(distances[index]) <=
+            datumIntersectionEpsilon) {
+            append_unique(points[index]);
+        }
+    }
+
+    constexpr std::array<
+        std::pair<std::size_t, std::size_t>,
+        3U>
+        edges{{
+            {0U, 1U},
+            {1U, 2U},
+            {2U, 0U},
+        }};
+    for (const auto [first, second] : edges) {
+        const double first_distance =
+            distances[first];
+        const double second_distance =
+            distances[second];
+        if ((first_distance <
+                 -datumIntersectionEpsilon &&
+             second_distance >
+                 datumIntersectionEpsilon) ||
+            (first_distance >
+                 datumIntersectionEpsilon &&
+             second_distance <
+                 -datumIntersectionEpsilon)) {
+            const double denominator =
+                first_distance - second_distance;
+            if (std::abs(denominator) <=
+                datumIntersectionEpsilon) {
+                continue;
+            }
+            const double parameter =
+                first_distance / denominator;
+            append_unique(
+                {
+                    points[first].x +
+                        (points[second].x -
+                         points[first].x) *
+                            parameter,
+                    points[first].y +
+                        (points[second].y -
+                         points[first].y) *
+                            parameter,
+                    points[first].z +
+                        (points[second].z -
+                         points[first].z) *
+                            parameter,
+                });
+        }
+    }
+
+    if (candidate_count != 2U ||
+        pointDistanceSquared(
+            candidates[0],
+            candidates[1]) <=
+            datumIntersectionEpsilon *
+                datumIntersectionEpsilon) {
+        return std::nullopt;
+    }
+
+    viewer::ReferenceLineSegmentPresentation
+        result{
+            candidates[0],
+            candidates[1]};
+    return result.valid()
+        ? std::optional<
+              viewer::ReferenceLineSegmentPresentation>{
+              result}
+        : std::nullopt;
+}
+
+[[nodiscard]] std::vector<
+    viewer::ReferenceLineSegmentPresentation>
+datumBodyIntersection(
+    const viewer::BodyScene& body,
+    const kernel::Frame3& frame) {
+    std::vector<
+        viewer::ReferenceLineSegmentPresentation>
+        result;
+    if (!body.valid() ||
+        body.empty() ||
+        body.purpose !=
+            viewer::BodyScenePurpose::current_body ||
+        !frame.valid()) {
+        return result;
+    }
+
+    result.reserve(body.triangles.size());
+    for (const auto& triangle : body.triangles) {
+        const auto segment =
+            datumTriangleIntersection(
+                triangle,
+                frame);
+        if (segment) {
+            result.push_back(*segment);
+        }
+    }
+    return result;
+}
 
 
 [[nodiscard]] std::optional<viewer::SolidScene>
@@ -572,9 +760,11 @@ void PartViewportController::setSolidModelingKernel(
         modeling_kernel;
     body_scene_revision_.reset();
     body_scene_cache_.reset();
+    datum_evaluation_cache_.reset();
     body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
     body_topology_bindings_.clear();
+    datum_bindings_.clear();
     clearBodyTopologyPreselection();
     clearBodyTopologySelection();
     if (had_body_selection) {
@@ -599,10 +789,12 @@ void PartViewportController::setDocumentSession(
                 select_pick_box;
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
+        datum_bindings_.clear();
         transient_profile_reveal_.reset();
         transient_profile_hide_.reset();
         body_scene_revision_.reset();
         body_scene_cache_.reset();
+        datum_evaluation_cache_.reset();
         body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
@@ -636,10 +828,12 @@ void PartViewportController::clear() {
             select_pick_box;
     sketch_entity_bindings_.clear();
     profile_bindings_.clear();
+    datum_bindings_.clear();
     transient_profile_reveal_.reset();
     transient_profile_hide_.reset();
     body_scene_revision_.reset();
     body_scene_cache_.reset();
+    datum_evaluation_cache_.reset();
     body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
     body_topology_bindings_.clear();
@@ -703,8 +897,10 @@ void PartViewportController::refreshPresentation() {
     if (session_ == nullptr) {
         sketch_entity_bindings_.clear();
         profile_bindings_.clear();
+        datum_bindings_.clear();
         body_scene_revision_.reset();
         body_scene_cache_.reset();
+        datum_evaluation_cache_.reset();
         body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
@@ -774,9 +970,17 @@ void PartViewportController::refreshPresentation() {
             : viewport_->setBodyTopologyOverlayScene(
                   viewer::BodyTopologyOverlayScene{});
 
+    const auto reference_scene =
+        buildReferenceScene();
     const bool reference_ok =
+        reference_scene.has_value() &&
         viewport_->setReferenceScene(
-            buildReferenceScene());
+            *reference_scene);
+    if (!reference_scene) {
+        static_cast<void>(
+            viewport_->setReferenceScene(
+                viewer::ReferenceScene{}));
+    }
 
     const auto profile_scene =
         buildProfileScene();
@@ -1744,6 +1948,32 @@ PartViewportController::profilePresentationFor(
     return std::nullopt;
 }
 
+std::optional<part::DatumId>
+PartViewportController::datumFor(
+    viewer::PresentationToken token) const {
+    if (!token.valid()) return std::nullopt;
+    const auto found =
+        datum_bindings_.find(token.value);
+    return found == datum_bindings_.end()
+        ? std::nullopt
+        : std::optional<part::DatumId>{
+              found->second};
+}
+
+std::optional<viewer::PresentationToken>
+PartViewportController::datumPresentationFor(
+    part::DatumId datum_id) const {
+    if (!datum_id.valid()) return std::nullopt;
+    for (const auto& [token, id] :
+         datum_bindings_) {
+        if (id == datum_id) {
+            return viewer::PresentationToken{
+                token};
+        }
+    }
+    return std::nullopt;
+}
+
 void PartViewportController::setProfileSelectionFromTree(
     const std::vector<part::ProfileId>& selected,
     std::optional<part::ProfileId> primary) {
@@ -1758,10 +1988,12 @@ void PartViewportController::setProfileSelectionFromTree(
             *primary) != selected.end()) {
         selection.primary_profile = primary;
         selection.primary.reset();
+        selection.primary_datum.reset();
     } else if (!selected.empty()) {
         selection.primary_profile =
             selected.front();
         selection.primary.reset();
+        selection.primary_datum.reset();
     } else {
         selection.primary_profile.reset();
     }
@@ -1840,6 +2072,7 @@ bool PartViewportController::projectSketchEntitySelection(
         presentation.selected.reserve(
             reference_selection->selected.size() +
             reference_selection->profiles.size() +
+            reference_selection->datums.size() +
             selected.size());
 
         for (const auto role :
@@ -1857,7 +2090,20 @@ bool PartViewportController::projectSketchEntitySelection(
             }
         }
 
-        if (reference_selection->primary_profile) {
+        for (const auto datum_id :
+             reference_selection->datums) {
+            const auto token =
+                datumPresentationFor(datum_id);
+            if (token) {
+                presentation.selected.push_back(*token);
+            }
+        }
+
+        if (reference_selection->primary_datum) {
+            presentation.primary =
+                datumPresentationFor(
+                    *reference_selection->primary_datum);
+        } else if (reference_selection->primary_profile) {
             presentation.primary =
                 profilePresentationFor(
                     *reference_selection->primary_profile);
@@ -2826,8 +3072,10 @@ PartViewportController::sketchPointToWorld(
         point);
 }
 
-viewer::ReferenceScene
-PartViewportController::buildReferenceScene() const {
+std::optional<viewer::ReferenceScene>
+PartViewportController::buildReferenceScene() {
+    datum_bindings_.clear();
+
     viewer::ReferenceScene scene;
     if (session_ == nullptr) return scene;
 
@@ -2876,6 +3124,95 @@ PartViewportController::buildReferenceScene() const {
                     .builtinReferenceVisible(role)));
     }
 
+    const auto& datums =
+        session_->document().datumPlanes();
+    if (datums.empty()) {
+        return scene;
+    }
+
+    if (!datum_evaluation_cache_ ||
+        datum_evaluation_cache_->source_revision !=
+            session_->document().revision() ||
+        datum_evaluation_cache_->planes.size() !=
+            datums.size()) {
+        return std::nullopt;
+    }
+
+    for (const auto& datum : datums) {
+        const auto* evaluation =
+            datum_evaluation_cache_->find(
+                datum.id);
+        if (evaluation == nullptr) {
+            datum_bindings_.clear();
+            return std::nullopt;
+        }
+
+        if (!datum.visible ||
+            evaluation->status !=
+                part::DatumPlaneEvaluationStatus::
+                    resolved ||
+            !evaluation->frame) {
+            continue;
+        }
+
+        const auto token =
+            allocatePresentationToken();
+        if (!token ||
+            !datum_bindings_
+                 .emplace(
+                     token->value,
+                     datum.id)
+                 .second) {
+            datum_bindings_.clear();
+            return std::nullopt;
+        }
+
+        const auto& frame =
+            *evaluation->frame;
+        viewer::ReferencePresentation
+            reference;
+        reference.token = *token;
+        reference.kind =
+            viewer::ReferencePresentationKind::
+                datum_plane;
+        reference.origin =
+            viewerPoint(frame.origin);
+        reference.u_axis =
+            viewerVector(frame.u_axis);
+        reference.v_axis =
+            viewerVector(frame.v_axis);
+        reference.extent = planeExtent;
+        reference.visible = true;
+        if (!reference.valid()) {
+            datum_bindings_.clear();
+            return std::nullopt;
+        }
+        scene.references.push_back(
+            std::move(reference));
+
+        if (body_scene_cache_ &&
+            body_scene_cache_->purpose ==
+                viewer::BodyScenePurpose::
+                    current_body &&
+            !body_scene_cache_->empty()) {
+            auto segments =
+                datumBodyIntersection(
+                    *body_scene_cache_,
+                    frame);
+            if (!segments.empty()) {
+                scene.overlays.push_back(
+                    viewer::
+                        ReferenceOwnedLineOverlay{
+                            *token,
+                            std::move(segments)});
+            }
+        }
+    }
+
+    if (!scene.valid()) {
+        datum_bindings_.clear();
+        return std::nullopt;
+    }
     return scene;
 }
 
@@ -2906,6 +3243,7 @@ PartViewportController::buildBodyScene() {
         solid_modeling_kernel_ == nullptr) {
         body_scene_revision_.reset();
         body_scene_cache_.reset();
+        datum_evaluation_cache_.reset();
         body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
         body_topology_bindings_.clear();
@@ -2916,7 +3254,10 @@ PartViewportController::buildBodyScene() {
         session_->document().revision();
     if (body_scene_revision_ &&
         *body_scene_revision_ == revision &&
-        body_scene_cache_) {
+        body_scene_cache_ &&
+        datum_evaluation_cache_ &&
+        datum_evaluation_cache_->
+                source_revision == revision) {
         return *body_scene_cache_;
     }
 
@@ -2925,6 +3266,7 @@ PartViewportController::buildBodyScene() {
             -> std::optional<viewer::BodyScene> {
             body_scene_revision_.reset();
             body_scene_cache_.reset();
+            datum_evaluation_cache_.reset();
             body_topology_catalog_cache_.reset();
         body_stage_topology_catalogs_cache_.clear();
             body_topology_bindings_.clear();
@@ -2936,6 +3278,18 @@ PartViewportController::buildBodyScene() {
         part::evaluatePart(
             session_->document(),
             *solid_modeling_kernel_);
+    const auto datum_evaluation =
+        part::evaluateDatums(
+            session_->document(),
+            evaluation);
+    if (datum_evaluation.source_revision !=
+            revision ||
+        datum_evaluation.planes.size() !=
+            session_->document()
+                .datumPlanes()
+                .size()) {
+        return fail();
+    }
 
     std::vector<part::BodyStageTopologyCatalog>
         stage_topologies;
@@ -2989,6 +3343,8 @@ PartViewportController::buildBodyScene() {
         clear_stale_body_selection();
         body_scene_revision_ = revision;
         body_scene_cache_ = empty_scene;
+        datum_evaluation_cache_ =
+            datum_evaluation;
         return *body_scene_cache_;
     }
     if (topology == nullptr ||
@@ -3189,6 +3545,8 @@ PartViewportController::buildBodyScene() {
     clear_stale_body_selection();
     body_scene_revision_ = revision;
     body_scene_cache_ = scene;
+    datum_evaluation_cache_ =
+        datum_evaluation;
     body_topology_catalog_cache_ = *topology;
     body_stage_topology_catalogs_cache_ =
         std::move(stage_topologies);
@@ -3471,6 +3829,8 @@ void PartViewportController::onTreeSelection(
     selection.primary_body_topology.reset();
     selection.body_topology_generation = {};
     selection.selected = selected;
+    selection.datums.clear();
+    selection.primary_datum.reset();
     selection.profiles =
         tree_->selectedProfileIds();
 
@@ -3525,9 +3885,52 @@ void PartViewportController::onViewportIntent(
         selection.primary.reset();
         selection.profiles.clear();
         selection.primary_profile.reset();
+        selection.datums.clear();
+        selection.primary_datum.reset();
         selection.body_topology.clear();
         selection.primary_body_topology.reset();
         selection.body_topology_generation = {};
+        applySelectionToSurfaces();
+        notifySelectionChanged();
+        return;
+    }
+
+    if (const auto datum =
+            datumFor(intent.token)) {
+        if (intent.mode ==
+            viewer::SelectionIntentMode::replace) {
+            selection.selected.clear();
+            selection.primary.reset();
+            selection.profiles.clear();
+            selection.primary_profile.reset();
+            selection.body_topology.clear();
+            selection.primary_body_topology.reset();
+            selection.body_topology_generation = {};
+            selection.datums = {*datum};
+            selection.primary_datum = *datum;
+        } else {
+            const auto found =
+                std::find(
+                    selection.datums.begin(),
+                    selection.datums.end(),
+                    *datum);
+            if (found == selection.datums.end()) {
+                selection.datums.push_back(*datum);
+                selection.primary_datum = *datum;
+                selection.primary.reset();
+                selection.primary_profile.reset();
+            } else {
+                selection.datums.erase(found);
+                if (selection.primary_datum &&
+                    *selection.primary_datum == *datum) {
+                    selection.primary_datum =
+                        selection.datums.empty()
+                            ? std::nullopt
+                            : std::optional<part::DatumId>{
+                                  selection.datums.back()};
+                }
+            }
+        }
         applySelectionToSurfaces();
         notifySelectionChanged();
         return;
@@ -3539,6 +3942,8 @@ void PartViewportController::onViewportIntent(
             viewer::SelectionIntentMode::replace) {
             selection.selected.clear();
             selection.primary.reset();
+            selection.datums.clear();
+            selection.primary_datum.reset();
             selection.body_topology.clear();
             selection.primary_body_topology.reset();
             selection.body_topology_generation = {};
@@ -3554,6 +3959,7 @@ void PartViewportController::onViewportIntent(
                 selection.profiles.push_back(*profile);
                 selection.primary_profile = *profile;
                 selection.primary.reset();
+                selection.primary_datum.reset();
             } else {
                 selection.profiles.erase(found);
                 if (selection.primary_profile &&
@@ -3578,6 +3984,8 @@ void PartViewportController::onViewportIntent(
         viewer::SelectionIntentMode::replace) {
         selection.profiles.clear();
         selection.primary_profile.reset();
+        selection.datums.clear();
+        selection.primary_datum.reset();
         selection.body_topology.clear();
         selection.primary_body_topology.reset();
         selection.body_topology_generation = {};
@@ -3593,6 +4001,7 @@ void PartViewportController::onViewportIntent(
             selection.selected.push_back(*role);
             selection.primary = *role;
             selection.primary_profile.reset();
+            selection.primary_datum.reset();
         } else {
             selection.selected.erase(found);
             if (selection.primary &&
@@ -4001,6 +4410,8 @@ void PartViewportController::onBodyTopologyIntent(
     selection.primary.reset();
     selection.profiles.clear();
     selection.primary_profile.reset();
+    selection.datums.clear();
+    selection.primary_datum.reset();
 
     if (mode ==
         viewer::SelectionIntentMode::replace) {
@@ -4119,6 +4530,7 @@ void PartViewportController::applySelectionToSurfaces() {
     presentation.selected.reserve(
         selection.selected.size() +
         selection.profiles.size() +
+        selection.datums.size() +
         selection.body_topology.size());
 
     for (const auto role : selection.selected) {
@@ -4130,6 +4542,15 @@ void PartViewportController::applySelectionToSurfaces() {
          selection.profiles) {
         const auto token =
             profilePresentationFor(profile_id);
+        if (token) {
+            presentation.selected.push_back(*token);
+        }
+    }
+
+    for (const auto datum_id :
+         selection.datums) {
+        const auto token =
+            datumPresentationFor(datum_id);
         if (token) {
             presentation.selected.push_back(*token);
         }
@@ -4159,6 +4580,10 @@ void PartViewportController::applySelectionToSurfaces() {
             selection.body_topology_generation) {
         presentation.primary =
             selection.primary_body_topology;
+    } else if (selection.primary_datum) {
+        presentation.primary =
+            datumPresentationFor(
+                *selection.primary_datum);
     } else if (selection.primary_profile) {
         presentation.primary =
             profilePresentationFor(
@@ -4221,6 +4646,18 @@ void PartViewportController::notifySelectionChanged() {
             profile_selection_changed_handler_(
                 selection->profiles,
                 selection->primary_profile);
+        }
+    }
+
+    if (datum_selection_changed_handler_) {
+        if (selection == nullptr) {
+            datum_selection_changed_handler_(
+                {},
+                std::nullopt);
+        } else {
+            datum_selection_changed_handler_(
+                selection->datums,
+                selection->primary_datum);
         }
     }
 

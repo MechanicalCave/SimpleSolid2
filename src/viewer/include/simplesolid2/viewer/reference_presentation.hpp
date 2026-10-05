@@ -2,6 +2,7 @@
 
 #include <simplesolid2/viewer/math3.hpp>
 
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <optional>
@@ -27,6 +28,7 @@ enum class ReferencePresentationKind : std::uint8_t {
     y_axis,
     z_axis,
     plane,
+    datum_plane,
 };
 
 enum class PresentationRole : std::uint8_t {
@@ -63,7 +65,8 @@ struct ReferencePresentation final {
             return false;
         }
 
-        if (kind != ReferencePresentationKind::plane) {
+        if (kind != ReferencePresentationKind::plane &&
+            kind != ReferencePresentationKind::datum_plane) {
             return true;
         }
 
@@ -74,6 +77,46 @@ struct ReferencePresentation final {
 
         return cross(u_axis, v_axis).squaredLength() > 1.0e-24;
     }
+};
+
+struct ReferenceLineSegmentPresentation final {
+    Point3 first;
+    Point3 second;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return finite(first) &&
+               finite(second) &&
+               first != second;
+    }
+
+    friend bool operator==(
+        const ReferenceLineSegmentPresentation&,
+        const ReferenceLineSegmentPresentation&) = default;
+};
+
+// Presentation-only geometry owned by one ReferencePresentation. It has no
+// presentation token or semantic identity of its own: provider picking must
+// resolve every rendered segment to owner. This is the PM-03D boundary that
+// prevents a Datum/Body intersection cue from becoming Edge/Curve authority.
+struct ReferenceOwnedLineOverlay final {
+    PresentationToken owner;
+    std::vector<ReferenceLineSegmentPresentation>
+        segments;
+
+    [[nodiscard]] bool valid() const noexcept {
+        return owner.valid() &&
+               !segments.empty() &&
+               std::all_of(
+                   segments.begin(),
+                   segments.end(),
+                   [](const auto& segment) {
+                       return segment.valid();
+                   });
+    }
+
+    friend bool operator==(
+        const ReferenceOwnedLineOverlay&,
+        const ReferenceOwnedLineOverlay&) = default;
 };
 
 struct GridPresentation final {
@@ -103,6 +146,7 @@ struct GridPresentation final {
 
 struct ReferenceScene final {
     std::vector<ReferencePresentation> references;
+    std::vector<ReferenceOwnedLineOverlay> overlays;
     std::optional<GridPresentation> grid;
 
     [[nodiscard]] bool valid() const noexcept {
@@ -122,6 +166,39 @@ struct ReferenceScene final {
                  ++right) {
                 if (references[left].token ==
                     references[right].token) {
+                    return false;
+                }
+            }
+        }
+
+        for (std::size_t index = 0U;
+             index < overlays.size();
+             ++index) {
+            const auto& overlay = overlays[index];
+            if (!overlay.valid()) {
+                return false;
+            }
+
+            const auto owner =
+                std::find_if(
+                    references.begin(),
+                    references.end(),
+                    [&overlay](const auto& reference) {
+                        return reference.token ==
+                               overlay.owner;
+                    });
+            if (owner == references.end() ||
+                owner->kind !=
+                    ReferencePresentationKind::datum_plane ||
+                !owner->visible) {
+                return false;
+            }
+
+            for (std::size_t other = index + 1U;
+                 other < overlays.size();
+                 ++other) {
+                if (overlays[other].owner ==
+                    overlay.owner) {
                     return false;
                 }
             }

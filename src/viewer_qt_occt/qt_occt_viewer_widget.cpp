@@ -164,6 +164,7 @@ void logProviderFailure(
     const viewer::ReferenceScene& right) noexcept {
     if (left.references.size() !=
             right.references.size() ||
+        left.overlays != right.overlays ||
         left.grid.has_value() !=
             right.grid.has_value()) {
         return false;
@@ -1590,7 +1591,36 @@ public:
                         reference.kind,
                         object});
                 context_->Display(object, false);
+            }
 
+            for (const auto& overlay : scene.overlays) {
+                for (const auto& segment :
+                     overlay.segments) {
+                    Handle(Geom_CartesianPoint) first =
+                        new Geom_CartesianPoint(
+                            toPoint(segment.first));
+                    Handle(Geom_CartesianPoint) second =
+                        new Geom_CartesianPoint(
+                            toPoint(segment.second));
+                    Handle(AIS_Line) object =
+                        new AIS_Line(first, second);
+                    if (object.IsNull()) {
+                        clearReferenceScene();
+                        return false;
+                    }
+
+                    // The virtual intersection has no independent semantic
+                    // identity. Provider picking resolves it to the owning
+                    // Datum Plane PresentationToken.
+                    reference_objects_.push_back(
+                        ReferenceObject{
+                            overlay.owner,
+                            viewer::ReferencePresentationKind::
+                                datum_plane,
+                            object,
+                            true});
+                    context_->Display(object, false);
+                }
             }
 
             applySelectionStyles();
@@ -4537,6 +4567,7 @@ public:
         viewer::PresentationToken token;
         viewer::ReferencePresentationKind kind;
         Handle(AIS_InteractiveObject) object;
+        bool owned_overlay{false};
     };
 
     struct SketchObject final {
@@ -4705,6 +4736,8 @@ public:
             return Quantity_Color{0.28, 0.48, 0.92, Quantity_TOC_RGB};
         case viewer::ReferencePresentationKind::plane:
             return Quantity_Color{0.42, 0.58, 0.82, Quantity_TOC_RGB};
+        case viewer::ReferencePresentationKind::datum_plane:
+            return Quantity_Color{0.30, 0.72, 0.88, Quantity_TOC_RGB};
         case viewer::ReferencePresentationKind::point:
             return Quantity_Color{0.92, 0.92, 0.92, Quantity_TOC_RGB};
         }
@@ -4726,7 +4759,10 @@ public:
         if (!u) return {};
 
         if (reference.kind !=
-            viewer::ReferencePresentationKind::plane) {
+                viewer::ReferencePresentationKind::plane &&
+            reference.kind !=
+                viewer::ReferencePresentationKind::
+                    datum_plane) {
             const auto offset = *u * reference.extent;
             Handle(Geom_CartesianPoint) start =
                 new Geom_CartesianPoint(
@@ -4765,6 +4801,12 @@ public:
             new AIS_Shape(face.Shape());
         object->Attributes()->SetShadingModel(
             Graphic3d_TOSM_UNLIT);
+        if (reference.kind ==
+            viewer::ReferencePresentationKind::
+                datum_plane) {
+            object->Attributes()->
+                SetFaceBoundaryDraw(Standard_True);
+        }
         return object;
     }
 
@@ -5627,7 +5669,11 @@ public:
                     : selected
                         ? Quantity_Color{
                               1.0, 0.63, 0.18, Quantity_TOC_RGB}
-                        : baseColor(entry.kind);
+                        : entry.owned_overlay
+                            ? Quantity_Color{
+                                  0.18, 0.92, 0.96,
+                                  Quantity_TOC_RGB}
+                            : baseColor(entry.kind);
 
             context_->SetColor(
                 entry.object,
@@ -5636,11 +5682,21 @@ public:
 
             context_->SetWidth(
                 entry.object,
-                primary ? 4.0 : (selected ? 3.0 : 1.8),
+                entry.owned_overlay
+                    ? (primary
+                           ? 4.2
+                           : (selected ? 3.4 : 2.4))
+                    : (primary
+                           ? 4.0
+                           : (selected ? 3.0 : 1.8)),
                 false);
 
-            if (entry.kind ==
-                viewer::ReferencePresentationKind::plane) {
+            if (!entry.owned_overlay &&
+                (entry.kind ==
+                     viewer::ReferencePresentationKind::plane ||
+                 entry.kind ==
+                     viewer::ReferencePresentationKind::
+                         datum_plane)) {
                 context_->SetTransparency(
                     entry.object,
                     primary ? 0.55 : (selected ? 0.68 : 0.82),
