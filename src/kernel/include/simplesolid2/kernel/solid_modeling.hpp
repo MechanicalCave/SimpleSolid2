@@ -204,6 +204,10 @@ struct CurrentEdgeSemanticObservation final {
     CurveKind provider_curve_kind{
         CurveKind::other};
     bool periodic_seam{false};
+    // True when this provider Edge only partitions two bounded Face
+    // realizations of one tracked semantic Surface carrier. Runtime-derived
+    // representation evidence only; never durable identity.
+    bool same_surface_partition{false};
     std::vector<RuntimeSurfaceToken>
         adjacent_surfaces;
 
@@ -348,6 +352,13 @@ struct NewSurfaceLineage final {
         resolved_token;
     std::vector<RuntimeFaceToken>
         current_faces;
+    // ADR-0017 runtime-only evidence. A created Add Surface may be absorbed
+    // into exactly one inherited carrier when Boolean lineage proves unique
+    // continuation. The created role then remains contribution evidence only.
+    std::optional<RuntimeSurfaceToken>
+        continued_into;
+    std::vector<RuntimeFaceToken>
+        contribution_faces;
 
     friend bool operator==(
         const NewSurfaceLineage&,
