@@ -84,6 +84,31 @@ int main() {
     scene.overlays = {overlay};
     CHECK(scene.valid());
 
+    ReferencePlanePreviewPresentation preview;
+    preview.origin = {0.0, 0.0, 10.0};
+    preview.u_axis = {1.0, 0.0, 0.0};
+    preview.v_axis = {0.0, 1.0, 0.0};
+    preview.extent = 40.0;
+    preview.intersection_segments.push_back(
+        {
+            {-4.0, 0.0, 10.0},
+            {4.0, 0.0, 10.0}});
+    CHECK(preview.valid());
+    scene.preview = preview;
+    CHECK(scene.valid());
+
+    auto invalid_preview = scene;
+    invalid_preview.preview->v_axis =
+        {2.0, 0.0, 0.0};
+    CHECK(!invalid_preview.valid());
+
+    auto invalid_preview_segment = scene;
+    invalid_preview_segment.preview->
+        intersection_segments.front().second =
+        invalid_preview_segment.preview->
+            intersection_segments.front().first;
+    CHECK(!invalid_preview_segment.valid());
+
     // Overlay ownership is semantic presentation ownership only: it must
     // resolve to one visible Datum Plane and may never introduce a second
     // token/identity.
