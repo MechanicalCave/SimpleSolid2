@@ -1,6 +1,6 @@
 # PM-02J — Owner Manual Acceptance Remediation
 
-**Status:** ACTIVE — OWNER MANUAL FAIL; REMEDIATION AUTHORIZED  
+**Status:** ACTIVE — AUTOMATED REMEDIATION PASS; OWNER WINDOWS RE-TEST PENDING  
 **Parent Work Contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Architecture authority:** ADR-0016 + ADR-0017  
 **Trigger:** Owner Windows manual acceptance on 2026-10-05  
@@ -46,6 +46,11 @@ Gate:
 
 ### J-R2 — Add Surface continuation + representation-partition Edge
 
+**State:** COMPLETED — PASS  
+**Final candidate:** `11c61bf9123f04bce55db3e211aa44812599b114`  
+**Windows FULL:** #1470 — PASS  
+**Merged main:** `bd5226a7d3cddc9743440295f02c9e2e87d6b4df`
+
 Scope:
 
 - production OCCT/Kernel lineage and Part topology only;
@@ -70,6 +75,11 @@ Required regressions:
 
 ### J-R3 — stage-correct face-Sketch Edit presentation
 
+**State:** COMPLETED — PASS  
+**Final candidate:** `77a924eb79578fc084403684471be0bbb4307f32`  
+**Windows FULL:** #1471 — PASS  
+**Merged main:** `7854302eb97896f88ae6229df52602dc1a70c297`
+
 Scope:
 
 - Viewer/UI derived placement only;
@@ -85,6 +95,11 @@ Gate:
 - Missing/Ambiguous support shows structured unavailable state, never stale last-good frame.
 
 ### J-R4 — topology hover/preselection / candidate cycling / ordinary pick
+
+**State:** COMPLETED — PASS  
+**Final candidate:** `ed455548cf8ea9d1a1f69c13fcfb369639228eac`  
+**Windows FULL:** #1472 — PASS  
+**Merged main:** `7a113ac07a568809160a2e956b723d3ffdf1fb1a`
 
 Scope:
 
@@ -104,6 +119,11 @@ Gate:
 
 ### J-R5 — bounded Sketch UX cleanup
 
+**State:** COMPLETED — PASS  
+**Final candidate:** `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`  
+**Windows FULL:** #1473 — PASS  
+**Merged main:** `7baf13b255f7e5a587a8caeffde19d0ab69434d0`
+
 Scope:
 
 - pending support action label is `Create Sketch`, not `Finish Sketch`;
@@ -119,10 +139,14 @@ Gate:
 
 ### J-R6 — consolidated automated gate + Owner re-test
 
-After J-R2..J-R5:
+**State:** ACTIVE — DOCS/READINESS UPDATE; OWNER RE-TEST PENDING
 
-- exact-head Windows FULL;
-- docs impact review and Product Browser regeneration if user-facing labels/behavior changed;
+J-R2..J-R5 are now complete. The post-remediation runtime candidate is `b9e70c684c2d054da21662ef3a8ae56ac59f60c0`, Windows FULL #1473 PASS; it includes the already-passed R2/R3/R4 runtime merges plus R5.
+
+Remaining J-R6 work:
+
+- canonical internal + PL/EN documentation update;
+- Product Browser regeneration and docs/closure verification;
 - repeat focused Owner Windows checks for manual items 2, 4, 9-15 and the window/label observations;
 - then repeat final PM-02 acceptance matrix as needed.
 

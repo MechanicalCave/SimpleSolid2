@@ -98,7 +98,7 @@ Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie i wyświetlanie Sketchu
 
-W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin lub bieżącą Face Body w viewporcie 3D. Podczas wyboru supportu Sketch viewport przyjmuje wyłącznie Face. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Sam wybór supportu pozostaje runtime draftem: **Finish Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu.
+W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin lub bieżącą Face Body w viewporcie 3D. Podczas wyboru supportu Sketch viewport przyjmuje wyłącznie Face. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Sam wybór supportu pozostaje runtime draftem: **Create Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu. Po utworzeniu Sketchu i wejściu w Edit ten sam obszar akcji zmienia się na **Finish Sketch**.
 
 Podczas Sketch Edit narzędzia są uporządkowane w grupy:
 
@@ -290,7 +290,7 @@ Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uru
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję.
 
-Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin lub planarną Face Body, a następnie Finish, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported albo powodujący cykl jest odrzucany bez częściowej mutacji. Undo/Redo przywraca poprzedni semantyczny support.
+Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin lub planarną Face Body, a następnie **Apply Support**, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported albo powodujący cykl jest odrzucany bez częściowej mutacji. Undo/Redo przywraca poprzedni semantyczny support.
 
 Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions i płaszczyzny Datum pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
 
@@ -465,7 +465,7 @@ Selektor View Style w viewport oferuje:
 - **Shaded + Edges**;
 - **Shaded + Hidden Edges**.
 
-View Style jest tymczasowym stanem prezentacji. Nie dirty'uje Parta, nie tworzy historii Undo/Redo i nie zmienia semantycznego zaznaczenia. Pokazanie hidden edges nie włącza wyboru przez zasłoniętą geometrię.
+View Style jest tymczasowym stanem prezentacji. Nie dirty'uje Parta, nie tworzy historii Undo/Redo i nie zmienia semantycznego zaznaczenia. Pokazanie hidden edges nie włącza wyboru przez zasłoniętą geometrię. Edge, która wyłącznie rozdziela bounded Face fragments należące do tego samego semantycznego Surface, jest representation partition: pozostaje w topology accounting, ale jest ukryta w normalnym inżynierskim wyświetlaniu krawędzi i ordinary picking.
 
 Przy zwykłym wyborze wszystkich typów widoczne kandydaty używają screen-space priority **Vertex → Edge → Face**. Gdy kilka kandydatów nakłada się pod kursorem, **Tab** i **Shift+Tab** przełączają runtime candidate stack przed kliknięciem. Widoczny preselection, który klikniesz, jest celem acquisition; kolejność zwrócona przez providera nie staje się CAD identity.
 
@@ -480,7 +480,7 @@ Bieżący element topologii może być **Present**, gdy trwała singular referen
 
 Zaznaczenie albo hover Feature w Document Tree podświetla jego **Current Feature Contribution** na bieżącym Body. Nie jest to podmiana Body na historyczny stage i nie tworzy duplikatów selectable topology. Gdy bezpośrednio wybrany element topologii znika po recompute, zaznaczenie jest czyszczone zamiast przeskakiwać na podobną geometrię.
 
-Sketch oparty na Face jest trwale związany z semantycznym planarnym **Surface**, nie z providerowym uchwytem Face. Jeśli późniejsze modelowanie rozdzieli ten Surface na kilka bounded Face fragments, Sketch może nadal pozostać Resolved. Gdy semantyczny support zostanie usunięty, stan przechodzi w **Missing**; gdy pozostaje wiele semantycznych kandydatów — w **Ambiguous**. Downstream modeling nie używa stale last-good frame. Do jawnej naprawy użyj Change Sketch Support / `RESUPPORT`.
+Sketch oparty na Face jest trwale związany z semantycznym planarnym **Surface**, nie z providerowym uchwytem Face. Jeśli późniejsze modelowanie rozdzieli ten Surface na kilka bounded Face fragments, Sketch może nadal pozostać Resolved. Współpłaszczyznowy Extrude Add może rozszerzyć istniejący carrier Surface wyłącznie wtedy, gdy Boolean lineage dowodzi jednoznacznej kontynuacji; sama współpłaszczyznowość nigdy nie przepina identity. Sztuczna partition Edge pomiędzy kontynuowanymi fragmentami nie jest granicą inżynierską. Ponowne wejście w Sketch Edit rozwiązuje prezentację względem dokładnego upstream Body stage zapisanego w support Sketchu, nawet gdy istnieją późniejsze Features. Gdy semantyczny support zostanie usunięty, stan przechodzi w **Missing**; gdy pozostaje wiele semantycznych kandydatów — w **Ambiguous**. Downstream modeling nie używa stale last-good frame. Do jawnej naprawy użyj Change Sketch Support / `RESUPPORT`.
 
 <!-- section-id: product.parts.navigation -->
 ## Nawigacja 3D i Navigation Cube
