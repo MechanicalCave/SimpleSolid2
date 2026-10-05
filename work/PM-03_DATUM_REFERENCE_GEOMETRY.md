@@ -349,7 +349,7 @@ PM-03 does not include:
 - global dependency graph;
 - Assembly or Drawing implementation.
 
-## 6. Public / architecture contract impact
+## Architecture impact
 
 This package deliberately proposes D2 changes in these bounded areas:
 
@@ -369,7 +369,20 @@ It does not change Foundation ownership:
 
 Owner acceptance of this exact Work Contract is required before implementation.
 
-## 7. Failure behavior
+## Public contract
+
+The proposed user-visible contract is intentionally narrow:
+
+- create one Offset Datum Plane from an Origin plane, resolved planar Body Surface or existing Datum Plane;
+- edit its signed offset/source while preserving DatumId;
+- show/hide and inspect current Datum status;
+- create/re-support Sketch on a resolved Datum Plane;
+- use the resulting Profile with the existing Extrude Add/Cut workflow;
+- receive explicit Missing/Ambiguous/Unsupported/Blocked failure instead of stale placement or guessed repair.
+
+No Datum Axis/Point or Projection surface is promised by this contract.
+
+## Failure behavior
 
 Fail closed.
 
@@ -393,7 +406,7 @@ If an already-authored Datum becomes unresolved after an upstream edit:
 - downstream Features become appropriately Blocked/unavailable;
 - repair occurs only through explicit source/edit/re-support commands.
 
-## 8. Proposed checkpoint sequence
+## Proposed checkpoint sequence
 
 ### PM-03A — semantic Datum foundation + schema
 
@@ -490,7 +503,7 @@ Close:
 - Product Browser regeneration;
 - supported Windows Owner workflow.
 
-## 9. Acceptance requirements
+## Acceptance
 
 PM-03 cannot complete without automated and manual evidence for at least:
 
@@ -524,7 +537,7 @@ PM-03 cannot complete without automated and manual evidence for at least:
 - semantic/core, kernel-native where applicable and desktop verification;
 - final Owner Windows manual workflow.
 
-## 10. Manual Windows acceptance themes
+## Manual Windows acceptance themes
 
 The final Owner workflow should cover:
 
@@ -544,7 +557,7 @@ The final Owner workflow should cover:
 14. Undo/Redo;
 15. Save, close, reopen and verify cold reconstruction.
 
-## 11. Documentation impact
+## Documentation impact
 
 Internal docs: required  
 User/Product docs: required  
@@ -557,7 +570,7 @@ Before completion:
 - Product Browser is regenerated from canonical Markdown;
 - deferred Datum Axis/Point must not be documented as implemented.
 
-## 12. STOP conditions
+## STOP conditions
 
 STOP and return to Owner review if implementation would require:
 
@@ -574,7 +587,7 @@ STOP and return to Owner review if implementation would require:
 - a new numerical tolerance policy that changes semantic success/failure outside already accepted PM-02 reference resolution;
 - a public dependency direction contrary to Architecture baseline.
 
-## 13. Activation and completion boundary
+## Activation and completion boundary
 
 This file is a proposal only.
 
