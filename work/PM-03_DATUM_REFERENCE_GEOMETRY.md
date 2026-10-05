@@ -1,12 +1,13 @@
 # PM-03 — Datum Reference Geometry / Offset Datum Plane
 
-**Status:** PROPOSED — NOT ACTIVE; OWNER D2 REVIEW REQUIRED  
+**Status:** OWNER ACCEPTED 2026-10-05 — NOT ACTIVE; GOVERNANCE ACTIVATION PENDING  
 **Decision class:** D2 production Work Contract candidate  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.17  
 **Architecture authority:** Constitution + Foundation + ADR-0014 + ADR-0016 + ADR-0017  
 **Entry gate:** PM-02 Body Semantic Topology / Face-Supported Sketch COMPLETED — PASS  
-**Production mutation:** NOT AUTHORIZED until explicit Owner acceptance and `work/ACTIVE.yaml` activation
+**Owner UI acceptance:** 2026-10-05 — single Datum Plane tool, Offset constructor, Extrude-style preview/default 10 mm, Command Line parity, intersection overlay, Reference Geometry tree grouping/visibility  
+**Production mutation:** NOT AUTHORIZED until `work/ACTIVE.yaml` activation passes its repository gate
 
 ## 1. Goal
 
@@ -260,41 +261,121 @@ This mirrors the existing support-producing Feature Delete safety direction from
 
 A future explicit Delete-with-dependents or dependency-repair workflow requires separate scope.
 
-### 4.11 UI / Tree / Properties
+### 4.11 Datum Plane tool / Operations panel
 
-PM-03 may add the minimum Part UI required for the accepted workflow.
+The product exposes one Part tool named **Datum Plane**.
 
-Expected product surface:
+`Offset` is the first constructor of that tool, not a separate user-facing tool type. Future accepted constructors extend the same Datum Plane tool/panel rather than creating unrelated workflows.
 
-- Reference Geometry action: Datum Plane;
-- selection-first or command-first source acquisition;
-- source can be Origin plane, planar Body Face/Surface or existing Datum Plane;
-- Operations panel exposes source, signed Offset and Finish/Cancel;
-- unit-aware Command Line input uses the same draft/semantic command;
-- Part tree exposes a Reference Geometry / Datum Plane item or equivalent clear Part-owned projection;
-- Properties exposes DatumId-facing user identity only through normal labels, constructor type, source meaning, offset, visibility and current evaluation status;
-- no provider/runtime token is shown as semantic identity.
+Both selection-first and command-first entry are required.
 
-Exact iconography/layout is D0/D1.
+Accepted source acquisition:
 
-### 4.12 Datum presentation and picking
+- Origin XY/XZ/YZ plane;
+- any uniquely resolved planar semantic Body Surface at its explicit `BodyStageRef`, acquired through the clicked bounded Face but persisted as `SurfaceReference`;
+- an existing resolved Datum Plane.
+
+The right Operations panel exposes at minimum:
+
+- **Constructor:** `Offset` (the only PM-03 value);
+- **Source:** current semantic source;
+- **Offset:** signed unit-aware length;
+- **Reverse:** convenience action that negates the signed Offset value; it is not independent authored state;
+- **Finish**;
+- **Cancel**.
+
+For a newly acquired valid source, the default draft Offset is **10 mm** in document unit-aware input semantics. This is draft/UI default only; it does not alter an existing Datum during edit.
+
+Tool interaction follows the established Extrude grammar:
+
+- valid source -> immediate transient preview;
+- changing Offset updates preview without authored mutation;
+- Reverse updates the same signed Offset draft value;
+- Finish revalidates current source/revision/context and commits exactly one transaction;
+- Cancel, hover, source preview, rejected Finish and no-op do not create authored history.
+
+Exact iconography, spacing and panel geometry remain D0/D1.
+
+### 4.12 Command Line parity
+
+Datum Plane is supported through the Command Line from the first delivered PM-03 slice.
+
+GUI and Command Line must drive the **same runtime draft and semantic command path**. Command Line is not allowed to invoke UI widgets as mutation authority and must not reimplement Datum semantics independently.
+
+The Command Line can at minimum:
+
+- start/enter the Datum Plane Offset draft;
+- acquire/set a legal semantic Source;
+- set unit-aware signed Offset;
+- invoke Reverse through the same sign-change semantics;
+- Finish;
+- Cancel.
+
+GUI and Command Line must produce equivalent validation, preview meaning, Finish/Cancel behavior, diagnostics and authored result for the same semantic inputs.
+
+### 4.13 Datum presentation, intersection overlay and picking
 
 Datum Plane display is derived presentation.
 
-The Viewer may receive a neutral finite plane patch/grid or equivalent geometry with a presentation token.
+Every visible Datum Plane preview/committed presentation contains:
+
+1. a finite translucent plane patch or equivalent neutral plane fill;
+2. a clear border for spatial orientation;
+3. when the currently presented Body intersects the plane, a **virtual plane/Body intersection overlay** showing that intersection in 3D.
+
+The intersection overlay is required because the finite plane patch alone is insufficient spatial feedback in common engineering views.
 
 Rules:
 
 - finite display extent is presentation-only and not authored engineering size;
-- Viewer token is transient and never serialized;
-- Application/Part binding maps the current presentation token to DatumId;
+- the intersection overlay is derived presentation only: it is not authored geometry, not an Edge/Curve semantic reference, not serialized and not Projection;
+- intersection is computed against the current Body presentation truth available to the Viewer/Application binding; if there is no current intersecting Body result, the overlay is absent;
+- any diagnostic resolved-prefix use must remain presentation-only and must never become successful modeling/reference authority;
+- Viewer/presentation tokens are transient and never serialized;
+- Application/Part binding maps current Datum presentation tokens to DatumId;
 - stale presentation generation cannot commit an edit or Sketch support;
 - Datum Plane picking must not be confused with Body Face topology picking;
+- the plane patch and border pick the owning Datum Plane;
+- clicking the virtual intersection overlay may also select the owning Datum Plane, but **never** exposes an Edge/Curve pick or semantic identity;
 - hidden Datum Plane is not ordinarily pickable.
 
-No new general Viewer reference-geometry framework beyond the concrete Datum Plane need is authorized.
+No new general Viewer reference-geometry framework and no hidden Projection implementation are authorized by this presentation requirement.
 
-### 4.13 Persistence
+### 4.14 Tree, grouping, visibility and Properties
+
+Reference geometry is projected in the Part tree directly below `Origin` as one explicit group:
+
+```text
+Origin
+Reference Geometry
+  Datum Plane 1
+  Datum Plane 2
+  ...
+<remaining Part model/history projection>
+```
+
+The group is the future product home for accepted Datum Plane/Axis/Point objects, but PM-03 populates it with Datum Plane only.
+
+Visibility semantics:
+
+- every Datum Plane has its own authored persistent visibility flag;
+- toggling the `Reference Geometry` group performs a normal authored bulk visibility operation over its Datum children;
+- the group does **not** introduce a second independent persisted visibility truth;
+- group show/hide must create a normal bounded semantic command/transaction and remain Undo/Redo-correct;
+- hidden Datum objects remain semantically present and may still be referenced; visibility is presentation state only.
+
+Properties exposes normal user-facing identity/meaning:
+
+- Datum Plane label/name;
+- Constructor = Offset;
+- semantic Source meaning;
+- signed Offset;
+- visibility;
+- current evaluation status/diagnostic.
+
+No provider/runtime token is shown as semantic identity. Tree location does not determine evaluation ownership or dependency order.
+
+### 4.15 Persistence
 
 PM-03 may advance the native Part schema from v9 to the next version required for:
 
@@ -312,7 +393,7 @@ Migration from valid v9:
 
 Malformed Datum state fails closed during load/reconstruction.
 
-### 4.14 Cold rebuild
+### 4.16 Cold rebuild
 
 A true cold rebuild must reconstruct:
 
@@ -373,9 +454,14 @@ Owner acceptance of this exact Work Contract is required before implementation.
 
 The proposed user-visible contract is intentionally narrow:
 
-- create one Offset Datum Plane from an Origin plane, resolved planar Body Surface or existing Datum Plane;
-- edit its signed offset/source while preserving DatumId;
-- show/hide and inspect current Datum status;
+- launch one **Datum Plane** tool whose PM-03 Constructor is `Offset`;
+- create one Offset Datum Plane from an Origin plane, any uniquely resolved planar semantic Body Surface at an explicit Body stage, or an existing Datum Plane;
+- receive immediate Extrude-style transient preview with a default new-draft Offset of 10 mm;
+- edit signed Offset/source while preserving DatumId; Reverse is only a convenience sign flip;
+- use GUI or Command Line through the same runtime draft/semantic command path;
+- see a finite plane patch/border plus a presentation-only virtual plane/Body intersection overlay when the plane intersects the current Body;
+- inspect Datum objects under the `Reference Geometry` tree group directly below `Origin`;
+- show/hide individual Datum Planes or bulk-toggle the group through authored visibility commands;
 - create/re-support Sketch on a resolved Datum Plane;
 - use the resulting Profile with the existing Extrude Add/Cut workflow;
 - receive explicit Missing/Ambiguous/Unsupported/Blocked failure instead of stale placement or guessed repair.
@@ -442,36 +528,44 @@ Gate:
 - cycle cases reject before mutation;
 - cold semantic evaluation deterministic.
 
-### PM-03C — commands + preview/edit/history
+### PM-03C — commands + Extrude-style draft / Command Line parity
 
 Deliver:
 
 - Create/Edit/Delete/Show/Hide commands;
 - one runtime draft shared by GUI/Command Line;
+- single `Datum Plane` tool with `Offset` constructor;
+- default new-draft Offset 10 mm;
+- Reverse as signed-offset negation;
 - transient preview;
 - one Finish transaction;
 - Undo/Redo.
 
 Gate:
 
+- GUI/Command Line semantic parity;
 - Cancel/rejected Finish = zero mutation/history;
 - edit preserves DatumId;
 - Delete dependency rejection is atomic;
 - stale draft cannot commit.
 
-### PM-03D — Viewer / Tree / Properties
+### PM-03D — Viewer / intersection overlay / Tree / Properties
 
 Deliver:
 
-- neutral Datum Plane presentation/pick binding;
-- tree projection;
+- finite Datum Plane patch + border presentation/pick binding;
+- required presentation-only plane/current-Body intersection overlay when an intersection exists;
+- `Reference Geometry` group directly below Origin;
+- persistent per-Datum visibility and authored bulk group toggle;
 - Properties/status;
-- visibility;
-- selection-first source workflow.
+- selection-first and command-first source workflows.
 
 Gate:
 
 - display size does not become authored plane size;
+- intersection overlay never becomes Edge/Curve/reference/Projection authority;
+- clicking overlay may select only the owning Datum Plane;
+- group visibility introduces no second persisted visibility truth;
 - stale presentation cannot commit;
 - Viewer token never becomes CAD identity.
 
@@ -522,8 +616,13 @@ PM-03 cannot complete without automated and manual evidence for at least:
 - edit preserves DatumId;
 - Delete unreferenced Datum succeeds;
 - Delete referenced Datum rejects atomically;
-- Show/Hide affects presentation only;
+- individual Show/Hide affects presentation only and persists as authored visibility;
+- Reference Geometry group Show/Hide bulk-toggles child authored visibility with Undo/Redo and no second group visibility truth;
+- default new-draft Offset is 10 mm and Reverse only negates the same signed value;
+- GUI/Command Line use the same Datum Plane draft/semantic command;
 - preview/Cancel/no-op produce no CAD history;
+- plane patch/border and plane/Body virtual intersection are presentation-only;
+- virtual intersection never becomes Edge/Curve semantics or Projection;
 - stale revision/session/evaluation/presentation cannot commit;
 - Create Sketch on Datum Plane;
 - re-support Sketch to/from Datum Plane preserving IDs/local U/V;
@@ -542,20 +641,24 @@ PM-03 cannot complete without automated and manual evidence for at least:
 The final Owner workflow should cover:
 
 1. create Base Body;
-2. create Datum Plane offset from an Origin plane;
-3. edit offset positive/negative/zero and verify deterministic orientation;
-4. create Datum Plane from a planar Body Face;
-5. create a second Datum Plane from the first Datum Plane;
-6. inspect Tree/Properties/status and Show/Hide;
-7. create Sketch on Datum Plane;
-8. author Profile and Extrude Add/Cut;
-9. edit upstream Body dimension so Body-Surface-backed Datum moves;
-10. edit Datum offset and verify Sketch local geometry remains unchanged;
-11. exercise source Missing/Ambiguous and verify no stale modeled result;
-12. repair source/re-support;
-13. verify cycle-causing re-reference rejects with zero mutation;
-14. Undo/Redo;
-15. Save, close, reopen and verify cold reconstruction.
+2. launch the single Datum Plane tool and verify Constructor = Offset, default Offset = 10 mm and immediate Extrude-style preview after valid source acquisition;
+3. create Datum Plane offset from an Origin plane; use Reverse and verify it is equivalent to changing the signed Offset;
+4. repeat the same draft through Command Line and verify GUI/Command Line parity;
+5. edit offset positive/negative/zero and verify deterministic orientation;
+6. create Datum Plane from a planar Body Face and verify the persisted source is the semantic planar Surface, not bounded Face/provider identity;
+7. verify the translucent plane patch, border and virtual plane/Body intersection overlay clearly locate the plane; clicking the overlay selects Datum Plane, never an Edge;
+8. create a second Datum Plane from the first Datum Plane;
+9. inspect `Reference Geometry` directly below Origin; verify individual Show/Hide and bulk group Show/Hide with Undo/Redo;
+10. inspect Properties/status;
+11. create Sketch on Datum Plane;
+12. author Profile and Extrude Add/Cut;
+13. edit upstream Body dimension so Body-Surface-backed Datum moves;
+14. edit Datum offset and verify Sketch local geometry remains unchanged;
+15. exercise source Missing/Ambiguous and verify no stale modeled result;
+16. repair source/re-support;
+17. verify cycle-causing re-reference rejects with zero mutation;
+18. Undo/Redo;
+19. Save, close, reopen and verify cold reconstruction.
 
 ## Documentation impact
 
@@ -589,12 +692,12 @@ STOP and return to Owner review if implementation would require:
 
 ## Activation and completion boundary
 
-This file is a proposal only.
+The Owner accepted the PM-03 D2 scope and the UI/interaction amendments materialized in this contract on 2026-10-05: Offset-Datum-Plane-only scope, single Datum Plane tool, 10 mm default Extrude-style preview, Command Line parity, required presentation-only plane/Body intersection overlay, and Reference Geometry tree grouping/visibility semantics.
 
 No production mutation is legal until:
 
-1. the Owner explicitly accepts this exact Work Contract (including the Offset-Plane-only PM-03 narrowing);
-2. repository governance records that acceptance;
+1. this accepted contract revision passes its exact-head repository gate and is merged;
+2. repository governance records activation;
 3. `work/ACTIVE.yaml` points to this contract with `status: active`;
 4. the activation change passes the required repository gate.
 
