@@ -28,13 +28,17 @@ Feature lifecycle actions from Properties and Tree share the same semantic handl
 Create Extrude supports both selection-first and command-first entry. Without an admissible preselection, Extrude owns an explicit CAD-input context that waits for exactly one valid Profile from Tree/viewport; Esc, toolbar toggle or Command Line CANCEL exits without mutation. The pick context has its own runtime generation so stale input cannot cross activations. Once a valid Profile is accepted, the ordinary revision-bound `ExtrudeDraft` starts and the product UI applies a 10 mm canonical default distance. The underlying application draft API remains capable of incomplete input and does not own that UI default.
 
 <!-- section-id: internal.cad-workbench-viewer.origin -->
-## Origin and reference scene
+## Origin, Datum reference geometry and reference scene
 
-PartViewportController maps the Part's seven deterministic built-in Origin roles to provider-neutral `ReferencePresentation` objects and runtime presentation tokens.
+`PartViewportController` maps the Part's seven deterministic built-in Origin roles and every currently visible/resolved Datum Plane into one provider-neutral `ReferenceScene`.
+
+Origin identity comes from the built-in role. Datum identity comes from durable `DatumId`; the Viewer never owns that identity. For each scene rebuild the controller allocates disposable presentation tokens and keeps only a runtime token↔DatumId map for current picking/selection. A refresh may allocate different tokens while semantic Datum selection remains stable.
 
 The reference grid is a Viewer presentation primitive. It is not a Part semantic object and is not selectable.
 
-Persistent Origin visibility comes from PartDocument authored presentation state. Hidden references still exist semantically and remain present in the Tree.
+A resolved Datum Plane is presented as a finite translucent patch with a visible border. The finite extent is presentation policy only; it is not an authored plane size. When the plane intersects the current committed Body, the controller may derive presentation-only line segments from the current Body scene. Those segments form an owner-bound overlay: they have no independent token, Edge/Curve identity or Projection meaning, and picking them resolves to the owning Datum Plane token.
+
+Persistent Origin and Datum visibility come from PartDocument authored presentation state. Hidden references still exist semantically and remain present in the Tree. `Reference Geometry` sits directly below Origin and bulk Show/Hide applies the existing per-Datum authored visibility values; the group has no second persisted visibility flag.
 
 Scene replacement clears native detected/selected state before removing provider presentation objects. A failed native replacement is contained at the provider boundary and leaves provider presentation state coherent instead of propagating a process-level failure.
 
@@ -73,13 +77,15 @@ Pointer routing and cursor mode remain independent runtime axes. Ordinary Select
 <!-- section-id: internal.cad-workbench-viewer.viewer-boundary -->
 ## Viewer provider boundary
 
-The public Viewer boundary remains provider-neutral. It accepts derived scenes for authored references/Sketch/Profile presentation, one atomic topology-aware committed Body scene and a separate transient solid-preview scene.
+The public Viewer boundary remains provider-neutral. It accepts derived scenes for authored Origin/Datum references, Sketch/Profile presentation, one atomic topology-aware committed Body scene and a separate transient solid-preview scene.
 
-Part evaluation may hold provider-neutral runtime solid/Face/Edge/Vertex tokens while the current runtime exists, but no TopoDS/OCAF handle, provider topology ordinal or Viewer presentation token crosses into durable Part identity. `PartViewportController` owns generation-scoped mappings from current runtime topology tokens to neutral presentation tokens and invalidates them whenever the Body scene/evaluation generation changes.
+Part evaluation may hold provider-neutral runtime solid/Face/Edge/Vertex tokens while the current runtime exists. Datum presentation likewise uses generation-scoped neutral presentation tokens. No TopoDS/OCAF handle, provider topology ordinal, Viewer presentation token or Datum intersection segment crosses into durable Part identity. `PartViewportController` owns current runtime mappings and invalidates/rebuilds them whenever the corresponding scene/evaluation generation changes.
 
-Current Face/Edge/Vertex picking is presentation acquisition only. Tessellation quality, camera, pick aperture, candidate order and Viewer state cannot alter Add/Cut results or durable semantic identity.
+Current Face/Edge/Vertex picking is presentation acquisition only. Datum patch/border and intersection-overlay picking is also acquisition only: the intersection has no independent semantic target and resolves to its owner DatumId. Tessellation quality, camera, pick aperture, candidate order and Viewer state cannot alter Add/Cut results, Datum source meaning or durable identity.
 
-Presentation setters report failure to the Workbench. A successful authored CAD command is not rolled back because a later Viewer refresh fails; recovery retries presentation from current authored state.
+The single Datum Plane tool uses one application-owned `DatumPlaneDraft` for Operations and Command Line. Source acquisition from Origin, planar Body Face or existing Datum Plane writes semantic source intent into that same draft. The default 10 mm Offset, signed Offset edits, Reverse, Finish and Cancel therefore share one validation/commit path. Preview is derived; Finish revalidates the current document/evaluation before the semantic command may commit.
+
+Presentation setters report failure to the Workbench. A successful authored CAD command is not rolled back because a later Viewer refresh fails; recovery retries presentation from current authored state. Conversely, stale presentation or stale draft/evaluation state is never accepted as mutation authority.
 
 <!-- section-id: internal.cad-workbench-viewer.accepted-next-pm02-visual-topology -->
 ## As-built PM-02 viewport topology, View Style and Feature contribution
@@ -585,6 +591,8 @@ Navigation changes are runtime-only and do not increment DocumentRevision, set n
 
 <!-- section-id: internal.cad-workbench-viewer.provider-presentation -->
 ## Current OCCT presentation
+
+The Qt/OCCT reference provider renders a Datum Plane through the existing reference-presentation channel rather than a second CAD model. The patch uses the current neutral Datum frame, while every virtual plane/Body intersection segment is registered with the same owner presentation token as the patch. Native picking of either object therefore returns the Datum Plane owner and can never create an Edge/Curve reference from the overlay. Datum patch size, transparency, border and overlay styling remain provider presentation policy.
 
 The concrete Qt/OCCT provider presents the current derived topology-aware Body scene and a separately replaceable transient Extrude preview alongside Origin, Sketch and Profile scenes. If final Part evaluation is Unavailable because a higher active Feature fails or blocks, evaluation may also expose a runtime-only `resolved_prefix_solid`: the same-revision solid result immediately before the first failing active Feature. `PartViewportController` may present that prefix diagnostically so lower UpToDate history remains visible. This does not change final Body truth: final semantic reference authority remains unavailable, downstream active Features remain Blocked and mutating topology-reference actions cannot consume the prefix. If the first active Feature fails, no prefix exists and the Viewer solid scene is empty.
 
