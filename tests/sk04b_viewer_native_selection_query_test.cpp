@@ -407,6 +407,172 @@ int main(int argc, char* argv[]) {
     CHECK(cycle_forward == 1);
     CHECK(cycle_reverse == 1);
 
+    // PM-02J R4: a visible box corner must keep stable Vertex/Edge
+    // candidates and hover preselection in an oblique engineering view.
+    // Boundary samples may differ from the nearest triangle by tiny
+    // projection/ray round-trip error, but hidden topology must remain
+    // excluded by the existing depth test.
+    {
+        viewer_qt_occt::QtOcctViewerWidget
+            boundary_widget;
+        boundary_widget.resize(801, 601);
+        boundary_widget.show();
+        QApplication::processEvents();
+        CHECK(boundary_widget.hasMouseTracking());
+
+        const viewer::CameraState boundary_camera{
+            viewer::Point3{60.0, -60.0, 60.0},
+            viewer::Point3{0.0, 0.0, 0.0},
+            viewer::Vec3{0.0, 0.0, 1.0},
+            viewer::CameraProjection::orthographic,
+            70.0};
+        CHECK(boundary_widget.setCameraState(
+            boundary_camera));
+
+        const viewer::PresentationToken
+            face_x_token{0x6101U};
+        const viewer::PresentationToken
+            face_y_token{0x6102U};
+        const viewer::PresentationToken
+            face_z_token{0x6103U};
+        const viewer::PresentationToken
+            edge_x_token{0x6201U};
+        const viewer::PresentationToken
+            edge_y_token{0x6202U};
+        const viewer::PresentationToken
+            edge_z_token{0x6203U};
+        const viewer::PresentationToken
+            corner_token{0x6301U};
+
+        viewer::BodyScene boundary_scene;
+        boundary_scene.generation = {88U};
+        boundary_scene.purpose =
+            viewer::BodyScenePurpose::current_body;
+
+        // Three front-visible box faces meeting at (10,-10,10).
+        boundary_scene.triangles = {
+            // +X
+            {{10.0,-10.0,-10.0},{10.0,10.0,-10.0},{10.0,10.0,10.0},
+             {1.0,0.0,0.0},{1.0,0.0,0.0},{1.0,0.0,0.0}},
+            {{10.0,-10.0,-10.0},{10.0,10.0,10.0},{10.0,-10.0,10.0},
+             {1.0,0.0,0.0},{1.0,0.0,0.0},{1.0,0.0,0.0}},
+            // -Y
+            {{-10.0,-10.0,-10.0},{10.0,-10.0,-10.0},{10.0,-10.0,10.0},
+             {0.0,-1.0,0.0},{0.0,-1.0,0.0},{0.0,-1.0,0.0}},
+            {{-10.0,-10.0,-10.0},{10.0,-10.0,10.0},{-10.0,-10.0,10.0},
+             {0.0,-1.0,0.0},{0.0,-1.0,0.0},{0.0,-1.0,0.0}},
+            // +Z
+            {{-10.0,-10.0,10.0},{10.0,-10.0,10.0},{10.0,10.0,10.0},
+             {0.0,0.0,1.0},{0.0,0.0,1.0},{0.0,0.0,1.0}},
+            {{-10.0,-10.0,10.0},{10.0,10.0,10.0},{-10.0,10.0,10.0},
+             {0.0,0.0,1.0},{0.0,0.0,1.0},{0.0,0.0,1.0}},
+        };
+        boundary_scene.faces = {
+            {face_x_token, 0U, 2U},
+            {face_y_token, 2U, 2U},
+            {face_z_token, 4U, 2U},
+        };
+        boundary_scene.edges = {
+            {edge_x_token,
+             {{-10.0,-10.0,10.0},{10.0,-10.0,10.0}},
+             true,true},
+            {edge_y_token,
+             {{10.0,-10.0,10.0},{10.0,10.0,10.0}},
+             true,true},
+            {edge_z_token,
+             {{10.0,-10.0,-10.0},{10.0,-10.0,10.0}},
+             true,true},
+        };
+        boundary_scene.vertices = {
+            {corner_token,{10.0,-10.0,10.0},true},
+        };
+        CHECK(boundary_scene.valid());
+        CHECK(boundary_widget.setBodyScene(
+            boundary_scene));
+
+        const auto corner_point =
+            boundary_widget.projectWorldPoint(
+                {10.0,-10.0,10.0});
+        CHECK(corner_point.has_value());
+
+        int corner_hover_intents = 0;
+        viewer::BodyTopologyPickQueryResult
+            corner_hover_query;
+        boundary_widget
+            .setBodyTopologyPreselectionIntentHandler(
+                [&boundary_widget,
+                 &corner_hover_intents,
+                 &corner_hover_query,
+                 corner_token](
+                    const viewer::BodyTopologyPickQueryResult& query,
+                    viewer::ViewportPoint2) {
+                    ++corner_hover_intents;
+                    corner_hover_query = query;
+                    const auto vertex =
+                        std::find_if(
+                            query.candidates.begin(),
+                            query.candidates.end(),
+                            [corner_token](const auto& item) {
+                                return item.token ==
+                                       corner_token;
+                            });
+                    if (vertex != query.candidates.end()) {
+                        CHECK(
+                            boundary_widget
+                                .setBodyTopologyPreselection(
+                                    corner_token));
+                    }
+                });
+
+        for (const auto offset :
+             std::vector<viewer::ViewportPoint2>{
+                 {0.0,0.0},
+                 {1.0,0.0},
+                 {-1.0,0.0},
+                 {0.0,1.0},
+                 {0.0,-1.0}}) {
+            const viewer::ViewportPoint2 probe{
+                corner_point->x + offset.x,
+                corner_point->y + offset.y};
+            const auto query =
+                boundary_widget.queryBodyTopology(
+                    probe);
+            CHECK(query.valid());
+            CHECK(query.completed);
+            CHECK(
+                std::any_of(
+                    query.candidates.begin(),
+                    query.candidates.end(),
+                    [corner_token](const auto& item) {
+                        return item.token ==
+                               corner_token;
+                    }));
+            CHECK(
+                std::count_if(
+                    query.candidates.begin(),
+                    query.candidates.end(),
+                    [](const auto& item) {
+                        return item.kind ==
+                            viewer::
+                                BodyTopologyPresentationKind::
+                                    edge;
+                    }) >= 2);
+            sendMouseMove(
+                boundary_widget,
+                probe);
+            CHECK(corner_hover_intents >= 1);
+            CHECK(corner_hover_query.valid());
+            CHECK(
+                std::any_of(
+                    corner_hover_query.candidates.begin(),
+                    corner_hover_query.candidates.end(),
+                    [corner_token](const auto& item) {
+                        return item.token ==
+                               corner_token;
+                    }));
+        }
+    }
+
     // View Style lives in the same provider-surface HUD family as the
     // navigation controls. Its click emits an action; the callback/controller
     // remains runtime state authority.
