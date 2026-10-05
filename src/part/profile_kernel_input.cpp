@@ -122,50 +122,83 @@ convertLoop(
 
 } // namespace
 
-std::optional<kernel::PlanarProfileInput>
-makeKernelProfileInput(
+ProfileKernelInputResult
+resolveKernelProfileInput(
     const PartDocument& document,
-    ProfileId profile_id) {
+    ProfileId profile_id,
+    const BodyStageTopologyCatalog*
+        support_topology) {
     const auto* profile =
         document.findProfile(profile_id);
     if (!profile) {
-        return std::nullopt;
+        return {
+            ProfileKernelInputStatus::
+                missing_profile};
     }
 
     const auto* source =
         document.findSketch(
             profile->source_sketch_id);
     if (!source) {
-        return std::nullopt;
+        return {
+            ProfileKernelInputStatus::
+                missing_source_sketch};
     }
 
-    // PM-02E removes authored world placement authority. The legacy
-    // document-only profile conversion remains intentionally Origin-support
-    // only until PM-02F supplies the exact upstream stage topology needed to
-    // resolve Body Surface-backed Sketches.
-    const auto placement =
-        sketchPlacementForSupport(
-            source->support);
-    if (!placement || !placement->valid()) {
-        return std::nullopt;
+    const auto support =
+        resolveSketchSupport(
+            source->support,
+            support_topology);
+    switch (support.status) {
+    case SketchSupportResolutionStatus::missing:
+        return {
+            ProfileKernelInputStatus::
+                support_missing,
+            support.diagnostic};
+    case SketchSupportResolutionStatus::ambiguous:
+        return {
+            ProfileKernelInputStatus::
+                support_ambiguous,
+            support.diagnostic};
+    case SketchSupportResolutionStatus::unsupported:
+        return {
+            ProfileKernelInputStatus::
+                support_unsupported,
+            support.diagnostic};
+    case SketchSupportResolutionStatus::resolved:
+        break;
+    }
+
+    if (!support.valid() ||
+        !support.frame.has_value()) {
+        return {
+            ProfileKernelInputStatus::
+                invalid_input,
+            support.diagnostic};
     }
 
     const auto resolved =
         document.evaluateProfile(profile_id);
     if (!resolved || !resolved->valid()) {
-        return std::nullopt;
+        return {
+            ProfileKernelInputStatus::
+                unresolved_profile,
+            support.diagnostic};
     }
 
-    const auto n = normal(*placement);
+    const auto n = normal(*support.frame);
     if (!n) {
-        return std::nullopt;
+        return {
+            ProfileKernelInputStatus::
+                invalid_input,
+            support.diagnostic};
     }
 
-    kernel::PlanarProfileInput result;
-    result.frame = {
-        point(placement->origin),
-        point(placement->u_axis),
-        point(placement->v_axis),
+    kernel::PlanarProfileInput input;
+    input.frame = {
+        point(support.frame->origin),
+        point(support.frame->u_axis),
+        point(support.frame->v_axis),
         *n,
     };
 
@@ -176,11 +209,14 @@ makeKernelProfileInput(
             0U,
             false);
     if (!outer) {
-        return std::nullopt;
+        return {
+            ProfileKernelInputStatus::
+                invalid_input,
+            support.diagnostic};
     }
-    result.outer = std::move(*outer);
+    input.outer = std::move(*outer);
 
-    result.holes.reserve(
+    input.holes.reserve(
         resolved->region->holes.size());
     for (std::size_t index = 0U;
          index < resolved->region->holes.size();
@@ -193,16 +229,40 @@ makeKernelProfileInput(
                     index + 1U),
                 true);
         if (!hole) {
-            return std::nullopt;
+            return {
+                ProfileKernelInputStatus::
+                    invalid_input,
+                support.diagnostic};
         }
-        result.holes.push_back(
+        input.holes.push_back(
             std::move(*hole));
     }
 
-    return result.valid()
-        ? std::optional<kernel::PlanarProfileInput>{
-              std::move(result)}
-        : std::nullopt;
+    if (!input.valid()) {
+        return {
+            ProfileKernelInputStatus::
+                invalid_input,
+            support.diagnostic};
+    }
+
+    return {
+        ProfileKernelInputStatus::resolved,
+        support.diagnostic,
+        std::move(input)};
+}
+
+std::optional<kernel::PlanarProfileInput>
+makeKernelProfileInput(
+    const PartDocument& document,
+    ProfileId profile_id) {
+    auto resolved =
+        resolveKernelProfileInput(
+            document,
+            profile_id);
+    if (!resolved.ok()) {
+        return std::nullopt;
+    }
+    return std::move(resolved.input);
 }
 
 } // namespace simplesolid2::part
