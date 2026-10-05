@@ -600,6 +600,9 @@ int main(int argc, char* argv[]) {
     CHECK(cad_result.accepted);
     CHECK(workbench.cadInputPrompt().find("SKETCH") !=
           std::string::npos);
+    viewport->clickMixedBodyCandidates();
+    CHECK(workbench.cadInputPrompt().find("FINISH") !=
+          std::string::npos);
     cad_result =
         workbench.submitCadInput(
             "CANCEL",
