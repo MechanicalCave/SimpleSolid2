@@ -287,8 +287,11 @@ add_executable(pm02jr2_add_surface_continuation_test
 
 target_link_libraries(pm02jr2_add_surface_continuation_test
     PRIVATE
+        simplesolid2_application
         simplesolid2_kernel
         simplesolid2_kernel_occt
+        simplesolid2_part
+        simplesolid2_sketch
 )
 
 target_compile_features(pm02jr2_add_surface_continuation_test PRIVATE cxx_std_20)
