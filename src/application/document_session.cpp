@@ -147,6 +147,33 @@ topologyAtStage(
     return nullptr;
 }
 
+const part::BodyStageTopologyCatalog*
+topologyForProfileSupport(
+    const part::PartDocument& document,
+    part::ProfileId profile_id,
+    const part::PartEvaluation& evaluation) noexcept {
+    const auto* profile =
+        document.findProfile(profile_id);
+    if (profile == nullptr) {
+        return nullptr;
+    }
+    const auto* source =
+        document.findSketch(
+            profile->source_sketch_id);
+    if (source == nullptr) {
+        return nullptr;
+    }
+    const auto* reference =
+        part::bodyPlanarSurfaceReference(
+            source->support);
+    if (reference == nullptr) {
+        return nullptr;
+    }
+    return topologyAtStage(
+        evaluation,
+        reference->stage);
+}
+
 SketchSupportMutationStatus supportMutationStatus(
     part::SketchSupportResolutionStatus status) noexcept {
     switch (status) {
@@ -2171,10 +2198,16 @@ DocumentSession::evaluateExtrudeDraft(
         }
     }
 
+    const auto* preview_support_topology =
+        topologyForProfileSupport(
+            *candidate.document,
+            definition.profile_id,
+            evaluation);
     auto preview_input =
         part::makeKernelExtrudeInput(
             *candidate.document,
-            definition);
+            definition,
+            preview_support_topology);
     if (preview_input &&
         preview_upstream_ready) {
         auto preview =
