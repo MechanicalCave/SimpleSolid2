@@ -117,5 +117,5 @@ Po otwarciu Projektu jego nazwa, `ProjectId` i ścieżka Workspace są pokazane 
 
 Workspace Shell zawiera trwały typ dokumentu Part `.ss2part` z właściwościami Dokumentu, Undo/Redo, warunkowym Save i możliwością utrzymywania kilku otwartych Partów jednocześnie.
 
-Wspólny CAD Workbench i Viewer 3D obsługują Origin/reference Parta, Sketche na płaszczyznach Origin i planarnych Face Body, bezpośrednią inspekcję bieżących Face/Edge/Vertex oraz jeden trwały Body z uporządkowanymi Feature Extrude Add/Cut. Datum/Projection, Revolve, Fillet/Chamfer, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Part Documents`.
+Wspólny CAD Workbench i Viewer 3D obsługują Origin/reference Parta, trwałe Offset Datum Planes w `Reference Geometry`, Sketche na płaszczyznach Origin, planarnych Face Body i Datum Plane, bezpośrednią inspekcję bieżących Face/Edge/Vertex oraz jeden trwały Body z uporządkowanymi Feature Extrude Add/Cut. Datum Axis/Point, dodatkowe konstruktory Datum Plane, Projection, Revolve, Fillet/Chamfer, Assembly i Drawing nie są jeszcze dostępne. Bieżący workflow Parta opisuje dokument `Part Documents`.
 

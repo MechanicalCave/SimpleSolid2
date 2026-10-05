@@ -95,10 +95,25 @@ Viewport selection behavior is:
 
 After `Save`, Origin visibility survives closing and restarting the application.
 
+<!-- section-id: product.parts.datum-plane -->
+## Datum reference plane
+
+The current Part provides one construction-reference object: **Datum Plane** with the **Offset** constructor. Its source can be an Origin XY/XZ/YZ plane, a planar Face of the current Body, or an earlier Datum Plane. A clicked planar Face is persisted as a semantic Body surface at an explicit history stage, not as a provider Face handle.
+
+There is one tool regardless of entry path. You can select an admissible source first and start **Datum Plane**, or start the tool with no source and select one afterwards. The right **Operations** panel shows `Constructor = Offset`, `Source`, signed `Offset`, **Reverse**, **Finish Datum Plane** and **Cancel**. A new draft starts at **10 mm**. Reverse does not persist a second direction flag; it negates the same signed Offset.
+
+After an admissible source is acquired, the active draft shows a finite translucent plane patch with a border in the Viewport. If the current Body intersects the plane, preview also shows a virtual intersection line. Draft preview is presentation-only: it has no `DatumId`, is not a pickable reference and clears on invalid input, **Cancel**, **Finish** or context exit. It creates no Undo step and no authored state.
+
+After **Finish**, a durable Datum Plane with stable `DatumId` exists. Its patch and border remain finite presentation, not authored size for the infinite plane. The virtual Body intersection is also presentation-only. Clicking that line selects the owning Datum Plane; it never becomes Edge/Curve meaning or Projection geometry.
+
+In Document Tree, **Reference Geometry** sits directly below `Origin`. Each Datum Plane has its own authored Show/Hide state, Properties shows identity, source, Offset, status and diagnostics, and **Edit Datum Plane** uses the same draft while preserving `DatumId`. Showing or hiding the complete group bulk-updates child authored visibility in one Undo/Redo operation; the group has no second persisted visibility flag. Delete is rejected atomically while another Datum Plane or Sketch still depends on the target Datum.
+
+GUI and Command Line drive the same draft. `DATUM PLANE` or `DATUMPLANE` starts the tool, while the active context accepts signed Offset/Length input plus `REVERSE`, `FINISH` and `CANCEL`. A Missing, Ambiguous, Unsupported, Blocked or otherwise invalid source publishes no stale last-good frame and cannot authorize downstream modeling.
+
 <!-- section-id: product.parts.sketch-host -->
 ## Creating and viewing a Sketch
 
-Use `Sketch` in the expanding left side of the active-Document top row, then select either `XY Plane`, `XZ Plane` or `YZ Plane` from Origin, or a current Body Face in the 3D Viewport. During Sketch support acquisition the viewport accepts Faces only. A planar semantic Face is accepted as standard Sketch support; a non-planar Face remains selectable but reports **Unsupported** instead of falling through to another target. Selecting the support is still a runtime draft: **Create Sketch** performs the single authored Create transaction and **Cancel** changes nothing. After the Sketch exists and Edit is active, the same action area becomes **Finish Sketch**.
+Use `Sketch` in the expanding left side of the active-Document top row, then select either `XY Plane`, `XZ Plane` or `YZ Plane` from Origin, a current planar Body Face, or an existing Datum Plane. A planar semantic Face is accepted as standard Sketch support; a non-planar Face remains selectable but reports **Unsupported** instead of falling through to another target. A Datum-backed Sketch persists only the support `DatumId`; authored local U/V geometry remains independent from the Datum's current world placement. Selecting the support is still a runtime draft: **Create Sketch** performs the single authored Create transaction and **Cancel** changes nothing. After the Sketch exists and Edit is active, the same action area becomes **Finish Sketch**.
 
 During Sketch Edit the tools are grouped as:
 
@@ -290,9 +305,9 @@ Space typed while a text-entry field has focus remains text input; it does not t
 
 Creation tools preserve pre-existing selection but hide/deactivate grips while active, and newly created geometry is not automatically selected. Use `Finish Sketch` to leave edit.
 
-An existing Sketch can use **Change Sketch Support** from Document Tree or `RESUPPORT` in Command Line. Select a new Origin plane or planar Body Face, then **Apply Support** to commit exactly one support change. Re-support preserves SketchId, EntityIds and authored local U/V geometry; it changes the host mapping. Missing, Ambiguous, Unsupported or cycle-causing targets are rejected without partial mutation. Undo/Redo restores the previous semantic support intent.
+An existing Sketch can use **Change Sketch Support** from Document Tree or `RESUPPORT` in Command Line. Select a new Origin plane, planar Body Face or Datum Plane, then **Apply Support** to commit exactly one support change. Re-support preserves SketchId, EntityIds and authored local U/V geometry; it changes the host mapping. Missing, Ambiguous, Unsupported, Blocked or cycle-causing targets are rejected without partial mutation. Editing an upstream Datum source/Offset recomputes the Sketch world frame without rewriting its local geometry. Undo/Redo restores the previous semantic support intent.
 
-Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions and Datum planes remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
+Copy combined with Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver and authored dimensions remain later stages. There is no separate Ortho mode; use Polar with a 90° step for orthogonal-only attraction.
 
 <!-- section-id: product.parts.structural-editing -->
 ## Structural editing — Trim and Extend
@@ -507,9 +522,9 @@ The next normal full Viewer refresh automatically retries presentation from the 
 <!-- section-id: product.parts.save-close -->
 ## Save and closing
 
-`Save` writes the current authored Part state: Document properties, Origin visibility, Sketches with semantic Origin/Body-Surface support and local geometry, Profiles with RegionIntent/visibility policy, and the Body with ordered Extrude Features, stable identities, parameters and Suppressed state.
+`Save` writes the current authored Part state: Document properties, Origin visibility, durable Offset Datum Planes with `DatumId`/source/signed Offset/visibility, Sketches with semantic Origin/Body-Surface/Datum support and local geometry, Profiles with RegionIntent/visibility policy, and the Body with ordered Extrude Features, stable identities, parameters and Suppressed state.
 
-The current B-Rep solid, evaluated topology catalog, derived Body-Surface support frames, preview, evaluation status, provider topology tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
+The current B-Rep solid, evaluated topology catalog, derived Body-Surface/Datum support frames, transient Datum/Extrude preview, virtual intersection lines, evaluation status, provider topology tokens and Viewer state are not stored as CAD intent. They are rebuilt by fresh evaluation after open.
 
 Ordinary Save remains conditional on the exact native file version loaded or last saved by the session. A removed, replaced or externally changed target reports a Save conflict rather than being silently overwritten. The in-memory Part, Undo/Redo and local changes stay open.
 
@@ -518,11 +533,11 @@ Closing a dirty Part requires `Save`, `Discard` or `Cancel`. Closing the complet
 <!-- section-id: product.parts.restart -->
 ## Restart and reopen
 
-After restarting, open the same Project. SimpleSolid scans the Workspace again and opens the saved Part with the same DocumentId, SketchId/ProfileId, BodyId and FeatureId values. Face-supported Sketches keep their semantic support and local U/V geometry even though runtime topology token values are rebuilt.
+After restarting, open the same Project. SimpleSolid scans the Workspace again and opens the saved Part with the same DocumentId, DatumId, SketchId/ProfileId, BodyId and FeatureId values. Face- and Datum-supported Sketches keep their semantic support and local U/V geometry even though runtime topology/presentation token values are rebuilt.
 
-The Body and its ordered Extrude Add/Cut Features are evaluated from scratch from authored state. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers. A deleted Feature stays deleted while its source Profile remains available unless the Profile itself was removed.
+Datums, the Body and ordered Extrude Add/Cut Features are evaluated from scratch from authored state. Datum sources, signed Offsets and authored visibility remain persisted, while world frames and virtual intersections are derived again. Persisted Suppressed Features remain Suppressed, and Automatic Profile presentation is derived again from current active consumers.
 
-Undo/Redo history, active selection, active Sketch/Extrude draft, preview, camera and provider/B-Rep runtime state are not stored and start fresh after reopen.
+Undo/Redo history, active selection, active Sketch/Datum/Extrude draft, preview, camera and provider/B-Rep runtime state are not stored and start fresh after reopen.
 
 <!-- section-id: product.parts.conflicts -->
 ## Document and Save conflicts
@@ -536,11 +551,11 @@ A Save conflict is different from a Workspace discovery conflict: it means the a
 <!-- section-id: product.parts.current-limits -->
 ## Current Part limits
 
-The current Part provides persistent Origin-plane and planar Body-Face Sketch support, Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles, direct Face/Edge/Vertex inspection and one durable Body with ordered Extrude Features.
+The current Part provides persistent Sketch support on Origin planes, planar Body Faces and Offset Datum Planes; construction Offset Datum Planes in `Reference Geometry`; Shared-2D authoring with precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; direct Face/Edge/Vertex inspection; and one durable Body with ordered Extrude Features.
 
-Solid modeling is currently limited to **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**. Edit Extrude, Feature status, Suppress/Unsuppress, Delete, semantic Sketch re-support, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
+Solid modeling is currently limited to **Extrude Add/Cut** with **OneSide Forward/Reverse** and **Midplane**. Edit Extrude, Feature status, Suppress/Unsuppress, Delete, semantic Sketch re-support, Datum Edit/Show/Hide, Undo/Redo, consumed-Profile automatic visibility and Save/Close/Reopen cold rebuild are supported.
 
-Not yet implemented are Sketch support on Datums, non-planar standard Sketch mapping, Projection, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body, Material, Assembly or Drawing tools.
+Not yet implemented are Datum Axis, Datum Point, additional Datum Plane constructors, non-planar standard Sketch mapping, Projection, Revolve, Fillet, Chamfer, other solid operations, arbitrary Feature reorder/insertion, multi-body, Material, Assembly or Drawing tools.
 
 On the Sketch side, authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy and final ordinary-Select RMB convergence remain outside the current surface.
 

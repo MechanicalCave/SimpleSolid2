@@ -95,10 +95,25 @@ Zachowanie zaznaczenia w Viewporcie:
 
 Po `Save` widoczność Origin przeżywa zamknięcie i restart aplikacji.
 
+<!-- section-id: product.parts.datum-plane -->
+## Płaszczyzna odniesienia Datum
+
+Obecny Part udostępnia jeden typ konstrukcyjnej geometrii odniesienia: **Datum Plane** z konstruktorem **Offset**. Źródłem może być płaszczyzna XY/XZ/YZ z Origin, planarna Face bieżącego Body albo wcześniejszy Datum Plane. Kliknięta planarna Face jest zapisywana jako semantyczna powierzchnia Body na określonym etapie historii, a nie jako providerowy uchwyt Face.
+
+Narzędzie jest jedno niezależnie od sposobu wejścia. Możesz najpierw wskazać poprawne źródło i uruchomić **Datum Plane**, albo uruchomić narzędzie bez źródła i wskazać je później. Prawy panel **Operations** pokazuje `Constructor = Offset`, `Source`, podpisany `Offset`, **Reverse**, **Finish Datum Plane** i **Cancel**. Nowy draft zaczyna z **10 mm**. Reverse nie zapisuje osobnej flagi kierunku — odwraca znak tego samego Offsetu.
+
+Po wskazaniu poprawnego źródła aktywny draft pokazuje w viewporcie skończoną półprzezroczystą łatę płaszczyzny z obrysem. Jeżeli bieżący Body przecina tę płaszczyznę, preview pokazuje także wirtualną linię przecięcia. Draft preview jest wyłącznie prezentacją: nie ma `DatumId`, nie jest pickowalną referencją i znika po niepoprawnym input, **Cancel**, **Finish** albo wyjściu z kontekstu. Nie tworzy kroku Undo ani authored state.
+
+Po **Finish** powstaje trwały Datum Plane ze stabilnym `DatumId`. Jego patch i obrys pozostają prezentacją o skończonym rozmiarze, nie authored rozmiarem nieskończonej płaszczyzny. Wirtualne przecięcie z Body również jest tylko wskazówką prezentacyjną. Kliknięcie tej linii wybiera właściciela Datum Plane; linia nie staje się Edge/Curve ani geometrią Projection.
+
+W Document Tree grupa **Reference Geometry** znajduje się bezpośrednio pod `Origin`. Każdy Datum Plane ma własne trwałe Show/Hide, Properties pokazuje tożsamość, źródło, Offset, status i diagnostykę, a **Edit Datum Plane** używa tego samego draftu i zachowuje `DatumId`. Show/Hide całej grupy zmienia authored visibility dzieci w jednej operacji Undo/Redo; grupa nie ma osobnej trwałej flagi widoczności. Delete jest odrzucany atomowo, jeżeli inny Datum Plane albo Sketch nadal zależy od usuwanego Datuma.
+
+GUI i Command Line sterują tym samym draftem. `DATUM PLANE` lub `DATUMPLANE` uruchamia narzędzie, a aktywny kontekst obsługuje podpisany Offset/Length, `REVERSE`, `FINISH` i `CANCEL`. Niepoprawny, Missing, Ambiguous, Unsupported albo Blocked source nie publikuje stale last-good frame i nie pozwala zatwierdzić downstream modelingu.
+
 <!-- section-id: product.parts.sketch-host -->
 ## Tworzenie i wyświetlanie Sketchu
 
-W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin lub bieżącą Face Body w viewporcie 3D. Podczas wyboru supportu Sketch viewport przyjmuje wyłącznie Face. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Sam wybór supportu pozostaje runtime draftem: **Create Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu. Po utworzeniu Sketchu i wejściu w Edit ten sam obszar akcji zmienia się na **Finish Sketch**.
+W lewej, rozszerzalnej części górnego wiersza aktywnego Dokumentu użyj `Sketch`, a następnie wskaż `XY Plane`, `XZ Plane` albo `YZ Plane` z Origin, bieżącą planarną Face Body albo istniejący Datum Plane. Planarna semantyczna Face jest akceptowana jako standardowy support Sketch; nieplanarna Face nadal daje się wybrać, ale zwraca **Unsupported** zamiast przełączyć się na sąsiedni cel. Datum-backed Sketch zapisuje tylko `DatumId` supportu; lokalna geometria U/V pozostaje authored niezależnie od bieżącego położenia Datuma. Sam wybór supportu pozostaje runtime draftem: **Create Sketch** wykonuje pojedynczą authored transakcję Create, a **Cancel** nie zmienia modelu. Po utworzeniu Sketchu i wejściu w Edit ten sam obszar akcji zmienia się na **Finish Sketch**.
 
 Podczas Sketch Edit narzędzia są uporządkowane w grupy:
 
@@ -290,9 +305,9 @@ Space wpisany przy focusie pola tekstowego pozostaje znakiem tekstowym i nie uru
 
 Narzędzia tworzenia zachowują wcześniejsze selection, ale ukrywają/dezaktywują grips podczas działania; nowa geometria nie jest automatycznie zaznaczana. `Finish Sketch` kończy edycję.
 
-Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin lub planarną Face Body, a następnie **Apply Support**, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported albo powodujący cykl jest odrzucany bez częściowej mutacji. Undo/Redo przywraca poprzedni semantyczny support.
+Dla istniejącego Sketch użyj **Change Sketch Support** w Document Tree albo `RESUPPORT` w Command Line. Wskaż nową płaszczyznę Origin, planarną Face Body albo Datum Plane, a następnie **Apply Support**, aby zatwierdzić dokładnie jedną zmianę supportu. Re-support zachowuje SketchId, EntityIds i authored lokalną geometrię U/V; zmienia mapowanie hosta. Target Missing, Ambiguous, Unsupported, Blocked albo powodujący cykl jest odrzucany bez częściowej mutacji. Zmiana źródła/Offsetu upstream Datuma przelicza world frame Sketchu bez przepisywania jego lokalnej geometrii. Undo/Redo przywraca poprzedni semantyczny support.
 
-Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver, authored dimensions i płaszczyzny Datum pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
+Copy połączone z Rotate/Scale/Mirror, ordinary-Select RMB context, clipboard/cross-Sketch Copy, Grid Snap, constraints/solver i authored dimensions pozostają późniejszymi etapami. Nie ma osobnego trybu Ortho; do przyciągania wyłącznie ortogonalnego użyj Polar ze Step=90°.
 
 <!-- section-id: product.parts.structural-editing -->
 ## Edycja strukturalna — Trim i Extend
@@ -507,9 +522,9 @@ Następne normalne pełne odświeżenie Viewera automatycznie ponawia budowę pr
 <!-- section-id: product.parts.save-close -->
 ## Save i zamykanie
 
-`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, Sketche z semantycznym supportem Origin/Body-Surface i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed.
+`Save` zapisuje bieżący authored state Parta: właściwości Dokumentu, Origin visibility, trwałe Offset Datum Planes z `DatumId`/źródłem/podpisanym Offsetem/widocznością, Sketche z semantycznym supportem Origin/Body-Surface/Datum i lokalną geometrią, Profiles z RegionIntent/polityką widoczności oraz Body z uporządkowanymi Extrude Features, ich stabilnymi identyfikatorami, parametrami i stanem Suppressed.
 
-Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface, preview, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
+Bieżąca bryła B-Rep, evaluated topology catalog, pochodne frame'y supportu Body-Surface/Datum, transient Datum/Extrude preview, wirtualne linie przecięcia, status ewaluacji, provider topology tokens i stan Viewera nie są zapisywane jako CAD intent. Po otwarciu są odtwarzane przez świeżą ewaluację trwałych danych.
 
 Ordinary Save pozostaje warunkowy względem dokładnej wersji natywnego pliku wczytanej lub ostatnio zapisanej przez sesję. Usunięty, podmieniony albo zewnętrznie zmieniony target powoduje konflikt Save zamiast cichego nadpisania. In-memory Part, Undo/Redo i lokalne zmiany pozostają wtedy otwarte.
 
@@ -518,11 +533,11 @@ Przy zamykaniu Parta z niezapisanymi zmianami aplikacja wymaga `Save`, `Discard`
 <!-- section-id: product.parts.restart -->
 ## Restart i ponowne otwarcie
 
-Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, SketchId/ProfileId, BodyId oraz FeatureId. Sketche oparte na Face zachowują semantyczny support i lokalną geometrię U/V, mimo że runtime topology tokeny są budowane od nowa.
+Po restarcie otwórz ten sam Projekt. SimpleSolid ponownie skanuje Workspace i otwiera zapisany Part z tym samym DocumentId, DatumId, SketchId/ProfileId, BodyId oraz FeatureId. Sketche oparte na Face i Datum zachowują semantyczny support i lokalną geometrię U/V, mimo że runtime topology/presentation tokeny są budowane od nowa.
 
-Body i jego ordered Extrude Add/Cut są przeliczane od zera z authored state. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów. Usunięty Feature pozostaje usunięty, natomiast jego źródłowy Profile pozostaje dostępny, jeżeli sam nie został usunięty.
+Datumy, Body i jego ordered Extrude Add/Cut są przeliczane od zera z authored state. Źródła Datum, podpisane Offsety i authored visibility pozostają zapisane, natomiast world frames i wirtualne przecięcia są wyprowadzane ponownie. Zapisany Suppressed pozostaje Suppressed, a polityka Automatic Profile ponownie wynika z aktualnych aktywnych konsumentów.
 
-Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Extrude draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
+Undo/Redo history, aktywne zaznaczenie, aktywny Sketch/Datum/Extrude draft, preview, kamera oraz provider/B-Rep runtime nie są zapisywane i po ponownym otwarciu zaczynają się świeżo.
 
 <!-- section-id: product.parts.conflicts -->
 ## Konflikty Dokumentu i Save
@@ -536,11 +551,11 @@ Konflikt Save jest czymś innym niż konflikt discovery w Workspace: oznacza, ż
 <!-- section-id: product.parts.current-limits -->
 ## Aktualne ograniczenia Parta
 
-Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin oraz planarnych Face Body, Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference, Trim/Extend/Measure, live-reference Profiles, bezpośrednią inspekcję Face/Edge/Vertex oraz jeden trwały Body z ordered Extrude Features.
+Obecny Part zapewnia trwałe Sketche na płaszczyznach Origin, planarnych Face Body i Offset Datum Planes; konstrukcyjne Offset Datum Planes w `Reference Geometry`; Shared-2D authoring z precision input/Polar/Dynamic Input/OSNAP/Tracking/Inference; Trim/Extend/Measure; live-reference Profiles; bezpośrednią inspekcję Face/Edge/Vertex oraz jeden trwały Body z ordered Extrude Features.
 
-Solid modeling jest obecnie ograniczony do **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**. Dostępne są Edit Extrude, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
+Solid modeling jest obecnie ograniczony do **Extrude Add/Cut** z **OneSide Forward/Reverse** i **Midplane**. Dostępne są Edit Extrude, statusy Feature, Suppress/Unsuppress, Delete, semantyczny re-support Sketch, Datum Edit/Show/Hide, Undo/Redo, automatyczna widoczność zużywanego Profile oraz Save/Close/Reopen z cold rebuildem.
 
-Nie ma jeszcze Sketch support na Datum, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, Revolve, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, multi-body, Material ani narzędzi Assembly/Drawing.
+Nie ma jeszcze Datum Axis, Datum Point, dodatkowych konstruktorów Datum Plane, standardowego mapowania Sketch na nieplanarne powierzchnie, Projection, Revolve, Fillet, Chamfer, innych operacji bryłowych, dowolnego reorder/insertion Feature, multi-body, Material ani narzędzi Assembly/Drawing.
 
 Po stronie Sketch nadal poza zakresem pozostają authored constraints/solver, authored dimensions, Grid Snap, Rotate/Scale/Mirror+Copy, clipboard/cross-Sketch Copy i docelowe ordinary-Select RMB convergence.
 
