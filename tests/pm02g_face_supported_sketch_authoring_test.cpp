@@ -25,7 +25,19 @@ void check(bool value, const char* expression, int line) {
 
 enum class ExtentMode { plane, non_planar };
 
-class SupportSolid final : public kernel::RuntimeSolid {};
+class SupportSolid final : public kernel::RuntimeSolid {
+public:
+    struct Surface final {
+        kernel::RuntimeFaceToken face;
+        kernel::RuntimeSurfaceToken surface;
+        kernel::SurfaceKind kind{kernel::SurfaceKind::plane};
+        std::optional<kernel::Frame3> frame;
+    };
+
+    std::vector<Surface> surfaces;
+    std::uint64_t next_face{1U};
+    std::uint64_t next_surface{1U};
+};
 
 class SupportKernel final : public kernel::ISolidModelingKernel {
 public:
@@ -35,22 +47,74 @@ public:
         const kernel::LinearExtrudeInput& input,
         kernel::RuntimeSolidHandle upstream = {}) noexcept override {
         kernel::SolidModelingResult result;
-        if (!input.valid() || upstream != nullptr) {
-            result.status = upstream
-                ? kernel::SolidModelingStatus::provider_mismatch
-                : kernel::SolidModelingStatus::invalid_input;
+        if (!input.valid()) {
+            result.status =
+                kernel::SolidModelingStatus::invalid_input;
+            return result;
+        }
+        if (input.operation ==
+                kernel::SolidBooleanOperation::cut &&
+            upstream == nullptr) {
+            result.status =
+                kernel::SolidModelingStatus::missing_upstream;
             return result;
         }
 
-        std::uint64_t next_face = 1U;
-        std::uint64_t next_surface = 1U;
+        auto runtime =
+            std::make_shared<SupportSolid>();
+        if (upstream != nullptr) {
+            const auto* previous =
+                dynamic_cast<const SupportSolid*>(
+                    upstream.get());
+            if (previous == nullptr) {
+                result.status =
+                    kernel::SolidModelingStatus::
+                        provider_mismatch;
+                return result;
+            }
+            runtime->surfaces = previous->surfaces;
+            runtime->next_face = previous->next_face;
+            runtime->next_surface =
+                previous->next_surface;
+
+            for (const auto& inherited :
+                 previous->surfaces) {
+                result.current_faces.push_back(
+                    inherited.face);
+                result.inherited_faces.push_back(
+                    {
+                        inherited.face,
+                        kernel::ReferenceStatus::resolved,
+                        1U,
+                    });
+                result.inherited_surfaces.push_back(
+                    {
+                        inherited.surface,
+                        kernel::ReferenceStatus::resolved,
+                        kernel::ReferenceStatus::resolved,
+                        1U,
+                        inherited.kind,
+                        inherited.frame,
+                        {inherited.face},
+                    });
+            }
+        }
+
         const auto publish =
-            [&result, &next_face, &next_surface](
+            [&result, &runtime](
                 kernel::ExtrudeFaceRole role,
                 kernel::SurfaceKind kind,
                 std::optional<kernel::Frame3> frame) {
-                const kernel::RuntimeFaceToken face{next_face++};
-                const kernel::RuntimeSurfaceToken surface{next_surface++};
+                const kernel::RuntimeFaceToken face{
+                    runtime->next_face++};
+                const kernel::RuntimeSurfaceToken surface{
+                    runtime->next_surface++};
+                runtime->surfaces.push_back(
+                    SupportSolid::Surface{
+                        face,
+                        surface,
+                        kind,
+                        frame});
                 result.current_faces.push_back(face);
                 result.new_faces.push_back(
                     {role, kernel::ReferenceStatus::resolved, 1U, face});
@@ -102,7 +166,7 @@ public:
             input.profile.frame);
 
         result.status = kernel::SolidModelingStatus::ok;
-        result.solid = std::make_shared<SupportSolid>();
+        result.solid = std::move(runtime);
         result.brep_valid = true;
         result.solid_count = 1U;
         result.face_count = result.current_faces.size();
@@ -171,7 +235,8 @@ Fixture makeFixture(SupportKernel& kernel) {
 part::SurfaceReference findSurfaceReference(
     const application::DocumentSession& session,
     SupportKernel& kernel,
-    part::FeatureSurfaceRoleKind role) {
+    part::FeatureSurfaceRoleKind role,
+    std::optional<part::FeatureId> producer = std::nullopt) {
     const auto evaluation =
         part::evaluatePart(session.document(), kernel);
     CHECK(evaluation.body_status ==
@@ -182,8 +247,11 @@ part::SurfaceReference findSurfaceReference(
     const auto found = std::find_if(
         topology.surfaces.begin(),
         topology.surfaces.end(),
-        [role](const auto& surface) {
+        [role, producer](const auto& surface) {
             return surface.address.role == role &&
+                   (!producer ||
+                    surface.address.producer_feature_id ==
+                        *producer) &&
                    surface.status == kernel::ReferenceStatus::resolved;
         });
     CHECK(found != topology.surfaces.end());
@@ -372,11 +440,47 @@ int main() {
           application::SketchSupportMutationStatus::stale_revision);
     CHECK(fixture.session.document().state() == stale_state);
 
+    // A planar Surface produced by a later Cut is admitted by the identical
+    // semantic SurfaceReference path; no cap-only or Add-only special case.
+    const auto base_profile_id =
+        fixture.session.document().profiles().front().id;
+    const auto cut = fixture.session.execute(
+        application::CreateExtrudeFeatureCommand{
+            base_profile_id,
+            fixture.session.document().revision(),
+            part::ExtrudeOperation::cut,
+            part::OneSidedExtrudeExtent{
+                core::LengthValue{4.0}, false},
+            "Cut"},
+        kernel);
+    CHECK(cut.ok() && cut.changed && cut.feature_id);
+
+    const auto cut_support = supportFor(
+        findSurfaceReference(
+            fixture.session,
+            kernel,
+            part::FeatureSurfaceRoleKind::side,
+            *cut.feature_id));
+    const auto cut_sketch = fixture.session.execute(
+        application::CreatePartSketchOnSupportCommand{
+            cut_support,
+            fixture.session.document().revision()},
+        &kernel);
+    CHECK(cut_sketch.ok());
+    CHECK(cut_sketch.changed);
+    CHECK(cut_sketch.sketch_id.has_value());
+    const auto* cut_hosted =
+        fixture.session.document().findSketch(
+            *cut_sketch.sketch_id);
+    CHECK(cut_hosted != nullptr);
+    CHECK(cut_hosted->support == cut_support);
+
     std::cout
         << "PM02G_FACE_SUPPORTED_SKETCH_AUTHORING_PASS"
         << " origin_parity=1"
         << " cap=1"
         << " lateral=1"
+        << " cut_exposed=1"
         << " ids_preserved=1"
         << " local_uv_preserved=1"
         << " cycle_rejected=1"
