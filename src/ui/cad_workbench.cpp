@@ -6575,6 +6575,15 @@ CadWorkbench::cadInputContextGeneration() const noexcept {
                (extrude_profile_pick_generation_ &
                 (extrude_pick_namespace - 1U));
     }
+    if (datum_plane_draft_) {
+        constexpr application::CadInputContextGeneration
+            datum_plane_namespace =
+                application::CadInputContextGeneration{
+                    1ULL << 60U};
+        return datum_plane_namespace |
+               (datum_plane_draft_->generation() &
+                (datum_plane_namespace - 1U));
+    }
     if (extrude_draft_) {
         constexpr application::CadInputContextGeneration
             extrude_namespace =
@@ -6595,6 +6604,14 @@ CadWorkbench::cadDynamicInputFields() const {
     if (sketch_support_pick_active_ ||
         extrude_profile_pick_active_) {
         return {};
+    }
+    if (datum_plane_draft_) {
+        return {
+            application::CadDynamicInputField{
+                application::
+                    CadDynamicInputFieldSemantic::
+                        distance,
+                "Offset"}};
     }
     if (extrude_draft_) {
         return {
@@ -6635,6 +6652,43 @@ CadWorkbench::lockCadDynamicInputField(
             false,
             "CAD input semantic context is stale."};
     }
+    if (datum_plane_draft_) {
+        if (index != 0U ||
+            document_session_ == nullptr) {
+            return {
+                false,
+                "Datum Plane has one Offset input field."};
+        }
+
+        const auto quantity =
+            application::parseCadQuantity(
+                text,
+                {
+                    application::CadQuantityDimension::length,
+                    document_session_->document()
+                        .lengthUnit()});
+        if (!quantity ||
+            !datum_plane_draft_->setOffset(
+                core::LengthValue{
+                    quantity->canonical_value})) {
+            return {
+                false,
+                "Datum Plane Offset expects a finite signed Length."};
+        }
+
+        datum_plane_offset_input_valid_ = true;
+        datum_plane_evaluation_.reset();
+        if (datum_plane_offset_edit_ != nullptr) {
+            const QSignalBlocker blocked{
+                datum_plane_offset_edit_};
+            datum_plane_offset_edit_->setText(
+                fromUtf8(text));
+        }
+        refreshDatumPlaneEvaluation();
+        notifyCadInputContextChanged();
+        return {true, {}};
+    }
+
     if (extrude_draft_) {
         if (index != 0U ||
             document_session_ == nullptr) {
