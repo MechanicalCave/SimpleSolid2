@@ -1435,6 +1435,87 @@ struct SurfaceCandidateClaim final {
     bool aliased{false};
 };
 
+[[nodiscard]] bool surfaceClaimsShareFace(
+    const SurfaceCandidateClaim& first,
+    const SurfaceCandidateClaim& second) {
+    for (const auto& first_face : first.candidates) {
+        if (std::any_of(
+                second.candidates.begin(),
+                second.candidates.end(),
+                [&first_face](const TopoDS_Face& second_face) {
+                    return first_face.IsSame(second_face);
+                })) {
+            return true;
+        }
+    }
+    return false;
+}
+
+void applyAddSurfaceContinuations(
+    std::vector<SurfaceCandidateClaim>& claims,
+    kernel::SolidBooleanOperation operation) {
+    if (operation != kernel::SolidBooleanOperation::add) {
+        return;
+    }
+
+    // Continuation matching is evaluated against the original Boolean
+    // lineage claims only. Faces appended by an earlier continuation in this
+    // pass must never become transitive evidence for another continuation.
+    const auto original = claims;
+
+    for (std::size_t created_index = 0U;
+         created_index < original.size();
+         ++created_index) {
+        const auto& created = original[created_index];
+        if (created.kind != SurfaceCandidateClaim::Kind::created ||
+            created.surface_kind != kernel::SurfaceKind::plane ||
+            created.candidates.empty()) {
+            continue;
+        }
+
+        std::vector<std::size_t> inherited_matches;
+        for (std::size_t inherited_index = 0U;
+             inherited_index < original.size();
+             ++inherited_index) {
+            const auto& inherited = original[inherited_index];
+            if (inherited.kind !=
+                    SurfaceCandidateClaim::Kind::inherited ||
+                inherited.surface_kind !=
+                    kernel::SurfaceKind::plane ||
+                inherited.candidates.empty() ||
+                !surfaceClaimsShareFace(
+                    inherited,
+                    created)) {
+                continue;
+            }
+            inherited_matches.push_back(inherited_index);
+        }
+
+        // Zero matches means a genuinely new Surface. More than one inherited
+        // match remains explicit ambiguity. Exactly one lineage-overlap match
+        // is a bounded Add continuation under ADR-0017.
+        if (inherited_matches.size() != 1U) {
+            continue;
+        }
+
+        auto& target =
+            claims[inherited_matches.front()];
+        auto& absorbed =
+            claims[created_index];
+        for (const auto& candidate :
+             absorbed.candidates) {
+            appendUniqueFaceCandidate(
+                target.candidates,
+                candidate);
+        }
+
+        // The tool Surface contributes current geometry but does not become a
+        // second independent semantic carrier. An empty created claim
+        // publishes Missing while the inherited carrier owns the union.
+        absorbed.candidates.clear();
+    }
+}
+
 void markAliasedSurfaceClaims(
     std::vector<SurfaceCandidateClaim>& claims) {
     for (std::size_t first = 0U;
@@ -1496,6 +1577,7 @@ template <typename Mapper>
     OcctRuntimeSolid& runtime,
     const OcctRuntimeSolid* upstream,
     const std::vector<NewSemanticSource>& created,
+    kernel::SolidBooleanOperation operation,
     Mapper&& mapper) {
     std::vector<SurfaceCandidateClaim> claims;
 
@@ -1590,6 +1672,9 @@ template <typename Mapper>
             });
     }
 
+    applyAddSurfaceContinuations(
+        claims,
+        operation);
     markAliasedSurfaceClaims(claims);
 
     for (const auto& claim : claims) {
@@ -1977,9 +2062,10 @@ template <typename Operation>
         observation.provider_curve_kind =
             providerCurveKind(edge);
 
+        bool same_surface_partition = false;
         for (const auto& [surface_value, surface] :
              runtime.tracked_surfaces) {
-            bool adjacent = false;
+            std::size_t containing_face_count = 0U;
             bool seam = false;
             for (const auto& face :
                  surface.faces) {
@@ -1988,23 +2074,30 @@ template <typename Operation>
                         edge)) {
                     continue;
                 }
-                adjacent = true;
+                ++containing_face_count;
                 if (BRepTools::IsReallyClosed(
                         edge,
                         face)) {
                     seam = true;
                 }
             }
-            if (adjacent) {
+            if (containing_face_count > 0U) {
                 appendUniqueToken(
                     observation.adjacent_surfaces,
                     kernel::RuntimeSurfaceToken{
                         surface_value});
             }
+            same_surface_partition =
+                same_surface_partition ||
+                containing_face_count >= 2U;
             observation.periodic_seam =
                 observation.periodic_seam ||
                 seam;
         }
+        observation.same_surface_partition =
+            same_surface_partition &&
+            !observation.periodic_seam &&
+            observation.adjacent_surfaces.size() == 1U;
 
         result.current_edge_semantics.push_back(
             std::move(observation));
@@ -2042,7 +2135,8 @@ template <typename Operation>
 
         for (const auto& edge_observation :
              result.current_edge_semantics) {
-            if (edge_observation.periodic_seam) {
+            if (edge_observation.periodic_seam ||
+                edge_observation.same_surface_partition) {
                 continue;
             }
             const auto found =
@@ -2336,6 +2430,7 @@ finishBoolean(
             *runtime,
             &upstream,
             created,
+            kind,
             [&operation, &shape](
                 const TopoDS_Face& source) {
                 return descendantFaces(
@@ -2719,6 +2814,7 @@ OcctSolidModelingKernel::extrude(
                     *runtime,
                     nullptr,
                     created,
+                    input.operation,
                     [&tool_shape](
                         const TopoDS_Face& source) {
                         std::vector<TopoDS_Face>

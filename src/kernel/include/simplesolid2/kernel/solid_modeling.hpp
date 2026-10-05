@@ -204,6 +204,10 @@ struct CurrentEdgeSemanticObservation final {
     CurveKind provider_curve_kind{
         CurveKind::other};
     bool periodic_seam{false};
+    // True when the current provider Edge is only a partition between two
+    // bounded Face realizations of one tracked semantic Surface. Runtime-only
+    // representation evidence; never durable Curve identity.
+    bool same_surface_partition{false};
     std::vector<RuntimeSurfaceToken>
         adjacent_surfaces;
 

@@ -232,6 +232,7 @@ struct BodyEdgeTopologyRecord final {
     kernel::CurveKind curve_kind{
         kernel::CurveKind::other};
     bool periodic_seam{false};
+    bool same_surface_partition{false};
     std::vector<FeatureCurveAddress>
         curve_candidates;
 

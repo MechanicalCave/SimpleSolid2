@@ -689,6 +689,7 @@ public:
                         edge.token,
                         edge.kind,
                         edge.seam,
+                        false,
                         edge.surfaces,
                     });
             }

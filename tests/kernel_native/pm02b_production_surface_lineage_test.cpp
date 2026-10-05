@@ -921,6 +921,138 @@ void verifyTrimSplitDeleteRecreate(
     }
 }
 
+void verifyCoplanarAddContinuation(
+    kernel_occt::OcctSolidModelingKernel& provider) {
+    const auto base =
+        provider.extrude(
+            oneSide(
+                rectangle(
+                    0.0, 0.0,
+                    40.0, 20.0,
+                    0.0,
+                    "continuation-base"),
+                10.0));
+    CHECK(base.ok());
+
+    const auto* base_extent =
+        newCap(
+            base,
+            kernel::ExtrudeCapRole::extent_cap);
+    CHECK(base_extent != nullptr);
+    CHECK(base_extent->resolved_token.has_value());
+    CHECK(base_extent->canonical_frame.has_value());
+    const auto inherited_token =
+        *base_extent->resolved_token;
+    const auto inherited_frame =
+        *base_extent->canonical_frame;
+
+    // Extend the prism side-by-side with equal height. The top plane is one
+    // engineering Surface even when the Boolean result retains bounded Face
+    // fragments separated by a representation partition.
+    const auto extended =
+        provider.extrude(
+            oneSide(
+                rectangle(
+                    40.0, 0.0,
+                    60.0, 20.0,
+                    0.0,
+                    "continuation-add"),
+                10.0),
+            base.solid);
+    CHECK(extended.ok());
+
+    const auto* inherited =
+        inheritedSurface(
+            extended,
+            inherited_token);
+    CHECK(inherited != nullptr);
+    CHECK(
+        inherited->surface_status ==
+        kernel::ReferenceStatus::resolved);
+    CHECK(inherited->candidate_face_count >= 1U);
+    CHECK(
+        inherited->current_faces.size() ==
+        inherited->candidate_face_count);
+    CHECK(inherited->canonical_frame.has_value());
+    CHECK(
+        near(
+            *inherited->canonical_frame,
+            inherited_frame));
+
+    const auto* added_extent =
+        newCap(
+            extended,
+            kernel::ExtrudeCapRole::extent_cap);
+    CHECK(added_extent != nullptr);
+
+    std::cerr
+        << "PM02J_R2_DIAG inherited_surfaces="
+        << extended.inherited_surfaces.size()
+        << " new_surfaces="
+        << extended.new_surfaces.size()
+        << " edges="
+        << extended.current_edge_semantics.size()
+        << '\n';
+    for (const auto& item :
+         extended.inherited_surfaces) {
+        std::cerr
+            << "  inherited token=" << item.token.value
+            << " status=" << static_cast<int>(item.surface_status)
+            << " strict=" << static_cast<int>(item.strict_face_status)
+            << " faces=" << item.candidate_face_count
+            << " kind=" << static_cast<int>(item.surface_kind)
+            << '\n';
+    }
+    for (const auto& item :
+         extended.new_surfaces) {
+        std::cerr
+            << "  new role=" << static_cast<int>(item.role.kind)
+            << " cap="
+            << (item.role.cap_role
+                    ? static_cast<int>(*item.role.cap_role)
+                    : -1)
+            << " status=" << static_cast<int>(item.surface_status)
+            << " strict=" << static_cast<int>(item.strict_face_status)
+            << " faces=" << item.candidate_face_count
+            << " kind=" << static_cast<int>(item.surface_kind)
+            << '\n';
+    }
+    for (const auto& edge :
+         extended.current_edge_semantics) {
+        if (edge.adjacent_surfaces.size() <= 2U) {
+            std::cerr
+                << "  edge=" << edge.runtime_token.value
+                << " adjacent=" << edge.adjacent_surfaces.size()
+                << " seam=" << edge.periodic_seam
+                << " partition=" << edge.same_surface_partition
+                << '\n';
+        }
+    }
+
+    CHECK(
+        added_extent->surface_status ==
+        kernel::ReferenceStatus::missing);
+    CHECK(
+        added_extent->strict_face_status ==
+        kernel::ReferenceStatus::missing);
+    CHECK(added_extent->candidate_face_count == 0U);
+    CHECK(added_extent->current_faces.empty());
+    CHECK(!added_extent->resolved_token.has_value());
+    CHECK(!added_extent->canonical_frame.has_value());
+
+    std::size_t partition_count = 0U;
+    for (const auto& edge :
+         extended.current_edge_semantics) {
+        if (!edge.same_surface_partition) {
+            continue;
+        }
+        ++partition_count;
+        CHECK(!edge.periodic_seam);
+        CHECK(edge.adjacent_surfaces.size() == 1U);
+    }
+    CHECK(partition_count >= 1U);
+}
+
 void verifyCutExposed(
     kernel_occt::OcctSolidModelingKernel& provider) {
     const auto base =
@@ -974,6 +1106,7 @@ int main() {
     verifyPristineAndFrames(provider);
     verifySemanticEditSurvival(provider);
     verifyTrimSplitDeleteRecreate(provider);
+    verifyCoplanarAddContinuation(provider);
     verifyCutExposed(provider);
 
     std::cout
@@ -981,6 +1114,8 @@ int main() {
         << " false_resolved=0"
         << " split_face=ambiguous"
         << " split_surface=resolved"
+        << " add_continuation=resolved"
+        << " same_surface_partition=representation_artifact_input"
         << " deleted_surface=missing_no_frame"
         << " cut_exposed_surface=resolved"
         << " edit_survival=pass"
