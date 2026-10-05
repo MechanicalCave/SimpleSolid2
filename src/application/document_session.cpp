@@ -199,6 +199,14 @@ std::string supportResolutionMessage(
         return "Selected Surface is non-planar and cannot host a standard Sketch";
     case Diagnostic::unsupported_surface:
         return "Selected Surface is unsupported for standard Sketch support";
+    case Diagnostic::missing_datum:
+        return "Sketch support Datum Plane is missing";
+    case Diagnostic::ambiguous_datum:
+        return "Sketch support Datum Plane is ambiguous";
+    case Diagnostic::unsupported_datum:
+        return "Sketch support Datum Plane is unsupported";
+    case Diagnostic::blocked_datum:
+        return "Sketch support Datum Plane is blocked by unavailable upstream geometry";
     }
     return "Sketch support could not be resolved";
 }
@@ -217,13 +225,6 @@ resolveSupportForMutation(
             support);
     }
 
-    const auto* reference =
-        part::bodyPlanarSurfaceReference(
-            support);
-    if (reference == nullptr) {
-        return std::nullopt;
-    }
-
     if (modeling_kernel == nullptr) {
         return std::nullopt;
     }
@@ -232,6 +233,26 @@ resolveSupportForMutation(
         part::evaluatePart(
             document,
             *modeling_kernel);
+
+    if (part::datumPlaneIdForSketchSupport(
+            support)) {
+        const auto datums =
+            part::evaluateDatums(
+                document,
+                evaluation);
+        return part::resolveSketchSupport(
+            support,
+            nullptr,
+            &datums);
+    }
+
+    const auto* reference =
+        part::bodyPlanarSurfaceReference(
+            support);
+    if (reference == nullptr) {
+        return std::nullopt;
+    }
+
     const auto* topology =
         topologyAtStage(
             evaluation,
@@ -241,14 +262,61 @@ resolveSupportForMutation(
         topology);
 }
 
+std::optional<part::BodyStageRef>
+requiredBodyStageForSketchSupport(
+    const part::PartAuthoredState& state,
+    const part::PartSketchSupport& support) noexcept {
+    if (const auto* reference =
+            part::bodyPlanarSurfaceReference(
+                support)) {
+        return reference->stage;
+    }
+
+    auto datum_id =
+        part::datumPlaneIdForSketchSupport(
+            support);
+    std::set<part::DatumId> visited;
+    while (datum_id) {
+        if (!visited.insert(*datum_id).second) {
+            return std::nullopt;
+        }
+
+        const auto found =
+            std::find_if(
+                state.datum_planes.begin(),
+                state.datum_planes.end(),
+                [datum_id](
+                    const part::OffsetDatumPlane& datum) {
+                    return datum.id == *datum_id;
+                });
+        if (found ==
+            state.datum_planes.end()) {
+            return std::nullopt;
+        }
+
+        if (const auto* surface =
+                part::bodyPlanarSurfaceForPlaneReference(
+                    found->source)) {
+            return surface->stage;
+        }
+
+        datum_id =
+            part::datumPlaneIdForPlaneReference(
+                found->source);
+    }
+
+    return std::nullopt;
+}
+
 bool supportWouldCreateCycle(
     const part::PartAuthoredState& state,
     sketch::SketchId sketch_id,
     const part::PartSketchSupport& support) noexcept {
-    const auto* reference =
-        part::bodyPlanarSurfaceReference(
+    const auto required_stage =
+        requiredBodyStageForSketchSupport(
+            state,
             support);
-    if (reference == nullptr) {
+    if (!required_stage) {
         return false;
     }
 
@@ -256,10 +324,11 @@ bool supportWouldCreateCycle(
         std::find_if(
             state.body.features.begin(),
             state.body.features.end(),
-            [reference](const part::PartFeature& feature) {
-                return reference->stage.feature_id &&
+            [required_stage](
+                const part::PartFeature& feature) {
+                return required_stage->feature_id &&
                        feature.id ==
-                           *reference->stage.feature_id;
+                           *required_stage->feature_id;
             });
     if (stage_it == state.body.features.end()) {
         return true;
@@ -2202,6 +2271,8 @@ DocumentSession::evaluateExtrudeDraft(
 
     const part::BodyStageTopologyCatalog*
         preview_support_topology = nullptr;
+    std::optional<part::DatumEvaluation>
+        preview_support_datums;
     if (const auto* profile =
             candidate.document->findProfile(
                 definition.profile_id)) {
@@ -2215,6 +2286,13 @@ DocumentSession::evaluateExtrudeDraft(
                     topologyAtStage(
                         evaluation,
                         support->stage);
+            } else if (
+                part::datumPlaneIdForSketchSupport(
+                    source->support)) {
+                preview_support_datums =
+                    part::evaluateDatums(
+                        *candidate.document,
+                        evaluation);
             }
         }
     }
@@ -2223,7 +2301,10 @@ DocumentSession::evaluateExtrudeDraft(
         part::makeKernelExtrudeInput(
             *candidate.document,
             definition,
-            preview_support_topology);
+            preview_support_topology,
+            preview_support_datums
+                ? &*preview_support_datums
+                : nullptr);
     if (preview_input &&
         preview_upstream_ready) {
         auto preview =
