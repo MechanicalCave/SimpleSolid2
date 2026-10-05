@@ -1575,6 +1575,7 @@ set(_ss2_fast_tests
     sk07b.common_transform_state
     sk07b.transform_controller
     r11.snap_core
+    pm02f.stage_aware_profile_evaluation
 )
 set_property(TEST ${_ss2_fast_tests} APPEND PROPERTY LABELS "tier-fast")
 set_property(TEST wb01a.workbench_native_stress APPEND PROPERTY LABELS
@@ -1671,6 +1672,7 @@ set(_ss2_part_tests
     sk07f.precision_input_controller
     r12.structural_edit_document_session
     r12.structural_edit_persistence
+    pm02f.stage_aware_profile_evaluation
 )
 set_property(TEST ${_ss2_part_tests} APPEND PROPERTY LABELS "subsystem-part")
 
@@ -1768,6 +1770,7 @@ set(_ss2_application_tests
     sk07f.precision_input_controller
     r12.structural_edit_document_session
     r12.structural_edit_persistence
+    pm02f.stage_aware_profile_evaluation
 )
 set_property(TEST ${_ss2_application_tests} APPEND PROPERTY LABELS "subsystem-application")
 
@@ -1802,6 +1805,7 @@ set_property(TEST ${_ss2_core_tests} APPEND PROPERTY LABELS "subsystem-core")
 
 set(_ss2_kernel_tests
     pm00a.kernel_boundaries
+    pm02f.stage_aware_profile_evaluation
 )
 set_property(TEST ${_ss2_kernel_tests} APPEND PROPERTY LABELS "subsystem-kernel")
 
