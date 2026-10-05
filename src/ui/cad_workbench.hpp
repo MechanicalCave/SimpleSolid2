@@ -305,6 +305,8 @@ private:
         sketch_resupport_target_;
     std::optional<part::PartSketchSupport>
         pending_sketch_support_;
+    std::optional<core::DocumentRevision>
+        pending_sketch_support_revision_;
     application::CadInputContextGeneration
         sketch_support_pick_generation_{};
     std::optional<core::DocumentId>
