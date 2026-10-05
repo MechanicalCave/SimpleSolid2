@@ -1,11 +1,14 @@
 # PM-02 — Final Acceptance Matrix
 
-**Status:** AUTOMATED EVIDENCE COMPLETE; OWNER WINDOWS MANUAL PENDING  
+**Status:** AUTOMATED + DOCUMENTATION EVIDENCE COMPLETE; OWNER WINDOWS MANUAL PENDING  
 **Work Contract:** `work/PM-02_BODY_SEMANTIC_TOPOLOGY_FACE_SUPPORTED_SKETCH.md`  
 **Final runtime/evidence candidate:** `b642a5af625a48d668a21efeaf3d78bfb9bf7c79`  
 **Final runtime gate:** Windows FULL #1451 — PASS  
 **Merged runtime/evidence main:** `a26d7e981b160973825603bc3c11f37d5ab594a8`  
 **PM-02J activation main:** `e28c756318e59cb68a28c375ddb96fc19d7ea67f`  
+**Documentation candidate:** `65919f28f8c8dade4ba2904ec699957f9077d1f1`  
+**Documentation gate:** Windows DOCS #1454 — PASS (`.\\ss2.ps1 docs` produced zero Browser diff)  
+**Merged documentation main:** `300459629658432bb94f938e51cb1df4a17b353e`  
 **Owner Windows manual acceptance:** PENDING
 
 ## 1. Gate interpretation
