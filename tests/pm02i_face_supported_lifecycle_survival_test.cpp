@@ -443,7 +443,7 @@ findSupportSurface(
             feature->result_topology->surfaces.end(),
             [&reference](const auto& surface) {
                 return surface.address ==
-                       reference.address;
+                       reference.surface;
             });
     return found ==
                feature->result_topology->surfaces.end()
@@ -1114,7 +1114,7 @@ int main() {
             none);
     CHECK(cold_support.frame.has_value());
     CHECK(
-        cold_support.frame->origin.z ==
+        cold_support.frame->origin[2] ==
         10.0);
 
     std::cout
