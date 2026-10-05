@@ -162,7 +162,7 @@ Fixture makeFixture(SupportKernel& kernel) {
             part::OneSidedExtrudeExtent{
                 core::LengthValue{10.0}, false},
             "Base"},
-        kernel);
+        &kernel);
     CHECK(feature.ok() && feature.changed && feature.feature_id);
 
     return {std::move(session), *sketch_created.sketch_id};
@@ -223,7 +223,7 @@ int main() {
     const auto created = fixture.session.execute(
         application::CreatePartSketchOnSupportCommand{
             cap_support, revision_before_create},
-        kernel);
+        &kernel);
     CHECK(created.ok() && created.changed && created.sketch_id);
     CHECK(created.status ==
           application::SketchSupportMutationStatus::applied);
@@ -264,7 +264,7 @@ int main() {
             created_id,
             side_support,
             fixture.session.document().revision()},
-        kernel);
+        &kernel);
     CHECK(resupported.ok() && resupported.changed);
     CHECK(resupported.sketch_id ==
           std::optional<sketch::SketchId>{created_id});
@@ -297,7 +297,7 @@ int main() {
             fixture.base_sketch_id,
             cap_support,
             cycle_revision},
-        kernel);
+        &kernel);
     CHECK(!cycle.ok() && !cycle.changed);
     CHECK(cycle.status ==
           application::SketchSupportMutationStatus::cycle_dependency);
@@ -312,7 +312,7 @@ int main() {
         application::CreatePartSketchOnSupportCommand{
             cap_support,
             unsupported_revision},
-        kernel);
+        &kernel);
     CHECK(!unsupported.ok() && !unsupported.changed);
     CHECK(unsupported.status ==
           application::SketchSupportMutationStatus::unsupported);
@@ -325,7 +325,7 @@ int main() {
         application::CreatePartSketchOnSupportCommand{
             cap_support,
             revision_before_create},
-        kernel);
+        &kernel);
     CHECK(!stale.ok() && !stale.changed);
     CHECK(stale.status ==
           application::SketchSupportMutationStatus::stale_revision);
