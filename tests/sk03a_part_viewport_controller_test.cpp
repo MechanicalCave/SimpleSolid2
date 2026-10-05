@@ -1672,8 +1672,41 @@ int main(int argc, char* argv[]) {
                 ++feature_hover_events;
             });
 
+        const auto topology_datum =
+            topology_session.execute(
+                application::CreateDatumPlaneCommand{
+                    part::PlaneReference{
+                        part::BuiltinOriginPlaneReference{
+                            core::BuiltinReferenceRole::
+                                yz_plane}},
+                    topology_session.document().revision(),
+                    core::LengthValue{0.0},
+                    true},
+                topology_kernel);
+        CHECK(topology_datum.ok());
+        CHECK(topology_datum.changed);
+        CHECK(topology_datum.datum_id.has_value());
+
         topology_controller.setDocumentSession(
             &topology_session);
+
+        CHECK(
+            topology_viewport.reference_scene_.
+                overlays.size() == 1U);
+        CHECK(
+            !topology_viewport.reference_scene_.
+                 overlays.front()
+                 .segments.empty());
+        CHECK(
+            topology_controller.datumFor(
+                topology_viewport.reference_scene_.
+                    overlays.front().owner) ==
+            topology_datum.datum_id);
+        CHECK(
+            topology_controller.datumPresentationFor(
+                *topology_datum.datum_id) ==
+            topology_viewport.reference_scene_.
+                overlays.front().owner);
 
         std::size_t topology_inspection_events = 0U;
         std::optional<ui::BodyTopologyInspection>
