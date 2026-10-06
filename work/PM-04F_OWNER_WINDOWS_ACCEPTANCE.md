@@ -1,72 +1,86 @@
 # PM-04F — Owner Windows Acceptance
 
-**Status:** PENDING OWNER  
+**Status:** PENDING IMPLEMENTATION + OWNER  
 **Parent Work Contract:** `work/PM-04_AXIS_REVOLVE.md`  
-**Checkpoint:** PM-04F — documentation / Product Browser / Owner Windows acceptance  
+**Owner amendment:** `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md`  
+**Checkpoint:** PM-04F — Axis-designation remediation / documentation / Product Browser / Owner Windows acceptance  
 **Date:** 2026-10-06
 
 ## Purpose
 
-This is the final supported-Windows product workflow for PM-04. Automated gates establish semantic/provider/regression correctness; this workflow verifies the accepted user-facing Axis/Revolve experience in the real desktop application.
+This is the final supported-Windows workflow for PM-04 after the Owner-accepted Axis-designation UX amendment.
 
-Do not mark PM-04 complete from automation alone. The Owner must report PASS for this workflow, or report the exact failing step/behavior.
+Do not execute this as final acceptance until the amendment implementation, new exact-head Windows FULL, current documentation and regenerated Product Browser have passed. Do not close PM-04 from automation alone.
 
 ## Preconditions
 
-- use the exact post-PM-04F-docs main candidate that passed the final automated gate;
+- use the exact final PM-04F candidate identified by the new Windows FULL and documentation gates;
 - launch through the supported repository Windows workflow;
-- start from a new disposable Project/Part so existing authored state cannot mask failures;
-- keep the default product presentation unless a step explicitly changes visibility.
+- start from a new disposable Project/Part;
+- keep default presentation unless a step explicitly changes visibility.
 
 ## Workflow
 
-### A. Authored Axis lifecycle
+### A. Axis designation during Line authoring
 
 1. Create a new Part and a Sketch on the XY Origin plane.
-2. Create one closed Regular profile entirely on one side of the Sketch U axis (for example a rectangle away from V=0).
-3. Create a separate non-degenerate **Construction Line** along the intended revolve axis. Confirm it stays Construction.
-4. Start **Axis**, select that Line and Finish.
-5. Confirm the Axis appears under its source Sketch, has Properties/status and is visible independently from the source Sketch geometry.
-6. Hide then show the Axis. Confirm modeling state/history is unchanged except authored presentation visibility.
-7. Edit/re-source the Axis to another admissible Line and Finish. Confirm the same Axis object/identity remains and downstream state recomputes.
-8. Undo and Redo the re-source and confirm the Axis returns between the exact two authored sources.
+2. Confirm there is no standalone GUI **Axis** authoring button in the Part Modeling / Sketcher toolbar surface.
+3. Start **Line**. Confirm Operations separates **Geometry role = Regular/Construction** from **Part reference = Axis**.
+4. Set Geometry role to **Construction**, enable **Axis**, and draw one non-degenerate Line.
+5. Confirm the Line remains Construction and exactly one authored Axis appears under the source Sketch in Tree with its own AxisId/Properties.
+6. Confirm the Axis designation is one-shot: after the successful Line+Axis commit, Axis returns to OFF. Draw the next continuous Line segment and confirm it does not create another Axis.
+7. Undo once and confirm the Line from step 4 and its Axis disappear together. Redo once and confirm both return with the same authored identities.
+8. Repeat with a new **Regular + Axis** Line and confirm Regular/Construction is orthogonal to Axis designation.
 
-### B. Revolve create / preview / interaction
+### B. Existing-Line designation and uniqueness
 
-9. Ensure the closed Profile and a resolved authored Axis are available. Start **Revolve** selection-first or command-first.
-10. Confirm Profile and Axis are explicit fields; no Axis is silently inferred.
-11. Confirm a new valid draft defaults to **Add + One Side + 360° + Reverse off**.
-12. Change Angle to 180° and confirm the transient preview updates while the already committed Body remains in normal presentation.
-13. Toggle **Reverse** and confirm direction changes without authored mutation before Finish.
-14. Switch to **Midplane** and confirm Reverse is unavailable/not authored; Angle remains the total symmetric sweep.
-15. Return to a valid One Side or Midplane setting and Finish. Confirm one Feature/one Undo step is created.
-16. Edit that Revolve from Tree/Properties. Confirm Edit uses the same Operations surface and preserves the same Feature identity.
-17. Cancel one edit after changing values and confirm the committed Feature is unchanged.
-18. Re-enter Edit, make a valid change, Finish and confirm one Undo step.
+9. Select exactly one Line with no Axis. Confirm Operations shows its Geometry role and **Part reference: Axis = OFF**.
+10. Enable Axis. Confirm exactly one new Axis is created in one Undo step and the Line geometry role/EntityId is unchanged.
+11. Toggle that Line between Regular and Construction and confirm the Axis remains the same authored Axis.
+12. Disable Axis on an unreferenced test Line. Confirm the Axis is removed while the Line remains; Undo restores the same AxisId.
+13. Re-enable Axis, then attempt to create/re-source another Axis to that exact Line through the supported expert/Edit path. Confirm duplicate-source authoring is rejected with zero partial mutation.
+14. If a pre-amendment duplicate-source fixture is available, open it and confirm it loads without AxisId/reference rewrite; selecting the shared source Line reports an indeterminate/conflict designation and does not arbitrarily toggle one Axis.
 
-### C. Origin Axis and visibility semantics
+### C. Axis lifecycle and identity-preserving re-source
 
-19. Start another Revolve context that can use the same valid Profile and explicitly choose Origin **X**, **Y** or **Z** as geometrically admissible for that Profile.
-20. Confirm no authored Axis object is created merely by using an Origin axis.
-21. Hide the chosen Origin/authored Axis in normal presentation, then enter a Revolve draft using it through explicit Tree/property selection. Confirm it may be temporarily visible/emphasized during the draft but returns to authored Hidden after Cancel/Finish.
+15. Select an authored Axis in Tree. Confirm Properties, Show/Hide and Edit/Re-source remain available even though the GUI Axis creation button is gone.
+16. Edit/Re-source it to another admissible Line that is not already designated. Confirm the same AxisId and authored visibility are preserved.
+17. Undo/Redo the re-source and confirm the exact two sources alternate under the same AxisId.
+18. Confirm `AXIS` Command Line remains available for selection-first and command-first Axis creation and follows the same duplicate-source rule.
 
-### D. Failure and repair
+### D. Revolve create / preview / interaction
 
-22. With a Revolve referencing an authored Axis, delete the Axis object. Confirm the Revolve remains authored and reports a Missing/Blocked condition rather than disappearing or binding to another line.
-23. Undo Delete and confirm the same Axis returns and the Revolve repairs.
-24. Delete or invalidate a source Line/geometry so the Axis or Profile becomes unavailable. Confirm no stale last-good Body is presented as current valid modeling truth.
-25. Repair through the supported explicit path (Axis re-source and/or source geometry repair) and confirm the same durable Axis/Profile/Feature identities resume current evaluation.
+19. Create/ensure one closed valid Profile entirely on one side of the intended Axis and one resolved authored Axis.
+20. Start **Revolve** selection-first or command-first. Confirm Profile and Axis are explicit; a raw non-designated Sketch Line is not silently accepted as AxisReference.
+21. Confirm a new valid draft defaults to **Add + One Side + 360° + Reverse off**.
+22. Change Angle to 180° and confirm transient preview updates while committed Body presentation remains normal.
+23. Toggle Reverse and confirm direction changes without authored mutation before Finish.
+24. Switch to Midplane and confirm Reverse is unavailable/not authored and Angle is the total symmetric sweep.
+25. Finish a valid Revolve and confirm one Feature / one Undo step.
+26. Edit that Revolve, Cancel one changed draft, then Edit again and Finish a valid change. Confirm FeatureId is preserved and only the successful Finish creates history.
 
-### E. Save / reopen / cold reconstruction
+### E. Origin Axis and referenced-Axis removal
 
-26. Save the Part, close it, reopen it from the Project and verify the authored Axis visibility/source, Revolve Profile/Axis reference, Add/Cut mode, OneSide/Midplane, Angle, Reverse where applicable and Suppressed state.
-27. Confirm reopened Body/Revolve presentation is freshly reconstructed and the document does not depend on previous-process preview/provider tokens.
-28. Exercise Undo/Redo after a fresh authored mutation and confirm normal history behavior; pre-close Undo history itself is not expected to persist.
+27. Start another geometrically admissible Revolve and explicitly select Origin X/Y/Z. Confirm no authored Axis object is created for Origin.
+28. Hide an Origin/authored Axis and enter Revolve using it through explicit semantic selection. Confirm transient emphasis does not change authored visibility.
+29. With a Revolve referencing an authored Axis, select its source Line in Sketch Edit and disable Axis designation. Confirm an explicit warning states that the consumer will become Missing/Blocked.
+30. Confirm removal. Verify the Revolve remains authored, becomes Missing/Blocked and does not bind to another Line.
+31. Undo and confirm the exact same AxisId returns and repairs the Revolve.
+32. Re-source the Axis explicitly and confirm the same Revolve reference follows the preserved AxisId.
 
-### F. Documentation / Product Browser
+### F. Failure, Save / reopen / cold reconstruction
 
-29. Open the generated Product Browser and verify the Axis/Revolve workflow is present in both Polish and English.
-30. Confirm Product docs do **not** claim Datum Axis, Body-Edge/Curve Axis, Projection, >360° Revolve or multi-Body as implemented.
+33. Delete/invalidate an Axis source Line or its support. Confirm no stale last-good Axis/Body is presented as current valid modeling truth.
+34. Repair through the explicit supported path and confirm existing durable Axis/Profile/Feature identities resume evaluation where valid.
+35. Save, close and reopen. Verify Axis source/visibility, Revolve AxisReference, Profile, Add/Cut, OneSide/Midplane, Angle, Reverse where applicable and Suppressed state.
+36. Confirm Body/Revolve/Axis presentation is freshly reconstructed without previous-process preview/provider tokens.
+37. Exercise a fresh authored mutation followed by Undo/Redo and confirm normal history behavior; pre-close history is not expected to persist.
+
+### G. Documentation / Product Browser
+
+38. Open the generated Product Browser and verify PL/EN documentation describes Axis as a Part designation of a Line while preserving the separate authored Axis object/AxisId.
+39. Confirm docs no longer instruct normal GUI users to start a standalone Axis toolbar tool.
+40. Confirm docs retain `AXIS` Command Line, Edit/Re-source, Tree/Properties, Show/Hide/Delete, Origin X/Y/Z direct AxisReference and the explicit exclusions: Datum Axis, Body-Edge/Curve Axis, Projection, >360° Revolve and multi-Body.
 
 ## Acceptance
 
@@ -75,4 +89,4 @@ Owner result:
 - **PASS** — every required step behaves as described and there is no functional PM-04 blocker; or
 - **FAIL** — report the first failing step plus observed/expected behavior. Do not close PM-04.
 
-Presentation polish already explicitly deferred by prior accepted governance (the common neutral translucent Origin/Datum plane fill for PM-06) is not a PM-04 blocker unless PM-04 introduced a new regression beyond that accepted defer.
+Presentation polish already explicitly deferred by prior accepted governance (the common neutral translucent Origin/Datum plane fill for PM-06) remains non-blocking unless this amendment introduces a new regression.

@@ -1,6 +1,7 @@
 # PM-04 — Axis / Revolve
 
-**Status:** ACTIVE — OWNER ACCEPTED 2026-10-06  
+**Status:** ACTIVE — OWNER ACCEPTED 2026-10-06; PM-04F AXIS-DESIGNATION UX AMENDMENT OWNER-ACCEPTED 2026-10-06  
+**Owner amendment:** `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` — bounded Axis authoring UX / source-uniqueness amendment; PM-04F final gates reset  
 **Decision class:** D2 production Work Contract  
 **Foundation:** 1.0 (`foundation-v1.0`)  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.25  
@@ -447,27 +448,25 @@ The existing SurfaceReference/Curve/Point catalog meaning must therefore remain 
 
 ## 8. Runtime draft / GUI / Command Line
 
-### 8.1 Axis tool
+### 8.1 Axis authoring after PM-04F Owner amendment
 
-Part exposes an `Axis` authoring action for Sketch-Line-derived Axis objects.
+The separate GUI **Axis** toolbar action is removed.
 
-Selection-first:
+Axis remains a Part-owned authored object with stable AxisId and Sketch-Line source. GUI authoring is projected through the active/selected Line Operations surface:
 
-- select exactly one admissible Line in a resolved Sketch;
-- start Axis;
-- draft acquires that source.
+- `Regular | Construction` remains the Shared-2D geometry role;
+- `Axis | none` is an orthogonal Part designation;
+- active Line creation may enable one-shot `Axis`, producing Line + authored Axis atomically in one semantic transaction / one Undo step;
+- exactly one selected existing Line may toggle Axis designation through one semantic transaction;
+- one exact Sketch-Line source may receive at most one newly-created/re-sourced authored Axis;
+- pre-amendment duplicate-source Axis records remain loadable and are exposed fail-closed rather than merged or silently rewritten;
+- Edit/Re-source on the Axis object remains the only identity-preserving way to move an existing Axis to another Line;
+- Axis Tree/Properties, Show/Hide, Delete and repair remain;
+- Origin X/Y/Z remain built-in AxisReference values and are not affected by this designation UI.
 
-Command-first:
+The `AXIS` Command Line path remains supported and uses the same AxisDraft / semantic command path. Selection-first and command-first acquisition continue to work without a persistent GUI Axis tool button.
 
-- start Axis;
-- enter explicit source acquisition;
-- choose one admissible Line.
-
-Finish creates exactly one Axis object / one Undo step.
-
-Cancel, invalid input and stale context create no authored state.
-
-GUI and Command Line must use the same Axis draft and semantic command path.
+The exact accepted rules, compatibility policy and reset acceptance gates are normative in `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md`.
 
 ### 8.2 Revolve tool
 
@@ -751,6 +750,8 @@ Close:
 - Product Browser;
 - final exact-head automated gate;
 - Owner Windows workflow.
+
+**PM-04F Owner amendment gate reset — 2026-10-06:** the pre-amendment #1563 runtime FULL and #1565 DOCS evidence remain valid historical/baseline evidence but are no longer final closure authority. Implement `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md`, then obtain a new exact-head Windows FULL, current internal + PL/EN Product docs, regenerated Product Browser/DOCS verification and the revised Owner Windows PASS before PM-04 may close.
 
 ## Documentation Impact
 

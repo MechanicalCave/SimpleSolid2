@@ -1,6 +1,6 @@
 # PM-04F — Automated Acceptance Matrix
 
-**Status:** AUTOMATED PASS — OWNER WINDOWS PENDING  
+**Status:** PRE-AMENDMENT BASELINE PASS — SUPERSEDED FOR FINAL CLOSURE BY ACCEPTED AXIS-DESIGNATION UX AMENDMENT  
 **Parent Work Contract:** `work/PM-04_AXIS_REVOLVE.md`  
 **Program authority:** `work/PART_MODELING_V1_ROADMAP.md` v1.25  
 **Date:** 2026-10-06
@@ -9,7 +9,13 @@
 
 This matrix closes the automated-evidence side of the accepted PM-04 Axis / Revolve package without redefining product or architecture semantics.
 
-PM-04A through PM-04E are already merged and exact-head gated. PM-04F updates current-state internal/Product documentation, regenerates the Product Browser, requires a final exact-head automated gate, and leaves the mandatory Owner Windows workflow as a separate final acceptance gate.
+PM-04A through PM-04E are already merged and exact-head gated. The original PM-04F documentation candidate and Owner workflow were prepared and gated, but Owner pre-close review accepted a bounded Axis-designation UX amendment on 2026-10-06. The evidence below remains authoritative for the pre-amendment implementation and unaffected PM-04 semantics; it is not sufficient for final PM-04 closure after the runtime/UI amendment.
+
+## Superseding PM-04F Owner amendment
+
+Normative amendment: `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` — ACCEPTED 2026-10-06.
+
+Required new closure evidence includes contextual Line Axis designation, atomic Line+Axis authoring/history, new-authoring source uniqueness with legacy duplicate-source compatibility, removal of the GUI Axis toolbar action, retained AXIS Command Line parity, refreshed documentation/Browser and a new exact-head Windows FULL plus revised Owner Windows PASS.
 
 ## Evidence authority
 
@@ -27,7 +33,8 @@ PM-04A through PM-04E are already merged and exact-head gated. PM-04F updates cu
 | PM-04E3 | `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f` | Windows FULL #1563 PASS | `1a7e1228a91b23f89bf13f6bb5c07c8abe9afae3` | Profile-source and Sketch-support edits |
 | PM-04F docs | `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` | Windows DOCS #1565 PASS | `72c40b8cfb39ea63859d5485f80a8adfbba35094` | internal + PL/EN Product + generated Browser |
 | PM-04F final automated | `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` | exact-head Windows DOCS #1565 PASS; latest runtime-affecting candidate remains FULL #1563 PASS | `72c40b8cfb39ea63859d5485f80a8adfbba35094` | final package automated verification |
-| PM-04F Owner Windows | Owner execution | manual PASS required | pending | `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` |
+| PM-04F Axis-designation amendment | Owner accepted 2026-10-06 | implementation + new exact-head FULL required | pending | `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` |
+| PM-04F Owner Windows | revised Owner execution after amendment | manual PASS required | pending | `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` |
 
 ## Contract matrix
 
@@ -72,11 +79,11 @@ PM-04A through PM-04E are already merged and exact-head gated. PM-04F updates cu
 | no provider identity or geometry-similarity rebinding | PM-04A/C/E | PASS |
 | exact preview delta and committed Body presentation isolation | PM-04D | PASS |
 | schema v13 reconstructs semantic intent without provider continuity | PM-04E1/E2/E3 | PASS |
-| internal as-built documentation | PM-04F docs exact candidate `5dfd0010...` / #1565 | PASS |
-| PL/EN Product documentation with paired section structure | PM-04F docs exact candidate `5dfd0010...` / #1565 | PASS |
-| generated Product Browser freshness | repository generator + Windows DOCS #1565 | PASS |
-| final exact-head automated package gate | Windows DOCS #1565 on the final docs/evidence candidate; runtime semantics last changed at PM-04E3 FULL #1563 | PASS |
-| Owner Windows workflow | Owner | **PENDING OWNER** |
+| internal as-built documentation | pre-amendment PM-04F docs `5dfd0010...` / #1565 | **UPDATE REQUIRED AFTER AMENDMENT** |
+| PL/EN Product documentation with paired section structure | pre-amendment PM-04F docs `5dfd0010...` / #1565 | **UPDATE REQUIRED AFTER AMENDMENT** |
+| generated Product Browser freshness | pre-amendment repository generator + Windows DOCS #1565 | **REGENERATE / REVERIFY AFTER AMENDMENT** |
+| final exact-head automated package gate | pre-amendment #1563 FULL / #1565 DOCS | **SUPERSEDED — NEW FULL REQUIRED** |
+| Owner Windows workflow | Owner after amendment | **PENDING IMPLEMENTATION + OWNER** |
 
 ## Documentation closure requirements
 
@@ -97,16 +104,18 @@ The Product Browser is generated from canonical Markdown and must not be edited 
 
 ## Remaining PM-04F gates
 
-Automated PM-04F closure is complete.
+The pre-amendment #1563 Windows FULL and #1565 Windows DOCS remain baseline evidence. They are not the final gate after the accepted runtime/UI amendment.
 
-The last runtime-affecting candidate, PM-04E3 `b7dcd55ab9c04fdf208a534f6e09de7ffac0e00f`, passed Windows FULL #1563. The only intervening merges before the final documentation candidate were governance-only PM-04E→F transition and documentation/evidence. Final documentation candidate `5dfd00100f16f0e5c195cdb53c12fb2ba65bf894` passed exact-head Windows DOCS #1565, including repository regeneration/freshness verification for Product Browser, and merged as `72c40b8cfb39ea63859d5485f80a8adfbba35094`.
+Remaining mandatory sequence:
 
-Therefore no artificial runtime/test mutation is required to manufacture another FULL run. A new automated gate is required only if main changes materially before PM-04 closure or Owner acceptance exposes a defect.
+1. implement `work/PM-04F_AXIS_DESIGNATION_UX_AMENDMENT.md` without expanding PM-04 scope;
+2. prove focused/subsystem regressions for designation semantics, transaction/history atomicity, uniqueness/legacy compatibility and GUI/CAD Input behavior;
+3. run a new exact-head Windows FULL on the final runtime candidate;
+4. update current-state internal and PL/EN Product documentation, regenerate Product Browser through the canonical generator and pass DOCS verification;
+5. execute the revised `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` on the final supported-Windows candidate;
+6. only after explicit Owner PASS, close PM-04 and advance governance.
 
-Remaining mandatory gate:
-
-1. execute `work/PM-04F_OWNER_WINDOWS_ACCEPTANCE.md` on supported Windows;
-2. only after explicit Owner PASS, close PM-04 and advance governance. PM-05/PM-06 remain separately gated.
+PM-05 and PM-06 remain separately gated.
 
 ## Documentation impact
 
