@@ -8,6 +8,7 @@
 
 #include <QAction>
 #include <QApplication>
+#include <QCheckBox>
 #include <QLabel>
 #include <QPushButton>
 #include <QStackedWidget>
@@ -565,6 +566,42 @@ int main(int argc, char* argv[]) {
     CHECK(
         session.document().axes().size() ==
         axis_count_before_command);
+
+    // Normal GUI creation is contextual to Line. Arming Axis is runtime-only
+    // until a Line successfully commits, and there is no standalone Axis
+    // toolbar action.
+    auto* line_tool =
+        workbench.findChild<QPushButton*>(
+            QStringLiteral("lineSketchToolButton"));
+    auto* axis_designation =
+        workbench.findChild<QCheckBox*>(
+            QStringLiteral(
+                "sketchAxisDesignationCheck"));
+    CHECK(line_tool != nullptr);
+    CHECK(axis_designation != nullptr);
+    CHECK(axis_tool == nullptr);
+    CHECK(!line_tool->isHidden());
+    line_tool->click();
+    QApplication::processEvents();
+    CHECK(!axis_designation->isHidden());
+    CHECK(axis_designation->isEnabled());
+    CHECK(!axis_designation->isChecked());
+    const auto axis_count_before_arming =
+        session.document().axes().size();
+    const auto undo_before_arming =
+        session.undoDepth();
+    axis_designation->click();
+    QApplication::processEvents();
+    CHECK(axis_designation->isChecked());
+    CHECK(
+        session.document().axes().size() ==
+        axis_count_before_arming);
+    CHECK(
+        session.undoDepth() ==
+        undo_before_arming);
+    axis_designation->click();
+    QApplication::processEvents();
+    CHECK(!axis_designation->isChecked());
 
     // Axis command opened source Sketch edit for semantic Line acquisition.
     // Finish that runtime context before the destructive repairability check.
